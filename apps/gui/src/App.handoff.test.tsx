@@ -145,7 +145,7 @@ describe('desktop terminal multiplexer', () => {
     await user.click(screen.getByRole('button', { name: 'Change start folder' }))
     const dialog = screen.getByRole('dialog', { name: 'Settings' })
     expect(within(dialog).getByRole('heading', { name: 'General' })).toBeInTheDocument()
-    expect(within(dialog).getByRole('textbox', { name: 'Start folder' })).toHaveValue('')
+    expect(within(within(dialog).getByRole('region', { name: 'Start folder' })).getByText('Your home folder')).toBeInTheDocument()
   })
 
   it('starts a plain shell in the home folder from New terminal and shows it', async () => {
@@ -1063,24 +1063,6 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'No sessions running' })
     expect(root()?.style.getPropertyValue('--accent')).toBe('#7DCFFF')
-  })
-
-  it('checks the start folder as it is typed and saves only a folder that exists', async () => {
-    const user = userEvent.setup()
-    daemon.suggestProjectFolders.mockImplementation((typed) => Promise.resolve(typed === `${HOME}/code` ? [`${HOME}/code/`, `${HOME}/codex/`] : []))
-    renderDesktopApp()
-    await screen.findByRole('heading', { name: 'No sessions running' })
-    await user.click(screen.getByRole('button', { name: 'Change start folder' }))
-    const input = screen.getByRole('textbox', { name: 'Start folder' })
-
-    await user.type(input, '/nowhere')
-    expect(await screen.findByText('Folder not found')).toBeInTheDocument()
-    expect(input).toHaveAttribute('aria-invalid', 'true')
-
-    await user.clear(input)
-    await user.type(input, `${HOME}/code`)
-    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('maitty.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: `${HOME}/code` }) })
-    expect(screen.getByText('Saved')).toBeInTheDocument()
   })
 })
 

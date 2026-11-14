@@ -175,7 +175,6 @@ export function WorkspaceDialogs() {
                 usage={usageInfo}
                 onSignInAgent={signInAgent}
                 github={{ onSignIn: signInGitHub, signInsEnded: gitHubSignInsEnded }}
-                validateFolder={folderExists}
                 onChooseFolder={chooseStartFolder}
                 onClose={() => { setPreviewTheme(null); setSettingsSection(null) }}
               />

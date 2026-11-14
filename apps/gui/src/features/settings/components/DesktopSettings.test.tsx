@@ -28,7 +28,7 @@ function renderSettings(section: DesktopSettingsSection, overrides: Partial<Para
   const onSection = vi.fn()
   const onPreviewTheme = vi.fn()
   const onShowWelcome = vi.fn()
-  render(<QueryClientProvider client={new QueryClient()}><DesktopSettings usage={{ budget: null, onBudget: vi.fn(), sessionForTerm: () => null, onOpenSession: vi.fn() }} section={section} onSection={onSection} preferences={PREFS} onChange={onChange} systemReducedMotion={false} systemDark onPreviewTheme={onPreviewTheme} onShowWelcome={onShowWelcome} platform="linux" daemon={{ online: true, sessionCount: 3 }} machines={info()} appVersion="0.64.0" validateFolder={() => Promise.resolve(true)} onClose={vi.fn()} {...overrides} /></QueryClientProvider>)
+  render(<QueryClientProvider client={new QueryClient()}><DesktopSettings usage={{ budget: null, onBudget: vi.fn(), sessionForTerm: () => null, onOpenSession: vi.fn() }} section={section} onSection={onSection} preferences={PREFS} onChange={onChange} systemReducedMotion={false} systemDark onPreviewTheme={onPreviewTheme} onShowWelcome={onShowWelcome} platform="linux" daemon={{ online: true, sessionCount: 3 }} machines={info()} appVersion="0.64.0" onClose={vi.fn()} {...overrides} /></QueryClientProvider>)
   return { onChange, onSection, onPreviewTheme, onShowWelcome }
 }
 
@@ -111,21 +111,21 @@ describe('desktop settings', () => {
     const onChooseFolder = vi.fn().mockResolvedValue('/home/casey/dev')
     const { onChange } = renderSettings('general', { onChooseFolder })
 
-    await user.click(screen.getByRole('button', { name: 'Browse…' }))
+    // The folder is picked, never typed: there is no field to type a path into.
+    expect(screen.queryByRole('textbox', { name: 'Start folder' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Start folder' })).getByText('Your home folder')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Choose the start folder' }))
 
     expect(onChooseFolder).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('textbox', { name: 'Start folder' })).toHaveValue('/home/casey/dev')
     await waitFor(() => { expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ startFolder: '/home/casey/dev' })) })
   })
 
   it('leaves the start folder alone when the picker is cancelled', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('general', { onChooseFolder: vi.fn().mockResolvedValue(null) })
-    const before = screen.getByRole<HTMLInputElement>('textbox', { name: 'Start folder' }).value
+    await user.click(screen.getByRole('button', { name: 'Choose the start folder' }))
 
-    await user.click(screen.getByRole('button', { name: 'Browse…' }))
-
-    expect(screen.getByRole('textbox', { name: 'Start folder' })).toHaveValue(before)
+    expect(within(screen.getByRole('region', { name: 'Start folder' })).getByText('Your home folder')).toBeInTheDocument()
     expect(onChange).not.toHaveBeenCalled()
   })
 

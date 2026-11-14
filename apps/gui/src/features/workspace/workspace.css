@@ -315,6 +315,9 @@
 .mx-scard.is-filtered:not(:has([data-search-hit])) { display: none; }
 .mx-settings-none { margin: 0; font-size: 13px; color: var(--dim); }
 .mx-scard-meta { font-size: 12px; color: var(--dim); }
+/* What a card holds that is not a row of label and control: a folder field, the terminal's text controls. */
+.mx-scard-body { padding: 0 0 14px; }
+.mx-folder-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
 .mx-scard-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
 .mx-scard-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-scard-text > :first-child { font-size: 13px; color: var(--fg); }
@@ -367,8 +370,8 @@
 .mx-theme-name { font-size: 12.5px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-theme-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-hotkey { font-family: var(--mono); font-size: 11.5px; color: var(--fg); padding: 3px 8px; border-radius: 6px; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); white-space: pre; }
-.mx-hotkey-row { display: flex; align-items: center; gap: 12px; min-height: 38px; padding: 0 16px; border-top: 1px solid var(--pane-line); font-size: 13px; }
-.mx-hotkey-row > span:first-child { flex: 1; color: var(--fg2); }
+.mx-hotkey-row { padding: 10px 0; font-size: 13px; }
+.mx-hotkey-row > span:first-child { flex: 1; color: var(--fg); }
 
 /* Context menu for a session row, portalled into the app so it reads the theme. */
 .mx-menu { z-index: 50; min-width: 180px; padding: 4px; border-radius: 10px; background: var(--m-raise); border: 1px solid var(--line2); box-shadow: 0 12px 40px rgba(0, 0, 0, .45); color: var(--fg); font-size: 12.5px; }
@@ -459,7 +462,8 @@
 .mx-keys { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .mx-chord { display: inline-flex; align-items: center; gap: 4px; }
 .mx-or { font-size: 11px; color: var(--dim); }
-.mx-keycap { min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: linear-gradient(180deg, color-mix(in oklab, var(--m-raise) 94%, white), var(--m-raise)); border: 1px solid var(--line2); border-bottom-width: 2.5px; box-shadow: 0 1px 0 rgba(0, 0, 0, .45), inset 0 1px 0 rgba(var(--hl), calc(.07 * var(--hk))); font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--fg); line-height: 1; }
+/* Flat like every other surface: a solid cap and a hairline, its thicker bottom edge the only thing that says "key". */
+.mx-keycap { min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: var(--m-raise); border: 1px solid var(--line2); border-bottom-width: 2px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--fg); line-height: 1; }
 .mx-keycap.is-symbol {  font-size: 13px; font-weight: 400; }
 
 /* Resizing columns: the 10px gap between them is the handle. The negative margin cancels the two flex gaps
