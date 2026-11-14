@@ -10,7 +10,7 @@ import type { PaneQueue } from '../useChatComposer'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { FULL_ACCESS_LABEL, FULL_ACCESS_WARNING } from '../fullAccess'
 import { AGENT_LABEL } from '../modelName'
-import { ChatSession } from './ChatSession'
+import { ChatSession, type WindowActions } from './ChatSession'
 import type { SessionUsage } from '../usageStrip'
 import type { BranchMenuSpec } from './BranchMenu'
 import type { ChatProblem } from '../problem'
@@ -75,6 +75,8 @@ export type ChatPaneProps = {
   fileSearch?: FileSearchPlace | undefined
   /** Leaves out runs of reads and searches that succeeded (the desktop setting). */
   hideSuccessfulTools?: boolean
+  /** The window's screens a command opens instead of Claude Code's menu. */
+  windowActions?: WindowActions | undefined
 }
 
 /**
@@ -115,6 +117,7 @@ export function ChatPane(props: ChatPaneProps) {
             {...(props.fileSearch === undefined ? {} : { fileSearch: props.fileSearch })}
             {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
             {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })}
+            {...(props.windowActions === undefined ? {} : { windowActions: props.windowActions })}
           />
         )
         : availability.kind === 'no-events' && props.sessionId !== undefined

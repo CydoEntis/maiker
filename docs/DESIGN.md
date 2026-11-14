@@ -420,6 +420,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   that has a terminal: running one types it there and shows the terminal, since its menu is the terminal's to draw,
   and it is refused with a toast while the agent works. One typed out with what it takes (`/btw which file?`) goes
   the same way, since Claude Code draws its answer only in the terminal; `/btw` alone may go while the agent works.
+  Some of them the window answers itself, in a chat session too, and the picker tags each with where it goes instead
+  of `terminal` (`windowCommands.ts`): `/diff` opens the side panel's Changes, `/rewind` (`/checkpoint`, `/undo`) its
+  History, `/permissions` (`/allowed-tools`) Settings › Agents with the approved commands, `/resume` Recent sessions,
+  and `/help` puts a lone `/` in the box so the list shows every command. Typed with something after the name they go
+  to Claude Code as typed, which has a use for it. `/exit` (`/quit`), `/background` (`/bg`) and `/clear` are tagged
+  `asks first`: a `ConfirmCloseDialog` with Cancel focused says what happens, and only a yes sends the command as typed
+  (typed into the terminal for the terminal's ones), refused with a toast while the agent works.
   The chat leaves out Claude's internal commands and the ones that only change how its terminal looks (the theme,
   colour, renderer, scroll speed, focus view, voice input; `CLAUDE_HIDDEN_COMMANDS`); they still work typed in the terminal.
   A listed command that opens a menu (`/model`, `/config`) still shows that menu in the terminal, not in the chat.

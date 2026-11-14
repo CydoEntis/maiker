@@ -11,6 +11,8 @@ export type SlashCommand = {
   readonly terminal?: true
   /** A Codex skill: named in a message after a `$`, not run as a command. */
   readonly skill?: true
+  /** Where the window runs it instead of Claude Code's menu, as the picker tags it (`windowCommands.ts`). */
+  readonly opens?: string
 }
 
 /** Codex lists only its skills (`agent_commands`); each is offered beside the window's list of its commands. */

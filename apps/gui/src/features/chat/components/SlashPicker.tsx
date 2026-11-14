@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import { commandLabel, type SlashCommand } from '../slashCommands'
+import { ASKS_FIRST } from '../windowCommands'
 
 /** The most rows drawn: past this a name is typed further, not scrolled to. */
 export const MAX_SHOWN = 50
@@ -48,7 +49,7 @@ export function SlashPicker({ agent, matches, active, loading, error, onPick, on
               onClick={() => { onPick(command) }}
             >
               <span className="mx-slash-name">{commandLabel(command)}{command.hint !== '' && <span className="mx-slash-hint"> {command.hint}</span>}</span>
-              <span className="mx-slash-what">{command.terminal === true && <span className="mx-slash-tag" title="Opens in the terminal">terminal</span>}{command.skill === true && <span className="mx-slash-tag" title="Named in your message for the agent to use">skill</span>}{command.description}</span>
+              <span className="mx-slash-what">{command.opens !== undefined && <span className="mx-slash-tag" title={command.opens === ASKS_FIRST ? 'Asks before it runs' : `Opens ${command.opens} in Maitty`}>{command.opens}</span>}{command.terminal === true && command.opens === undefined && <span className="mx-slash-tag" title="Opens in the terminal">terminal</span>}{command.skill === true && <span className="mx-slash-tag" title="Named in your message for the agent to use">skill</span>}{command.description}</span>
             </ResultsOption>
           ))}
         </ResultsList>

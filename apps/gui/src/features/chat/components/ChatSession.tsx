@@ -44,6 +44,11 @@ import { SubagentBar, SubagentChat } from './SubagentChat'
 import { VirtualList } from './VirtualList'
 import { copyText } from '@/lib/clipboard'
 import { ConfirmCloseDialog } from '@/features/workspace/components/ConfirmCloseDialog'
+import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
+import type { InspectView } from '@/features/inspect/InspectPanel'
+import type { ConfirmAsk, WindowRoute } from '../windowCommands'
+import { namedCommand } from '../slashCommands'
+import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import type { RewindPlace } from '../editFromHere'
 import type { FileSearchPlace } from '../fileMention'
 import { useEditFromHere } from '../useEditFromHere'
@@ -149,10 +154,19 @@ type Props = {
   fileSearch?: FileSearchPlace | undefined
   /** Leaves out runs of reads and searches that succeeded (Settings › Chat). */
   hideSuccessfulTools?: boolean
+  /** The window's own screens a command opens instead of Claude Code's menu (`windowCommands.ts`); absent where there are none. */
+  windowActions?: WindowActions | undefined
+}
+
+/** The screens a command can open beside the chat: a Settings page, a tab of the session's side panel, the closed sessions. */
+export type WindowActions = {
+  readonly openSettings: (section: DesktopSettingsSection) => void
+  readonly openPanel: (view: InspectView) => void
+  readonly openRecent: () => void
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, worktree: paneWorktree, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, sessionId, paneStatus, folder = '', branch = null, onOpenFolder = null, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, branchMenu, effort = null, rewind, hideSuccessfulTools = false, fileSearch }: Props) {
+export function ChatSession({ link, agent, online, hasTerminal = true, worktree: paneWorktree, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, sessionId, paneStatus, folder = '', branch = null, onOpenFolder = null, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, branchMenu, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
   const paneWorking = paneStatus === 'working'
   const [branches] = useFolderBranches(root ?? '')
@@ -290,6 +304,22 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
     void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.error(errorMessage(error, `Could not run ${command}`)) })
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
+  // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
+  const [confirming, setConfirming] = useState<{ ask: ConfirmAsk; typed: string } | null>(null)
+  // Once confirmed it runs where Claude Code runs it: one only the terminal answers is typed there and shown, the rest are sent.
+  const runConfirmed = (typed: string) => {
+    if (runInTerminal !== undefined && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) runInTerminal(typed)
+    else void sendText(typed)
+  }
+  const runInWindow = windowActions === undefined ? undefined : (route: WindowRoute, typed: string) => {
+    switch (route.kind) {
+      case 'settings': windowActions.openSettings(route.section); return
+      case 'panel': windowActions.openPanel(route.view); return
+      case 'recent': windowActions.openRecent(); return
+      case 'confirm': setConfirming({ ask: route.ask, typed }); return
+      case 'commands': return
+    }
+  }
   // A message just sent shows at once, with the agent taken to be at work on it, until the history has it.
   // A first message typed while the agent started is held, and shows exactly as the starting chat showed it (the bubble, then the
   // working line) until it is sent and the history has it, so the chat never says "No messages yet" in between.
@@ -492,6 +522,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
 
   return (
     <div ref={chat} className="mx-chat" onKeyDown={onKeyDown} onClick={keepComposerFocus} onMouseUp={(event) => { const next = pickedText(event); if (next !== undefined) setPicked(next) }}>
+      {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed } = confirming; setConfirming(null); runConfirmed(typed) }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={() => { if (chat.current !== null) quotePicked(chat.current) }} />}
       {(notices.length > 0 || fullAccess) && (
@@ -524,7 +555,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
         composer={composer}
         conversation={link.conversation}
         // Claude says which commands it takes, in its folder; Codex's are a list the window keeps. Gemini has none yet.
-        {...(abilities.slashCommands !== null && root !== null ? { commandsFrom: { agent, folder: root, inTerminal: runInTerminal } } : {})}
+        {...(abilities.slashCommands !== null && root !== null ? { commandsFrom: { agent, folder: root, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
         question={question}
         waiting={held !== null}
         files={fileSearch}
