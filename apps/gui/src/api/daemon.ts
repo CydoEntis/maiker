@@ -8,6 +8,9 @@ import { LOCAL_MACHINE, addressOf, machineArgs, terminalOf, terminalSessionId } 
 import { conversationKey, machineArgOfKey, splitConversationKey } from './conversationKey'
 import { previewConversations, type Conversation, type Message, type SessionStatus } from '@/data/preview'
 
+/** One question of an agent's prompt; `multi` when it takes any number of its choices. */
+const AskQuestionSchema = z.object({ question: z.string(), choices: z.array(z.string()), multi: z.boolean().default(false) })
+
 const StatusSchema = z.enum(['None', 'Idle', 'Working', 'Blocked', 'Done'])
 // A subagent as the daemon reports it (`SubagentActivity`); times are unix seconds.
 const SubagentActivitySchema = z.object({
@@ -102,7 +105,7 @@ const TerminalSessionSchema = z.object({
   // The follow-ups its daemon holds for the working agent, oldest first (`TermInfo.queued`).
   queued: z.array(z.string()).default([]),
   // The agent's own hook said what its permission prompt asks (not read off the screen).
-  ask: z.object({ tool: z.string(), detail: z.string(), answerable: z.boolean().default(false), choices: z.array(z.string()).default([]), questions: z.array(z.object({ question: z.string(), choices: z.array(z.string()) })).default([]) }).nullable().default(null),
+  ask: z.object({ tool: z.string(), detail: z.string(), answerable: z.boolean().default(false), choices: z.array(z.string()).default([]), questions: z.array(AskQuestionSchema).default([]), form: z.array(AskQuestionSchema).default([]) }).nullable().default(null),
   interrupted: z.object({ agent: z.string(), resume: z.string() }).nullable().default(null),
   // How the last command ended, when it ended in failure (the daemon's `TermInfo.exit`); absent from an older daemon.
   exit: z.object({ code: z.number().int().nullable().default(null), at: z.number().default(0) }).nullable().default(null),

@@ -522,6 +522,12 @@ pub struct PermissionAsk {
     /// Empty for any other prompt.
     #[serde(default)]
     pub questions: Vec<AskQuestion>,
+    /// A prompt with at least one question that takes several answers: every question it asks, in
+    /// order, each saying whether it does (`AskQuestion::multi`). `questions` and `choices` stay
+    /// empty for it, so a peer from before this field, which would answer each question with one
+    /// key, leaves the prompt to the terminal instead. Empty for any other prompt.
+    #[serde(default)]
+    pub form: Vec<AskQuestion>,
 }
 
 /// One question of a prompt that asks several, and its choices as the agent numbers them.
@@ -529,6 +535,10 @@ pub struct PermissionAsk {
 pub struct AskQuestion {
     pub question: String,
     pub choices: Vec<String>,
+    /// The question takes any number of its choices (Claude's `multiSelect`); only ever set in
+    /// `PermissionAsk::form`.
+    #[serde(default)]
+    pub multi: bool,
 }
 
 /// What an agent's session has used.
@@ -2498,6 +2508,7 @@ mod tests {
                     answerable: true,
                     choices: vec![],
                     questions: Vec::new(),
+                    form: Vec::new(),
                 }),
                 call: Some("00112233445566ff".into()),
             },
@@ -2863,11 +2874,33 @@ mod tests {
 
         let several = PermissionAsk {
             tool: "AskUserQuestion".into(),
-            questions: vec![AskQuestion { question: "Which?".into(), choices: vec!["A".into(), "B".into()] }; 2],
+            questions: vec![AskQuestion { question: "Which?".into(), choices: vec!["A".into(), "B".into()], multi: false }; 2],
             ..PermissionAsk::default()
         };
         let back: PermissionAsk = decode(&encode(&several).unwrap()).unwrap();
         assert_eq!(back, several);
+
+        // A form with a question that takes several answers reaches a peer from before it as no
+        // questions at all, so that peer leaves the prompt to the terminal rather than answer it
+        // one key per question.
+        #[derive(Deserialize)]
+        struct AskBeforeForm {
+            #[serde(default)]
+            choices: Vec<String>,
+            #[serde(default)]
+            questions: Vec<OldQuestion>,
+        }
+        #[derive(Deserialize)]
+        struct OldQuestion {}
+        let form = PermissionAsk {
+            tool: "AskUserQuestion".into(),
+            form: vec![AskQuestion { question: "Which ones?".into(), choices: vec!["A".into(), "B".into()], multi: true }],
+            ..PermissionAsk::default()
+        };
+        let old: AskBeforeForm = decode(&encode(&form).unwrap()).unwrap();
+        assert!(old.choices.is_empty() && old.questions.is_empty());
+        let back: PermissionAsk = decode(&encode(&form).unwrap()).unwrap();
+        assert_eq!(back, form);
     }
 
     /// `first` was added to `QueueFollowUp` as a defaulted field: a peer that does not send it
@@ -3642,6 +3675,7 @@ mod tests {
             answerable: true,
             choices: vec!["A".into(), "B".into()],
             questions: Vec::new(),
+            form: Vec::new(),
         });
         round_trips(&ServerMsg::State(Snapshot {
             terms: [(3, term)].into(),
@@ -3887,6 +3921,7 @@ mod tests {
                 answerable: false,
                 choices: vec!["Yes".into()],
                 questions: Vec::new(),
+                form: Vec::new(),
             }),
             call: Some("00112233445566ff".into()),
         };

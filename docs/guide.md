@@ -1014,7 +1014,8 @@ message box. The message box is off, and says why, until you have answered.
   leaves the answer to the terminal instead of guessing a key.
 - **A question Claude asks.** Each choice is a button, and its number key picks it. A prompt with several questions (up to 4, each
   with 2 to 4 choices) shows each one with its choices and one **Send answers** button, which stays
-  off until every question has an answer. Nothing is typed to the agent before then, so you can still
+  off until every question has an answer. A question that takes several answers has boxes to tick
+  ("Pick any"); tick at least one. Nothing is typed to the agent before then, so you can still
   change an answer. A question beyond those limits, or "Type something", is answered in the terminal.
 - **Codex, and any menu the chat has no buttons for.** Maitty does not press a button for these,
   because it has not checked that those keys are right. The card shows the question as the terminal

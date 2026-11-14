@@ -2,9 +2,9 @@ import { useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
-import type { PermissionAsk } from '@/data/preview'
+import type { AskedQuestion, PermissionAsk } from '@/data/preview'
 import type { ApprovalDecision, ApprovalEvent } from '../chatEvents'
-import { ANSWER_KEY, type AskChoice } from '../permissionAsk'
+import { ANSWER_KEY, formQuestions, type AskChoice } from '../permissionAsk'
 import type { AskedPlan } from '../planApproval'
 import { PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { KEY_ESCAPE } from '../terminalKeys'
@@ -126,8 +126,8 @@ type PromptProps = {
   answer: ((choice: AskChoice) => Promise<void>) | undefined
   /** Picks the numbered choice of a question the agent asks; absent where the window cannot type for the agent. */
   pick?: ((index: number) => Promise<void>) | undefined
-  /** Answers a prompt of several questions: the choice picked for each, in the prompt's order. */
-  pickAll?: ((picked: readonly number[]) => Promise<void>) | undefined
+  /** Answers a form: the choices picked for each question, in the prompt's order. */
+  pickAll?: ((picked: readonly (readonly number[])[]) => Promise<void>) | undefined
   /** Types a key into the agent's terminal, for a menu the chat has no buttons for; absent where the window cannot type for the agent. */
   sendKeys?: ((keys: string) => Promise<void>) | undefined
   /** Reads the agent's terminal screen, to show that menu; absent where the screen cannot be read. */
@@ -138,10 +138,11 @@ type PromptProps = {
   asking?: string
 }
 
-type AskedQuestion = NonNullable<PermissionAsk['questions']>[number]
-
-/** One choice of a question: a box with its number key, lit in the needs colour once picked. */
-function Choice({ label, index, picked, busy, onPick, radio }: { label: string; index: number; picked: boolean; busy: boolean; onPick: () => void; radio?: string }) {
+/**
+ * One choice of a question: a box with its number key, lit in the needs colour once picked. In a form it is a radio
+ * button named `group`, or a checkbox when its question takes several answers (`several`).
+ */
+function Choice({ label, index, picked, busy, onPick, group, several = false }: { label: string; index: number; picked: boolean; busy: boolean; onPick: () => void; group?: string; several?: boolean }) {
   const body = (
     <>
       <span className="mx-option-mark" aria-hidden="true" />
@@ -149,46 +150,60 @@ function Choice({ label, index, picked, busy, onPick, radio }: { label: string; 
       <kbd className="mx-option-key" aria-hidden="true">{index + 1}</kbd>
     </>
   )
-  if (radio === undefined) {
+  if (group === undefined) {
     return <button type="button" className="mx-option" aria-keyshortcuts={String(index + 1)} disabled={busy} onClick={onPick}>{body}</button>
   }
   return (
-    <label className={`mx-option${picked ? ' is-picked' : ''}`}>
-      <input type="radio" className="sr-only" name={radio} checked={picked} disabled={busy} onChange={onPick} />
+    <label className={`mx-option${picked ? ' is-picked' : ''}${several ? ' is-check' : ''}`}>
+      <input type={several ? 'checkbox' : 'radio'} className="sr-only" name={group} checked={picked} disabled={busy} onChange={onPick} />
       {body}
     </label>
   )
 }
 
+/** What the foot of a form says while answers are missing. */
+function formNote(questions: readonly AskedQuestion[], left: number): string {
+  if (left === 0) return 'Ready to send.'
+  if (questions.length === 1) return 'Pick at least one.'
+  return left === questions.length ? 'Pick an answer for each question.' : `${String(left)} more to answer`
+}
+
 /**
- * A prompt that asks several questions: each with its choices to pick from, and one button that sends them all once
- * every question has an answer. Nothing is typed into the agent until then, so an answer can be changed first.
+ * A form of questions: each with its choices to pick from (one, or any number of them for a question that takes
+ * several), and one button that sends them all once every question has an answer. Nothing is typed into the agent
+ * until then, so an answer can be changed first.
  */
-function QuestionsForm({ questions, busy, onSend }: { questions: readonly AskedQuestion[]; busy: boolean; onSend: (picked: readonly number[]) => void }) {
+function QuestionsForm({ questions, busy, onSend }: { questions: readonly AskedQuestion[]; busy: boolean; onSend: (picked: readonly (readonly number[])[]) => void }) {
   const name = useId()
-  const [picked, setPicked] = useState<readonly (number | null)[]>(() => questions.map(() => null))
-  const answers = picked.filter((choice): choice is number => choice !== null)
-  const left = questions.length - answers.length
+  const [picked, setPicked] = useState<readonly (readonly number[])[]>(() => questions.map(() => []))
+  const left = picked.filter((chosen) => chosen.length === 0).length
+  const choose = (at: number, index: number, several: boolean) => {
+    setPicked((now) => now.map((was, place) => {
+      if (place !== at) return was
+      if (!several) return [index]
+      return was.includes(index) ? was.filter((other) => other !== index) : [...was, index].sort((a, b) => a - b)
+    }))
+  }
   return (
     <form
       className="mx-waiting-form"
       onSubmit={(event) => {
         event.preventDefault()
-        if (left === 0 && !busy) onSend(answers)
+        if (left === 0 && !busy) onSend(picked)
       }}
     >
       {questions.map((asked, at) => (
         <fieldset key={`${String(at)}-${asked.question}`} className="mx-waiting-question">
-          <legend>{asked.question}</legend>
+          <legend>{asked.question}{asked.multi === true && <>{' '}<span className="mx-waiting-any">Pick any</span></>}</legend>
           {asked.choices.map((choice, index) => (
-            <Choice key={`${String(index)}-${choice}`} label={choice} index={index} picked={picked[at] === index} busy={busy} radio={`${name}-${String(at)}`} onPick={() => { setPicked((now) => now.map((was, place) => (place === at ? index : was))) }} />
+            <Choice key={`${String(index)}-${choice}`} label={choice} index={index} picked={picked[at]?.includes(index) === true} busy={busy} group={`${name}-${String(at)}`} several={asked.multi === true} onPick={() => { choose(at, index, asked.multi === true) }} />
           ))}
         </fieldset>
       ))}
       <div className="mx-waiting-foot is-form">
-        <span className="mx-waiting-note">{left === 0 ? 'Ready to send.' : left === questions.length ? 'Pick an answer for each question.' : `${String(left)} more to answer`}</span>
+        <span className="mx-waiting-note">{formNote(questions, left)}</span>
         <span className="mx-spacer" />
-        <Button type="submit" variant="needs" keyHint="⏎" disabled={busy || left > 0}>{busy ? 'Sending…' : 'Send answers'}</Button>
+        <Button type="submit" variant="needs" keyHint="⏎" disabled={busy || left > 0}>{busy ? 'Sending…' : questions.length === 1 ? 'Send answer' : 'Send answers'}</Button>
       </div>
     </form>
   )
@@ -246,8 +261,8 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, sendKeys
   const run = (action: () => Promise<void>) => { RUN(action, setBusy) }
   const choices = ask?.choices ?? []
   const picker = choices.length > 0 && online ? pick : undefined
-  const questions = ask?.questions ?? []
-  const sendAll = questions.length > 1 && online ? pickAll : undefined
+  const questions = formQuestions(ask)
+  const sendAll = questions.length > 0 && online ? pickAll : undefined
   const canAnswer = ask !== null && ask.answerable && online && answer !== undefined
   const isQuestion = ask?.tool === QUESTION_TOOL
   const label = `${agent} needs your permission`
@@ -257,7 +272,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, sendKeys
 
   if (sendAll !== undefined) {
     return (
-      <WaitingCard label={label} title={`${agent} needs your input`} aside={`${String(questions.length)} questions`}>
+      <WaitingCard label={label} title={`${agent} needs your input`} aside={questions.length === 1 ? '1 question' : `${String(questions.length)} questions`}>
         <QuestionsForm questions={questions} busy={busy} onSend={(picked) => { run(() => sendAll(picked)) }} />
       </WaitingCard>
     )

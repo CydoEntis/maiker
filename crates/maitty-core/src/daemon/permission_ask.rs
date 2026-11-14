@@ -141,35 +141,56 @@ pub(super) fn clean_ask(ask: PermissionAsk, agent: &str) -> Option<PermissionAsk
     } else {
         Vec::new()
     };
-    // Several questions are answered by a key each, in order: all of them clean, or none, since a
-    // choice dropped from one would put every number after it on the wrong line.
+    // Several questions are answered by keys, in order: all of them clean, or none, since a choice
+    // dropped from one would put every number after it on the wrong line.
     let clean = |text: &str, most: usize| -> String {
         mask_secrets(&hidden::sanitize(text, false)).trim().chars().take(most).collect()
     };
-    let questions: Vec<AskQuestion> = if tool == QUESTION_TOOL && agent == "claude" && ask.questions.len() <= MAX_ASK_QUESTIONS {
-        ask.questions
-            .iter()
-            .map(|asked| AskQuestion {
-                question: clean(&asked.question, MAX_ASK_DETAIL_CHARS),
-                choices: asked.choices.iter().map(|choice| clean(choice, MAX_ASK_CHOICE_CHARS)).collect(),
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-    let whole = questions.len() >= 2
-        && questions.iter().all(|asked| {
-            !asked.question.is_empty()
-                && (2..=MAX_ASK_CHOICES).contains(&asked.choices.len())
-                && asked.choices.iter().all(|choice| !choice.is_empty())
-        });
+    // Only Claude's question keys are known.
+    let keyed = tool == QUESTION_TOOL && agent == "claude";
+    let questions = whole_questions(&ask.questions, keyed, &clean).filter(|asked| {
+        asked.len() >= 2 && asked.iter().all(|question| !question.multi)
+    });
+    // A form is only ever one with a question that takes several answers: otherwise it is one of
+    // the prompts above, which a peer from before forms can answer too.
+    let form = whole_questions(&ask.form, keyed, &clean)
+        .filter(|asked| asked.iter().any(|question| question.multi));
     Some(PermissionAsk {
         tool,
         detail,
         answerable,
         choices,
-        questions: if whole { questions } else { Vec::new() },
+        questions: questions.unwrap_or_default(),
+        form: form.unwrap_or_default(),
     })
+}
+
+/// A prompt's questions, cleaned, when every one is still whole (its text and two to four choices,
+/// none empty) and the daemon knows the keys that answer them; `None` otherwise.
+fn whole_questions(
+    asked: &[AskQuestion],
+    keyed: bool,
+    clean: &impl Fn(&str, usize) -> String,
+) -> Option<Vec<AskQuestion>> {
+    if !keyed || asked.is_empty() || asked.len() > MAX_ASK_QUESTIONS {
+        return None;
+    }
+    let cleaned: Vec<AskQuestion> = asked
+        .iter()
+        .map(|question| AskQuestion {
+            question: clean(&question.question, MAX_ASK_DETAIL_CHARS),
+            choices: question.choices.iter().map(|choice| clean(choice, MAX_ASK_CHOICE_CHARS)).collect(),
+            multi: question.multi,
+        })
+        .collect();
+    cleaned
+        .iter()
+        .all(|question| {
+            !question.question.is_empty()
+                && (2..=MAX_ASK_CHOICES).contains(&question.choices.len())
+                && question.choices.iter().all(|choice| !choice.is_empty())
+        })
+        .then_some(cleaned)
 }
 
 impl super::term::Term {
@@ -196,6 +217,7 @@ mod tests {
             answerable: true,
             choices: Vec::new(),
             questions: Vec::new(),
+            form: Vec::new(),
         }
     }
 
@@ -224,6 +246,7 @@ mod tests {
         let asked = |choices: &[&str]| AskQuestion {
             question: " Which?\u{1b} ".into(),
             choices: choices.iter().map(|choice| choice.to_string()).collect(),
+            multi: false,
         };
         let mut prompt = ask("AskUserQuestion", "Which? / Which?");
         prompt.questions = vec![asked(&["A", "B"]), asked(&["C", " D ", "E"])];
@@ -236,6 +259,28 @@ mod tests {
         assert!(clean_ask(prompt.clone(), "claude").unwrap().questions.is_empty());
         // One question is the single-choice prompt's, not this one's.
         prompt.questions = vec![asked(&["A", "B"])];
+        assert!(clean_ask(prompt, "claude").unwrap().questions.is_empty());
+    }
+
+    #[test]
+    fn a_form_is_kept_whole_only_when_a_question_takes_several_answers() {
+        let asked = |multi: bool| AskQuestion {
+            question: "Which?".into(),
+            choices: vec!["A".into(), "B".into()],
+            multi,
+        };
+        let mut prompt = ask("AskUserQuestion", "Which?");
+        prompt.form = vec![asked(true)];
+        let cleaned = clean_ask(prompt.clone(), "claude").unwrap();
+        assert_eq!(cleaned.form, [asked(true)], "one question with several answers is a form too");
+        assert!(clean_ask(prompt.clone(), "codex").unwrap().form.is_empty(), "no keys known");
+        prompt.form = vec![asked(false), asked(true)];
+        assert_eq!(clean_ask(prompt.clone(), "claude").unwrap().form.len(), 2);
+        // With no such question it is no form; nor are questions with one answer each a place for one.
+        prompt.form = vec![asked(false), asked(false)];
+        assert!(clean_ask(prompt.clone(), "claude").unwrap().form.is_empty());
+        prompt.form = Vec::new();
+        prompt.questions = vec![asked(false), asked(true)];
         assert!(clean_ask(prompt, "claude").unwrap().questions.is_empty());
     }
 
