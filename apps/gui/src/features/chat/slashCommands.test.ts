@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { commandText, isSlashLine, matchCommands, slashQuery, withTerminalCommands, type SlashCommand } from './slashCommands'
+import { CLAUDE_HIDDEN_COMMANDS } from './terminalCommands'
 
 const command = (name: string, aliases: string[] = []): SlashCommand => ({ name, description: '', hint: '', aliases })
 const names = (commands: SlashCommand[]) => commands.map((entry) => entry.name)
@@ -38,6 +39,11 @@ describe('a slash command in the message box', () => {
     const listed = [command('compact'), command('settings', ['config'])]
     const terminal = [command('help'), command('config'), command('compact')]
     expect(names(withTerminalCommands(listed, terminal))).toEqual(['compact', 'settings', 'help'])
+  })
+
+  it('leaves out the commands the chat does not offer, such as ones that only change how the terminal looks', () => {
+    const listed = [command('compact'), command('color'), command('__remote-workflow')]
+    expect(names(withTerminalCommands(listed, [], CLAUDE_HIDDEN_COMMANDS))).toEqual(['compact'])
   })
 
   it('leaves its name and a space in the box when picked', () => {

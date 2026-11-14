@@ -18,7 +18,7 @@ import { FilePicker } from './FilePicker'
 import { useFileMention } from '../useFileMention'
 import type { FileSearchPlace } from '../fileMention'
 import { asSkills, commandText, matchCommands, skillQuery, slashQuery, useSlashCommands, withTerminalCommands, type SlashCommand } from '../slashCommands'
-import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
+import { CLAUDE_HIDDEN_COMMANDS, CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import { CODEX_COMMANDS } from '../codexCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
 import { BranchMenu, type BranchMenuSpec } from './BranchMenu'
@@ -162,7 +162,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
       if (skillsOnly) return skills
       return [...(inTerminal === undefined ? CODEX_COMMANDS.filter((command) => command.terminal !== true) : CODEX_COMMANDS), ...skills]
     }
-    const own = withTerminalCommands(slash.commands, CLAUDE_TERMINAL_COMMANDS)
+    const own = withTerminalCommands(slash.commands, CLAUDE_TERMINAL_COMMANDS, CLAUDE_HIDDEN_COMMANDS)
     return inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own
   }, [slash.commands, inTerminal, windowList, skillsOnly])
   const matches = useMemo(() => (query === null ? [] : matchCommands(offered, query)), [offered, query])

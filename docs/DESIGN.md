@@ -416,10 +416,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   follows 400ms later (`typeMessage`, `COMMAND_SUBMIT_GAP_MS`): sent with the text, Claude Code takes the Enter for the
   path it is completing and leaves `/export /some/path` typed in its box, and Codex loses it. Claude Code leaves
   the commands that only its terminal runs out of that list (`/help`, `/permissions`, `/resume`, `/add-dir`…), so they
-  are written by hand in `terminalCommands.ts` (from Claude Code 2.1.322) and offered, tagged `terminal`, to an agent
+  are written by hand in `terminalCommands.ts` (from Claude Code 2.1.322, each run in 2.1.325) and offered, tagged `terminal`, to an agent
   that has a terminal: running one types it there and shows the terminal, since its menu is the terminal's to draw,
   and it is refused with a toast while the agent works. One typed out with what it takes (`/btw which file?`) goes
   the same way, since Claude Code draws its answer only in the terminal; `/btw` alone may go while the agent works.
+  The chat leaves out Claude's internal commands and the ones that only change how its terminal looks (the theme,
+  colour, renderer, scroll speed, focus view, voice input; `CLAUDE_HIDDEN_COMMANDS`); they still work typed in the terminal.
   A listed command that opens a menu (`/model`, `/config`) still shows that menu in the terminal, not in the chat.
   A command run in the terminal shows in the chat as the person's bubble with what it printed beneath as a quiet
   "↳ Set model to Haiku 5.5" line, never as a shell step, and a turn that was only that gets no divider. What the
