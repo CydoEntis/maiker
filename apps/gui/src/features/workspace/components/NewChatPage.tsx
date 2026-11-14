@@ -7,6 +7,7 @@ import { registerComposerDrop } from '@/features/chat/composerDrop'
 import { updateComposer, useComposerState } from '@/features/chat/composerStore'
 import { revokePreviews, useAttachmentIntake } from '@/features/chat/useAttachmentIntake'
 import { DraftAttachments } from '@/features/chat/components/Attachments'
+import { useKeepTyping } from '@/features/chat/useKeepTyping'
 import { errorMessage } from '@/lib/error-message'
 import { DEFAULT_PICK, modelsFor, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
@@ -120,6 +121,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   // The box and its tray: the Where popover rises from its top edge, lined up with its left.
   const stack = useRef<HTMLDivElement>(null)
   const { attachments } = useComposerState(NEW_CHAT_DRAFT)
+  useKeepTyping(text, attachments.length)
   // A new chat runs on this computer, so its files are copied here and named by path in the first message.
   const attach = useAttachmentIntake({ conversation: NEW_CHAT_DRAFT, blocked: remote ? `Files stay on this computer, not on ${targetLabel}` : busy ? 'The chat is starting' : null })
   const { addPaths } = attach

@@ -24,6 +24,7 @@ import { isBangLine } from '../slashCommands'
 import { BranchMenu, type BranchMenuSpec } from './BranchMenu'
 import { usageItems, type SessionUsage } from '../usageStrip'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
+import { useKeepTyping } from '../useKeepTyping'
 
 /** A key with nothing stored under it, for a composer whose view holds its own draft. */
 const NO_CONVERSATION = -1
@@ -111,6 +112,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   const off = disabledReason !== null
   const box = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLTextAreaElement>(null)
+  useKeepTyping(text, attachments.length)
   // A chat that opens takes the typing, as the terminal under it would, when nothing else on the page has it:
   // the new-chat page has just closed, or the starting chat's box was replaced by this one.
   useEffect(() => {

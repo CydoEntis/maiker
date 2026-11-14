@@ -1111,7 +1111,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   Draft files live in `composerStore` beside the text, so switching views loses nothing. Each is a chip (kind icon,
   name, size, a Remove button) or, for a pasted image, a thumbnail made from the bytes the window already holds
   (an object URL, revoked on remove or send). A chip is at most 240px wide: a long name is cut with an ellipsis (its
-  whole name is the tooltip), and the thumbnail, size and Remove stay inside it. Sending builds the text with `buildAttachmentMessage` (the text, then a
+  whole name is the tooltip), and the thumbnail, size and Remove stay inside it. When a file lands (a drop, or a picture pasted for
+  another machine, which arrives after the paste has ended) and focus is not in another field, it goes back to the
+  message box with the caret at the end (`useKeepTyping`), so typing carries on. Sending builds the text with `buildAttachmentMessage` (the text, then a
   fixed block naming each kept file by path); a message may be only files. A failed send gives text and files back.
   A sent message is shown by `parseAttachmentMessage` as its text and chips (name, and a thumbnail for an image; "no longer available"
   when `attachments_exist` says the kept file was swept). An image thumbnail, in a draft or a sent message, opens the picture
