@@ -283,6 +283,12 @@ impl Transcript {
         notes: &mut Vec<Note>,
     ) {
         let command = self.local_command.take();
+        // A model picked in the terminal is the model from here on, before any reply says so.
+        if command.as_deref().is_some_and(|command| command.split_whitespace().next() == Some("/model"))
+            && let Some(model) = model_set_to(output)
+        {
+            self.meta.model = Some(model);
+        }
         if !output.trim().is_empty() {
             let turn = self.turn_id(at_ms, notes);
             let item = json!({
@@ -788,6 +794,37 @@ fn slash_command(text: &str) -> Option<String> {
     } else {
         format!("{name} {args}")
     })
+}
+
+/// How Claude Code's `/model` says which model it switched to: "Set model to `Haiku 5.5` and saved
+/// as your default for new sessions" (older builds leave out the backticks).
+const MODEL_SET_PREFIX: &str = "Set model to ";
+
+/// The model a `/model` command's output says it switched to, by the name it gave ("Haiku 5.5").
+/// None when it kept the model or said something else.
+fn model_set_to(output: &str) -> Option<String> {
+    let plain = clean_text(output);
+    let (_, after) = plain.split_once(MODEL_SET_PREFIX)?;
+    let name = match after.strip_prefix('`') {
+        Some(quoted) => quoted.split_once('`')?.0,
+        None => first_words(after),
+    };
+    let name = name.trim();
+    (!name.is_empty() && name.chars().count() <= MAX_MODEL_NAME_CHARS).then(|| name.to_owned())
+}
+
+/// The longest model name kept from a command's output: a real one is a few words.
+const MAX_MODEL_NAME_CHARS: usize = 60;
+
+/// The words of an unquoted model name: everything up to the first word that starts the rest of the
+/// sentence ("and saved…", "with high effort") or the end of the line.
+fn first_words(text: &str) -> &str {
+    let line = text.split(['\n', '(', '…']).next().unwrap_or_default();
+    [" and ", " with ", " for "]
+        .iter()
+        .filter_map(|stop| line.find(stop))
+        .min()
+        .map_or(line, |end| &line[..end])
 }
 
 /// The text between `<tag>` and `</tag>`, when the text has both.

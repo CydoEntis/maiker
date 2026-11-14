@@ -28,7 +28,7 @@ import { keepComposerFocus } from '../keepComposerFocus'
 import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
-import { writeChoice } from '../agentChoice'
+import { noteAgentSaid, writeChoice } from '../agentChoice'
 import { isWorktree, useFolderBranches } from '@/features/workspace/model/newChatHost'
 import { Composer } from './Composer'
 import { ChatItem, type ChatItemContext } from './ChatItems'
@@ -365,6 +365,9 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
     if (started !== null) writeChoice(link.conversation, { model: started.model, reasoning: started.reasoning })
     releaseStartChoice(sessionId)
   }, [sessionId, started, link.conversation])
+  // Once the agent says it runs another model or effort than it last said (a /model typed in the terminal), that is
+  // what the message box shows and what the next message keeps. After the start choice above, so it is not undone.
+  useEffect(() => { noteAgentSaid(link.conversation, { model: metaModel, effort }) }, [link.conversation, metaModel, effort])
   // The session's unsent text comes along when its chat was given a new conversation number.
   useEffect(() => {
     if (sessionId !== undefined) followComposer(sessionId, link.conversation)
