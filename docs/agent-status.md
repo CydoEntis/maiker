@@ -141,6 +141,13 @@ The screen fallback (`daemon/last_lines.rs`) was not run against a live Claude o
 that needs a pane inside a running daemon, and Claude and Codex already send the message, so
 the fallback is not used for them. Its readability on a real screen stays unmeasured.
 
+Plan menu (MAITTY-384), read 2026-11-14 off interactive Claude Code 2.1.325 in plan mode, after a one-step plan:
+"Claude has written up a plan and is ready to execute. Would you like to proceed?" over `1. Yes, and use auto
+mode`, `2. Yes, manually approve edits`, `3. Tell Claude what to change` (with "shift+tab to approve with this
+feedback" under it). Esc leaves the plan unanswered and Claude in plan mode. The binary also holds "Yes, clear
+context…", "Yes, auto-accept edits" and "No, keep planning", shown in other sessions, so the chat reads the menu
+off the screen and never assumes it.
+
 Permission-prompt lifetime (ticket 31, `NEEDS_SETTLES`), measured 2026-11-06 on Linux with
 interactive Claude Code 2.1.319 in a PTY (`scripts/measure-permission-prompt.py MODE TURNS`;
 one "create x.txt" turn each, 24 real turns). The time is from the `PermissionRequest` hook to

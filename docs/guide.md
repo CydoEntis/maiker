@@ -968,7 +968,10 @@ message box. The message box is off, and says why, until you have answered.
   **No**, and the keys `y` and `n` do the same from anywhere in the chat except a text field. They
   type Claude's own answer into its terminal.
 - **A plan Claude wants to start on** (in plan mode). The card shows the plan, formatted, with
-  **Approve** (`y`), which picks the first choice of Claude's plan menu, and **Keep planning** (`n`).
+  Claude's own menu for it, each choice in Claude's words with its number key (on Claude Code 2.1.325:
+  "Yes, and use auto mode", "Yes, manually approve edits", "Tell Claude what to change"), and **Keep planning**
+  (`n`, Esc in the terminal). When the menu cannot be read off the screen (another machine's session), the card
+  leaves the answer to the terminal instead of guessing a key.
 - **A question Claude asks.** Each choice is a button, and its number key picks it. A prompt with several questions (up to 4, each
   with 2 to 4 choices) shows each one with its choices and one **Send answers** button, which stays
   off until every question has an answer. Nothing is typed to the agent before then, so you can still

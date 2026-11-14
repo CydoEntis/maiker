@@ -51,3 +51,23 @@ export function askedPlan(events: readonly ChatEvent[]): AskedPlan | null {
   }
   return null
 }
+
+const MENU_LINE = /^(?:❯\s*)?(\d+)\.\s+(.*\S)\s*$/
+/** A menu offers at least this many choices; one numbered line is a step of the plan, not a menu. */
+const FEWEST_CHOICES = 2
+
+/**
+ * The choices of Claude's plan menu, in its order and words, from the daemon's reading of the screen (`asking`):
+ * the lines from the last one numbered 1, which must run 1, 2, 3… to the end. The daemon takes in every numbered
+ * line near the menu, and a plan's own steps are numbered too, so anything before that last 1 is the plan.
+ * Empty when there is no such menu, and the card then leaves the answer to the terminal.
+ */
+export function planMenuChoices(asking: string): string[] {
+  const rows = asking.split('\n').map((line) => MENU_LINE.exec(line.trim()))
+  const start = rows.findLastIndex((row) => row?.[1] === '1')
+  if (start === -1) return []
+  const menu = rows.slice(start)
+  const inOrder = menu.every((row, at) => row !== null && Number(row[1]) === at + 1)
+  return inOrder && menu.length >= FEWEST_CHOICES ? menu.map((row) => row?.[2] ?? '') : []
+}
+

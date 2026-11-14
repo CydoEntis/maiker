@@ -6,7 +6,8 @@ import type { PermissionAsk } from '@/data/preview'
 import type { ApprovalDecision, ApprovalEvent } from '../chatEvents'
 import { ANSWER_KEY, type AskChoice } from '../permissionAsk'
 import type { AskedPlan } from '../planApproval'
-import { PLAN_TOOL } from '../planApproval'
+import { PLAN_TOOL, planMenuChoices } from '../planApproval'
+import { KEY_ESCAPE } from '../terminalKeys'
 import { keysToPick, type ScreenMenu } from '../screenMenu'
 import type { ApprovalActions } from './ApprovalCard'
 import { FileBadge } from './cardParts'
@@ -133,6 +134,8 @@ type PromptProps = {
   readScreen?: (() => Promise<string>) | undefined
   /** The plan a plan-approval prompt is about, from the conversation's history. */
   plan?: AskedPlan | null
+  /** What the daemon read off the agent's screen: for a plan, Claude's own menu of what to do with it. */
+  asking?: string
 }
 
 type AskedQuestion = NonNullable<PermissionAsk['questions']>[number]
@@ -203,11 +206,42 @@ function PlanBody({ plan }: { plan: AskedPlan | null }) {
 }
 
 /**
+ * A plan Claude asks to leave plan mode with, and Claude's own menu for it: each choice as the terminal words it,
+ * picked by its number. The menu differs between Claude versions and sessions ("Yes, and use auto mode", "Yes,
+ * manually approve edits", "Tell Claude what to change" on 2.1.325), so it is read off the screen, never assumed;
+ * where it cannot be read the card leaves the answer to the terminal rather than guess a key. Esc keeps planning.
+ */
+function PlanTray({ label, plan, asking, send, readScreen }: { label: string; plan: AskedPlan | null; asking: string; send: ((keys: string) => Promise<void>) | undefined; readScreen: (() => Promise<string>) | undefined }) {
+  const [busy, setBusy] = useState(false)
+  const run = (action: () => Promise<void>) => { RUN(action, setBusy) }
+  const choices = send === undefined ? [] : planMenuChoices(asking)
+  const press = send === undefined || choices.length === 0 ? undefined : send
+  return (
+    <WaitingCard
+      label={label}
+      title="Approve this plan?"
+      aside="Plan mode"
+      foot={press === undefined
+        ? (send === undefined ? <span className="mx-waiting-note">Answer in the terminal.</span> : null)
+        : <Button variant="soft" keyHint="n" aria-keyshortcuts="n" disabled={busy} title="Esc in the terminal: Claude stays in plan mode" onClick={() => { run(() => press(KEY_ESCAPE)) }}>Keep planning</Button>}
+    >
+      <PlanBody plan={plan} />
+      {press !== undefined && (
+        <div className="mx-waiting-options" role="group" aria-label="Claude's plan menu">
+          {choices.map((choice, index) => <Choice key={`${String(index)}-${choice}`} label={choice} index={index} picked={false} busy={busy} onPick={() => { run(() => press(String(index + 1))) }} />)}
+        </div>
+      )}
+      {press === undefined && send !== undefined && <TerminalPrompt readScreen={readScreen} sendKeys={send} />}
+    </WaitingCard>
+  )
+}
+
+/**
  * What an agent in a terminal is stopped on, from its own hook and never the screen (ADR 0003). The
  * buttons exist only where the daemon knows the keys that answer this agent; otherwise the card says
  * to answer in the terminal rather than guess.
  */
-export function PromptTray({ agent, ask, online, answer, pick, pickAll, sendKeys, readScreen, plan = null }: PromptProps) {
+export function PromptTray({ agent, ask, online, answer, pick, pickAll, sendKeys, readScreen, plan = null, asking = '' }: PromptProps) {
   const [busy, setBusy] = useState(false)
   const run = (action: () => Promise<void>) => { RUN(action, setBusy) }
   const choices = ask?.choices ?? []
@@ -219,25 +253,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, sendKeys
   const label = `${agent} needs your permission`
   const mirror = sendKeys !== undefined && online ? sendKeys : undefined
 
-  if (ask?.tool === PLAN_TOOL) {
-    return (
-      <WaitingCard
-        label={label}
-        title="Approve this plan?"
-        aside="Plan mode"
-        onEnter={canAnswer ? () => { run(() => answer('approve')) } : undefined}
-        foot={canAnswer ? (
-          <>
-            <Button variant="needs" keyHint="y" aria-keyshortcuts="y" disabled={busy} title="Picks the first choice in the agent's plan menu" onClick={() => { run(() => answer('approve')) }}>Approve</Button>
-            <Button variant="soft" keyHint="n" aria-keyshortcuts="n" disabled={busy} onClick={() => { run(() => answer('deny')) }}>Keep planning</Button>
-          </>
-        ) : mirror === undefined ? <span className="mx-waiting-note">Answer in the terminal.</span> : null}
-      >
-        <PlanBody plan={plan} />
-        {!canAnswer && mirror !== undefined && <TerminalPrompt readScreen={readScreen} sendKeys={mirror} />}
-      </WaitingCard>
-    )
-  }
+  if (ask?.tool === PLAN_TOOL) return <PlanTray label={label} plan={plan} asking={asking} send={mirror} readScreen={readScreen} />
 
   if (sendAll !== undefined) {
     return (

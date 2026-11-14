@@ -99,6 +99,7 @@ export function ChatPane(props: ChatPaneProps) {
             typeInto={props.typeInto}
             paneQueue={props.paneQueue}
             ask={props.ask ?? null}
+            asking={props.asking ?? ''}
             folder={props.folder ?? ''}
             branch={props.branch ?? null}
             subagent={props.subagent ?? null}
