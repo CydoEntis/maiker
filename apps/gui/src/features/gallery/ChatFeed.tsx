@@ -52,6 +52,8 @@ const started = (ms: number) => ({ startedAtMs: ms, completedAtMs: ms + TOOK_MS 
 
 const IDLE = () => Promise.resolve()
 const ACTIONS = { answer: () => undefined, answerInput: () => undefined, remember: () => undefined, busy: false }
+/** Claude Code 2.1.325's plan menu, as the daemon reads it off the screen. */
+const PLAN_MENU = 'Would you like to proceed?\n1. Yes, and use auto mode\n2. Yes, manually approve edits\n3. Tell Claude what to change'
 const PLAN = { text: '#### Partial refunds\n1. Subtract earlier refunds in `refundable()`.\n2. Add `POST /orders/:id/refunds`.\n3. Test the limits.', cut: false }
 
 /** When the gallery opened, in unix seconds; the helpers started a little before. */
@@ -85,7 +87,7 @@ export function WaitingCards() {
       <div className="mx-chat-column">
         <div><ApprovalTray event={approvalEvent('r1', { command: 'pnpm db:migrate --env staging', canRemember: true })} actions={ACTIONS} agent="Claude" />{box}</div>
         <div><ApprovalTray event={approvalEvent('r2', { approvalKind: 'FileChange', command: null, changes: ['src/refunds/partial.ts', 'src/api/refunds.ts', 'docs/refunds.md'].map((path) => ({ path, kind: 'update', diff: { status: 'unavailable' as const } })) })} actions={ACTIONS} agent="Codex" />{box}</div>
-        <div><PromptTray agent="claude" online ask={{ tool: 'ExitPlanMode', detail: '', answerable: true }} answer={IDLE} plan={PLAN} />{box}</div>
+        <div><PromptTray agent="claude" online ask={{ tool: 'ExitPlanMode', detail: '', answerable: true }} answer={IDLE} sendKeys={IDLE} plan={PLAN} asking={PLAN_MENU} />{box}</div>
         <div><PromptTray agent="claude" online ask={{ tool: 'AskUserQuestion', detail: 'Which database should refunds use?', answerable: false, choices: ['Postgres', 'SQLite', 'Keep the current one'] }} answer={IDLE} pick={IDLE} />{box}</div>
         <div><PromptTray agent="claude" online ask={{ tool: 'AskUserQuestion', detail: '', answerable: false, choices: [], questions: [{ question: 'Which database?', choices: ['Postgres', 'SQLite'] }, { question: 'Which language?', choices: ['Rust', 'Go'] }] }} answer={IDLE} pickAll={IDLE} />{box}</div>
       </div>

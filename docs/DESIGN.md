@@ -665,7 +665,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   needs colour, **This session** `a` and **No** `n` soft, and for a command request **Always in this project** as a
   ghost at the right (the daemon then approves that exact command in that project without asking; see ADR 0005).
   Settings → Permissions lists these under "Commands approved for a project" (`ApprovedCommands.tsx`), each with **Forget**.
-  A plan has **Approve** `y` and **Keep planning** `n`; a form **Send answer(s)** `⏎`; a menu its keys. y, a and n
+  A plan has Claude's own menu, each choice on its number, and **Keep planning** `n` (no `y`: the menu has no single yes); a form **Send answer(s)** `⏎`; a menu its keys. y, a and n
   answer from anywhere in the chat but a field, a choice's number picks it, and Enter on the card gives its main
   answer. Answering removes it, the box unlocks and the agent is working again (its row and the badge follow the
   daemon); the request then folds into one line in the feed (a hairline row: its mark, "Allowed for this session",

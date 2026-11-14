@@ -35,7 +35,7 @@ import { Composer } from './Composer'
 import { ChatItem, type ChatItemContext } from './ChatItems'
 import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
-import { askedPlan, PLAN_TOOL } from '../planApproval'
+import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
 import type { BranchMenuSpec } from './BranchMenu'
 import { ProblemBanner } from './ProblemBanner'
@@ -122,6 +122,8 @@ type Props = {
   paneQueue?: PaneQueue | undefined
   /** The permission prompt the agent's hook says its terminal is stopped on, for a chat that follows it. */
   ask?: PermissionAsk | null
+  /** What the daemon read off the agent's screen while it is stopped: the lines asked and the numbered choices. */
+  asking?: string
   /** The pane's own status, live in the sidebar: the chat shows working at once and reads then, instead of at its next poll. */
   paneStatus?: SessionStatus
   /** The session's id: a message typed while its agent was starting is held under it, and goes out from here. */
@@ -153,7 +155,7 @@ type Props = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, worktree: paneWorktree, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, sessionId, paneStatus, folder = '', branch = null, onOpenFolder = null, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, branchMenu, effort = null, rewind, hideSuccessfulTools = false, fileSearch }: Props) {
+export function ChatSession({ link, agent, online, hasTerminal = true, worktree: paneWorktree, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, folder = '', branch = null, onOpenFolder = null, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, branchMenu, effort = null, rewind, hideSuccessfulTools = false, fileSearch }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
   const paneWorking = paneStatus === 'working'
   const [branches] = useFolderBranches(root ?? '')
@@ -457,6 +459,19 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
     if (event.ctrlKey || event.metaKey || event.altKey || typedInField(event.target)) return
     // A question's number picks its choice, as it does in the agent's own menu.
     const choice = Number(event.key) - 1
+    // A plan is answered from Claude's own menu as the screen shows it, never a guessed key (see PlanTray).
+    if (ask?.tool === PLAN_TOOL) {
+      const menu = sendKeys === undefined ? [] : planMenuChoices(asking)
+      if (!stoppedOnPrompt || !online || sendKeys === undefined || menu.length === 0) return
+      if (Number.isInteger(choice) && choice >= 0 && choice < menu.length) {
+        event.preventDefault()
+        void sendKeys(String(choice + 1))
+      } else if (event.key.toLowerCase() === 'n') {
+        event.preventDefault()
+        void sendKeys(ANSWER_KEYS.deny)
+      }
+      return
+    }
     const choices = ask?.choices ?? []
     if (stoppedOnPrompt && online && pickChoice !== undefined && (ask?.questions?.length ?? 0) <= 1 && Number.isInteger(choice) && choice >= 0 && choice < choices.length) {
       event.preventDefault()
@@ -482,7 +497,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
 
   const question = pending !== null
     ? <ApprovalTray event={pending} actions={approval} agent={agent} />
-    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} sendKeys={sendKeys} readScreen={readScreen} plan={plan} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
+    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
     !offline && incomplete !== null ? `History is incomplete: ${incomplete}.` : null,

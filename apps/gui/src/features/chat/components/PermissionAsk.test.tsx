@@ -162,23 +162,48 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(typeInto).toHaveBeenCalledExactlyOnceWith('2')
   })
 
-  it('shows the plan Claude asks to leave plan mode with, formatted, and approves or keeps planning with y and n', async () => {
+  const planHistory = () => {
     const daemon = new FakeDaemonHistory()
     daemon.upsert(daemon.message('t1', 'u', 'User', 'plan the refunds'))
     daemon.upsert({ source: { conversation: FAKE_CONVERSATION, turn: 't1', item: 'p' }, content: { Tool: { kind: 'commandExecution', label: 'ExitPlanMode ', output: '', input: { plan: '## Refunds\n1. Add the endpoint' } } }, state: 'Completed' })
     daemon.status = 'Blocked'
     fake.current = daemon
+  }
+  const PLAN_ASKING = 'Would you like to proceed?\n1. Add the endpoint\n1. Yes, and use auto mode\n2. Yes, manually approve edits\n3. Tell Claude what to change'
+
+  it("shows the plan formatted with Claude's own menu for it, each choice picked by its number, and n keeps planning", async () => {
+    planHistory()
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
-    render(<ChatSession link={LINK} agent="claude" online typeInto={typeInto} ask={{ tool: 'ExitPlanMode', detail: '', answerable: true }} />)
+    render(<ChatSession link={LINK} agent="claude" online typeInto={typeInto} ask={{ tool: 'ExitPlanMode', detail: '', answerable: true }} asking={PLAN_ASKING} />)
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
     const card = screen.getByRole('region', { name: 'claude needs your permission' })
     expect(within(card).getByText('Approve this plan?')).toBeInTheDocument()
     expect(within(card).getByRole('heading', { name: 'Refunds' })).toBeInTheDocument()
+    const menu = within(card).getByRole('group', { name: "Claude's plan menu" })
+    expect(within(menu).getAllByRole('button').map((button) => button.textContent)).toEqual(['Yes, and use auto mode1', 'Yes, manually approve edits2', 'Tell Claude what to change3'])
+    expect(within(card).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
+
+    fireEvent.keyDown(card, { key: '2' })
+    expect(typeInto).toHaveBeenLastCalledWith('2')
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(within(card).getByRole('button', { name: 'Keep planning' })).toHaveAttribute('aria-keyshortcuts', 'n')
     fireEvent.keyDown(card, { key: 'n' })
+    expect(typeInto).toHaveBeenLastCalledWith(ANSWER_KEYS.deny)
+  })
 
-    expect(typeInto).toHaveBeenCalledExactlyOnceWith(ANSWER_KEYS.deny)
+  it('sends no guessed key for a plan whose menu could not be read, and leaves it to the terminal', async () => {
+    planHistory()
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    render(<ChatSession link={LINK} agent="claude" online typeInto={typeInto} ask={{ tool: 'ExitPlanMode', detail: '', answerable: true }} />)
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+
+    const card = screen.getByRole('region', { name: 'claude needs your permission' })
+    expect(within(card).queryByRole('group', { name: "Claude's plan menu" })).not.toBeInTheDocument()
+    expect(within(card).getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
+    fireEvent.keyDown(card, { key: 'y' })
+    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(typeInto).not.toHaveBeenCalled()
   })
 
   it('still says the agent is waiting when its hook reported no question', async () => {
