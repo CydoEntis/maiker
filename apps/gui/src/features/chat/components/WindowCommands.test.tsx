@@ -11,12 +11,14 @@ const fake = vi.hoisted(() => ({
   current: null as null | { read: (cursor: never) => Promise<unknown> },
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string) => Promise<unknown>>(),
   loadAgentCommands: vi.fn<(agent: string, folder: string) => Promise<{ name: string; description: string; hint: string; aliases: string[] }[]>>(),
+  sideAnswer: vi.fn<(conversation: number, ask: unknown) => Promise<{ ok: true; text: string } | { ok: false; reason: string }>>(),
 }))
 
 vi.mock('@/api/daemon', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/daemon')>()),
   submitMessage: fake.submitMessage,
   loadAgentCommands: fake.loadAgentCommands,
+  sideAnswer: fake.sideAnswer,
   readConversationPage: (_id: number, cursor: unknown) => {
     if (fake.current === null) throw new Error('no fake daemon')
     return fake.current.read(cursor as never)
@@ -24,6 +26,8 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
 }))
 
 const COMMANDS = [
+  { name: 'context', description: 'Show what fills the context', hint: '', aliases: [] },
+  { name: 'goal', description: 'Set a goal', hint: '[condition]', aliases: [] },
   { name: 'clear', description: 'Start a new conversation', hint: '', aliases: [] },
   { name: 'compact', description: 'Keep a summary of the conversation', hint: '', aliases: [] },
   { name: 'model', description: 'Pick the model', hint: '[model]', aliases: [] },
@@ -38,6 +42,7 @@ beforeEach(() => {
   forgetSlashCommands()
   fake.submitMessage.mockReset().mockResolvedValue({})
   fake.loadAgentCommands.mockReset().mockResolvedValue(COMMANDS)
+  fake.sideAnswer.mockReset().mockResolvedValue({ ok: true, text: '## Context Usage\n\n**Tokens:** 48.2k' })
 })
 
 afterEach(() => {
@@ -138,5 +143,75 @@ describe('the commands the window answers itself', () => {
     expect(onShowTerminal).toHaveBeenCalledOnce()
     await settle(1000)
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/exit', '\r'])
+  })
+
+  it('answers /context in a card above the box, never in the conversation, and the card goes when closed', async () => {
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/cont')
+    expect(offered()).toEqual(['/contextanswered hereShow what fills the context'])
+    await user.keyboard('{Enter}')
+    await settle()
+
+    expect(fake.sideAnswer).toHaveBeenCalledExactlyOnceWith(FAKE_CONVERSATION, { command: 'context' })
+    const card = screen.getByRole('region', { name: 'Context' })
+    expect(within(card).getByRole('heading', { name: 'Context Usage' })).toBeInTheDocument()
+    expect(within(card).getByText('Not added to the conversation')).toBeInTheDocument()
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+
+    await user.click(within(card).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('region', { name: 'Context' })).not.toBeInTheDocument()
+  })
+
+  it('asks a side question while Claude works on, and can ask it in the conversation instead', async () => {
+    let answer: (reply: { ok: true; text: string }) => void = () => {}
+    fake.sideAnswer.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/btw which file was that?{Enter}')
+
+    const card = screen.getByRole('region', { name: 'Side question' })
+    expect(within(card).getByText('which file was that?')).toBeInTheDocument()
+    expect(within(card).getByRole('status')).toHaveTextContent('Asking Claude…')
+    expect(fake.sideAnswer).toHaveBeenCalledExactlyOnceWith(FAKE_CONVERSATION, { question: 'which file was that?' })
+    answer({ ok: true, text: 'src/tax.js' })
+    await settle()
+    expect(within(card).getByText('src/tax.js')).toBeInTheDocument()
+
+    await user.click(within(card).getByRole('button', { name: 'Ask in the conversation' }))
+    expect(fake.submitMessage).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 1, 'which file was that?')
+    expect(screen.queryByRole('region', { name: 'Side question' })).not.toBeInTheDocument()
+  })
+
+  it('waits for the question after /btw alone, and says so when Claude Code cannot answer', async () => {
+    fake.sideAnswer.mockResolvedValue({ ok: false, reason: 'Claude Code took too long to answer' })
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/btw{Escape}{Enter}')
+    expect(box).toHaveValue('/btw ')
+    expect(fake.sideAnswer).not.toHaveBeenCalled()
+
+    await user.type(box, 'why?{Enter}')
+    await settle()
+    expect(within(screen.getByRole('region', { name: 'Side question' })).getByRole('alert')).toHaveTextContent('Claude Code took too long to answer')
+  })
+
+  it('sends a reporting command typed with something after it as typed, since that changes something', async () => {
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/goal tests pass{Escape}{Enter}')
+
+    expect(fake.sideAnswer).not.toHaveBeenCalled()
+    expect(fake.submitMessage).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 1, '/goal tests pass')
+  })
+
+  it('shows where the phone app is for /mobile, which Claude Code draws as a QR code', async () => {
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/mobile{Escape}{Enter}')
+
+    const card = screen.getByRole('region', { name: 'Claude on your phone' })
+    expect(within(card).getByRole('button', { name: 'claude.ai/mobile' })).toHaveAttribute('title', 'https://claude.ai/mobile (click to open in your browser)')
+    expect(fake.sideAnswer).not.toHaveBeenCalled()
   })
 })

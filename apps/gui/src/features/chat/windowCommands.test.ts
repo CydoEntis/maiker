@@ -44,4 +44,15 @@ describe('the commands the window answers itself', () => {
     expect(typedCommand('/diff')).toEqual({ name: 'diff', args: '' })
     expect(typedCommand('show the /diff')).toBeNull()
   })
+
+  it('asks Claude Code beside the conversation for a reporting command typed alone, and for /btw with its question', () => {
+    expect(windowRouteOf('context')).toEqual({ kind: 'aside', title: 'Context', ask: { command: 'context' } })
+    expect(windowRouteOf('skill-doctor')).toEqual({ kind: 'aside', title: 'Skills', ask: { command: 'skill-doctor' } })
+    expect(windowRouteOf('btw', '  which file?  ')).toEqual({ kind: 'aside', title: 'Side question', ask: { question: 'which file?' } })
+    expect(windowRouteOf('btw')).toEqual({ kind: 'complete', text: '/btw ' })
+    expect(windowRouteOf('config', 'editor=vim')).toBeNull()
+    expect(windowRouteOf('advisor', 'opus')).toBeNull()
+    expect(windowRouteOf('mobile')?.kind).toBe('note')
+  })
 })
+

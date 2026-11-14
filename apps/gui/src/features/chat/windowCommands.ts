@@ -1,3 +1,4 @@
+import type { SideAsk, SideCommand } from '@/api/daemon'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SlashCommand } from './slashCommands'
@@ -10,6 +11,10 @@ import type { SlashCommand } from './slashCommands'
  * - `commands`: every command the box offers, as `/` alone lists them.
  * - `confirm`: the command still runs as Claude Code takes it, once the person says yes, since it ends or empties the
  *   session.
+ * - `aside`: Claude Code answers in a card above the box, from a copy of the session the daemon never saves, so the
+ *   conversation is not added to (`sideAnswer`).
+ * - `note`: a card above the box that says where the thing is, for a command that only shows a web page's address.
+ * - `complete`: the box is filled in, for a command that is nothing without what follows it.
  */
 export type WindowRoute =
   | { readonly kind: 'settings'; readonly section: DesktopSettingsSection }
@@ -17,11 +22,23 @@ export type WindowRoute =
   | { readonly kind: 'recent' }
   | { readonly kind: 'commands' }
   | { readonly kind: 'confirm'; readonly ask: ConfirmAsk }
+  | { readonly kind: 'aside'; readonly title: string; readonly ask: SideAsk }
+  | { readonly kind: 'note'; readonly title: string; readonly text: string }
+  | { readonly kind: 'complete'; readonly text: string }
 
 export type ConfirmAsk = { readonly title: string; readonly body: string; readonly confirmLabel: string }
 
 /** The picker's tag for a command that runs as Claude Code takes it once the person says yes. */
 export const ASKS_FIRST = 'asks first'
+
+/** The picker's tag for a command answered in a card above the box. */
+export const ANSWERED_HERE = 'answered here'
+
+/** Claude Code's side question: what follows the name is asked, and the name alone waits for it. */
+const SIDE_QUESTION = 'btw'
+
+const aside = (command: SideCommand, title: string): WindowRoute => ({ kind: 'aside', title, ask: { command } })
+const note = (title: string, text: string): WindowRoute => ({ kind: 'note', title, text })
 
 const END: WindowRoute = { kind: 'confirm', ask: { title: 'End this session?', body: 'Claude Code quits and the session ends. Its conversation is kept, so Recent sessions can reopen it.', confirmLabel: 'End session' } }
 const BACKGROUND: WindowRoute = { kind: 'confirm', ask: { title: 'Send this session to the background?', body: 'Claude Code hands it to its own background service and leaves this pane. Maitty does not list sessions running there.', confirmLabel: 'Send to background' } }
@@ -45,17 +62,31 @@ const ROUTES: Readonly<Record<string, { readonly route: WindowRoute; readonly op
   background: { route: BACKGROUND, opens: ASKS_FIRST },
   bg: { route: BACKGROUND, opens: ASKS_FIRST },
   clear: { route: CLEAR, opens: ASKS_FIRST },
+  [SIDE_QUESTION]: { route: { kind: 'complete', text: `/${SIDE_QUESTION} ` }, opens: ANSWERED_HERE },
+  context: { route: aside('context', 'Context'), opens: ANSWERED_HERE },
+  usage: { route: aside('usage', 'Usage'), opens: ANSWERED_HERE },
+  'skill-doctor': { route: aside('skill-doctor', 'Skills'), opens: ANSWERED_HERE },
+  goal: { route: aside('goal', 'Goal'), opens: ANSWERED_HERE },
+  advisor: { route: aside('advisor', 'Advisor'), opens: ANSWERED_HERE },
+  config: { route: aside('config', 'Config'), opens: ANSWERED_HERE },
+  mcp: { route: aside('mcp', 'MCP servers'), opens: ANSWERED_HERE },
+  // Claude Code draws a QR code or opens a browser for these; the address is all there is to show.
+  mobile: { route: note('Claude on your phone', 'Get the Claude app at [claude.ai/mobile](https://claude.ai/mobile), then sign in with the same account to see your sessions.'), opens: ANSWERED_HERE },
+  'privacy-settings': { route: note('Privacy settings', 'Your privacy settings are on your account page: [claude.ai/settings/data-privacy-controls](https://claude.ai/settings/data-privacy-controls).'), opens: ANSWERED_HERE },
+  artifacts: { route: note('Artifacts', 'Your published and shared artifacts are at [claude.ai/code/artifacts](https://claude.ai/code/artifacts).'), opens: ANSWERED_HERE },
 }
 
 /**
  * The window's way to run a command typed or picked in the box: null when it goes to Claude Code as typed. A command
- * typed with something after its name goes as typed too, except one that only asks first, since the window has no
- * place for what was typed.
+ * typed with something after its name goes as typed too (`/goal <condition>` sets a goal, which a side answer must
+ * not), except one that only asks first, and `/btw`, whose question is what follows.
  */
 export function windowRouteOf(name: string, args = ''): WindowRoute | null {
   const found = ROUTES[name]
   if (found === undefined) return null
-  if (args.trim() !== '' && found.route.kind !== 'confirm') return null
+  const question = args.trim()
+  if (name === SIDE_QUESTION && question !== '') return { kind: 'aside', title: 'Side question', ask: { question } }
+  if (question !== '' && found.route.kind !== 'confirm') return null
   return found.route
 }
 

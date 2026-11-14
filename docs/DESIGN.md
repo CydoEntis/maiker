@@ -418,8 +418,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   the commands that only its terminal runs out of that list (`/help`, `/permissions`, `/resume`, `/add-dir`…), so they
   are written by hand in `terminalCommands.ts` (from Claude Code 2.1.322, each run in 2.1.325) and offered, tagged `terminal`, to an agent
   that has a terminal: running one types it there and shows the terminal, since its menu is the terminal's to draw,
-  and it is refused with a toast while the agent works. One typed out with what it takes (`/btw which file?`) goes
-  the same way, since Claude Code draws its answer only in the terminal; `/btw` alone may go while the agent works.
+  and it is refused with a toast while the agent works. One typed out with what it takes goes the same way, since
+  Claude Code draws its answer only in the terminal.
   Some of them the window answers itself, in a chat session too, and the picker tags each with where it goes instead
   of `terminal` (`windowCommands.ts`): `/diff` opens the side panel's Changes, `/rewind` (`/checkpoint`, `/undo`) its
   History, `/permissions` (`/allowed-tools`) Settings › Agents with the approved commands, `/resume` Recent sessions,
@@ -427,6 +427,18 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   to Claude Code as typed, which has a use for it. `/exit` (`/quit`), `/background` (`/bg`) and `/clear` are tagged
   `asks first`: a `ConfirmCloseDialog` with Cancel focused says what happens, and only a yes sends the command as typed
   (typed into the terminal for the terminal's ones), refused with a toast while the agent works.
+  **Side answers** (tagged `answered here`): `/btw <question>` and the commands that only report, typed alone
+  (`/context`, `/usage`, `/skill-doctor`, `/goal`, `/advisor`, `/config`, `/mcp`), are answered in a card above the
+  message box (`AsideCard`, `useAside`), as wide as the messages: a title, "Not added to the conversation" in
+  `--muted`, a Close button; the question in italics; "Asking Claude…" while it runs, then the answer as Markdown,
+  scrolling inside the card past 38% of the window's height. Its foot has **Copy** and, for a question, **Ask in the
+  conversation**, which sends the question as a message. Esc or Close puts it away, and a new one replaces it. The
+  daemon answers from a copy of the session it never saves (`sideAnswer`, API_PATTERNS), so it may run while the agent
+  works; a failure is the card in the `err` tone with the daemon's reason. `/btw` alone puts `/btw ` in the box. One of
+  the reporting commands typed with something after it (`/goal tests pass`, `/config editor=vim`) changes something,
+  so it goes to Claude Code as typed. `/mobile`, `/privacy-settings` and `/artifacts`, which Claude Code shows as a
+  QR code or a browser page, are the same card with the web address to open. Side answers are for sessions on this
+  computer; another machine's card says so.
   The chat leaves out Claude's internal commands and the ones that only change how its terminal looks (the theme,
   colour, renderer, scroll speed, focus view, voice input; `CLAUDE_HIDDEN_COMMANDS`); they still work typed in the terminal.
   A listed command that opens a menu (`/model`, `/config`) still shows that menu in the terminal, not in the chat.

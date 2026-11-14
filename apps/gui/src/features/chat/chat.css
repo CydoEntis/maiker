@@ -245,6 +245,12 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 /* The message box. */
 .mx-composer { flex-shrink: 0; padding: 4px 20px 14px; }
 .mx-composer-column { margin: 0 auto; width: 100%; max-width: var(--chat-width, 760px); display: flex; flex-direction: column; align-items: center; }
+/* A side answer above the box, as wide as the messages; a long one scrolls inside it so the conversation stays in sight. */
+.mx-aside { flex: none; align-self: center; width: calc(100% - 40px); max-width: var(--chat-width, 760px); margin: 6px 20px 2px; }
+.mx-aside-note { flex: none; font-size: 11.5px; font-weight: 400; color: var(--muted); }
+.mx-aside-body { max-height: 38vh; overflow-y: auto; font-size: 13px; }
+.mx-aside-question { margin: 0 0 6px; color: var(--fg2); font-style: italic; }
+.mx-aside-wait { margin: 0; color: var(--muted); }
 .mx-composer-error { margin: 6px 0 0; align-self: stretch; font-size: 12px; color: var(--danger); }
 .mx-queue-row { align-self: stretch; display: flex; justify-content: flex-end; align-items: flex-start; gap: 8px; margin: 0 0 8px; }
 .mx-queue { flex: 1; min-width: 0; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }

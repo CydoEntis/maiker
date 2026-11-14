@@ -49,6 +49,8 @@ import type { InspectView } from '@/features/inspect/InspectPanel'
 import type { ConfirmAsk, WindowRoute } from '../windowCommands'
 import { namedCommand } from '../slashCommands'
 import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
+import { useAside } from '../useAside'
+import { AsideCard } from './AsideCard'
 import type { RewindPlace } from '../editFromHere'
 import type { FileSearchPlace } from '../fileMention'
 import { useEditFromHere } from '../useEditFromHere'
@@ -306,6 +308,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
   const [confirming, setConfirming] = useState<{ ask: ConfirmAsk; typed: string } | null>(null)
+  const aside = useAside(link.conversation)
   // Once confirmed it runs where Claude Code runs it: one only the terminal answers is typed there and shown, the rest are sent.
   const runConfirmed = (typed: string) => {
     if (runInTerminal !== undefined && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) runInTerminal(typed)
@@ -317,7 +320,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
       case 'panel': windowActions.openPanel(route.view); return
       case 'recent': windowActions.openRecent(); return
       case 'confirm': setConfirming({ ask: route.ask, typed }); return
-      case 'commands': return
+      case 'aside': aside.ask(route.title, route.ask); return
+      case 'note': aside.show(route.title, route.text); return
+      case 'commands':
+      case 'complete': return
     }
   }
   // A message just sent shows at once, with the agent taken to be at work on it, until the history has it.
@@ -550,6 +556,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
       ) : (
         <ChatSkeleton />
       )}
+      {aside.aside !== null && <AsideCard aside={aside.aside} onClose={aside.close} onAskInConversation={(question) => { aside.close(); void sendText(question) }} />}
       <Composer
         agent={agent}
         composer={composer}

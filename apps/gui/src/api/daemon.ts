@@ -1174,6 +1174,33 @@ export async function savedConversations(agent: 'claude' | 'codex', folder: stri
   return found === 'NotSupported' ? [] : found.Listed
 }
 
+/** The commands Claude Code answers beside a conversation, with nothing after the name: each only reports. */
+export const SIDE_COMMANDS = ['context', 'usage', 'skill-doctor', 'goal', 'advisor', 'config', 'mcp'] as const
+export type SideCommand = (typeof SIDE_COMMANDS)[number]
+/** What a side answer asks: a question answered from the conversation (`/btw`), or one of `SIDE_COMMANDS`. */
+export type SideAsk = { readonly question: string } | { readonly command: SideCommand }
+export type SideReply = { readonly ok: true; readonly text: string } | { readonly ok: false; readonly reason: string }
+
+const SideAnswerSchema = z.union([
+  z.object({ Answered: z.object({ text: z.string() }) }),
+  z.literal('NotSupported'),
+  z.object({ Failed: z.object({ reason: z.string() }) }),
+])
+
+/**
+ * Claude Code's answer beside a chat's conversation, which it never adds to: the daemon resumes a copy of the session
+ * that is not saved. On this computer only, where the daemon holds the session.
+ */
+export async function sideAnswer(conversation: number, ask: SideAsk): Promise<SideReply> {
+  if (!isDesktop()) throw new Error('Side answers need the desktop app')
+  const { machine, id } = splitConversationKey(conversation)
+  if (machine !== LOCAL_MACHINE) return { ok: false, reason: 'Side answers work for sessions on this computer for now.' }
+  const wire = 'question' in ask ? { Question: ask.question } : { Command: ask.command }
+  const answer = await invokeParsed('side_answer', SideAnswerSchema, { id, ask: wire })
+  if (answer === 'NotSupported') return { ok: false, reason: 'Only Claude answers beside a conversation.' }
+  return 'Answered' in answer ? { ok: true, text: answer.Answered.text } : { ok: false, reason: answer.Failed.reason }
+}
+
 const ClosedSessionSchema = z.object({
   agent: z.string(),
   session: z.string(),

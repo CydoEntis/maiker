@@ -178,16 +178,18 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     setDraft(commandText(command))
     text.current?.focus()
   }
-  // A command the window answers itself (`windowCommands.ts`): `/help` lists every command here, the rest go to the
-  // session's chat. One that ends or empties the session is refused while the agent works, as the terminal's are.
+  // A command the window answers itself (`windowCommands.ts`): `/help` lists every command here and `/btw` alone waits
+  // for its question, the rest go to the session's chat. One that ends or empties the session is refused while the
+  // agent works, as the terminal's are; a side answer may go then, as it leaves the conversation alone.
   const routeOf = (typed: string): WindowRoute | null => {
-    if (inWindow === undefined || windowList || attachments.length > 0) return null
+    // The routes are Claude Code's commands by its names; another agent's are its own.
+    if (inWindow === undefined || agent !== 'claude' || windowList || attachments.length > 0) return null
     const parts = typedCommand(typed)
     return parts === null ? null : windowRouteOf(parts.name, parts.args)
   }
   const inWindowRun = (route: WindowRoute, typed: string) => {
-    if (route.kind === 'commands') {
-      setDraft('/')
+    if (route.kind === 'commands' || route.kind === 'complete') {
+      setDraft(route.kind === 'commands' ? '/' : route.text)
       text.current?.focus()
       return
     }
