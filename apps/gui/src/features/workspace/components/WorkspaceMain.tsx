@@ -2,11 +2,9 @@ import { Fragment } from 'react'
 import { toast } from '@/lib/toast'
 import { openDaemonLog } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from '@/features/settings/preferences'
 import { daemonConnectionError } from '@/lib/daemon-connection'
 import { errorMessage } from '@/lib/error-message'
 import { SplitHandle } from './SplitHandle'
-import { StatusBar } from './StatusBar'
 import { FindBar } from '@/features/find/FindBar'
 import { RestoreBanner } from './RestoreBanner'
 import { chatFindOf } from '@/features/chat/chatSearch'
@@ -23,9 +21,9 @@ import { resolveStartFolder } from '../model/startFolder'
 import { WorkspacePane } from './WorkspacePane'
 import { useWorkspace } from '../workspaceContext'
 
-/** The middle of the window: the new chat page, find, the service's state, the panes of each mounted tab and the status bar. */
+/** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { serviceFooterText, newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, focusMode, focusMachine, theme, shortcutChord, root, setThemeMode, pickTheme, openAppearance, setCorners, setTextSize, resetTextSize, openShortcuts } = useWorkspace()
+  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber } = useWorkspace()
   const newChatMachineLabel = sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine'
   const remotePick = useRemoteFolderPick(newChatMachine, newChatMachineLabel)
   const newChatBrowse = newChatMachine === LOCAL_MACHINE ? chooseProjectFolder : remotePick.browse
@@ -128,29 +126,6 @@ export function WorkspaceMain() {
                                   canStart={canStart}
                     onNewSession={() => { newSession(focusedMachineNumber) }}
                     onChangeStartFolder={() => { setSettingsSection('general') }}
-                  />
-                )}
-                {!focusMode && preferences.statusBar && (
-                  <StatusBar
-                    offlineText={mismatch ? serviceFooterText : undefined}
-                    online={online}
-                    machine={focusMachine}
-                    themeMode={preferences.themeMode}
-                    lightInUse={theme.light}
-                    activeTheme={theme.name}
-                    corners={preferences.corners}
-                    textSize={preferences.terminalFontSize}
-                    minTextSize={TERMINAL_FONT_SIZE_MIN}
-                    maxTextSize={TERMINAL_FONT_SIZE_MAX}
-                    shortcutChord={shortcutChord}
-                    portalContainer={root}
-                    onThemeMode={setThemeMode}
-                    onPickTheme={pickTheme}
-                    onAllThemes={openAppearance}
-                    onCorners={setCorners}
-                    onTextSize={setTextSize}
-                    onResetTextSize={resetTextSize}
-                    onOpenShortcuts={openShortcuts}
                   />
                 )}
               </main>

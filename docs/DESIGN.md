@@ -207,8 +207,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   them casts a shadow (`--sh-pop`); a waiting card rising from the message box casts `--sh-rise`. `--hl`/`--hk` (the
   highlight colour and strength) and `--sd`/`--sk` (the shadow) are theme tokens; the design's nine themes set their
   own strengths (`hk`/`sk` in their palette), and the rest take dark .7/.6 or light 1/.35 (`theme/corners.ts`).
-  **Background glow** (Settings › Appearance, `backgroundGlow`, `data-glow`) is off by default and is the only tint
-  behind the cards. A terminal sits on the card's own ground: xterm's background and ANSI black are `--main`, so a
+  Nothing tints the window behind the cards. A terminal sits on the card's own ground: xterm's background and ANSI black are `--main`, so a
   program that paints with black leaves no box. On a web view without WebGL 2 (`data-gpu="software"`) the same rules
   use cheaper values: a 1px ring for the popover shadow ([PERFORMANCE](PERFORMANCE.md)). The window ground is opaque
   on every platform (no Mica), and nothing blurs.
@@ -326,13 +325,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   terminal (agents) or Clear and Copy folder path (shells); then Close pane, only when there are several. **Close pane** on one pane of several closes only the pane when its
   session has work in it (an agent, a chat, a shell running a program): the session keeps running and stays in the
   sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session as before, with Undo.
-- **Status bar.** A 28px line at the bottom of the main area under a hairline, 11.5px muted, one line.
-  The left is empty, except "Reconnecting to maittyd…" in amber with a dashed dot when the daemon is
-  unreachable (the sidebar foot says "Service stopped" or "Restart needed" beside a red dot). The right holds quick controls: a **theme** menu (Dark, Light or System, a few themes of
-  the kind in use, and "All themes in Settings…"), the **corners** (Square or Rounded), the terminal
-  **text size** (−, the size which resets it to 14px, +; Ctrl+= and Ctrl+− do the same) and the shortcuts
-  keycaps, which open the shortcut overlay. Hidden in Focus mode and by Settings › General › Window ›
-  Status bar (off by default).
+- **No status bar.** The window has none: the daemon's state is the sidebar foot ("Service stopped" or "Restart
+  needed" beside a red dot) and the service card, the theme and corners are in Settings › Appearance, the terminal
+  text size is Ctrl+= and Ctrl+− (and Settings › Terminal), and the shortcuts open with their own key.
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; the whole-app mock). Agents only: no fleets, ships
   or tabs. A 264px card on `--card` with a `--line` hairline, 8px from the window's edges. Its header reads **Chats**
   (12px 600 `--muted`) with three 26px buttons: **Search** (the command palette; there is no filter field), **Filter
@@ -428,11 +423,11 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   by conversation number and belongs to its session: when the daemon gives the session's chat a new number, it moves
   to that number (`followComposer`).
 - **Settings pages.** ESSENTIALS: **General** (start and export folders, each the folder shown with **Browse…**, which
-  opens the system's folder picker, and a way back to the default; nothing is typed, window, updates, sessions) and **Chat** (how a
-  chat starts and is drawn: default agent, view, width, text size, full access, Yolo) and **Agents** (the account each
+  opens the system's folder picker, and a way back to the default; nothing is typed; updates; sessions) and **Chat** (how a
+  chat starts and is drawn: default agent, the view each agent's sessions open in, width, text size, Yolo) and **Agents** (the account each
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). TERMINAL: **Terminal** (text,
-  scrollback, and Panes: where an agent's terminals open, see-through), **Appearance** (look, surfaces, density and pane
+  scrollback, and Panes: where an agent's terminals open), **Appearance** (look, surfaces, density and pane
   title text, motion) and **Sidebar** (grouping, order, position, icon and text size, width). WORKSPACE and ADVANCED
   are as they were. Each page has a letter that jumps to it (G, C, E, T, A, S, U, N, M, ?, D, P).
 - **Chat size.** Settings › Chat › Chat view has **Chat width** (`chatWidth`: Auto, Narrow, Wide, Full) and **Chat

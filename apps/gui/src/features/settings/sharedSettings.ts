@@ -18,7 +18,6 @@ type Update = (change: (current: SettingsPreferences) => SettingsPreferences) =>
 export function sharedFrom(preferences: SettingsPreferences): Partial<SharedSettings> {
   const shared: Partial<SharedSettings> = {
     default_agent: preferences.defaultAgent,
-    new_session_view: preferences.newSessionView,
     sidebar_side: preferences.sidebarSide,
     theme_dark: themeIdOf(preferences.darkTheme),
     theme_light: themeIdOf(preferences.lightTheme),
@@ -34,7 +33,6 @@ export function sharedFrom(preferences: SettingsPreferences): Partial<SharedSett
 export function applyShared(preferences: SettingsPreferences, shared: SharedSettings): SettingsPreferences {
   const next: SettingsPreferences = {
     ...preferences,
-    newSessionView: shared.new_session_view,
     sidebarSide: shared.sidebar_side,
     startFolder: shared.start_dir,
     reduceMotion: shared.reduce_motion,

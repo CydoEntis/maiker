@@ -217,8 +217,7 @@ Two things seen on the user's Linux machine that look like app bugs and are not:
   cells in the colour it was told. `TerminalView.tsx` now answers OSC 10 and 11 queries with the
   theme's own foreground and background and leaves everything else to xterm. The boxes that
   remained were ANSI black backgrounds (SGR 40), which Claude Code paints under its prompt and
-  status line: the palette's black is now the terminal ground and the pane is opaque unless
-  Settings › Appearance › See-through terminal is on, where any painted background is a box.
+  status line: the palette's black is now the terminal ground and the pane is always opaque.
 
 ## What the measurement did not cover
 
