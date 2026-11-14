@@ -52,6 +52,13 @@ export function isSlashLine(text: string): boolean {
   return /^\/\S[^\n]*$/.test(text)
 }
 
+/** The command among `commands` that a one-line slash command names, by its name or an alias ("/btw which file?" → btw). */
+export function namedCommand(commands: readonly SlashCommand[], text: string): SlashCommand | undefined {
+  if (!isSlashLine(text)) return undefined
+  const name = text.slice(1).split(/\s/, 1)[0] ?? ''
+  return commands.find((command) => command.name === name || command.aliases.includes(name))
+}
+
 /** A plugin's command is written `plugin:command`; people type the part after the colon. */
 const shortName = (name: string): string => name.slice(name.lastIndexOf(':') + 1)
 

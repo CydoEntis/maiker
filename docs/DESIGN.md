@@ -416,8 +416,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   the commands that only its terminal runs out of that list (`/help`, `/permissions`, `/resume`, `/add-dir`…), so they
   are written by hand in `terminalCommands.ts` (from Claude Code 2.1.322) and offered, tagged `terminal`, to an agent
   that has a terminal: running one types it there and shows the terminal, since its menu is the terminal's to draw,
-  and it is refused with a toast while the agent works. A listed command that opens a menu (`/model`, `/config`)
-  still shows that menu in the terminal, not in the chat.
+  and it is refused with a toast while the agent works. One typed out with what it takes (`/btw which file?`) goes
+  the same way, since Claude Code draws its answer only in the terminal; `/btw` alone may go while the agent works.
+  A listed command that opens a menu (`/model`, `/config`) still shows that menu in the terminal, not in the chat.
+  A command run in the terminal shows in the chat as the person's bubble with what it printed beneath as a quiet
+  "↳ Set model to Haiku 5.5" line, never as a shell step, and a turn that was only that gets no divider. What the
+  agent then says it runs (`/model`, `/effort`) replaces the model and effort picked in the chat.
 - **The tray under the message box** is one line (`SettingsTray`). At the left: the folder, the branch in mono in
   the theme's magenta with the branch mark (or the tree and the worktree's blue; the tooltip says which), then the
   permission mode. At the right, what the agent reported using (`UsageMeters`, `usageStrip.ts`): the context, then
@@ -598,7 +602,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   rows. **Thought** is one quiet italic 26px line in `--dim` that opens to the reasoning, ruled on its left in
   `--line2`. A helper's report is one line, "↳ summary · time", the summary cut short. A request answered earlier
   folds into one line, "Allowed", "Allowed for this session" or "Denied". A turn ends with a divider (centred words
-  between hairlines, "Finished in 3m 40s · 10:46"; failed in `--err` and stopped in `--dim`, each with its mark) and,
+  between hairlines, "Finished in 3m 40s · 10:46"; failed in `--err` and stopped in `--dim`, each with its mark; a
+  turn the person stopped in the terminal is "Stopped after …", never a bubble of Claude's "[Request interrupted…]") and,
   when it edited files, the changed-files card (a head-only card: icon, "N changed files", +A −R, **Review**). card. The working line is the spinner and "claude is working · m:ss". Problems with the history (offline, incomplete, a provider error) and Full access show in one
   slim strip above the list. **A subagent's chat** replaces the list with a 36px bar on `--well` (**‹ Main session**,
   "· Subagent", its name, its time in mono and a **read-only** tag), then what it was asked, what it is doing while it works and its report once done.

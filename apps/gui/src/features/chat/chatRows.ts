@@ -82,6 +82,12 @@ function mergedStatus(a: ItemStatus, b: ItemStatus): ItemStatus {
  * step between two messages ends the first, so the text and the steps keep the order they happened in.
  * `hideSuccessfulTools` leaves out the runs `isQuietRun` allows to go (Settings › Chat).
  */
+/** Whether a turn held nothing but a slash command's own lines: what the person typed and what it printed. */
+function onlyCommands(events: readonly ChatEvent[], turnId: string): boolean {
+  const own = events.filter((event) => event.turnId === turnId && event.kind !== 'turn')
+  return own.some((event) => event.kind === 'note') && own.every((event) => event.kind === 'note' || (event.kind === 'message' && event.role === 'user'))
+}
+
 export function buildRows(events: readonly ChatEvent[], working: boolean, root: string | null = null, echoText: string | null = null, echoThinking = true, hideSuccessfulTools = false): ChatRow[] {
   const rows: ChatRow[] = []
   const edits = new Map<string, EditEvent[]>()
@@ -112,7 +118,12 @@ export function buildRows(events: readonly ChatEvent[], working: boolean, root: 
       case 'approval':
         rows.push({ kind: 'approval', key: event.id, event, step: null })
         break
+      case 'note':
+        rows.push({ kind: 'report', key: event.id, text: event.text })
+        break
       case 'turn': {
+        // A turn that was only a command the person ran and what it printed took no work, so it gets no "Finished in 0s".
+        if (event.outcome === 'completed' && onlyCommands(events, event.turnId)) break
         rows.push({ kind: 'divider', key: event.id, event })
         const changed = changesOf(edits.get(event.turnId) ?? [])
         if (changed !== null) rows.push({ kind: 'changes', key: `changes:${event.turnId}`, ...changed, turn: event.timed ? { startedAtMs: event.startedAtMs, endedAtMs: event.endedAtMs } : null })

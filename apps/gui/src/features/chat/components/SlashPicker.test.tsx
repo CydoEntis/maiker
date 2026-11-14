@@ -161,6 +161,18 @@ describe('the agent\'s commands in the message box', () => {
     expect(box).toHaveValue('')
   })
 
+  it('runs a terminal-only command typed out with what it takes in the terminal, as the answer is only drawn there', async () => {
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const onShowTerminal = vi.fn()
+    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto, onShowTerminal })
+
+    await user.type(box, '/btw which file is that?{Enter}')
+
+    expect(onShowTerminal).toHaveBeenCalledOnce()
+    expect(typeInto).toHaveBeenCalledExactlyOnceWith('/btw which file is that?\r')
+    expect(box).toHaveValue('')
+  })
+
   it('leaves the terminal\'s commands out for a chat session, which has no terminal to run them in', async () => {
     const { user, box } = await open()
 

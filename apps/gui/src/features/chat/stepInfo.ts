@@ -63,6 +63,7 @@ export function describeStep(event: ChatEvent, root: string | null): string | nu
     case 'subagent':
       return event.title ?? 'A helper agent'
     case 'message':
+    case 'note':
     case 'reasoning':
     case 'approval':
     case 'turn':
