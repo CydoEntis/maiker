@@ -27,11 +27,11 @@ const JETBRAINS_MONO = "'JetBrains Mono Variable','JetBrains Mono',monospace"
 
 /**
  * The one look's fonts and shading strengths, for a theme that does not set its own (`ThemeEntry.shading`, the design's
- * palette themes do). No sheen and no background glow: the design's panels are flat.
+ * palette themes do). No sheen: the design's panels are flat.
  */
 const LOOK: { dark: StyleLook; light: StyleLook } = {
-  dark: { ui: INTER, mono: JETBRAINS_MONO, hk: '.7', sk: '.6', sh: 'none', glowAccent: '0%', glowMag: '0%' },
-  light: { ui: INTER, mono: JETBRAINS_MONO, hk: '1', sk: '.35', sh: 'none', glowAccent: '0%', glowMag: '0%' },
+  dark: { ui: INTER, mono: JETBRAINS_MONO, hk: '.7', sk: '.6', sh: 'none' },
+  light: { ui: INTER, mono: JETBRAINS_MONO, hk: '1', sk: '.35', sh: 'none' },
 }
 
 /** The theme as the window draws it: its own colours, with the look's fonts and shading laid over them. */

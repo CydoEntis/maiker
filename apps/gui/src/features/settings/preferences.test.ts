@@ -26,25 +26,25 @@ const DEFAULTS: SettingsPreferences = {
   scrollback: 10000, scrollSpeed: 1,
   
   
-  defaultAgent: 'claude', newSessionView: 'chat',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', statusBar: false, chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, chatFullAccessDefault: false, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, terminalSeeThrough: false, backgroundGlow: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100,
+  defaultAgent: 'claude',
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100,
 }
 
 describe('settings preferences', () => {
   beforeEach(() => { localStorage.clear() })
 
   it('opens a new session as a chat with Claude until told otherwise, and ignores a value it does not know', () => {
-    expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'claude', newSessionView: 'chat' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ defaultAgent: 'codex', newSessionView: 'terminal' }))
-    expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'codex', newSessionView: 'terminal' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ defaultAgent: 'gemini', newSessionView: 'sideways' }))
-    expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'claude', newSessionView: 'chat' })
+    expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'claude' })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ defaultAgent: 'codex' }))
+    expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'codex' })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ defaultAgent: 'gemini' }))
+    expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'claude' })
   })
 
   it('starts with a flat ground and a steady cursor, and keeps a stored choice', () => {
-    expect(readSettingsPreferences()).toMatchObject({ backgroundGlow: false, cursorBlink: false })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ backgroundGlow: true, cursorBlink: true }))
-    expect(readSettingsPreferences()).toMatchObject({ backgroundGlow: true, cursorBlink: true })
+    expect(readSettingsPreferences()).toMatchObject({ cursorBlink: false })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cursorBlink: true }))
+    expect(readSettingsPreferences()).toMatchObject({ cursorBlink: true })
   })
 
   it('installs updates when idle by default, and a stored off stays off', () => {
@@ -122,24 +122,8 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().corners).toBe('square')
   })
 
-  it('hides the status bar unless it was turned on', () => {
-    expect(readSettingsPreferences().statusBar).toBe(false)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ statusBar: true }))
-    expect(readSettingsPreferences().statusBar).toBe(true)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ statusBar: 'no' }))
-    expect(readSettingsPreferences().statusBar).toBe(false)
-  })
-
-  it('starts new agent sessions as chats with full access off, and ignores nonsense', () => {
-    expect(readSettingsPreferences()).toMatchObject({ chatFullAccessDefault: false })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatFullAccessDefault: true }))
-    expect(readSettingsPreferences()).toMatchObject({ chatFullAccessDefault: true })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatFullAccessDefault: 'yes' }))
-    expect(readSettingsPreferences()).toMatchObject({ chatFullAccessDefault: false })
-  })
-
   it('shows every tool call unless hiding the successful ones was turned on, as settings saved before it read', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatFullAccessDefault: true }))
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({}))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: true }))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(true)

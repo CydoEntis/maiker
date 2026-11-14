@@ -857,8 +857,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   points to a terminal.
   **A new session** (the new chat page) starts the chosen
   agent (Settings › Chat › Chat view › **Default agent**, Claude, Codex or Gemini, unless the page picks another) in a new
-  shell the daemon owns and types the agent's command into it, and opens the pane in the view **New sessions open as**
-  names (Chat by default). It is
+  shell the daemon owns and types the agent's command into it, and opens the pane in the view Settings › Chat
+  names for that agent (**Claude sessions open in**, and the same for Codex and Gemini). It is
   one session either way: **the switch between Terminal and Chat never restarts the agent**
   ([ADR 0003](adr/0003-status-and-conversation-trust.md), v18 B.3). The chat reads the
   agent's own transcript (ADR 0003), and its composer **types into the agent's terminal** as one bracketed paste and

@@ -41,10 +41,6 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
   }, [preferences.corners])
 
   useEffect(() => {
-    document.documentElement.dataset.glow = preferences.backgroundGlow ? 'on' : 'off'
-  }, [preferences.backgroundGlow])
-
-  useEffect(() => {
     document.documentElement.dataset.icons = preferences.iconColor
   }, [preferences.iconColor])
 }

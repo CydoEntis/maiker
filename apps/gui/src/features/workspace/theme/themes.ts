@@ -63,10 +63,10 @@ export type ThemeInputs = { bg: string; fg: string; accent: string; mag: string;
 
 /**
  * What the look (`corners.ts`) adds to a theme besides colours: the fonts, the two shading dials (`hk` is the
- * highlight strength, `sk` the shadow strength), the resting card sheen (`sh`) and the background glow
- * strengths. A field left out keeps the stylesheet's default.
+ * highlight strength, `sk` the shadow strength), and the resting card sheen (`sh`).
+ * A field left out keeps the stylesheet's default.
  */
-export type StyleLook = { ui: string; mono: string; hk?: string; sk?: string; sh?: string; glowAccent?: string; glowMag?: string }
+export type StyleLook = { ui: string; mono: string; hk?: string; sk?: string; sh?: string }
 
 /** `cardRing` is the solid card colour that rings a status badge so it reads as cut out of the card. `look` is set by `withLook` (`corners.ts`). */
 export type ThemeEntry = { id: string; name: string; family: string; light: boolean; tokens: ThemeTokens; cardRing: string; look?: StyleLook; shading?: { hk: string; sk: string } }
@@ -313,8 +313,6 @@ export function themeStyle(theme: ThemeEntry): Record<string, string> {
     if (look.hk !== undefined) style['--hk'] = look.hk
     if (look.sk !== undefined) style['--sk'] = look.sk
     if (look.sh !== undefined) style['--sh'] = look.sh
-    if (look.glowAccent !== undefined) style['--glow-accent'] = look.glowAccent
-    if (look.glowMag !== undefined) style['--glow-mag'] = look.glowMag
   }
   // A palette theme's own shading strengths win over the look's, as the design sets them per theme.
   if (shading !== undefined) {

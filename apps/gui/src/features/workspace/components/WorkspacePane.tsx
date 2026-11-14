@@ -133,7 +133,6 @@ export function WorkspacePane({ shown, pane, kept }: {
             paneViews.choose(session.id, 'terminal')
             void sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, `${agent}\r`).catch((error: unknown) => { toast.error(errorMessage(error, `Could not start ${agent}`)) })
           }}
-          defaultFullAccess={preferences.chatFullAccessDefault}
           hideSuccessfulTools={preferences.hideSuccessfulTools}
           onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
         />

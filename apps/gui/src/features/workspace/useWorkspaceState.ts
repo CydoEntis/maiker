@@ -5,13 +5,12 @@ import { toast } from '@/lib/toast'
 import { defaultSessionFolder, isDesktop, markSeenOnDaemon } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
-import { readSettingsPreferences, type SettingsPreferences, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from '@/features/settings/preferences'
+import { readSettingsPreferences, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from '@/features/settings/preferences'
 import { sizeVariables } from './model/layoutSize'
 import { errorMessage } from '@/lib/error-message'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import { isChatSession } from './model/chatSession'
-import { LOCAL_HEAD, machineHeads, machineTitle, remoteStartRefusal, type UpdateAction } from './model/machines'
-import type { FocusMachine } from './components/StatusBar'
+import { LOCAL_HEAD, machineHeads, remoteStartRefusal, type UpdateAction } from './model/machines'
 import { isFirstRun } from '@/features/welcome/welcomed'
 import { repoDiff } from '@/features/inspect/api'
 import { type RestartedUpdate, takeRestarted } from '@/features/updates/updateMemory'
@@ -41,7 +40,7 @@ import { folderNameOf, inCreationOrder, type SessionView, tildePath } from './mo
 import { sharedCheckoutRefusal } from './model/sharedCheckout'
 import { bindingFor, detectPlatform, shortcutChords } from './model/shortcuts'
 import { resolveStartFolder } from './model/startFolder'
-import { findTheme, themeStyle } from './theme/themes'
+import { themeStyle } from './theme/themes'
 import { COMPACT_WIDTH_PX, NARROW_WIDTH_PX } from './model/windowSize'
 import { makeId } from './makeId'
 import { useSessionStarts } from './useSessionStarts'
@@ -68,8 +67,6 @@ import { usePutAway } from './usePutAway'
 
 const TOAST_MS = 2600
 
-/** What clicking the status bar's size resets the terminal text to. */
-const DEFAULT_TEXT_SIZE = 14
 
 const ABSOLUTE_PATH = /^(\/|[A-Za-z]:[\\/])/
 
@@ -173,15 +170,6 @@ export function useWorkspaceState() {
   const [machineNicknames, setMachineNicknames] = useState(readMachineNicknames)
   const [renamingMachine, setRenamingMachine] = useState<string | null>(null)
   const heads = useMemo(() => machineHeads(machines, machineNicknames), [machines, machineNicknames])
-  // The machine of the pane in front, named in the status bar once there is more than one machine to tell apart.
-  const focusedMachine = focusedSession?.machine
-  const focusMachine = useMemo<FocusMachine | null>(() => {
-    if (heads.length === 0 || focusedMachine === undefined) return null
-    if (focusedMachine === LOCAL_MACHINE) return { name: 'This computer', word: 'local', tone: 'ok' }
-    const head = heads.find((candidate) => candidate.machine === focusedMachine)
-    if (head === undefined) return null
-    return { name: machineTitle(head), word: head.chip?.word ?? 'unknown', tone: head.chip?.tone ?? 'quiet' }
-  }, [heads, focusedMachine])
   const { retryNamed, addNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed } = useMachineActions(sessionsQuery.data)
   // The sidebar is one flat list in creation order; a status change, a pin or a focus never moves a row.
   const ordered = useMemo(() => inCreationOrder(sessions), [sessions])
@@ -301,13 +289,6 @@ export function useWorkspaceState() {
     else setPreferences((current) => ({ ...current, compactSidebar: !current.compactSidebar }))
   }, [compact])
   const { toggleInspect, inspectRefusal, showChangesOf, showChanges, togglePanel } = useInspectActions({ focusedSession, setInspectOpen, setInspectView, setTurnDiff, sessionMap, showSessionById, inspectOpen, inspectView, focusedId, setLayout })
-  const setThemeMode = useCallback((themeMode: SettingsPreferences['themeMode']) => { setPreferences((current) => ({ ...current, themeMode })) }, [])
-  const pickTheme = useCallback((name: string) => { setPreferences((current) => (findTheme(name).light ? { ...current, lightTheme: name } : { ...current, darkTheme: name })) }, [])
-  const openAppearance = useCallback(() => { setSettingsSection('appearance') }, [])
-  const setCorners = useCallback((corners: SettingsPreferences['corners']) => { setPreferences((current) => ({ ...current, corners })) }, [])
-  const resetTextSize = useCallback(() => { setTextSize(DEFAULT_TEXT_SIZE) }, [setTextSize])
-  const openShortcuts = useCallback(() => { setShortcutsOpen(true) }, [])
-  const shortcutChord = useMemo(() => shortcutChords(bindingFor('shortcuts'), platform)[0] ?? [], [platform])
   const focusModeChord = useMemo(() => shortcutChords(bindingFor('focus-mode'), platform)[0] ?? [], [platform])
 
   // Which view a session shows, and whether it has a chat. Switching views only changes the window; the one thing sent is the chat box's text, typed into the terminal it goes to (`carryDraftToTerminal`).
@@ -432,5 +413,5 @@ export function useWorkspaceState() {
   const sidebarWidth = liveSidebarWidth ?? preferences.sidebarWidth
   const rootStyle = { ...themeStyle(theme), ...sizeVariables(preferences, sidebarWidth) } as CSSProperties
 
-  return { signInAgent, activeTerminals, setActiveTerminals, closeAgentTerminal, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, inspectOpen, focusMode, inspectTerm, focusedSession, projectOf, diffStat, inspectView, lookAt, turnDiff, setTurnDiff, setInspectView, setInspectOpen, flash, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, tracks, showSessionById, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, home, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, newChatWithSummary, sidebarMachineHeads, setNewChatOpen, startNewChat, warmNewChat, findOpen, terminalHandles, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, focusMachine, theme, shortcutChord, setThemeMode, pickTheme, openAppearance, setCorners, setTextSize, resetTextSize, openShortcuts, sidebarSessions, openSubagent, sidebarWidth, setLiveSidebarWidth, newTerminal, showSubagent, openInSplit, addAgentTerminal, copyPathOf, copyText, showChangesOf, markDone, putAway, bringBack, snooze, unsnooze, endSession, serviceFooterText, updateProgress, skippedVersion, setSkippedVersion, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, reducedMotion, setRoot, rootStyle, machineSaid, paneSessions, chatOf, agentTerminals, outsidePanes, dropId, dragId, paneViews, showChanges, setOpenSubagent, togglePanel, startChatHere, handoffSession, look, modalOpen, mirrorInput, openPath, pasteImage, split, closePaneById, sendTo, restartPane, moveToWorktree, recentOpen, setRecentOpen, reopenSession }
+  return { signInAgent, activeTerminals, setActiveTerminals, closeAgentTerminal, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, inspectOpen, focusMode, inspectTerm, focusedSession, projectOf, diffStat, inspectView, lookAt, turnDiff, setTurnDiff, setInspectView, setInspectOpen, flash, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, tracks, showSessionById, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, home, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, newChatWithSummary, sidebarMachineHeads, setNewChatOpen, startNewChat, warmNewChat, findOpen, terminalHandles, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, theme, setTextSize, sidebarSessions, openSubagent, sidebarWidth, setLiveSidebarWidth, newTerminal, showSubagent, openInSplit, addAgentTerminal, copyPathOf, copyText, showChangesOf, markDone, putAway, bringBack, snooze, unsnooze, endSession, serviceFooterText, updateProgress, skippedVersion, setSkippedVersion, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, reducedMotion, setRoot, rootStyle, machineSaid, paneSessions, chatOf, agentTerminals, outsidePanes, dropId, dragId, paneViews, showChanges, setOpenSubagent, togglePanel, startChatHere, handoffSession, look, modalOpen, mirrorInput, openPath, pasteImage, split, closePaneById, sendTo, restartPane, moveToWorktree, recentOpen, setRecentOpen, reopenSession }
 }

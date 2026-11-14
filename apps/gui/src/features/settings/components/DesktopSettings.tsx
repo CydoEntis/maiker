@@ -16,6 +16,7 @@ import { SpinnerPicker } from './SpinnerPicker'
 import { PerformanceSection } from './PerformanceSection'
 import { hotkeyRows, type Platform } from '@/features/workspace/model/shortcuts'
 import { CHAT_AGENTS } from '@/features/workspace/model/chatView'
+import { AGENT_LABEL } from '@/features/chat/modelName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { errorMessage } from '@/lib/error-message'
@@ -399,11 +400,6 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome, up
           </div>
         </div>
       </Card>
-      <Card title="Window">
-        <Row label="Status bar" detail="A line at the bottom with quick controls for theme, layout, text size and shortcuts.">
-          <Switch aria-label="Status bar" checked={preferences.statusBar} onCheckedChange={(value) => { update('statusBar', value) }} />
-        </Row>
-      </Card>
       {updates && (
         <Card title="Updates">
           <Row label="Maitty updates" detail={updates.summary}>
@@ -581,9 +577,6 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         <Row label="Terminals open in" detail="An agent's own terminals: a tab of the side panel, or a drawer pinned under its chat.">
           <SegmentedChoice label="Terminals open in" value={preferences.terminalDock} options={DOCK_OPTIONS} onChange={(value) => { update('terminalDock', value) }} />
         </Row>
-        <Row label="See-through terminal" detail="Lets the card show behind a pane's text when WebGL draws it. Programs that paint their own backgrounds, like Claude Code under its prompt, then show as boxes.">
-          <Switch aria-label="See-through terminal" checked={preferences.terminalSeeThrough} onCheckedChange={(value) => { update('terminalSeeThrough', value) }} />
-        </Row>
       </Card>
     </>
   )
@@ -623,9 +616,6 @@ function AppearanceSection({ preferences, update, systemReducedMotion, systemDar
         <Row label="Icons" detail="Agent and folder icons in their own colours, or neutral gray tiles.">
           <SegmentedChoice label="Icons" value={preferences.iconColor} options={ICON_COLOR_OPTIONS} onChange={(value) => { update('iconColor', value) }} />
         </Row>
-        <Row label="Background glow" detail="Two faint tints of the theme behind the cards. Off is a flat ground; a web view without WebGL always uses the flat one.">
-          <Switch aria-label="Background glow" checked={preferences.backgroundGlow} onCheckedChange={(value) => { update('backgroundGlow', value) }} />
-        </Row>
       </Card>
       <Card title="Interface size">
         <Row label="Density" detail="How much room the sidebar rows, pane headers and gaps get.">
@@ -652,24 +642,18 @@ function ChatSection({ preferences, update }: { preferences: SettingsPreferences
         <Row label="Default agent" detail="The agent a new session starts. A plain terminal is always one click away.">
           <SegmentedChoice label="Default agent" value={preferences.defaultAgent} options={AGENT_OPTIONS} onChange={(value) => { update('defaultAgent', value) }} />
         </Row>
-        <Row label="New sessions open as" detail="Which view a new session opens in. The agent runs in a terminal either way, so you can switch between its chat and its terminal at any time.">
-          <SegmentedChoice label="New sessions open as" value={preferences.newSessionView} options={VIEW_OPTIONS} onChange={(value) => { update('newSessionView', value) }} />
-        </Row>
         <Row label="Chat width" detail="How wide the messages and the message box run. Auto grows with the pane, so a large screen is used; Narrow keeps the original column.">
           <SegmentedChoice label="Chat width" value={preferences.chatWidth} options={CHAT_WIDTH_OPTIONS} onChange={(value) => { update('chatWidth', value) }} />
         </Row>
         <Row label="Chat text size" detail="Draws everything in the chat larger or smaller: its messages, its cards and its message box.">
           <SegmentedChoice label="Chat text size" value={preferences.chatTextSize} options={CHAT_TEXT_SIZE_OPTIONS} onChange={(value) => { update('chatTextSize', value) }} />
         </Row>
-        <Row label="Full access in new chats" detail="Start new chats with the agent's skip-permissions mode: no sandbox and no approval prompts, so the agent can change files and run commands without asking. Each chat can still turn it off or on when it starts.">
-          <Switch aria-label="Full access in new chats" checked={preferences.chatFullAccessDefault} onCheckedChange={(value) => { update('chatFullAccessDefault', value) }} />
-        </Row>
         <Row label="Hide successful tool calls" detail="Leaves out the file reads and searches that worked. Commands, edits, other tools and anything that failed still show, and so does each turn's changes.">
           <Switch aria-label="Hide successful tool calls" checked={preferences.hideSuccessfulTools} onCheckedChange={(value) => { update('hideSuccessfulTools', value) }} />
         </Row>
         {CHAT_AGENTS.map((agent) => (
-          <Row key={agent} label={`${agent === 'claude' ? 'Claude' : 'Codex'} sessions open in`} detail="Only a session with a chat opens in it; the switch on each pane changes one session.">
-            <SegmentedChoice label={`${agent === 'claude' ? 'Claude' : 'Codex'} sessions open in`} value={preferences.chatViewDefault[agent]} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('chatViewDefault', { ...preferences.chatViewDefault, [agent]: value }) }} />
+          <Row key={agent} label={`${AGENT_LABEL[agent]} sessions open in`} detail="Only a session with a chat opens in it; the switch on each pane changes one session.">
+            <SegmentedChoice label={`${AGENT_LABEL[agent]} sessions open in`} value={preferences.chatViewDefault[agent]} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('chatViewDefault', { ...preferences.chatViewDefault, [agent]: value }) }} />
           </Row>
         ))}
       </Card>
@@ -810,7 +794,6 @@ function UsageSection({ usage }: { usage: UsageInfo }) {
 }
 
 const AGENT_OPTIONS = [['claude', 'Claude'], ['codex', 'Codex']] as const
-const VIEW_OPTIONS = [['chat', 'Chat'], ['terminal', 'Terminal']] as const
 const CHAT_WIDTH_OPTIONS = [['auto', 'Auto'], ['narrow', 'Narrow'], ['wide', 'Wide'], ['full', 'Full']] as const
 const CHAT_TEXT_SIZE_OPTIONS: ReadonlyArray<readonly [number, string]> = CHAT_TEXT_SIZES.map((size) => [size, `${String(size)}%`] as const)
 

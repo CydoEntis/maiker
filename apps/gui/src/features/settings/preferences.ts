@@ -106,26 +106,16 @@ export type SettingsPreferences = {
   chatViewDefault: ChatViewDefaults
   /** The agent a new session starts. */
   defaultAgent: ChatAgent
-  /** What a new session opens as: a chat with the default agent, or that agent typed into a new shell. */
-  newSessionView: PaneView
-  /** A new chat starts with the agent's full-access mode (no sandbox, no permission prompts). Off until you turn it on. */
-  chatFullAccessDefault: boolean
   /** The chat leaves out runs of reads and searches that succeeded (`isQuietRun`). Off until you turn it on. */
   hideSuccessfulTools: boolean
   /** Yolo mode per agent, off by default: Claude may pick Bypass permissions; Codex and Gemini start with approvals and sandbox off. */
   yoloClaude: boolean
   yoloCodex: boolean
   yoloGemini: boolean
-  /** The bottom line of the window: daemon, branch, counts and the focused session. */
-  statusBar: boolean
   /** A small readout of frames and process load over the window, for finding what lags. */
   perfOverlay: boolean
   /** Draw terminals with xterm's DOM renderer instead of WebGL; for a web view that shows typed text late. */
   terminalPlainDrawing: boolean
-  /** The card shows behind a pane's text (Glass with WebGL); programs' own backgrounds show as boxes. */
-  terminalSeeThrough: boolean
-  /** Glass paints two faint tints of the theme over the window ground. Off is a flat ground; the software path is always flat. */
-  backgroundGlow: boolean
   /** The terminal cursor blinks while its pane is focused. xterm drives it, so it is off by default. */
   cursorBlink: boolean
   /** Fetch a new release in the background. Installing still waits for a restart. */
@@ -206,18 +196,13 @@ function defaults(): SettingsPreferences {
     chatTextSize: CHAT_TEXT_SIZE_DEFAULT,
     chatViewDefault: DEFAULT_CHAT_VIEWS,
     defaultAgent: 'claude',
-    newSessionView: 'chat',
-    chatFullAccessDefault: false,
     hideSuccessfulTools: false,
     yoloClaude: false,
     yoloCodex: false,
     yoloGemini: false,
-    statusBar: false,
     perfOverlay: false,
     // WebGL everywhere. The late letters it once showed on Linux came from a page drawn on the CPU, which the host now prevents (docs/PERFORMANCE.md).
     terminalPlainDrawing: false,
-    terminalSeeThrough: false,
-    backgroundGlow: false,
     cursorBlink: false,
     autoDownloadUpdates: true,
     restartWhenIdle: true,
@@ -289,17 +274,12 @@ export function readSettingsPreferences(): SettingsPreferences {
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,
       chatViewDefault: chatViewDefault(preferences.chatViewDefault, fallback.chatViewDefault),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
-      newSessionView: paneView(preferences.newSessionView, fallback.newSessionView),
-      chatFullAccessDefault: bool(preferences.chatFullAccessDefault, fallback.chatFullAccessDefault),
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
       yoloClaude: bool(preferences.yoloClaude, fallback.yoloClaude),
       yoloCodex: bool(preferences.yoloCodex, fallback.yoloCodex),
       yoloGemini: bool(preferences.yoloGemini, fallback.yoloGemini),
-      statusBar: bool(preferences.statusBar, fallback.statusBar),
       perfOverlay: bool(preferences.perfOverlay, fallback.perfOverlay),
       terminalPlainDrawing: bool(preferences.terminalPlainDrawing, fallback.terminalPlainDrawing),
-      terminalSeeThrough: bool(preferences.terminalSeeThrough, fallback.terminalSeeThrough),
-      backgroundGlow: bool(preferences.backgroundGlow, fallback.backgroundGlow),
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
       autoDownloadUpdates: bool(preferences.autoDownloadUpdates, fallback.autoDownloadUpdates),
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),

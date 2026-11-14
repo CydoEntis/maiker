@@ -6,7 +6,7 @@ import type { SettingsPreferences } from '../preferences'
 import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', statusBar: true, chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', newSessionView: 'chat', chatFullAccessDefault: false, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, terminalSeeThrough: false, backgroundGlow: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100 }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100 }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -147,11 +147,6 @@ describe('desktop settings', () => {
     expect(within(agent).getByRole('radio', { name: 'Claude' })).toBeChecked()
     await user.click(within(agent).getByRole('radio', { name: 'Codex' }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ defaultAgent: 'codex' }))
-
-    const view = screen.getByRole('radiogroup', { name: 'New sessions open as' })
-    expect(within(view).getByRole('radio', { name: 'Chat' })).toBeChecked()
-    await user.click(within(view).getByRole('radio', { name: 'Terminal' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ newSessionView: 'terminal' }))
   })
 
   it('has a yolo switch for each agent, all off, set from the settings screen', async () => {
@@ -161,14 +156,6 @@ describe('desktop settings', () => {
     for (const agent of ['Claude', 'Codex', 'Gemini']) expect(screen.getByRole('switch', { name: `Yolo mode for ${agent}` })).not.toBeChecked()
     await user.click(screen.getByRole('switch', { name: 'Yolo mode for Codex' }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ yoloCodex: true, yoloClaude: false, yoloGemini: false }))
-  })
-
-  it('chooses whether new chats get full access', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('chat')
-
-    await user.click(screen.getByRole('switch', { name: 'Full access in new chats' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ chatFullAccessDefault: true }))
   })
 
   it('turns on hiding successful tool calls, off by default', async () => {
@@ -450,15 +437,6 @@ describe('desktop settings', () => {
 
     expect(onShowWelcome).toHaveBeenCalledTimes(1)
   })
-
-  it('turns the status bar on and off from General', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('general')
-
-    await user.click(screen.getByRole('switch', { name: 'Status bar' }))
-
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ statusBar: false }))
-  })
 })
 
 describe('performance section', () => {
@@ -480,23 +458,6 @@ describe('performance section', () => {
   })
 })
 
-describe('appearance section', () => {
-  it('turns the see-through terminal on', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('terminal')
-    await user.click(screen.getByRole('switch', { name: 'See-through terminal' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ terminalSeeThrough: true }))
-  })
-
-  it('turns the background glow on, starting from off', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance')
-    const glow = screen.getByRole('switch', { name: 'Background glow' })
-    expect(glow).toHaveAttribute('aria-checked', 'false')
-    await user.click(glow)
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ backgroundGlow: true }))
-  })
-})
 
 function box(kind: RemoteMachine['state']['state'], why: string | null = null): RemoteMachine {
   return { state: { machine: 1, name: 'box', state: kind, why, attempt: null, since: Date.now() - 180_000 }, conversations: [], heard: true, listedAt: 0 }

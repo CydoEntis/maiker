@@ -61,7 +61,6 @@ async function loadReplayOnceConnected(binding: Parameters<typeof loadTerminalRe
 }
 
 const DEFAULT_THEME: ITheme = { background: '#060d16', foreground: '#c9d6e3', cursor: '#3dd6c6' }
-const TRANSPARENT = 'rgba(0,0,0,0)'
 /**
  * Writes land at most this often: every write redraws the terminal, and under a steady stream the
  * host sends a batch every 12 ms, so without a gap the pane would redraw on every frame. A key's
@@ -69,24 +68,6 @@ const TRANSPARENT = 'rgba(0,0,0,0)'
  */
 const FLUSH_GAP_MS = 32
 const NO_MINIMUM_CONTRAST = 1
-
-type Renderer = 'webgl' | 'dom'
-
-/**
- * The pane's colours. A see-through pane (Settings › Appearance, WebGL only) lets the card show
- * behind the text; otherwise the theme's opaque terminal ground, which the DOM renderer needs
- * since each row it repaints would blend through the card's gradient and shadow
- * (docs/PERFORMANCE.md).
- */
-function terminalTheme(look: TerminalLook, seeThrough: boolean): ITheme {
-  const theme = look.theme ?? DEFAULT_THEME
-  return seeThrough ? { ...theme, background: TRANSPARENT } : theme
-}
-
-/** Only WebGL can afford a see-through canvas; the DOM renderer always sits on the opaque ground. */
-function seeThroughOf(look: TerminalLook, renderer: Renderer): boolean {
-  return renderer === 'webgl' && (look.seeThrough ?? false)
-}
 
 /** The slots a program's colour query names (`ESC ] 11 ; ? ST` asks for the background). */
 const OSC_FOREGROUND = 10
@@ -127,8 +108,6 @@ export type TerminalLook = {
   scrollback?: number
   /** Lines per wheel notch as a multiple of xterm's default. */
   scrollSpeed?: number
-  /** The card shows behind the text (WebGL only); programs' own backgrounds then show as boxes. */
-  seeThrough?: boolean
   /** xterm's own cursor blink, for the focused pane only. Off unless asked for. */
   cursorBlink?: boolean
   /** Draw with the DOM renderer even where WebGL 2 exists (Settings › Performance). Read when the view opens. */
@@ -228,7 +207,6 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
   const inputDisabledRef = useRef(inputDisabled)
   const focusedRef = useRef(focused)
   const windowActive = useWindowActive()
-  const rendererRef = useRef<Renderer>('dom')
   const endedRef = useRef(ended)
   useEffect(() => { endedRef.current = ended })
   const onInputRef = useRef(onInput)
@@ -249,7 +227,6 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
   const [loadError, setLoadError] = useState(false)
   const [inputFailed, setInputFailed] = useState(false)
   const [resizeError, setResizeError] = useState('')
-  const [transparent, setTransparent] = useState(() => hasWebgl2() && !(look.plainDrawing ?? false) && (look.seeThrough ?? false))
 
   const send = useCallback((data: string | Uint8Array) => {
     if (!data || inputDisabledRef.current) return
@@ -377,10 +354,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         if (!stillMounted()) return
 
         const wantsWebgl = hasWebgl2() && !(lookRef.current.plainDrawing ?? false)
-        const startRenderer: Renderer = wantsWebgl ? 'webgl' : 'dom'
-        const startSeeThrough = seeThroughOf(lookRef.current, startRenderer)
         emulator = new TerminalEmulator({
-          allowTransparency: startSeeThrough,
           cursorBlink: (lookRef.current.cursorBlink ?? false) && focusedRef.current && isWindowActive(),
           cursorStyle: lookRef.current.cursorStyle ?? 'block',
           disableStdin: inputDisabledRef.current,
@@ -392,7 +366,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
           scrollback: lookRef.current.scrollback ?? DEFAULT_SCROLLBACK_LINES,
           scrollSensitivity: lookRef.current.scrollSpeed ?? DEFAULT_SCROLL_SPEED,
           screenReaderMode: lookRef.current.screenReader ?? false,
-          theme: terminalTheme(lookRef.current, startSeeThrough),
+          theme: lookRef.current.theme ?? DEFAULT_THEME,
           minimumContrastRatio: lookRef.current.minimumContrast ?? NO_MINIMUM_CONTRAST,
         })
         const terminalInstance = emulator
@@ -403,15 +377,10 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         terminalInstance.open(hostElement)
         terminal.current = terminalInstance
         const fallBackToDomRenderer = () => {
-          rendererRef.current = 'dom'
           reportRenderer(terminalInstance, 'dom')
-          terminalInstance.options.allowTransparency = false
-          terminalInstance.options.theme = terminalTheme(lookRef.current, false)
-          if (isMounted) setTransparent(false)
         }
         if (wantsWebgl) {
           if (await loadWebglRenderer(terminalInstance, fallBackToDomRenderer)) {
-            rendererRef.current = 'webgl'
             reportRenderer(terminalInstance, 'webgl')
           } else {
             fallBackToDomRenderer()
@@ -738,12 +707,9 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     if (look.scrollback && emulator.options.scrollback !== look.scrollback) emulator.options.scrollback = look.scrollback
     if (look.scrollSpeed && emulator.options.scrollSensitivity !== look.scrollSpeed) emulator.options.scrollSensitivity = look.scrollSpeed
     if (look.screenReader !== undefined && emulator.options.screenReaderMode !== look.screenReader) emulator.options.screenReaderMode = look.screenReader
-    const seeThrough = seeThroughOf(look, rendererRef.current)
-    if (emulator.options.allowTransparency !== seeThrough) emulator.options.allowTransparency = seeThrough
-    if (look.theme) emulator.options.theme = terminalTheme(look, seeThrough)
+    if (look.theme) emulator.options.theme = look.theme
     const minimumContrast = look.minimumContrast ?? NO_MINIMUM_CONTRAST
     if (emulator.options.minimumContrastRatio !== minimumContrast) emulator.options.minimumContrastRatio = minimumContrast
-    setTransparent(seeThrough)
   }, [look])
 
   useEffect(() => {
@@ -783,7 +749,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     if (terminal.current) terminal.current.options.cursorBlink = (look.cursorBlink ?? false) && focused && windowActive
   }, [focused, windowActive, connecting, look.cursorBlink])
 
-  return <div className={`terminal-view${transparent ? ' is-transparent' : ''}`}>
+  return <div className="terminal-view">
     {machine !== 0 && connecting && catchUpMs !== null && !loadError && (
       <div className="terminal-catch-up" role="status">
         <LoaderCircle size={13} aria-hidden="true" />

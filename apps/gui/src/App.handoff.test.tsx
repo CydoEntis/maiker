@@ -121,7 +121,6 @@ describe('desktop terminal multiplexer', () => {
     vi.clearAllMocks()
     toast.dismiss()
     window.localStorage.clear()
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ statusBar: true }))
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadConversations.mockResolvedValue([])
     daemon.startShellSession.mockResolvedValue(undefined)
@@ -641,12 +640,12 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
     fireEvent.keyDown(document.body, { key: '.', ctrlKey: true })
-    await waitFor(() => { expect(screen.queryByLabelText('Status')).not.toBeInTheDocument() })
+    await waitFor(() => { expect(screen.queryByRole('navigation', { name: 'Sessions' })).not.toBeInTheDocument() })
 
     const passedOn = fireEvent.keyDown(document.body, { key: 'Escape', cancelable: true })
 
     expect(passedOn).toBe(false)
-    await waitFor(() => { expect(screen.getByLabelText('Status')).toBeInTheDocument() })
+    await waitFor(() => { expect(screen.getByRole('navigation', { name: 'Sessions' })).toBeInTheDocument() })
   })
 
   it('asks before closing a pane that runs an agent', async () => {
@@ -831,8 +830,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(screen.getByText(/Try 2 of 5 · next in 2s/)).toBeInTheDocument()
     // The row says only that it is unknown; "last seen working" now lives in its tooltip and hover card.
     expect(screen.getByRole('button', { name: 'codex, codex, unknown' })).toBeInTheDocument()
-    expect(screen.getAllByText('Reconnecting to maittyd…')).toHaveLength(2)
-    expect(within(screen.getByLabelText('Status')).getByRole('status')).toHaveTextContent('Reconnecting to maittyd…')
+    expect(screen.getAllByText('Reconnecting to maittyd…')).toHaveLength(1)
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).toHaveAttribute('data-input-disabled', 'true')
     expect(screen.getByRole('button', { name: 'New chat' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'codex, codex, unknown' })).not.toHaveClass('mx-fx-working')
@@ -852,7 +850,6 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     const card = await screen.findByRole('region', { name: 'Maitty service stopped' })
     expect(within(card).getByText('Your session is saved. Start the service to pick up where it left off.')).toBeInTheDocument()
     expect(within(card).getByText('Details')).toBeInTheDocument()
-    expect(within(screen.getByLabelText('Status')).queryByText('Service stopped')).toBeNull()
     expect(screen.queryByText('Reconnecting to maittyd')).not.toBeInTheDocument()
 
     daemon.openDaemonLog.mockResolvedValue(undefined)
@@ -873,9 +870,8 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     const card = await screen.findByRole('region', { name: 'Restart Maitty to finish updating' })
     expect(within(card).getByText('The app updated, but the service behind it is still the older one.')).toBeInTheDocument()
     expect(within(card).getByText('protocol 49 → 62')).toBeInTheDocument()
-    // The card is the one message: the status bar agrees with it instead of saying it is reconnecting.
-    expect(within(screen.getByLabelText('Status')).getByText('Restart needed')).toBeInTheDocument()
-    expect(within(screen.getByLabelText('Status')).queryByText(/Reconnecting/)).toBeNull()
+    // The card is the one message: nothing says it is reconnecting.
+    expect(screen.queryByText(/Reconnecting/)).toBeNull()
     await user.click(within(card).getByRole('button', { name: 'Later' }))
     expect(screen.queryByRole('region', { name: 'Restart Maitty to finish updating' })).not.toBeInTheDocument()
     expect(screen.getByText('Restart needed.')).toBeInTheDocument()
@@ -1262,64 +1258,6 @@ describe('desktop overlays and pane tools', () => {
     expect(screen.queryByRole('dialog', { name: 'Keyboard shortcuts' })).not.toBeInTheDocument()
   })
 
-  it('keeps the status bar to quick controls: theme, corners, text size and the shortcuts', async () => {
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ statusBar: true }))
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([
-      inRepo(3, `${HOME}/code/maitty`, `${HOME}/code/maitty`, { agent: 'claude', status: 'working' }),
-      inRepo(4, `${HOME}/code/maitty`, `${HOME}/code/maitty/crates`, { agent: 'codex', status: 'needs-you' }),
-    ])
-    renderDesktopApp()
-    const bar = await screen.findByLabelText('Status')
-
-    expect(bar).not.toHaveTextContent('maittyd')
-    expect(bar).not.toHaveTextContent('working')
-    expect(bar).not.toHaveTextContent('needs you')
-    expect(bar).not.toHaveTextContent('main')
-    expect(bar).toHaveTextContent('13px')
-
-    await user.click(within(bar).getByRole('button', { name: 'Larger text' }))
-    expect(bar).toHaveTextContent('14px')
-    await user.click(within(bar).getByRole('button', { name: 'Smaller text' }))
-    await user.click(within(bar).getByRole('button', { name: 'Smaller text' }))
-    expect(bar).toHaveTextContent('12px')
-    expect(within(bar).getByRole('button', { name: 'Smaller text' })).toBeDisabled()
-    await user.click(within(bar).getByRole('button', { name: /^Text size 12px/ }))
-    expect(bar).toHaveTextContent('14px')
-
-    await user.click(within(bar).getByRole('button', { name: 'Keyboard shortcuts' }))
-    expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
-  })
-
-  it('changes the corners from the status bar', async () => {
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ statusBar: true }))
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    renderDesktopApp()
-    const bar = await screen.findByLabelText('Status')
-    expect(document.documentElement.dataset.corners).toBe('square')
-
-    await user.click(within(bar).getByRole('button', { name: /^Corners/ }))
-    await user.click(await screen.findByRole('menuitemradio', { name: 'Rounded' }))
-
-    expect(document.documentElement.dataset.corners).toBe('rounded')
-    expect(document.documentElement.dataset.finish).toBe('flat')
-    expect(within(bar).getByRole('button', { name: 'Corners: Rounded' })).toBeInTheDocument()
-  })
-
-  it('picks a theme from the status bar and opens the full list in Settings', async () => {
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ statusBar: true }))
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    renderDesktopApp()
-    const bar = await screen.findByLabelText('Status')
-
-    await user.click(within(bar).getByRole('button', { name: /^Theme:/ }))
-    await user.click(await screen.findByRole('menuitem', { name: /All themes in Settings/ }))
-
-    expect(await screen.findByRole('dialog', { name: /Settings/ })).toBeInTheDocument()
-  })
-
   it('mirrors the window when the sidebar is moved to the right, from the command palette', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
@@ -1334,25 +1272,6 @@ describe('desktop overlays and pane tools', () => {
 
     await waitFor(() => { expect(app).toHaveAttribute('data-side', 'right') })
     expect(JSON.parse(window.localStorage.getItem('maitty.gui.settings.v1') ?? '{}')).toMatchObject({ sidebarSide: 'right' })
-  })
-
-  it('hides the status bar in focus mode and when Settings turns it off', async () => {
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ statusBar: true }))
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    const app = renderDesktopApp()
-    await screen.findByLabelText('Status')
-
-    await user.keyboard('{Control>}.{/Control}')
-    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    await screen.findByLabelText('Status')
-
-    app.unmount()
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ statusBar: false }))
-    renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/a' })
-    expect(screen.queryByLabelText('Status')).not.toBeInTheDocument()
   })
 
   it('hides the sidebar in focus mode and brings it back with Escape', async () => {

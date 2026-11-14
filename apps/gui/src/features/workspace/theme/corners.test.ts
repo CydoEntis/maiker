@@ -32,8 +32,8 @@ describe('the one look', () => {
     expect(themeStyle(withLook(findTheme('Catppuccin Mocha')))['--sk']).toBe('.6')
   })
 
-  it('draws flat: no sheen and no background glow', () => {
+  it('draws flat: no sheen', () => {
     const style = themeStyle(withLook(findTheme('Maitty Night')))
-    expect([style['--sh'], style['--glow-accent'], style['--glow-mag']]).toEqual(['none', '0%', '0%'])
+    expect(style['--sh']).toBe('none')
   })
 })

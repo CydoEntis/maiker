@@ -272,11 +272,11 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!online || starting) return
     try {
-      await startAgentSession(() => Promise.resolve(from.cwd), to, preferences.newSessionView, await handoffBrief(from))
+      await startAgentSession(() => Promise.resolve(from.cwd), to, preferences.chatViewDefault[to], await handoffBrief(from))
     } catch (error: unknown) {
       toast.error(errorMessage(error, `Could not hand off to ${to}`))
     }
-  }, [online, starting, startAgentSession, preferences.newSessionView])
+  }, [online, starting, startAgentSession, preferences.chatViewDefault])
 
   // Starts a shell on another machine and opens it once the machine lists it; resolves to its id.
   const startOnMachine = useCallback(async (target: { machine: number; name: string }, folder: string): Promise<string | null> => {

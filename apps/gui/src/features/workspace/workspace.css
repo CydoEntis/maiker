@@ -64,7 +64,7 @@
 .mx-icon-button:not(:disabled):active { transform: scale(.9); }
 
 /* The window ground is the theme's --bg. Cards on it are opaque, so nothing that changes inside a card
-   repaints the ground. With Background glow on, two faint tints of the theme are painted once behind them. */
+   repaints the ground. */
 .mx-window {
   position: relative;
   flex: 1;
@@ -72,13 +72,6 @@
   display: flex;
   overflow: hidden;
   background: var(--bg);
-}
-:root[data-glow="on"]:not([data-gpu="software"]) .mx-window {
-  background:
-    radial-gradient(1000px 600px at 15% 0%, color-mix(in oklab, var(--accent) var(--glow-accent), transparent), transparent 70%),
-    radial-gradient(900px 560px at 100% 100%, color-mix(in oklab, var(--ansi-mag) var(--glow-mag), transparent), transparent 70%),
-    radial-gradient(700px 480px at 52% 48%, color-mix(in oklab, var(--ansi-blue) var(--glow-mag), transparent), transparent 70%),
-    var(--bg);
 }
 .mx-card {
   background: var(--card);
@@ -264,9 +257,6 @@
 .mx-quiet:hover { color: var(--fg); background: rgba(var(--hl), calc(.06 * var(--hk))); }
 .mx-empty-note-small { font-size: 12px; color: var(--dim); }
 
-/* Chrome type: the hooks are set by Tiled (uppercase Geist Mono) and unset elsewhere, where these fall back
-   to what the elements already were. Terminal text never reads them. */
-.mx-statusbar { font-family: var(--ch-ff, inherit); text-transform: var(--ch-tt, inherit); letter-spacing: var(--ch-ls, inherit); }
 
 /* xterm's own stylesheet paints the scroll viewport black. It is taller than the rows by the part of a
    row that does not fit, so on the opaque renderers that remainder showed as a black bar along the pane's bottom edge. */
@@ -593,31 +583,6 @@
 @keyframes v9toast { from { opacity: 0; transform: translateY(-8px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes mx-notice-count { to { transform: scaleX(0); } }
 
-/* Status bar. */
-.mx-statusbar { flex: none; height: 28px; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-top: 1px solid var(--pane-line); font-size: var(--ch-fs-sm, 11.5px); color: var(--muted); white-space: nowrap; overflow: hidden; }
-.mx-sb-item { display: inline-flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mx-sb-item.mono { font-family: var(--mono); }
-.mx-sb-item.is-offline { color: var(--warn); }
-.mx-sb-item .mx-daemon-dot.is-offline { background: transparent; box-shadow: none; border: 1.5px dashed var(--warn); }
-.mx-sb-button { height: 22px; padding: 0 6px; border-radius: calc(6px * var(--rk)); cursor: pointer; color: inherit; transition: background-color .14s ease, color .14s ease; }
-.mx-sb-button:hover, .mx-sb-button[data-state="open"] { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
-.mx-sb-size { display: inline-flex; align-items: center; height: 22px; border-radius: calc(6px * var(--rk)); box-shadow: inset 0 0 0 1px var(--pane-line); }
-.mx-sb-step, .mx-sb-number { height: 22px; padding: 0 7px; color: inherit; font: inherit; cursor: pointer; transition: background-color .14s ease, color .14s ease; }
-.mx-sb-step:hover:not(:disabled), .mx-sb-number:hover { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
-.mx-sb-step:disabled { opacity: .35; cursor: default; }
-.mx-sb-number { min-width: 42px; font-family: var(--mono); }
-.mx-sb-menu { min-width: 200px; }
-.mx-sb-modes { display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--m-well); }
-.mx-sb-mode { flex: 1; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 12px; color: var(--muted); outline: none; cursor: default; }
-.mx-sb-mode[data-state="checked"] { background: var(--m-raise); color: var(--fg); font-weight: 500; }
-.mx-sb-mode[data-highlighted] { color: var(--fg); }
-.mx-sb-check { width: 14px; flex: none; display: inline-flex; align-items: center; justify-content: center; }
-button.mx-sb-item { height: 22px; margin: 0 -6px; padding: 0 6px; border-radius: calc(6px * var(--rk)); cursor: pointer; transition: background-color .14s ease, color .14s ease; }
-button.mx-sb-item:hover { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
-.mx-sb-item .mx-daemon-dot { width: 7px; height: 7px; }
-.mx-sb-item svg { width: 12px; height: 12px; flex: none; }
-.mx-statusbar .mx-keycap { transform: scale(.9); transform-origin: right center; }
-
 /* Hover tooltip for anything with a title. */
 .mx-tip { z-index: 90; max-width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 5px 9px; border-radius: 8px; background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); line-height: 1.4; color: var(--fg); pointer-events: none; animation: mx-tip-in .16s ease-out; }
 .mx-tip-line { display: flex; align-items: center; gap: 8px; }
@@ -663,10 +628,9 @@ button.mx-sb-item:hover { background: rgba(var(--hl), calc(.07 * var(--hk))); co
   /* Surfaces: opaque cards with a hairline and, on dark themes, a faint top highlight; a soft shadow only on
      short-lived popovers. */
   --card: var(--main); --sh: inset 0 1px 0 rgba(var(--hl), calc(.045 * var(--hk))); --blur-pop: blur(14px) saturate(1.2); --sh-pop: 0 16px 40px rgba(0, 0, 0, .45);
-  --glow-accent: 10%; --glow-mag: 7%;
   --sbm: 12px 0 12px 12px; --sbw: 1px; --tba: center; --tl: 4px; --edge: 8px; --tsh: 32px; --tsw: 26px; --ibh: 30px;
 }
-.mx-app[data-theme-kind="light"] { --sh: none; --sh-pop: 0 12px 32px rgba(17, 24, 32, .14), 0 0 0 1px rgba(17, 22, 27, .08); --glow-accent: 9%; --glow-mag: 6%; }
+.mx-app[data-theme-kind="light"] { --sh: none; --sh-pop: 0 12px 32px rgba(17, 24, 32, .14), 0 0 0 1px rgba(17, 22, 27, .08); }
 
 .mx-app .title-bar { background: var(--tbar); border-bottom: var(--tbar-b); }
 
@@ -767,13 +731,6 @@ button.mx-sb-item:hover { background: rgba(var(--hl), calc(.07 * var(--hk))); co
 /* What a stopped agent asks, above the message box: a question with its choices as rows, or a permission with its buttons. */
 @media (prefers-reduced-motion: reduce) { .mx-ask-choice { transition: none; } }
 
-/* The focused pane's machine, at the left of the status bar (v19 §8). */
-.mx-sb-machine strong { font-weight: 500; color: var(--fg2); }
-.mx-sb-machine-word { color: var(--dim); font-variant-numeric: tabular-nums; }
-.mx-sb-machine-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
-.mx-sb-machine-dot.is-quiet { background: transparent; box-shadow: inset 0 0 0 1.5px var(--dim); }
-.mx-sb-machine-dot.is-warn { background: var(--warn); }
-.mx-sb-machine-dot.is-bad { background: transparent; box-shadow: inset 0 0 0 1.5px var(--danger); }
 
 /* Flat sidebar: one list of two-line rows, a filter field, and a 60px rail. Status is the badge and nothing else
    moves a row, so none of these animates. */
