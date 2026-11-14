@@ -460,7 +460,7 @@ describe('starting a chat and going on writing', () => {
     await ready()
     await userEvent.click(screen.getByRole('button', { name: /^Starting permission mode/ }))
     await userEvent.click(screen.getByRole('menuitemradio', { name: /^Plan mode/ }))
-    await userEvent.click(within(screen.getByRole('group', { name: 'Also start with' })).getByRole('checkbox', { name: 'Codex' }))
+    await userEvent.click(within(screen.getByRole('group', { name: 'Also send to' })).getByRole('checkbox', { name: 'Codex' }))
     await userEvent.type(box(), 'fix the login{Enter}')
 
     expect(onStart).toHaveBeenCalledTimes(2)
@@ -475,7 +475,7 @@ describe('starting a chat and going on writing', () => {
     const onStart = vi.fn<Start>(() => new Promise(() => undefined))
     page(onStart)
     await ready()
-    const also = within(screen.getByRole('group', { name: 'Also start with' }))
+    const also = within(screen.getByRole('group', { name: 'Also send to' }))
     await userEvent.click(also.getByRole('checkbox', { name: 'Codex' }))
     await userEvent.click(also.getByRole('checkbox', { name: 'Gemini' }))
     await userEvent.type(box(), 'fix the login{Enter}')
@@ -489,7 +489,7 @@ describe('starting a chat and going on writing', () => {
     const onStart = vi.fn<Start>(() => new Promise(() => undefined))
     page(onStart)
     await ready()
-    await userEvent.click(within(screen.getByRole('group', { name: 'Also start with' })).getByRole('checkbox', { name: 'Codex' }))
+    await userEvent.click(within(screen.getByRole('group', { name: 'Also send to' })).getByRole('checkbox', { name: 'Codex' }))
     await userEvent.click(screen.getByRole('button', { name: /Review my uncommitted changes/ }))
 
     const names = onStart.mock.calls.map(([request]) => request.branch?.name)
@@ -502,7 +502,7 @@ describe('starting a chat and going on writing', () => {
     const onStart = vi.fn<Start>((request) => new Promise((_, reject) => { if (request.agent === 'claude') fail = reject }))
     page(onStart)
     await ready()
-    await userEvent.click(within(screen.getByRole('group', { name: 'Also start with' })).getByRole('checkbox', { name: 'Codex' }))
+    await userEvent.click(within(screen.getByRole('group', { name: 'Also send to' })).getByRole('checkbox', { name: 'Codex' }))
     await userEvent.type(box(), 'fix the login{Enter}')
     fail(new Error('boom'))
 
@@ -515,7 +515,7 @@ describe('starting a chat and going on writing', () => {
   it('drops an agent from the others once it is the one the chat starts with', async () => {
     page()
     await ready()
-    await userEvent.click(within(screen.getByRole('group', { name: 'Also start with' })).getByRole('checkbox', { name: 'Codex' }))
+    await userEvent.click(within(screen.getByRole('group', { name: 'Also send to' })).getByRole('checkbox', { name: 'Codex' }))
     await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
     await userEvent.click(screen.getByRole('button', { name: /^Agent: / }))
     await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Codex' }))
@@ -523,14 +523,14 @@ describe('starting a chat and going on writing', () => {
     await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Claude' }))
     await userEvent.keyboard('{Escape}')
 
-    expect(within(screen.getByRole('group', { name: 'Also start with' })).getByRole('checkbox', { name: 'Codex' })).not.toBeChecked()
+    expect(within(screen.getByRole('group', { name: 'Also send to' })).getByRole('checkbox', { name: 'Codex' })).not.toBeChecked()
   })
 
   it('will not tick another agent in This folder, and says why', async () => {
     const onStart = vi.fn<Start>(() => new Promise(() => undefined))
     page(onStart)
     await ready()
-    const codex = within(screen.getByRole('group', { name: 'Also start with' })).getByRole('checkbox', { name: 'Codex' })
+    const codex = within(screen.getByRole('group', { name: 'Also send to' })).getByRole('checkbox', { name: 'Codex' })
     await userEvent.click(codex)
     await inWhere()
     await userEvent.click(screen.getByRole('radio', { name: 'This folder' }))
@@ -548,7 +548,7 @@ describe('starting a chat and going on writing', () => {
     const onStart = vi.fn<Start>((request) => (request.agent === 'claude' ? new Promise(() => undefined) : Promise.reject(new Error('no worktree'))))
     page(onStart)
     await ready()
-    const also = within(screen.getByRole('group', { name: 'Also start with' }))
+    const also = within(screen.getByRole('group', { name: 'Also send to' }))
     await userEvent.click(also.getByRole('checkbox', { name: 'Codex' }))
     await userEvent.click(also.getByRole('checkbox', { name: 'Gemini' }))
     attach.chooseFilesToAttach.mockResolvedValue(['/home/me/errors.log'])

@@ -184,6 +184,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   const alsoOffered = remote || branches === null || installed === null ? [] : CHAT_AGENTS.filter((other) => other !== agent && installed.includes(other))
   const alsoWith = treeMode ? alsoOffered.filter((other) => alsoPicked.has(other)) : []
   const alsoWhy = useId()
+  const alsoWhat = useId()
   const toggleAlso = (other: ChatAgent, on: boolean) => {
     if (!treeMode) return
     setAlsoPicked((now) => new Set(on ? [...now, other] : [...now].filter((name) => name !== other)))
@@ -501,15 +502,17 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
             </div>
           </div>
           {alsoOffered.length > 0 && (
-            <div className="mx-nc-also" role="group" aria-label="Also start with">
-              <span className="mx-nc-switch-label">Also start with</span>
+            <div className="mx-nc-also" role="group" aria-label="Also send to" aria-describedby={treeMode ? alsoWhat : alsoWhy}>
+              <span className="mx-nc-switch-label">Also send to</span>
               {alsoOffered.map((other) => (
                 <label key={other} className="mx-nc-also-agent">
                   <input type="checkbox" aria-disabled={!treeMode} aria-describedby={treeMode ? undefined : alsoWhy} checked={alsoWith.includes(other)} onChange={(event) => { toggleAlso(other, event.target.checked) }} />
                   {AGENT_LABEL[other]}
                 </label>
               ))}
-              {!treeMode && <span id={alsoWhy} className="mx-nc-also-why">Each agent needs a copy of its own. Choose New worktree to start several.</span>}
+              {treeMode
+                ? <span id={alsoWhat} className="mx-nc-also-why">Starts the same message in each one ticked, as a chat of its own on its own branch, so you can compare them.</span>
+                : <span id={alsoWhy} className="mx-nc-also-why">Each agent needs a copy of its own. Choose New worktree to start several.</span>}
             </div>
           )}
           {error !== null && <p role="alert" className="mx-composer-error">{error}</p>}

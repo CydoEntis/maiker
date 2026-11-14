@@ -92,18 +92,18 @@ describe('the new chat page, against this computer', () => {
     host.installed = ['claude', 'codex', 'opencode']
     page()
     await pickProject('a')
-    const also = await screen.findByRole('group', { name: 'Also start with' })
+    const also = await screen.findByRole('group', { name: 'Also send to' })
     expect(within(also).getAllByRole('checkbox')).toHaveLength(1)
     expect(within(also).getByRole('checkbox', { name: 'Codex' })).not.toBeChecked()
   })
 
-  it('has no Also start with row when no other agent is installed', async () => {
+  it('has no Also send to row when no other agent is installed', async () => {
     host.branches = GIT
     page()
     await pickProject('a')
     await inWhere()
     await screen.findByRole('radio', { name: 'This folder' })
-    expect(screen.queryByRole('group', { name: 'Also start with' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Also send to' })).not.toBeInTheDocument()
   })
 
   it('lists the real branches and worktrees with their ages, the current branch ticked', async () => {
