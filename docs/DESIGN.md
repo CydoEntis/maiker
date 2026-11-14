@@ -280,6 +280,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   rows of 14px padding, each with a `--line` above it, and a dim foot note. A group has no box of its own. The
   sidebar settings sit in Appearance, the daemon's in Machines ("This computer") and the approved commands in
   Permissions. **Usage** and **Performance** have no nav item: Ctrl+Shift+U and Ctrl+Shift+P or the palette open them.
+  **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
+  (not Usage, which holds figures): while it has text the body is the pages' groups, each titled "Page · Group", whole
+  when the page name or the group title matches, else with only the rows whose label or detail match, and a group with
+  none is left out; the header reads **Search** over "N settings match “q”", or "No settings match “q”." in the body.
+  No nav item is current then. A group's title opens its page with focus in that group; a nav item opens its page;
+  both empty the search, and Esc empties it before it closes Settings (`settingsSearch.ts`, the `Card` and `Row` of
+  `DesktopSettings.tsx`).
   Performance shows live frame, drawing, output and process figures with a **Copy report** button, and a switch for a
   corner readout over the window ([PERFORMANCE](PERFORMANCE.md#measuring-in-the-app)). The **switch** is 32×18 with a
   12px knob (`--c-sw-off` is the well, on is the accent, the knob `--muted` off and `--on-accent` on); a
