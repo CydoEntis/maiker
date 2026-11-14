@@ -43,8 +43,8 @@ const note = (title: string, text: string): WindowRoute => ({ kind: 'note', titl
 const END: WindowRoute = { kind: 'confirm', ask: { title: 'End this session?', body: 'Claude Code quits and the session ends. Its conversation is kept, so Recent sessions can reopen it.', confirmLabel: 'End session' } }
 const BACKGROUND: WindowRoute = { kind: 'confirm', ask: { title: 'Send this session to the background?', body: 'Claude Code hands it to its own background service and leaves this pane. Maitty does not list sessions running there.', confirmLabel: 'Send to background' } }
 const CLEAR: WindowRoute = { kind: 'confirm', ask: { title: 'Start a new conversation?', body: 'Claude Code starts over with empty context. The current conversation stays on disk and can be reopened.', confirmLabel: 'Clear' } }
-// The Agents page lists the commands approved for each project, the window's view of Claude Code's allow rules.
-const SETTINGS_PERMISSIONS: WindowRoute = { kind: 'settings', section: 'agents' }
+// The Permissions page lists the commands approved for each project, the window's view of Claude Code's allow rules.
+const SETTINGS_PERMISSIONS: WindowRoute = { kind: 'settings', section: 'permissions' }
 const HISTORY: WindowRoute = { kind: 'panel', view: 'history' }
 
 /** What a command does in the window, by Claude Code's names for it, and the words the picker tags it with. */

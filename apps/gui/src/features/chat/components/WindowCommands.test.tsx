@@ -92,7 +92,7 @@ describe('the commands the window answers itself', () => {
     await user.type(box, '/permissions{Escape}{Enter}')
     await user.type(box, '/resume{Escape}{Enter}')
 
-    expect(actions.openSettings).toHaveBeenCalledExactlyOnceWith('agents')
+    expect(actions.openSettings).toHaveBeenCalledExactlyOnceWith('permissions')
     expect(actions.openRecent).toHaveBeenCalledOnce()
     expect(fake.submitMessage).not.toHaveBeenCalled()
   })
