@@ -282,6 +282,20 @@ describe('Inspect history', () => {
     expect(vi.mocked(invoke)).toHaveBeenCalledWith('restore_snapshot', { term: 5, commit: 'feed1234' })
   })
 
+  it('says when the agent\'s snapshots could not be read, keeps the commits, and reads them again on Try again', async () => {
+    daemonAnswers({ Log: history.Log })
+    renderPanel('history')
+
+    expect((await screen.findByRole('alert')).textContent).toContain("Could not load the agent's snapshots")
+    expect(screen.getByText('first commit')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Restore' })).toBeNull()
+
+    daemonAnswers(history)
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('button', { name: 'Restore' })).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('will not restore while the agent is working', async () => {
     daemonAnswers(history)
     renderPanel('history', { agentWorking: true })

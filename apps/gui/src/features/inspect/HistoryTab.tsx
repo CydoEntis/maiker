@@ -77,6 +77,13 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
             )))}
         </section>
       )}
+      {snapshots.isError && (
+        // The commits still show; the agent's snapshots, which Restore needs, are said to be missing rather than left out.
+        <p className="mx-inspect-note is-error" role="alert">
+          Could not load the agent's snapshots: {messageOf(snapshots.error)}{' '}
+          <button type="button" className="mx-text-button" disabled={snapshots.isFetching} onClick={() => { void snapshots.refetch() }}>{snapshots.isFetching ? 'Trying again…' : 'Try again'}</button>
+        </p>
+      )}
       <ul className="mx-inspect-list" aria-label="History">
         {entries.map((entry) => {
           const isPicked = picked.includes(entry.id)
@@ -106,7 +113,7 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
             </li>
           )
         })}
-        {entries.length === 0 && <li className="mx-inspect-note">No commits or snapshots yet.</li>}
+        {entries.length === 0 && <li className="mx-inspect-note">{snapshots.isError ? 'No commits yet.' : 'No commits or snapshots yet.'}</li>}
       </ul>
     </div>
   )
