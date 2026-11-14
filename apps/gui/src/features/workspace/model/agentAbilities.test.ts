@@ -9,7 +9,7 @@ import type { SessionView } from './session'
 describe('abilitiesOf', () => {
   it('gives Claude its own commands, Shift+Tab modes, a structured chat, moves, verified keys, live model chips, `!` lines, saved conversations, model discovery and hooked asks', () => {
     expect(abilitiesOf('claude')).toEqual({
-      slashCommands: { list: 'agent', skillsAfterDollar: false, enterAfterPause: false },
+      slashCommands: { list: 'agent', skillsAfterDollar: false, enterAfterPause: true },
       permissionModes: { modes: PICKABLE_MODES, switchBy: 'shift-tab' },
       structuredChat: true,
       moveToWorktree: true,

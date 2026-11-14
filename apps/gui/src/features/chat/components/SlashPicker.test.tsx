@@ -138,13 +138,15 @@ describe('the agent\'s commands in the message box', () => {
     expect(fake.submitMessage).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 1, '/nope')
   })
 
-  it('types the command into an agent that runs in a terminal, where a pasted one would be read as words', async () => {
+  it('types the command into an agent that runs in a terminal, where a pasted one would be read as words, and Enter a moment later', async () => {
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto })
 
     await user.type(box, '/comp{Enter}')
+    await settle(1000)
 
-    expect(typeInto).toHaveBeenCalledExactlyOnceWith('/compact\r')
+    // Sent with the text, the Enter would pick from the path Claude Code is completing instead of running the command.
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/compact', '\r'])
   })
 
   it('offers the commands only the terminal runs to an agent that has one, and shows the terminal when one is run', async () => {
@@ -157,7 +159,8 @@ describe('the agent\'s commands in the message box', () => {
     await user.keyboard('{Enter}')
 
     expect(onShowTerminal).toHaveBeenCalledOnce()
-    expect(typeInto).toHaveBeenCalledExactlyOnceWith('/permissions\r')
+    await settle(1000)
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/permissions', '\r'])
     expect(box).toHaveValue('')
   })
 
@@ -169,7 +172,8 @@ describe('the agent\'s commands in the message box', () => {
     await user.type(box, '/btw which file is that?{Enter}')
 
     expect(onShowTerminal).toHaveBeenCalledOnce()
-    expect(typeInto).toHaveBeenCalledExactlyOnceWith('/btw which file is that?\r')
+    await settle(1000)
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/btw which file is that?', '\r'])
     expect(box).toHaveValue('')
   })
 

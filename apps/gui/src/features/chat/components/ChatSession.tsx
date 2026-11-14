@@ -12,7 +12,7 @@ import { buildRows, type ChatRow } from '../chatRows'
 import { findRow, registerChatFind } from '../chatSearch'
 import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
-import { CODEX_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } from '../useChatComposer'
+import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } from '../useChatComposer'
 import { countUserMessages } from '../workPhase'
 import { startedWithYolo } from '../yoloSessions'
 import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel } from '../chatMeta'
@@ -233,7 +233,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
           setLiveMode({ base: metaMode, value: target })
           const step = async () => {
             await typeInto(command)
-            await new Promise<void>((resolve) => { window.setTimeout(resolve, CODEX_SUBMIT_GAP_MS) })
+            await new Promise<void>((resolve) => { window.setTimeout(resolve, COMMAND_SUBMIT_GAP_MS) })
             await typeInto('\r')
             await new Promise<void>((resolve) => { window.setTimeout(resolve, MODE_READ_MS) })
             if (CODEX_MODE_REFUSED.test(await loadTerminalScreen({ id: sessionId, generation: 0 }))) {

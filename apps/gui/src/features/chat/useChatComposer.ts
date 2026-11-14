@@ -37,17 +37,20 @@ export function asTyped(text: string): string {
 /** How long a pasted message is given before its Enter is typed. */
 export const PASTE_SUBMIT_GAP_MS = 150
 
-/** Codex takes a typed command only when Enter comes a moment after it: sent together, the Enter is lost. */
-export const CODEX_SUBMIT_GAP_MS = 400
+/**
+ * How long a typed command is given before its Enter. Sent together, Codex loses the Enter, and Claude Code takes it for
+ * the path it is completing (`/export /some/path` stays typed in its box).
+ */
+export const COMMAND_SUBMIT_GAP_MS = 400
 
-/** Types a message into an agent's terminal with `type`, the way that agent takes it (`asTyped`; Codex's commands with a pause before Enter). */
+/** Types a message into an agent's terminal with `type`, the way that agent takes it (`asTyped`; a command with a pause before Enter). */
 /** How long the agent is given to switch to its shell mode after the `!` before the command is typed. */
 export const BANG_MODE_GAP_MS = 150
 
 export async function typeMessage(type: (text: string) => Promise<void>, agent: string | undefined, text: string): Promise<void> {
   if (abilitiesOf(agent).slashCommands?.enterAfterPause === true && isSlashLine(text)) {
     await type(text)
-    await new Promise<void>((resolve) => { window.setTimeout(resolve, CODEX_SUBMIT_GAP_MS) })
+    await new Promise<void>((resolve) => { window.setTimeout(resolve, COMMAND_SUBMIT_GAP_MS) })
     await type('\r')
     return
   }

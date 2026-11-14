@@ -412,7 +412,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   that start with it, then a plugin's command by its own name, then names that hold it); ↑ ↓ move, **Tab** completes
   the name, **Enter** or a click runs a command that takes nothing and completes one that takes something, **Esc**
   puts the list away until the text changes. The list goes once a space ends the name. A one-line message that
-  starts with a slash is typed into a terminal agent instead of pasted, so it is read as a command. Claude Code leaves
+  starts with a slash is typed into a terminal agent instead of pasted, so it is read as a command, and its Enter
+  follows 400ms later (`typeMessage`, `COMMAND_SUBMIT_GAP_MS`): sent with the text, Claude Code takes the Enter for the
+  path it is completing and leaves `/export /some/path` typed in its box, and Codex loses it. Claude Code leaves
   the commands that only its terminal runs out of that list (`/help`, `/permissions`, `/resume`, `/add-dir`…), so they
   are written by hand in `terminalCommands.ts` (from Claude Code 2.1.322) and offered, tagged `terminal`, to an agent
   that has a terminal: running one types it there and shows the terminal, since its menu is the terminal's to draw,
@@ -434,8 +436,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
   list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from Codex CLI
   0.167.0). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
-  Codex's terminal, are tagged `terminal`, and run there with the terminal shown. A Codex command is typed and Enter
-  follows 400ms later (`typeMessage`), since Codex loses an Enter sent with it. Codex does list its **skills**
+  Codex's terminal, are tagged `terminal`, and run there with the terminal shown. Codex does list its **skills**
   (`agent_commands` asks its app server, `skills/list`), so those are offered too, tagged `skill` and written `$name`
   as Codex's own box takes them: beside the commands after a slash, alone after a `$`. Picking one leaves `$name ` in
   the box to write the message around; a skill is never sent by itself.

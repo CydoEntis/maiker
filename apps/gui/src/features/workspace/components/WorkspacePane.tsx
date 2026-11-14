@@ -13,7 +13,7 @@ import { LOCAL_MACHINE } from '@/api/machines'
 import { AgentTerminals } from './AgentTerminals'
 import { startsFolded } from '../model/terminalDrawer'
 import type { TurnSpan } from '@/features/inspect/turnRange'
-import { CODEX_SUBMIT_GAP_MS } from '@/features/chat/useChatComposer'
+import { COMMAND_SUBMIT_GAP_MS } from '@/features/chat/useChatComposer'
 import { contextFull, type ChatProblem } from '@/features/chat/problem'
 import { RunningSubagents } from '@/features/chat/components/RunningSubagents'
 import { ChatPane } from '@/features/chat/components/ChatPane'
@@ -72,7 +72,7 @@ export function WorkspacePane({ shown, pane, kept }: {
     : session.status === 'error' && !session.ended && !isShell(session)
       ? { kind: 'crashed', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onViewLog: () => { showTerminal() }, onRestart: chatOnly ? null : () => { restartPane(pane.id) } }
       : fullPercent !== null && typeInto !== undefined
-        ? { kind: 'context', agent: session.process, percent: fullPercent, onNewWithSummary: (summary) => { newChatWithSummary(session, summary) }, onCompact: () => { void typeInto('/compact').then(() => new Promise((resolve) => { window.setTimeout(resolve, CODEX_SUBMIT_GAP_MS) })).then(() => typeInto('\r')).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not compact')) }) } }
+        ? { kind: 'context', agent: session.process, percent: fullPercent, onNewWithSummary: (summary) => { newChatWithSummary(session, summary) }, onCompact: () => { void typeInto('/compact').then(() => new Promise((resolve) => { window.setTimeout(resolve, COMMAND_SUBMIT_GAP_MS) })).then(() => typeInto('\r')).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not compact')) }) } }
         : null
   const terminals = ownsTerminals(session)
   // Restoring reads and writes the checkout, so it is this computer's only, like Inspect.
