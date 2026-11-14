@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
@@ -755,3 +755,69 @@ describe('adding a machine', () => {
     expect(screen.getByText(/Windows: use ssh keys or an agent/)).toBeInTheDocument()
   })
 })
+
+describe('searching settings', () => {
+  // A search draws every page, Permissions with its accounts among them.
+  beforeEach(() => {
+    accounts.loadAgentAuth.mockReset().mockResolvedValue({ installed: false, signedIn: null, account: '', plan: '' })
+  })
+
+  const search = async (text: string) => {
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('textbox', { name: 'Search settings' }), text)
+    return user
+  }
+
+  it('shows the matching rows of every page, titled with their page', async () => {
+    renderSettings('general')
+    await search('corners')
+    expect(screen.getByRole('heading', { name: 'Search' })).toBeInTheDocument()
+    expect(await screen.findByText(/setting(s)? match(es)? “corners”/)).toBeInTheDocument()
+    expect(screen.getByText('Corners')).toBeInTheDocument()
+    expect(screen.queryByText('Dark theme')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Appearance · / }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { current: 'page' })).not.toBeInTheDocument()
+  })
+
+  it('draws nothing but groups while searching, so no page shows what was not asked for', async () => {
+    renderSettings('general')
+    await search('zzzz')
+    expect(await screen.findByText('No settings match “zzzz”.')).toBeInTheDocument()
+    const strays = Array.from(document.querySelectorAll('.mx-settings-sections > *')).filter((child) => !child.matches('.mx-scard, .mx-settings-none'))
+    expect(strays.map((child) => child.className)).toEqual([])
+  })
+
+  it('shows every group of a page whose name matches', async () => {
+    renderSettings('general')
+    await search('machines')
+    expect(within(screen.getByRole('region', { name: 'This computer' })).getAllByText(/./).length).toBeGreaterThan(1)
+  })
+
+  it('opens the page of a result from its title and leaves the search', async () => {
+    const { onSection } = renderSettings('general')
+    const user = await search('corners')
+    const [result] = screen.getAllByRole('button', { name: /^Appearance · / })
+    if (result === undefined) throw new Error('no Appearance result')
+    await user.click(result)
+    expect(onSection).toHaveBeenCalledWith('appearance')
+    expect(screen.getByRole('textbox', { name: 'Search settings' })).toHaveValue('')
+  })
+
+  it('empties the search on Esc before it closes Settings', async () => {
+    const onClose = vi.fn()
+    renderSettings('general', { onClose })
+    const user = await search('corners')
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('textbox', { name: 'Search settings' })).toHaveValue('')
+    expect(onClose).not.toHaveBeenCalled()
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('does not jump pages on a letter typed into the search', async () => {
+    const { onSection } = renderSettings('general')
+    await search('m')
+    expect(onSection).not.toHaveBeenCalled()
+  })
+})
+

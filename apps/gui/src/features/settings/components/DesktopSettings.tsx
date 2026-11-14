@@ -3,7 +3,8 @@ import { toast } from '@/lib/toast'
 import type { UpdaterState } from '@/features/updates/useUpdater'
 import { percentOf, type Transfer } from '@/features/updates/downloadEta'
 import { DownloadProgress } from '@/features/updates/DownloadProgress'
-import { Fragment, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useContext, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { GroupShowsAll, matchesQuery, SettingsSearch } from '../settingsSearch'
 import { THEMES } from '@/features/workspace/theme/themes'
 import { ThemePicker } from './ThemePicker'
 import { CORNERS, CORNER_NAMES } from '@/features/workspace/theme/corners'
@@ -156,6 +157,13 @@ const keepForOpenList = (event: globalThis.KeyboardEvent) => {
   if (inside || document.querySelector('.mx-picker-list') !== null) event.preventDefault()
 }
 
+/** The pages a search looks through, in nav order, then Performance. Usage is figures, not settings. */
+const SEARCHED: readonly DesktopSettingsSection[] = [...NAV.flatMap((group) => group.items.map((item) => item.id)), 'performance']
+
+function foundLine(rows: number, query: string): string {
+  return `${String(rows)} ${rows === 1 ? 'setting matches' : 'settings match'} “${query}”`
+}
+
 function tint(color: string): CSSProperties {
   return { '--tint': color } as CSSProperties
 }
@@ -181,17 +189,81 @@ export function DesktopSettings(props: DesktopSettingsProps) {
     }
   }
 
-  const [title, subtitle] = PAGE[section]
+  const [query, setQuery] = useState('')
+  const searching = query.trim() !== ''
+  const scroller = useRef<HTMLDivElement>(null)
+  const [found, setFound] = useState({ rows: 0, groups: 0 })
+  // A group to put focus in once its page has drawn, after a search result's page was opened.
+  const focusGroup = useRef<string | null>(null)
+
+  // The results are the pages themselves, filtered as they draw, and some fill in later (signed-in agents, machines),
+  // so they are counted from what is on screen whenever it changes.
+  useEffect(() => {
+    const root = scroller.current
+    if (!searching || root === null) return
+    const count = () => {
+      const rows = root.querySelectorAll('[data-search-hit]').length
+      const groups = root.querySelectorAll('.mx-scard:not(.is-filtered), .mx-scard.is-filtered:has([data-search-hit])').length
+      setFound((was) => (was.rows === rows && was.groups === groups ? was : { rows, groups }))
+    }
+    const frame = requestAnimationFrame(count)
+    const observer = new MutationObserver(count)
+    observer.observe(root, { childList: true, subtree: true })
+    return () => { cancelAnimationFrame(frame); observer.disconnect() }
+  }, [searching, query])
+
+  useEffect(() => {
+    const wanted = focusGroup.current
+    if (searching || wanted === null) return
+    focusGroup.current = null
+    const group = scroller.current?.querySelector<HTMLElement>(`.mx-scard[aria-label="${CSS.escape(wanted)}"]`)
+    group?.scrollIntoView({ block: 'start' })
+    group?.querySelector<HTMLElement>('button, input, select, textarea, [role="switch"], [role="radio"], [tabindex="0"]')?.focus()
+  }, [searching, section])
+
+  const openPage = (id: DesktopSettingsSection) => {
+    setQuery('')
+    props.onSection(id)
+  }
+
+  // Esc empties the search before it closes Settings.
+  const onEscape = (event: globalThis.KeyboardEvent) => {
+    keepForOpenList(event)
+    if (event.defaultPrevented || !searching) return
+    event.preventDefault()
+    setQuery('')
+  }
+
+  const page = (id: DesktopSettingsSection): ReactNode => {
+    switch (id) {
+      case 'general': return <GeneralSection preferences={preferences} update={update} validateFolder={props.validateFolder} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} updates={props.updates} />
+      case 'chat': return <ChatSection preferences={preferences} update={update} />
+      case 'permissions': return <><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
+      case 'terminal': return <TerminalSection preferences={preferences} update={update} />
+      case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemReducedMotion={props.systemReducedMotion} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
+      case 'usage': return <UsageSection usage={props.usage} />
+      case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
+      case 'machines': return <><DaemonSection daemon={props.daemon} /><MachinesSection machines={props.machines} /></>
+      case 'keys': return <HotkeysSection platform={props.platform} />
+      case 'performance': return <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />
+    }
+  }
+
+  const [title, subtitle] = searching ? ['Search', foundLine(found.rows, query.trim())] : PAGE[section]
   return (
-    <Panel label="Settings" onClose={props.onClose} scrimClassName="mx-settings-scrim" className="mx-settings" onKeyDown={onKeyDown} onOpenAutoFocus={focusSection} onEscapeKeyDown={keepForOpenList}>
+    <Panel label="Settings" onClose={props.onClose} scrimClassName="mx-settings-scrim" className="mx-settings" onKeyDown={onKeyDown} onOpenAutoFocus={focusSection} onEscapeKeyDown={onEscape}>
       <>
         <nav aria-label="Settings sections" className="mx-settings-nav">
           <span className="mx-settings-nav-title">Settings</span>
+          <label className="mx-settings-search">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <input type="text" value={query} placeholder="Search settings" aria-label="Search settings" spellCheck={false} onChange={(event) => { setQuery(event.target.value) }} />
+          </label>
           {NAV.map((group) => (
             <div key={group.label} className="mx-settings-nav-group">
               <span className="mx-settings-nav-label">{group.label}</span>
               {group.items.map((item) => (
-                <button key={item.id} type="button" className={`mx-settings-nav-item${section === item.id ? ' is-current' : ''}`} aria-current={section === item.id ? 'page' : undefined} onClick={() => { props.onSection(item.id) }}>
+                <button key={item.id} type="button" className={`mx-settings-nav-item${!searching && section === item.id ? ' is-current' : ''}`} aria-current={!searching && section === item.id ? 'page' : undefined} onClick={() => { openPage(item.id) }}>
                   <span className="mx-tint-tile" style={tint(item.tint)}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={item.path} /></svg>
                   </span>
@@ -204,24 +276,21 @@ export function DesktopSettings(props: DesktopSettingsProps) {
         </nav>
         <div className="mx-settings-body">
           <header className="mx-settings-header">
-            <div className="mx-settings-heading" key={section}>
+            <div className="mx-settings-heading" key={searching ? 'search' : section}>
               <h2>{title}</h2>
               <p>{subtitle}</p>
             </div>
             <button type="button" className="mx-icon-button mx-settings-close" aria-label="Close settings" title="Close (Esc)" onClick={props.onClose}><Icon name="close" size={14} /></button>
           </header>
-          <div className="mx-settings-scroll">
-            <div className="mx-settings-sections" key={section}>
-              {section === 'general' && <GeneralSection preferences={preferences} update={update} validateFolder={props.validateFolder} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} updates={props.updates} />}
-              {section === 'chat' && <ChatSection preferences={preferences} update={update} />}
-              {section === 'permissions' && <><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>}
-              {section === 'terminal' && <TerminalSection preferences={preferences} update={update} />}
-              {section === 'appearance' && <><AppearanceSection preferences={preferences} update={update} systemReducedMotion={props.systemReducedMotion} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>}
-              {section === 'usage' && <UsageSection usage={props.usage} />}
-              {section === 'notifications' && <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />}
-              {section === 'machines' && <><DaemonSection daemon={props.daemon} /><MachinesSection machines={props.machines} /></>}
-              {section === 'keys' && <HotkeysSection platform={props.platform} />}
-              {section === 'performance' && <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />}
+          <div className="mx-settings-scroll" ref={scroller}>
+            <div className="mx-settings-sections" key={searching ? 'search' : section}>
+              {!searching && page(section)}
+              {searching && SEARCHED.map((id) => (
+                <SettingsSearch.Provider key={id} value={{ query, page: PAGE[id][0], pageMatched: matchesQuery(PAGE[id][0], query), onOpen: (group) => { focusGroup.current = group; openPage(id) } }}>
+                  {page(id)}
+                </SettingsSearch.Provider>
+              ))}
+              {searching && found.groups === 0 && <p className="mx-settings-none">No settings match “{query.trim()}”.</p>}
             </div>
           </div>
         </div>
@@ -234,6 +303,20 @@ type Update = <K extends keyof SettingsPreferences>(key: K, value: SettingsPrefe
 
 /** A titled group of rows: an uppercase heading with an optional note at its right, then rows divided by hairlines. */
 export function Card({ title, meta, children, foot, footRow = false }: { title: string; meta?: ReactNode; children?: ReactNode; foot?: ReactNode; footRow?: boolean }) {
+  const search = useContext(SettingsSearch)
+  if (search !== null) {
+    // In the results: titled with its page, opened by its title, and only its matching rows unless the title matched.
+    const whole = search.pageMatched || matchesQuery(title, search.query)
+    const heading = search.page === title ? title : `${search.page} · ${title}`
+    return (
+      <section className={`mx-scard${whole ? '' : ' is-filtered'}`} aria-label={title}>
+        <div className="mx-scard-head">
+          <button type="button" className="mx-scard-title mx-scard-open" title={`Open ${search.page}`} onClick={() => { search.onOpen(title) }}>{heading}</button>
+        </div>
+        <GroupShowsAll.Provider value={whole}>{children}</GroupShowsAll.Provider>
+      </section>
+    )
+  }
   return (
     <section className="mx-scard" aria-label={title}>
       <div className="mx-scard-head">
@@ -247,8 +330,12 @@ export function Card({ title, meta, children, foot, footRow = false }: { title: 
 }
 
 export function Row({ label, detail, children }: { label: string; detail?: string; children: ReactNode }) {
+  const search = useContext(SettingsSearch)
+  const whole = useContext(GroupShowsAll)
+  const hit = search !== null && (whole || matchesQuery(`${label} ${detail ?? ''}`, search.query))
+  if (search !== null && !hit) return null
   return (
-    <div className="mx-scard-row">
+    <div className="mx-scard-row" data-search-hit={hit || undefined}>
       <div className="mx-scard-text"><span>{label}</span>{detail && <span>{detail}</span>}</div>
       {children}
     </div>
