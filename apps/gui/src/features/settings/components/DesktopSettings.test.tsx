@@ -6,7 +6,7 @@ import type { SettingsPreferences } from '../preferences'
 import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', statusBar: true, chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', newSessionView: 'chat', chatFullAccessDefault: false, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, terminalSeeThrough: false, backgroundGlow: false, cursorBlink: false, style: 'glass', chatWidth: 'auto', chatTextSize: 100 }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', statusBar: true, chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', newSessionView: 'chat', chatFullAccessDefault: false, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, terminalSeeThrough: false, backgroundGlow: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100 }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -39,7 +39,7 @@ describe('the agents page', () => {
       ? { installed: true, signedIn: true, account: 'me@example.com', plan: 'max' }
       : { installed: true, signedIn: false, account: '', plan: '' }))
     accounts.signOutAgent.mockReset().mockResolvedValue(undefined)
-    renderSettings('agents')
+    renderSettings('permissions')
 
     expect(await screen.findByText('Signed in: me@example.com · max')).toBeInTheDocument()
     expect(screen.getByText('Not signed in.')).toBeInTheDocument()
@@ -57,7 +57,7 @@ describe('the agents page', () => {
     accounts.loadAgentAuth.mockReset().mockImplementation((agent) => Promise.resolve(agent === 'claude'
       ? { installed: false, signedIn: null, account: '', plan: '' }
       : { installed: true, signedIn: false, account: '', plan: '' }))
-    renderSettings('agents', { onSignInAgent })
+    renderSettings('permissions', { onSignInAgent })
 
     expect(await screen.findByText('Not installed on this computer.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sign in to Claude' })).not.toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('the agents page', () => {
 
   it('says when an agent could not be asked', async () => {
     accounts.loadAgentAuth.mockReset().mockRejectedValue(new Error('The agent did not answer in time'))
-    renderSettings('agents')
+    renderSettings('permissions')
 
     expect((await screen.findAllByText('Could not check: The agent did not answer in time')).length).toBe(2)
   })
@@ -78,7 +78,7 @@ describe('desktop settings', () => {
   it('groups the sections the way the design does', () => {
     renderSettings('general')
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(nav).toHaveTextContent('ESSENTIALSGeneralGChatCAgentsETERMINALTerminalTAppearanceASidebarSWORKSPACEUsage & costUNotificationsNMachinesMHotkeys?ADVANCEDDaemonDPerformanceP')
+    expect(nav).toHaveTextContent('APPGeneralGAppearanceANotificationsNHotkeys?AGENTSChatCPermissionsETerminalTMACHINESMachinesM')
     expect(within(nav).getByRole('button', { name: /General/ })).toHaveAttribute('aria-current', 'page')
   })
 
@@ -326,7 +326,7 @@ describe('desktop settings', () => {
   it('picks a dark and a light theme separately, from searchable dropdowns that list the one in use first', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, darkTheme: 'Gruvbox Dark' } })
-    expect(screen.getByText('50 themes installed')).toBeInTheDocument()
+    expect(screen.getByText('55 themes installed')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Dark theme: Gruvbox Dark' }))
     const dark = (await screen.findByRole('radiogroup', { name: 'Dark themes' }))
@@ -389,12 +389,13 @@ describe('desktop settings', () => {
     expect(screen.queryByRole('switch', { name: 'Needs you' })).toBeNull()
   })
 
-  it('shows only what maittyd reports about itself', () => {
-    renderSettings('daemon', { daemon: { online: false, sessionCount: 3 } })
-    expect(screen.getByRole('status')).toHaveTextContent('Disconnected')
-    expect(screen.getByText('Sessions').parentElement?.parentElement).toHaveTextContent('3')
-    expect(screen.queryByText('Version')).not.toBeInTheDocument()
-    expect(screen.queryByText('Socket')).not.toBeInTheDocument()
+  it('shows only what maittyd reports about itself, first on the Machines page as This computer', () => {
+    renderSettings('machines', { daemon: { online: false, sessionCount: 3 } })
+    const here = screen.getByRole('region', { name: 'This computer' })
+    expect(within(here).getByRole('status')).toHaveTextContent('Disconnected')
+    expect(within(here).getByText('Sessions').parentElement?.parentElement).toHaveTextContent('3')
+    expect(within(here).queryByText('Version')).not.toBeInTheDocument()
+    expect(within(here).queryByText('Socket')).not.toBeInTheDocument()
   })
 
   it('picks the terminal font from a list that starts with the bundled one, and keeps a saved family that is not installed', async () => {
@@ -420,32 +421,25 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ terminalFontWeightBold: 800 }))
   })
 
-  it('sets how big the sidebar icons are', async () => {
+  it('sets how big the sidebar icons are, from the Appearance page', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('sidebar')
+    const { onChange } = renderSettings('appearance')
 
     await user.click(within(screen.getByRole('radiogroup', { name: 'Sidebar icon size' })).getByRole('radio', { name: 'Small' }))
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ iconSize: 'small' }))
   })
 
-  it('offers the four window styles in one dropdown, with the current one checked', async () => {
+  it('offers square or rounded corners, with the current one checked', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, style: 'glass' } })
-    const button = screen.getByRole('button', { name: 'Window style: Glass' })
+    const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, corners: 'square' } })
+    const corners = screen.getByRole('radiogroup', { name: 'Corners' })
 
-    await user.click(button)
-    const list = await screen.findByRole('menu', { name: /^Window style/ })
-    expect(within(list).getAllByRole('menuitemradio').map((item) => item.textContent)).toEqual([
-      expect.stringContaining('Glass'),
-      expect.stringContaining('Squared'),
-      expect.stringContaining('Flat'),
-      expect.stringContaining('Retro Pixel'),
-    ])
-    expect(within(list).getByRole('menuitemradio', { name: /Glass/ })).toHaveAttribute('aria-checked', 'true')
+    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded'])
+    expect(within(corners).getByRole('radio', { name: 'Square' })).toHaveAttribute('aria-checked', 'true')
 
-    await user.click(within(list).getByRole('menuitemradio', { name: /Retro Pixel/ }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ style: 'pixel' }))
+    await user.click(within(corners).getByRole('radio', { name: 'Rounded' }))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ corners: 'rounded' }))
   })
 
   it('replays the welcome from General', async () => {
@@ -513,7 +507,7 @@ describe('the Machines page', () => {
 
   it('says it is loading until the host has answered', () => {
     renderSettings('machines', { machines: info({ known: false }) })
-    expect(screen.getByRole('status')).toHaveTextContent('Loading machines')
+    expect(within(screen.getByRole('region', { name: 'Machines' })).getByRole('status')).toHaveTextContent('Loading machines')
   })
 
   it('says where machines come from when there are none', () => {
@@ -730,7 +724,7 @@ describe('adding a machine', () => {
     const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
     renderSettings('machines', { machines: info({ add: { ...info().add, onAdd, onCancel } }) })
     await user.type(screen.getByRole('textbox', { name: 'Host or user@host' }), 'slow.example{Enter}')
-    expect(screen.getByRole('status')).toHaveTextContent('Checking slow.example')
+    expect(within(screen.getByRole('region', { name: 'Add a machine' })).getByRole('status')).toHaveTextContent('Checking slow.example')
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onCancel).toHaveBeenCalled()
   })

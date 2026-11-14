@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from '@/lib/toast'
 import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen } from '@/api/daemon'
+import { machineNameOf, terminalOf } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
 import { readConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
@@ -34,6 +35,7 @@ import { Composer } from './Composer'
 import { ChatItem, type ChatItemContext } from './ChatItems'
 import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
+import { askedPlan, PLAN_TOOL } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
 import type { BranchMenuSpec } from './BranchMenu'
 import { ProblemBanner } from './ProblemBanner'
@@ -437,6 +439,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
   }, [sessionId, rowsNow, foundNow, goToStep])
 
   const waitingStep = pending?.stepId ?? null
+  const plan = useMemo(() => (ask?.tool === PLAN_TOOL ? askedPlan(events) : null), [ask?.tool, events])
   // The daemon refuses a restore while the agent works too: its files would be rolled back under it.
   const rewindBusy = !online ? 'The daemon is offline' : working ? `${agent} is working. Edit from here when it finishes.` : null
   const editFromHere = useEditFromHere({ place: rewind ?? null, conversation: link.conversation, events, agent, busy: rewindBusy })
@@ -452,6 +455,14 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
   // y, a and n answer the tray from anywhere in the chat but a field, as the same letters do in the terminal.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.ctrlKey || event.metaKey || event.altKey || typedInField(event.target)) return
+    // A question's number picks its choice, as it does in the agent's own menu.
+    const choice = Number(event.key) - 1
+    const choices = ask?.choices ?? []
+    if (stoppedOnPrompt && online && pickChoice !== undefined && (ask?.questions?.length ?? 0) <= 1 && Number.isInteger(choice) && choice >= 0 && choice < choices.length) {
+      event.preventDefault()
+      void pickChoice(choice)
+      return
+    }
     const decision = KEY_DECISION[event.key.toLowerCase()]
     if (decision === undefined) return
     if (pending !== null && approval !== null && !approval.busy && pending.approvalKind !== 'UserInput' && pending.choices.includes(decision)) {
@@ -470,8 +481,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
   const openFile = useMemo<OpenFile | null>(() => (canOpenFile ? (path, line) => { openFileRef.current?.(path, line) } : null), [canOpenFile])
 
   const question = pending !== null
-    ? <ApprovalTray event={pending} actions={approval} />
-    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} sendKeys={sendKeys} readScreen={readScreen} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
+    ? <ApprovalTray event={pending} actions={approval} agent={agent} />
+    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} sendKeys={sendKeys} readScreen={readScreen} plan={plan} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
     !offline && incomplete !== null ? `History is incomplete: ${incomplete}.` : null,
@@ -493,7 +504,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
       {subagent !== null ? (
         <>
           <SubagentBar subagent={subagent} onBack={() => { onBackToMain?.() }} />
-          <SubagentChat subagent={subagent} agent={agent} />
+          <SubagentChat subagent={subagent} agent={agent} root={root} term={sessionId !== undefined && machineNameOf(sessionId) === null ? terminalOf(sessionId) : null} />
         </>
       ) : feed.loaded && rows.length === 0 ? (
         <p className="mx-chat-empty">{hasTerminal ? 'No messages yet. Send one below, or type in the terminal.' : 'No messages yet. Send one below.'}</p>
