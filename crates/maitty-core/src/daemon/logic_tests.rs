@@ -9459,6 +9459,7 @@ fn permission_report(term: TermId, status: HookStatus, event: &str, agent: &str,
             answerable: true,
             choices: Vec::new(),
             questions: Vec::new(),
+            form: Vec::new(),
         });
     }
     msg

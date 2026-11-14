@@ -18,7 +18,7 @@ import { startedWithYolo } from '../yoloSessions'
 import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
-import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, type AskChoice } from '../permissionAsk'
+import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, type AskChoice } from '../permissionAsk'
 import { draftWithQuote, pickedText, type PickedText } from '../selectionActions'
 import { peekComposer } from '../composerStore'
 import { COPY_TOAST_ID, COPY_TOAST_MS } from '@/features/terminal/copyToast'
@@ -185,15 +185,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
   }, [working, refresh])
   // The transcript has no entry for a terminal agent's prompt until it is answered, so the chat shows it from the hook's report.
   const stoppedOnPrompt = link.readOnly === true && feed.status === 'Blocked'
-  const answersPrompt = stoppedOnPrompt && typeInto !== undefined && (ask?.answerable === true || (ask?.choices?.length ?? 0) > 0 || (ask?.questions?.length ?? 0) > 1)
+  const answersPrompt = stoppedOnPrompt && typeInto !== undefined && (ask?.answerable === true || (ask?.choices?.length ?? 0) > 0 || formQuestions(ask).length > 0)
   const answerPrompt = typeInto === undefined ? undefined : (choice: AskChoice) => typeInto(ANSWER_KEYS[choice]).then(refresh)
   // A menu the chat has no buttons for is answered with the keys a person would press, in the agent's own terminal.
   const sendKeys = typeInto === undefined ? undefined : (keys: string) => typeInto(keys).then(refresh)
   const readScreen = useMemo(() => (sessionId === undefined ? undefined : () => loadTerminalScreen({ id: sessionId, generation: 0 })), [sessionId])
   const pickChoice = typeInto === undefined ? undefined : (index: number) => typeInto(choiceKey(index)).then(refresh)
-  // Several questions are answered a key at a time, as a person would: the prompt moves on after each.
-  const pickChoices = typeInto === undefined ? undefined : async (picked: readonly number[]) => {
-    for (const [at, key] of answerKeys(picked).entries()) {
+  // A form is answered a key at a time, as a person would: the prompt redraws after each.
+  const pickChoices = typeInto === undefined ? undefined : async (picked: readonly (readonly number[])[]) => {
+    for (const [at, key] of answerKeys(formQuestions(ask), picked).entries()) {
       if (at > 0) await new Promise<void>((resolve) => { window.setTimeout(resolve, ANSWER_STEP_MS) })
       await typeInto(key)
     }
@@ -456,7 +456,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
     // A question's number picks its choice, as it does in the agent's own menu.
     const choice = Number(event.key) - 1
     const choices = ask?.choices ?? []
-    if (stoppedOnPrompt && online && pickChoice !== undefined && (ask?.questions?.length ?? 0) <= 1 && Number.isInteger(choice) && choice >= 0 && choice < choices.length) {
+    if (stoppedOnPrompt && online && pickChoice !== undefined && formQuestions(ask).length === 0 && Number.isInteger(choice) && choice >= 0 && choice < choices.length) {
       event.preventDefault()
       void pickChoice(choice)
       return

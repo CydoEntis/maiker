@@ -2356,13 +2356,10 @@ const MAX_QUESTION_CHOICES: usize = 4;
 /// The most questions one prompt asks at once: Claude's own limit.
 const MAX_QUESTIONS: usize = 4;
 
-/// One question with one answer and its choices: the labels, in the order the menu numbers them.
-/// None for a question that takes several answers, has no text, or has more choices than a key
-/// can name, and for one with a label that is empty (the numbers would no longer match the menu).
-fn question_choices(entry: &Value) -> Option<(String, Vec<String>)> {
-    if entry.get("multiSelect").and_then(Value::as_bool) == Some(true) {
-        return None;
-    }
+/// One question and its choices: the labels, in the order the menu numbers them, and whether it
+/// takes several of them (`multiSelect`). None for a question with no text or more choices than a
+/// key can name, and for one with a label that is empty (the numbers would no longer match the menu).
+fn asked_question(entry: &Value) -> Option<AskQuestion> {
     let question = one_line(entry.get("question")?.as_str()?, 2000);
     let labels: Vec<String> = entry
         .get("options")?
@@ -2370,35 +2367,42 @@ fn question_choices(entry: &Value) -> Option<(String, Vec<String>)> {
         .iter()
         .map(|option| option.get("label").and_then(Value::as_str).map(|label| one_line(label, 200)))
         .collect::<Option<_>>()?;
+    let multi = entry.get("multiSelect").and_then(Value::as_bool) == Some(true);
     (!question.is_empty()
         && (2..=MAX_QUESTION_CHOICES).contains(&labels.len())
         && labels.iter().all(|label| !label.is_empty()))
-    .then_some((question, labels))
+    .then_some(AskQuestion { question, choices: labels, multi })
 }
 
-/// The choices of a prompt that is one question with one answer. A prompt with several answers
-/// is answered in the terminal, since one key cannot answer it.
-fn single_question_choices(input: Option<&Value>) -> Option<(String, Vec<String>)> {
-    let questions = input?.get("questions")?.as_array()?;
-    let [only] = questions.as_slice() else { return None };
-    question_choices(only)
-}
-
-/// A prompt that asks several questions, each with one answer: every question with its choices, in
-/// the order the prompt shows them. All of them or none: one that cannot be answered with a key
-/// leaves the whole prompt to the terminal.
-fn several_questions(input: Option<&Value>) -> Vec<AskQuestion> {
+/// Every question a prompt asks, in the order it shows them. All of them or none: one that cannot
+/// be answered with keys leaves the whole prompt to the terminal.
+fn asked_questions(input: Option<&Value>) -> Vec<AskQuestion> {
     let Some(questions) = input.and_then(|input| input.get("questions")).and_then(Value::as_array) else {
         return Vec::new();
     };
-    if !(2..=MAX_QUESTIONS).contains(&questions.len()) {
+    if !(1..=MAX_QUESTIONS).contains(&questions.len()) {
         return Vec::new();
     }
-    questions
-        .iter()
-        .map(|entry| question_choices(entry).map(|(question, choices)| AskQuestion { question, choices }))
-        .collect::<Option<Vec<_>>>()
-        .unwrap_or_default()
+    questions.iter().map(asked_question).collect::<Option<Vec<_>>>().unwrap_or_default()
+}
+
+/// How a question prompt is put to the chat: one question with one answer as its choices, several
+/// with one answer each as `questions`, and any with a question that takes several answers as
+/// `form` (which a peer from before it does not read, and so leaves to the terminal).
+struct AskedQuestions {
+    single: Option<AskQuestion>,
+    questions: Vec<AskQuestion>,
+    form: Vec<AskQuestion>,
+}
+
+fn sort_questions(asked: Vec<AskQuestion>) -> AskedQuestions {
+    if asked.iter().any(|question| question.multi) {
+        return AskedQuestions { single: None, questions: Vec::new(), form: asked };
+    }
+    match <[AskQuestion; 1]>::try_from(asked) {
+        Ok([only]) => AskedQuestions { single: Some(only), questions: Vec::new(), form: Vec::new() },
+        Err(several) => AskedQuestions { single: None, questions: several, form: Vec::new() },
+    }
 }
 
 /// A question Claude asks with its choices, on one line: `Which? 1 Fast · 2 Safe`. A tool input
@@ -2431,10 +2435,10 @@ fn permission_ask(payload: &Value) -> Option<PermissionAsk> {
         return None;
     }
     let input = payload.get("tool_input");
-    let single = if tool == QUESTION_TOOL { single_question_choices(input) } else { None };
-    let choices = single.as_ref().map(|(_, labels)| labels.clone()).unwrap_or_default();
-    let detail = if let Some((question, _)) = single {
-        question
+    let asked = sort_questions(if tool == QUESTION_TOOL { asked_questions(input) } else { Vec::new() });
+    let choices = asked.single.as_ref().map(|only| only.choices.clone()).unwrap_or_default();
+    let detail = if let Some(only) = asked.single {
+        only.question
     } else if tool == QUESTION_TOOL {
         question_subject(input)
     } else {
@@ -2449,7 +2453,8 @@ fn permission_ask(payload: &Value) -> Option<PermissionAsk> {
         detail,
         answerable: false,
         choices,
-        questions: if tool == QUESTION_TOOL { several_questions(input) } else { Vec::new() },
+        questions: asked.questions,
+        form: asked.form,
     })
 }
 
@@ -4773,7 +4778,8 @@ mod tests {
         .expect("a question");
         assert_eq!(question.detail, "Which database?");
         assert_eq!(question.choices, ["SQLite", "Postgres"]);
-        // Several questions, or several answers, cannot be answered with one key: numbered in the line.
+        // A question with several answers is carried as a form, still numbered in the line for a
+        // peer that reads only that.
         let many = report(json!({
             "hook_event_name": "PermissionRequest",
             "tool_name": "AskUserQuestion",
@@ -4784,6 +4790,7 @@ mod tests {
         .expect("a multi-select question");
         assert_eq!((many.detail.as_str(), many.choices.len()), ("Which? 1 A · 2 B", 0));
         assert!(many.questions.is_empty());
+        assert_eq!(many.form.iter().map(|q| (q.question.as_str(), q.multi)).collect::<Vec<_>>(), [("Which?", true)]);
         // Several questions with one answer each are carried whole, in order, for the chat to answer.
         let several = report(json!({
             "hook_event_name": "PermissionRequest",
@@ -4799,7 +4806,8 @@ mod tests {
             several.questions.iter().map(|q| (q.question.as_str(), q.choices.len())).collect::<Vec<_>>(),
             [("Which database?", 3), ("Which language?", 2)]
         );
-        // One of them takes several answers: the whole prompt stays the terminal's.
+        // One of them takes several answers: the whole prompt is a form, and no peer from before
+        // forms reads it as questions with one answer each.
         let mixed = report(json!({
             "hook_event_name": "PermissionRequest",
             "tool_name": "AskUserQuestion",
@@ -4809,7 +4817,12 @@ mod tests {
             ]},
         }))
         .expect("a mixed prompt");
-        assert!(mixed.questions.is_empty());
+        assert!(mixed.questions.is_empty() && mixed.choices.is_empty());
+        assert_eq!(
+            mixed.form.iter().map(|q| (q.question.as_str(), q.choices.len(), q.multi)).collect::<Vec<_>>(),
+            [("Which?", 2, false), ("Which ones?", 2, true)]
+        );
+        assert!(several.form.is_empty() && question.form.is_empty());
 
         // A tool with no subject field is still a question; one with no tool is not reported.
         let bare = report(json!({"hook_event_name": "PermissionRequest", "tool_name": "ExitPlanMode"}))

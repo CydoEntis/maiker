@@ -873,8 +873,12 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   for each choice, which sends its number. A prompt of several such questions (`PermissionAsk.questions`) shows each
   question with its choices to pick from and one **Send answers** button, off until every question has an answer;
   it then types the number of each pick in the prompt's order, a quarter second apart, and `1`, which is "Submit
-  answers" on the page that reviews them (checked against Claude Code 2.1.322 in a terminal). A question that takes
-  several answers, or the prompt's own "Type something", is still answered in the terminal. The box stays off while
+  answers" on the page that reviews them (checked against Claude Code 2.1.322 in a terminal). A prompt with a question
+  that takes several answers (`multiSelect`, even a lone one) comes as `PermissionAsk.form`, which a peer from before
+  it does not read, so it leaves that prompt to the terminal instead of answering a key per question. The form gives
+  such a question checkboxes ("Pick any", at least one) and types each ticked number, then → to move on (checked
+  against Claude Code 2.1.325); a question with one answer still takes its number. The prompt's own "Type something"
+  is still answered in the terminal. The box stays off while
   the tray shows, because typed text would answer that prompt. A message the daemon types for an agent (the
   first message of a new chat, or a queued one) is its text and then Enter a tick later; when the agent was still
   starting or the machine was busy the two can arrive together, and the agent reads the Enter as a new line and leaves

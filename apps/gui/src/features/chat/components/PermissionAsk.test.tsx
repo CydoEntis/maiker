@@ -134,6 +134,43 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(typeInto.mock.calls.map(([key]) => key)).toEqual(['2', '2', '1'])
   })
 
+  it('answers a question that takes several answers with boxes to tick: each number, then → to move on, then submit', async () => {
+    const form = [
+      { question: 'Which size?', choices: ['Small', 'Large'], multi: false },
+      { question: 'Which toppings?', choices: ['Nuts', 'Cream', 'Fruit'], multi: true },
+    ]
+    const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which size? … / Which toppings? …', answerable: false, choices: [], questions: [], form })
+
+    expect(screen.getByRole('group', { name: 'Which toppings? Pick any' })).toBeInTheDocument()
+    const send = screen.getByRole('button', { name: 'Send answers' })
+    await user.click(screen.getByRole('radio', { name: 'Large' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Fruit' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Nuts' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Cream' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Cream' }))
+    expect(screen.getByRole('checkbox', { name: 'Cream' })).not.toBeChecked()
+    expect(typeInto).not.toHaveBeenCalled()
+
+    await user.click(send)
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
+
+    expect(typeInto.mock.calls.map(([key]) => key)).toEqual(['2', '1', '3', '\x1b[C', '1'])
+  })
+
+  it('answers a lone question that takes several answers as a form, which needs at least one pick', async () => {
+    const form = [{ question: 'Which toppings?', choices: ['Nuts', 'Cream'], multi: true }]
+    const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which toppings? 1 Nuts · 2 Cream', answerable: false, choices: [], questions: [], form })
+
+    const send = screen.getByRole('button', { name: 'Send answer' })
+    expect(send).toBeDisabled()
+    expect(screen.getByText('Pick at least one.')).toBeInTheDocument()
+    await user.click(screen.getByRole('checkbox', { name: 'Cream' }))
+    await user.click(send)
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+
+    expect(typeInto.mock.calls.map(([key]) => key)).toEqual(['2', '\x1b[C', '1'])
+  })
+
   it("picks a choice of a question with its number key, as the agent's own menu does", async () => {
     const { typeInto } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which database?', answerable: false, choices: ['SQLite', 'Postgres'] })
 

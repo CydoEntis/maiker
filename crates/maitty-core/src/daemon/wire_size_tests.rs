@@ -315,6 +315,7 @@ fn ask() -> PermissionAsk {
             "No, and tell Claude what to do differently".into(),
         ],
         questions: Vec::new(),
+        form: Vec::new(),
     }
 }
 
