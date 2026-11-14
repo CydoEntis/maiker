@@ -265,6 +265,10 @@ impl Transcript {
             ClaudeLine::CommandOutput(output) => {
                 self.claude_command_output(uuid, &output, at_ms, notes);
             }
+            ClaudeLine::Interrupted => {
+                self.close_turn("interrupted", at_ms, notes);
+                self.last_user_text = None;
+            }
             ClaudeLine::Hidden => {}
         }
     }
@@ -735,12 +739,21 @@ pub(super) enum ClaudeLine {
     CommandOutput(String),
     /// Notes for the agent (`<system-reminder>`, `<local-command-caveat>`), not the conversation.
     Hidden,
+    /// Claude's own record that the person stopped the turn: it ends the turn, nobody said it.
+    Interrupted,
 }
 
 const COMMAND_OUTPUT_TAGS: [&str; 2] = ["local-command-stdout", "local-command-stderr"];
 
+/// How Claude Code begins the line it writes when the person stops a turn, followed by
+/// `]` or ` for tool use]`.
+const INTERRUPTED_PREFIX: &str = "[Request interrupted by user";
+
 pub(super) fn claude_line(text: &str) -> ClaudeLine {
     let start = text.trim_start();
+    if start.starts_with(INTERRUPTED_PREFIX) && start.trim_end().ends_with(']') {
+        return ClaudeLine::Interrupted;
+    }
     if start.starts_with("<command-name>") || start.starts_with("<command-message>") {
         return slash_command(start).map_or(ClaudeLine::Hidden, ClaudeLine::Command);
     }

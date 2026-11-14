@@ -703,6 +703,30 @@ fn a_codex_turn_becomes_messages_commands_a_patch_and_a_finished_turn() {
 }
 
 #[test]
+fn a_claude_turn_the_person_stopped_is_interrupted_and_its_note_is_not_something_said() {
+    let lines = vec![
+        claude_user("u1", "go"),
+        claude_user("i", "[Request interrupted by user for tool use]"),
+        line(json!({
+            "type": "user", "uuid": "i2",
+            "message": { "content": [{ "type": "text", "text": "[Request interrupted by user]" }] },
+        })),
+        claude_user("u2", "next"),
+    ];
+
+    let history = history_of(Format::Claude, &lines);
+
+    let said: Vec<_> = items(&history)
+        .into_iter()
+        .map(|e| message(e).1.to_string())
+        .collect();
+    assert_eq!(said, ["go", "next"]);
+    let turns = turns(&history);
+    assert_eq!(turns.len(), 2);
+    assert_eq!(turns[0].state, ItemState::Interrupted);
+}
+
+#[test]
 fn an_aborted_codex_turn_is_interrupted() {
     let at = "2026-11-04T10:00:00.000Z";
     let lines = vec![
