@@ -526,8 +526,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   Ctrl+letter always goes to the terminal, so the window uses Ctrl+Shift (T, W, D, F, K, I, B, N,
   J ...); where two actions want the same Ctrl+Shift letter the second takes Ctrl+Alt+Shift (split
   down, broadcast). Ctrl with a non-letter (`,` `.` `/` `[` `]` `=` `1`-`9` Tab) is the window's
-  too. A binding with `available: false` (Undo close) is registered but
-  its key does nothing and the overlay hides it until the feature lands.
+  too. A binding with `available: false` is registered but its key does nothing and the overlay
+  hides it until the feature lands; none is off now (Undo close is on).
   Jump to the next session that needs you is ⌘J on macOS and Ctrl+Shift+J elsewhere: a bare Ctrl+J is a terminal key.
 - **Terminal | Chat switch.** An agent's pane header carries a two-button switch (terminal glyph, chat bubble). The
   chat covers the pane body while the terminal stays mounted underneath, hidden by `visibility`, so it keeps streaming
