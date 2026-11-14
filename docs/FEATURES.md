@@ -56,7 +56,7 @@ conversation continuity are planned in phases 34–37:
 - Send now: a queued message in a structured chat steers into the running turn instead of waiting for it to end — `apps/gui/src/features/chat/components/QueuedMessages.tsx`, `crates/maitty-core/src/daemon/conversation/commands.rs`
 - `@` files in the message box: type `@` to search the session's folder (this computer or another machine) and insert a path — `apps/gui/src/features/chat/components/FilePicker.tsx`, `apps/gui/src/features/chat/fileMention.ts`
 - Also start with: tick other installed agents on the new chat page to start the same message in a worktree each — `apps/gui/src/features/workspace/useSessionStarts.ts`
-- Approve or decline a Codex request from the chat with the keys `y`, `a` and `n` — `apps/gui/src/features/chat/components/ApprovalCard.tsx`
+- Approve or decline a Codex command or file-change request from a terminal-backed chat: `y` approves and Esc declines, only while the pane shows the menu verified against Codex 0.166.0, otherwise the arrow-key row stays — `crates/maitty-core/src/daemon/permission_ask.rs`, `apps/gui/src/features/chat/permissionAsk.ts`
 - An agent's reasoning shows as a folded Thought row in the chat — `apps/gui/src/features/chat/chatRows.ts`
 - Settings › Chat › Hide successful tool calls leaves out file reads and searches that worked — `apps/gui/src/features/settings/components/DesktopSettings.tsx`, `apps/gui/src/features/chat/workSummary.ts`
 - Close with a six-second Undo, in the desktop app and the TUI — shipped — `UNDO_WINDOW` in `crates/maitty-core/src/daemon/mod.rs`, `apps/gui/src/features/workspace/useClosing.ts`, `crates/maitty-terminal-client/src/client/screen/closing.rs`
