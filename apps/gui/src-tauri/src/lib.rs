@@ -14,6 +14,7 @@ mod linux_gpu;
 mod machine_update;
 mod machines;
 mod changes;
+mod clone;
 mod claude_models;
 mod codex_skills;
 mod new_chat;
@@ -1573,6 +1574,7 @@ pub fn run() {
             reopen_closed_session,
             new_chat::git_sync_state,
             new_chat::git_pull,
+            clone::git_clone,
             new_chat::open_agent_docs,
             changes::git_commit_all,
             changes::git_create_pull_request,

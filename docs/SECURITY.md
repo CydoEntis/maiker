@@ -677,6 +677,22 @@ The agent runs with the user's permissions, so the window's start path is narrow
 - Secret masking in history is the daemon's (ticket 18), at the point where history is stored and served; the
   window adds no copy of a message.
 
+## Project-specific: cloning a repository from the desktop
+
+The new chat page's Clone from GitHub runs `git clone` in the desktop host (`git_clone`, `src-tauri/src/clone.rs`),
+off the UI thread, with the user's permissions. What was pasted never reaches git as typed:
+
+- It is read as a GitHub owner and repository name (owner/repo, a github.com page or HTTPS address, or
+  `git@github.com:`). Each name is checked: ASCII letters, digits, `-`, `_` and `.`, at most 100 characters, not
+  starting with `-` or `.`. Anything else, including another host, a user or token in the address, `file://` or
+  `ext::`, is refused.
+- The address git is given is built again from the two checked names, after `--`, so no option or transport can
+  reach the command line.
+- The target is a new folder named after the repository inside an absolute folder that exists; an existing folder
+  is never written into.
+- Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses
+  the credentials git already has. Maitty stores no GitHub token.
+
 ## Project-specific: the message the daemon sends by itself
 
 With `restore.continue_turn` on, the daemon sends one fixed message, `Continue where you left off.`,

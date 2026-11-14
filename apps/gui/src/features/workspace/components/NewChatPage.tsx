@@ -13,13 +13,15 @@ import { AGENT_LABEL } from '@/features/chat/modelName'
 import { CODEX_FULL_MODE, DANGER_MODES, modeLabel, START_MODE } from '@/features/chat/chatMeta'
 import { AgentPicker } from '@/features/chat/components/AgentPicker'
 import { PermissionMenu } from '@/features/chat/components/PermissionMenu'
-import { openAgentDocs } from '@/api/daemon'
+import { cloneRepository, openAgentDocs } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { CHAT_AGENTS, chatAgentOf, type ChatAgent } from '../model/chatView'
 import { abilitiesOf, hasAbility } from '../model/agentAbilities'
 import { ageOf, nowSeconds, splitRecent, useFolderBranches, useGlances, useInstalledAgents, useSavedConversations, useSyncState } from '../model/newChatHost'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { WherePopover } from './WherePopover'
+import { CloneFromGitHub } from './CloneFromGitHub'
+import { parentFolder } from '../model/folders'
 import type { NewSessionProject } from '../model/newSession'
 import { branchNameFromMessage, suggestBranchName } from '../model/worktreeName'
 import { Icon } from './glyphs'
@@ -108,6 +110,8 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   // Own copy: the agent works in a worktree of its own, so the checkout is untouched. On unless it is turned off.
   const [treeMode, setTreeMode] = useState(true)
   const [whereOpen, setWhereOpen] = useState(false)
+  // The Where popover shows Clone from GitHub in place of its choices.
+  const [cloneView, setCloneView] = useState(false)
   // Other agents the same message also starts with, each on a new branch in a worktree of its own.
   const [alsoPicked, setAlsoPicked] = useState<ReadonlySet<ChatAgent>>(() => new Set())
   const [busy, setBusy] = useState(false)
@@ -448,11 +452,15 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
             <div className="mx-settings-tray mx-ctxtray">
               {folder !== '' && (
                 <>
-                  <WherePopover open={whereOpen} onOpenChange={setWhereOpen} folderName={folderName} color={current?.color ?? null} branch={branches === null ? null : branchLabel} worktree={treeMode && branches !== null} anchor={stack}>
+                  <WherePopover open={whereOpen} onOpenChange={(open) => { setWhereOpen(open); if (!open) setCloneView(false) }} folderName={folderName} color={current?.color ?? null} branch={branches === null ? null : branchLabel} worktree={treeMode && branches !== null} anchor={stack}>
+                    {cloneView ? (
+                      <CloneFromGitHub parent={parentFolder(folder)} browse={browse} clone={cloneRepository} onBack={() => { setCloneView(false) }} onCloned={(cloned) => { setCloneView(false); openFolder(cloned) }} />
+                    ) : (
+                    <>
                     <h3 className="mx-where-label">Project</h3>
                     <ChipMenu title="Project" side="bottom" label={<strong>{folderName}</strong>} summary={folderName} icon={<span className="mx-ns-square" style={{ background: current?.color ?? 'var(--dim)' }} aria-hidden="true" />} search="Search projects" width={300}
                       sections={folderSections} fromQuery={fromPath}
-                      footer={<>{browse !== null && <button type="button" className="mx-chip-action" onClick={pickOther}><Icon name="folder" size={12} />Browse for a folder…</button>}{otherMachines}{addMachine}</>} />
+                      footer={<>{browse !== null && <button type="button" className="mx-chip-action" onClick={pickOther}><Icon name="folder" size={12} />Browse for a folder…</button>}{!remote && <button type="button" className="mx-chip-action" onClick={() => { setCloneView(true) }}><Icon name="download" size={12} />Clone from GitHub…</button>}{otherMachines}{addMachine}</>} />
                     {branches !== null && (
                       <>
                         <h3 className="mx-where-label">Branch in {folderName}</h3>
@@ -482,6 +490,8 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
                           <><span className="mx-nc-dot" aria-hidden="true" />{pulledNow ? 'Pulled · up to date with' : 'Up to date with'} {sync.upstream}</>
                         ) : null}
                       </p>
+                    )}
+                    </>
                     )}
                   </WherePopover>
                   <span className="mx-tray-sep" aria-hidden="true" />

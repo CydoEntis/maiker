@@ -933,7 +933,10 @@ to choose them. Its **Branch** and **Work in** choices, and **Also start with**,
 folder is not a git repository, and for a session on another machine. Done, Esc or a click outside
 closes it.
 
-- **Project.** Pick another project, paste a path, or **Browse for a folder…**.
+- **Project.** Pick another project, paste a path, or **Browse for a folder…**. **Clone from GitHub…**
+  takes a GitHub link or owner/repo, clones it into a new folder (beside your current project unless you
+  pick another) and opens it as the project. A private repository uses the sign-in git already has on
+  this computer; Maitty never asks for a password.
 - **Branch.** Pick a branch, or type a new name to create one.
 - **Work in: New worktree** is chosen by default. The agent works in a worktree of its own, on a new
   branch named from your message, so your checkout stays as it is. A line under it says what it
