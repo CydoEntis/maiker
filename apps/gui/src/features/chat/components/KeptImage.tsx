@@ -41,7 +41,7 @@ export function ImageThumb({ name, path, preview = null, fallback, className = T
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button type="button" aria-label={`View ${name}`} title={`View ${name}`} className="flex min-w-0 shrink-0 cursor-zoom-in items-center gap-2 rounded text-left focus-visible:outline-2 focus-visible:outline-[var(--accent-line)]">
+        <button type="button" aria-label={`View ${name}`} title={`View ${name}`} className="flex min-w-0 flex-1 cursor-zoom-in items-center gap-2 overflow-hidden rounded text-left focus-visible:outline-2 focus-visible:outline-[var(--accent-line)]">
           <img src={src} alt="" className={className} />
           {children}
         </button>
