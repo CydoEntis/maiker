@@ -664,7 +664,9 @@ The agent runs with the user's permissions, so the window's start path is narrow
   that waits for a person's answer, and there is no auto-approve. There is no way to change a running session's
   posture, and no read-only-to-writable switch, in the window. Answers are human-only, bound to the current generation and the exact request id (unchanged
   from the structured runtime rules above).
-- **Where it runs.** The folder is a project the app already shows; a branch start also needs a git
+- **Where it runs.** The folder is a project the app already shows, or one a person picked in their own window (a
+  client that is not a pane's agent, a structured runtime or a rejected client: `may_name_checkout`); an agent cannot
+  point a checkout at a repository the app has never been shown. A branch start also needs a git
   repository and a valid branch name (`branch_agent::branch_problem`), and the worktree is made by the daemon
   (`create_trusted_worktree`: the trust copy and the repo's allowed setup hook only). The window never builds a
   path or runs git. A start for another machine is refused in the window.
