@@ -936,7 +936,7 @@ closes it.
 - **Project.** Pick another project, paste a path, or **Browse for a folder…**.
 - **Branch.** Pick a branch, or type a new name to create one.
 - **Work in: New worktree** is chosen by default. The agent works in a worktree of its own, on a new
-  branch named from your message, so your checkout stays as it is. A line under it says what it
+  branch with a short two-word name (like `quiet-otter`), so your checkout stays as it is. A line under it says what it
   starts from, and how far behind its upstream it is. Choose **This folder** and the agent edits the
   checkout. Then, if the checkout is behind, a **↓ Pull** button runs `git pull --ff-only`. It is
   refused while you have uncommitted changes.

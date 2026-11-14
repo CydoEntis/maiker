@@ -124,28 +124,27 @@ describe('the new chat page', () => {
     await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'hello')
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => { expect(onStart).toHaveBeenCalled() })
-    expect(onStart.mock.calls[0]?.[0].branch).toEqual({ name: 'hello', create: true, worktree: true })
+    expect(onStart.mock.calls[0]?.[0].branch).toMatchObject({ create: true, worktree: true })
+    expect(JSON.stringify(onStart.mock.calls[0]?.[0].branch)).toMatch(/"name":"[a-z]+-[a-z]+(-[0-9]+)?"/)
   })
 
-  it('names the new branch after the message as it is typed, and two words while it has none', async () => {
+  it('names the new branch with two words and never copies the message into it', async () => {
     page()
     await inWhere()
-    expect(await screen.findByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })).toBeInTheDocument()
+    const named = (await screen.findByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })).getAttribute('aria-label')
     await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'Fix the login bug')
     await inWhere()
-    expect(screen.getByRole('button', { name: 'Branch: fix-the-login-bug' })).toBeInTheDocument()
-    await userEvent.clear(screen.getByRole('textbox', { name: 'First message' }))
-    await inWhere()
-    expect(screen.getByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Branch: / })).toHaveAttribute('aria-label', named)
+    expect(screen.queryByRole('button', { name: /fix-the-login/ })).not.toBeInTheDocument()
   })
 
-  it('names the branch after a suggested task when that is what is sent', async () => {
+  it('keeps the two-word name when a suggested task is sent', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     page(onStart)
     await inWhere()
     await screen.findByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })
     await userEvent.click(screen.getByRole('button', { name: /Review my uncommitted changes/ }))
-    await waitFor(() => { expect(onStart.mock.calls[0]?.[0].branch?.name).toBe('review-my-uncommitted-changes') })
+    await waitFor(() => { expect(onStart.mock.calls[0]?.[0].branch?.name).toEqual(expect.stringMatching(/^[a-z]+-[a-z]+(-[0-9]+)?$/)) })
   })
 
   it('keeps the two-word name for a page opened with a message, such as a chat’s summary', async () => {
@@ -472,7 +471,7 @@ describe('starting a chat and going on writing', () => {
     expect(extra?.[0].branch?.name).not.toBe(main?.[0].branch?.name)
   })
 
-  it('names each ticked agent’s branch after the message too, each with its own number', async () => {
+  it('gives each ticked agent a two-word branch of its own', async () => {
     const onStart = vi.fn<Start>(() => new Promise(() => undefined))
     page(onStart)
     await ready()
@@ -481,17 +480,21 @@ describe('starting a chat and going on writing', () => {
     await userEvent.click(also.getByRole('checkbox', { name: 'Gemini' }))
     await userEvent.type(box(), 'fix the login{Enter}')
 
-    expect(onStart.mock.calls.map(([request]) => request.branch?.name)).toEqual(['fix-the-login', 'fix-the-login-2', 'fix-the-login-3'])
+    const names = onStart.mock.calls.map(([request]) => request.branch?.name)
+    expect(names).toEqual([expect.stringMatching(/^[a-z]+-[a-z]+(-[0-9]+)?$/), expect.stringMatching(/^[a-z]+-[a-z]+(-[0-9]+)?$/), expect.stringMatching(/^[a-z]+-[a-z]+(-[0-9]+)?$/)])
+    expect(new Set(names).size).toBe(3)
   })
 
-  it('names each ticked agent’s branch after a suggested task when that is what is sent', async () => {
+  it('gives each ticked agent its own two-word branch when a suggested task is sent', async () => {
     const onStart = vi.fn<Start>(() => new Promise(() => undefined))
     page(onStart)
     await ready()
     await userEvent.click(within(screen.getByRole('group', { name: 'Also start with' })).getByRole('checkbox', { name: 'Codex' }))
     await userEvent.click(screen.getByRole('button', { name: /Review my uncommitted changes/ }))
 
-    expect(onStart.mock.calls.map(([request]) => request.branch?.name)).toEqual(['review-my-uncommitted-changes', 'review-my-uncommitted-changes-2'])
+    const names = onStart.mock.calls.map(([request]) => request.branch?.name)
+    expect(names).toEqual([expect.stringMatching(/^[a-z]+-[a-z]+(-[0-9]+)?$/), expect.stringMatching(/^[a-z]+-[a-z]+(-[0-9]+)?$/)])
+    expect(new Set(names).size).toBe(2)
   })
 
   it('names a failed main start by its agent when others went with it, and a retry starts only the main agent', async () => {
