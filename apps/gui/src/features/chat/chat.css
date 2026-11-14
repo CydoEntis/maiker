@@ -4,7 +4,8 @@
 
 .mx-chat-layer { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; min-height: 0; background: transparent; font-family: var(--ui); line-height: normal; cursor: default; }
 .mx-pane-body.is-chat > :not(.mx-chat-layer, .mx-subs) { visibility: hidden; }
-.mx-pane-body.is-chat { padding: 0; }
+/* The body keeps its padding in the chat view: the chat layer covers it anyway (absolute, inset 0), and dropping it
+   would resize the hidden terminal on every switch, so the agent would redraw its whole screen twice. */
 /* The chat's size is the person's: `--chat-zoom` draws all of it larger or smaller (Settings › Chat text size), and
    `--chat-width` is how wide its column of messages and its message box may run. */
 .mx-chat { flex: 1; min-height: 0; display: flex; flex-direction: column; zoom: var(--chat-zoom, 1); }

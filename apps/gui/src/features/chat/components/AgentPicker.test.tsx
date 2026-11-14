@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { forgetChoices, forgetDiscoveredModels, setDiscoveredModels, readChoice, useAgentChoice, wireChoice, writeChoice } from '../agentChoice'
+import { forgetChoices, forgetDiscoveredModels, noteAgentSaid, setDiscoveredModels, readChoice, useAgentChoice, wireChoice, writeChoice } from '../agentChoice'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { AgentPicker } from './AgentPicker'
 
@@ -207,6 +207,21 @@ describe('what the picker sends with a message', () => {
     writeChoiceFor(7, { model: 'opus' })
     expect(wireChoice(7, 'claude')).toEqual({ model: 'opus', effort: 'high' })
     writeChoiceFor(7, { model: 'default', reasoning: 'default' })
+    expect(wireChoice(7, 'claude')).toBeNull()
+  })
+
+  it('gives way to a model or effort the agent says it changed to, even one changed while the chat was closed', () => {
+    writeChoiceFor(7, { model: 'opus', reasoning: 'low' })
+    noteAgentSaid(7, { model: null, effort: null })
+    expect(wireChoice(7, 'claude')).toEqual({ model: 'opus', effort: 'low' })
+    // The first word from the agent, then a /model typed in its terminal: each time the agent's word stands.
+    noteAgentSaid(7, { model: 'claude-opus-5-5', effort: null })
+    expect(wireChoice(7, 'claude')).toEqual({ effort: 'low' })
+    writeChoiceFor(7, { model: 'sonnet' })
+    noteAgentSaid(7, { model: 'claude-opus-5-5', effort: null })
+    expect(wireChoice(7, 'claude')).toEqual({ model: 'sonnet', effort: 'low' })
+    forgetChoices()
+    noteAgentSaid(7, { model: 'Haiku 5.5', effort: 'max' })
     expect(wireChoice(7, 'claude')).toBeNull()
   })
 

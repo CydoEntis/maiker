@@ -513,6 +513,26 @@ fn a_claude_transcript_says_its_permission_mode_and_the_model_answering() {
     assert_eq!(transcript.meta().mode.as_deref(), Some("plan"));
 }
 
+#[test]
+fn a_model_picked_in_the_terminal_is_the_model_before_any_reply_says_so() {
+    let mut transcript = Transcript::new(Format::Claude, SESSION);
+    transcript.feed(0, &claude_user("c1", "<command-name>/model</command-name>"));
+    transcript.feed(0, &claude_user("o1", "<local-command-stdout>Set model to `Haiku 5.5` and saved as your default for new sessions</local-command-stdout>"));
+    assert_eq!(transcript.meta().model.as_deref(), Some("Haiku 5.5"));
+
+    let mut transcript = Transcript::new(Format::Claude, SESSION);
+    transcript.feed(0, &claude_user("c1", "<command-name>/model</command-name><command-args>opus</command-args>"));
+    transcript.feed(0, &claude_user("o1", "<local-command-stdout>Set model to \u{1b}[1mOpus 5.5\u{1b}[22m (default)</local-command-stdout>"));
+    assert_eq!(transcript.meta().model.as_deref(), Some("Opus 5.5"));
+
+    // Keeping the model, or the same words from another command, changes nothing.
+    transcript.feed(0, &claude_user("c2", "<command-name>/model</command-name>"));
+    transcript.feed(0, &claude_user("o2", "<local-command-stdout>Kept model as `Opus 5.5`</local-command-stdout>"));
+    transcript.feed(0, &claude_user("c3", "<command-name>/help</command-name>"));
+    transcript.feed(0, &claude_user("o3", "<local-command-stdout>Set model to `Nope 1`</local-command-stdout>"));
+    assert_eq!(transcript.meta().model.as_deref(), Some("Opus 5.5"));
+}
+
 /// Codex 0.156 writes the person's words as a user-role response item, with no `user_message` event.
 #[test]
 fn a_codex_user_message_written_only_as_a_response_item_is_shown_and_its_injected_context_is_not() {
@@ -733,6 +753,30 @@ fn a_codex_turn_becomes_messages_commands_a_patch_and_a_finished_turn() {
     assert_eq!(turns.len(), 1);
     assert_eq!(turns[0].source.turn, "turn-a");
     assert_eq!(turns[0].state, ItemState::Completed);
+}
+
+#[test]
+fn a_claude_turn_the_person_stopped_is_interrupted_and_its_note_is_not_something_said() {
+    let lines = vec![
+        claude_user("u1", "go"),
+        claude_user("i", "[Request interrupted by user for tool use]"),
+        line(json!({
+            "type": "user", "uuid": "i2",
+            "message": { "content": [{ "type": "text", "text": "[Request interrupted by user]" }] },
+        })),
+        claude_user("u2", "next"),
+    ];
+
+    let history = history_of(Format::Claude, &lines);
+
+    let said: Vec<_> = items(&history)
+        .into_iter()
+        .map(|e| message(e).1.to_string())
+        .collect();
+    assert_eq!(said, ["go", "next"]);
+    let turns = turns(&history);
+    assert_eq!(turns.len(), 2);
+    assert_eq!(turns[0].state, ItemState::Interrupted);
 }
 
 #[test]

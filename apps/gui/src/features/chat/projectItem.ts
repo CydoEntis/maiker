@@ -78,9 +78,20 @@ function codexTool(tool: ToolContent, base: ItemFields): ChatEvent[] {
   }))
 }
 
+/**
+ * A slash command's output, as the daemon reads it from Claude's transcript: a command item named by the slash command
+ * and carrying no tool input, which every tool the agent itself runs (Bash included) has.
+ */
+function isSlashCommandOutput(tool: ToolContent): boolean {
+  return (tool.input === undefined || tool.input === null) && SLASH_COMMAND.test(tool.label ?? '')
+}
+
+const SLASH_COMMAND = /^\/[\w:-]+(\s|$)/
+
 function claudeTool(tool: ToolContent, base: ItemFields): ChatEvent[] {
   const label = tool.label ?? ''
   if (tool.kind !== COMMAND_ITEM) return [genericTool(tool, tool.kind, base)]
+  if (isSlashCommandOutput(tool)) return [{ ...base, kind: 'note', text: tool.output.trim() }]
   const name = claudeToolName(label)
   // No tool name in the label means the label is the Bash command.
   if (name === null) return [commandEvent(tool, label, base)]

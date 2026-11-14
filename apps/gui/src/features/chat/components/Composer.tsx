@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProp
 import { toast } from '@/lib/toast'
 import { pasteFromHost, pickFromClipboard, unsupportedMessage } from '@/features/terminal/clipboardImage'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
-import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
+import { abilitiesOf, runsMidTurn } from '@/features/workspace/model/agentAbilities'
 import { AppIcon, Icon } from '@/features/workspace/components/glyphs'
 import { registerComposerDrop } from '../composerDrop'
 import { updateComposer, useComposerDraft, useComposerSlice } from '../composerStore'
@@ -20,7 +20,7 @@ import type { FileSearchPlace } from '../fileMention'
 import { asSkills, commandText, matchCommands, skillQuery, slashQuery, useSlashCommands, withTerminalCommands, type SlashCommand } from '../slashCommands'
 import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import { CODEX_COMMANDS } from '../codexCommands'
-import { isBangLine } from '../slashCommands'
+import { isBangLine, namedCommand } from '../slashCommands'
 import { BranchMenu, type BranchMenuSpec } from './BranchMenu'
 import { usageItems, type SessionUsage } from '../usageStrip'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
@@ -196,6 +196,22 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     submit()
     text.current?.focus()
   }
+  // A command only the terminal runs, typed out with what it takes ("/btw which file is that?"), goes there too: the
+  // agent draws its answer in the terminal and never writes it to the conversation, so the chat would wait for it forever.
+  const send = () => {
+    const typed = draft.trim()
+    const command = inTerminal === undefined || attachments.length > 0 ? undefined : namedCommand(offered, typed)
+    if (command?.terminal !== true || inTerminal === undefined) {
+      submit()
+      return
+    }
+    if (running && !runsMidTurn(commandsFrom?.agent, typed)) {
+      toast.message(`${agent} is working. Run /${command.name} when it finishes.`)
+      return
+    }
+    setDraft('')
+    inTerminal(typed)
+  }
   // The @ picker follows the caret: it is open only while the caret sits, with nothing selected, at the end of the text.
   const [caretAtEnd, setCaretAtEnd] = useState(true)
   const followCaret = (area: HTMLTextAreaElement) => { setCaretAtEnd(area.selectionStart === area.selectionEnd && area.selectionEnd === area.value.length) }
@@ -227,7 +243,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      submit()
+      send()
     } else if (event.key === 'Escape' && running) {
       event.preventDefault()
       stop()
@@ -286,7 +302,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
               // Sent, and not yet a turn to stop: the same square, off until there is one.
               <button type="button" className="mx-send is-stop is-off is-busy" aria-label={`${agent} is working`} aria-busy="true" title={`${agent} is working`} disabled><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : (
-              <button type="button" className={`mx-send${off || empty ? ' is-off' : ''}`} aria-label={running ? 'Queue message' : 'Send message'} disabled={off || sending || empty} onClick={submit}>
+              <button type="button" className={`mx-send${off || empty ? ' is-off' : ''}`} aria-label={running ? 'Queue message' : 'Send message'} disabled={off || sending || empty} onClick={send}>
                 <Icon name="arrowUp" size={15} strokeWidth={2.2} />
               </button>
             )}
