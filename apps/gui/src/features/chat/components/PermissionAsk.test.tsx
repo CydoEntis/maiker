@@ -62,7 +62,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
 
   it('approves a Codex prompt with `y`, the key checked against Codex 0.166.0, and refuses with Esc', async () => {
     const approve = await open('Blocked', WRITE_ASK, 'codex')
-    await approve.user.click(screen.getByRole('button', { name: /^Yes, once/ }))
+    await approve.user.click(screen.getByRole('button', { name: /^Yes once/ }))
     expect(approve.typeInto).toHaveBeenCalledExactlyOnceWith('y')
     cleanup()
 
@@ -74,7 +74,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
   it('shows the terminal\'s own menu and keys for a Codex prompt the daemon did not mark answerable', async () => {
     const { typeInto } = await open('Blocked', { ...WRITE_ASK, answerable: false }, 'codex')
 
-    expect(screen.queryByRole('button', { name: /^Yes, once/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
     expect(screen.getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
     expect(typeInto).not.toHaveBeenCalled()
   })
