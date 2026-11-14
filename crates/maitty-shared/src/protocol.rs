@@ -12,7 +12,65 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 103;
+pub const PROTOCOL_VERSION: u32 = 104;
+
+/// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
+pub const SIDE_ANSWER_SINCE: u32 = 104;
+
+/// The longest side question, in characters.
+pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
+
+/// The most of a side answer a reply carries, in bytes; the rest is cut.
+pub const SIDE_ANSWER_MAX_BYTES: usize = 64 * 1024;
+
+/// What `Query::SideAnswer` asks Claude Code, beside the conversation and without changing it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SideAsk {
+    /// A question answered from the conversation so far, with no tools: Claude Code's `/btw`.
+    Question(String),
+    /// One of Claude Code's commands that only reports, run with nothing after its name.
+    Command(SideCommand),
+}
+
+/// The commands a side answer may run: each only reports, and none takes anything, so none can
+/// change a setting (`/config key=value` and `/goal <condition>` would; those are never sent).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SideCommand {
+    Context,
+    Usage,
+    SkillDoctor,
+    Goal,
+    Advisor,
+    Config,
+    Mcp,
+}
+
+impl SideCommand {
+    /// The command as Claude Code reads it.
+    pub fn typed(self) -> &'static str {
+        match self {
+            SideCommand::Context => "/context",
+            SideCommand::Usage => "/usage",
+            SideCommand::SkillDoctor => "/skill-doctor",
+            SideCommand::Goal => "/goal",
+            SideCommand::Advisor => "/advisor",
+            SideCommand::Config => "/config",
+            SideCommand::Mcp => "/mcp",
+        }
+    }
+}
+
+/// What `Query::SideAnswer` got back.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SideAnswer {
+    /// What Claude Code printed, at most `SIDE_ANSWER_MAX_BYTES`.
+    Answered { text: String },
+    /// The conversation is not a Claude one this daemon can answer beside.
+    NotSupported,
+    /// Claude Code could not answer, in words that carry nothing it printed.
+    Failed { reason: String },
+}
 
 /// The first version whose daemon sends a queued chat message now (`Command::ConversationSendNow`).
 pub const SEND_NOW_SINCE: u32 = 94;
@@ -1169,6 +1227,14 @@ pub enum Query {
         folder: String,
         tag: u64,
     },
+    /// Asks Claude Code about conversation `id` without adding to it (human clients only): the
+    /// daemon starts a copy of the agent's session that is never saved and answers `ask` from it.
+    /// The answer echoes `tag`.
+    SideAnswer {
+        id: crate::conversation::ConversationId,
+        ask: SideAsk,
+        tag: u64,
+    },
     List,
     /// What one of a pane's helpers did, from its own record (human clients only; ADR 0010). The
     /// helper must be one the pane's verified reports named.
@@ -1443,6 +1509,10 @@ pub enum Reply {
     ClosedSessions(Vec<ClosedSession>),
     HelperRead(HelperRecord),
     Specialists(crate::specialists::SpecialistList),
+    SideAnswer {
+        tag: u64,
+        answer: SideAnswer,
+    },
 }
 
 /// The most repositories one answer carries.
@@ -2326,6 +2396,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::HelperRead(_)) => HELPER_READ_SINCE,
             ServerMsg::Reply(Reply::Specialists(_)) => SPECIALISTS_SINCE,
             ServerMsg::Reply(Reply::WorktreeStanding(_)) => WORKTREE_STANDING_SINCE,
+            ServerMsg::Reply(Reply::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2360,6 +2431,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::Specialists { .. }) => SPECIALISTS_SINCE,
             ClientMsg::Command(Command::SnoozePane { .. }) => SNOOZE_SINCE,
             ClientMsg::Command(Command::ConversationSendNow { .. }) => SEND_NOW_SINCE,
+            ClientMsg::Query(Query::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
             ClientMsg::Command(
                 Command::QueueFollowUp { operation: Some(_), .. }
                 | Command::SendWhenReady { operation: Some(_), .. },
@@ -2795,7 +2867,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 103);
+        assert_eq!(PROTOCOL_VERSION, 104);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3285,7 +3357,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 103);
+        assert_eq!(PROTOCOL_VERSION, 104);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -3630,6 +3702,35 @@ mod tests {
         ));
         assert_eq!(ClientMsg::Command(now).introduced_in(), SEND_NOW_SINCE);
         const { assert!(SEND_NOW_SINCE > COMPATIBLE_SINCE && SEND_NOW_SINCE <= PROTOCOL_VERSION) };
+    }
+
+    /// A side answer is a new query and a new reply: a peer built before them cannot read either,
+    /// so a client asks only a daemon new enough and the daemon answers only such a client.
+    #[test]
+    fn side_answers_pass_only_between_peers_that_know_them() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            ListFolders { path: String, tag: u64 },
+        }
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldReply {
+            Ok,
+        }
+        let id = crate::conversation::ConversationId(4);
+        let ask = Query::SideAnswer { id, ask: SideAsk::Command(SideCommand::SkillDoctor), tag: 3 };
+        let answer = Reply::SideAnswer { tag: 3, answer: SideAnswer::Answered { text: "ok".into() } };
+        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err());
+        assert!(decode::<OldReply>(&encode(&answer).unwrap()).is_err());
+        assert!(matches!(
+            decode::<Query>(&encode(&ask).unwrap()),
+            Ok(Query::SideAnswer { ask: SideAsk::Command(SideCommand::SkillDoctor), tag: 3, .. })
+        ));
+        assert_eq!(SideCommand::SkillDoctor.typed(), "/skill-doctor");
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), SIDE_ANSWER_SINCE);
+        assert_eq!(ServerMsg::Reply(answer).introduced_in(), SIDE_ANSWER_SINCE);
+        const { assert!(SIDE_ANSWER_SINCE > COMPATIBLE_SINCE && SIDE_ANSWER_SINCE <= PROTOCOL_VERSION) };
     }
 
     #[test]

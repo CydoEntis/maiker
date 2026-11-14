@@ -11,6 +11,8 @@ export type SlashCommand = {
   readonly terminal?: true
   /** A Codex skill: named in a message after a `$`, not run as a command. */
   readonly skill?: true
+  /** Where the window runs it instead of Claude Code's menu, as the picker tags it (`windowCommands.ts`). */
+  readonly opens?: string
 }
 
 /** Codex lists only its skills (`agent_commands`); each is offered beside the window's list of its commands. */
@@ -23,10 +25,13 @@ export function commandLabel(command: SlashCommand): string {
   return `${command.skill === true ? '$' : '/'}${command.name}`
 }
 
-/** The agent's own list with the terminal's commands added, leaving out any the agent has started to list itself. */
-export function withTerminalCommands(listed: readonly SlashCommand[], terminal: readonly SlashCommand[]): SlashCommand[] {
+/**
+ * The agent's own list with the terminal's commands added, leaving out any the agent has started to list itself and the
+ * ones the chat does not offer (`hidden`).
+ */
+export function withTerminalCommands(listed: readonly SlashCommand[], terminal: readonly SlashCommand[], hidden: ReadonlySet<string> = new Set()): SlashCommand[] {
   const known = new Set(listed.flatMap((command) => [command.name, ...command.aliases]))
-  return [...listed, ...terminal.filter((command) => !known.has(command.name))]
+  return [...listed.filter((command) => !hidden.has(command.name)), ...terminal.filter((command) => !known.has(command.name))]
 }
 
 /**

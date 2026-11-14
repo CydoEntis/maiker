@@ -81,7 +81,7 @@ const NONE: AgentAbilities = {
 
 const AGENT_ABILITIES: Readonly<Record<ChatAgent, AgentAbilities>> = {
   claude: {
-    slashCommands: { list: 'agent', skillsAfterDollar: false, enterAfterPause: false },
+    slashCommands: { list: 'agent', skillsAfterDollar: false, enterAfterPause: true },
     permissionModes: { modes: PICKABLE_MODES, switchBy: 'shift-tab' },
     structuredChat: true,
     moveToWorktree: true,

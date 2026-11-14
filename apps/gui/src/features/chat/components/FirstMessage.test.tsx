@@ -242,10 +242,9 @@ describe('a message written while a terminal agent works', () => {
     const { typeInto } = open('Working')
     await settle()
     await user.type(screen.getByRole('textbox', { name: 'Message claude' }), '/btw which file is that?{Enter}')
-    await settle(10)
+    await settle(1000)
 
-    expect(typeInto).toHaveBeenCalledTimes(1)
-    expect(typeInto).toHaveBeenCalledWith('/btw which file is that?\r')
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/btw which file is that?', '\r'])
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('')
     expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
   })

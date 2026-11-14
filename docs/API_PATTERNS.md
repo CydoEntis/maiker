@@ -892,6 +892,20 @@ A retry with the same `operation` while the steer or interrupt is under way is a
 message sent now out of turn can leave the conversation's receipt with a higher number than a message still waiting,
 so `ConversationSend` looks at the waiting queue before it judges a number stale.
 
+Protocol 104 adds `Query::SideAnswer { id, ask, tag }` and `Reply::SideAnswer { tag, answer }`
+(`daemon/conversation/side.rs`): Claude Code's answer beside a conversation, for the chat's `/btw` and the commands
+that only report, without adding to it. Both have their own `introduced_in` arm (`SIDE_ANSWER_SINCE`) and
+`COMPATIBLE_SINCE` stays 78, since an older daemon is never asked and an older client never sent the reply. Human
+clients only, read grant. `ask` is `Question(text)` (1 to `SIDE_QUESTION_MAX_CHARS` characters, no NUL) or
+`Command(name)`, one of a fixed list that only reports and takes nothing (`context`, `usage`, `skill-doctor`, `goal`,
+`advisor`, `config`, `mcp`). The client names nothing else: for a followed pane the daemon takes the session id the
+hook gave, the pane's folder, the model the transcript last named and the `claude` on the login PATH, and answers only
+the app the pane is shown in; for a structured chat it takes the binding's session, folder, program and config folder.
+A session id that is not a UUID, another agent, or an unknown conversation is answered at once (`Failed`,
+`NotSupported`); otherwise the reply comes when Claude Code is done, from a background task. `answer` is
+`Answered { text }` (control characters removed, cut at `SIDE_ANSWER_MAX_BYTES`), `NotSupported`, or
+`Failed { reason }` in the daemon's words, never Claude Code's output. The desktop client waits 100 seconds.
+
 Protocol 92 adds `Command::SnoozePane { term, until }` and the defaulted `TermInfo.snoozed_until` (unix seconds;
 an older peer decodes it as `None`, and a test decodes the old shape). `until: None`, or a time already past, wakes the
 pane; a time more than a week ahead is refused, and so is a snooze of a chat session's pane (`conversation_id`) or of a

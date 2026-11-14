@@ -18,7 +18,8 @@ import { FilePicker } from './FilePicker'
 import { useFileMention } from '../useFileMention'
 import type { FileSearchPlace } from '../fileMention'
 import { asSkills, commandText, matchCommands, skillQuery, slashQuery, useSlashCommands, withTerminalCommands, type SlashCommand } from '../slashCommands'
-import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
+import { CLAUDE_HIDDEN_COMMANDS, CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
+import { typedCommand, windowRouteOf, withWindowRoutes, type WindowRoute } from '../windowCommands'
 import { CODEX_COMMANDS } from '../codexCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
 import { BranchMenu, type BranchMenuSpec } from './BranchMenu'
@@ -85,6 +86,8 @@ type Props = {
     readonly folder: string
     /** For an agent with a terminal: types a command there and shows it. With it the box also offers the commands only the terminal runs. */
     readonly inTerminal?: ((command: string) => void) | undefined
+    /** Answers the commands the window runs itself (`windowCommands.ts`) with the route and the text as typed. Without it they go to the agent. */
+    readonly inWindow?: ((route: WindowRoute, typed: string) => void) | undefined
   } | undefined
   /** The question tray: what the agent asks, slid up from behind the box. Null when it asks nothing. */
   question?: ReactNode
@@ -154,6 +157,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   const picking = query !== null && closedFor !== draft
   const slash = useSlashCommands(commandsFrom ?? null, picking)
   const inTerminal = commandsFrom?.inTerminal
+  const inWindow = commandsFrom?.inWindow
   // Claude's are its own list plus the ones only its terminal runs; Codex's are the window's list and the skills
   // Codex itself lists. The terminal's commands are offered only to an agent that has a terminal to run them in.
   const skillsOnly = naming !== null
@@ -164,9 +168,10 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
       if (skillsOnly) return skills
       return [...(inTerminal === undefined ? CODEX_COMMANDS.filter((command) => command.terminal !== true) : CODEX_COMMANDS), ...skills]
     }
-    const own = withTerminalCommands(slash.commands, CLAUDE_TERMINAL_COMMANDS)
+    const listed = withTerminalCommands(slash.commands, CLAUDE_TERMINAL_COMMANDS, CLAUDE_HIDDEN_COMMANDS)
+    const own = inWindow === undefined ? listed : withWindowRoutes(listed)
     return inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own
-  }, [slash.commands, inTerminal, windowList, skillsOnly])
+  }, [slash.commands, inTerminal, inWindow, windowList, skillsOnly])
   const matches = useMemo(() => (query === null ? [] : matchCommands(offered, query)), [offered, query])
   // The keys start at the closest match each time the typed name changes.
   const [cursor, setCursor] = useState({ query: '', index: 0 })
@@ -175,8 +180,35 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     setDraft(commandText(command))
     text.current?.focus()
   }
+  // A command the window answers itself (`windowCommands.ts`): `/help` lists every command here and `/btw` alone waits
+  // for its question, the rest go to the session's chat. One that ends or empties the session is refused while the
+  // agent works, as the terminal's are; a side answer may go then, as it leaves the conversation alone.
+  const routeOf = (typed: string): WindowRoute | null => {
+    // The routes are Claude Code's commands by its names; another agent's are its own.
+    if (inWindow === undefined || agent !== 'claude' || windowList || attachments.length > 0) return null
+    const parts = typedCommand(typed)
+    return parts === null ? null : windowRouteOf(parts.name, parts.args)
+  }
+  const inWindowRun = (route: WindowRoute, typed: string) => {
+    if (route.kind === 'commands' || route.kind === 'complete') {
+      setDraft(route.kind === 'commands' ? '/' : route.text)
+      text.current?.focus()
+      return
+    }
+    if (route.kind === 'confirm' && running) {
+      toast.message(`${agent} is working. Run ${typed} when it finishes.`)
+      return
+    }
+    setDraft('')
+    inWindow?.(route, typed)
+  }
   // A command that takes nothing runs at once, as it does in the terminal; one that takes something waits for it.
   const run = (command: SlashCommand) => {
+    const route = routeOf(`/${command.name}`)
+    if (route !== null) {
+      inWindowRun(route, `/${command.name}`)
+      return
+    }
     // A skill is named in a message, never run by itself.
     if (command.hint !== '' || command.skill === true) {
       complete(command)
@@ -200,6 +232,11 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   // agent draws its answer in the terminal and never writes it to the conversation, so the chat would wait for it forever.
   const send = () => {
     const typed = draft.trim()
+    const route = routeOf(typed)
+    if (route !== null) {
+      inWindowRun(route, typed)
+      return
+    }
     const command = inTerminal === undefined || attachments.length > 0 ? undefined : namedCommand(offered, typed)
     if (command?.terminal !== true || inTerminal === undefined) {
       submit()

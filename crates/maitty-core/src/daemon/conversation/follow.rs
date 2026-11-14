@@ -102,6 +102,12 @@ impl Followed {
         self.error.clone()
     }
 
+    /// What a side answer resumes, from what the hook and the file said: the agent's session id,
+    /// the transcript the hook named, and the model the file last named.
+    pub fn side_parts(&self) -> (&str, Option<&std::path::Path>, Option<&str>) {
+        (&self.session, self.hint.as_deref(), self.meta.model.as_deref())
+    }
+
     fn reset(&mut self, generation: u64, session: &str, hint: Option<PathBuf>) {
         let mut history = History::new(self.id);
         history.completeness = Completeness::Loading;

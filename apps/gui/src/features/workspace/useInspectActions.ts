@@ -70,8 +70,8 @@ export function useInspectActions({ focusedSession, setInspectOpen, setInspectVi
   }, [openChanges, setLayout])
   // A session menu's Show changes: the session may be out of sight, so it is brought to the front.
   const showChangesOf = useCallback((sessionId: string) => { openChanges(sessionId, () => { showSessionById(sessionId) }) }, [openChanges, showSessionById])
-  // A pane's side-panel button: the pane takes the focus and the panel opens for it, on `view` when one is asked for; it closes when it already showed that.
-  const togglePanel = useCallback((paneId: string, sessionId: string, view?: InspectView) => {
+  // The pane takes the focus and the panel shows for it, on `view` when one is asked for; `open` false closes it.
+  const showPanel = useCallback((paneId: string, sessionId: string, view: InspectView | undefined, open: (showing: boolean) => boolean) => {
     const refusal = panelRefusal(sessionMap.get(sessionId))
     if (refusal !== null) {
       toast.message(refusal)
@@ -81,7 +81,11 @@ export function useInspectActions({ focusedSession, setInspectOpen, setInspectVi
     setLayout((current) => focusPane(current, paneId))
     setTurnDiff(null)
     if (view !== undefined) setInspectView(view)
-    setInspectOpen(!showing)
+    setInspectOpen(open(showing))
   }, [sessionMap, inspectOpen, inspectView, focusedId, setLayout, setInspectView, setInspectOpen, setTurnDiff])
-  return { toggleInspect, inspectRefusal, showChangesOf, showChanges, togglePanel }
+  // A pane's side-panel button closes the panel when it already showed that.
+  const togglePanel = useCallback((paneId: string, sessionId: string, view?: InspectView) => { showPanel(paneId, sessionId, view, (showing) => !showing) }, [showPanel])
+  // A chat command such as /diff only ever opens it: typing it twice must not hide what it asked for.
+  const openPanel = useCallback((paneId: string, sessionId: string, view: InspectView) => { showPanel(paneId, sessionId, view, () => true) }, [showPanel])
+  return { toggleInspect, inspectRefusal, showChangesOf, showChanges, togglePanel, openPanel }
 }
