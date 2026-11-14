@@ -869,7 +869,9 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 /* Long tool output stays in the expanded block, one line in the row; wide diffs scroll inside the panel. */
 .activity-detail { color: var(--dim); font: 12px var(--font-mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity-expanded { max-height: 260px; overflow: auto; }
-.context-panel-scroll [data-radix-scroll-area-viewport] > div { display: block !important; min-width: 0 !important; }
+/* Radix wraps a scroll area's content in a table that grows to its widest row; held to the column, rows truncate. */
+.context-panel-scroll [data-radix-scroll-area-viewport] > div,
+.session-list-scroll [data-radix-scroll-area-viewport] > div { display: block !important; min-width: 0 !important; }
 .diff-file pre { max-width: 100%; }
 .diff-file-choice > span { min-width: 0; }
 
