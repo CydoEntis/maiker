@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { checkAction, checkActions, checkOutput, checkStateWords, checkTone, type Check, type CheckAction } from './checks'
 import { messageOf } from './useRepoQuery'
+import { LOCAL_MACHINE } from '@/api/machines'
+import { localOnlyMessage } from '@/lib/localOnly'
 
 type Props = {
   term: number
@@ -29,8 +31,11 @@ function CheckRow({ term, machine, check, onNotice }: { term: number; machine: n
       .catch((error: unknown) => { setFailure(messageOf(error)) })
       .finally(() => { setBusy(false) })
   }
+  // The output is kept by the daemon whose pane ran the check, and this window asks only its own computer's for it.
+  const outputRefusal = machine === LOCAL_MACHINE ? null : localOnlyMessage('check-output', null)
   const showOutput = () => {
     if (output !== null) { setOutput(null); return }
+    if (outputRefusal !== null) { setFailure(outputRefusal); return }
     checkOutput(term, machine, check.name)
       .then(setOutput)
       .catch((error: unknown) => { setFailure(messageOf(error)) })
@@ -59,7 +64,7 @@ function CheckRow({ term, machine, check, onNotice }: { term: number; machine: n
             {choice === 'once' ? 'Run once' : choice === 'always' ? 'Always run this' : 'Never run'}
           </button>
         ))}
-        {check.line_count > 0 && <button type="button" className="mx-text-button" onClick={showOutput}>{output === null ? 'Output' : 'Hide output'}</button>}
+        {check.line_count > 0 && <button type="button" className="mx-text-button" aria-disabled={outputRefusal === null ? undefined : true} title={outputRefusal ?? undefined} onClick={showOutput}>{output === null ? 'Output' : 'Hide output'}</button>}
       </div>
       {reasoning !== null && (
         <form className="mx-check-reason" onSubmit={(event) => { event.preventDefault(); send({ action: 'override', name: check.name, reason: reasoning.trim() }, `${check.name} accepted as it is`) }}>

@@ -20,6 +20,7 @@ export const LOCAL_FEATURES = {
   'screen-text': 'The screen text',
   replay: 'A fresh replay',
   rewind: 'Edit from here',
+  'check-output': "A check's output",
 } as const
 
 export type LocalFeature = keyof typeof LOCAL_FEATURES
