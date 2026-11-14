@@ -12,11 +12,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 96;
-
-/// The first version whose daemon clones, lists GitHub repositories and accounts, runs git sync,
-/// commit and pull request, and writes folder identity rules (the GitHub repositories work).
-pub const GITHUB_WORK_SINCE: u32 = 96;
+pub const PROTOCOL_VERSION: u32 = 103;
 
 /// The first version whose daemon sends a queued chat message now (`Command::ConversationSendNow`).
 pub const SEND_NOW_SINCE: u32 = 94;
@@ -131,7 +127,7 @@ pub struct ClosedSession {
 
 /// The first version whose daemon writes and removes a folder's GitHub account and commit identity
 /// rule on request (`Query::GitIdentityRule`).
-pub const GIT_RULES_SINCE: u32 = GITHUB_WORK_SINCE;
+pub const GIT_RULES_SINCE: u32 = 103;
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
@@ -158,7 +154,7 @@ pub struct GitConfigWrite {
 
 /// The first version whose daemon says which commit identity its machine's git uses, and for
 /// which folders a different one applies (`Query::GitIdentities`).
-pub const GIT_IDENTITIES_SINCE: u32 = GITHUB_WORK_SINCE;
+pub const GIT_IDENTITIES_SINCE: u32 = 102;
 /// The most folder rules one report carries.
 pub const GIT_IDENTITY_RULES_MAX: usize = 100;
 /// The longest name, email or folder a report carries, in characters.
@@ -198,11 +194,11 @@ pub struct GitIdentity {
 
 /// The first version whose daemon opens a pull request for a pane's checkout on request
 /// (`GitRequest::PullRequest`).
-pub const GIT_PULL_REQUEST_SINCE: u32 = GITHUB_WORK_SINCE;
+pub const GIT_PULL_REQUEST_SINCE: u32 = 101;
 
 /// The first version whose daemon commits files of a pane's checkout on request
 /// (`GitRequest::Commit`).
-pub const GIT_COMMIT_SINCE: u32 = GITHUB_WORK_SINCE;
+pub const GIT_COMMIT_SINCE: u32 = 100;
 /// How long the daemon gives one commit, in seconds: the repository's own hooks run in it.
 pub const GIT_COMMIT_LIMIT_SECS: u64 = 120;
 /// The longest commit message taken, in bytes.
@@ -213,7 +209,7 @@ pub const GIT_COMMIT_PATHS_MAX_BYTES: usize = 24 * 1024;
 
 /// The first version whose daemon fetches, pulls and pushes a pane's checkout on request
 /// (`Query::Git`).
-pub const GIT_SYNC_SINCE: u32 = GITHUB_WORK_SINCE;
+pub const GIT_SYNC_SINCE: u32 = 99;
 /// How long the daemon gives one fetch, pull or push, in seconds.
 pub const GIT_SYNC_LIMIT_SECS: u64 = 60;
 
@@ -244,16 +240,16 @@ pub enum GitRequest {
 
 /// The first version whose daemon lists the repositories its machine's GitHub account can clone
 /// (`Query::GitHubRepos`, `Query::GitHubOwners`).
-pub const GITHUB_REPOS_SINCE: u32 = GITHUB_WORK_SINCE;
+pub const GITHUB_REPOS_SINCE: u32 = 98;
 /// How long the daemon gives `gh` to list repositories or organisations.
 pub const GITHUB_LIST_LIMIT_SECS: u64 = 30;
 
 /// The first version whose daemon says who is signed in to GitHub on its machine
 /// (`Query::GitHubAccounts`).
-pub const GITHUB_ACCOUNTS_SINCE: u32 = GITHUB_WORK_SINCE;
+pub const GITHUB_ACCOUNTS_SINCE: u32 = 97;
 
 /// The first version whose daemon clones a repository on request (`Query::CloneRepo`).
-pub const CLONE_SINCE: u32 = GITHUB_WORK_SINCE;
+pub const CLONE_SINCE: u32 = 96;
 
 /// How long a daemon lets one clone run before it stops it, in seconds. A client waits a little
 /// longer than this for the answer.
@@ -2788,7 +2784,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 96);
+        assert_eq!(PROTOCOL_VERSION, 103);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3256,7 +3252,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 96);
+        assert_eq!(PROTOCOL_VERSION, 103);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
