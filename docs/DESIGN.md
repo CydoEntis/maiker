@@ -409,7 +409,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   finished. What a box holds (unsent text, files) is kept
   by conversation number and belongs to its session: when the daemon gives the session's chat a new number, it moves
   to that number (`followComposer`).
-- **Settings pages.** ESSENTIALS: **General** (start and export folders, window, updates, sessions) and **Chat** (how a
+- **Settings pages.** ESSENTIALS: **General** (start and export folders, each the folder shown with **Browse…**, which
+  opens the system's folder picker, and a way back to the default; nothing is typed, window, updates, sessions) and **Chat** (how a
   chat starts and is drawn: default agent, view, width, text size, full access, Yolo) and **Agents** (the account each
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). TERMINAL: **Terminal** (text,
@@ -546,8 +547,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   recommend compacting earlier" prompt). The daemon reads them off the screen (`crates/maitty-agent-detection/rules/
   claude.toml`, Maitty's own rules beside the vendored Herdr ones) and says the pane needs you, so the chat shows
   "claude is waiting for you", its box is off until it is answered in the terminal, and nothing queued is typed into it.
-- **Hotkeys are keycaps.** Settings › Hotkeys draws each key as its own key-shaped cap (a thicker
-  bottom edge, symbols ⌘⇧⌃⌥ in the interface font, other keys in Geist Mono), with a dim "or"
+- **Hotkeys are keycaps.** Settings › Hotkeys lists them in the same rows as every other page, and draws each key as
+  its own flat cap (`--m-raise`, a hairline and a thicker bottom edge, no gradient or highlight; symbols ⌘⇧⌃⌥ in the interface font, other keys in Geist Mono), with a dim "or"
   between alternatives. Windows and Linux show Ctrl, Shift and Alt as words.
 - **One key table.** `features/workspace/model/shortcuts.ts` holds every window shortcut once
   (`BINDINGS`); the key handler, tooltips, menu hints, palette, keycaps, Settings › Hotkeys and the

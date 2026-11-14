@@ -95,8 +95,6 @@ type DesktopSettingsProps = {
   /** The running app's version, for the performance report; null until known. */
   appVersion: string | null
   machines: MachinesInfo
-  /** Resolves whether a typed folder exists. */
-  validateFolder: (path: string) => Promise<boolean>
   /** Opens the system's folder picker at the folder given; the path picked, or null when it is cancelled. */
   onChooseFolder?: (current: string) => Promise<string | null>
   /** What the Usage & cost page needs from the window. */
@@ -236,7 +234,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
 
   const page = (id: DesktopSettingsSection): ReactNode => {
     switch (id) {
-      case 'general': return <GeneralSection preferences={preferences} update={update} validateFolder={props.validateFolder} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} updates={props.updates} />
+      case 'general': return <GeneralSection preferences={preferences} update={update} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} updates={props.updates} />
       case 'chat': return <ChatSection preferences={preferences} update={update} />
       case 'permissions': return <><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
       case 'terminal': return <TerminalSection preferences={preferences} update={update} />
@@ -358,59 +356,30 @@ function SegmentedChoice<T extends string | number>({ label, value, options, onC
   )
 }
 
-const VALIDATE_DELAY_MS = 250
-type FolderCheck = 'saved' | 'missing' | 'checking'
-
 const YOLO_AGENTS = [
   { key: 'yoloClaude', label: 'Claude', detail: 'Lets you pick Bypass permissions in a chat, where Claude asks about nothing. New chats still start in the mode you had.' },
   { key: 'yoloCodex', label: 'Codex', detail: 'Starts new Codex sessions with approvals and the sandbox off, so it runs commands and edits files without asking.' },
   { key: 'yoloGemini', label: 'Gemini', detail: 'Starts new Gemini sessions in its yolo mode, which approves every tool call without asking.' },
 ] as const
 
-function GeneralSection({ preferences, update, validateFolder, onChooseFolder, onShowWelcome, updates }: { preferences: SettingsPreferences; update: Update; validateFolder: (path: string) => Promise<boolean>; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void; updates: DesktopSettingsProps['updates'] }) {
-  const [draft, setDraft] = useState(preferences.startFolder)
-  const [check, setCheck] = useState<FolderCheck>('saved')
-  const latest = useRef({ preferences, update })
-  useEffect(() => { latest.current = { preferences, update } })
-  useEffect(() => {
-    const typed = draft.trim()
-    if (typed === latest.current.preferences.startFolder) {
-      setCheck('saved')
-      return
-    }
-    setCheck('checking')
-    let current = true
-    const timer = window.setTimeout(() => {
-      void validateFolder(typed)
-        .catch(() => false)
-        .then((exists) => {
-          if (!current) return
-          setCheck(exists ? 'saved' : 'missing')
-          if (exists) latest.current.update('startFolder', typed)
-        })
-    }, VALIDATE_DELAY_MS)
-    return () => {
-      current = false
-      window.clearTimeout(timer)
-    }
-  }, [draft, validateFolder])
-  const missing = check === 'missing'
+function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome, updates }: { preferences: SettingsPreferences; update: Update; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void; updates: DesktopSettingsProps['updates'] }) {
+  // The folder comes from the system's folder picker, which only offers one that exists, so nothing is typed or checked.
+  const home = preferences.startFolder === ''
   return (
     <>
       <Card
         title="Start folder"
-        meta={<span className="mx-scard-meta" style={{ fontSize: 11.5, color: missing ? 'var(--danger)' : 'var(--dim)' }} role="status">{missing ? 'Folder not found' : check === 'checking' ? 'Checking…' : 'Saved'}</span>}
-        foot="Every new session opens a shell here. Leave it empty for your home folder. Projects appear in the sidebar when a session cds into a git repo."
+        foot="Every new session opens a shell here. Projects appear in the sidebar when a session cds into a git repo."
       >
-        <div style={{ padding: '0 16px 14px' }}>
+        <div className="mx-scard-body">
           <div className="mx-folder-row">
-            <div className={`mx-folder-field${missing ? ' is-invalid' : ''}`}>
-              <span className="mono" style={{ fontSize: 12, color: 'var(--dim)' }}>cd</span>
-              <input value={draft} placeholder="~" aria-label="Start folder" aria-invalid={missing} spellCheck={false} onChange={(event) => { setDraft(event.target.value) }} />
+            <div className="mx-folder-field" title={home ? undefined : preferences.startFolder}>
+              <span className="mono mx-folder-path" style={{ color: home ? 'var(--dim)' : 'var(--fg)' }}>{home ? 'Your home folder' : preferences.startFolder}</span>
             </div>
             {onChooseFolder && (
-              <button type="button" className="mx-text-button" onClick={() => { void onChooseFolder(draft.trim()).then((picked) => { if (picked) setDraft(picked) }) }}>Browse…</button>
+              <button type="button" className="mx-text-button" aria-label="Choose the start folder" onClick={() => { void onChooseFolder(preferences.startFolder).then((picked) => { if (picked) update('startFolder', picked) }) }}>Browse…</button>
             )}
+            {!home && <button type="button" className="mx-text-button" onClick={() => { update('startFolder', '') }}>Use home folder</button>}
           </div>
         </div>
       </Card>
@@ -418,10 +387,10 @@ function GeneralSection({ preferences, update, validateFolder, onChooseFolder, o
         title="Export folder"
         foot="Code blocks and tables you save from a chat go here. An existing file is never replaced; the new one gets a number."
       >
-        <div style={{ padding: '0 16px 14px' }}>
+        <div className="mx-scard-body">
           <div className="mx-folder-row">
-            <div className="mx-folder-field">
-              <span className="mono" style={{ fontSize: 12, color: preferences.exportFolder === '' ? 'var(--dim)' : 'var(--fg)' }}>{preferences.exportFolder === '' ? 'Your Downloads folder' : preferences.exportFolder}</span>
+            <div className="mx-folder-field" title={preferences.exportFolder === '' ? undefined : preferences.exportFolder}>
+              <span className="mono mx-folder-path" style={{ color: preferences.exportFolder === '' ? 'var(--dim)' : 'var(--fg)' }}>{preferences.exportFolder === '' ? 'Your Downloads folder' : preferences.exportFolder}</span>
             </div>
             {onChooseFolder && (
               <button type="button" className="mx-text-button" aria-label="Choose the export folder" onClick={() => { void onChooseFolder(preferences.exportFolder).then((picked) => { if (picked) update('exportFolder', picked) }) }}>Browse…</button>
@@ -565,7 +534,7 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
     <>
       <Card title="Text" meta={<span className="mono" style={{ fontSize: 12, color: 'var(--fg2)' }}>{family} · {preferences.terminalFontSize}px</span>}
         foot="Leave the font empty for Geist Mono, or name any monospace font installed on this computer; if it is missing, Geist Mono is used. Regular at 400 can look thin on Linux: try Medium.">
-        <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="mx-scard-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <span className="mx-field-label">Size</span>
             <SegmentedChoice label="Terminal text size" value={preferences.terminalFontSize} options={FONT_SIZES} onChange={(value) => { update('terminalFontSize', value) }} />
@@ -816,9 +785,9 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
 function HotkeysSection({ platform }: { platform: Platform }) {
   return (
     <Card title="Hotkeys" meta={<span className="mx-scard-meta">{platform === 'mac' ? '⌘ here, Ctrl+Shift on Windows and Linux' : 'Ctrl+Shift here, ⌘ on macOS'}</span>} foot="In a focused pane, every other key goes straight to the shell.">
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div>
         {hotkeyRows(platform).map((row) => (
-          <div key={row.action} className="mx-hotkey-row">
+          <div key={row.action} className="mx-scard-row mx-hotkey-row">
             <span>{row.action}</span>
             <span className="mx-keys">
               {row.chords.map((chord, index) => (
