@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { RadioGroup, RadioGroupItem, Segmented, SegmentedItem } from '@/components/ui/radio-group'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Check } from 'lucide-react'
 import { Popover } from 'radix-ui'
 import { PopupContent } from '@/components/ui/popup'
@@ -21,6 +22,36 @@ function MiniMeter({ level }: { level: string }) {
     <span aria-hidden="true" className="mx-mm-mini">
       {REASONING_LEVELS.map((name, index) => <span key={name} className={index < filled ? 'is-on' : undefined} />)}
     </span>
+  )
+}
+
+/**
+ * The agent, as a dropdown: one row per agent with its icon and whole name, so a longer list never squeezes a name
+ * out of a fixed-width switch.
+ */
+function AgentSelect({ agent, onAgent }: { agent: ChatAgent; onAgent: (agent: ChatAgent) => void }) {
+  return (
+    <div className="mx-mm-agent-row">
+      <span className="mx-mm-agent-word">Agent</span>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="mx-mm-agent-pick" aria-label={`Agent: ${AGENT_LABEL[agent]}`}>
+            <AppIcon process={agent} size={14} />
+            <span className="mx-mm-agent-name">{AGENT_LABEL[agent]}</span>
+            <Icon name="chevronDown" size={12} />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="bottom" align="end" container={document.querySelector<HTMLElement>('.mx-app')} aria-label="Agent" className="mx-mm-agent-list text-fg">
+          <DropdownMenuRadioGroup value={agent} onValueChange={(value) => { onAgent(value as ChatAgent) }}>
+            {CHAT_AGENTS.map((name) => (
+              <DropdownMenuRadioItem key={name} value={name} className="mx-mm-agent-item">
+                <AppIcon process={name} size={14} />{AGENT_LABEL[name]}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   )
 }
 
@@ -89,11 +120,7 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
       </Popover.Trigger>
       <PopupContent side="top" align="start" aria-label="Model and effort" className="mx-mm">
         {onAgent !== undefined && (
-          <Segmented aria-label="Agent" value={agent} onValueChange={(value) => { onAgent(value as ChatAgent) }} className="mx-mm-agents">
-            {CHAT_AGENTS.map((name) => (
-              <SegmentedItem key={name} value={name} className="mx-mm-agent"><AppIcon process={name} size={14} />{AGENT_LABEL[name]}</SegmentedItem>
-            ))}
-          </Segmented>
+          <AgentSelect agent={agent} onAgent={onAgent} />
         )}
         {!agentOnly && (<>
         <RadioGroup aria-label="Model" value={modelId} onValueChange={(value) => { const option = rows.find((row) => row.id === value); if (option) pickModel(option) }} className="mx-mm-models">

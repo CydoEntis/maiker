@@ -25,10 +25,10 @@ impl Daemon {
         if let Some(problem) = branch_agent::branch_problem(&branch) {
             bail!("{problem}");
         }
-        // The same limit as a branch agent: a client cannot ask for a checkout (and its setup
-        // hook) in a repository the app has never been shown.
+        // The same limit as a branch agent: only a person's window may ask for a checkout (and its
+        // setup hook) in a repository the app has never been shown.
         let project = Some(clean_path(settings.cwd.clone()))
-            .filter(|dir| dir.is_absolute() && dir.is_dir() && self.is_known_project(dir))
+            .filter(|dir| dir.is_absolute() && dir.is_dir() && self.may_name_checkout(client, dir))
             .ok_or_else(|| anyhow::anyhow!("that is not a project in the app"))?;
         if crate::gitfs::head(&project).is_none() {
             bail!("{} is not in a git repository", project.display());

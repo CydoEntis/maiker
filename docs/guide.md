@@ -962,7 +962,7 @@ dots, Ctrl+Shift+A, skips the page: it starts a chat at once with the default ag
 folder.)
 
 **Where the chat runs** is the first button under the message box: the project and its branch. Click it
-to choose them. Its **Branch** and **Work in** choices, and **Also start with**, are left out when the
+to choose them. Its **Branch** and **Work in** choices, and **Also send to**, are left out when the
 folder is not a git repository, and for a session on another machine. Done, Esc or a click outside
 closes it.
 
@@ -972,7 +972,7 @@ closes it.
   this computer; Maitty never asks for a password.
 - **Branch.** Pick a branch, or type a new name to create one.
 - **Work in: New worktree** is chosen by default. The agent works in a worktree of its own, on a new
-  branch named from your message, so your checkout stays as it is. A line under it says what it
+  branch with a short two-word name (like `quiet-otter`), so your checkout stays as it is. A line under it says what it
   starts from, and how far behind its upstream it is. Choose **This folder** and the agent edits the
   checkout. Then, if the checkout is behind, a **↓ Pull** button runs `git pull --ff-only`. It is
   refused while you have uncommitted changes.
@@ -983,9 +983,9 @@ closes it.
   lists the conversations Claude or Codex saved for the folder. Resuming starts in that folder
   without a worktree.
 
-**Several agents at once.** Under the message box, **Also start with** lists the other agents
+**Several agents at once.** Under the message box, **Also send to** lists the other agents
 installed on this computer. Tick one or more and the same message goes to each, every one in its own
-worktree and on its own new branch (`fix-login`, `fix-login-2`, …). That needs New worktree. In This
+worktree and on its own new branch with a two-word name. That needs New worktree. In This
 folder the boxes cannot be ticked, and the page says "Each agent needs a copy of its own. Choose New
 worktree to start several." The chat you
 see open is the agent on the model button. The others start on their own default model, effort and

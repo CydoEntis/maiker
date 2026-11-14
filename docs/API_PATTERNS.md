@@ -181,7 +181,8 @@ daemon running is older) and `drop_prewarmed_agent`.
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
 app's new chat page, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
-does, requires `project` to be one the app shows and a git repository, then makes the checkout with
+does, requires `project` to be one the app shows (or, from a person's own window, any folder the person picked:
+`may_name_checkout`; a pane's agent, a structured runtime or a rejected client is held to the shown ones) and a git repository, then makes the checkout with
 `create_trusted_worktree` (the `worktree.dir` template, an existing local or remote branch else a new one from HEAD,
 trusted like its repo), runs the repo's `on_create` setup, lists the folder in `made_worktrees` and replies
 `Reply::Text(folder)`. The window starts its agent in that folder. It came in protocol 81 (`BRANCH_WORKTREE_SINCE`, with

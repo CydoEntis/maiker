@@ -7,6 +7,7 @@ import { registerComposerDrop } from '@/features/chat/composerDrop'
 import { updateComposer, useComposerState } from '@/features/chat/composerStore'
 import { revokePreviews, useAttachmentIntake } from '@/features/chat/useAttachmentIntake'
 import { DraftAttachments } from '@/features/chat/components/Attachments'
+import { useKeepTyping } from '@/features/chat/useKeepTyping'
 import { errorMessage } from '@/lib/error-message'
 import { DEFAULT_PICK, modelsFor, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
@@ -23,7 +24,7 @@ import { WherePopover } from './WherePopover'
 import { CloneFromGitHub } from './CloneFromGitHub'
 import { parentFolder } from '../model/folders'
 import type { NewSessionProject } from '../model/newSession'
-import { branchNameFromMessage, suggestBranchName } from '../model/worktreeName'
+import { suggestBranchName } from '../model/worktreeName'
 import { Icon } from './glyphs'
 import { ChipMenu, type ChipItem } from './NewChatMenus'
 import { ResumeList } from './ResumeList'
@@ -126,6 +127,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   // The box and its tray: the Where popover rises from its top edge, lined up with its left.
   const stack = useRef<HTMLDivElement>(null)
   const { attachments } = useComposerState(NEW_CHAT_DRAFT)
+  useKeepTyping(text, attachments.length)
   // A new chat runs on this computer, so its files are copied here and named by path in the first message.
   const attach = useAttachmentIntake({ conversation: NEW_CHAT_DRAFT, blocked: remote ? `Files stay on this computer, not on ${targetLabel}` : busy ? 'The chat is starting' : null })
   const { addPaths } = attach
@@ -158,13 +160,9 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   const explicit = branchPick?.folder === folder ? branchPick.pick : null
   const { state: sync, busy: pulling, pull } = useSyncState(remote ? '' : folder, true)
   const takenBranches = useMemo(() => new Set([...(branches?.branches ?? []).map((entry) => entry.name), ...takenNames]), [branches, takenNames])
-  // Rolled once per list of names in use, so a message with no usable words does not reroll it on every key.
-  const twoWordName = useMemo(() => (treeMode && branches !== null ? suggestBranchName(takenBranches) : null), [treeMode, branches, takenBranches])
-  // A page opened with a message (a full chat's summary) keeps two words: every summary begins alike.
-  const fromMessage = (sent: string, taken: ReadonlySet<string>) => (seed === null ? branchNameFromMessage(sent, taken) : null)
-  // With Own copy on and no branch chosen, the chat gets a new branch named after what it sends, in a worktree.
-  const suggestedFor = (sent: string) => (twoWordName === null ? null : fromMessage(sent, takenBranches) ?? twoWordName)
-  const suggested = suggestedFor(message)
+  // With New worktree on and no branch chosen, the chat gets a new branch with a two-word name, in a worktree. It is
+  // rolled once per list of names in use and never copies the message, which is no name for a branch.
+  const suggested = useMemo(() => (treeMode && branches !== null ? suggestBranchName(takenBranches) : null), [treeMode, branches, takenBranches])
   const chosen = useMemo(() => explicit ?? (treeMode && suggested !== null ? { name: suggested, create: true, worktree: true } : null), [explicit, treeMode, suggested])
   const branch = chosen
   const isInstalled = (id: string) => (installed === null ? chatAgentOf(id) !== null : installed.includes(id))
@@ -192,6 +190,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   const alsoOffered = remote || branches === null || installed === null ? [] : CHAT_AGENTS.filter((other) => other !== agent && installed.includes(other))
   const alsoWith = treeMode ? alsoOffered.filter((other) => alsoPicked.has(other)) : []
   const alsoWhy = useId()
+  const alsoWhat = useId()
   const toggleAlso = (other: ChatAgent, on: boolean) => {
     if (!treeMode) return
     setAlsoPicked((now) => new Set(on ? [...now, other] : [...now].filter((name) => name !== other)))
@@ -206,17 +205,15 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   const requestFor = (task: string, resume: string | null): NewChatRequest => {
     // A saved conversation continues in the folder it was saved in, so a worktree is left out for this start.
     const startBranch = remote || (resume !== null && branch?.worktree === true) ? null : branch
-    // A suggested task is sent instead of the box's text, so a branch the page named is named after the task.
-    const named = explicit === null && startBranch !== null ? { ...startBranch, name: suggestedFor(task) ?? startBranch.name } : startBranch
-    return { folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments), branch: named, machine, machineName: targetLabel, resume }
+    return { folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments), branch: startBranch, machine, machineName: targetLabel, resume }
   }
   // The page's model, effort and mode are the main agent's; each other agent ticked starts on its own defaults, on a new
   // branch in a worktree of its own. A saved conversation is the main agent's, so resuming one starts no others.
-  const alsoRequests = (main: NewChatRequest, task: string): NewChatRequest[] => {
+  const alsoRequests = (main: NewChatRequest): NewChatRequest[] => {
     if (main.resume !== null) return []
     const taken = new Set([...takenBranches, ...(main.branch === null ? [] : [main.branch.name])])
     return alsoWith.map((other) => {
-      const name = fromMessage(task, taken) ?? suggestBranchName(taken)
+      const name = suggestBranchName(taken)
       taken.add(name)
       return { ...main, agent: other, model: DEFAULT_PICK, reasoning: START_REASONING, mode: defaultModeOf(other, codexYolo), branch: { name, create: true, worktree: true } }
     })
@@ -232,7 +229,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
     setBusy(true)
     setError(null)
     const request = requestFor(task, resume)
-    const others = alsoRequests(request, task)
+    const others = alsoRequests(request)
     onStart(request)
       .catch((failure: unknown) => {
         const reason = errorMessage(failure, 'Could not start the chat')
@@ -254,7 +251,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
     }
     if (busy || folder === '' || agentMissing) return
     const request = requestFor(message, null)
-    const requests = [request, ...alsoRequests(request, message)]
+    const requests = [request, ...alsoRequests(request)]
     takeNames(requests)
     if (request.branch?.create === true && explicit?.create === true) setBranchPick(null)
     background.launch(requests, { text: message, attachments })
@@ -525,15 +522,17 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
             </div>
           </div>
           {alsoOffered.length > 0 && (
-            <div className="mx-nc-also" role="group" aria-label="Also start with">
-              <span className="mx-nc-switch-label">Also start with</span>
+            <div className="mx-nc-also" role="group" aria-label="Also send to" aria-describedby={treeMode ? alsoWhat : alsoWhy}>
+              <span className="mx-nc-switch-label">Also send to</span>
               {alsoOffered.map((other) => (
                 <label key={other} className="mx-nc-also-agent">
                   <input type="checkbox" aria-disabled={!treeMode} aria-describedby={treeMode ? undefined : alsoWhy} checked={alsoWith.includes(other)} onChange={(event) => { toggleAlso(other, event.target.checked) }} />
                   {AGENT_LABEL[other]}
                 </label>
               ))}
-              {!treeMode && <span id={alsoWhy} className="mx-nc-also-why">Each agent needs a copy of its own. Choose New worktree to start several.</span>}
+              {treeMode
+                ? <span id={alsoWhat} className="mx-nc-also-why">Starts the same message in each one ticked, as a chat of its own on its own branch, so you can compare them.</span>
+                : <span id={alsoWhy} className="mx-nc-also-why">Each agent needs a copy of its own. Choose New worktree to start several.</span>}
             </div>
           )}
           {error !== null && <p role="alert" className="mx-composer-error">{error}</p>}
