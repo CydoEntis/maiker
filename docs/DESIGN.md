@@ -652,8 +652,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   words (Running, Passed, Failed, Accepted as it is, Could not run, Needs your approval, …) and the first failing
   line, with **Run again**, **Accept the failure…** (an optional reason, up to 280 characters; **Undo accept** takes it
   back), **Run once / Always run this / Never run** for a command the repository brought, and **Output** for the
-  tail of its last run. The tab's count is the checks that want you (`ChecksTab.tsx`, `checks.ts`). Branches (with
-  each branch's distance from its upstream), History (the commit log and the agent's snapshots),
+  tail of its last run (on another machine's session it says the output is local-only instead). The tab's count is the checks that want you (`ChecksTab.tsx`, `checks.ts`). Branches (with
+  each branch's distance from its upstream), History (the commit log and the agent's snapshots; snapshots that cannot be read are said, with Try again, above the commits),
   Timeline (what the pane reported lately) and References follow Terminal as tabs of their own; the tab strip scrolls
   when the panel is narrow. Changes lists the
   changed files (`+N −N`) and the picked file's diff (added lines tinted with `--ok`, removed with `--danger`, hunk
