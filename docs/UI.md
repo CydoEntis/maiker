@@ -889,7 +889,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   opens in the view Settings names. Beside a session on another machine it opens the new chat page on that machine, as + does.
 - **Agent, model and effort.** A button names the agent's mark and the model (the one picked, else the one the agent's
   own file says, else just the agent) with a four-bar meter for the effort, and opens one small menu (`AgentPicker`, 248px,
-  one column): the agent switch, only before a chat starts (after that its agent is already running); the models, a row
+  one column): the agent, only before a chat starts (after that its agent is already running), as an **Agent** dropdown
+  that lists every agent with its mark and whole name (a switch squeezed the names out of the 248px menu); the models, a row
   each with its description as the tooltip, a tick on the picked one and a dim "default" on the model the agent's settings
   name; then **Effort** as four rising bars (Low, Medium, High, Max) with the level's name beside them. Earlier models wait
   under a **More models** row, so the newest lead; the picked one shows wherever it is. Picking leaves the menu open; Esc

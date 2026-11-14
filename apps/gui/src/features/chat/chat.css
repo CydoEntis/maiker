@@ -370,9 +370,16 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-model-effort { color: var(--dim); white-space: nowrap; }
 /* The model menu: one column of models, then the effort as four rising bars. */
 .mx-mm { width: 248px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; }
-.mx-mm-agents { margin-bottom: 6px; padding: 2px; border-radius: 8px; }
-.mx-mm-agents .mx-mm-agent { flex: 1; height: 26px; justify-content: center; gap: 6px; font-size: 12.5px; }
-.mx-mm-agent .mx-app-icon { box-shadow: none; }
+/* The agent, before a chat starts: a word and a dropdown button the width of the menu. */
+.mx-mm-agent-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 0 2px 0 8px; }
+.mx-mm-agent-word { font-size: 12px; color: var(--dim); }
+.mx-mm-agent-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: var(--r-control); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); font-size: 12.5px; color: var(--fg); }
+.mx-mm-agent-pick:hover, .mx-mm-agent-pick[data-state="open"] { box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-mm-agent-pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.mx-mm-agent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.mx-mm-agent-list { min-width: var(--radix-dropdown-menu-trigger-width); padding: 4px; border-radius: 10px; }
+.mx-mm-agent-item { gap: 8px; height: 30px; font-size: 12.5px; }
+.mx-mm-agent-pick .mx-app-icon, .mx-mm-agent-item .mx-app-icon { box-shadow: none; }
 .mx-mm-models { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; }
 .mx-mm-model { flex: none; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 7px; font-size: 13px; color: var(--fg); text-align: left; outline: none; }
 .mx-mm-model > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
