@@ -44,7 +44,7 @@ export function usePaletteItems({ paletteOpen, platform, layout, sessions, proje
   const paletteItems: PaletteItem[] = useMemo(() => {
     // Thirty-odd items with closures, built only while the palette can show them.
     if (!paletteOpen) return []
-    const keys = (shortcut: ShortcutAction) => shortcutText(shortcut, platform)
+    const keys = (shortcut: ShortcutAction) => shortcutText(shortcut, platform, preferences.keyOverrides)
     const action = (id: string, label: string, run: () => void, shortcut?: string): PaletteItem => ({ id, label, kind: 'Action', run, ...(shortcut ? { shortcut } : {}) })
     const showing = activeArrangement(layout)
     // Sessions first, most urgent first, then their projects, then actions: what the palette is mostly for is jumping.
@@ -92,7 +92,7 @@ export function usePaletteItems({ paletteOpen, platform, layout, sessions, proje
     ]
     for (const candidate of THEMES) items.push({ id: `theme-${candidate.name}`, label: candidate.name, detail: candidate.family, kind: 'Theme', needsQuery: true, run: () => { setPreferences((current) => ({ ...current, themeMode: candidate.light ? 'light' : 'dark', ...(candidate.light ? { lightTheme: candidate.name } : { darkTheme: candidate.name }) })) } })
     return items
-  }, [paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, platform, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen])
+  }, [paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen])
   /** A line some session printed, as a row that opens that session; null when the pane is not one of the window's sessions. */
   const paletteOutputItem = useCallback((hit: SearchHit, query: string): PaletteItem | null => {
     const owner = sessions.find((member) => member.machine === hit.machine && member.pane === hit.term)

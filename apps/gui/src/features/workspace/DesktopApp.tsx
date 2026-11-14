@@ -1,4 +1,5 @@
 import { Toaster } from '@/components/ui/sonner'
+import { KeyOverridesContext } from '@/features/shortcuts/platform'
 import { ReducedMotionContext } from './components/motion'
 import { useWorkspaceState } from './useWorkspaceState'
 import { WorkspaceContext } from './workspaceContext'
@@ -21,6 +22,7 @@ export function DesktopApp() {
   return (
     <WorkspaceContext.Provider value={workspace}>
     <ReducedMotionContext.Provider value={reducedMotion}>
+    <KeyOverridesContext.Provider value={preferences.keyOverrides}>
         <div ref={setRoot} className={`mx-app${narrow ? ' is-narrow' : ''}`} style={rootStyle} data-motion={reducedMotion ? 'reduced' : 'full'} data-theme-kind={theme.light ? 'light' : 'dark'} data-side={preferences.sidebarSide}>
           <AppTitleBar />
           <div className="mx-window" role="application" aria-label="Maitty">
@@ -31,6 +33,7 @@ export function DesktopApp() {
           <Toaster position={preferences.toastPosition} theme={theme.light ? 'light' : 'dark'} />
           <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{machineSaid}</div>
         </div>
+    </KeyOverridesContext.Provider>
     </ReducedMotionContext.Provider>
     </WorkspaceContext.Provider>
   )

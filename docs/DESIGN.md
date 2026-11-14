@@ -569,9 +569,16 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Hotkeys are keycaps.** Settings › Hotkeys lists them in the same rows as every other page, and draws each key as
   its own flat cap (`--m-raise`, a hairline and a thicker bottom edge, no gradient or highlight; symbols ⌘⇧⌃⌥ in the interface font, other keys in Geist Mono), with a dim "or"
   between alternatives. Windows and Linux show Ctrl, Shift and Alt as words.
+- **Hotkeys can be changed.** Each window row ends in **Change** (small `mx-text-button`s, one width so the keycaps
+  line up); it turns the keycaps into an accent-ringed "Press the new keys…" field that takes the next combination,
+  and Esc cancels it without closing Settings (`KEY_CAPTURE_ATTRIBUTE`, `data-owns-escape`). A key the terminal owns
+  (no Ctrl, a plain Ctrl+letter on Windows and Linux, no ⌘ on macOS) or one another action already has is refused in
+  `--needs` under the row, naming that action. A changed row adds **Reset**, the card's foot **Reset all**; the
+  terminal's own rows (Interrupt, Clear screen) say "Terminal" instead. The choice replaces the action's own keys,
+  is saved with the window's settings (`keyOverrides`) and reaches every reader through `KeyOverridesContext`.
 - **One key table.** `features/workspace/model/shortcuts.ts` holds every window shortcut once
   (`BINDINGS`); the key handler, tooltips, menu hints, palette, keycaps, Settings › Hotkeys and the
-  overlay all read it through `formatShortcut(binding, platform)`. The glyphs are never rewritten in
+  overlay all read it through `formatShortcut(binding, platform, overrides)`, with the keys chosen in Settings in place. The glyphs are never rewritten in
   the DOM. On macOS the window uses ⌘ and leaves Ctrl to the terminal. On Windows and Linux a plain
   Ctrl+letter always goes to the terminal, so the window uses Ctrl+Shift (T, W, D, F, K, I, B, N,
   J ...); where two actions want the same Ctrl+Shift letter the second takes Ctrl+Alt+Shift (split

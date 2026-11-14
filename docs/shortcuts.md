@@ -224,6 +224,8 @@ There is no dialog. Leader `n`, leader `t`, `Alt+N`, `Ctrl+T`, the ` n new sessi
 In the desktop app's New chat page, `Enter` starts the chat and opens it; `Ctrl+Enter` (`⌘Enter` on
 macOS) starts it in the background, empties the message box and keeps the page open for the next one.
 
+The desktop app's window keys are changed in its Settings › Hotkeys: **Change** on a row, then press the new keys (Esc cancels). It refuses a key the terminal uses, such as a plain Ctrl+letter on Windows and Linux or any key without ⌘ on macOS, and a key another action already has. **Reset** puts one back, and **Reset all** puts them all back.
+
 ## A session wants to start helpers
 
 Enter on its sidebar row (or a click on the `wants to start N helpers` line) opens the question.

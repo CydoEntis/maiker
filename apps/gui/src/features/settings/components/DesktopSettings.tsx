@@ -15,7 +15,7 @@ import { Switch } from '@/components/ui/switch'
 import { SpinnerPicker } from './SpinnerPicker'
 import { PerformanceSection } from './PerformanceSection'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
-import { hotkeyRows, type Platform } from '@/features/workspace/model/shortcuts'
+import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
 import { CHAT_AGENTS } from '@/features/workspace/model/chatView'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
@@ -250,7 +250,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <><DaemonSection daemon={props.daemon} /><MachinesSection machines={props.machines} /></>
       case 'github': return <GitHubSection machines={props.machines.list} signIn={props.github} />
-      case 'keys': return <HotkeysSection platform={props.platform} />
+      case 'keys': return <HotkeysSection platform={props.platform} overrides={preferences.keyOverrides} onOverrides={(next) => { update('keyOverrides', next) }} />
       case 'performance': return <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />
     }
   }
@@ -773,23 +773,82 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
   )
 }
 
-function HotkeysSection({ platform }: { platform: Platform }) {
+/** Without the one action's chosen keys, so it goes back to its own. */
+function withoutOverride(overrides: KeyOverrides, action: ShortcutAction): KeyOverrides {
+  return Object.fromEntries(Object.entries(overrides).filter(([chosen]) => chosen !== action))
+}
+
+/** Each window key, with Change to press a new one for it and Reset to go back to its own. The terminal's keys are listed, not changed. */
+function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platform; overrides: KeyOverrides; onOverrides: (next: KeyOverrides) => void }) {
+  const [capturing, setCapturing] = useState<ShortcutAction | null>(null)
+  const [refusal, setRefusal] = useState<{ action: ShortcutAction; reason: string } | null>(null)
+  const rows = hotkeyRows(platform, overrides)
+  const anyChanged = rows.some((row) => row.changed)
+
+  const startCapture = (action: ShortcutAction) => { setRefusal(null); setCapturing(action) }
+  const onCaptureKey = (action: ShortcutAction, event: KeyboardEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Escape') { setCapturing(null); return }
+    const captured = captureCombo(event, platform)
+    if (captured.kind === 'waiting') return
+    if (captured.kind === 'refused') { setRefusal({ action, reason: captured.reason }); return }
+    const keys = writeChord(comboChord(captured.combo, platform), platform)
+    const other = takenBy(captured.combo, action, platform, overrides)
+    if (other) { setRefusal({ action, reason: `${keys} is already ${other.label}. Change that one first.` }); return }
+    setRefusal(null)
+    setCapturing(null)
+    onOverrides(isOwnKey(captured.combo, action, platform) ? withoutOverride(overrides, action) : { ...overrides, [action]: captured.combo })
+  }
+
   return (
-    <Card title="Hotkeys" meta={<span className="mx-scard-meta">{platform === 'mac' ? '⌘ here, Ctrl+Shift on Windows and Linux' : 'Ctrl+Shift here, ⌘ on macOS'}</span>} foot="In a focused pane, every other key goes straight to the shell.">
+    <Card
+      title="Hotkeys"
+      meta={<span className="mx-scard-meta">{platform === 'mac' ? '⌘ here, Ctrl+Shift on Windows and Linux' : 'Ctrl+Shift here, ⌘ on macOS'}</span>}
+      foot={<>
+        <span>In a focused pane, every other key goes straight to the shell.</span>
+        {anyChanged && <button type="button" className="mx-text-button" onClick={() => { setRefusal(null); onOverrides({}) }}>Reset all</button>}
+      </>}
+      footRow
+    >
       <div>
-        {hotkeyRows(platform).map((row) => (
-          <div key={row.action} className="mx-scard-row mx-hotkey-row">
-            <span>{row.action}</span>
-            <span className="mx-keys">
-              {row.chords.map((chord, index) => (
-                <Fragment key={chord.join('+')}>
-                  {index > 0 && <span className="mx-or">or</span>}
-                  <Keycaps chord={chord} className="mx-chord" labelled />
-                </Fragment>
-              ))}
-            </span>
-          </div>
-        ))}
+        {rows.map((row) => {
+          const action = row.id
+          const listening = action !== null && capturing === action
+          return (
+            <div key={row.action} className="mx-scard-row mx-hotkey-row">
+              <span>{row.action}</span>
+              {listening ? (
+                // Focused as it opens; every key pressed here, Esc too, is taken down rather than acted on.
+                <button
+                  type="button"
+                  className="mx-key-capture"
+                  {...{ [KEY_CAPTURE_ATTRIBUTE]: '', 'data-owns-escape': '' }}
+                  aria-label={`Press the new keys for ${row.action}, or Esc to cancel`}
+                  autoFocus
+                  onKeyDown={(event) => { onCaptureKey(action, event) }}
+                  onBlur={() => { setCapturing(null) }}
+                >Press the new keys…</button>
+              ) : (
+                <span className="mx-keys">
+                  {row.chords.map((chord, index) => (
+                    <Fragment key={chord.join('+')}>
+                      {index > 0 && <span className="mx-or">or</span>}
+                      <Keycaps chord={chord} className="mx-chord" labelled />
+                    </Fragment>
+                  ))}
+                </span>
+              )}
+              {action === null ? <span className="mx-hotkey-actions"><span className="mx-hotkey-fixed">Terminal</span></span> : (
+                <span className="mx-hotkey-actions">
+                  {!listening && <button type="button" className="mx-text-button" aria-label={`Change the keys for ${row.action}`} onClick={() => { startCapture(action) }}>Change</button>}
+                  {row.changed && !listening && <button type="button" className="mx-text-button" aria-label={`Reset ${row.action}`} onClick={() => { setRefusal(null); onOverrides(withoutOverride(overrides, action)) }}>Reset</button>}
+                </span>
+              )}
+              {refusal?.action === action && <p className="mx-hotkey-refusal" role="alert">{refusal.reason}</p>}
+            </div>
+          )
+        })}
       </div>
     </Card>
   )

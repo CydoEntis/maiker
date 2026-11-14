@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ESC_LADDER, topmostOpen } from './escLadder'
-import { BINDINGS, HOTKEY_GROUPS, bindingFor, detectPlatform, formatShortcut, hotkeyRows, matchShortcut, shortcutChords, shortcutText, type Platform, type ShortcutAction } from './shortcuts'
+import { BINDINGS, HOTKEY_GROUPS, bindingFor, captureCombo, detectPlatform, formatShortcut, hotkeyRows, isOwnKey, matchShortcut, readKeyOverrides, shortcutChords, shortcutText, takenBy, type KeyOverrides, type Platform, type ShortcutAction } from './shortcuts'
 
 type Key = { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }
 
@@ -150,8 +150,8 @@ describe('matching a key press', () => {
 
 describe('the shortcut lists', () => {
   it('lists the hotkeys in the platform’s words', () => {
-    expect(hotkeyRows('mac').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['⌘', '⇧', 'D']] })
-    expect(hotkeyRows('windows').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['Ctrl', 'Alt', 'Shift', 'D']] })
+    expect(hotkeyRows('mac').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['⌘', '⇧', 'D']], id: 'split-down', changed: false })
+    expect(hotkeyRows('windows').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['Ctrl', 'Alt', 'Shift', 'D']], id: 'split-down', changed: false })
   })
 
   it('shows the terminal’s own keys as the terminal’s', () => {
@@ -191,5 +191,54 @@ describe('the Esc ladder', () => {
   it('leaves Esc to the terminal when nothing is open', () => {
     expect(topmostOpen({})).toBeNull()
     expect(topmostOpen({ palette: false, drawer: false })).toBeNull()
+  })
+})
+
+const press = (key: string, held: Partial<Omit<Key, 'key'>> = {}): Key => ({ key, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...held })
+
+describe('keys chosen in Settings', () => {
+  const chosen: KeyOverrides = { palette: { mods: ['ctrl', 'alt'], key: 'P' } }
+
+  it('puts the chosen key in place of the action\'s own, for the key handler and every list that names it', () => {
+    expect(matchShortcut(press('p', { ctrlKey: true, altKey: true }), 'linux', chosen)).toEqual({ action: 'palette' })
+    expect(matchShortcut(press('K', { ctrlKey: true, shiftKey: true }), 'linux', chosen)).toBeNull()
+    expect(shortcutText('palette', 'linux', chosen)).toBe('Ctrl+Alt+P')
+    expect(hotkeyRows('linux', chosen).find((row) => row.id === 'palette')).toMatchObject({ chords: [['Ctrl', 'Alt', 'P']], changed: true })
+  })
+
+  it('takes down a key pressed with its modifiers, waiting while only a modifier is held', () => {
+    expect(captureCombo(press('Shift', { ctrlKey: true, shiftKey: true }), 'linux')).toEqual({ kind: 'waiting' })
+    expect(captureCombo(press('y', { ctrlKey: true, shiftKey: true }), 'windows')).toEqual({ kind: 'combo', combo: { mods: ['ctrl', 'shift'], key: 'Y' } })
+    expect(captureCombo(press('y', { metaKey: true }), 'mac')).toEqual({ kind: 'combo', combo: { mods: ['cmd'], key: 'Y' } })
+    expect(captureCombo(press('-', { ctrlKey: true, altKey: true }), 'linux')).toEqual({ kind: 'combo', combo: { mods: ['ctrl', 'alt'], key: '−' } })
+  })
+
+  it('refuses the keys that are the terminal\'s: a plain Ctrl letter, no Ctrl at all, and Ctrl without ⌘ on macOS', () => {
+    expect(captureCombo(press('c', { ctrlKey: true }), 'linux')).toMatchObject({ kind: 'refused', reason: expect.stringContaining('Ctrl+C') as unknown })
+    expect(captureCombo(press('y', { altKey: true }), 'windows')).toMatchObject({ kind: 'refused' })
+    expect(captureCombo(press('y'), 'linux')).toMatchObject({ kind: 'refused' })
+    expect(captureCombo(press('y', { ctrlKey: true }), 'mac')).toMatchObject({ kind: 'refused' })
+  })
+
+  it('names the action a key already does, with the chosen keys in place', () => {
+    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'K' }, 'find', 'linux', {})?.action).toBe('palette')
+    // Once the palette has moved, its old key is free.
+    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'K' }, 'find', 'linux', chosen)).toBeNull()
+    expect(takenBy({ mods: ['ctrl', 'alt'], key: 'P' }, 'find', 'linux', chosen)?.action).toBe('palette')
+    // Shift with = is still "larger", as the key handler reads it.
+    expect(takenBy({ mods: ['ctrl', 'shift'], key: '=' }, 'find', 'linux', {})?.action).toBe('text-larger')
+    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'K' }, 'palette', 'linux', {})).toBeNull()
+  })
+
+  it('knows a key that is the action\'s own, so choosing it again resets it', () => {
+    expect(isOwnKey({ mods: ['ctrl', 'shift'], key: 'K' }, 'palette', 'linux')).toBe(true)
+    expect(isOwnKey({ mods: ['cmd'], key: 'K' }, 'palette', 'mac')).toBe(true)
+    expect(isOwnKey({ mods: ['ctrl', 'alt'], key: 'P' }, 'palette', 'linux')).toBe(false)
+  })
+
+  it('reads back only known actions with a well-formed key from saved settings', () => {
+    expect(readKeyOverrides({ palette: { mods: ['ctrl', 'alt'], key: 'P' }, nope: { mods: ['ctrl'], key: 'X' }, find: { mods: ['hyper'], key: 'F' }, usage: { mods: ['ctrl'], key: '' } })).toEqual(chosen)
+    expect(readKeyOverrides('junk')).toEqual({})
+    expect(readKeyOverrides(undefined)).toEqual({})
   })
 })

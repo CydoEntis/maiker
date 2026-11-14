@@ -3,6 +3,7 @@ import { cornersOfWindowStyle, DEFAULT_CORNERS, isCorners, type Corners } from '
 import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, isFontFamily, isFontWeight, type TerminalFontWeight } from '@/lib/terminalFont'
 import { readThemePreference, type ThemePreference } from '@/data/themePreference'
 import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/features/workspace/theme/themes'
+import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
 import { DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '@/features/workspace/model/chatView'
 
 export type ToastPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
@@ -98,6 +99,8 @@ export type SettingsPreferences = {
   iconSize: IconSize
   corners: CornersChoice
   iconColor: IconColor
+  /** The keys chosen in Settings › Hotkeys, in place of the actions' own. */
+  keyOverrides: KeyOverrides
   /** How wide the chat's messages run; `auto` grows with the pane, so a large screen is used. */
   chatWidth: ChatWidth
   /** The size of everything in the chat, as a percentage (`CHAT_TEXT_SIZES`). */
@@ -192,6 +195,7 @@ function defaults(): SettingsPreferences {
     terminalDock: 'panel',
     iconSize: 'medium',
     iconColor: 'color',
+    keyOverrides: NO_OVERRIDES,
     chatWidth: 'auto',
     chatTextSize: CHAT_TEXT_SIZE_DEFAULT,
     chatViewDefault: DEFAULT_CHAT_VIEWS,
@@ -285,6 +289,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),
       monthlyBudget: validBudget(preferences.monthlyBudget),
       iconColor: preferences.iconColor === 'color' || preferences.iconColor === 'grayscale' ? preferences.iconColor : fallback.iconColor,
+      keyOverrides: readKeyOverrides(preferences.keyOverrides),
     }
   } catch {
     console.warn('Ignoring invalid Maitty settings')
