@@ -252,6 +252,11 @@ pub enum Ev {
         tag: u64,
         found: crate::protocol::SavedConversations,
     },
+    SideAnswerReady {
+        client: ClientId,
+        tag: u64,
+        answer: crate::protocol::SideAnswer,
+    },
     RepoReady {
         client: ClientId,
         tag: u64,
@@ -2378,6 +2383,9 @@ impl Daemon {
             Ev::SavedConversationsReady { client, tag, found } => {
                 self.send(client, ServerMsg::Reply(Reply::SavedConversations { tag, found }));
             }
+            Ev::SideAnswerReady { client, tag, answer } => {
+                self.send(client, ServerMsg::Reply(Reply::SideAnswer { tag, answer }));
+            }
             Ev::RepoReady {
                 client,
                 tag,
@@ -2991,6 +2999,32 @@ impl Daemon {
                         tokio::task::spawn_blocking(move || {
                             let found = conversation::saved::list(&agent, &folder, &stores);
                             let _ = tx.blocking_send(Ev::SavedConversationsReady { client, tag, found });
+                        });
+                        return;
+                    }
+                    Query::SideAnswer { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can ask beside a conversation".into())
+                    }
+                    Query::SideAnswer { id, ask, tag } => {
+                        if let Err(error) = self.may(client, Grant::Read, None) {
+                            self.send(client, ServerMsg::Error(format!("{error:#}")));
+                            return;
+                        }
+                        let target = match conversation::side::refusal(&ask) {
+                            Some(reason) => Err(crate::protocol::SideAnswer::Failed { reason }),
+                            None => self.side_target(client, id),
+                        };
+                        let target = match target {
+                            Ok(target) => target,
+                            Err(answer) => {
+                                self.send(client, ServerMsg::Reply(Reply::SideAnswer { tag, answer }));
+                                return;
+                            }
+                        };
+                        let tx = self.tx.clone();
+                        tokio::spawn(async move {
+                            let answer = conversation::side::answer(target, ask).await;
+                            let _ = tx.send(Ev::SideAnswerReady { client, tag, answer }).await;
                         });
                         return;
                     }

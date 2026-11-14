@@ -176,6 +176,24 @@ app-server` with that one fixed argument in the same checked folder, sends `init
 `skills/list` for that folder, reads the answer and stops it. No message is sent. The names and
 descriptions are cleaned the same way before the webview sees them.
 
+Side answers (`Query::SideAnswer`, `daemon/conversation/side.rs`) are the one place the daemon starts Claude Code
+outside a pane or a structured chat: for the chat's `/btw` and the commands that only report, it runs `claude -p
+--resume <session> --fork-session --no-session-persistence`, a copy of the session that is never saved. Only the
+daemon starts it (ADR 0001); the webview and the host name only the conversation and the ask. The session id is the
+daemon's own record (the hook's for a followed pane, the binding's for a structured chat) and must be a UUID; the
+folder is the pane's or the binding's; the program is the binding's, or for a pane `claude` (`claude.exe` on Windows)
+found on the login PATH; the model is one the transcript named, kept only if it is a plain model name. The arguments
+are an array, never a shell line, and the ask goes on standard input, so a question that starts with a dash is never
+read as an option. A question runs with no tools and no MCP servers (`--tools "" --strict-mcp-config`), so the copy can
+only answer; a command keeps the session's tools and servers, which it reports on, and is one of a fixed list that
+takes nothing after its name, so none changes a setting (`/config key=value` and `/goal <condition>` are sent to the
+conversation as typed instead). The pane and structured-chat variables are removed from its environment, so its hooks
+report for no pane. A followed pane is answered only for the app it is shown in, as its history is. Three run at most
+at once; each is killed after 90 seconds or when the daemon drops it (`kill_on_drop`). Standard error is discarded; the
+answer is cut at 64 KiB with control characters removed, and a failure is reported in the daemon's words, never
+Claude Code's output. It runs as the user with the user's Claude Code settings, so start-up hooks run as for any
+session, and it uses the person's plan like any message.
+
 Assets: the user's shells and agent sessions (which can run any command as the
 user), their source code, and API keys in `config.local.toml`. Threats: another
 local user or process driving the daemon's socket; a process inside one pane
@@ -490,6 +508,7 @@ that is not this one (`remote_policy.rs`, `remote_snapshot.rs` in `maitty-machin
 | `Reply::ClosedSessions` | answer, cleaned | the closed sessions a window asked that machine for: at most 50, every field one clean line, cut short; the folder is a label for that machine and never touches this computer's disk |
 | `AskRemoveWorktree` | ignore | names a folder on this computer's disk to delete; remote worktree management is out of scope (ADR 0007) |
 | `Reply::SavedConversations` | ignore | saved conversations are listed for this computer's folders only; another machine's are out of scope |
+| `Reply::SideAnswer` | ignore | side answers are asked of this computer's daemon only; another machine's are out of scope |
 | `AutoWorkspace` | ignore | announces a workspace and arms this computer's undo |
 
 The opt-ins are read from the machine's `[[machines]]` entry by name; a machine no entry names

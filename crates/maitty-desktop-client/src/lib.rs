@@ -1718,6 +1718,30 @@ pub async fn saved_conversations(agent: String, folder: String) -> Result<Value>
     .await
 }
 
+/// How long a side answer may take: the daemon's own limit, with a margin for the connection.
+const SIDE_ANSWER_TIMEOUT: Duration = Duration::from_secs(100);
+
+/// Claude Code's answer beside conversation `id` on this computer, as the daemon's `SideAnswer`, without adding to
+/// the conversation. Refused in words when the daemon running is older than the question.
+pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk) -> Result<Value> {
+    let message = ClientMsg::Query(Query::SideAnswer {
+        id: maitty_shared::conversation::ConversationId(id),
+        ask: side,
+        tag: 0,
+    });
+    answered_within(SIDE_ANSWER_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("connecting to the local daemon")?;
+        refuse_unless_daemon_reads(&message, version)?;
+        match ask(&mut connection, &message).await? {
+            Reply::SideAnswer { answer, .. } => Ok(serde_json::to_value(answer)?),
+            _ => bail!("daemon returned an unexpected side answer reply"),
+        }
+    })
+    .await
+}
+
 /// The agent sessions this computer's daemon recorded as closed, newest first, each with `folder_present`: whether its
 /// folder is still there, looked at off the async workers. Null when the daemon running is older than the question.
 pub async fn closed_sessions() -> Result<Value> {

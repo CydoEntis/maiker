@@ -619,6 +619,16 @@ async fn saved_conversations(agent: String, folder: String) -> Result<serde_json
         .map_err(|error| format!("{error:#}"))
 }
 
+/// Claude Code's answer beside a chat's conversation, for `/btw` and the commands that only report: the daemon
+/// resumes a copy of the session that is never saved. The webview names the conversation and the ask, one of a
+/// fixed set of commands or a question; the daemon checks both and finds the session, the folder and the program.
+#[tauri::command]
+async fn side_answer(id: u64, ask: maitty_shared::protocol::SideAsk) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::side_answer(id, ask)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// The agent sessions that closed on this computer, for the Recent sessions list, each saying whether its folder is
 /// still there; null when the service running is older. This computer's daemon only: a folder another machine names is
 /// not on this disk.
@@ -1569,6 +1579,7 @@ pub fn run() {
             new_chat::git_switch_branch,
             add_branch_worktree,
             saved_conversations,
+            side_answer,
             closed_sessions,
             reopen_closed_session,
             new_chat::git_sync_state,

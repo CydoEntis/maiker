@@ -1913,6 +1913,46 @@ async fn saved_conversations_are_listed_for_a_person_only_and_off_the_loop() {
 }
 
 #[tokio::test]
+async fn a_side_answer_is_for_a_person_and_a_claude_conversation_the_daemon_knows() {
+    let mut session = conversation_fixture("conversation-side-answer").await;
+    let outcome = AssertUnwindSafe(async {
+        use crate::protocol::{Query, Reply, SideAnswer, SideAsk, SideCommand};
+        let codex = session.fixture.record.clone();
+        let mut unnamed = codex.clone();
+        unnamed.id = crate::conversation::ConversationId(codex.id.0 + 1);
+        unnamed.binding.provider = crate::conversation::Provider::Claude;
+        unnamed.binding.session_id = "not-a-session".into();
+        session.daemon.conversations.push(codex.clone());
+        session.daemon.conversations.push(unnamed.clone());
+        let ask = |id, ask| crate::protocol::ClientMsg::Query(Query::SideAnswer { id, ask, tag: 9 });
+        let context = || SideAsk::Command(SideCommand::Context);
+
+        let from = authenticated_pane(&mut session);
+        let refused = exchange(&mut session, 450, ask(codex.id, context()), Some(from)).await;
+        assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
+
+        let missing = exchange(&mut session, 451, ask(crate::conversation::ConversationId(9_999), context()), None).await;
+        assert!(matches!(missing, ServerMsg::Reply(Reply::SideAnswer { tag: 9, answer: SideAnswer::Failed { ref reason } }) if reason == "No such conversation"), "{missing:?}");
+
+        let other_agent = exchange(&mut session, 452, ask(codex.id, context()), None).await;
+        assert!(matches!(other_agent, ServerMsg::Reply(Reply::SideAnswer { answer: SideAnswer::NotSupported, .. })), "{other_agent:?}");
+
+        // A session id that is not Claude's own shape never reaches an argument list.
+        let not_named = exchange(&mut session, 453, ask(unnamed.id, context()), None).await;
+        assert!(matches!(not_named, ServerMsg::Reply(Reply::SideAnswer { answer: SideAnswer::Failed { ref reason }, .. }) if reason.contains("not named")), "{not_named:?}");
+
+        let empty = exchange(&mut session, 454, ask(unnamed.id, SideAsk::Question("  ".into())), None).await;
+        assert!(matches!(empty, ServerMsg::Reply(Reply::SideAnswer { answer: SideAnswer::Failed { ref reason }, .. }) if reason.contains("empty")), "{empty:?}");
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+#[tokio::test]
 async fn approved_commands_are_listed_and_taken_back_by_a_person_only() {
     let mut session = conversation_fixture("conversation-approval").await;
     let outcome = AssertUnwindSafe(async {

@@ -15,6 +15,7 @@ pub(super) mod history_storage;
 mod process;
 mod redact;
 pub(super) mod saved;
+pub(super) mod side;
 mod runtime;
 pub(super) mod transport;
 
