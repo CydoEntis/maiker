@@ -1331,6 +1331,14 @@ export async function folderSyncState(folder: string, fetch: boolean): Promise<S
   return invokeParsed('git_sync_state', SyncStateSchema, { folder, fetch })
 }
 
+/**
+ * Clones a GitHub repository (a link or owner/repo) into a new folder inside `parent`, and gives that folder. The
+ * host reads the link as a GitHub owner and name and refuses anything else (`clone.rs`).
+ */
+export async function cloneRepository(link: string, parent: string): Promise<string> {
+  return invokeParsed('git_clone', z.string().min(1), { link, parent })
+}
+
 /** Fast-forwards the folder's checkout to its upstream; refused with the reason when it has uncommitted changes. */
 export async function pullFolder(folder: string): Promise<void> {
   await invokeParsed('git_pull', NullSchema, { folder })

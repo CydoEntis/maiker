@@ -8,7 +8,8 @@ function syncOf(folder: string) {
 }
 type Saved = { id: string; first_message: string; last_active: number }
 const saved = vi.hoisted(() => ({ read: vi.fn<(agent: string, folder: string) => Promise<Saved[] | null>>(() => Promise.resolve([])) }))
-vi.mock('@/api/daemon', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/daemon')>()), savedConversations: (agent: string, folder: string) => saved.read(agent, folder), agentsInstalled: () => Promise.resolve(['claude', 'codex', 'gemini']), loadAgentModels: () => Promise.resolve([]), folderSyncState: (folder: string) => Promise.resolve(syncOf(folder)), pullFolder: (folder: string) => { sync.pulled.push(folder); return Promise.resolve() }, folderBranches: () => Promise.resolve({ current: 'dev', branches: [{ name: 'dev', when: 10 }], worktrees: [{ path: '/dev/growth', branch: 'dev', main: true, when: 10 }] }) }))
+const cloned = vi.hoisted(() => ({ clone: vi.fn<(link: string, parent: string) => Promise<string>>() }))
+vi.mock('@/api/daemon', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/daemon')>()), cloneRepository: (link: string, parent: string) => cloned.clone(link, parent), savedConversations: (agent: string, folder: string) => saved.read(agent, folder), agentsInstalled: () => Promise.resolve(['claude', 'codex', 'gemini']), loadAgentModels: () => Promise.resolve([]), folderSyncState: (folder: string) => Promise.resolve(syncOf(folder)), pullFolder: (folder: string) => { sync.pulled.push(folder); return Promise.resolve() }, folderBranches: () => Promise.resolve({ current: 'dev', branches: [{ name: 'dev', when: 10 }], worktrees: [{ path: '/dev/growth', branch: 'dev', main: true, when: 10 }] }) }))
 
 const attach = vi.hoisted(() => ({ attachLocalFile: vi.fn(), chooseFilesToAttach: vi.fn() }))
 vi.mock('@/api/attachments', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/attachments')>()), ...attach }))
@@ -615,7 +616,26 @@ describe('the new chat page on another machine', () => {
     await inWhere()
     await userEvent.click(await screen.findByRole('button', { name: 'Project: app' }))
     expect(screen.queryByRole('button', { name: /Browse for a folder/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Clone from GitHub/ })).not.toBeInTheDocument()
     await userEvent.click(await screen.findByRole('button', { name: /Start on This computer/ }))
     expect(onOtherMachine).toHaveBeenCalledWith(0)
   })
+
+  it('clones a GitHub repository beside the project from the Where popover, and starts the chat in it', async () => {
+    cloned.clone.mockReset().mockResolvedValue('/dev/refunds')
+    page()
+    await pickProject('growth')
+    await inWhere()
+    await userEvent.click(await screen.findByRole('button', { name: 'Project: growth' }))
+    await userEvent.click(within(await lastPopup()).getByRole('button', { name: /Clone from GitHub/ }))
+
+    const view = await screen.findByRole('group', { name: 'Clone from GitHub' })
+    expect(within(view).getByRole('button', { name: '/dev' })).toBeInTheDocument()
+    await userEvent.type(within(view).getByRole('textbox', { name: 'GitHub repository' }), 'acme/refunds{Enter}')
+
+    expect(cloned.clone).toHaveBeenCalledExactlyOnceWith('acme/refunds', '/dev')
+    expect(await screen.findByRole('button', { name: 'Project: refunds' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Clone from GitHub' })).not.toBeInTheDocument()
+  })
 })
+
