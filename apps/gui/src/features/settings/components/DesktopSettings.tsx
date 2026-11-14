@@ -14,6 +14,7 @@ import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { SpinnerPicker } from './SpinnerPicker'
 import { PerformanceSection } from './PerformanceSection'
+import { GitHubSection, type GitHubSignIn } from './GitHubSection'
 import { hotkeyRows, type Platform } from '@/features/workspace/model/shortcuts'
 import { CHAT_AGENTS } from '@/features/workspace/model/chatView'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
@@ -26,9 +27,10 @@ import { DisconnectedSince } from '@/features/workspace/components/times'
 import { installNote, UPDATE_WORDS, updateVerb, updateWarning, type MachineHead, type UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
+import { BRANCH_PATH } from '@/features/workspace/components/paths'
 import { CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
 
-export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'machines' | 'usage' | 'performance'
+export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'machines' | 'github' | 'usage' | 'performance'
 
 /** The other machines, for the Machines page: what the window knows of each, and what it can ask of the host. */
 export type MachinesInfo = {
@@ -103,6 +105,8 @@ type DesktopSettingsProps = {
   usage: UsageInfo
   /** Opens the agent's own sign-in in a terminal of its own; without it the Agents page offers no sign-in. */
   onSignInAgent?: (agent: 'claude' | 'codex') => void
+  /** Starts GitHub's own sign-in in a terminal on a machine, and how many of those have ended; without it the GitHub page offers no sign-in. */
+  github?: GitHubSignIn
   onClose: () => void
 }
 
@@ -132,6 +136,7 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
     label: 'MACHINES',
     items: [
       { id: 'machines', label: 'Machines', key: 'M', tint: 'var(--ok)', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01M17 7h.01M17 17h.01' },
+      { id: 'github', label: 'GitHub', key: 'H', tint: 'var(--ansi-blue)', path: BRANCH_PATH },
     ],
   },
 ]
@@ -145,11 +150,12 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   permissions: ['Permissions', 'Who your agents are signed in as, and what they may run without asking.'],
   terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
   machines: ['Machines', 'This computer and the others whose sessions show up beside it.'],
+  github: ['GitHub', 'Who each machine is signed in to GitHub as.'],
   usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
   performance: ['Performance', 'What the window is spending its time on, measured live.'],
 }
 
-const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', m: 'machines' }
+const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', m: 'machines', h: 'github' }
 
 /** Esc ends an open theme list, or a running add-machine, first; Settings stays. A part that handles Esc itself is marked `data-owns-escape`. */
 const keepForOpenList = (event: globalThis.KeyboardEvent) => {
@@ -244,6 +250,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
       case 'usage': return <UsageSection usage={props.usage} />
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <><DaemonSection daemon={props.daemon} /><MachinesSection machines={props.machines} /></>
+      case 'github': return <GitHubSection machines={props.machines.list} signIn={props.github} />
       case 'keys': return <HotkeysSection platform={props.platform} />
       case 'performance': return <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />
     }

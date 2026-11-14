@@ -119,6 +119,15 @@ export type ToolEvent = ItemFields & {
   readonly detail: string
 }
 
+/**
+ * The agent's own summary of the conversation so far, written when it ran out of room and carried on
+ * from the summary. Nobody typed it.
+ */
+export type SummaryEvent = ItemFields & {
+  readonly kind: 'summary'
+  readonly text: string
+}
+
 export type UserInputQuestion = {
   readonly id: string
   readonly header: string
@@ -189,5 +198,6 @@ export type ChatEvent =
   | TodoEvent
   | SubagentEvent
   | ToolEvent
+  | SummaryEvent
   | ApprovalEvent
   | TurnEvent

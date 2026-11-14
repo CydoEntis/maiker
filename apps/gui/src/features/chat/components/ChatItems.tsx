@@ -17,6 +17,7 @@ import { parseAttachmentMessage } from '../attachmentMessage'
 import { AgentsCard } from './AgentsCard'
 import { SentAttachments } from './Attachments'
 import { ApprovalCard, type ApprovalActions } from './ApprovalCard'
+import { ContextSummary } from './ContextSummary'
 import { InlineMarkdown, Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
 import { StepView } from './StepCards'
@@ -90,6 +91,7 @@ function sameRow(a: ChatRow, b: ChatRow): boolean {
       return b.kind === 'report' && a.text === b.text
     case 'user':
     case 'step':
+    case 'summary':
     case 'divider':
       return 'event' in b && a.event === b.event
   }
@@ -176,6 +178,8 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
       return <Frame>{row.event.kind === 'todo' ? <PlanCard event={row.event} /> : <StepView event={row.event} root={root} openDiff={openDiff} alone waiting={isWaitingStep(waitingStep, row.event.id)} />}</Frame>
     case 'thought':
       return <Frame><ThoughtRow texts={row.texts} /></Frame>
+    case 'summary':
+      return <Frame><ContextSummary text={row.event.text} /></Frame>
     case 'work':
       return <Frame><WorkCard steps={row.events} root={root} openDiff={openDiff} waitingStep={waitingStep} /></Frame>
     case 'agents':
