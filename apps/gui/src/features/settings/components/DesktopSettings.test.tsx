@@ -6,7 +6,7 @@ import type { SettingsPreferences } from '../preferences'
 import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100 }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -782,3 +782,55 @@ describe('searching settings', () => {
   })
 })
 
+
+describe('the hotkeys page', () => {
+  it('takes down a new key for an action and saves it in place of its own', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('keys')
+
+    await user.click(screen.getByRole('button', { name: 'Change the keys for Command palette' }))
+    const field = screen.getByRole('button', { name: /^Press the new keys for Command palette/ })
+    expect(field).toHaveFocus()
+    await user.keyboard('{Control>}{Alt>}p{/Alt}{/Control}')
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ keyOverrides: { palette: { mods: ['ctrl', 'alt'], key: 'P' } } }))
+  })
+
+  it('refuses a key the shell owns, or one another action has, saying why, and keeps listening', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('keys')
+
+    await user.click(screen.getByRole('button', { name: 'Change the keys for Command palette' }))
+    await user.keyboard('{Control>}c{/Control}')
+    expect(screen.getByRole('alert')).toHaveTextContent("Ctrl+C is the shell's own key. Add Shift or Alt.")
+    await user.keyboard('{Control>}{Shift>}f{/Shift}{/Control}')
+    expect(screen.getByRole('alert')).toHaveTextContent('Ctrl+Shift+F is already Find in the pane or every session.')
+
+    expect(screen.getByRole('button', { name: /^Press the new keys for Command palette/ })).toHaveFocus()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('cancels on Esc without closing Settings', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const { onChange } = renderSettings('keys', { onClose })
+
+    await user.click(screen.getByRole('button', { name: 'Change the keys for Command palette' }))
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('button', { name: /^Press the new keys/ })).not.toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('shows a chosen key with Reset, which goes back to the action\'s own, and lists the terminal\'s keys without Change', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('keys', { preferences: { ...PREFS, keyOverrides: { palette: { mods: ['ctrl', 'alt'], key: 'P' } } } })
+
+    expect(screen.getByRole('group', { name: 'Ctrl Alt P' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Change the keys for Interrupt' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reset Command palette' }))
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ keyOverrides: {} }))
+  })
+})

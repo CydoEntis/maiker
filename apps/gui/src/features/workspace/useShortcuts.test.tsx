@@ -1,8 +1,9 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides } from './model/shortcuts'
 import { useShortcutKeys } from './useShortcuts'
 
-function listen(canUndoClose: boolean) {
+function listen(canUndoClose: boolean, keyOverrides: KeyOverrides = {}) {
   const runShortcut = vi.fn()
   renderHook(() => {
     useShortcutKeys({
@@ -22,6 +23,7 @@ function listen(canUndoClose: boolean) {
       setDrawerOpen: vi.fn(),
       setFocusMode: vi.fn(),
       platform: 'windows',
+      keyOverrides,
     })
   })
   return runShortcut
@@ -52,6 +54,34 @@ describe('the undo close shortcut', () => {
   it('leaves the key to the terminal when nothing was just closed', () => {
     const runShortcut = listen(false)
     pressUndoIn('xterm-helper-textarea')
+    expect(runShortcut).not.toHaveBeenCalled()
+  })
+})
+
+describe('a key chosen in Settings', () => {
+  afterEach(() => { document.body.replaceChildren() })
+
+  const press = (target: HTMLElement, key: string, held: KeyboardEventInit) => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...held }))
+  }
+
+  it('runs its action, and the action\'s old key no longer does', () => {
+    const runShortcut = listen(false, { palette: { mods: ['ctrl', 'alt'], key: 'P' } })
+
+    press(document.body, 'K', { ctrlKey: true, shiftKey: true })
+    expect(runShortcut).not.toHaveBeenCalled()
+    press(document.body, 'p', { ctrlKey: true, altKey: true })
+    expect(runShortcut).toHaveBeenCalledExactlyOnceWith('palette')
+  })
+
+  it('is not acted on while Settings is taking down a new key', () => {
+    const runShortcut = listen(false)
+    const field = document.createElement('button')
+    field.setAttribute(KEY_CAPTURE_ATTRIBUTE, '')
+    document.body.append(field)
+
+    press(field, 'K', { ctrlKey: true, shiftKey: true })
+
     expect(runShortcut).not.toHaveBeenCalled()
   })
 })

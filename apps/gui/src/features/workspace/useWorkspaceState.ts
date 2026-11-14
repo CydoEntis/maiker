@@ -289,7 +289,7 @@ export function useWorkspaceState() {
     else setPreferences((current) => ({ ...current, compactSidebar: !current.compactSidebar }))
   }, [compact])
   const { toggleInspect, inspectRefusal, showChangesOf, showChanges, togglePanel } = useInspectActions({ focusedSession, setInspectOpen, setInspectView, setTurnDiff, sessionMap, showSessionById, inspectOpen, inspectView, focusedId, setLayout })
-  const focusModeChord = useMemo(() => shortcutChords(bindingFor('focus-mode'), platform)[0] ?? [], [platform])
+  const focusModeChord = useMemo(() => shortcutChords(bindingFor('focus-mode'), platform, preferences.keyOverrides)[0] ?? [], [platform, preferences.keyOverrides])
 
   // Which view a session shows, and whether it has a chat. Switching views only changes the window; the one thing sent is the chat box's text, typed into the terminal it goes to (`carryDraftToTerminal`).
   const chatOf = useCallback((session: SessionView) => {
@@ -310,7 +310,7 @@ export function useWorkspaceState() {
   const modalOpen = dialogOpen || overlayOpen
   // Only the new chat page is up, with no dialog over it.
   const onNewChatPage = newChatOpen && settingsSection === null && (renameId === null || renameInline) && getFileId === null && renamingMachine === null && !recentOpen
-  useShortcutKeys({ runShortcut, canUndoClose: lastClose !== null, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform })
+  useShortcutKeys({ runShortcut, canUndoClose: lastClose !== null, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides: preferences.keyOverrides })
 
   // The folder each session sits in, for the notices and the palette.
   const projectOf = useMemo(() => new Map(sessions.map((member) => [member.id, { name: folderNameOf(member), key: member.repoRoot ?? member.cwd }])), [sessions])
