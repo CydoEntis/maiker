@@ -439,6 +439,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   so it goes to Claude Code as typed. `/mobile`, `/privacy-settings` and `/artifacts`, which Claude Code shows as a
   QR code or a browser page, are the same card with the web address to open. Side answers are for sessions on this
   computer; another machine's card says so.
+  **`/rename <name>`** names the Maitty session too (the sidebar's rename) and still goes to Claude Code, so both
+  agree. A name Claude Code gives a session with a terminal, by `/rename` typed in the chat or the terminal, with a name
+  or alone, renames the pane as well: the daemon reads the transcript's `custom-title` line (`follow.rs`; the names
+  already in the file when it is first read are left alone, so a restart never undoes a rename made in the window).
+  **What cannot run here says so.** A command only the terminal runs, typed in a chat with no terminal, gets the same
+  card: "`/hooks` only works in Claude Code's own terminal, and this chat has none." In a chat with a terminal, one run
+  there shows the terminal with the toast "/hooks has no chat version, so it opened in the terminal."
   The chat leaves out Claude's internal commands and the ones that only change how its terminal looks (the theme,
   colour, renderer, scroll speed, focus view, voice input; `CLAUDE_HIDDEN_COMMANDS`); they still work typed in the terminal.
   A listed command that opens a menu (`/model`, `/config`) still shows that menu in the terminal, not in the chat.

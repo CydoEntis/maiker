@@ -19,7 +19,7 @@ import { useFileMention } from '../useFileMention'
 import type { FileSearchPlace } from '../fileMention'
 import { asSkills, commandText, matchCommands, skillQuery, slashQuery, useSlashCommands, withTerminalCommands, type SlashCommand } from '../slashCommands'
 import { CLAUDE_HIDDEN_COMMANDS, CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
-import { typedCommand, windowRouteOf, withWindowRoutes, type WindowRoute } from '../windowCommands'
+import { terminalOnlyNote, typedCommand, windowRouteOf, withWindowRoutes, type WindowRoute } from '../windowCommands'
 import { CODEX_COMMANDS } from '../codexCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
 import { BranchMenu, type BranchMenuSpec } from './BranchMenu'
@@ -185,7 +185,12 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     // The routes are Claude Code's commands by its names; another agent's are its own.
     if (inWindow === undefined || agent !== 'claude' || windowList || attachments.length > 0) return null
     const parts = typedCommand(typed)
-    return parts === null ? null : windowRouteOf(parts.name, parts.args)
+    if (parts === null) return null
+    const route = windowRouteOf(parts.name, parts.args)
+    if (route !== null || inTerminal !== undefined) return route
+    // With no terminal, a command only the terminal runs gets a card saying so instead of going nowhere.
+    const terminalOnly = namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)
+    return terminalOnly === undefined ? null : terminalOnlyNote(terminalOnly.name)
   }
   const inWindowRun = (route: WindowRoute, typed: string) => {
     if (route.kind === 'commands' || route.kind === 'complete') {

@@ -165,6 +165,8 @@ export type WindowActions = {
   readonly openSettings: (section: DesktopSettingsSection) => void
   readonly openPanel: (view: InspectView) => void
   readonly openRecent: () => void
+  /** Gives the session a new name in Maitty, as the sidebar's rename does. */
+  readonly renameSession: (name: string) => void
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
@@ -303,6 +305,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
+    toast.message(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so it opened in the terminal.`)
     void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.error(errorMessage(error, `Could not run ${command}`)) })
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
@@ -322,6 +325,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
       case 'confirm': setConfirming({ ask: route.ask, typed }); return
       case 'aside': aside.ask(route.title, route.ask); return
       case 'note': aside.show(route.title, route.text); return
+      case 'rename': windowActions.renameSession(route.name); void sendText(typed); return
       case 'commands':
       case 'complete': return
     }

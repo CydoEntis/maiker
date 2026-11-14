@@ -54,5 +54,10 @@ describe('the commands the window answers itself', () => {
     expect(windowRouteOf('advisor', 'opus')).toBeNull()
     expect(windowRouteOf('mobile')?.kind).toBe('note')
   })
+
+  it('renames for /rename with a name, and leaves /rename alone to Claude Code, which makes one up', () => {
+    expect(windowRouteOf('rename', ' tax fix ')).toEqual({ kind: 'rename', name: 'tax fix' })
+    expect(windowRouteOf('rename')).toBeNull()
+  })
 })
 

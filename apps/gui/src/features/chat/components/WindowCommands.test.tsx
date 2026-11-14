@@ -68,7 +68,7 @@ async function open(props: Partial<Parameters<typeof ChatSession>[0]> = {}) {
 const offered = () => within(screen.getByRole('listbox', { name: 'claude commands' })).getAllByRole('option').map((option) => option.textContent)
 
 function windowActions() {
-  return { openSettings: vi.fn<WindowActions['openSettings']>(), openPanel: vi.fn<WindowActions['openPanel']>(), openRecent: vi.fn<WindowActions['openRecent']>() }
+  return { openSettings: vi.fn<WindowActions['openSettings']>(), openPanel: vi.fn<WindowActions['openPanel']>(), openRecent: vi.fn<WindowActions['openRecent']>(), renameSession: vi.fn<WindowActions['renameSession']>() }
 }
 
 describe('the commands the window answers itself', () => {
@@ -214,4 +214,26 @@ describe('the commands the window answers itself', () => {
     expect(within(card).getByRole('button', { name: 'claude.ai/mobile' })).toHaveAttribute('title', 'https://claude.ai/mobile (click to open in your browser)')
     expect(fake.sideAnswer).not.toHaveBeenCalled()
   })
+
+  it('renames the session in Maitty too for /rename with a name, and still sends it so Claude Code agrees', async () => {
+    const actions = windowActions()
+    const { user, box } = await open({ windowActions: actions })
+
+    await user.type(box, '/rename tax fix{Escape}{Enter}')
+
+    expect(actions.renameSession).toHaveBeenCalledExactlyOnceWith('tax fix')
+    expect(fake.submitMessage).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 1, '/rename tax fix')
+  })
+
+  it('says a command only the terminal runs cannot run in a chat that has no terminal, and sends nothing', async () => {
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/hooks{Escape}{Enter}')
+
+    const card = screen.getByRole('region', { name: '/hooks' })
+    expect(card).toHaveTextContent("only works in Claude Code's own terminal, and this chat has none")
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+    expect(box).toHaveValue('')
+  })
 })
+
