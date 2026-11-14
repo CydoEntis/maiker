@@ -517,6 +517,51 @@ async fn the_conversation_of_a_followed_claude_pane_reports_its_mode_and_model()
     assert_eq!(meta.model.as_deref(), Some("claude-opus-5-1"));
 }
 
+fn custom_title(title: &str) -> String {
+    format!("{}\n", json!({ "type": "custom-title", "customTitle": title, "sessionId": SESSION }))
+}
+
+fn append(path: &std::path::Path, text: &str) {
+    use std::io::Write;
+    std::fs::OpenOptions::new().append(true).open(path).unwrap().write_all(text.as_bytes()).unwrap();
+}
+
+#[tokio::test]
+async fn a_name_given_in_claude_code_while_followed_renames_the_pane() {
+    let mut world = World::new();
+    // A name already in the file is history: a name given in the window since must not be put back.
+    append(&world.path, &custom_title("old name"));
+    world.follow().await;
+    assert_eq!(world.daemon.terms[&world.pane].label, "");
+
+    append(&world.path, &custom_title("  tax\u{7}  fix  "));
+    world.follow().await;
+    assert_eq!(world.daemon.terms[&world.pane].label, "tax  fix");
+
+    // Read again with nothing new, it is not renamed again over a name given in the window.
+    world.daemon.terms.get_mut(&world.pane).unwrap().label = "mine".into();
+    append(&world.path, &claude_prompt("more"));
+    world.follow().await;
+    assert_eq!(world.daemon.terms[&world.pane].label, "mine");
+
+    let long = "x".repeat(200);
+    append(&world.path, &custom_title(&long));
+    world.follow().await;
+    assert_eq!(world.daemon.terms[&world.pane].label.chars().count(), 60);
+}
+
+#[tokio::test]
+async fn a_new_session_renamed_before_its_first_message_takes_that_name() {
+    let mut world = World::new();
+    std::fs::remove_file(&world.path).unwrap();
+    world.follow().await;
+
+    std::fs::write(&world.path, custom_title("first thing")).unwrap();
+    world.follow().await;
+
+    assert_eq!(world.daemon.terms[&world.pane].label, "first thing");
+}
+
 #[tokio::test]
 async fn a_followed_pane_whose_file_says_nothing_of_its_setup_reports_none() {
     let mut world = World::new();

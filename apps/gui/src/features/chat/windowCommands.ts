@@ -15,6 +15,7 @@ import type { SlashCommand } from './slashCommands'
  *   conversation is not added to (`sideAnswer`).
  * - `note`: a card above the box that says where the thing is, for a command that only shows a web page's address.
  * - `complete`: the box is filled in, for a command that is nothing without what follows it.
+ * - `rename`: the Maitty session takes the name too, and the command still goes to Claude Code, so both agree.
  */
 export type WindowRoute =
   | { readonly kind: 'settings'; readonly section: DesktopSettingsSection }
@@ -25,6 +26,7 @@ export type WindowRoute =
   | { readonly kind: 'aside'; readonly title: string; readonly ask: SideAsk }
   | { readonly kind: 'note'; readonly title: string; readonly text: string }
   | { readonly kind: 'complete'; readonly text: string }
+  | { readonly kind: 'rename'; readonly name: string }
 
 export type ConfirmAsk = { readonly title: string; readonly body: string; readonly confirmLabel: string }
 
@@ -36,6 +38,16 @@ export const ANSWERED_HERE = 'answered here'
 
 /** Claude Code's side question: what follows the name is asked, and the name alone waits for it. */
 const SIDE_QUESTION = 'btw'
+
+const RENAME = 'rename'
+
+/**
+ * The card for a command only Claude Code's terminal runs, typed in a chat that has no terminal: sent, Claude Code
+ * would only say it is not available here.
+ */
+export function terminalOnlyNote(name: string): WindowRoute {
+  return note(`/${name}`, `\`/${name}\` only works in Claude Code's own terminal, and this chat has none. Start a Claude session with a terminal to use it.`)
+}
 
 const aside = (command: SideCommand, title: string): WindowRoute => ({ kind: 'aside', title, ask: { command } })
 const note = (title: string, text: string): WindowRoute => ({ kind: 'note', title, text })
@@ -82,9 +94,11 @@ const ROUTES: Readonly<Record<string, { readonly route: WindowRoute; readonly op
  * not), except one that only asks first, and `/btw`, whose question is what follows.
  */
 export function windowRouteOf(name: string, args = ''): WindowRoute | null {
+  const question = args.trim()
+  // Alone, Claude Code makes a name up; the daemon reads it from the transcript for a session with a terminal.
+  if (name === RENAME) return question === '' ? null : { kind: 'rename', name: question }
   const found = ROUTES[name]
   if (found === undefined) return null
-  const question = args.trim()
   if (name === SIDE_QUESTION && question !== '') return { kind: 'aside', title: 'Side question', ask: { question } }
   if (question !== '' && found.route.kind !== 'confirm') return null
   return found.route

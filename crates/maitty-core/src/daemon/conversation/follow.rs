@@ -57,6 +57,10 @@ pub(in crate::daemon) struct Followed {
     error: Option<String>,
     /// The mode and model the file last said.
     meta: crate::conversation::SessionMeta,
+    /// The name Claude Code last gave the session (`/rename`), as read so far.
+    title: Option<String>,
+    /// The file was not there when following began: everything in it is new, names included.
+    born_empty: bool,
 }
 
 impl Followed {
@@ -85,6 +89,8 @@ impl Followed {
             last_read: None,
             error: None,
             meta: crate::conversation::SessionMeta::default(),
+            title: None,
+            born_empty: false,
         }
     }
 
@@ -121,6 +127,8 @@ impl Followed {
         self.parser = Some(Transcript::new(format_of(self.provider), session));
         self.last_read = None;
         self.error = None;
+        self.title = None;
+        self.born_empty = false;
         // A read still in flight belongs to the old session; its result is dropped on arrival
         // because the session no longer matches.
     }
@@ -335,11 +343,13 @@ impl Daemon {
             return;
         };
         follower.in_flight = false;
+        let mut renamed = None;
         match done.result {
             // Nothing has been read yet and there is no file: the agent has not been given its first
             // prompt, which is where it writes it. That is an empty chat, not a fault.
             Err(ReadFailure::NotFound) if follower.offset.is_none() => {
                 follower.error = None;
+                follower.born_empty = true;
                 if follower.parser.is_none() {
                     follower.parser = Some(Transcript::new(
                         format_of(follower.provider),
@@ -376,11 +386,26 @@ impl Daemon {
                     history.revision = follower.history.revision.saturating_add(1);
                     follower.history = history;
                 }
+                // A name given while the pane is followed renames it, `/rename` typed in the chat or the
+                // terminal alike. The names already in the file when it is first read are history: a
+                // name given in the window since must not be put back by a restart.
+                let title = chunk.parser.custom_title().map(str::to_owned);
+                let first_read = (follower.offset.is_none() && !follower.born_empty) || chunk.restarted;
+                if !first_read && title.is_some() && title != follower.title {
+                    renamed = title.clone().map(|title| (follower.term, title));
+                }
+                follower.title = title;
                 follower.offset = Some(chunk.offset);
                 follower.meta = chunk.parser.meta().clone();
                 follower.parser = Some(chunk.parser);
                 apply_notes(follower, chunk.notes, chunk.start_missing);
             }
+        }
+        if let Some((term, title)) = renamed
+            && let Some(pane) = self.terms.get_mut(&term)
+        {
+            pane.label = title;
+            self.dirty = true;
         }
     }
 

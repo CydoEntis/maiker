@@ -63,6 +63,8 @@ pub(in crate::daemon) struct Transcript {
     tools: HashMap<String, PendingTool>,
     /// The command Claude ran itself and has not printed for yet: it names the row its output gets.
     local_command: Option<String>,
+    /// The name the session was last given in Claude Code (`/rename`, a `custom-title` line).
+    custom_title: Option<String>,
     /// The file is a helper's own record, not a session's (ADR 0010).
     helper: Helper,
 }
@@ -78,10 +80,18 @@ enum Helper {
     ParentCopy,
 }
 
+/// The longest session name taken from a transcript, as a pane's name is cut.
+pub(super) const TITLE_MAX_CHARS: usize = 60;
+
 impl Transcript {
     /// What the file has said about the agent's mode and model so far.
     pub fn meta(&self) -> &crate::conversation::SessionMeta {
         &self.meta
+    }
+
+    /// The name the session was last given in Claude Code, if it was given one.
+    pub fn custom_title(&self) -> Option<&str> {
+        self.custom_title.as_deref()
     }
 
     pub fn new(format: Format, thread: &str) -> Self {
@@ -96,6 +106,7 @@ impl Transcript {
             meta: crate::conversation::SessionMeta::default(),
             tools: HashMap::new(),
             local_command: None,
+            custom_title: None,
             helper: Helper::No,
         }
     }
@@ -354,6 +365,16 @@ impl Transcript {
     /// The permission mode and the model, when this line says them. A placeholder model name (Claude
     /// writes `<synthetic>` for a message it made itself) is not a model.
     fn note_claude_setup(&mut self, line: &Value) {
+        if line.get("type").and_then(Value::as_str) == Some("custom-title")
+            && let Some(title) = line.get("customTitle").and_then(Value::as_str)
+        {
+            // One clean line: it becomes the pane's name, which every window shows.
+            let title: String = title.chars().filter(|c| !c.is_control()).take(TITLE_MAX_CHARS).collect();
+            let title = title.trim();
+            if !title.is_empty() {
+                self.custom_title = Some(title.to_owned());
+            }
+        }
         if let Some(mode) = line.get("permissionMode").and_then(Value::as_str) {
             self.meta.mode = Some(mode.to_owned());
         }
