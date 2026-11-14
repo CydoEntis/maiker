@@ -31,10 +31,13 @@ export type AgentAbilities = {
   /** The keys the chat types to answer the agent's permission menu, verified against that agent; null where none are. */
   readonly answerKeys: Readonly<Record<AskChoice, string>> | null
   /**
-   * The keys the sidebar types for its answer buttons. They disagree with `answerKeys`: for Claude the sidebar
-   * sends `n` and `a` as letters, which its menu ignores, and for every other agent it sends unverified letters.
+   * The keys the sidebar and a notification's Allow type. A letter with no key here is never sent. For Claude the
+   * sidebar sends `n` and `a` as letters, which its menu ignores, and for Gemini it sends unverified letters;
+   * Codex gets only its verified keys.
    */
-  readonly sidebarAnswerKeys: Readonly<Record<SidebarAnswer, string>>
+  readonly sidebarAnswerKeys: Readonly<Partial<Record<SidebarAnswer, string>>>
+  /** The sidebar answers only a prompt the daemon marked answerable (its screen matched the verified shape). */
+  readonly sidebarNeedsAnswerable: boolean
   /** A chat that follows the agent's terminal changes its model and effort from the chips, by typing the agent's commands. */
   readonly changeAgent: boolean
   /** The agent's prompt takes a typed `!` line as a command for its own shell, run in its terminal. */
@@ -64,6 +67,7 @@ const NONE: AgentAbilities = {
   moveToWorktree: false,
   answerKeys: null,
   sidebarAnswerKeys: LETTERS,
+  sidebarNeedsAnswerable: false,
   changeAgent: false,
   bangToTerminal: false,
   resumeSaved: false,
@@ -83,6 +87,7 @@ const AGENT_ABILITIES: Readonly<Record<ChatAgent, AgentAbilities>> = {
     moveToWorktree: true,
     answerKeys: ANSWER_KEYS,
     sidebarAnswerKeys: { ...LETTERS, y: ANSWER_KEYS.approve },
+    sidebarNeedsAnswerable: false,
     changeAgent: true,
     bangToTerminal: true,
     resumeSaved: true,
@@ -99,7 +104,9 @@ const AGENT_ABILITIES: Readonly<Record<ChatAgent, AgentAbilities>> = {
     structuredChat: true,
     moveToWorktree: true,
     answerKeys: CODEX_ANSWER_KEYS,
-    sidebarAnswerKeys: LETTERS,
+    // Only the verified keys: `a` may pick "don't ask again" and `n` does nothing on Codex's menus.
+    sidebarAnswerKeys: { y: CODEX_ANSWER_KEYS.approve, n: CODEX_ANSWER_KEYS.deny },
+    sidebarNeedsAnswerable: true,
     changeAgent: false,
     bangToTerminal: false,
     resumeSaved: true,
