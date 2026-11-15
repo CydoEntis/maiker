@@ -383,6 +383,13 @@ impl App {
                     self.resume_failed();
                 }
                 self.tidy_failed(machine);
+                // A listing another machine refused leaves the Finder waiting no more.
+                if let Mode::Finder(fd) = &mut self.mode
+                    && fd.machine == machine
+                    && fd.waiting
+                {
+                    (fd.waiting, fd.missing) = (false, true);
+                }
                 self.notify(e, true);
             }
             ServerMsg::Notice(n) if machine != MachineId::LOCAL => self.notify(n, false),
@@ -438,6 +445,13 @@ impl App {
                 self.helper_arrived(record)
             }
             ServerMsg::Reply(Reply::WorktreeStanding(standing)) => self.tidy_standing_arrived(machine, standing),
+            ServerMsg::Reply(Reply::Folders { tag, listing }) => {
+                if let Mode::Finder(fd) = &mut self.mode
+                    && fd.machine == machine
+                {
+                    fd.listed_remote(tag, listing);
+                }
+            }
             ServerMsg::Reply(Reply::Text(text)) if self.check_asked_of(machine) => {
                 self.check_output_arrived(text)
             }
@@ -696,6 +710,14 @@ impl App {
         let Some(dir) = fd.wanted.take() else {
             return;
         };
+        if fd.remote() {
+            let tag = screen::next_listing_tag();
+            fd.tag = tag;
+            let machine = fd.machine;
+            let path = dir.display().to_string();
+            self.send(machine, ClientMsg::Query(Query::ListFolders { path, tag }));
+            return;
+        }
         self.spawn_bg(move || {
             let (list, repo) = screen::Finder::list_folders(&dir);
             Bg::FolderList(dir, list, repo)

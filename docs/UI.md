@@ -865,6 +865,13 @@ the raw body of the command.
 this window's own question, as every reply from another machine is, and what it names is drawn with
 control and hidden characters taken out):
 
+- **Open a folder on a machine** (`Action::OpenFolderOn`; a machine heading's **Open a folder…**). The
+  folder picker, titled `Open a folder on <machine>`, lists that machine's folders through
+  `Query::ListFolders` (tagged; an answer for a folder already left is dropped), from `~`, with `/` in
+  paths, `reading <machine>…` while it waits and `no such folder there` when it has none. Enter on
+  `.` or a repository starts a shell there on that machine; another folder is gone into by the path its
+  daemon gave. A machine that is not connected is refused with a toast. With no other machine connected
+  the command opens this computer's picker.
 - **Clean up worktrees** works for another machine's project: its daemon says where each worktree stands
   (`Query::WorktreeStanding`, asked one after another since the answer names none; a worktree whose
   folder is gone is left out) and removes the ticked ones (`Command::TidyWorktrees` to that machine).

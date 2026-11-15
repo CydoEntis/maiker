@@ -92,6 +92,8 @@ pub enum Act {
     RemoveReference(PathBuf, PathBuf, String),
     /// A shell on this machine at once.
     MachineShell(MachineId),
+    /// Browse this machine's folders and open one.
+    MachineFolder(MachineId),
     /// `machine update` for this machine in a popup: install or update the app there.
     MachineUpdate(MachineId),
     MachineReconnect(MachineId),
@@ -400,6 +402,7 @@ impl App {
             items.push((fix.label(), Act::MachineUpdate(machine)));
         }
         items.push(("New shell here".to_string(), Act::MachineShell(machine)));
+        items.push(("Open a folder…".to_string(), Act::MachineFolder(machine)));
         let title = match self.remotes.get(&machine) {
             Some(remote) => {
                 items.push(("Reconnect".to_string(), Act::MachineReconnect(machine)));
@@ -903,6 +906,7 @@ impl App {
         }
         match a {
             Act::MachineShell(machine) => self.new_ship_on(machine),
+            Act::MachineFolder(machine) => self.open_finder_on(machine),
             Act::MachineUpdate(machine) => self.machine_update_from_side(machine),
             Act::MachineReconnect(machine) => {
                 if let Some(name) = self.remotes.get(&machine).map(|r| r.name.clone()) {

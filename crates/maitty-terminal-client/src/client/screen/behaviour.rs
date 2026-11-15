@@ -1093,6 +1093,9 @@ impl App {
     }
 
     pub(in crate::client) fn finder_enter(&mut self, mut fd: Finder) {
+        if fd.remote() {
+            return self.finder_enter_remote(fd);
+        }
         let sep = std::path::MAIN_SEPARATOR;
         let rows = fd.rows();
         match rows.get(fd.sel).cloned() {
@@ -1123,8 +1126,74 @@ impl App {
         }
     }
 
+    /// Enter in another machine's folders: open the folder, or go into it. A folder there is
+    /// known only from its daemon's listing, so one typed that it did not list is not opened.
+    fn finder_enter_remote(&mut self, mut fd: Finder) {
+        match fd.rows().get(fd.sel).cloned() {
+            None => {
+                let (dir, part) = fd.split();
+                self.notify(format!("no folder {part} in {}", fd.spelled(&dir)), true);
+                self.mode = Mode::Finder(Box::new(fd));
+            }
+            Some((n, p, repo)) if n == "." || repo => {
+                if n == "." && fd.abs.is_none() {
+                    // Not answered yet: its real path is still to come.
+                    self.mode = Mode::Finder(Box::new(fd));
+                    return;
+                }
+                let machine = fd.machine;
+                let name = folder_name(&p);
+                self.screen_new_session_on(machine, p, None, false);
+                self.notify(format!("Opened {name} on {} with a shell", self.machine_name(machine)), false);
+            }
+            Some((_, p, _)) => {
+                fd.q = format!("{}/", fd.spelled(&p).trim_end_matches('/'));
+                fd.sel = 0;
+                fd.refresh();
+                self.mode = Mode::Finder(Box::new(fd));
+            }
+        }
+    }
+
+    /// Open a folder on `machine`: this computer's Finder, or another's through its daemon.
+    pub(in crate::client) fn open_finder_on(&mut self, machine: MachineId) {
+        if machine == MachineId::LOCAL {
+            return self.screen_open_finder();
+        }
+        let up = self
+            .remotes
+            .get(&machine)
+            .is_some_and(|r| matches!(r.state, crate::client::link::ConnectionState::Connected));
+        if !up {
+            let name = self.machine_name(machine).to_string();
+            return self.notify(format!("{name} is not connected: its folders cannot be listed"), true);
+        }
+        self.mode = Mode::Finder(Box::new(Finder::on(machine)));
+    }
+
+    /// Which machine's folders to open: straight to this computer's when no other is
+    /// connected, else a menu of them.
+    pub(in crate::client) fn pick_folder_machine(&mut self) {
+        let up: Vec<(MachineId, String)> = self
+            .remotes
+            .iter()
+            .filter(|(_, r)| matches!(r.state, crate::client::link::ConnectionState::Connected))
+            .map(|(id, r)| (*id, crate::hidden::sanitize(&r.name, false)))
+            .collect();
+        if up.is_empty() {
+            return self.screen_open_finder();
+        }
+        let mut items = vec![("This computer".to_string(), crate::client::menu::Act::MachineFolder(MachineId::LOCAL))];
+        items.extend(up.into_iter().map(|(id, name)| (name, crate::client::menu::Act::MachineFolder(id))));
+        let at = self
+            .focused()
+            .and_then(|term| self.pane_frames.iter().find(|(t, _)| *t == term))
+            .map_or((2, 1), |(_, r)| (r.x + 2, r.y));
+        self.menu("open a folder on".into(), items, at);
+    }
+
     pub(in crate::client) fn on_finder_key(&mut self, mut fd: Finder, k: &KeyEvent) {
-        let sep = std::path::MAIN_SEPARATOR;
+        let sep = fd.sep();
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         match k.code {
             KeyCode::Esc => {
@@ -1139,7 +1208,7 @@ impl App {
                 if let Some((n, p, _)) = fd.rows().get(fd.sel).cloned()
                     && n != "."
                 {
-                    fd.q = format!("{}{sep}", tilde(&p).trim_end_matches(sep));
+                    fd.q = format!("{}{sep}", fd.spelled(&p).trim_end_matches(sep));
                     fd.sel = 0;
                 }
             }

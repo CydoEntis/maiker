@@ -462,6 +462,16 @@ pub(super) struct Finder {
     pub wanted: Option<PathBuf>,
     /// Picking a folder for this setting (Settings → Start folder) instead of opening one.
     pub for_setting: Option<&'static str>,
+    /// The machine whose folders these are. Another machine's are listed by its daemon
+    /// (`Query::ListFolders`) and spelled with `/` whatever this computer uses.
+    pub machine: MachineId,
+    /// The listing asked of another machine, and whether its answer is still to come.
+    pub tag: u64,
+    pub waiting: bool,
+    /// Another machine's `dir` as its daemon spelled it (absolute, `~` taken out).
+    pub abs: Option<String>,
+    /// That machine has no such folder, or could not read it.
+    pub missing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

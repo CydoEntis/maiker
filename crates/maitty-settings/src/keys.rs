@@ -302,6 +302,8 @@ pub enum Action {
     ResumeConversation,
     /// The sessions put away (still running, out of the lists), each to bring back.
     PutAway,
+    /// Browse the folders of a machine (this computer or another) and open one.
+    OpenFolderOn,
     /// Explicitly unbind a default.
     None,
 }
@@ -397,6 +399,7 @@ impl Action {
             Action::Worktrees => "Worktrees…".into(),
             Action::ResumeConversation => "Resume a conversation here".into(),
             Action::PutAway => "Sessions put away".into(),
+            Action::OpenFolderOn => "Open a folder on a machine…".into(),
             Action::None => "Unbound".into(),
         }
     }
@@ -494,6 +497,7 @@ impl Action {
             Action::Worktrees => "worktrees".into(),
             Action::ResumeConversation => "resume-conversation".into(),
             Action::PutAway => "put-away".into(),
+            Action::OpenFolderOn => "open-folder-on".into(),
             Action::None => return None,
         })
     }
@@ -614,6 +618,7 @@ impl FromStr for Action {
             "worktrees" => Action::Worktrees,
             "resume-conversation" => Action::ResumeConversation,
             "put-away" => Action::PutAway,
+            "open-folder-on" => Action::OpenFolderOn,
             // The fleet and the why popover are gone; a binding written for one stays
             // harmless, not a config error.
             "none" | "unbind" | "start-fleet" | "why" => Action::None,

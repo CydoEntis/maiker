@@ -188,7 +188,7 @@ menu runs its items by letter while it is open.
 | Menu key (`.` after the prefix), right-click | The session's menu |
 | `+` on a machine heading | A shell on that machine at once |
 | `install` / `update` on a machine heading | Shown instead of `+` while the machine needs maitty installed or updated: runs it in a popup that asks first |
-| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Reconnect, Machines… |
+| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Open a folder…, Reconnect, Machines… |
 | Enter on a row of an agent a restart stopped | Types its resume command, then opens the session |
 | Esc | Return keyboard focus to the active pane |
 
@@ -216,6 +216,10 @@ Leader `w`, or a click on a remote machine's heading in the sidebar. These keys 
 | Ctrl+U in text prompts | Clear prompt text |
 | Enter, Esc | Open the selected result / submit prompt, or cancel |
 | y / Y / Enter in close-group or remove-worktree prompt | Confirm; f / F forces worktree removal when offered; other keys cancel |
+
+## Open a folder on another machine
+
+Search commands' **Open a folder on a machine…** (a menu of this computer and each connected machine), or a machine heading's right-click **Open a folder…**. The keys are the folder picker's; paths are written with `/`.
 
 ## New session
 
