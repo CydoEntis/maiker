@@ -40,10 +40,10 @@ function host(change: Partial<TicketsHost> = {}): TicketsHost {
   }
 }
 
-function show(page: TicketsHost = host()) {
+function show(page: TicketsHost = host(), suggestedLink?: string) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <TicketsPage project={{ name: 'shop', linkKey: ':/home/me/shop', folder: '/home/me/shop', machine: 0, machineName: null }} host={page} />
+      <TicketsPage project={{ name: 'shop', linkKey: ':/home/me/shop', folder: '/home/me/shop', machine: 0, machineName: null }} host={page} suggestedLink={suggestedLink} />
     </QueryClientProvider>,
   )
   return page
@@ -90,12 +90,58 @@ describe('the Tickets view', () => {
   it('sets up GitHub in place when the folder names no repository, for the project and its worktrees', async () => {
     api.githubRepoOf.mockResolvedValue(null)
     show()
-    expect(await screen.findByText("Which repository are shop's issues in?")).toBeInTheDocument()
+    expect(await screen.findByText("Paste a link to shop's repository")).toBeInTheDocument()
     expect(screen.getByText(/Saved for shop and every worktree of it/)).toBeInTheDocument()
-    await userEvent.type(screen.getByRole('textbox', { name: 'GitHub repo for shop' }), 'me/shop')
-    await userEvent.click(screen.getByRole('button', { name: 'Use this repo' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Link to your GitHub repository' }), 'https://github.com/me/shop/issues/3')
+    await userEvent.click(screen.getByRole('button', { name: 'Use link' }))
     expect(links().projects).toEqual([{ machine: null, folder: '/home/me/shop', link: { github: 'me/shop', plane: null, linear: null } }])
     expect(await screen.findByText('Fix the cart')).toBeInTheDocument()
+  })
+
+  it('types the repository by hand under Enter the details instead', async () => {
+    api.githubRepoOf.mockResolvedValue(null)
+    show()
+    await userEvent.click(await screen.findByRole('button', { name: 'Enter the details instead' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'GitHub repo for shop' }), 'me/shop')
+    await userEvent.click(screen.getByRole('button', { name: 'Use this repo' }))
+    await vi.waitFor(() => { expect(links().projects[0]?.link.github).toBe('me/shop') })
+  })
+
+  it('says which tab a link of another source belongs on', async () => {
+    api.githubRepoOf.mockResolvedValue(null)
+    show()
+    await userEvent.type(await screen.findByRole('textbox', { name: 'Link to your GitHub repository' }), 'https://linear.app/acme/team/ENG')
+    await userEvent.click(screen.getByRole('button', { name: 'Use link' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('That is a Linear link: paste it on the Linear tab.')
+    expect(links().projects).toEqual([])
+  })
+
+  it('fills Plane from a pasted link, connects the key, then links the project the link names', async () => {
+    const ID = '3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'
+    const PLANE_SET: TicketKeyState[] = [{ provider: 'Plane', set: true, address: 'http://192.168.1.244', workspace: 'ideayard' }, { provider: 'Linear', set: false, address: '', workspace: '' }]
+    api.saveTicketKey.mockResolvedValue({ ok: true, value: PLANE_SET })
+    api.loadTicketGroups.mockImplementation((source) => Promise.resolve({ ok: true, value: source === 'plane' ? [{ id: 'plane:00000000-0000-4000-8000-000000000000', kind: 'Project', name: 'Other', parent: null, count: 1 }, { id: `plane:${ID}`, kind: 'Project', name: 'MAITTY', parent: null, count: 9 }] : [] }))
+    show()
+    await userEvent.click(await screen.findByRole('tab', { name: /Plane/ }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Link to your Plane project' }), `http://192.168.1.244/ideayard/projects/${ID}/issues/`)
+    await userEvent.click(screen.getByRole('button', { name: 'Use link' }))
+    expect(screen.getByText(/For/)).toHaveTextContent('For ideayard at http://192.168.1.244.')
+    // The address and workspace came from the link, so only the key is left to type.
+    expect(screen.queryByRole('textbox', { name: 'Plane address' })).toBeNull()
+    await userEvent.type(screen.getByLabelText('Plane API key'), 'plane_api_0123456789')
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Plane' }))
+    expect(api.saveTicketKey).toHaveBeenCalledWith('Plane', 'http://192.168.1.244', 'ideayard', 'plane_api_0123456789')
+    await userEvent.click(await screen.findByRole('button', { name: 'Link MAITTY' }))
+    await vi.waitFor(() => { expect(links().projects[0]?.link.plane).toEqual({ id: `plane:${ID}`, name: 'MAITTY' }) })
+    expect(document.body.innerHTML).not.toContain('plane_api_0123456789')
+  })
+
+  it('opens on the tab of a suggested link with it in the paste box, and saves nothing until Use link', async () => {
+    show(host(), 'https://linear.app/acme/team/ENG')
+    expect(await screen.findByRole('textbox', { name: 'Link to your Linear team' })).toHaveValue('https://linear.app/acme/team/ENG')
+    expect(screen.getByRole('list', { name: 'Set up Linear' })).toBeInTheDocument()
+    expect(api.saveTicketKey).not.toHaveBeenCalled()
+    expect(links().projects).toEqual([])
   })
 
   it('connects Linear once, then picks the team this project reads', async () => {

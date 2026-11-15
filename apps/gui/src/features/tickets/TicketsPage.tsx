@@ -12,6 +12,7 @@ import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
 import { linkOf, placeOf, useTicketLinks, type ProjectLink } from './model/ticketLinks'
 import { TicketSetup } from './TicketSetup'
+import { parseTicketLink } from './model/pastedLink'
 import { GROUP_VIEWS, groupCounts, groupsUnder, isMine, kindWord, matchesSearch, openBlockers, PROVIDER_LOOK, PROVIDERS, ticketKey, type KitchenRun, type Provider } from './model/tickets'
 import { failureOf, ticketsOf, TICKETS_REFRESH_MS, useTicketDetail, useTicketGroups, useTicketList } from './useTicketData'
 import { TicketBoard, TicketRow, TicketSkeleton, type RowState } from './TicketRows'
@@ -124,6 +125,13 @@ function useCacheVersion(): number {
   return useSyncExternalStore(subscribe, () => version.current, () => version.current)
 }
 
+/** The tab a suggested link belongs on, or none when it names no source. */
+function suggestedProvider(link: string | undefined): Provider | null {
+  if (link === undefined) return null
+  const read = parseTicketLink(link)
+  return read.ok ? read.link.kind : null
+}
+
 const VIEW_ICON: Readonly<Record<GroupKind, IconName>> = { Milestone: 'milestone', Module: 'modules', Cycle: 'cycle', Project: 'folder' }
 
 /**
@@ -132,7 +140,13 @@ const VIEW_ICON: Readonly<Record<GroupKind, IconName>> = { Milestone: 'milestone
  * the list, the board or one kind of group, a selection bar, the ticket page, and the dialogs that start an agent or
  * hand tickets to Kitchen. Ticket text is other people's and is shown as plain text everywhere.
  */
-export function TicketsPage({ project, host, leaving = false }: { project: TicketsProject; host: TicketsHost; leaving?: boolean }) {
+export function TicketsPage({ project, host, leaving = false, suggestedLink }: {
+  project: TicketsProject
+  host: TicketsHost
+  leaving?: boolean
+  /** A link to start the setup's paste box with (see `TicketSetupProps.suggestedLink`); its source's tab opens first. */
+  suggestedLink?: string | undefined
+}) {
   const links = useTicketLinks(project)
   const link = linkOf(links.data)
   // The project the daemon took the folder to (a worktree's main checkout), where a link is kept.
@@ -155,7 +169,7 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
     return all
   }, [link, detected.data, keys.data])
   const firstLinked = PROVIDERS.find((provider) => sources[provider].linked) ?? 'github'
-  const [picked, setPicked] = useState<Provider | null>(null)
+  const [picked, setPicked] = useState<Provider | null>(() => suggestedProvider(suggestedLink))
   const provider = picked ?? firstLinked
   const current = sources[provider]
   const source = current.linked ? current.source : null
@@ -429,7 +443,7 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
           {!current.linked && settling ? (
             <TicketSkeleton />
           ) : !current.linked ? (
-            <TicketSetup provider={provider} project={setupProject} link={link} keys={keys.data} />
+            <TicketSetup provider={provider} project={setupProject} link={link} keys={keys.data} suggestedLink={suggestedLink} />
           ) : (
             <>
               {banner !== null && (

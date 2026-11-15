@@ -114,4 +114,12 @@ describe('Settings › Tickets', () => {
     await userEvent.type(address, 'plane.example')
     expect(screen.getByText('Starts with https://')).toBeInTheDocument()
   })
+
+  it('fills the Plane address and workspace from a pasted link', async () => {
+    show()
+    await userEvent.type(await screen.findByLabelText('Link to your Plane'), 'http://192.168.1.244/ideayard/projects/3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d/issues/')
+    await userEvent.click(screen.getByRole('button', { name: 'Use link' }))
+    expect(screen.getByLabelText('Plane address')).toHaveValue('http://192.168.1.244')
+    expect(screen.getByLabelText('Plane workspace')).toHaveValue('ideayard')
+  })
 })
