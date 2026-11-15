@@ -875,7 +875,7 @@ Preserve colors applications paint explicitly.
 ## Project-specific: Tickets view (desktop)
 
 Tickets shows the tickets of the project the chat in front works in, from GitHub, Plane and Linear, read-only
-([spec](features/tickets/spec.md), the [2h handoff](features/chat-gui/design-handoff/2h/README.md)). Code:
+apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [2h handoff](features/chat-gui/design-handoff/2h/README.md)). Code:
 `apps/gui/src/features/tickets/`, data from `apps/gui/src/api/tickets.ts`. Rules:
 
 - **Where it is.** The title bar's **Tickets** toggle opens it over the chat area (`TicketsOverlay` in `.mx-main`);
@@ -891,6 +891,14 @@ Tickets shows the tickets of the project the chat in front works in, from GitHub
   A blocked ticket warns in red and can still be started. Send to Kitchen types Kitchen's own `/kitchen run <key>
   (<url>)`, one per ticket, into a chat already running Kitchen in the project or a new Claude chat; blocked ones are
   skipped unless ticked, and a ticket Kitchen already runs is "Already in Kitchen".
+- **Writes.** The ticket page's **Comment…** and **Mark done…** (disabled for a closed ticket) are the only things that
+  change a ticket (`TicketWriteDialog.tsx`, `writeTicket` in `api/tickets.ts`). A comment is typed, then **Review**
+  shows the provider, the ticket and **exactly what will be written** as text (at most 4,000 characters; no tabs or
+  hidden characters); marking done goes straight to that review. Only a click on the confirm button
+  (**Post comment to …** / **Mark done on …**) sends it; Enter does not, and Esc, ✕ and Cancel write nothing. A
+  refusal stays in the dialog as "Not written." with why, and the ticket is as it was; a success closes it, toasts,
+  and reads the ticket and lists again. Maitty never edits or deletes a ticket. `writeTicket` takes `confirmed: true`
+  and is called from nowhere but this dialog's confirm.
 - **States.** Loading (skeleton rows), no matches (Clear filters), no sources (Connect a source), not linked (Link …,
   opening Settings › Tickets), gh signed out (Open terminal), key refused (red, Replace key), offline (last good copy
   with Retry), rate-limited (no button). Banners are never amber.

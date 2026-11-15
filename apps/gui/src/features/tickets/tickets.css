@@ -280,3 +280,5 @@
 @media (prefers-reduced-motion: reduce) {
   .mx-tk, .mx-tk *, .mx-tk-scrim, .mx-tk-dialog, .mx-tk-source-form { animation: none !important; }
 }
+.mx-tk-compose { width: 100%; min-height: 120px; resize: vertical; padding: 9px 11px; font: 400 12.5px/1.55 var(--mono); color: var(--fg); background: var(--m-well); border: 1px solid var(--line2); border-radius: var(--r-control, 0); outline: none; overflow-wrap: anywhere; }
+.mx-tk-compose:focus-visible { border-color: var(--accent); }

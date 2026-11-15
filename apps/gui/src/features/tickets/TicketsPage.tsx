@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { githubRepoOf, loadTicket, loadTicketKeys, type GroupKind, type TicketDetail, type TicketFailure, type TicketGroup, type TicketKeyState, type TicketSummary } from '@/api/tickets'
+import { githubRepoOf, loadTicket, loadTicketKeys, writeTicket, type GroupKind, type TicketDetail, type TicketFailure, type TicketGroup, type TicketKeyState, type TicketSummary, type TicketWrite } from '@/api/tickets'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -16,6 +16,8 @@ import { failureOf, ticketsOf, TICKETS_REFRESH_MS, useTicketDetail, useTicketGro
 import { TicketBoard, TicketRow, TicketSkeleton, type RowState } from './TicketRows'
 import { TicketGroups, type GroupLayout } from './TicketGroups'
 import { TicketDrawer } from './TicketDrawer'
+import { TicketWriteDialog } from './TicketWriteDialog'
+import { writeFailureWords } from './model/ticketWrite'
 import { KitchenDialog, StartTicketDialog, type KitchenTarget, type StartChoice } from './TicketDialogs'
 import type { TicketsProject } from './model/ticketProjects'
 import './tickets.css'
@@ -47,7 +49,7 @@ export type TicketsHost = {
 }
 
 type View = 'list' | 'mine' | 'board' | GroupKind
-type Dialog = { kind: 'start' | 'here'; id: string } | { kind: 'kitchen'; ids: readonly string[] } | null
+type Dialog = { kind: 'start' | 'here' | 'comment' | 'close'; id: string } | { kind: 'kitchen'; ids: readonly string[] } | null
 
 /** How long the ticket page takes to slide out (README §1: in .28s, out .19s). */
 const DRAWER_EXIT_MS = 190
@@ -293,6 +295,24 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
   }
 
   const start = (id: string, kind: 'start' | 'here') => { setDialog({ kind, id }) }
+  /**
+   * Sends the one write the person just confirmed in the dialog. Resolves with why it was not written, or null when it
+   * was, after which the dialog closes and the ticket is read again so the page shows what is now there.
+   */
+  const write = async (id: string, what: TicketWrite): Promise<string | null> => {
+    if (source === null) return 'This ticket has no source to write to.'
+    try {
+      const told = await writeTicket(source, id, what, true)
+      if (!told.ok) return writeFailureWords(told.failure, provider)
+    } catch {
+      return 'Maitty did not answer in time. The ticket may have changed: read it again before trying twice.'
+    }
+    setDialog(null)
+    toast.success(what.kind === 'close' ? 'Marked done' : 'Comment posted')
+    void client.invalidateQueries({ queryKey: ['tickets', 'detail', source, id] })
+    void client.invalidateQueries({ queryKey: ['tickets', 'list'] })
+    return null
+  }
   const kitchen = (ids: readonly string[]) => { if (ids.length > 0) setDialog({ kind: 'kitchen', ids }) }
   const selectOpen = (ids: readonly string[]) => { setSelected((now) => new Set([...now, ...ids])) }
 
@@ -345,7 +365,8 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
   const groupKindLabel = kinds.find((entry) => entry.kind === view)?.label ?? ''
   const selectedTickets = [...selected].map((id) => known.get(id)).filter((ticket): ticket is TicketSummary => ticket !== undefined)
   const selectedBlocked = selectedTickets.filter((ticket) => (blockersOf(ticket.id)?.length ?? 0) > 0).length
-  const dialogTicket = dialog !== null && dialog.kind !== 'kitchen' ? detailOf(dialog.id) ?? null : null
+  const dialogTicket = dialog !== null && (dialog.kind === 'start' || dialog.kind === 'here') ? detailOf(dialog.id) ?? null : null
+  const writeTarget = dialog !== null && (dialog.kind === 'comment' || dialog.kind === 'close') ? known.get(dialog.id) ?? null : null
   const dialogBlockers = dialogTicket === null ? [] : openBlockers(dialogTicket, known)
   const firstBlocker = dialogBlockers[0] === undefined ? undefined : known.get(dialogBlockers[0])
 
@@ -497,12 +518,14 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
           onSendHere={host.canSendHere ? () => { start(drawerTicket.id, 'here') } : null}
           onKitchen={() => { kitchen([drawerTicket.id]) }}
           onStart={() => { start(drawerTicket.id, 'start') }}
+          onComment={() => { setDialog({ kind: 'comment', id: drawerTicket.id }) }}
+          onMarkDone={() => { setDialog({ kind: 'close', id: drawerTicket.id }) }}
           onOpenWork={host.onOpenWork}
           onOpenTicket={openTicket}
           onClose={closeTicket}
         />
       )}
-      {dialog !== null && dialog.kind !== 'kitchen' && dialogTicket !== null && (
+      {dialog !== null && (dialog.kind === 'start' || dialog.kind === 'here') && dialogTicket !== null && (
         <StartTicketDialog
           container={host.container}
           provider={provider}
@@ -522,6 +545,16 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
             if (!here) setSelected(new Set())
             void go(() => (here ? host.onSendHere(ticket, choice.message) : host.onStart(ticket, choice)), here ? 'Could not send the ticket' : 'Could not start the agent')
           }}
+        />
+      )}
+      {dialog !== null && (dialog.kind === 'comment' || dialog.kind === 'close') && writeTarget !== null && (
+        <TicketWriteDialog
+          container={host.container}
+          provider={provider}
+          ticket={writeTarget}
+          kind={dialog.kind}
+          onConfirm={(what) => write(dialog.id, what)}
+          onCancel={() => { setDialog(null) }}
         />
       )}
       {dialog?.kind === 'kitchen' && (

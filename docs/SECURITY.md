@@ -643,6 +643,22 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   checked on the way in (printable ASCII, 8 to 200 characters); Plane's address must pass the same
   `check_base_url` that every request does, so a key cannot be saved for an address it could not be
   sent to; Linear's server is fixed and a key for it takes no address.
+- **Writing to a ticket** (`Query::TicketWrite`, `daemon/tickets_write.rs`) is the one place Maitty changes
+  a ticket, and it does two things only: add a comment, or close the ticket. It never edits a ticket's own
+  words and never deletes. Nothing is written unless the request carries `confirmed: true`, which the
+  desktop sets only after the person saw the provider, the ticket and the exact text and clicked to confirm;
+  the daemon refuses a pane or a structured runtime outright (human clients only) and answers an
+  unconfirmed request with a refusal before it reads a key, starts `gh` or sends a byte, so a refused
+  write leaves the ticket as it was. The comment is checked by `clean_comment` (not empty, at most 4,000
+  characters, no control, hidden or tab characters, `\n` line breaks) and is refused rather than quietly
+  changed, so the text confirmed is the text written. The ticket id must belong to the named source (a
+  GitHub issue of that repository, a Plane work item, a Linear issue). GitHub goes through the user's own
+  `gh`, with the text joined to its flag (`--body=<text>`); Plane's comment is a `POST` whose text is
+  HTML-escaped into paragraphs, and closing is a `PATCH` to a state of its `completed` group; Linear's
+  comment and `issueUpdate` take the text and ids as GraphQL variables, never as query text, to the
+  same fixed server. A write is sent once and never retried (a retry could comment twice). Failures are
+  the same fixed lines as the reads; no key, ticket text or server word is logged. Not yet checked against
+  a live Plane or Linear server.
 - **Reading Plane and Linear** (`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`, over
   `daemon/ticket_http.rs`) sends a stored key to a server, so what goes where is fixed. *Sent:* the key
   in one header (`X-API-Key` for Plane, `Authorization` for Linear), the request path, and for Linear a
@@ -651,8 +667,9 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   file, which must pass `check_base_url` on every call (https anywhere; http only to loopback, a private
   or link-local address, a name with no dots or ending `.local`/`.lan`), with its workspace and every id
   restricted to letters, digits and dashes before it enters a path; Linear's one server,
-  `https://api.linear.app/graphql`, a constant that the key file cannot change. Every request is a read:
-  Plane's calls are all `GET`, Linear's are all `query`, and there is no `mutation` in the code. *How:*
+  `https://api.linear.app/graphql`, a constant that the key file cannot change. Every request in these
+  two files is a read: Plane's calls are all `GET`, Linear's are all `query`. The only writes are in
+  `daemon/tickets_write.rs` (next item). *How:*
   the system `curl` (no new dependency), with the key on its standard input as a config, never on the
   command line where `ps` shows it; `--disable` so a user's `.curlrc` cannot change it; no redirect is
   followed, so a key is never forwarded; Plane may be spoken to over http or https, Linear over https
