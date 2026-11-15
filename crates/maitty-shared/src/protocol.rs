@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 102;
+pub const PROTOCOL_VERSION: u32 = 103;
 
 /// The first version whose daemon sends a queued chat message now (`Command::ConversationSendNow`).
 pub const SEND_NOW_SINCE: u32 = 94;
@@ -72,6 +72,9 @@ pub enum SavedConversations {
 /// The first version whose daemon writes and removes a folder's GitHub account and commit identity
 /// rule on request (`Query::GitIdentityRule`).
 pub const GIT_RULES_SINCE: u32 = 102;
+/// The first version whose daemon reads the tickets of a source on request (`Query::Tickets`).
+pub const TICKETS_SINCE: u32 = 103;
+
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
@@ -1099,6 +1102,15 @@ pub enum Query {
     GitHubOwners {
         tag: u64,
     },
+    /// Read tickets from `source` on this daemon's computer (human clients only): its groups, a
+    /// page of its tickets or one ticket. `source` is a GitHub repository, `owner/name`, read
+    /// with the machine's own `gh`. Nothing is written. The answer is `Reply::Tickets` with the
+    /// same `tag`.
+    Tickets {
+        source: String,
+        request: crate::tickets::TicketsRequest,
+        tag: u64,
+    },
     /// Which commit name and email git uses on this daemon's computer, and the folders where a
     /// rule gives another (human clients only). Nothing is written. The answer is
     /// `Reply::GitIdentities` with the same `tag`.
@@ -1365,6 +1377,11 @@ pub enum Reply {
     GitHubOwners {
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
+    },
+    /// What a `Query::Tickets` found, or why it found nothing.
+    Tickets {
+        tag: u64,
+        answer: Result<crate::tickets::TicketsReply, crate::tickets::TicketError>,
     },
     /// How a `Query::Git` ended: one line saying what happened ("Pulled", "Pushed main"), or one
     /// line saying why nothing did.
@@ -2265,6 +2282,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::SavedConversations { .. }) => SAVED_CONVERSATIONS_SINCE,
             ServerMsg::Reply(Reply::ClosedSessions(_)) => CLOSED_SESSIONS_SINCE,
             ServerMsg::Reply(Reply::WorktreeStanding(_)) => WORKTREE_STANDING_SINCE,
+            ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2285,6 +2303,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::CloneRepo { .. }) => CLONE_SINCE,
             ClientMsg::Query(Query::GitHubAccounts { .. }) => GITHUB_ACCOUNTS_SINCE,
             ClientMsg::Query(Query::GitHubRepos { .. } | Query::GitHubOwners { .. }) => GITHUB_REPOS_SINCE,
+            ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
             ClientMsg::Query(Query::GitIdentities { .. }) => GIT_IDENTITIES_SINCE,
             ClientMsg::Query(Query::GitIdentityRule { .. }) => GIT_RULES_SINCE,
             ClientMsg::Query(Query::Git { request: GitRequest::Commit { .. }, .. }) => GIT_COMMIT_SINCE,
@@ -2729,7 +2748,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 102);
+        assert_eq!(PROTOCOL_VERSION, 103);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3197,7 +3216,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 102);
+        assert_eq!(PROTOCOL_VERSION, 103);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4107,6 +4126,33 @@ mod tests {
         let remove = Query::GitIdentityRule { change: GitRuleChange::Remove { folder: "/code".into() }, tag: 1 };
         assert_eq!(ClientMsg::Query(remove).introduced_in(), GIT_RULES_SINCE);
         const { assert!(GIT_RULES_SINCE > GIT_IDENTITIES_SINCE && GIT_RULES_SINCE <= PROTOCOL_VERSION) };
+    }
+
+    /// Reading tickets is a new request and a new reply: a peer built before them cannot read
+    /// either, but nothing an older peer already sends or reads changed, so the window stays open
+    /// and the daemon is asked only when it is new enough.
+    #[test]
+    fn reading_tickets_is_asked_only_of_a_daemon_that_knows_it_and_changes_nothing_older() {
+        use crate::tickets::{TicketError, TicketsReply, TicketsRequest};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            GitIdentities { tag: u64 },
+        }
+        let ask = Query::Tickets { source: "me/widgets".into(), request: TicketsRequest::Groups, tag: 7 };
+        let bytes = encode(&ask).unwrap();
+        assert!(decode::<OldQuery>(&bytes).is_err());
+        assert!(matches!(decode::<Query>(&bytes), Ok(Query::Tickets { tag: 7, request: TicketsRequest::Groups, .. })));
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), TICKETS_SINCE);
+
+        let found = ServerMsg::Reply(Reply::Tickets { tag: 7, answer: Ok(TicketsReply::Groups(Vec::new())) });
+        let refused = ServerMsg::Reply(Reply::Tickets { tag: 8, answer: Err(TicketError::SignedOut) });
+        for reply in [found, refused] {
+            assert_eq!(reply.introduced_in(), TICKETS_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        const { assert!(TICKETS_SINCE > COMPATIBLE_SINCE && TICKETS_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never

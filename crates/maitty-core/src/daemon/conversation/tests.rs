@@ -2047,12 +2047,21 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             Query::GitHubAccounts { tag: 9 },
             Query::GitHubRepos { owner: None, search: None, tag: 9 },
             Query::GitHubOwners { tag: 9 },
+            Query::Tickets { source: "me/widgets".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 },
         ];
         for (client, query) in (442..).zip(about_github) {
             let from = authenticated_pane(&mut session);
             let refused = exchange(&mut session, client, crate::protocol::ClientMsg::Query(query), Some(from)).await;
             assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
         }
+
+        // A person's client is answered, here with a refusal that needs no `gh`.
+        let nowhere = Query::Tickets { source: "not a repository".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 };
+        let answered = exchange(&mut session, 460, crate::protocol::ClientMsg::Query(nowhere), None).await;
+        assert!(
+            matches!(answered, ServerMsg::Reply(crate::protocol::Reply::Tickets { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(_)) })),
+            "{answered:?}"
+        );
 
         let from = authenticated_pane(&mut session);
         let push = Query::Git { term: from.0, request: crate::protocol::GitRequest::Push, tag: 9 };
