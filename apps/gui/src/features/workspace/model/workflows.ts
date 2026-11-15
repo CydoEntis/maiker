@@ -14,6 +14,8 @@ export type WorkflowView = {
   /** Some step is not over yet: waiting, working, sent back or needing the person. */
   active: boolean
   needsYou: boolean
+  /** When the daemon took the run's last report, unix seconds. */
+  reportedAt: number
 }
 
 /** States after which a step has nothing more to do. */
@@ -35,6 +37,7 @@ export function toWorkflowView(run: WorkflowRun): WorkflowView {
     current,
     active: run.steps.some((step) => !OVER.has(step.state) && step.state !== 'unknown'),
     needsYou: run.steps.some((step) => step.state === 'needs_you'),
+    reportedAt: run.reportedAt,
   }
 }
 

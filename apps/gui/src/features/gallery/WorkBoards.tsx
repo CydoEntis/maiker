@@ -26,13 +26,15 @@ const HELPERS: SubagentView[] = [
 
 const none = () => undefined
 
+const WHERE = { machine: 'This computer', remote: false, project: 'maitty', branch: 'main' }
+
 /** The Work tab: the switch with its count and needs square over the board; with `open`, a run's drawer open. */
 export function WorkBoards({ open }: { open: boolean }) {
   return (
     <div className="flex w-full flex-col items-start gap-6">
       <PaneViewSwitch views={['chat', 'terminal', 'work']} view="work" work={{ going: 4, needsYou: true }} onChange={none} />
       <div className="relative h-[440px] w-full overflow-hidden rounded-(--r-panel) border border-(--line)">
-        <WorkBoard runs={RUNS} helpers={HELPERS} onOpenHelper={none} {...(open ? { startOpen: 'kitchen:041' } : {})} />
+        <WorkBoard runs={RUNS} helpers={HELPERS} onOpenHelper={none} where={WHERE} {...(open ? { startOpen: 'kitchen:041' } : {})} />
       </div>
     </div>
   )
