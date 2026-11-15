@@ -20,8 +20,9 @@ export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Asid
     )
   }
   return (
-    <Card role="region" aria-label={aside.title} tone={state.kind === 'failed' ? 'err' : 'none'} className="mx-aside" onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
+    <Card role="region" aria-label={aside.title} tone={state.kind === 'failed' ? 'err' : 'none'} className={`mx-aside${question === undefined ? '' : ' is-side'}`} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
       <CardHead>
+        {question !== undefined && <span className="mx-aside-badge" aria-hidden="true">btw</span>}
         <span className="min-w-0 flex-1 truncate">{aside.title}</span>
         <span className="mx-aside-note">Not added to the conversation</span>
         <IconButton label="Close" onClick={onClose}><X /></IconButton>

@@ -498,7 +498,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   **Side answers** (tagged `answered here`): `/btw <question>` and the commands that only report, typed alone
   (`/context`, `/usage`, `/skill-doctor`, `/goal`, `/advisor`, `/config`, `/mcp`), are answered in a card above the
   message box (`AsideCard`, `useAside`), as wide as the messages: a title, "Not added to the conversation" in
-  `--muted`, a Close button; the question in italics; "Asking Claude…" while it runs, then the answer as Markdown,
+  `--muted`, a Close button; a side question also carries a `BTW` badge and a border in `--link`, so it reads as an
+  aside at a glance; the question in italics; "Asking Claude…" while it runs, then the answer as Markdown,
   scrolling inside the card past 38% of the window's height. Its foot has **Copy** and, for a question, **Ask in the
   conversation**, which sends the question as a message. Esc or Close puts it away, and a new one replaces it. The
   daemon answers from a copy of the session it never saves (`sideAnswer`, API_PATTERNS), so it may run while the agent
