@@ -29,6 +29,8 @@ export function rowText(row: ChatRow): string {
       return row.files.join('\n')
     // A summary stays folded, so a match inside it would land on a row that does not show the words.
     case 'summary':
+    // A thought is folded, so what it says is not yet a word a person can see; it is left out of the search.
+    case 'thought':
     case 'approval':
     case 'divider':
     case 'working':

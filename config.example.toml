@@ -92,6 +92,7 @@ dir = "{repo_parent}/{repo}-worktrees/{branch}"
 command = ""                # e.g. "claude" to start an agent in every new worktree
 prewarm = ""                # e.g. "claude": keep one booted in a spare worktree so + New is instant
 base_on_default = false     # true: a new branch starts from the default branch (origin/HEAD, else main), not the checkout's current branch
+inactive_days = 14          # no commit and no file change for this many days: flagged inactive in its standing (never removed for it); 0 turns it off
 
 [icons]
 working = "⠹"
@@ -102,7 +103,7 @@ shell = ""                  # a terminal (Nerd Font); ">" or "$" without one
 branch = "\ue0a0 "          # Nerd Font branch glyph; use "" or "on " without one
 
 [snapshots]
-enabled = true              # keep a checkout's files as they were when an agent's turn begins; restore from its menu
+enabled = true              # keep a checkout's files as they were when an agent's turn begins and ends; restore from its menu
 
 [notify]
 sound = true                # maitty's own sounds, all of them; off silences the two below

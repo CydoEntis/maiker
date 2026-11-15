@@ -210,6 +210,9 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
                 owners
             }),
         }),
+        ServerMsg::Reply(Reply::ClosedSessions(sessions)) => {
+            ServerMsg::Reply(Reply::ClosedSessions(sanitize_closed(sessions)))
+        }
         other => other,
     })
 }
@@ -320,6 +323,26 @@ fn sanitize_listing(mut listing: maitty_shared::protocol::FolderListing) -> mait
         !entry.name.is_empty() && !entry.name.contains(['/', '\\'])
     });
     listing
+}
+
+/// Closed sessions from another machine: no more than its daemon keeps, every field one clean
+/// line, cut short. The folder stays a label for that machine; nothing here touches it.
+fn sanitize_closed(
+    mut sessions: Vec<maitty_shared::protocol::ClosedSession>,
+) -> Vec<maitty_shared::protocol::ClosedSession> {
+    let line = |text: String, max: usize| sanitize(&cut_bytes(text, max), false);
+    sessions.truncate(maitty_shared::protocol::CLOSED_SESSIONS_MAX);
+    for session in &mut sessions {
+        session.agent = line(std::mem::take(&mut session.agent), NAME_MAX);
+        session.session = line(std::mem::take(&mut session.session), NAME_MAX);
+        session.cwd = line(session.cwd.to_string_lossy().into_owned(), PATH_MAX).into();
+        for path in [&mut session.worktree, &mut session.repo] {
+            *path = path.take().map(|p| line(p.to_string_lossy().into_owned(), PATH_MAX).into());
+        }
+        session.branch = session.branch.take().map(|branch| line(branch, NAME_MAX));
+        session.title = session.title.take().map(|title| line(title, NAME_MAX));
+    }
+    sessions
 }
 
 /// A remote's words for a toast: one clean line, cut short, led by the machine so the source
@@ -566,6 +589,44 @@ mod tests {
             panic!("an answer that was asked for is kept");
         };
         assert_eq!(owners, ["me", "my-org"]);
+    }
+
+    #[test]
+    fn closed_sessions_from_another_machine_are_cleaned_and_capped() {
+        use maitty_shared::protocol::{CLOSED_SESSIONS_MAX, ClosedSession};
+        let hostile = ClosedSession {
+            agent: "claude\x1b[2J".into(),
+            session: "abc\n".into(),
+            cwd: PathBuf::from("/code\u{202e}/api"),
+            branch: Some("main\x07".into()),
+            title: Some(format!("fix\x1b]0;title\x07{}", "y".repeat(1000))),
+            at: 1,
+            worktree: Some(PathBuf::from("/code\u{202e}/api-wt")),
+            repo: Some(PathBuf::from("/code\x1b[2J")),
+        };
+        let sessions = vec![hostile; CLOSED_SESSIONS_MAX + 10];
+        let Some(ServerMsg::Reply(Reply::ClosedSessions(cleaned))) =
+            vet(&nothing_on(), true, "box", ServerMsg::Reply(Reply::ClosedSessions(sessions)))
+        else {
+            panic!("a list that was asked for is passed on");
+        };
+        assert_eq!(cleaned.len(), CLOSED_SESSIONS_MAX);
+        let unclean = |text: &str| text.chars().any(|c| c.is_control() || c == '\u{202e}');
+        for s in &cleaned {
+            let title = s.title.as_deref().unwrap();
+            assert!(title.len() <= NAME_MAX, "{title:?}");
+            let cwd = s.cwd.to_string_lossy();
+            let worktree = s.worktree.as_deref().unwrap().to_string_lossy();
+            let repo = s.repo.as_deref().unwrap().to_string_lossy();
+            for field in [s.agent.as_str(), &s.session, title, s.branch.as_deref().unwrap(), &cwd, &worktree, &repo] {
+                assert!(!unclean(field), "{field:?}");
+            }
+        }
+        assert!(
+            vet(&nothing_on(), false, "box", ServerMsg::Reply(Reply::ClosedSessions(Vec::new())))
+                .is_none(),
+            "nor is one nobody asked for"
+        );
     }
 
     #[test]

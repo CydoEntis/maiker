@@ -3,6 +3,7 @@ import { FileText } from 'lucide-react'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
+import type { TurnSpan } from '@/features/inspect/turnRange'
 import { dividerText, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
 import type { ItemStatus } from '../chatEvents'
 import { KnownRowsContext } from '../knownRows'
@@ -18,7 +19,10 @@ import { ContextSummary } from './ContextSummary'
 import { InlineMarkdown, Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
 import { StepView } from './StepCards'
+import { ThoughtRow } from './ThoughtRow'
 import { WorkCard } from './WorkCard'
+import { MessageMenu } from './MessageMenu'
+import { stripRestoreNote, type EditFromHere } from '../editFromHere'
 
 /**
  * The rows of the chat (v18 C.1). Every fact the daemon's history carries is shown, and one it does
@@ -40,11 +44,16 @@ export type ChatItemContext = {
   approval: ApprovalActions | null
   /** The session's folder, so file names are shown relative to it. */
   root: string | null
-  /** Opens a file's diff in the Changes panel; `null` where there is none. */
-  openDiff: ((file: string) => void) | null
+  /**
+   * Opens a file's diff in the Changes panel; `null` where there is none. A turn's changes row passes the turn too
+   * (null when its times are unknown), so the panel shows what that turn changed.
+   */
+  openDiff: ((file: string, turn?: TurnSpan | null) => void) | null
   goToStep: ((key: string) => void) | null
   /** The id of the tool step a pending request is about, so that step says it is waiting. */
   waitingStep: string | null
+  /** Edit from here on a message the person sent; absent where the chat offers none. */
+  editFromHere?: EditFromHere | null
 }
 
 type RowProps = { row: ChatRow } & ChatItemContext
@@ -65,7 +74,9 @@ function sameRow(a: ChatRow, b: ChatRow): boolean {
     case 'agents':
       return b.kind === 'agents' && a.events.length === b.events.length && a.events.every((event, index) => event === b.events[index])
     case 'changes':
-      return b.kind === 'changes' && sameStrings(a.files, b.files) && a.lines?.added === b.lines?.added && a.lines?.removed === b.lines?.removed
+      return b.kind === 'changes' && sameStrings(a.files, b.files) && a.lines?.added === b.lines?.added && a.lines?.removed === b.lines?.removed && a.turn?.startedAtMs === b.turn?.startedAtMs && a.turn?.endedAtMs === b.turn?.endedAtMs
+    case 'thought':
+      return b.kind === 'thought' && sameStrings(a.texts, b.texts)
     case 'work':
       return b.kind === 'work' && a.events.length === b.events.length && a.events.every((event, index) => event === b.events[index])
     case 'approval':
@@ -85,7 +96,7 @@ function sameRow(a: ChatRow, b: ChatRow): boolean {
 }
 
 function sameProps(a: RowProps, b: RowProps): boolean {
-  return a.agent === b.agent && a.workingSince === b.workingSince && a.approval === b.approval && a.root === b.root && a.openDiff === b.openDiff && a.goToStep === b.goToStep && a.waitingStep === b.waitingStep && sameRow(a.row, b.row)
+  return a.agent === b.agent && a.workingSince === b.workingSince && a.approval === b.approval && a.root === b.root && a.openDiff === b.openDiff && a.goToStep === b.goToStep && a.waitingStep === b.waitingStep && a.editFromHere === b.editFromHere && sameRow(a.row, b.row)
 }
 
 /**
@@ -114,7 +125,9 @@ function AgentMessage({ rowKey, paragraphs, status }: { rowKey: string; paragrap
  * What the person said: its text, and its attached files as chips. A message on its way is drawn the
  * same as one the history holds, so the files never show as the paths that carry them.
  */
-function SaidText({ text }: { text: string }) {
+function SaidText({ text: sent }: { text: string }) {
+  // The note a restore put in front is for the agent; the person sees what they wrote.
+  const text = stripRestoreNote(sent)
   const attached = parseAttachmentMessage(text)
   if (attached === null) return <p>{text}</p>
   return (
@@ -126,7 +139,7 @@ function SaidText({ text }: { text: string }) {
 }
 
 /** One row of the list. Memoised: a streamed update re-renders only the rows whose events changed. */
-export const ChatItem = memo(function ChatItem({ row, agent, workingSince, approval, root, openDiff, goToStep, waitingStep }: RowProps) {
+export const ChatItem = memo(function ChatItem({ row, agent, workingSince, approval, root, openDiff, goToStep, waitingStep, editFromHere = null }: RowProps) {
   switch (row.kind) {
     case 'user': {
       // Only the daemon's own time: when the window first saw a message is not when it was sent.
@@ -134,6 +147,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
       return (
         <Frame>
           <div className="mx-msg-user">
+            {editFromHere !== null && <MessageMenu message={row.event} editFromHere={editFromHere} />}
             <SaidText text={row.event.text} />
             {sentAt !== null && <time className="mx-msg-time" dateTime={new Date(sentAt).toISOString()}>{clock(sentAt)}</time>}
           </div>
@@ -154,6 +168,8 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
       return <Frame>{row.event.kind === 'todo' ? <PlanCard event={row.event} /> : <StepView event={row.event} root={root} openDiff={openDiff} alone waiting={isWaitingStep(waitingStep, row.event.id)} />}</Frame>
     case 'summary':
       return <Frame><ContextSummary text={row.event.text} /></Frame>
+    case 'thought':
+      return <Frame><ThoughtRow texts={row.texts} /></Frame>
     case 'work':
       return <Frame><WorkCard steps={row.events} root={root} openDiff={openDiff} waitingStep={waitingStep} /></Frame>
     case 'agents':
@@ -180,7 +196,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
       return (
         <Frame>
           {openDiff !== null && first !== undefined
-            ? <button type="button" className="mx-changed" title="Show the changes" onClick={() => { openDiff(first) }}>{body}<span className="mx-spacer" /><span className="mx-changed-review">Review</span><span className="mx-caret-wrap"><Icon name="caret" /></span></button>
+            ? <button type="button" className="mx-changed" title="Show what this turn changed" onClick={() => { openDiff(first, row.turn) }}>{body}<span className="mx-spacer" /><span className="mx-changed-review">Review</span><span className="mx-caret-wrap"><Icon name="caret" /></span></button>
             : <p className="mx-changed is-still">{body}</p>}
         </Frame>
       )

@@ -11,7 +11,7 @@ const REMOVE_SETTLE_MS = 1500
 type RowProps = { entry: RepoWorktree; /** The main checkout's folder, where a missing worktree is made again from. */ main: string | null; machine: number; onChanged: () => void }
 
 function WorktreeRow({ entry, main, machine, onChanged }: RowProps) {
-  const standing = useQuery({ queryKey: ['worktree-standing', machine, entry.path], queryFn: () => worktreeStanding(entry.path, machine), retry: false })
+  const standing = useQuery({ queryKey: ['worktree-standing', machine, entry.path], queryFn: () => worktreeStanding(main ?? entry.path, entry.path, machine), retry: false })
   const client = useQueryClient()
   const [busy, setBusy] = useState(false)
   const [sure, setSure] = useState(false)
@@ -59,7 +59,7 @@ function WorktreeRow({ entry, main, machine, onChanged }: RowProps) {
         <button type="button" className="mx-text-button" disabled={busy || blocked !== null} title={blocked ?? `Merge ${entry.branch} into the main checkout's branch (no fast-forward)`} onClick={() => { run(() => mergeWorktree(entry.path, machine)) }}>Merge</button>
         {sure
           ? <button type="button" className="mx-text-button is-danger" disabled={busy} onClick={remove}>{`Lose ${loss ?? 'nothing'}? Remove`}</button>
-          : <button type="button" className="mx-text-button" disabled={busy} title="Closes what runs in it and removes the folder; the branch stays unless it is merged" onClick={() => { if (loss === null) remove(); else setSure(true) }}>Remove</button>}
+          : <button type="button" className="mx-text-button" disabled={busy} title="Removes the folder; the branch stays unless it is merged. Close what runs in it first" onClick={() => { if (loss === null) remove(); else setSure(true) }}>Remove</button>}
       </span>
       {note !== null && <small role="status">{note}</small>}
     </li>

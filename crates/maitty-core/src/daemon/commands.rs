@@ -61,6 +61,14 @@ impl Daemon {
                 self.conversation_dequeue(client, id, generation, operation)?;
                 return Ok(false);
             }
+            Command::ConversationSendNow {
+                id,
+                generation,
+                operation,
+            } => {
+                self.conversation_send_now(client, id, generation, operation)?;
+                return Ok(false);
+            }
             Command::ForgetAllowedCommand { project, command_sha256 } => {
                 self.chat_allowed.forget(&project, &command_sha256);
                 let file = self.chat_allowed_file.clone();
@@ -154,6 +162,10 @@ impl Daemon {
             }
             Command::Prewarm { cwd, cmd } => self.prewarm_agent(cwd, cmd)?,
             Command::DropPrewarm => self.drop_warm(),
+            Command::ReopenClosedSession { agent, session } => {
+                self.reopen_closed_session(client, &agent, &session)?;
+                return Ok(false);
+            }
             Command::CloseWorkspace { ws } => {
                 let terms = self.workspace_panes(ws);
                 let tops = self.worktrees_of(&terms);
@@ -447,10 +459,23 @@ impl Daemon {
                 }
             }
             Command::ArchivePane { term, archived } => {
+                // Bringing a session back also settles any merged PR it has now, however it was
+                // put away, so put_away_merged does not put it away again for that merge.
+                let merged_url = (!archived)
+                    .then(|| self.terms.get(&term))
+                    .flatten()
+                    .and_then(|t| self.pr_of(t))
+                    .filter(|pr| pr.state == PrState::Merged)
+                    .map(|pr| pr.url);
                 if let Some(t) = self.terms.get_mut(&term) {
                     t.archived = archived;
+                    if merged_url.is_some() {
+                        t.put_away_for = merged_url;
+                        self.dirty = true;
+                    }
                 }
             }
+            Command::SnoozePane { term, until } => self.snooze_pane(term, until, term::unix_now())?,
             Command::MarkSeen { term } => {
                 if self
                     .terms
@@ -810,9 +835,21 @@ impl Daemon {
                     "Its agent is working; wait for it to finish before restoring"
                 );
                 let dir = pane.cwd.clone();
+                // A chat's agent works through its conversation, which its terminal's status does not show.
+                let working: Vec<_> = self
+                    .conversations
+                    .iter()
+                    .filter(|c| {
+                        self.conversation_states
+                            .get(&c.id)
+                            .is_some_and(|state| state.status == Status::Working)
+                    })
+                    .map(|c| c.binding.worktree.clone().unwrap_or_else(|| c.binding.cwd.clone()))
+                    .collect();
                 let tx = self.tx.clone();
                 tokio::task::spawn_blocking(move || {
-                    let result = repo::restore(&dir, &commit).map_err(|e| format!("{e:#}"));
+                    let result =
+                        repo::restore(&dir, &commit, &working).map_err(|e| format!("{e:#}"));
                     let _ = tx.blocking_send(Ev::RepoReady {
                         client,
                         tag,
@@ -1008,12 +1045,16 @@ impl Daemon {
                 self.set_status(q.term, Status::Working, "you answered it");
                 self.dirty = true;
             }
-            Command::QueueFollowUp { term, text, first } => {
+            Command::QueueFollowUp { term, text, first, operation } => {
                 let t = self
                     .terms
                     .get_mut(&term)
                     .ok_or_else(|| anyhow::anyhow!("no pane {term}"))?;
                 let text = text.trim();
+                let now = Instant::now();
+                if self.terminal_sends.already_sent(term, operation, text, now)? {
+                    return Ok(true);
+                }
                 if t.agent.is_none() {
                     anyhow::bail!("only an agent takes a follow-up");
                 }
@@ -1028,6 +1069,7 @@ impl Daemon {
                 } else {
                     t.queue.push_back(text.to_string());
                 }
+                self.terminal_sends.remember(term, operation, text, now);
                 self.dirty = true;
             }
             Command::ClearQueue { term } => {
@@ -1049,12 +1091,16 @@ impl Daemon {
                 t.queue.remove(index);
                 self.dirty = true;
             }
-            Command::SendWhenReady { term, text } => {
+            Command::SendWhenReady { term, text, operation } => {
                 let t = self
                     .terms
                     .get_mut(&term)
                     .ok_or_else(|| anyhow::anyhow!("no pane {term}"))?;
                 let text = text.trim();
+                let now = Instant::now();
+                if self.terminal_sends.already_sent(term, operation, text, now)? {
+                    return Ok(true);
+                }
                 if text.is_empty() {
                     anyhow::bail!("there's nothing to send");
                 }
@@ -1062,6 +1108,7 @@ impl Daemon {
                     anyhow::bail!("a message is already waiting for its agent");
                 }
                 t.held_message = Some(term::HeldMessage::new(text));
+                self.terminal_sends.remember(term, operation, text, now);
             }
             Command::RerunCheck { term, name } => self.rerun_check(term, name.as_deref())?,
             Command::OverrideCheck { term, name, reason } => {
@@ -1142,8 +1189,10 @@ impl Daemon {
                 } else {
                     self.save_outputs(true);
                 }
-                // Usage is history, not session state: it is kept even with --forget.
+                // Usage and closed sessions are history, not session state: they are kept even
+                // with --forget.
                 self.usage_store.save_now(term::unix_now());
+                self.closed_sessions.save_now();
                 for t in self.terms.values_mut() {
                     t.kill_tree();
                 }

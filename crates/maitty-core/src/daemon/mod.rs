@@ -12,6 +12,7 @@ mod check_source;
 mod check_stale;
 mod clone;
 mod commit;
+mod closed_sessions;
 mod commands;
 mod contain;
 mod conversation;
@@ -30,15 +31,18 @@ mod pr;
 #[cfg(unix)]
 mod provider_groups;
 mod pull_request;
+mod reopen;
 mod repeats;
 mod repo;
 mod restore;
 mod scan;
 mod search;
 mod secrets;
+mod snooze;
 mod status;
 mod sync;
 mod term;
+mod terminal_sends;
 mod usage;
 mod usage_store;
 mod warm;
@@ -157,7 +161,8 @@ pub enum Ev {
     },
     Output(TermId, Vec<u8>),
     Exited(TermId),
-    ProcessExited(TermId),
+    /// A pane's own process exited; true when it reported a failure.
+    ProcessExited(TermId, bool),
     Scan(Vec<scan::Found>),
     Git(Vec<(WsId, Option<GitInfo>)>),
     /// Lines added and removed per checkout, read beside the git poll.
@@ -229,6 +234,10 @@ pub enum Ev {
         client: ClientId,
         result: Result<Vec<WorktreeEntry>, String>,
     },
+    WorktreeStandingReady {
+        client: ClientId,
+        result: Result<Option<crate::tidy::Standing>, String>,
+    },
     SearchReady {
         client: ClientId,
         hits: Vec<crate::protocol::SearchHit>,
@@ -252,6 +261,13 @@ pub enum Ev {
         client: ClientId,
         tag: u64,
         listing: crate::protocol::FolderListing,
+    },
+    /// A closed session's folder is ready to start it in, its worktree made again if it was gone
+    /// (`Command::ReopenClosedSession`).
+    ClosedSessionReady {
+        client: ClientId,
+        cmd: String,
+        result: Result<reopen::Ready, String>,
     },
     SavedConversationsReady {
         client: ClientId,
@@ -477,14 +493,24 @@ struct Daemon {
         BTreeMap<crate::conversation::ConversationId, conversation::history::History>,
     /// Agents running in desktop panes, followed read-only through their own transcripts.
     followed: Vec<conversation::follow::Followed>,
+    /// Follow-ups and held messages sent with an operation, so a retry is not typed twice.
+    terminal_sends: terminal_sends::TerminalSends,
     /// Messages sent while a turn ran, per conversation, delivered in order as turns end.
     conversation_queues:
         BTreeMap<crate::conversation::ConversationId, Vec<conversation::commands::QueuedSend>>,
+    /// The messages each conversation most recently acknowledged, newest last and bounded, so a
+    /// retry of a send or a send-now for one of them is answered and never sent twice. The
+    /// conversation's single receipt cannot do this once a message is sent out of turn.
+    conversation_recent:
+        BTreeMap<crate::conversation::ConversationId, std::collections::VecDeque<crate::conversation::Operation>>,
     /// The highest id given to a followed pane, so an id is not reused while the daemon lives.
     followed_high_water: u64,
     /// Tests read transcripts from a scratch "home" instead of the real one.
     #[cfg(test)]
     followed_home: Option<PathBuf>,
+    /// Tests note why each pane snapshot was asked for instead of taking it.
+    #[cfg(test)]
+    pane_snapshots: Vec<String>,
     conversation_cache: Option<conversation::history_storage::Cache>,
     conversation_cache_dirty: std::collections::BTreeSet<crate::conversation::ConversationId>,
     conversation_cache_writes: BTreeMap<crate::conversation::ConversationId, u64>,
@@ -503,6 +529,10 @@ struct Daemon {
     turns: Vec<(u64, String, String, u64)>,
     /// Provider-reported usage per session per day, kept on disk (ADR 0009).
     usage_store: usage_store::UsageStore,
+    /// Agent sessions that closed for good or crashed, kept on disk.
+    closed_sessions: closed_sessions::ClosedSessions,
+    /// What a pane whose output ended would record if its process turns out to have failed.
+    unreaped: HashMap<TermId, ClosedSession>,
     codex_busy: bool,
     last_codex: Instant,
     effort_busy: bool,
@@ -707,6 +737,7 @@ async fn serve(
             if !client_reads(&msg, theirs) {
                 continue;
             }
+            let msg = for_client(msg, theirs);
             let bye = matches!(msg, ServerMsg::Bye);
             if ipc::send(&mut w, &msg).await.is_err() || bye {
                 break;
@@ -742,6 +773,21 @@ async fn serve(
 /// never sent a message added after it: it could not decode it, and would drop the connection.
 fn client_reads(msg: &ServerMsg, theirs: u32) -> bool {
     theirs >= msg.introduced_in()
+}
+
+/// `msg` as a client at `theirs` can read it. A reasoning item is a kind of history entry added
+/// inside the compatibility window: an older client could not decode a page that held one, so
+/// its pages go without them.
+fn for_client(mut msg: ServerMsg, theirs: u32) -> ServerMsg {
+    use crate::conversation::history::Content;
+    if theirs < REASONING_ITEM_SINCE
+        && let ServerMsg::Reply(Reply::ConversationRead(read)) = &mut msg
+    {
+        read.history
+            .entries
+            .retain(|entry| !matches!(entry.content, Content::Reasoning { .. }));
+    }
+    msg
 }
 
 /// Whether a frame that would not decode is passed over instead of ending the connection: only
@@ -967,6 +1013,16 @@ impl Daemon {
                 anyhow::bail!("Only a human client can remove a queued message")
             }
             Command::ConversationDequeue { .. } => self.may(client, Grant::Write, None),
+            Command::ConversationSendNow { .. }
+                if structured
+                    || self
+                        .clients
+                        .get(&client)
+                        .is_some_and(|client| client.from.is_some()) =>
+            {
+                anyhow::bail!("Only a human client can send a queued message now")
+            }
+            Command::ConversationSendNow { .. } => self.may(client, Grant::Write, None),
             Command::SetSetting { .. }
                 if structured
                     || self
@@ -1023,6 +1079,10 @@ impl Daemon {
                 anyhow::bail!("Only an app window can keep an agent warm")
             }
             Command::Prewarm { .. } | Command::DropPrewarm => Ok(()),
+            Command::ReopenClosedSession { .. } if self.client_is_agent(client) => {
+                anyhow::bail!("reopening a closed session is yours to do, not a pane's")
+            }
+            Command::ReopenClosedSession { .. } => self.may(client, Grant::Start, None),
             Command::NewWorkspace { .. }
             | Command::NewTab { .. }
             | Command::NewFleet { .. }
@@ -1154,6 +1214,9 @@ impl Daemon {
             Command::SpendSecret { .. } if !self.client_is_agent(client) => {
                 anyhow::bail!("only an agent pane can spend a secret reference")
             }
+            Command::SnoozePane { .. } if self.client_is_agent(client) => {
+                anyhow::bail!("snoozing a session is yours to do, not a pane's")
+            }
             // A session may not let itself (or another) start helpers.
             Command::AnswerHelpers { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("starting helpers is yours to allow, not a pane's")
@@ -1267,10 +1330,14 @@ impl Daemon {
             conversation_barriers: BTreeMap::new(),
             conversation_histories: BTreeMap::new(),
             followed: Vec::new(),
+            terminal_sends: terminal_sends::TerminalSends::default(),
             conversation_queues: BTreeMap::new(),
+            conversation_recent: BTreeMap::new(),
             followed_high_water: 0,
             #[cfg(test)]
             followed_home: None,
+            #[cfg(test)]
+            pane_snapshots: Vec::new(),
             conversation_cache: None,
             conversation_cache_dirty: Default::default(),
             conversation_cache_writes: Default::default(),
@@ -1294,6 +1361,14 @@ impl Daemon {
                     term::unix_now(),
                 )
             },
+            closed_sessions: if cfg!(test) {
+                closed_sessions::ClosedSessions::in_memory()
+            } else {
+                closed_sessions::ClosedSessions::open(
+                    closed_sessions::ClosedSessions::default_path(),
+                )
+            },
+            unreaped: HashMap::new(),
             codex_busy: false,
             last_codex: Instant::now() - Duration::from_secs(3600),
             effort_busy: false,
@@ -1328,6 +1403,7 @@ impl Daemon {
                     self.finish_chat_closes();
                     self.close_ended_agents();
                     self.expire_warm();
+                    self.wake_snoozed(term::unix_now());
                     self.update_statuses();
                     self.settled_alerts();
                     self.phone_alerts();
@@ -1375,6 +1451,7 @@ impl Daemon {
                 // The user closed everything, so start fresh next time.
                 persist::forget();
                 self.usage_store.save_now(term::unix_now());
+                self.closed_sessions.save_now();
                 self.broadcast(|_| true, ServerMsg::Bye);
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 let _ = std::fs::remove_file(ipc::pid_file());
@@ -1939,10 +2016,12 @@ impl Daemon {
                 }
                 if self.terms.contains_key(&tid) {
                     self.last_loss = Some(Instant::now());
+                    self.await_pane_exit(tid);
                     self.remove_term(tid, RemovalReason::Exited);
                 }
             }
-            Ev::ProcessExited(tid) => {
+            Ev::ProcessExited(tid, failed) => {
+                self.pane_process_exited(tid, failed);
                 if self.terms.contains_key(&tid) {
                     self.last_loss = Some(Instant::now());
                     self.remove_term(tid, RemovalReason::Exited);
@@ -2221,6 +2300,9 @@ impl Daemon {
                 set_up,
                 result,
             } => self.branch_worktree_made(client, set_up, result),
+            Ev::ClosedSessionReady { client, cmd, result } => {
+                self.closed_session_ready(client, cmd, result)
+            }
             Ev::AgentWorktreeMade { client, result } => {
                 self.pending_ops -= 1;
                 match result {
@@ -2299,6 +2381,12 @@ impl Daemon {
             }
             Ev::WorktreeList { client, result } => match result {
                 Ok(list) => self.send(client, ServerMsg::Reply(Reply::Worktrees(list))),
+                Err(e) => self.send(client, ServerMsg::Error(e)),
+            },
+            Ev::WorktreeStandingReady { client, result } => match result {
+                Ok(standing) => {
+                    self.send(client, ServerMsg::Reply(Reply::WorktreeStanding(standing)))
+                }
                 Err(e) => self.send(client, ServerMsg::Error(e)),
             },
             Ev::SearchReady { client, hits } => {
@@ -2840,6 +2928,24 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can read usage".into())
                     }
+                    Query::WorktreeStanding { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can read where a worktree stands".into())
+                    }
+                    Query::WorktreeStanding { repo, folder } => {
+                        let inactive_after = self.cfg.worktree.inactive_days;
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let result = worktree_standing(&repo, &folder, inactive_after);
+                            let _ = tx.blocking_send(Ev::WorktreeStandingReady { client, result });
+                        });
+                        return;
+                    }
+                    Query::ClosedSessions if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can read the closed sessions".into())
+                    }
+                    Query::ClosedSessions => {
+                        ServerMsg::Reply(Reply::ClosedSessions(self.closed_sessions.list().to_vec()))
+                    }
                     Query::AllowedCommands if self.client_is_agent(client) => {
                         ServerMsg::Error("Only a human client can read the approved commands".into())
                     }
@@ -3272,6 +3378,7 @@ impl Daemon {
                         label: t.label.clone(),
                         pinned: t.pinned,
                         archived: t.archived,
+                        snoozed_until: t.snoozed_until,
                         mem: t.mem,
                         cpu: t.cpu,
                         bell: t.bell,
@@ -3691,6 +3798,7 @@ impl Daemon {
 
     /// End a pane on purpose. To a list that showed it, a person closed it.
     fn close_term(&mut self, term: TermId) {
+        self.remember_closed_pane(term);
         self.end_term(term, RemovalReason::Closed);
     }
 
@@ -3781,6 +3889,8 @@ fn home() -> PathBuf {
 mod branch_agent_tests;
 #[cfg(test)]
 mod logic_tests;
+#[cfg(test)]
+mod wire_size_tests;
 
 #[cfg(test)]
 mod tests {
@@ -3802,6 +3912,43 @@ mod tests {
             PROTOCOL_VERSION + 1,
             &anyhow::anyhow!("the pipe closed")
         ));
+    }
+
+    #[test]
+    fn a_client_from_before_reasoning_items_is_sent_its_history_without_them() {
+        use super::{REASONING_ITEM_SINCE, Reply, ServerMsg, for_client};
+        use crate::conversation::history::Content;
+        let page: crate::conversation::ReadResult = serde_json::from_value(serde_json::json!({
+            "conversation": 1, "generation": 1, "status": "Done", "receipt": null, "error": null,
+            "checks": [], "approvals": [],
+            "history": { "next": null, "completeness": "Complete", "entries": [
+                { "source": { "conversation": 1, "turn": "t", "item": "thought" }, "state": "Completed",
+                  "content": { "Reasoning": { "text": "Weighing two fixes" } } },
+                { "source": { "conversation": 1, "turn": "t", "item": "said" }, "state": "Completed",
+                  "content": { "Message": { "role": "Assistant", "text": "Done." } } },
+            ] },
+        }))
+        .unwrap();
+        let kinds = |theirs: u32| {
+            let sent = for_client(ServerMsg::Reply(Reply::ConversationRead(page.clone())), theirs);
+            let ServerMsg::Reply(Reply::ConversationRead(read)) = sent else {
+                panic!("a read stays a read");
+            };
+            read.history
+                .entries
+                .iter()
+                .map(|entry| matches!(entry.content, Content::Reasoning { .. }))
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(kinds(REASONING_ITEM_SINCE), [true, false]);
+        assert_eq!(kinds(REASONING_ITEM_SINCE - 1), [false]);
+        const {
+            assert!(
+                REASONING_ITEM_SINCE > crate::protocol::COMPATIBLE_SINCE
+                    && REASONING_ITEM_SINCE <= crate::protocol::PROTOCOL_VERSION
+            )
+        };
     }
 
     #[test]
@@ -3838,6 +3985,51 @@ mod tests {
             "never trusts what you didn't"
         );
         assert_eq!(v["other"], 1, "the rest of the file is kept");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn two_worktrees_trusted_at_once_are_both_trusted() {
+        let dir = std::env::temp_dir().join(format!(
+            concat!(env!("APP_COMMAND"), "-trust-both-{}"),
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("claude.json");
+        for round in 0..30 {
+            std::fs::write(
+                &f,
+                r#"{"projects":{"c:/code/app":{"hasTrustDialogAccepted":true}}}"#,
+            )
+            .unwrap();
+            let start = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let trusts: Vec<_> = ["a", "b"]
+                .into_iter()
+                .map(|name| {
+                    let (f, start) = (f.clone(), start.clone());
+                    std::thread::spawn(move || {
+                        start.wait();
+                        super::trust_in(
+                            &f,
+                            std::path::Path::new("C:/code/app"),
+                            &std::path::Path::new("C:/code/app-worktrees").join(name),
+                        );
+                    })
+                })
+                .collect();
+            for trust in trusts {
+                trust.join().unwrap();
+            }
+            let v: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&f).unwrap()).unwrap();
+            for name in ["a", "b"] {
+                assert_eq!(
+                    v["projects"][format!("C:/code/app-worktrees/{name}")]["hasTrustDialogAccepted"],
+                    true,
+                    "round {round}: worktree {name} lost its trust"
+                );
+            }
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

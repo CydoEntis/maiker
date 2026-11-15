@@ -116,5 +116,10 @@ export function projectItem(provider: ChatProvider, content: ItemContent, base: 
     if (content.Tool.kind === CONTEXT_SUMMARY_ITEM) return [{ ...base, kind: 'summary', text: content.Tool.output }]
     return provider === 'claude' ? claudeTool(content.Tool, base) : codexTool(content.Tool, base)
   }
+  if ('Reasoning' in content) {
+    const { text } = content.Reasoning
+    // A summary with nothing in it has nothing to open, so it gets no row.
+    return text.trim() === '' ? [] : [{ ...base, kind: 'reasoning', text }]
+  }
   return unsupportedItem(provider, content.Unsupported.kind, base)
 }

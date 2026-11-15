@@ -40,6 +40,8 @@ const TerminalSessionSchema = z.object({
   branch: z.string().nullable().default(null),
   // The pane runs in a linked worktree rather than the main checkout (the daemon's `TermInfo.linked`).
   linked: z.boolean().default(false),
+  // The top folder of the checkout (main or a linked worktree) the pane is in (`TermInfo.top`).
+  top: z.string().nullable().default(null),
   label: z.string().default(''),
   pinned: z.boolean().default(false),
   // Whether the agent's hooks have reported in; an agent started before they were installed never does.
@@ -61,6 +63,8 @@ const TerminalSessionSchema = z.object({
   status_why: z.string().default(''),
   // When the daemon tells an agent stopped by its plan limit to continue, in unix seconds (`TermInfo.resume_at`); null when it is not held.
   resume_at: z.number().nonnegative().nullable().default(null),
+  // Out of the way until this time, in unix seconds (`TermInfo.snoozed_until`); null when it is awake.
+  snoozed_until: z.number().nonnegative().nullable().default(null),
   asking: z.string().default(''),
   // The pane's checks (`TermInfo.checks`); absent from an older daemon.
   checks: z.array(CheckSchema).default([]),
@@ -121,6 +125,11 @@ const DaemonSnapshotSchema = z.object({
   workspaces: z.array(WorkspaceSummarySchema),
   // Read one by one: a terminal this app can't read is left out rather than hiding every session.
   terms: z.record(z.string(), z.unknown()).default({}),
+  // The daemon's count of updates to this list (`Snapshot.revision`); 0 from a daemon built before it.
+  revision: z.number().int().nonnegative().default(0).catch(0),
+  // Why each pane this update dropped left (`Snapshot.removed`), by pane number. Every reason, `Unknown` and one
+  // newer than this build included, is the daemon saying the pane left; empty when it did not say.
+  removed: z.record(z.string(), z.string()).default({}).catch({}),
 })
 
 const HistoryCursorSchema = z.object({
@@ -153,6 +162,7 @@ const HistoryEntrySchema = z.object({
       }),
     }),
     z.object({ Unsupported: z.object({ kind: z.string() }) }),
+    z.object({ Reasoning: z.object({ text: z.string() }) }),
   ]),
   state: z.enum(['Running', 'Completed', 'Failed', 'Interrupted']),
   started_at_ms: z.number().int().nonnegative().optional(),
@@ -400,6 +410,15 @@ export async function loadConversations(): Promise<Conversation[]> {
 }
 
 /**
+ * This computer's list read to check on sessions a list missed. It is not the list the window shows, so it leaves
+ * what the window last heard (`localListRevision`, `daemonSaidRemoved`) as it was.
+ */
+export async function checkConversations(): Promise<Conversation[]> {
+  if (!isDesktop()) return previewConversations
+  return conversationsOf(DaemonSnapshotSchema.parse(await invoke<unknown>('list_sessions')))
+}
+
+/**
  * Calls back with the daemon's snapshot each time it changes (the same shape `list_sessions`
  * returns), or with null when the host lost the daemon and the list has to be asked for again.
  */
@@ -417,6 +436,11 @@ export type SnapshotMachine = { id: number; name: string }
  */
 export function conversationsFromSnapshot(raw: unknown, machine?: SnapshotMachine): Conversation[] {
   const snapshot = DaemonSnapshotSchema.parse(raw)
+  noteList(snapshot, machine)
+  return conversationsOf(snapshot, machine)
+}
+
+function conversationsOf(snapshot: DaemonSnapshot, machine?: SnapshotMachine): Conversation[] {
   const from = machine?.id ?? LOCAL_MACHINE
   for (const key of lastGoodTerm.keys()) {
     if (isOfMachine(key, from) && !(String(termOfKey(key)) in snapshot.terms)) lastGoodTerm.delete(key)
@@ -457,6 +481,28 @@ export function conversationsFromSnapshot(raw: unknown, machine?: SnapshotMachin
 }
 
 type TerminalSession = z.infer<typeof TerminalSessionSchema>
+
+type DaemonSnapshot = z.infer<typeof DaemonSnapshotSchema>
+
+// What the daemons said of their lists: the revision of this computer's last one read, and the sessions each
+// daemon said left and has not listed since, by session id (another machine's carry its name). Several lists can
+// arrive between two renders, so a reason is kept past its own list; a new daemon numbers its panes from 1 again,
+// so listing a pane forgets its old reason.
+let localRevision = 0
+const leftWithReason = new Set<string>()
+
+function noteList(snapshot: DaemonSnapshot, machine?: SnapshotMachine): void {
+  if (machine === undefined) localRevision = snapshot.revision
+  const idOf = (pane: string) => terminalSessionId(Number(pane), machine?.name ?? null)
+  for (const pane of Object.keys(snapshot.terms)) leftWithReason.delete(idOf(pane))
+  for (const pane of Object.keys(snapshot.removed)) leftWithReason.add(idOf(pane))
+}
+
+/** The revision of the last list of this computer's sessions read, 0 when the daemon does not number them. */
+export const localListRevision = (): number => localRevision
+
+/** Whether the session's daemon (this computer's or another machine's) said it left its list, for any reason, and has not listed it since. */
+export const daemonSaidRemoved = (sessionId: string): boolean => leftWithReason.has(sessionId)
 
 // A session that fails to read for one refresh must not vanish from the sidebar and come back
 // 1.5 seconds later, so it keeps its last good state, and the reason is logged once.
@@ -570,6 +616,8 @@ export async function loadMessages(
         time: 'Recent',
       }]
     }
+    // A reasoning summary has no row yet, so it is shown as nothing.
+    if ('Reasoning' in entry.content) return []
     return [{
       id: `${entry.source.turn}:${entry.source.item}`,
       role: 'activity',
@@ -769,12 +817,13 @@ export async function loadTerminalReplay(conversation: Pick<Conversation, 'id'> 
 
 /**
  * Leaves a message with the pane's daemon for its working agent: typed in when the turn is over, whether or not
- * this window is open. `first` puts it ahead of the ones already waiting.
+ * this window is open. `first` puts it ahead of the ones already waiting. A retry carries the same `operation`
+ * (`terminalSendOperation`), so a daemon that took the first try does not queue it twice.
  */
-export async function queueFollowUp(conversation: Pick<Conversation, 'id'>, text: string, first: boolean): Promise<void> {
+export async function queueFollowUp(conversation: Pick<Conversation, 'id'>, text: string, first: boolean, operation: number): Promise<void> {
   const pane = addressOf(conversation.id)
   if (!isDesktop() || pane === null) throw new Error('Only an agent in a terminal takes a queued message')
-  await invokeParsed('queue_follow_up', NullSchema, { term: pane.term, text, first, ...machineArgs(pane) })
+  await invokeParsed('queue_follow_up', NullSchema, { term: pane.term, text, first, operation, ...machineArgs(pane) })
 }
 
 /** Takes back the queued message at `index`, while it still reads `text`: the queue moves when a turn ends. */
@@ -860,6 +909,19 @@ export async function dequeueMessage(conversation: Pick<Conversation, 'id' | 'ge
   })
 }
 
+/**
+ * Sends a message waiting in the daemon's queue now, without waiting for the turn to end. The daemon answers only once the
+ * message was taken; a refusal rejects with its reason and the message stays queued.
+ */
+export async function sendQueuedMessageNow(conversation: Pick<Conversation, 'id' | 'generation'>, operation: number): Promise<void> {
+  await invokeParsed('send_conversation_now', NullSchema, {
+    id: splitConversationKey(Number(conversation.id)).id,
+    ...machineArgOfKey(Number(conversation.id)),
+    generation: conversation.generation,
+    operation,
+  })
+}
+
 export async function approveRequest(conversation: Pick<Conversation, 'id' | 'generation'>, requestId: number | string, decision: 'Accept' | 'AcceptForSession' | 'Decline' | 'Cancel'): Promise<void> {
   await invokeParsed('approve_conversation', NullSchema, {
     id: splitConversationKey(Number(conversation.id)).id,
@@ -917,6 +979,13 @@ export async function archiveSessionOnDaemon(conversation: Pick<Conversation, 'i
   if (pane !== null) await invokeParsed('archive_terminal_session', NullSchema, { term: pane.term, archived, ...machineArgs(pane) })
 }
 
+/** Snooze a session until `until` (unix seconds), or wake it (`null`). It keeps running: the daemon owns the snooze and ends it when its time comes or the session needs you. */
+export async function snoozeSessionOnDaemon(conversation: Pick<Conversation, 'id'>, until: number | null): Promise<void> {
+  if (!isDesktop()) return
+  const pane = addressOf(conversation.id)
+  if (pane !== null) await invokeParsed('snooze_terminal_session', NullSchema, { term: pane.term, until, ...machineArgs(pane) })
+}
+
 /** Restart an agent in place, keeping its name, so it loads hooks it missed. */
 export async function reloadAgentOnDaemon(conversation: Pick<Conversation, 'id'>): Promise<void> {
   if (!isDesktop()) return
@@ -965,10 +1034,10 @@ export async function markSeenOnDaemon(conversation: Pick<Conversation, 'id'>): 
 }
 
 /** Hands a message to a terminal session's daemon, which types it in once the agent starting there takes input. */
-export async function sendWhenAgentReady(sessionId: string, text: string): Promise<void> {
+export async function sendWhenAgentReady(sessionId: string, text: string, operation: number): Promise<void> {
   const pane = addressOf(sessionId)
   if (pane === null) throw new Error('Only a terminal session holds a message for its agent')
-  await invokeParsed('send_when_agent_ready', NullSchema, { term: pane.term, text, ...machineArgs(pane) })
+  await invokeParsed('send_when_agent_ready', NullSchema, { term: pane.term, text, operation, ...machineArgs(pane) })
 }
 
 export async function renameConversationOnDaemon(conversation: Pick<Conversation, 'id'>, title: string): Promise<void> {
@@ -1089,6 +1158,50 @@ export type FolderBranches = NonNullable<z.infer<typeof FolderBranchesSchema>>
 /** A folder's branches (newest commit first) and worktrees; null when the folder is not in a git repository. */
 export async function folderBranches(folder: string): Promise<FolderBranches | null> {
   return invokeParsed('git_branches', FolderBranchesSchema, { folder })
+}
+
+const SavedConversationSchema = z.object({ id: z.string(), first_message: z.string(), last_active: z.number().int().nonnegative() })
+export type SavedConversation = z.infer<typeof SavedConversationSchema>
+const SavedConversationsSchema = z.union([z.null(), z.literal('NotSupported'), z.object({ Listed: z.array(SavedConversationSchema) })])
+
+/**
+ * The conversations an agent saved for a folder on this computer, newest first; empty for an agent the daemon reads
+ * none of. Null when the service running is older than the question.
+ */
+export async function savedConversations(agent: 'claude' | 'codex', folder: string): Promise<SavedConversation[] | null> {
+  const found = await invokeParsed('saved_conversations', SavedConversationsSchema, { agent, folder })
+  if (found === null) return null
+  return found === 'NotSupported' ? [] : found.Listed
+}
+
+const ClosedSessionSchema = z.object({
+  agent: z.string(),
+  session: z.string(),
+  cwd: z.string(),
+  branch: z.string().nullable(),
+  title: z.string().nullable(),
+  at: z.number().int().nonnegative(),
+  folder_present: z.boolean(),
+  /** The linked worktree it worked in and that worktree's repository, when it was in one; what a removed folder is made again from. */
+  worktree: z.string().nullable(),
+  repo: z.string().nullable(),
+})
+export type ClosedSession = z.infer<typeof ClosedSessionSchema>
+
+/**
+ * The agent sessions that closed on this computer, newest first, each saying whether its folder is still there. Null
+ * when the service running is older than the question.
+ */
+export async function closedSessions(): Promise<ClosedSession[] | null> {
+  return invokeParsed('closed_sessions', z.array(ClosedSessionSchema).nullable())
+}
+
+/**
+ * Has this computer's service reopen a closed session it keeps: its worktree made again when the folder is gone, then
+ * its agent started there with its conversation. False when the service running is older than this and was not asked.
+ */
+export async function reopenClosedSession(agent: string, session: string): Promise<boolean> {
+  return invokeParsed('reopen_closed_session', z.boolean(), { agent, session })
 }
 
 /**
@@ -1220,6 +1333,7 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
     nativePane: term.id,
     ...(machine ? { machine: machine.id, machineName: machine.name } : {}),
     linked: term.linked,
+    checkout: term.top,
     hasDiff: term.diff_added + term.diff_removed > 0,
     diffAdded: term.diff_added,
     diffRemoved: term.diff_removed,
@@ -1239,6 +1353,7 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       since: term.since,
       statusWhy: term.status_why,
       resumeAt: term.resume_at,
+      snoozedUntil: term.snoozed_until,
       timeline: term.timeline,
       usage: term.usage,
       queued: term.queued,
@@ -1293,6 +1408,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
     ...(chatSession
       ? {
           cwd,
+          checkout: summary.worktree,
           repo: root === null ? null : (root.split(/[\\/]/).filter(Boolean).at(-1) ?? null),
           agent: summary.provider.toLowerCase(),
           process: summary.provider.toLowerCase(),

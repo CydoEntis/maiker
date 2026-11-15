@@ -14,6 +14,8 @@ const MAX_PLAN_BYTES: usize = 64 * 1024;
 /// The item a provider's own summary of the earlier conversation arrives as. It is kept as a tool
 /// step of this kind, with the summary as its output.
 pub(super) const CONTEXT_SUMMARY_ITEM: &str = "contextSummary";
+/// Largest summary text kept for one reasoning item.
+const MAX_REASONING_BYTES: usize = 64 * 1024;
 
 fn tool_label(item: &Value) -> String {
     item.get("command")
@@ -105,10 +107,11 @@ pub(super) fn notification(
         item: text(item, "id")?.into(),
     };
     let kind = text(item, "type")?;
-    if kind == "reasoning" {
-        return Ok(None);
-    }
     let content = match kind {
+        "reasoning" => match reasoning_summary(item) {
+            Some(text) => Content::Reasoning { text },
+            None => return Ok(None),
+        },
         "agentMessage" => Content::Message {
             role: Role::Assistant,
             text: item
@@ -218,15 +221,40 @@ fn seconds_as_ms(turn: &Value, field: &str) -> Option<u64> {
 }
 
 fn bounded_plan(text: &str) -> String {
+    bounded(text, MAX_PLAN_BYTES, "plan")
+}
+
+/// `text` with terminal escapes stripped, cut at `max_bytes` with a note naming `what` was cut.
+fn bounded(text: &str, max_bytes: usize, what: &str) -> String {
     let clean = clean_text(text);
-    if clean.len() <= MAX_PLAN_BYTES {
+    if clean.len() <= max_bytes {
         return clean;
     }
-    let mut end = MAX_PLAN_BYTES;
+    let mut end = max_bytes;
     while !clean.is_char_boundary(end) {
         end -= 1;
     }
-    format!("{}\n... plan cut off", &clean[..end])
+    format!("{}\n... {what} cut off", &clean[..end])
+}
+
+/// The summary a Codex reasoning item publishes as plain text, its parts one paragraph each.
+/// `None` when it has none: the reasoning itself (its `content`) is never read or kept.
+fn reasoning_summary(item: &Value) -> Option<String> {
+    let parts: Vec<&str> = item
+        .get("summary")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .collect();
+    if parts.is_empty() {
+        return None;
+    }
+    // Masked before the cut: a secret split by the cut would no longer match a pattern.
+    let joined = parts.join("\n\n");
+    let masked = super::redact::redact_text(&joined);
+    Some(bounded(&masked, MAX_REASONING_BYTES, "reasoning"))
 }
 
 /// The first line of the task given to a helper agent, or the helper tool's name when the call

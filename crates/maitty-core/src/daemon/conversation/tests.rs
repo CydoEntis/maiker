@@ -98,6 +98,7 @@ fn claude_launch(root: &Path, scenario: Option<&str>) -> (Launch, super::runtime
         awaiting_first_user_message: false,
         title: None,
         archived: false,
+        worktree_origin: None,
     };
     let environment = scenario
         .map(|scenario| {
@@ -2151,6 +2152,7 @@ async fn a_closed_chat_is_hidden_at_once_comes_back_with_undo_and_ends_when_the_
         assert!(matches!(back, ServerMsg::Reply(crate::protocol::Reply::Ok)), "{back:?}");
         assert!(!archived(&session), "brought back");
         assert!(session.daemon.conversation_closing.is_empty());
+        assert!(session.daemon.closed_sessions.list().is_empty(), "an undo leaves no record");
         let late = exchange(&mut session, 423, undo.clone(), None).await;
         assert!(matches!(late, ServerMsg::Error(ref message) if message.contains("window has passed")), "{late:?}");
 
@@ -2158,10 +2160,16 @@ async fn a_closed_chat_is_hidden_at_once_comes_back_with_undo_and_ends_when_the_
         assert!(matches!(exchange(&mut session, 424, close, None).await, ServerMsg::Reply(crate::protocol::Reply::Ok)));
         session.daemon.finish_chat_closes();
         assert!(session.daemon.conversation_runtimes.owns(id), "not before the window passes");
+        assert!(session.daemon.closed_sessions.list().is_empty(), "no record before the window passes");
         *session.daemon.conversation_closing.get_mut(&id).unwrap() = std::time::Instant::now() - crate::daemon::UNDO_WINDOW;
         session.daemon.finish_chat_closes();
         assert!(session.daemon.conversation_closing.is_empty());
         assert!(archived(&session));
+        let binding = session.daemon.conversations.iter().find(|c| c.id == id).unwrap().binding.clone();
+        let [kept] = session.daemon.closed_sessions.list() else {
+            panic!("one record once the window passed: {:?}", session.daemon.closed_sessions.list());
+        };
+        assert_eq!((kept.session.as_str(), &kept.cwd), (binding.session_id.as_str(), binding.worktree.as_ref().unwrap_or(&binding.cwd)));
         let late = exchange(&mut session, 425, undo, None).await;
         assert!(matches!(late, ServerMsg::Error(ref message) if message.contains("window has passed")), "{late:?}");
     })
@@ -2835,6 +2843,7 @@ async fn structured_runtime_claims_apply_grants_without_human_or_pane_exemptions
             term: pane,
             text: "Synthetic scoped write".into(),
             first: false,
+            operation: None,
         });
         let denied =
             exchange_claim(&mut s, 231, write.clone(), None, Some(claim.clone()), None).await;
@@ -3013,6 +3022,35 @@ async fn structured_local_ipc_create_send_read_reconnect_and_exact_identity() {
         let stale=exchange(&mut s,104,crate::protocol::ClientMsg::Command(crate::protocol::Command::ConversationSend { id,generation:generation+1,operation:2,text:"Synthetic stale".into(),choice:None }),None).await;
         assert!(matches!(stale,ServerMsg::Error(ref e) if e.contains("Stale")));
     }).catch_unwind().await;
+    s.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+#[tokio::test]
+async fn startup_survives_an_unreadable_history_cache_and_keeps_its_files() {
+    let mut s = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        s.daemon.initialize_conversation_cache().await.unwrap();
+        let record = s.fixture.record.clone();
+        let root = s.daemon.session_path.with_extension("history");
+        let dir = root.join(record.id.0.to_string());
+        let written = dir.clone();
+        tokio::task::spawn_blocking(move || {
+            std::fs::create_dir_all(&written).unwrap();
+            std::fs::write(written.join("manifest.json"), b"{ not a manifest").unwrap();
+        })
+        .await
+        .unwrap();
+        s.daemon.conversations.push(record.clone());
+        s.daemon.initialize_conversation_cache().await.unwrap();
+        assert!(!s.daemon.conversation_histories.contains_key(&record.id));
+        let aside = root.join(format!("{}.bad-1", record.id.0));
+        assert!(aside.join("manifest.json").exists());
+    })
+    .catch_unwind()
+    .await;
     s.cleanup().await;
     if let Err(panic) = outcome {
         std::panic::resume_unwind(panic);
@@ -4152,10 +4190,12 @@ async fn a_provider_stopped_cleanly_leaves_no_entry_in_the_record() {
 }
 
 mod queue;
+mod send_now;
 mod continue_turn;
 mod branch_chat;
 mod claude_chat;
 mod turn_snapshot;
+mod worktree_recreate;
 
 #[tokio::test]
 async fn the_daemon_resumes_a_stopped_conversation_on_the_same_id_and_the_next_generation() {

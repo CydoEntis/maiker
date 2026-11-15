@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { cancelTurn, dequeueMessage, submitMessage } from '@/api/daemon'
+import { cancelTurn, dequeueMessage, sendQueuedMessageNow, submitMessage } from '@/api/daemon'
 import { errorMessage } from '@/lib/error-message'
 import { useLatest } from '@/lib/useLatest'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
+import { abilitiesOf, runsMidTurn } from '@/features/workspace/model/agentAbilities'
 import { hasPendingApproval, type ChatFeed } from './chatFeed'
 import { buildAttachmentMessage, parseAttachmentMessage } from './attachmentMessage'
 import { announceOutsideSend, onOutsideSend } from './outsideSends'
@@ -12,8 +13,9 @@ import { peekComposer, updateComposer, useComposerSlice, type ComposerState, typ
 
 import { newId, revokePreviews, useAttachmentIntake, type AttachmentIntake } from './useAttachmentIntake'
 import { wireChoice } from './agentChoice'
-import { reserveOperation, STALE_OPERATION } from './sendOperation'
+import { paneSendOperation, reserveOperation, STALE_OPERATION, type FailedSend } from './sendOperation'
 import { isBangLine, isSlashLine } from './slashCommands'
+import { withRestoreNote } from './editFromHere'
 
 export const PENDING_APPROVAL_NOTE = 'Answer the request above first'
 export const READ_ONLY_NOTE = 'Read-only: talk to the agent in the terminal'
@@ -41,11 +43,9 @@ export const CODEX_SUBMIT_GAP_MS = 400
 /** Types a message into an agent's terminal with `type`, the way that agent takes it (`asTyped`; Codex's commands with a pause before Enter). */
 /** How long the agent is given to switch to its shell mode after the `!` before the command is typed. */
 export const BANG_MODE_GAP_MS = 150
-/** The agents whose prompt takes `!` as "run this in a shell". */
-const BANG_AGENTS: ReadonlySet<string> = new Set(['claude', 'gemini'])
 
 export async function typeMessage(type: (text: string) => Promise<void>, agent: string | undefined, text: string): Promise<void> {
-  if (agent === 'codex' && isSlashLine(text)) {
+  if (abilitiesOf(agent).slashCommands?.enterAfterPause === true && isSlashLine(text)) {
     await type(text)
     await new Promise<void>((resolve) => { window.setTimeout(resolve, CODEX_SUBMIT_GAP_MS) })
     await type('\r')
@@ -53,7 +53,7 @@ export async function typeMessage(type: (text: string) => Promise<void>, agent: 
   }
   // `!command` is typed, never pasted: the agent switches to its shell mode on the typed `!`, runs the command in the
   // terminal it owns and keeps the output in its context. A paste starting with `!` is only text.
-  if (agent !== undefined && BANG_AGENTS.has(agent) && isBangLine(text)) {
+  if (abilitiesOf(agent).bangToTerminal && isBangLine(text)) {
     await type('!')
     await new Promise<void>((resolve) => { window.setTimeout(resolve, BANG_MODE_GAP_MS) })
     await type(`${text.slice(1).trim()}\r`)
@@ -82,8 +82,11 @@ const FOLLOW_UP_REFRESH_MS = 700
 /** The follow-ups a pane's daemon holds for its working agent, and the ways to add one and to take one back. */
 export type PaneQueue = {
   readonly queued: readonly string[]
-  /** Leaves a message with the daemon; `first` puts it ahead of the ones already waiting. */
-  add: (text: string, first: boolean) => Promise<void>
+  /**
+   * Leaves a message with the daemon; `first` puts it ahead of the ones already waiting. `operation` names the
+   * send, so the daemon takes a retry of it as the same message.
+   */
+  add: (text: string, first: boolean, operation: number) => Promise<void>
   /** Takes back the one at `index`, while it still reads `text`. */
   drop: (index: number, text: string) => Promise<void>
 }
@@ -98,6 +101,8 @@ const paneQueuedIndex = (id: number): number => -id - 1
 export type SentEcho = { readonly text: string; readonly baseline: number; readonly quiet: boolean }
 
 /** A message the daemon holds until the running turn ends. `id` is its operation number. */
+const NO_PENDING: ReadonlySet<number> = new Set()
+
 export type QueuedItem = { readonly id: number; readonly text: string }
 
 type Input = {
@@ -144,9 +149,12 @@ export type ChatComposer = {
   editQueued: (id: number) => void
   /**
    * Types a queued message into the agent now, in the turn that is running, as typing in its terminal does: the agent
-   * reads it at its next step instead of when the turn ends. Only for an agent in a terminal.
+   * reads it at its next step instead of when the turn ends. For a chat the daemon runs, the daemon sends it now
+   * (steered into the turn, or the turn stopped for it) and a refusal leaves it queued; absent while a request waits for an answer.
    */
   sendQueuedNow?: ((id: number) => void) | undefined
+  /** The queued messages whose Send now the daemon has not answered yet, so a second click cannot send it twice. */
+  sendingNow?: ReadonlySet<number> | undefined
   /** Sends the draft; while the agent works the daemon holds it and sends it when the turn ends. */
   submit: () => void
   /** Interrupts the running turn. */
@@ -166,6 +174,21 @@ export type ChatComposer = {
 }
 
 /**
+ * A message put back in the box, ahead of anything written there: its files come back as attachments, as they were
+ * when it was written, not as the lines that name them.
+ */
+export function messageIntoDraft(text: string): (state: ComposerState) => ComposerState {
+  const parsed = parseAttachmentMessage(text)
+  const words = parsed?.text ?? text
+  const files = (parsed?.files ?? []).map((file) => ({ id: newId(), path: file.path, name: file.name, size: null, kind: file.kind, preview: null }))
+  return (state) => ({
+    ...state,
+    draft: state.draft.trim() === '' ? words : words === '' ? state.draft : `${words}\n\n${state.draft}`,
+    attachments: [...files, ...state.attachments],
+  })
+}
+
+/**
  * The composer's behaviour. A message goes to the daemon through the conversation's own send, with
  * an operation number the daemon uses to tell a retry from a new message. While a turn runs the
  * daemon holds the message and delivers it when the turn ends, in order and once each, whether or
@@ -177,9 +200,13 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   const paneQueued = paneQueue?.queued ?? NO_QUEUED
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sendingNow, setSendingNow] = useState<ReadonlySet<number>>(NO_PENDING)
   const [echo, setEcho] = useState<SentEcho | null>(null)
   // A send that failed is tried again with the same operation number, so the daemon can tell it is the same message.
   const retry = useRef<{ text: string; operation: number } | null>(null)
+  // The same for a message left with the pane's daemon: one that timed out may have been queued all the same. Set only
+  // once the attempt has failed, so a send still pending is never mistaken for its own retry.
+  const paneRetry = useRef<FailedSend | null>(null)
 
   const readOnly = link.readOnly === true
   // A chat that follows a terminal agent talks to it by typing, when it has a terminal to type in.
@@ -203,6 +230,8 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   const queue = useMemo<readonly QueuedItem[]>(() => [...feed.queued.map((message) => ({ id: message.operation, text: message.text })), ...paneQueued.map((text, index) => ({ id: paneQueuedId(index), text }))], [feed.queued, paneQueued])
 
   const setDraft = useCallback((text: string) => {
+    // Editing the box means the next send is a new message, not the retry of a failed one.
+    if (peekComposer(conversation).draft !== text) paneRetry.current = null
     updateComposer(conversation, (state) => (state.draft === text ? state : { ...state, draft: text }))
   }, [conversation])
 
@@ -268,12 +297,15 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   }, [conversation, link.generation, agent, feed, refresh, typeText, running])
 
   const submit = useCallback(() => {
-    const { draft, attachments } = peekComposer(conversation)
+    const { draft, attachments, note: boxNote } = peekComposer(conversation)
     const text = draft.trim()
     // A message may be only attachments; the block naming them is then the whole text.
     if ((text === '' && attachments.length === 0) || disabledReason !== null || sending) return
     const files = attachments
+    // The agent's own command is not a message to it, so the note waits for the next one that is.
+    const note = isSlashLine(text) || isBangLine(text) ? null : boxNote
     updateComposer(conversation, (state) => ({ ...state, draft: '', attachments: [] }))
+    if (note === null && boxNote !== null) updateComposer(conversation, (state) => ({ ...state, note: boxNote }))
     const settle = (delivered: boolean) => {
       if (delivered) {
         revokePreviews(files)
@@ -285,22 +317,28 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
         revokePreviews(files)
         return
       }
-      updateComposer(conversation, (state) => ({ ...state, draft: text, attachments: files }))
+      updateComposer(conversation, (state) => ({ ...state, draft: text, attachments: files, note: note ?? state.note }))
     }
-    if (holding) {
+    // An agent's own command that runs beside a working turn is typed in now; with files attached the message is a paste, not a command.
+    const typedNow = busy && files.length === 0 && runsMidTurn(agent, text)
+    if (holding && !typedNow) {
       // Left with the pane's daemon until the agent is ready for a message; shown in the queue meanwhile.
       setError(null)
-      paneQueue.add(buildAttachmentMessage(text, files), false).then(
+      const message = withRestoreNote(note, buildAttachmentMessage(text, files))
+      const operation = paneSendOperation(paneRetry.current, message, Date.now())
+      paneRetry.current = null
+      paneQueue.add(message, false, operation).then(
         () => { settle(true) },
         (failure: unknown) => {
+          paneRetry.current = { text: message, operation, at: Date.now() }
           setError(errorMessage(failure, 'Could not queue the message'))
           settle(false)
         },
       )
       return
     }
-    void send(buildAttachmentMessage(text, files)).then(settle)
-  }, [disabledReason, sending, conversation, send, holding, paneQueue])
+    void send(withRestoreNote(note, buildAttachmentMessage(text, files))).then(settle)
+  }, [disabledReason, sending, conversation, send, holding, paneQueue, agent, busy])
 
   // The ones this box took back, so their leaving the queue is not read as the daemon having sent them.
   const taken = useRef(new Set<string>())
@@ -325,7 +363,26 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
 
   const sendQueuedNow = useCallback((operation: number) => {
     // Typed text answers a prompt the agent is showing, so nothing is pushed in while it asks something.
-    if (operation >= 0 || disabledReason !== null || sending) return
+    if (disabledReason !== null || sending) return
+    if (operation >= 0) {
+      // The daemon holds it: it answers only once the message was taken, and refuses with a reason (the turn ended, an
+      // approval waits) otherwise, so the message is still in its queue then and the next read shows it.
+      if (sendingNow.has(operation)) return
+      const settled = () => { setSendingNow((current) => new Set([...current].filter((pending) => pending !== operation))) }
+      setSendingNow((current) => new Set([...current, operation]))
+      sendQueuedMessageNow({ id: String(conversation), generation: link.generation }, operation)
+        .then(() => {
+          setError(null)
+          settled()
+          refresh()
+        })
+        .catch((failure: unknown) => {
+          setError(errorMessage(failure, 'Could not send the queued message now'))
+          settled()
+          refresh()
+        })
+      return
+    }
     const taking = takeBack(operation)
     if (taking === null) return
     // Typed in only once the daemon has let go of it, or it would go in twice.
@@ -341,7 +398,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
         setError(errorMessage(failure, 'Could not send the queued message now'))
       },
     )
-  }, [disabledReason, sending, send, takeBack, conversation])
+  }, [disabledReason, sending, sendingNow, send, takeBack, conversation, link.generation, refresh])
 
   const removeQueued = useCallback((operation: number) => {
     if (operation < 0) {
@@ -366,15 +423,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   const editQueued = useCallback((operation: number) => {
     const message = queue.find((item) => item.id === operation)
     if (message === undefined) return
-    // Its files come back as attachments, as they were when it was written, not as the lines that name them.
-    const parsed = parseAttachmentMessage(message.text)
-    const words = parsed?.text ?? message.text
-    const files = (parsed?.files ?? []).map((file) => ({ id: newId(), path: file.path, name: file.name, size: null, kind: file.kind, preview: null }))
-    const intoDraft = (state: ComposerState): ComposerState => ({
-      ...state,
-      draft: state.draft.trim() === '' ? words : words === '' ? state.draft : `${words}\n\n${state.draft}`,
-      attachments: [...files, ...state.attachments],
-    })
+    const intoDraft = messageIntoDraft(message.text)
     if (operation < 0) {
       const taking = takeBack(operation)
       if (taking === null) return
@@ -411,5 +460,5 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
       .catch((failure: unknown) => { setError(errorMessage(failure, 'Could not interrupt the turn')) })
   }, [running, feed.cancelling, conversation, link.generation, refresh, typeText])
 
-  return { conversationKey: link.conversation, setDraft, attachments, attach, readOnly, attachable: !readOnly || typing, queue, removeQueued, editQueued, sendQueuedNow: typing ? sendQueuedNow : undefined, submit, stop, running, sending, disabledReason, ready: disabledReason === null && !holding, error, sendText: send, echo }
+  return { conversationKey: link.conversation, setDraft, attachments, attach, readOnly, attachable: !readOnly || typing, queue, removeQueued, editQueued, sendQueuedNow: disabledReason === null ? sendQueuedNow : undefined, sendingNow, submit, stop, running, sending, disabledReason, ready: disabledReason === null && !holding, error, sendText: send, echo }
 }

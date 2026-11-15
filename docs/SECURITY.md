@@ -493,7 +493,8 @@ that is not this one (`remote_policy.rs`, `remote_snapshot.rs` in `maitty-machin
 | `Clipboard` | gated by `clipboard` (on by default; `clipboard = false` refuses) | writes this computer's clipboard; cut to 64 KiB; the toast says which machine, and a refused copy says so. This computer's own daemon is not gated: a program in a local pane copies as it would in any terminal |
 | `Notice` | gated by `notices` | a toast, cleaned and led by `[machine]`; it does not touch this computer's undo hint |
 | `Raise` | gated by `notices` | brings the window to the front, the same "may get my attention" grant as a toast (there is no separate `raise` setting) |
-| `Error`, `Reply` | answer, cleaned | applied only while this window has a command or query out to that machine that nothing has answered yet (client-side bookkeeping, see API_PATTERNS "client routing"; the wire is unchanged); otherwise ignored. An error's toast leads with `[machine]`; reply text is cleaned and cut to 256 KiB. A `List` reply is apart from that bookkeeping in the desktop host: a pane delta the machine itself sends can make the host ask for its list, so that asking opens nothing for an error or any other reply, and one `List` is taken only while the host's asking for it is unanswered, then cleaned, capped and id-checked like a `State` (a different daemon's list turns the machine away). A `Worktrees` reply never fills this computer's picker, and a check's output is taken only when the open sheet or the failure waiting for it is on that machine |
+| `Error`, `Reply` | answer, cleaned | applied only while this window has a command or query out to that machine that nothing has answered yet (client-side bookkeeping, see API_PATTERNS "client routing"; the wire is unchanged); otherwise ignored. An error's toast leads with `[machine]`; reply text is cleaned and cut to 256 KiB. A `List` reply is apart from that bookkeeping in the desktop host and the TUI: a pane delta the machine itself sends can make the window ask for its list, so that asking opens nothing for an error or any other reply, spends no other request's allowance, and one `List` is taken only while the window's asking for it is unanswered, then cleaned, capped and id-checked like a `State` (a different daemon's list turns the machine away). A `Worktrees` reply never fills this computer's picker, and a check's output is taken only when the open sheet or the failure waiting for it is on that machine |
+| `Reply::ClosedSessions` | answer, cleaned | the closed sessions a window asked that machine for: at most 50, every field one clean line, cut short; the folder is a label for that machine and never touches this computer's disk |
 | `AskRemoveWorktree` | ignore | names a folder on this computer's disk to delete; remote worktree management is out of scope (ADR 0007) |
 | `Reply::SavedConversations` | ignore | saved conversations are listed for this computer's folders only; another machine's are out of scope |
 | `AutoWorkspace` | ignore | announces a workspace and arms this computer's undo |
@@ -685,6 +686,25 @@ fingerprint (the first 8 bytes of SHA-256 over the tool's name and input, as 16 
 which cannot be turned back into the input and is never logged. The name and input stay in the
 agent.
 
+## Project-specific: closed sessions
+
+The closed-sessions list (`closed-sessions-<socket>.json`, DATABASE "closed sessions") holds each
+agent session's agent name, conversation id, folder (with its worktree and repository when it
+was in one), branch, name and time. It holds no prompts,
+output or secrets, and the name is the one you or the agent gave it, never a prompt. The file is
+private to the user (0600 in a 0700 folder on Unix). `Query::ClosedSessions` is for human clients
+only: an agent pane or a structured runtime cannot read where other work was done.
+
+`Command::ReopenClosedSession { agent, session }` is for human clients only, the same way: a pane,
+a structured runtime or a rejected client is refused. It names an entry the daemon keeps, never a
+path, branch or command: the folder, branch and repository come from that entry, and the command
+typed is the agent's own resume template with the entry's conversation id, which must start with a
+letter or digit and hold only letters, digits, `_` and `-`, at most 128. Making a worktree again
+follows DATABASE "closed sessions": nothing at the path is ever overwritten. Another machine: the
+command is a worktree command, so a window sends it to this computer's daemon only, as it does
+`BranchWorktree` (API_PATTERNS "client routing"; remote worktree management is out of scope, ADR
+0007). Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
+
 ## Project-specific: followed transcripts
 
 The daemon reads an agent's own transcript for a pane it follows ([ADR 0003](adr/0003-status-and-conversation-trust.md)).
@@ -758,7 +778,9 @@ The structured-history cache reuses private-directory/file helpers:
 Windows. Binding fingerprints and numeric Maitty paths keep native identifiers
 out of filenames; pages remain sensitive conversation content, never diagnostics.
 Only current daemon-owned provider events may project into attached history.
-Unsupported raw provider objects are not retained. Cache disable serializes with
+Unsupported raw provider objects are not retained. Of a Codex reasoning item only the plain-text
+summary is kept, masked like a message and never logged; its encrypted content is not read. The same holds for the thinking a followed Claude or Codex
+transcript holds (a Claude block's signature is not kept). Cache disable serializes with
 writes and deletes only Maitty's socket-scoped history root, never native history.
 Without persistence, hydrated content belongs to an attachment and disappears on
 its disconnect. No credentials, real transcripts or model requests enter fixtures.

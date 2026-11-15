@@ -21,6 +21,8 @@ const MAX_PROMPT_BYTES: usize = 256 * 1024;
 /// Messages the daemon holds for one busy conversation, and their total text.
 const MAX_QUEUED_MESSAGES: usize = 32;
 const MAX_QUEUED_BYTES: usize = 1024 * 1024;
+/// Acknowledged messages a conversation remembers, for answering a retry.
+const RECENT_OPERATIONS: usize = 64;
 /// A queued message was sent by a request that is long over; its replies have nowhere to go.
 const NO_CLIENT: ClientId = ClientId::MAX;
 
@@ -133,10 +135,22 @@ pub(in crate::daemon) enum Pending {
         id: ConversationId,
         generation: u64,
         turn_id: String,
+        /// Started to send a queued message now, not by a person's cancel: if the turn ended
+        /// first and the provider refuses, nothing is wrong with the conversation.
+        for_send_now: bool,
     },
     Receipt {
         client: ClientId,
         receipt: Receipt,
+    },
+    /// A queued message steered into the running turn, waiting for the provider's answer. The
+    /// message stays in the queue until that answer, so a refusal loses nothing.
+    Steering {
+        client: ClientId,
+        id: ConversationId,
+        generation: u64,
+        operation: u64,
+        turn_id: String,
     },
 }
 
@@ -156,6 +170,7 @@ impl Pending {
             | Self::Submit { client, .. }
             | Self::Sending { client, .. }
             | Self::Cancelling { client, .. }
+            | Self::Steering { client, .. }
             | Self::Receipt { client, .. } => Some(*client),
             Self::Hydration { read, started, .. } => {
                 read.as_ref().map(|read| read.client).or(*started)
@@ -169,8 +184,7 @@ impl Pending {
             | Self::Opening { id, .. }
             | Self::Identity { id, .. }
             | Self::Hydration { id, .. } => *id,
-            Self::Cancelling { id, .. }
-            => *id,
+            Self::Cancelling { id, .. } | Self::Steering { id, .. } => *id,
             Self::Submit { receipt, .. }
             | Self::Sending { receipt, .. }
             | Self::Receipt { receipt, .. } => receipt.conversation,
@@ -992,6 +1006,22 @@ impl Daemon {
             bail!("Only a human client can cancel a structured turn");
         }
         self.may(client, Grant::Write, None)?;
+        self.interrupt_turn(client, id, generation, false)?;
+        self.send(client, ServerMsg::Reply(Reply::Ok));
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// Asks the provider to interrupt the conversation's running turn, which must be the
+    /// acknowledged one. It answers nothing to `client`; asking again while an interrupt is
+    /// pending changes nothing.
+    fn interrupt_turn(
+        &mut self,
+        client: ClientId,
+        id: ConversationId,
+        generation: u64,
+        for_send_now: bool,
+    ) -> Result<()> {
         let conversation = self
             .conversations
             .iter()
@@ -1029,7 +1059,6 @@ impl Daemon {
                     if *pending_id == id && *pending_generation == generation && pending_turn == &turn_id)
             });
         if cancellation_pending {
-            self.send(client, ServerMsg::Reply(Reply::Ok));
             return Ok(());
         }
         let token = self.conversation_token(Pending::Cancelling {
@@ -1037,6 +1066,7 @@ impl Daemon {
             id,
             generation,
             turn_id: turn_id.clone(),
+            for_send_now,
         })?;
         let request = self.conversation_runtimes.request(
             id,
@@ -1054,7 +1084,6 @@ impl Daemon {
             .get_mut(&id)
             .expect("validated conversation state")
             .cancelling = Some(turn_id);
-        self.send(client, ServerMsg::Reply(Reply::Ok));
         self.dirty = true;
         Ok(())
     }
@@ -1195,8 +1224,13 @@ impl Daemon {
                 continue;
             }
             self.conversation_closing.remove(&id);
-            if let Err(error) = self.stop_structured(id) {
-                tracing::warn!("ending a closed chat: {error:#}");
+            self.remember_closed_chat(id);
+            let tops = self.worktrees_of_chat(id);
+            match self.stop_structured(id) {
+                // No client is waiting on a close whose window passed, so an unmerged
+                // worktree stays and only the daemon log says why.
+                Ok(()) => self.cleanup_worktrees(NO_CLIENT, tops),
+                Err(error) => tracing::warn!("ending a closed chat: {error:#}"),
             }
         }
     }
@@ -1227,6 +1261,36 @@ impl Daemon {
             bail!("Stale conversation generation");
         }
         let digest = format!("{:x}", Sha256::digest(text.as_bytes()));
+        // A message already waiting is the same send again (a retry), or a reused number. Looked
+        // at first: a message sent now out of turn leaves a receipt with a higher number than one
+        // still waiting, which must not make that one's retry look stale.
+        if let Some(waiting) = self
+            .conversation_queues
+            .get(&id)
+            .and_then(|queue| queue.iter().find(|m| m.operation == operation))
+        {
+            if waiting.generation == generation && waiting.digest == digest {
+                self.send(
+                    client,
+                    ServerMsg::Reply(Reply::ConversationQueued(QueuedReceipt {
+                        conversation: id,
+                        generation,
+                        operation,
+                    })),
+                );
+                return Ok(());
+            }
+            bail!("Operation ID is stale or reused with changed content");
+        }
+        // Acknowledged before, whatever the conversation's single receipt says now.
+        if let Some(done) = self.acknowledged(id, generation, operation) {
+            if done.digest == digest {
+                let receipt = done.receipt.clone();
+                self.send(client, ServerMsg::Reply(Reply::ConversationSent(receipt)));
+                return Ok(());
+            }
+            bail!("Operation ID is stale or reused with changed content");
+        }
         if let Some(old) = self
             .conversation_operations
             .iter()
@@ -1256,25 +1320,6 @@ impl Daemon {
             if old.receipt.delivery == Delivery::SubmissionUncertain {
                 bail!("Previous submission delivery remains uncertain");
             }
-        }
-        // A message already waiting is the same send again (a retry), or a reused number.
-        if let Some(waiting) = self
-            .conversation_queues
-            .get(&id)
-            .and_then(|queue| queue.iter().find(|m| m.operation == operation))
-        {
-            if waiting.generation == generation && waiting.digest == digest {
-                self.send(
-                    client,
-                    ServerMsg::Reply(Reply::ConversationQueued(QueuedReceipt {
-                        conversation: id,
-                        generation,
-                        operation,
-                    })),
-                );
-                return Ok(());
-            }
-            bail!("Operation ID is stale or reused with changed content");
         }
         if self
             .conversation_queues
@@ -1352,9 +1397,10 @@ impl Daemon {
         Ok(())
     }
 
-    /// A turn is starting: the checkout's files as they are now are what it can be taken back
-    /// to. Called once a message was handed to the provider, which happens once a turn.
-    fn snapshot_before_conversation_turn(&self, id: ConversationId) {
+    /// Keep the checkout's files as they are `when` ("before", "after") a turn. Before: once
+    /// a message was handed to the provider, which happens once a turn. After: once the
+    /// provider said the turn completed, failed or was interrupted.
+    pub(super) fn snapshot_conversation_turn(&self, id: ConversationId, when: &str) {
         if !self.cfg.snapshots.enabled {
             return;
         }
@@ -1364,7 +1410,7 @@ impl Daemon {
         // Named as a terminal agent's snapshots are, so the list reads the same for both.
         let agent = c.binding.provider.agent_name();
         let dir = c.binding.worktree.as_ref().unwrap_or(&c.binding.cwd);
-        self.snapshot_off_loop(agent.into(), dir.clone());
+        self.snapshot_off_loop(format!("{when} {agent}'s turn"), dir.clone());
     }
 
     fn conversation_enqueue(
@@ -1415,6 +1461,9 @@ impl Daemon {
     ) -> Result<()> {
         self.refuse_if_followed(id)?;
         self.may(client, Grant::Write, None)?;
+        if self.steering(id, operation) {
+            bail!("That message is being sent now");
+        }
         let found = self.conversation_queues.get_mut(&id).and_then(|queue| {
             let position = queue
                 .iter()
@@ -1428,6 +1477,208 @@ impl Daemon {
         self.send(client, ServerMsg::Reply(Reply::Ok));
         self.dirty = true;
         Ok(())
+    }
+
+    /// Remembers an acknowledged message, the oldest forgotten past `RECENT_OPERATIONS`.
+    fn remember_acknowledged(&mut self, operation: Operation) {
+        let recent = self
+            .conversation_recent
+            .entry(operation.receipt.conversation)
+            .or_default();
+        recent.retain(|o| {
+            !(o.receipt.generation == operation.receipt.generation
+                && o.receipt.operation == operation.receipt.operation)
+        });
+        if recent.len() >= RECENT_OPERATIONS {
+            recent.pop_front();
+        }
+        recent.push_back(operation);
+    }
+
+    /// The remembered acknowledged message with this number in this generation.
+    fn acknowledged(&self, id: ConversationId, generation: u64, operation: u64) -> Option<&Operation> {
+        self.conversation_recent.get(&id)?.iter().find(|o| {
+            o.receipt.generation == generation && o.receipt.operation == operation
+        })
+    }
+
+    /// Whether a queued message is on its way into the running turn right now.
+    fn steering(&self, id: ConversationId, operation: u64) -> bool {
+        self.conversation_requests.values().any(|pending| {
+            matches!(pending, Pending::Steering { id: steering, operation: steered, .. }
+                if *steering == id && *steered == operation)
+        })
+    }
+
+    /// Sends a waiting message now rather than when the turn ends: steered into the running turn
+    /// when the provider can take it there, otherwise by stopping the turn and sending the message
+    /// as the next one. A message is only ever taken out of the queue once the provider has it, so
+    /// every refusal leaves it waiting, and the ordinary delivery then sends it.
+    pub(in crate::daemon) fn conversation_send_now(
+        &mut self,
+        client: ClientId,
+        id: ConversationId,
+        generation: u64,
+        operation: u64,
+    ) -> Result<()> {
+        self.refuse_if_followed(id)?;
+        self.may(client, Grant::Write, None)?;
+        let record = self
+            .conversations
+            .iter()
+            .find(|c| c.id == id)
+            .ok_or_else(|| anyhow::anyhow!("No such conversation"))?;
+        if record.generation != generation {
+            bail!("Stale conversation generation");
+        }
+        let running = record.state == RecoveryState::Running;
+        let thread = record.binding.session_id.clone();
+        // A retry while the steer is on its way is the same ask, not a second one.
+        if self.steering(id, operation) {
+            self.send(client, ServerMsg::Reply(Reply::Ok));
+            return Ok(());
+        }
+        let position = self
+            .conversation_queues
+            .get(&id)
+            .and_then(|queue| {
+                queue
+                    .iter()
+                    .position(|m| m.operation == operation && m.generation == generation)
+            })
+            .map_or_else(
+                || {
+                    // Sent already, by a steer or a delivery whose reply was lost: the same ask
+                    // again is answered, not refused, and nothing is sent.
+                    if self.acknowledged(id, generation, operation).is_some() {
+                        Ok(None)
+                    } else {
+                        Err(anyhow::anyhow!(
+                            "That message is no longer waiting; it may already have been sent or taken back"
+                        ))
+                    }
+                },
+                |position| Ok(Some(position)),
+            )?;
+        let Some(position) = position else {
+            self.send(client, ServerMsg::Reply(Reply::Ok));
+            return Ok(());
+        };
+        let state = self
+            .conversation_states
+            .get(&id)
+            .filter(|_| running)
+            .ok_or_else(|| anyhow::anyhow!("Conversation runtime is not ready"))?;
+        if state.blocked
+            || !state.approvals.is_empty()
+            || !state.unsupported_requests.is_empty()
+        {
+            bail!("Answer the pending approval or question before sending a message now");
+        }
+        let working = state.status == Status::Working;
+        let stopping = state.cancelling.is_some();
+        let can_steer = self.conversation_runtimes.can_steer(id, generation);
+        // Next in line, ahead of what was queued before it: it is the one the person chose.
+        let to_front = |daemon: &mut Self| {
+            if let Some(queue) = daemon.conversation_queues.get_mut(&id) {
+                let message = queue.remove(position);
+                queue.insert(0, message);
+            }
+        };
+        if !working || stopping {
+            // The turn is over, or already being stopped: the ordinary delivery is what is
+            // wanted, and it goes first.
+            to_front(self);
+            self.send(client, ServerMsg::Reply(Reply::Ok));
+            self.deliver_queued();
+            self.dirty = true;
+            return Ok(());
+        }
+        let in_flight = self
+            .conversation_requests
+            .values()
+            .any(|pending| pending.conversation() == id);
+        if in_flight {
+            bail!("The agent is taking a message already; try again in a moment");
+        }
+        if can_steer {
+            let turn_id = self
+                .conversation_operations
+                .iter()
+                .find(|o| o.receipt.conversation == id && o.receipt.generation == generation)
+                .and_then(|o| match &o.receipt.delivery {
+                    Delivery::Acknowledged { turn_id } => Some(turn_id.clone()),
+                    Delivery::SubmissionUncertain => None,
+                })
+                .ok_or_else(|| {
+                    anyhow::anyhow!("The running turn is not identified yet; try again in a moment")
+                })?;
+            let text = self.conversation_queues[&id][position].text.clone();
+            let mut request =
+                maitty_provider_codex::turn_steer_request(0, &thread, &turn_id, &text);
+            let params = request["params"].take();
+            let token = self.conversation_token(Pending::Steering {
+                client,
+                id,
+                generation,
+                operation,
+                turn_id,
+            })?;
+            if let Err(error) =
+                self.conversation_runtimes
+                    .request(id, generation, token, Rpc::Steer { params })
+            {
+                self.conversation_requests.remove(&token);
+                return Err(error);
+            }
+            self.dirty = true;
+            return Ok(());
+        }
+        // No way to add to a running turn: stop it, and the message goes out as the next one.
+        self.interrupt_turn(client, id, generation, true)?;
+        to_front(self);
+        self.send(client, ServerMsg::Reply(Reply::Ok));
+        self.dirty = true;
+        Ok(())
+    }
+
+    /// The provider took a steered message into the running turn: it leaves the queue, and its
+    /// number is answered as sent from then on.
+    fn steered(
+        &mut self,
+        client: ClientId,
+        id: ConversationId,
+        generation: u64,
+        operation: u64,
+        turn_id: String,
+    ) {
+        let taken = self.conversation_queues.get_mut(&id).and_then(|queue| {
+            let position = queue
+                .iter()
+                .position(|m| m.operation == operation && m.generation == generation)?;
+            Some(queue.remove(position))
+        });
+        let current = self
+            .conversations
+            .iter()
+            .any(|c| c.id == id && c.generation == generation);
+        if let (Some(message), true) = (taken, current) {
+            let steered = Operation {
+                receipt: Receipt {
+                    conversation: id,
+                    generation,
+                    operation,
+                    delivery: Delivery::Acknowledged { turn_id },
+                },
+                digest: message.digest,
+            };
+            self.conversation_operations
+                .retain(|o| o.receipt.conversation != id);
+            self.conversation_operations.push(steered.clone());
+            self.remember_acknowledged(steered);
+        }
+        self.send(client, ServerMsg::Reply(Reply::Ok));
+        self.dirty = true;
     }
 
     /// Delivers the oldest waiting message of every conversation whose turn has ended: once, in
@@ -1804,7 +2055,7 @@ impl Daemon {
                 state.error = None;
                 let sent = self.conversation_runtimes.request(id, generation, token, Rpc::Send { params: send_params(&thread, &text, &format!("{}-{generation}-{operation}", id.0), &choice) }).map_err(|e| (token, e.to_string()));
                 if sent.is_ok() {
-                    self.snapshot_before_conversation_turn(id);
+                    self.snapshot_conversation_turn(id, "before");
                 }
                 sent
             }
@@ -1818,6 +2069,14 @@ impl Daemon {
                         .iter()
                         .any(|c| c.id == id && c.generation == receipt.generation)
                 {
+                    if let Some(done) = self
+                        .conversation_operations
+                        .iter()
+                        .find(|o| o.receipt == receipt)
+                        .cloned()
+                    {
+                        self.remember_acknowledged(done);
+                    }
                     self.send(client, ServerMsg::Reply(Reply::ConversationSent(receipt)));
                 } else {
                     self.send(
@@ -1959,6 +2218,42 @@ impl Daemon {
         };
         let value = match result {
             Ok(value) => value,
+            // A steer Codex will not take (the turn ended a moment ago, or another one runs) is
+            // not a fault of the conversation: the message is still waiting and goes out as the
+            // next turn like any queued one. Only the person who asked hears why.
+            Err(error) if matches!(pending, Pending::Steering { .. }) => {
+                if let Pending::Steering { client, id, operation, .. } = pending {
+                    let reason = format!(
+                        "Codex did not take message {operation} into the running turn (RPC error {}); it is still waiting and goes out when the turn ends",
+                        error.code
+                    );
+                    tracing::info!(conversation = id.0, "{reason}");
+                    self.send(client, ServerMsg::Error(reason));
+                }
+                return Ok(());
+            }
+            // The same for an interrupt that only served to send a message now: the turn ended
+            // before the provider heard it. Nothing is stopped, the message keeps its place at
+            // the front, and the ordinary delivery sends it once the turn is over.
+            Err(error)
+                if matches!(pending, Pending::Cancelling { for_send_now: true, .. }) =>
+            {
+                if let Pending::Cancelling { client, id, turn_id, .. } = pending {
+                    if let Some(state) = self.conversation_states.get_mut(&id)
+                        && state.cancelling.as_deref() == Some(turn_id.as_str())
+                    {
+                        state.cancelling = None;
+                    }
+                    let reason = format!(
+                        "Codex did not take the interrupt (RPC error {}); the turn may have just ended, and the message goes out next",
+                        error.code
+                    );
+                    tracing::info!(conversation = id.0, "{reason}");
+                    self.send(client, ServerMsg::Error(reason));
+                }
+                self.dirty = true;
+                return Ok(());
+            }
             Err(error) => {
                 let stage = match &pending {
                     Pending::Opening { expected: None, .. } => "thread/start",
@@ -2001,6 +2296,7 @@ impl Daemon {
                         return Ok(());
                     }
                 };
+                let origin = worktree_origin_of(&settings.cwd);
                 let c = Conversation {
                     id,
                     generation,
@@ -2035,6 +2331,14 @@ impl Daemon {
                         .iter()
                         .find(|conversation| conversation.id == id)
                         .is_some_and(|conversation| conversation.archived),
+                    // What the folder says now wins (the branch may have been switched in it);
+                    // the saved one stays when the folder says nothing (detached, or gone).
+                    worktree_origin: origin.or_else(|| {
+                        self.conversations
+                            .iter()
+                            .find(|conversation| conversation.id == id)
+                            .and_then(|conversation| conversation.worktree_origin.clone())
+                    }),
                 };
                 let mut proposed = self.conversations.clone();
                 proposed.retain(|c| c.id != id);
@@ -2091,6 +2395,24 @@ impl Daemon {
                 self.conversation_requests
                     .insert(token, Pending::Receipt { client, receipt });
                 self.conversation_persist(token)?;
+            }
+            Pending::Steering {
+                client,
+                id,
+                generation,
+                operation,
+                turn_id,
+            } => {
+                // Codex answered without an error, so the message is in its turn: it must leave
+                // the queue even if the answer is oddly shaped, or it would be sent twice.
+                let acknowledged = maitty_provider_codex::parse_turn_steer_ack(
+                    &json!({"id":0,"result":value}),
+                )
+                .unwrap_or_else(|problem| {
+                    tracing::warn!(conversation = id.0, "{problem}");
+                    turn_id
+                });
+                self.steered(client, id, generation, operation, acknowledged);
             }
             Pending::Cancelling {
                 id,
@@ -2584,6 +2906,7 @@ impl Daemon {
             | Pending::Submit { client, .. }
             | Pending::Sending { client, .. }
             | Pending::Cancelling { client, .. }
+            | Pending::Steering { client, .. }
             | Pending::Receipt { client, .. } => Some(client),
             Pending::Hydration { read, started, .. } => read.map(|r| r.client).or(started),
         };
@@ -2598,6 +2921,62 @@ impl Daemon {
             self.send(client, ServerMsg::Error(error));
         }
         self.dirty = true;
+    }
+}
+
+/// Where the linked worktree holding `cwd` came from, if it is in one and on a branch (a
+/// detached HEAD has no branch to make the folder again from). Reads the checkout's `.git`
+/// files only; no git process runs.
+fn worktree_origin_of(cwd: &std::path::Path) -> Option<crate::conversation::WorktreeOrigin> {
+    let head = crate::gitfs::head(cwd).filter(|h| h.linked && !h.detached)?;
+    Some(crate::conversation::WorktreeOrigin {
+        main: head.main_root,
+        folder: head.top,
+        branch: head.branch,
+    })
+}
+
+#[cfg(test)]
+mod worktree_origin_tests {
+    use super::worktree_origin_of;
+    use std::path::Path;
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let mut command = Command::new("git");
+        command.arg("-C").arg(dir).args(args);
+        let output = crate::proc::quiet(&mut command).output().unwrap();
+        assert!(output.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+    }
+
+    #[test]
+    fn only_a_linked_worktree_on_a_branch_has_an_origin() {
+        let root = std::env::temp_dir().join(format!("maitty-origin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let main = root.join("main");
+        std::fs::create_dir_all(&main).unwrap();
+        git(&main, &["init", "-q", "-b", "main"]);
+        git(&main, &["config", "user.email", "test@example.invalid"]);
+        git(&main, &["config", "user.name", "Test"]);
+        git(&main, &["config", "commit.gpgsign", "false"]);
+        std::fs::write(main.join("a.txt"), "one\n").unwrap();
+        git(&main, &["add", "a.txt"]);
+        git(&main, &["commit", "-q", "-m", "first"]);
+        let task = root.join("task");
+        git(&main, &["worktree", "add", "-q", "-b", "task", task.to_str().unwrap()]);
+        let loose = root.join("loose");
+        git(&main, &["worktree", "add", "-q", "--detach", loose.to_str().unwrap()]);
+
+        assert_eq!(worktree_origin_of(&main), None, "the main checkout is not a worktree");
+        assert_eq!(worktree_origin_of(&loose), None, "a detached HEAD has no branch");
+        let origin = worktree_origin_of(&task)
+            .expect("a linked worktree on a branch");
+        assert_eq!(origin.branch, "task");
+        // The temp dir may be spelled with 8.3 short names; compare what each names on disk.
+        let named = |p: &Path| crate::daemon::clean_path(std::fs::canonicalize(p).unwrap());
+        assert_eq!(named(&origin.folder), named(&task));
+        assert_eq!(named(&origin.main), named(&main));
+        let _ = std::fs::remove_dir_all(&root);
     }
 }
 
