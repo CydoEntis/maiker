@@ -411,7 +411,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
       <div ref={box} className="mx-composer">
         <div className="mx-composer-column">
           <div className="mx-box">
-            {picking && <SlashPicker agent={AGENT_LABEL[agent]} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={complete} onHover={(index) => { setCursor({ query, index }) }} />}
+            {picking && <SlashPicker agent={AGENT_LABEL[agent]} typed={message.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={complete} onHover={(index) => { setCursor({ query, index }) }} />}
             <DraftAttachments attachments={attachments} onRemove={attach.remove} />
             <textarea ref={text} onPaste={onPaste} onKeyDown={onTextKey} aria-label="First message" rows={2} value={message} placeholder="Describe a task, or type / for commands" className="mx-box-text" onChange={(event) => { setMessage(event.target.value) }}
               {...(picking && matches.length > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-slash-list', 'aria-activedescendant': `mx-slash-${String(active)}` } : {})} />

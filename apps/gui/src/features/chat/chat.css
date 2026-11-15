@@ -70,6 +70,7 @@
 .mx-md-table :is(th, td) { padding: 7px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow-wrap: normal; word-break: normal; }
 .mx-md-table th { font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .mx-md-table td { color: var(--fg2); }
+.mx-md-table td.mx-md-num { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .mx-md-table tbody tr:last-child td { border-bottom: 0; }
 .mx-code-chip { padding: 1px 5px; background: var(--m-sel); font-family: var(--mono); font-size: .9em; color: var(--fg); }
 .mx-code-lang { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--muted); }
@@ -91,6 +92,7 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 /* Amber is the one colour that means "needs you", so only a step a request is waiting on wears it: a tint and a left edge. */
 .mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); box-shadow: inset 2px 0 0 var(--needs); }
 .mx-step-glyph { flex: none; display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; }
+.mx-step-tool { flex: none; display: inline-flex; color: var(--muted); }
 .mx-step-verb { flex: none; font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .mx-step-target { display: inline-flex; min-width: 0; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12.5px; color: var(--fg2); white-space: nowrap; }
 .mx-step-target > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -323,6 +325,15 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-terminal-key { min-width: 34px; justify-content: center; font-family: var(--mono); }
 /* Questions: each a group of option boxes, the picked one on the amber edge. */
 .mx-waiting-form { display: flex; flex-direction: column; gap: 10px; margin: 0; }
+/* One tab per question; the one shown in the needs colour, an answered one ticked. */
+.mx-waiting-steps { display: flex; gap: 4px; min-width: 0; }
+.mx-waiting-step { flex: 0 1 auto; min-width: 0; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.mx-waiting-step:hover { background: var(--m-hover); color: var(--fg); }
+.mx-waiting-step.is-on { color: var(--fg); box-shadow: inset 0 0 0 1px var(--needs); }
+.mx-waiting-step-mark { flex: none; font: 600 11px var(--mono); color: var(--dim); }
+.mx-waiting-step.is-on .mx-waiting-step-mark { color: var(--needs); }
+.mx-waiting-step.is-done .mx-waiting-step-mark { color: var(--done); }
+.mx-waiting-step-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-waiting-question { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px; }
 .mx-waiting-question > legend { padding: 0; margin-bottom: 6px; font-size: 14px; font-weight: 600; color: var(--fg); }
 /* A question that takes several answers says so beside it, and its boxes tick rather than fill. */
@@ -353,19 +364,25 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 }
 .mx-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 /* The agent's commands, over the box while a slash and a name are typed. It floats, so the box and the chat stay put. */
-.mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(320px, 50vh); padding: 6px; border-radius: 12px; border: 1px solid var(--line2); background: var(--main); box-shadow: 0 16px 44px rgba(0, 0, 0, .45); animation: v7fade .12s var(--ease-out); }
+/* Square, as the window's corners are: a head that counts the matches, the rows, and the keys at its foot. */
+.mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(340px, 50vh); border: 1px solid var(--line2); background: var(--main); box-shadow: 0 3px 10px rgba(var(--sd), calc(.35 * var(--sk))); animation: v7fade .12s var(--ease-out); }
+.mx-slash-head { flex: none; margin: 0; display: flex; align-items: center; gap: 8px; padding: 7px 10px 5px; font-size: 11px; font-weight: 600; color: var(--dim); }
+.mx-slash-count { font-weight: 400; }
+.mx-slash-none { display: flex; flex-direction: column; gap: 4px; padding: 4px 12px 12px; font-size: 12px; color: var(--muted); }
+.mx-slash-none-title { font-size: 13px; color: var(--fg); }
+.mx-slash-none code { font-family: var(--mono); }
 .mx-slash-list { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
-.mx-slash-row { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr); align-items: baseline; gap: 14px; padding: 5px 9px; border-radius: 7px; cursor: pointer; }
+.mx-slash-row { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr); align-items: baseline; gap: 14px; padding: 6px 10px; cursor: pointer; }
 .mx-slash-row.is-active { background: var(--accent-soft); }
 .mx-slash-row.is-file { grid-template-columns: minmax(0, 1fr); }
 .mx-slash-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; color: var(--fg); }
 .mx-slash-row.is-active .mx-slash-name { color: var(--accent-text, var(--accent)); }
 .mx-slash-hint { color: var(--dim); }
 .mx-slash-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--muted); }
-.mx-slash-tag { margin-right: 6px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line2); font-size: 10.5px; color: var(--dim); }
+.mx-slash-tag { margin-right: 6px; padding: 0 5px; border: 1px solid var(--line); font-size: 10.5px; color: var(--dim); }
 .mx-slash-note { margin: 0; padding: 6px 9px; font-size: 12px; color: var(--muted); }
-.mx-slash-keys { flex: none; margin: 4px 0 0; padding: 5px 9px 1px; border-top: 1px solid rgba(var(--hl), calc(.07 * var(--hk))); font-size: 11px; color: var(--dim); }
-.mx-slash-keys kbd { margin-right: 3px; padding: 0 4px; border-radius: 4px; background: rgba(var(--hl), calc(.08 * var(--hk))); font-family: var(--mono); font-size: 10.5px; }
+.mx-slash-keys { flex: none; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--dim); }
+.mx-slash-keys kbd { margin-right: 4px; font: 500 11px var(--mono); }
 @media (prefers-reduced-motion: reduce) { .mx-slash { animation: none; } }
 .mx-box-text { width: calc(100% - 32px); min-height: 44px; max-height: 160px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
 .mx-box-text:focus-visible { outline: none; }
@@ -510,15 +527,19 @@ button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-of
    column, on the menu surface. Opening it extends it downward over the feed without moving it; the feed fades behind
    it, more while it is open. It floats over the terminal view the same way. */
 .mx-subs { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; justify-content: center; padding: 8px 12px 0; pointer-events: none; }
-.mx-subs-fade { position: absolute; top: 0; left: 0; right: 0; height: 22px; background: linear-gradient(var(--bg), transparent); -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent); transition: height var(--t-base, .18s) var(--ease, ease); }
+.mx-subs-fade { position: absolute; top: 0; left: 0; right: 0; height: 22px; background: linear-gradient(var(--main), transparent); -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent); transition: height var(--t-base, .18s) var(--ease, ease); }
 .mx-subs.is-open .mx-subs-fade { height: 44px; }
 .mx-subs-card { position: relative; display: flex; width: 100%; max-width: var(--chat-width, 760px); flex-direction: column; border: 1px solid var(--line2); border-radius: var(--r-panel); background: var(--card); box-shadow: var(--sh-pop); font-family: var(--ui); line-height: normal; pointer-events: auto; animation: mxRise .2s var(--ease, ease) both; }
-.mx-subs-bar { display: flex; min-width: 0; height: 34px; align-items: center; gap: 8px; padding: 0 4px 0 12px; font-size: 12.5px; color: var(--muted); }
+.mx-subs-bar { display: flex; width: 100%; min-width: 0; height: 34px; align-items: center; gap: 8px; padding: 0 12px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
+.mx-subs-bar:hover { background: var(--m-hover); }
+.mx-subs-bar:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.mx-subs-chevron { flex: none; display: inline-flex; transition: transform var(--t-base, .18s) var(--ease, ease); }
+.mx-subs.is-open .mx-subs-chevron { transform: rotate(180deg); }
 .mx-subs-spin { display: inline-flex; width: 14px; flex: none; justify-content: center; color: var(--working); }
 .mx-subs-count { flex: none; font-weight: 600; color: var(--fg); }
 .mx-subs-first { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-subs-task { color: var(--fg2); }
-.mx-subs-activity { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+.mx-subs-activity { color: var(--dim); }
 .mx-subs-more { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--dim); }
 .mx-subs-list { list-style: none; margin: 0; padding: 0; max-height: min(440px, 60vh); overflow: auto; border-top: 1px solid var(--line); }
 .mx-subs-item + .mx-subs-item { border-top: 1px solid var(--line); }
@@ -534,4 +555,4 @@ button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-of
 .mx-subs-detail p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-subs-detail p.is-mono { font-family: var(--mono); font-size: 12px; }
 .mx-subs-label { font-size: 11px; font-weight: 600; color: var(--dim); }
-@media (prefers-reduced-motion: reduce) { .mx-subs-card { animation: none; } .mx-subs-fade { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mx-subs-card { animation: none; } .mx-subs-fade, .mx-subs-chevron { transition: none; } }

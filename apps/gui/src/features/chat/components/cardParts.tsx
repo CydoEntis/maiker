@@ -26,9 +26,15 @@ export function StepGlyph({ status, waiting = false }: { status: ItemStatus; wai
 
 export type MetaTone = 'dim' | 'danger' | 'working' | 'warn'
 
+/** The kinds of step that wear a mark of their own, each with its glyph. */
+export type StepTool = 'read' | 'edit' | 'run'
+const TOOL_ICON = { read: 'toolRead', edit: 'toolEdit', run: 'toolRun' } as const
+
 type StepRowProps = {
   status: ItemStatus
   verb: ReactNode
+  /** What kind of work the step did, as a small mark before its verb: looked at something, changed a file, ran a command. */
+  tool?: StepTool
   target?: ReactNode
   meta?: ReactNode
   metaTone?: MetaTone
@@ -39,11 +45,12 @@ type StepRowProps = {
   waiting?: boolean
 }
 
-/** One step as a 30px line: its mark, a verb, what it acted on, and how it ended at the right. */
-export function StepRow({ status, verb, target, meta, metaTone = 'dim', open, onToggle, waiting = false }: StepRowProps) {
+/** One step as a 30px line: its mark, the kind of work, a verb, what it acted on, and how it ended at the right. */
+export function StepRow({ status, verb, tool, target, meta, metaTone = 'dim', open, onToggle, waiting = false }: StepRowProps) {
   const body = (
     <>
       <StepGlyph status={status} waiting={waiting} />
+      {tool !== undefined && <span className="mx-step-tool" aria-hidden="true"><Icon name={TOOL_ICON[tool]} size={13} /></span>}
       <span className="mx-step-verb">{verb}</span>
       {target !== undefined && <span className="mx-step-target">{target}</span>}
       <span className="sr-only">{STATUS_WORD[status]}</span>

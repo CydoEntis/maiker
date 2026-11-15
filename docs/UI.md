@@ -945,8 +945,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   steps), one button each in Claude's words that sends its number, and **Keep planning** (`n`, Esc). The menu
   differs between Claude versions and sessions, so it is never assumed: where it cannot be read the card shows the
   terminal's question and keys (`TerminalPrompt`) and `y`, Enter and the numbers send nothing. A question Claude asks (`AskUserQuestion`) with one answer has a button
-  for each choice, which sends its number. A prompt of several such questions (`PermissionAsk.questions`) shows each
-  question with its choices to pick from and one **Send answers** button, off until every question has an answer;
+  for each choice, which sends its number. A prompt of several such questions (`PermissionAsk.questions`) shows them
+  one at a time: a tab for each (its number, ✓ once answered), the question with its choices, **Back** and **Next**,
+  and on the last one **Send answers**, off until every question has an answer;
   it then types the number of each pick in the prompt's order, a quarter second apart, and `1`, which is "Submit
   answers" on the page that reviews them (checked against Claude Code 2.1.322 in a terminal). A prompt with a question
   that takes several answers (`multiSelect`, even a lone one) comes as `PermissionAsk.form`, which a peer from before
@@ -1083,8 +1084,12 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   unavailable (a diff the history did not keep, a checklist without items, a command time or exit code the provider
   does not report, a turn without the daemon's times shows "Turn finished", not an invented duration). Only a step
   that is running animates (its spinner).
-  - *Step row* (`cardParts.tsx` `StepRow`): the mark, a verb, what the step acted on, and how it ended. Every step
-    is one; a step with detail is a button that opens it.
+  - *Step row* (`cardParts.tsx` `StepRow`): the mark, the kind of work as a small glyph (`StepTool`: read for a
+    tool that looks at something, edit for a file change, run for a command), a verb, what the step acted on, and how
+    it ended. Every step is one; a step with detail is a button that opens it. A command on its own is a card that
+    opens on its output once it has ended; an edit card's Open in side panel is the side-panel glyph, and the
+    changed-files bar wears the edit glyph. A table column of figures (`numericColumns`: every cell a number, maybe
+    with a currency or a short unit) sits right, in mono, unless the table set its alignment.
   - *Tool step:* the verb and target are read from the tool's own input (`toolFacts.ts`): "Read `src/a.ts` lines
     40–88", "Search `pattern` in src", "Fetch example.com/docs", "Skill kitchen:kitchen" and its arguments, an extension's server
     and tool. Nothing the input does not hold (hit counts, a status code) is shown. Click opens the input and the

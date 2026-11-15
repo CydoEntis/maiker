@@ -295,7 +295,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
         {question}
         <div className={`mx-box${off ? ' is-locked' : ''}`}>
           {picking && (
-            <SlashPicker agent={agent} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={run} onHover={(index) => { setCursor({ query, index }) }} />
+            <SlashPicker agent={agent} typed={draft.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={run} onHover={(index) => { setCursor({ query, index }) }} />
           )}
           {mention.open && (
             <FilePicker found={mention.found} active={mention.active} onPick={mention.pick} onHover={mention.hover} />

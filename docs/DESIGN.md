@@ -387,9 +387,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Running subagents** (`RunningSubagents`, the daemon's `subagent_activity`, `model/subagents.ts`). A 34px bar floats
   under the pane's header, as wide as the chat's column, on the menu surface (`--card`, a `--line2` edge, `--sh-pop`),
   over the chat and the terminal alike, only while one or more subagents run: the spinner, "N subagents running", the
-  first one's task and what it is doing (mono, `--dim`), "+N more" and **Show** / **Hide**. Opening extends it
-  downward over the feed (at most `min(440px, 60vh)`, scrolling past that) without moving it; the feed fades behind it
-  (22px closed, 44px open, a slight blur). Each row is its mark, its task and kind, what it is doing and its time; a
+  first one's task and what it is doing (plain text, `--dim`), "+N more" and a chevron. The whole bar is the toggle
+  (named Show / Hide the subagents), and the chevron turns over while it is open. Opening extends it downward over the
+  feed (at most `min(440px, 60vh)`, scrolling past that) without moving it; the feed fades behind it into `--main`
+  (22px closed, 44px open). Each row is its mark, its task and kind, what it is doing and its time; a
   click unfolds **Asked to** and **Ran**, with **Open its chat**. The runtime reports no model or effort for a
   subagent, so the rows show none. A finished one clears itself, and the bar goes with the last. The daemon
   takes a helper's own report that it finished as final, whatever second its other reports were stamped with, and only
@@ -439,7 +440,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   it (`SlashPicker`, the shared `ResultsList`): its own, and the person's and the project's commands, skills and
   plugins, as Claude Code itself lists them for the session's folder (`agent_commands`, asked as the chat opens and
   again after five minutes), each with what it does and what it takes. Typing narrows them (the exact name, then names
-  that start with it, then a plugin's command by its own name, then names that hold it); ↑ ↓ move, **Tab** completes
+  that start with it, then a plugin's command by its own name, then names that hold it). The list is square, headed
+  "Commands" with the number that match, with the keys at its foot (↑↓ choose, Tab complete, Enter run, Esc close);
+  with none it says "No command by that name" and "Press Enter to send <typed> to the agent as a message.". ↑ ↓ move, **Tab** completes
   the name, **Enter** or a click runs a command that takes nothing and completes one that takes something, **Esc**
   puts the list away until the text changes. The list goes once a space ends the name. A one-line message that
   starts with a slash is typed into a terminal agent instead of pasted, so it is read as a command, and its Enter
