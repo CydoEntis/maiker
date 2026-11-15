@@ -23,6 +23,7 @@ pub(in crate::client) fn menu_groups() -> Vec<MenuGroup> {
             vec![
                 ("Shell here", Action::ShellHere),
                 ("Pane beside this", Action::SplitRight),
+                ("Clone a repository…", Action::CloneRepo),
             ],
         ),
         (

@@ -357,7 +357,7 @@ Rules for keys and their labels: one key per action (no alias keys; a user's own
 
 **Action bars.** A panel's key hints sit in their own one-row bar (`action_bar`, `panel_bar` in `popups.rs`) on a ground one step above the panel's: `card` for a sheet on the app background (Inbox, check evidence) and `card2` inside a modal (Settings, the key overlay, confirms, pickers). It spans the panel's width with one column of padding, shows keycaps and labels, and is always the panel's last row. When the hints do not fit they close their gaps, then give up the ones before `Esc`.
 
-**Menu.** Sections a blank row apart, each under a `muted` title that says what its rows are for, labels capitalised, no letter lit: `NEW` (Shell here, Session..., Pane beside this); `TOOLS` (Files, Changes, Branches, History, References); `FIND` (Inbox, Search commands, All keys); `SIDEBAR` (Collapse sidebar); then Settings, untitled. The arrows move over rows and skip the headers; the selected row has an accent `▌`. In a short window the blank rows give way first, then the titles, so every row that does something stays (`leader.rs` `MenuRoom`). No row shows a key (a bare letter reads as one that works anywhere), but the leader key that does the same runs the row inside the Menu too; there is no footer. "Shell here" is leader `n` (a plain shell where you are) and "Session..." the New session dialog (Ctrl+T).
+**Menu.** Sections a blank row apart, each under a `muted` title that says what its rows are for, labels capitalised, no letter lit: `NEW` (Shell here, Session..., Pane beside this, Clone a repository…); `TOOLS` (Files, Changes, Branches, History, References); `FIND` (Inbox, Search commands, All keys); `SIDEBAR` (Collapse sidebar); then Settings, untitled. The arrows move over rows and skip the headers; the selected row has an accent `▌`. In a short window the blank rows give way first, then the titles, so every row that does something stays (`leader.rs` `MenuRoom`). No row shows a key (a bare letter reads as one that works anywhere), but the leader key that does the same runs the row inside the Menu too; there is no footer. "Shell here" is leader `n` (a plain shell where you are) and "Session..." the New session dialog (Ctrl+T).
 
 **Resume a conversation here** (Search commands only, `Action::ResumeConversation`, `resume-conversation`; `client/resume.rs`). It asks this computer's daemon for the conversations Claude and Codex saved for the selected pane's folder (`Query::SavedConversations`, one per agent; the answers arrive as messages). A menu by the pane opens at once with one row, `looking for saved conversations…` (picking it only closes the menu); once both answers are in, it shows the nine newest across both agents: `Claude · 3h ago · <the first message>`, cut to 44 columns. Answers that arrive after that menu was closed open nothing, and an error from this computer's daemon while it waits closes it under the error's toast. A daemon older than the request (`ClientMsg::introduced_in`, against the protocol it named when this window connected) is not asked: one error toast says `restart the daemon to list saved conversations`. Enter or a click starts that agent in a new pane in the folder with the agent's resume command from its `[[agents]]` definition (`claude --resume <id>`, `codex resume <id>`); an id that does not start with a letter or digit, or holds anything but letters, digits, `-` and `_`, is refused with an error toast. With none saved the menu closes and one toast line says `no saved Claude or Codex chats`. A pane on another machine gets the local-only toast (see *features that need a pane's files*).
 
@@ -865,6 +865,22 @@ the raw body of the command.
 this window's own question, as every reply from another machine is, and what it names is drawn with
 control and hidden characters taken out):
 
+- **Clone a repository** (`client/screen/clone_repo.rs`, `Action::CloneRepo`; Search commands, the Menu's
+  NEW, a machine heading's right-click). A modal `Clone a repository to <this computer | machine>`: the
+  address (it has the keys first; at most 2,048 characters), the machine's own GitHub repositories
+  (`Query::GitHubRepos`, `Query::GitHubOwners`: newest pushed first, `· private`, the description; a
+  search asked again 300 ms after the last key; Ctrl+O the next owner; `Loading your repositories…`,
+  `No repository matches.`, the first-200 note), then "It goes in a new folder, named after the
+  repository, inside:" and that folder (at most 4,096; the last one used on that machine, kept in
+  `<app>-ui.json` `clone_into`, else this computer's start folder or `~`). Enter in the list fills in
+  the address; Enter in the address or folder sends `Query::CloneRepo`, whose daemon judges the address
+  and runs git with that machine's sign-in. A machine with nobody signed in says `Sign in to GitHub on
+  <machine> to pick from your repositories: gh auth login`, one without `gh` says where to get it;
+  pasting still works. While it clones it reads `Cloning… A large repository can take a few minutes.`
+  and takes no typing; a refusal stays in the dialog as the machine said it. Success opens the folder
+  (this computer's as any folder opens, another machine's with a shell there). Esc while cloning closes
+  the dialog and the clone ends in a toast. An older local daemon gets "restart the service to clone a
+  repository" and is not asked.
 - **Open a folder on a machine** (`Action::OpenFolderOn`; a machine heading's **Open a folder…**). The
   folder picker, titled `Open a folder on <machine>`, lists that machine's folders through
   `Query::ListFolders` (tagged; an answer for a folder already left is dropped), from `~`, with `/` in

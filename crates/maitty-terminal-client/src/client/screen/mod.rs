@@ -83,6 +83,9 @@ pub(super) struct Saved {
     /// that is no longer configured keeps its entry.
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub machines: std::collections::BTreeMap<String, MachineSaved>,
+    /// The folder a clone last went in, by machine name ("" for this computer).
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub clone_into: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -1577,6 +1580,9 @@ pub(super) enum ScreenHit {
     SecretDecline(ClientTerm),
     /// A button or row of Settings › Check.
     CheckDraft(check_settings::DraftHit),
+    /// A repository in the clone dialog's list, and its Clone button.
+    ClonePick(usize),
+    CloneGo,
 }
 
 pub(super) fn hit(app: &mut App, r: Rect, h: ScreenHit) {
@@ -1683,6 +1689,8 @@ mod usage;
 mod tidy;
 mod workflow_runs;
 mod helper_view;
+mod clone_repo;
+pub(in crate::client) use self::clone_repo::*;
 pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,

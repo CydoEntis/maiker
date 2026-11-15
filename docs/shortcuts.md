@@ -188,7 +188,7 @@ menu runs its items by letter while it is open.
 | Menu key (`.` after the prefix), right-click | The session's menu |
 | `+` on a machine heading | A shell on that machine at once |
 | `install` / `update` on a machine heading | Shown instead of `+` while the machine needs maitty installed or updated: runs it in a popup that asks first |
-| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Open a folder…, Reconnect, Machines… |
+| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Open a folder…, Clone a repository…, Reconnect, Machines… |
 | Enter on a row of an agent a restart stopped | Types its resume command, then opens the session |
 | Esc | Return keyboard focus to the active pane |
 
@@ -216,6 +216,20 @@ Leader `w`, or a click on a remote machine's heading in the sidebar. These keys 
 | Ctrl+U in text prompts | Clear prompt text |
 | Enter, Esc | Open the selected result / submit prompt, or cancel |
 | y / Y / Enter in close-group or remove-worktree prompt | Confirm; f / F forces worktree removal when offered; other keys cancel |
+
+## Clone a repository
+
+Search commands' **Clone a repository…**, the Menu's NEW section, or a machine heading's right-click menu (that machine). The address has the keys first.
+
+| Keys | Action |
+| --- | --- |
+| Type, paste, Backspace | Edit the line that has the keys (one line of a paste) |
+| Tab, Shift+Tab, Down, Up | The next or previous line: address, your GitHub repositories, the folder it goes in |
+| Up, Down in the repositories | Choose one |
+| Enter in the repositories | Use its address, then go to the folder |
+| Ctrl+O in the repositories | The next owner (your account, then its organisations) |
+| Enter in the address or the folder | Clone |
+| Esc | Close; a clone that has started goes on and ends in a toast |
 
 ## Open a folder on another machine
 

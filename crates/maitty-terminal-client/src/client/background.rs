@@ -376,6 +376,7 @@ impl App {
                 self.announce_copy(&text, native, Some(from));
             }
             ServerMsg::Error(e) if machine == MachineId::LOCAL && self.helper_failed(&e) => {}
+            ServerMsg::Error(e) if self.clone_failed(machine, &e) => {}
             ServerMsg::Error(e) => {
                 // The output a failure waited for may be what failed; a later reply is not its.
                 self.screen.failure_ask = None;
@@ -444,6 +445,9 @@ impl App {
             ServerMsg::Reply(Reply::HelperRead(record)) if machine == MachineId::LOCAL => {
                 self.helper_arrived(record)
             }
+            ServerMsg::Reply(Reply::Cloned { tag, outcome }) => self.cloned_arrived(machine, tag, outcome),
+            ServerMsg::Reply(Reply::GitHubRepos { tag, answer }) => self.github_repos_arrived(machine, tag, answer),
+            ServerMsg::Reply(Reply::GitHubOwners { tag, answer }) => self.github_owners_arrived(machine, tag, answer),
             ServerMsg::Reply(Reply::WorktreeStanding(standing)) => self.tidy_standing_arrived(machine, standing),
             ServerMsg::Reply(Reply::Folders { tag, listing }) => {
                 if let Mode::Finder(fd) = &mut self.mode

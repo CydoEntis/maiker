@@ -178,6 +178,7 @@ impl App {
                     _ => {}
                 }
             }
+            Mode::Clone(v) => v.type_text(s.trim()),
             Mode::Finder(fd) => {
                 fd.q.push_str(s.lines().next().unwrap_or("").trim());
                 fd.sel = 0;
@@ -399,6 +400,7 @@ impl App {
             Mode::Usage => self.on_usage_key(&k),
             Mode::Run { .. } => self.on_run_key(&k),
             Mode::Helper(v) => self.on_helper_key(*v, &k),
+            Mode::Clone(v) => self.on_clone_key(*v, &k),
             Mode::History { sel } => self.on_history_key(sel, &k),
             Mode::Tidy(v) => self.on_tidy_key(*v, &k),
             Mode::Machines(v) => self.on_machines_key(*v, &k),

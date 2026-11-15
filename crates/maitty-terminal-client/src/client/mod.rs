@@ -218,6 +218,8 @@ enum Mode {
     RenameTab(Box<screen::TabName>),
     /// The computers reached over ssh: how each stands, and adding or removing one.
     Machines(Box<screen::machines::MachinesView>),
+    /// Clone a repository onto a machine.
+    Clone(Box<screen::CloneView>),
 }
 
 /// A view that replaces the pane area.
@@ -1066,6 +1068,7 @@ impl App {
             self.request_diff();
             self.request_files_preview();
             self.request_folder_list();
+            self.clone_search_tick();
             if self.dirty
                 && last_draw.elapsed() >= frame
                 && self.sync_hold_until().is_none_or(|h| Instant::now() >= h)

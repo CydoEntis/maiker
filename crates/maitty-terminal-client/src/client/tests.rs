@@ -3177,7 +3177,7 @@ mod screen_tests {
         let labels: Vec<&str> = rows.iter().take(3).map(|(l, _)| *l).collect();
         assert_eq!(
             labels,
-            ["Shell here", "Pane beside this", "Files"],
+            ["Shell here", "Pane beside this", "Clone a repository…"],
             "Shell first, and no dialog row: New session is a shell too"
         );
         assert!(!rows.iter().any(|(l, _)| *l == "Session..."));

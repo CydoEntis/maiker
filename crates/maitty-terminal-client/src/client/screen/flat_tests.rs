@@ -396,7 +396,7 @@ fn a_machine_heading_s_right_click_menu_offers_the_fix_first() {
     right_click(&mut app, 4, y as u16);
     assert_eq!(
         menu_labels(&app),
-        [AppFix::Install.label().as_str(), "New shell here", "Open a folder…", "Reconnect", "Machines…"]
+        [AppFix::Install.label().as_str(), "New shell here", "Open a folder…", "Clone a repository…", "Reconnect", "Machines…"]
     );
     let rows = text(&mut app, 140, 36);
     show(&rows, "kingdom's menu");
@@ -406,7 +406,7 @@ fn a_machine_heading_s_right_click_menu_offers_the_fix_first() {
     app.mode = Mode::Normal;
     text(&mut app, 140, 36);
     right_click(&mut app, 4, 2);
-    assert_eq!(menu_labels(&app), ["New shell here", "Open a folder…"]);
+    assert_eq!(menu_labels(&app), ["New shell here", "Open a folder…", "Clone a repository…"]);
 }
 
 #[test]
