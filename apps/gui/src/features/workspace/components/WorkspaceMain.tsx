@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { toast } from '@/lib/toast'
 import { openDaemonLog } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
@@ -14,7 +14,7 @@ import { machineProjects } from '../model/newSession'
 import { NewChatPage } from './NewChatPage'
 import { useRemoteFolderPick } from './useRemoteFolderPick'
 import { EmptyState } from './states'
-import { ServiceStatus } from './ServiceStatus'
+import { ServiceStatus, UpdateReadyBanner } from './ServiceStatus'
 import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
 import { displayName } from '../model/session'
 import { resolveStartFolder } from '../model/startFolder'
@@ -26,7 +26,9 @@ import { useWorkspace } from '../workspaceContext'
 
 /** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen } = useWorkspace()
+  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow } = useWorkspace()
+  // The version whose Update ready banner Later put away; the sidebar's chip still offers the restart.
+  const [updateLater, setUpdateLater] = useState<string | null>(null)
   const tickets = usePresence(ticketsOpen, TICKETS_EXIT_MS, useReducedMotion())
   const newChatMachineLabel = sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine'
   const remotePick = useRemoteFolderPick(newChatMachine, newChatMachineLabel)
@@ -83,6 +85,9 @@ export function WorkspaceMain() {
                   onResume={resumeInterrupted}
                   onDismiss={(id) => { setDismissedRestores((current) => new Set(current).add(id)) }}
                 />
+                {updater.state.status === 'ready' && updater.state.version !== updateLater && (
+                  <UpdateReadyBanner version={updater.state.version} onRestart={restartNow} onLater={() => { if (updater.state.status === 'ready') setUpdateLater(updater.state.version) }} />
+                )}
                 <ServiceStatus online={online} failures={failures} mismatch={Boolean(mismatch)} retryAt={retryAt} detail={offlineDetail ?? (sessionsQuery.isError ? daemonConnectionError(sessionsQuery.error) : null)} restart={restartOffer} appBehind={appBehindOffer} sessions={sessions.length} onRetry={() => { void refetchSessions() }} onOpenLog={() => { openDaemonLog().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the log')) }) }} />
                 {tab ? (
                   <div className="mx-pane-stack">

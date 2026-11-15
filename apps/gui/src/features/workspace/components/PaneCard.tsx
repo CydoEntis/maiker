@@ -71,6 +71,10 @@ export type PaneCardProps = {
   onRestart: (paneId: string) => void
   /** Answers the session's request to start helpers; absent where it cannot be answered. */
   onAnswerHelpers?: (choice: 'allow' | 'always' | 'no') => void
+  /** Set while the sidebar is hidden, on the first pane only: its header starts with Show sidebar (layout 2h). */
+  onShowSidebar?: () => void
+  /** That button's tooltip, with the keys that do the same. */
+  showSidebarTip?: string
 }
 
 /** The pane's width as it is laid out, so its header can give up controls as it narrows. */
@@ -163,6 +167,7 @@ export function PaneCard(props: PaneCardProps) {
         }}
         onDoubleClick={() => { props.onToggleMaximize(pane.id) }}
       >
+        {props.onShowSidebar !== undefined && <button type="button" className="mx-pane-show-sidebar" aria-label="Show sidebar" title={props.showSidebarTip ?? 'Show sidebar'} onClick={props.onShowSidebar}><Icon name="panelLeft" size={14} /></button>}
         <span className="mx-pane-icon" role="img" aria-label={`${agentName(session.process)} · ${STATUS_WORD[session.status]}`}>
           <AppIcon process={session.process} size={20} flat dimmed={session.status === 'unknown' || session.status === 'idle'} />
           <StatusBadge status={session.status} />

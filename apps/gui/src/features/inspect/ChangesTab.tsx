@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { Icon } from '@/features/workspace/components/glyphs'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { repoDiff, repoDiffRange, repoSnapshots, repoStatus, type RepoDiff } from './api'
 import { changeKind } from './changeKind'
+import { ChangesBar } from './ChangesBar'
 import { CommitBar, type ChangeActions } from './CommitBar'
 import { PatchView, type PatchComments, type SentComment } from './PatchView'
 import { RepoError } from './RepoError'
@@ -125,18 +125,31 @@ export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, comments, ac
   const selected = files.find((file) => file.path === picked) ?? files[0]
   const kind = selected ? changeKind(selected.patch) : null
   const where = selected ? splitPath(selected.path) : null
+  const ticked = actions ? (everything ? 'all' : chosen.length === 0 ? 'none' : 'some') : null
+  const tickAll = () => { setSkipped(everything ? new Set(files.map((file) => file.path)) : new Set()) }
+  const reread = () => { void query.refetch(); void status.refetch() }
   return (
     <div className="mx-changes">
+      <ChangesBar term={term} machine={machine} branch={status.data?.branch ?? branch} ahead={status.data?.ahead ?? 0} behind={status.data?.behind ?? 0} actions={treeActions} onChanged={reread} onNotice={onNotice} />
+      {scope && <ScopeLine shown={shown} why={why} onAllChanges={scope.onAllChanges} />}
+      <div className="mx-changes-split">
       <div className="mx-changes-side">
-        {branch !== undefined && branch !== '' && <p className="mx-changes-branch" title={`Branch ${branch}`}><Icon name="branch" size={11} /><span>{branch}</span></p>}
-        {scope && <ScopeLine shown={shown} why={why} onAllChanges={scope.onAllChanges} />}
+        {files.length > 0 && (
+          <div className="mx-changes-all">
+            {ticked !== null && <input type="checkbox" className="mx-changes-tick" aria-label="Commit every changed file" checked={ticked === 'all'} ref={(box) => { if (box) box.indeterminate = ticked === 'some' }} onChange={tickAll} />}
+            <span className="mx-changes-all-count">{files.length} changed</span>
+            <span className="mx-changes-count">
+              {query.data.additions > 0 && <span className="is-add">+{query.data.additions}</span>}
+              {query.data.deletions > 0 && <span className="is-remove">−{query.data.deletions}</span>}
+            </span>
+          </div>
+        )}
         <ul className="mx-changes-list" aria-label="Changed files">
           {files.map((file) => (
             <li key={file.path}><FileRow file={file} current={file.path === selected?.path} ticked={actions ? !skipped.has(file.path) : null} onTick={() => { tick(file.path) }} onPick={() => { setPicked(file.path) }} /></li>
           ))}
           {query.data.truncated && <li className="mx-inspect-note">Showing {files.length} of {query.data.total_files} files.</li>}
         </ul>
-        {actions && <CommitBar {...actions} files={files.length} chosen={chosen} everything={everything} ahead={status.data?.ahead ?? 0} behind={status.data?.behind ?? 0} onChanged={() => { void query.refetch(); void status.refetch() }} onNotice={onNotice} />}
       </div>
       <div className="mx-changes-main">
         {selected && kind && where ? (
@@ -153,9 +166,14 @@ export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, comments, ac
             {selected.binary ? <p className="mx-inspect-note">Binary file; no diff to show.</p> : <PatchView key={selected.path} patch={selected.patch} {...(comments ? { comments: { ...comments, path: selected.path, sent: sent.get(selected.path) ?? [], onSent: (comment) => { setSent((current) => new Map(current).set(selected.path, [...(current.get(selected.path) ?? []), comment])) } } } : {})} />}
           </>
         ) : (
-          <p className="mx-changes-none">{shown === 'turn' ? 'This turn left the files in the checkout as they were.' : 'No changes. The working tree matches the last commit.'}</p>
+          <div className="mx-changes-none">
+            <strong>{shown === 'turn' ? 'This turn left the files as they were' : 'No changes yet'}</strong>
+            <span>Files the agent edits show up here with their diffs. You can comment on any line.</span>
+          </div>
         )}
       </div>
+      </div>
+      {actions && <CommitBar {...actions} files={files.length} chosen={chosen} everything={everything} onChanged={reread} onNotice={onNotice} />}
     </div>
   )
 }

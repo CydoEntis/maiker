@@ -80,7 +80,8 @@ export function WorkspaceSidebars() {
 
   return (
     <>
-      {!focusMode && renderSidebar(sidebarMode, noop, toggleSidebar)}
+      {/* Hidden, the sidebar leaves no rail: the pane header's Show sidebar button brings it back. */}
+      {!focusMode && sidebarMode !== 'hidden' && renderSidebar(sidebarMode, noop, toggleSidebar)}
             {!focusMode && drawerShown && (
               <Panel label="Sessions" onClose={() => { setDrawerOpen(false) }} scrimClassName="mx-drawer-scrim" className="mx-drawer">
                 {renderSidebar('docked', () => { setDrawerOpen(false) }, () => { setDrawerOpen(false) })}

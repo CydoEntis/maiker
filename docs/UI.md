@@ -177,8 +177,8 @@ daemon does not take it. There is no New session dialog. **Layout 2g changes the
 Ctrl+Shift+T) opens the page above (**New agent chat** without the dots, ⌘⇧A or Ctrl+Shift+A, starts a chat at once with the default agent in the start folder), and **New shell** (⌘⇧T, Ctrl+Alt+T, the sidebar's terminal button, a
 machine's New shell here) starts a plain shell in the start folder with no dialog; another machine asks for a folder there first, so it opens the dialog. A screen reader is told when a machine goes down (`build disconnected: unreachable`) and when it is back, once each and not for every retry, through a polite live region; every state is a word as well as a shape and a colour, nothing about machines animates, and the Machines page works with the keyboard alone (Tab, Enter, Esc ends a look in progress without closing Settings). Features that read a pane's files (Inspect, worktreesFeatures that read a pane's files (Inspect, worktrees, opening a file from the output, dropping files, the screen text) are for this computer's panes only: each says `<Feature> is local-only in v1: the files are on <machine>, not on this computer.` and the Repository button shows disabled with that text.
 
-**Recent sessions** (`RecentSessionsDialog`, `model/recentSessions.ts`, `useRecentSessions`; the title bar's Maitty
-menu, the clock in the rail's foot, and **Recent sessions…** in the palette) lists the agent sessions that closed on this
+**Recent sessions** (`RecentSessionsDialog`, `model/recentSessions.ts`, `useRecentSessions`; the clock in the rail's
+foot and **Recent sessions…** in the command palette) lists the agent sessions that closed on this
 computer, newest first (`closed_sessions`, API_PATTERNS; read when the list opens, off the UI thread): each its title
 (else "Claude session"), the agent's mark and name, the folder, the branch and "closed 3h ago". Picking one closes the
 list and starts that agent in that folder with its conversation, through the new chat's resume start (`startNewChat`
@@ -878,8 +878,8 @@ Tickets shows the tickets of the project the chat in front works in, from GitHub
 ([spec](features/tickets/spec.md), the [2h handoff](features/chat-gui/design-handoff/2h/README.md)). Code:
 `apps/gui/src/features/tickets/`, data from `apps/gui/src/api/tickets.ts`. Rules:
 
-- **Where it is.** The title bar's **Tickets** toggle opens it over the chat area (`TicketsOverlay` in `.mx-main`);
-  ✕ or the toggle closes it. The handoff's right activity bar is not built: the window has none (DESIGN › title bar).
+- **Where it is.** The tools bar's **Tickets** button opens it over the chat area (`TicketsOverlay` in `.mx-main`) and
+  closes the side panel; ✕ or the button closes it (DESIGN › *Tools bar*).
 - **Project scope.** A project is a machine and a folder (the repository's root, else the folder;
   `model/ticketProjects.ts`). Its links (a GitHub repo, a Plane project, a Linear team) and your names in Plane and
   Linear are kept by the window (`model/ticketLinks.ts`, `localStorage`, nothing secret). GitHub follows the folder's

@@ -79,14 +79,42 @@ function CheckRow({ term, machine, check, onNotice }: { term: number; machine: n
   )
 }
 
+/** Runs every check that can run again now; a check waiting for approval or still running is left alone. */
+function RunAll({ term, machine, checks, onNotice }: Props) {
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState<string | null>(null)
+  const runnable = checks.filter((check) => checkActions(check).includes('rerun'))
+  const run = () => {
+    setBusy(true)
+    setFailure(null)
+    Promise.all(runnable.map((check) => checkAction(term, machine, { action: 'rerun', name: check.name })))
+      .then(() => { onNotice(`Running ${String(runnable.length)} ${runnable.length === 1 ? 'check' : 'checks'} again`) })
+      .catch((error: unknown) => { setFailure(messageOf(error)) })
+      .finally(() => { setBusy(false) })
+  }
+  return (
+    <>
+      <div className="mx-checks-bar">
+        <span>After every turn · {checks.length} {checks.length === 1 ? 'check' : 'checks'}</span>
+        <span className="mx-spacer" />
+        <button type="button" className="mx-checks-run" disabled={busy || runnable.length === 0} title={runnable.length === 0 ? 'No check can run again right now' : undefined} onClick={run}>{busy ? 'Running…' : 'Run all'}</button>
+      </div>
+      {failure !== null && <p className="mx-commit-error" role="alert">{failure}</p>}
+    </>
+  )
+}
+
 /** What the repository's checks said about the agent's last turn, with the choices the terminal app has: run again, accept a failure with a reason, approve a command the repository brought. */
 export function ChecksTab({ term, machine, checks, onNotice }: Props) {
   if (checks.length === 0) {
     return <p className="mx-inspect-note">No checks have run for this session. A check is a command (tests, a build) that runs after each turn; set one in Settings or in the repository’s checks file.</p>
   }
   return (
-    <ul className="mx-inspect-list mx-checks" aria-label="Checks">
-      {checks.map((check) => <CheckRow key={`${check.name}-${String(check.turn)}`} term={term} machine={machine} check={check} onNotice={onNotice} />)}
-    </ul>
+    <div className="mx-checks-view">
+      <RunAll term={term} machine={machine} checks={checks} onNotice={onNotice} />
+      <ul className="mx-inspect-list mx-checks" aria-label="Checks">
+        {checks.map((check) => <CheckRow key={`${check.name}-${String(check.turn)}`} term={term} machine={machine} check={check} onNotice={onNotice} />)}
+      </ul>
+    </div>
   )
 }

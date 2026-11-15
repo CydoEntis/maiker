@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { canPutAway, canSnooze, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, SIDEBAR_GROUPINGS, splitPutAway, statusSections, terminalSessions, type MachineGroup, type SidebarGrouping, type SidebarOrder } from '../model/sidebar'
+import { canPutAway, canSnooze, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, SIDEBAR_GROUPINGS, splitPutAway, statusSections, type MachineGroup, type SidebarGrouping, type SidebarOrder } from '../model/sidebar'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
 import { AppIcon, Icon, StatusBadge } from './glyphs'
@@ -119,7 +119,6 @@ export function Sidebar(props: SidebarProps) {
   )
 }
 
-const TERMINALS_SECTION = 'terminals'
 const PUT_AWAY_SECTION = 'put-away'
 
 /** Which headings are folded and which machines are grouped by project. */
@@ -170,14 +169,15 @@ function Expanded(props: SidebarProps) {
   const { listed: sessions, putAway } = splitPutAway(inProject(props.sessions, project))
   const draft = props.draft ?? null
   const groups = machineGroups(sessions, props.machines, draft !== null, props.order)
-  const terminals = terminalSessions(sessions)
   const groupingLabel = SIDEBAR_GROUPINGS.find(([grouping]) => grouping === props.grouping)?.[1] ?? ''
   const localMachine = props.machines[0]?.machine ?? 0
   const picked = (on: boolean, otherwise = '') => (on ? '✓' : otherwise)
   // Group by, then which project's sessions to show: one menu for both, as the header has one button.
   const filterMenu = (): MenuEntry[] => [
-    ...SIDEBAR_GROUPINGS.map(([grouping, label]) => ({ label: `Group by ${label.toLowerCase()}`, hint: picked(props.grouping === grouping), run: () => { props.onGrouping(grouping) } })),
+    { heading: 'Group by' },
+    ...SIDEBAR_GROUPINGS.map(([grouping, label]) => ({ label, hint: picked(props.grouping === grouping), run: () => { props.onGrouping(grouping) } })),
     'separator' as const,
+    { heading: 'Show' },
     { label: 'All projects', hint: picked(project === null, String(props.sessions.length)), run: () => { setPickedProject(null) } },
     ...projects.map((choice) => ({ label: choice.name, hint: picked(project === choice.name, String(choice.count)), run: () => { setPickedProject(choice.name) } })),
   ]
@@ -274,6 +274,7 @@ function Expanded(props: SidebarProps) {
   return (
     <div className="mx-sidebar-expanded">
       <div className="mx-sidebar-top">
+        <button type="button" className="mx-head-button" aria-label="Hide sidebar" title={tip('Hide sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="panelLeft" size={14} /></button>
         <span className="mx-sidebar-title">Chats</span>
         <span className="mx-spacer" />
         <button type="button" className="mx-head-button" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={14} /></button>
@@ -294,7 +295,7 @@ function Expanded(props: SidebarProps) {
                 {section.sessions.map((session) => renderRow(session, false))}
               </ListSection>
             ))}
-            {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">No agents running. New chat starts one.</div>}
+            {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">Chats and shells you start appear here, sorted by what needs you.</div>}
             <MachineNotes heads={props.machines} progress={props.updateProgress} onUpdate={props.onUpdateMachine} />
           </section>
         )}
@@ -318,7 +319,7 @@ function Expanded(props: SidebarProps) {
               renderRow={renderRow}
             />
           ))}
-          {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">No agents running. New chat starts one.</div>}
+          {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">Chats and shells you start appear here, sorted by what needs you.</div>}
         </section>
         )}
         {putAway.length > 0 && (
@@ -329,14 +330,6 @@ function Expanded(props: SidebarProps) {
           </section>
         )}
       </div>
-      {/* Terminals keep to the foot of the sidebar, under the agents however many there are, so they are always in the same place. */}
-      {props.grouping !== 'machine' && terminals.length > 0 && (
-        <section aria-label="Terminals" className="mx-sidebar-terminals" onScroll={endHover}>
-          <ListSection id={TERMINALS_SECTION} name="Terminals" count={terminals.length} label="Terminals" open={views.isOpen(TERMINALS_SECTION)} onToggle={() => { views.toggle(TERMINALS_SECTION) }}>
-            {terminals.map((session) => renderRow(session, true, true))}
-          </ListSection>
-        </section>
-      )}
       <div className="mx-sidebar-foot">
         {props.online
           ? <span className="mx-foot-slot">{props.updateSlot}</span>
@@ -471,17 +464,17 @@ function MachineSection({ draft, progress, group, open, byProject, canStart, onT
 }
 
 /**
- * The chat that has not been sent yet: a copy of a session row (its icon, its name line and its project line) drawn as
- * placeholders with a softly pulsing icon square, last in its machine. The real row takes this place when the chat starts.
+ * The chat that has not been sent yet (layout 2h): a row named "New chat" in italics with a "draft" tag and a faded agent
+ * tile, first in the list. The real row takes this place when the chat starts.
  */
 function DraftRow() {
   return (
     <div className="mx-row-wrap mx-draft-wrap" role="status" aria-label="New chat, waiting for the first message" data-flip="draft">
       <div className="mx-row mx-draft">
-        <span className="mx-row-icon"><span className="mx-draft-tile" /></span>
-        <span className="mx-row-text" aria-hidden="true">
-          <span className="mx-draft-line is-name" />
-          <span className="mx-draft-line is-sub" />
+        <span className="mx-row-icon mx-draft-tile"><AppIcon process="claude" size={24} /></span>
+        <span className="mx-row-text">
+          <span className="mx-draft-name">New chat</span>
+          <span className="mx-draft-tag">draft</span>
         </span>
       </div>
     </div>

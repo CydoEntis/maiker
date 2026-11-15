@@ -1,6 +1,7 @@
 import { movePanes } from './paneTransition'
 import { useCallback } from 'react'
 import { TerminalView } from '@/TerminalView'
+import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
 import { chatAvailability, type PaneView } from '../model/chatView'
 import { toast } from '@/lib/toast'
@@ -44,7 +45,8 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, setPreferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, drawerFoldedOf, setDrawerFolded } = useWorkspace()
+  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, setPreferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, drawerFoldedOf, setDrawerFolded, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
   const session = paneSessions.get(pane.sessionId)
@@ -103,6 +105,7 @@ export function WorkspacePane({ shown, pane, kept }: {
     <PaneCard
       pane={pane}
       index={shown.panes.findIndex((candidate) => candidate.id === pane.id)}
+      {...(sidebarMode === 'hidden' && !focusMode && shown.panes[0]?.id === pane.id ? { onShowSidebar: toggleSidebar, showSidebarTip: tip('Show sidebar', 'toggle-sidebar') } : {})}
       session={session}
       paneCount={shown.panes.length}
       broadcast={shown.broadcast === true}

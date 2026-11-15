@@ -22,5 +22,13 @@ export function usePaneViews() {
   const showWork = useCallback((sessionId: string) => {
     setWork((current) => new Set(current).add(sessionId))
   }, [])
-  return { choices, choose, work, showWork }
+  const hideWork = useCallback((sessionId: string) => {
+    setWork((current) => {
+      if (!current.has(sessionId)) return current
+      const next = new Set(current)
+      next.delete(sessionId)
+      return next
+    })
+  }, [])
+  return { choices, choose, work, showWork, hideWork }
 }

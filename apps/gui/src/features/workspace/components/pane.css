@@ -36,6 +36,9 @@
 /* The pane header (desktop frame, section 4): the agent's tile and badge, the title, then the view tabs and controls. */
 .mx-pane-head { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); cursor: default; }
 .mx-pane-head.is-draggable { cursor: grab; }
+.mx-pane-show-sidebar { flex: none; width: 28px; height: 28px; margin-left: -4px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
+.mx-pane-show-sidebar:hover { background: var(--m-hover); color: var(--fg); }
+.mx-pane-show-sidebar:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
 .mx-pane-icon { position: relative; width: 20px; height: 20px; flex: none; }
 .mx-pane-title { flex: 1; min-width: 64px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
 .mx-pane-name { font-size: 14px; line-height: 18px; font-weight: 600; letter-spacing: -.01em; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }

@@ -7,6 +7,8 @@ import { WorkspaceSidebars } from './components/WorkspaceSidebars'
 import { WorkspaceMain } from './components/WorkspaceMain'
 import { WorkspaceDialogs } from './components/WorkspaceDialogs'
 import { AppTitleBar } from './components/AppTitleBar'
+import { WorkspaceSidePanel } from './components/WorkspaceSidePanel'
+import { ActivityBar } from './components/ActivityBar'
 import './workspace.css'
 import './components/sidebar.css'
 import './components/pane.css'
@@ -28,6 +30,8 @@ export function DesktopApp() {
           <div className="mx-window" role="application" aria-label="Maitty">
             <WorkspaceSidebars />
             <WorkspaceMain />
+            <WorkspaceSidePanel />
+            {!workspace.focusMode && <ActivityBar />}
             <WorkspaceDialogs />
           </div>
           <Toaster position={preferences.toastPosition} theme={theme.light ? 'light' : 'dark'} />

@@ -60,13 +60,22 @@ function WindowButton(props: { platform: TitleBarPlatform; kind: Kind; label: st
   )
 }
 
+/** Windows' own caption glyphs (layout 2h): thin strokes at 11, 10 and 12px. */
+const CAPTION_GLYPHS = {
+  minimize: <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M5 12h14" /></svg>,
+  maximize: <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><rect x="4" y="4" width="16" height="16" /></svg>,
+  restore: <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true"><path d="M8 8V4h12v12h-4M4 8h12v12H4z" /></svg>,
+  close: <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>,
+} as const
+
 function WindowButtons({ platform, actions }: { platform: TitleBarPlatform; actions: TitleBarActions }) {
   const mac = platform === 'macos'
+  const windows = platform === 'windows'
   const iconSize = mac ? MAC_ICON_SIZE : ICON_SIZE
   const smallIconSize = iconSize - GLYPH_SHRINK
   const maximizeLabel = actions.maximized ? 'Restore' : 'Maximize'
   const minimize = (
-    <WindowButton key="minimize" platform={platform} kind="minimize" label="Minimize" icon={<Minus size={iconSize} />} onClick={actions.onMinimize} />
+    <WindowButton key="minimize" platform={platform} kind="minimize" label="Minimize" icon={windows ? CAPTION_GLYPHS.minimize : <Minus size={iconSize} />} onClick={actions.onMinimize} />
   )
   const maximize = (
     <WindowButton
@@ -74,12 +83,12 @@ function WindowButtons({ platform, actions }: { platform: TitleBarPlatform; acti
       platform={platform}
       kind="maximize"
       label={maximizeLabel}
-      icon={actions.maximized ? <Copy size={smallIconSize} /> : <Square size={smallIconSize} />}
+      icon={windows ? (actions.maximized ? CAPTION_GLYPHS.restore : CAPTION_GLYPHS.maximize) : actions.maximized ? <Copy size={smallIconSize} /> : <Square size={smallIconSize} />}
       onClick={actions.onToggleMaximize}
     />
   )
   const close = (
-    <WindowButton key="close" platform={platform} kind="close" label="Close window" icon={<X size={iconSize + 1} />} onClick={actions.onClose} />
+    <WindowButton key="close" platform={platform} kind="close" label="Close window" icon={windows ? CAPTION_GLYPHS.close : <X size={iconSize + 1} />} onClick={actions.onClose} />
   )
   // macOS reads close, minimize, zoom from the left edge; the others read minimize, maximize, close.
   const buttons = mac ? [close, minimize, maximize] : [minimize, maximize, close]

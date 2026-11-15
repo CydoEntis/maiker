@@ -455,7 +455,7 @@ describe('a draft chat', () => {
 describe('with nothing running', () => {
   it('says how to start one, under no heading', () => {
     show([])
-    expect(screen.getByText('No agents running. New chat starts one.')).toBeTruthy()
+    expect(screen.getByText('Chats and shells you start appear here, sorted by what needs you.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^This computer/ })).toBeNull()
   })
 })
@@ -478,14 +478,11 @@ describe('grouped by status', () => {
     expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Idle'])
   })
 
-  it('lists terminals in a section of their own at the bottom, whatever they are doing', () => {
+  it('lists shells as ordinary rows of the status sections', () => {
     show([session(9, { named: true, title: 'Dev server', status: 'working' }), ...mixed()], { grouping: 'status' })
-    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Finished', 'Idle', 'Terminals'])
-    expect(within(screen.getByRole('list', { name: 'Terminals' })).getByRole('button', { name: /^Dev server,/ })).toBeTruthy()
-    // Terminals are pinned over the sidebar's foot, outside the list of agents that scrolls.
-    expect(screen.getByRole('list', { name: 'Terminals' }).closest('.mx-sidebar-list')).toBeNull()
-    expect(screen.getByRole('list', { name: 'Terminals' }).closest('.mx-sidebar-terminals')).not.toBeNull()
-    expect(within(screen.getByRole('list', { name: 'Working' })).queryByRole('button', { name: /^Dev server,/ })).toBeNull()
+    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Finished', 'Idle'])
+    expect(within(screen.getByRole('list', { name: 'Working' })).getByRole('button', { name: /^Dev server,/ })).toBeTruthy()
+    expect(screen.queryByRole('list', { name: 'Terminals' })).toBeNull()
   })
 
   it('says which other machine a row runs on, since no heading does', () => {
@@ -593,7 +590,8 @@ describe('the top of the sidebar', () => {
     const onGrouping = vi.fn()
     show([], { grouping: 'status', onGrouping })
     await user.click(screen.getByRole('button', { name: /^Filter and group/ }))
-    await user.click(screen.getByRole('menuitem', { name: /^Group by project/ }))
+    expect(screen.getByText('Group by')).toBeTruthy()
+    await user.click(screen.getByRole('menuitem', { name: /^Project/ }))
     expect(onGrouping).toHaveBeenCalledWith('project')
   })
 })

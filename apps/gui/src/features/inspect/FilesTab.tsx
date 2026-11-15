@@ -63,7 +63,7 @@ function ancestorsOf(path: string): string[] {
  * The repository's files, read-only: the changed ones listed first, then the tree (folders open in place, each read when
  * first opened), and the chosen file beside them. A changed file opens as its diff, with the whole file a click away.
  */
-export function FilesTab({ term, machine = 0, lookAt }: { term: number; /** The machine the session is on; a file is edited on this computer (0) only. */ machine?: number; lookAt: LookAt | null }) {
+export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: number; /** The machine the session is on; a file is edited on this computer (0) only. */ machine?: number; lookAt: LookAt | null; /** Opens the project's references, the first entry of the tree. */ onReferences?: () => void }) {
   const client = useQueryClient()
   // The text being edited, and what the file said when the edit began (so a change made meanwhile is noticed).
   const [edit, setEdit] = useState<{ file: string; original: string; draft: string } | null>(null)
@@ -148,6 +148,13 @@ export function FilesTab({ term, machine = 0, lookAt }: { term: number; /** The 
   return (
     <div className="mx-files">
       <nav className="mx-files-tree" aria-label="Files">
+        {onReferences !== undefined && (
+          <button type="button" className="mx-files-refs" onClick={onReferences}>
+            <Icon name="references" size={13} />
+            <span>References</span>
+            <Icon name="chevron" />
+          </button>
+        )}
         {changed.size > 0 && (
           <>
             <p className="mx-files-heading">Changed</p>

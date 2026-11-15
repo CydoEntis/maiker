@@ -104,12 +104,14 @@ describe('a pane of another machine and the features that need its files', () =>
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
     await user.click(await screen.findByRole('menuitem', { name: /^Changes/ }))
     const panel = within(await screen.findByRole('complementary', { name: 'Side panel' }))
-    expect(panel.getByRole('tab', { name: /^Changes/ })).toHaveAttribute('aria-selected', 'true')
+    expect(panel.getByRole('heading', { name: 'Changes' })).toBeInTheDocument()
     expect(screen.queryByText(REFUSAL('Inspect'))).toBeNull()
-    for (const view of ['Files', 'Branches', 'History', 'References']) {
-      await user.click(panel.getByRole('tab', { name: view }))
-      expect(await panel.findByText(REFUSAL(view))).toBeInTheDocument()
-    }
+    const tools = within(screen.getByRole('navigation', { name: 'Tools' }))
+    await user.click(tools.getByRole('button', { name: 'Files' }))
+    expect(await panel.findByText(REFUSAL('Files'))).toBeInTheDocument()
+    await user.click(tools.getByRole('button', { name: 'History' }))
+    await user.click(panel.getByRole('radio', { name: 'Snapshots' }))
+    expect(await panel.findByText(REFUSAL('History'))).toBeInTheDocument()
   })
 
   it('says Worktrees is local-only and opens no dialog', async () => {

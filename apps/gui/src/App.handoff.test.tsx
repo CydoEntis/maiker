@@ -139,7 +139,7 @@ describe('desktop terminal multiplexer', () => {
 
     expect(await screen.findByRole('heading', { name: 'No sessions running' })).toBeInTheDocument()
     expect(screen.getByText(/A new session opens a shell in/)).toHaveTextContent('A new session opens a shell in ~. cd into a project')
-    expect(screen.getByText('No agents running. New chat starts one.')).toBeInTheDocument()
+    expect(screen.getByText('Chats and shells you start appear here, sorted by what needs you.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Change start folder' }))
     const dialog = screen.getByRole('dialog', { name: 'Settings' })
@@ -724,8 +724,8 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     // `/exit`: the daemon says the agent is gone (the pane is a bare shell for a moment), then ends the pane.
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`), term(3, `${HOME}/b`)])
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
-    // The window shows it as the bare shell it is for that moment.
-    await screen.findByRole('list', { name: 'Terminals' })
+    // The window shows it as the bare shell it is for that moment, an ordinary row of the sidebar.
+    expect(await within(screen.getByRole('navigation', { name: 'Sessions' })).findByRole('button', { name: /^a, (?!claude)/ })).toBeInTheDocument()
     daemon.loadConversations.mockResolvedValue([term(3, `${HOME}/b`)])
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
@@ -840,7 +840,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await waitFor(() => { expect(screen.queryByText('Reconnecting to maittyd')).not.toBeInTheDocument() })
   })
 
-  it('calls the service stopped after five failed tries, and Start service tries again', async () => {
+  it('calls the service stopped after five failed tries, and Restart service tries again', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValueOnce([term(2, `${HOME}/a`)]).mockRejectedValue(new Error('connection refused'))
     const { client } = renderDesktopApp()
@@ -848,8 +848,8 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     for (let attempt = 0; attempt < 5; attempt += 1) await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
     const card = await screen.findByRole('region', { name: 'Maitty service stopped' })
-    expect(within(card).getByText('Your session is saved. Start the service to pick up where it left off.')).toBeInTheDocument()
-    expect(within(card).getByText('Details')).toBeInTheDocument()
+    expect(card).toHaveTextContent('Chats are paused and nothing is lost. Restart to pick up where they left off.')
+    await user.click(within(card).getByRole('button', { name: 'Details' }))
     expect(screen.queryByText('Reconnecting to maittyd')).not.toBeInTheDocument()
 
     daemon.openDaemonLog.mockResolvedValue(undefined)
@@ -857,7 +857,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(daemon.openDaemonLog).toHaveBeenCalledOnce()
 
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    await user.click(within(card).getByRole('button', { name: 'Start service' }))
+    await user.click(within(card).getByRole('button', { name: 'Restart service' }))
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'Maitty service stopped' })).not.toBeInTheDocument() })
   })
 
@@ -982,8 +982,9 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(fireEvent.keyDown(terminal, { key: 'b', ctrlKey: true })).toBe(true)
     expect(fireEvent.keyDown(terminal, { key: 'B', ctrlKey: true, shiftKey: true })).toBe(false)
 
-    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeInTheDocument()
-    expect(screen.getByRole('navigation', { name: 'Sessions' })).toHaveClass('is-rail')
+    // Hidden, the sidebar leaves no rail; the first pane's header offers it back.
+    expect(screen.queryByRole('navigation', { name: 'Sessions' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeInTheDocument()
   })
 
   it('gives every button in the window a name, so an icon-only one still has a tooltip', async () => {

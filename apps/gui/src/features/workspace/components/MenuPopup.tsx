@@ -1,10 +1,11 @@
 import { useRef } from 'react'
 import { EDGE_PX } from './menuPoint'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
-/** One row of a menu, or a separator line between groups of rows. */
+/** One row of a menu, a separator line between groups of rows, or a dim heading over a group. */
 export type MenuEntry =
   | 'separator'
+  | { heading: string }
   | {
       label: string
       /** A key or a word shown dim at the right. */
@@ -42,7 +43,7 @@ function focusFirstItem(menu: HTMLDivElement | null): void {
 
 export function MenuPopup({ title, untitled = false, at, items, portalContainer, onClose }: Props) {
   const returnTo = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null)
-  const choose = (entry: Exclude<MenuEntry, 'separator'>) => {
+  const choose = (entry: Exclude<MenuEntry, 'separator' | { heading: string }>) => {
     onClose()
     entry.run?.()
   }
@@ -72,7 +73,9 @@ export function MenuPopup({ title, untitled = false, at, items, portalContainer,
         {!untitled && <span className="mx-ctx-title">{title}</span>}
         {items.map((entry, index) => entry === 'separator'
           ? <DropdownMenuSeparator key={`sep-${String(index)}`} className="mx-ctx-sep" />
-          : (
+          : 'heading' in entry
+            ? <DropdownMenuLabel key={`head-${entry.heading}`} className="mx-ctx-heading">{entry.heading}</DropdownMenuLabel>
+            : (
             <DropdownMenuItem
               key={entry.label}
               className={`mx-ctx-item${entry.danger === true ? ' is-danger' : ''}`}
