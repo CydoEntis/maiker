@@ -3,6 +3,7 @@
 //! --nocapture` prints the frames.
 use super::*;
 use crate::client::reference_fixture::{self, Stage};
+use crate::layout::Dir;
 use crate::protocol::{ClientMsg, ClosedSession, PROTOCOL_VERSION, Reply, ServerMsg, TurnEvent, TurnKind};
 use crate::workflow::{StepState::{self, *}, WorkflowRun, WorkflowStep, WorkflowTicket};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -181,6 +182,41 @@ fn the_status_log_says_why_newest_first_with_how_long_each_turn_ran() {
     assert!(matches!(app.mode, Mode::Normal));
     let items = app.session_items(ClientTerm::local(2)).unwrap().1;
     assert!(items.iter().any(|(l, _)| l == "Status log"));
+}
+
+#[test]
+fn broadcast_types_into_every_pane_of_the_tab_and_the_bar_says_so() {
+    let mut app = reference_fixture::world(Stage::None);
+    let focus = app.focused().expect("a focused pane");
+    let tab = app.screen.tab;
+    app.screen.tabs[tab].layout.split(focus.term, Dir::Right, 2);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    app.out = tx;
+    app.act(Action::Broadcast);
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "broadcasting");
+    assert!(rows.last().unwrap().contains("BROADCAST · 2 PANES"), "{}", rows.last().unwrap());
+    let _ = std::iter::from_fn(|| rx.try_recv().ok()).count();
+    key(&mut app, KeyCode::Char('l'));
+    let typed: Vec<u32> = std::iter::from_fn(|| rx.try_recv().ok())
+        .filter_map(|o| match o.msg {
+            ClientMsg::Input { term, data } if data == b"l" => Some(term),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(typed.len(), 2, "{typed:?}");
+    assert!(typed.contains(&focus.term) && typed.contains(&2));
+    app.act(Action::Broadcast);
+    assert!(app.broadcasting().is_none());
+    let rows = text(&mut app, 140, 36);
+    assert!(!rows.last().unwrap().contains("BROADCAST"));
+}
+
+#[test]
+fn broadcast_wants_two_panes() {
+    let mut app = reference_fixture::world(Stage::None);
+    app.act(Action::Broadcast);
+    assert!(app.broadcasting().is_none(), "one pane: nothing to broadcast to");
 }
 
 #[test]

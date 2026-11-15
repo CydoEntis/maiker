@@ -309,6 +309,8 @@ pub enum Action {
     StatusLog,
     /// Agent sessions that closed lately, each to reopen with its conversation.
     RecentSessions,
+    /// Type into every pane of this tab at once, or stop.
+    Broadcast,
     /// Explicitly unbind a default.
     None,
 }
@@ -407,6 +409,7 @@ impl Action {
             Action::WorkBoard => "Work board".into(),
             Action::StatusLog => "Status log".into(),
             Action::RecentSessions => "Recent sessions…".into(),
+            Action::Broadcast => "Broadcast typing to this tab".into(),
             Action::None => "Unbound".into(),
         }
     }
@@ -507,6 +510,7 @@ impl Action {
             Action::WorkBoard => "work-board".into(),
             Action::StatusLog => "status-log".into(),
             Action::RecentSessions => "recent-sessions".into(),
+            Action::Broadcast => "broadcast".into(),
             Action::None => return None,
         })
     }
@@ -630,6 +634,7 @@ impl FromStr for Action {
             "work-board" => Action::WorkBoard,
             "status-log" => Action::StatusLog,
             "recent-sessions" => Action::RecentSessions,
+            "broadcast" => Action::Broadcast,
             // The fleet and the why popover are gone; a binding written for one stays
             // harmless, not a config error.
             "none" | "unbind" | "start-fleet" | "why" => Action::None,
@@ -674,6 +679,7 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
     ("_", "split-up"),
     ("\\", "split-left"),
     ("z", "zoom-pane"),
+    ("a", "broadcast"),
     ("x", "close-pane"),
     ("m", "swap-next"),
     ("ctrl+left", "resize-left"),

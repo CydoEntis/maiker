@@ -326,6 +326,8 @@ pub(super) struct ScreenTab {
     pub used: u64,
     /// What you called it; empty: named after what runs in it.
     pub name: String,
+    /// What is typed into its focused pane goes to every pane of it.
+    pub broadcast: bool,
 }
 
 impl ScreenTab {
@@ -337,6 +339,7 @@ impl ScreenTab {
             owner,
             used: 0,
             name: String::new(),
+            broadcast: false,
         }
     }
     /// Its panes are the daemon's, so they are on `owner`'s machine.
@@ -1122,6 +1125,7 @@ impl App {
                             }
                         },
                     ),
+                    broadcast: prior.is_some_and(|tab| tab.broadcast),
                 }
             })
             .collect();
@@ -1679,6 +1683,7 @@ mod usage;
 mod tidy;
 mod workflow_runs;
 mod work_board;
+mod broadcast;
 mod status_log;
 mod helper_view;
 pub(in crate::client) use self::{

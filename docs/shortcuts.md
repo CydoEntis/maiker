@@ -59,6 +59,7 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `Ctrl`+arrows | Resize the pane |
 | `Alt`+arrows | Swap the pane with the one that way |
 | `PgUp` / `PgDn` | Scroll half a pane |
+| `a` | Broadcast: what you type into the focused pane goes to every pane of the tab (the mode bar reads `BROADCAST · N PANES` in red); again stops it |
 
 ### Sidebar
 

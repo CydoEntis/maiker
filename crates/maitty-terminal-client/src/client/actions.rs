@@ -253,6 +253,7 @@ impl App {
             Action::WorkBoard => self.open_work_board(),
             Action::StatusLog => self.open_status_log(),
             Action::RecentSessions => self.ask_closed_sessions(),
+            Action::Broadcast => self.toggle_broadcast(),
             Action::None => {}
             // The rest are handled by screen_act above.
             _ => {}
@@ -339,6 +340,7 @@ impl App {
             Action::PutAway,
             Action::WorkBoard,
             Action::StatusLog,
+            Action::Broadcast,
             Action::CloseSplit,
             Action::StopAgent,
             Action::Message,
