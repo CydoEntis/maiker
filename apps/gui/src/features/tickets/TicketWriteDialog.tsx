@@ -93,10 +93,11 @@ export function TicketWriteDialog({ container, provider, ticket, kind, onConfirm
         <div className="mx-tk-dialog-foot">
           {reviewing && kind === 'comment' && <button type="button" className="mx-tk-button" disabled={busy} onClick={() => { setReviewing(false); setRefused(null) }}>Back</button>}
           <button type="button" className="mx-tk-button" disabled={busy} onClick={cancel}>Cancel <kbd>Esc</kbd></button>
+          {/* Separate keys, so the button that was just clicked to review is not the one a held Enter then confirms. */}
           {!reviewing ? (
-            <button type="button" className="mx-tk-button is-primary" aria-disabled={problem !== null} onClick={() => { if (problem === null) setReviewing(true) }}>Review</button>
+            <button key="review" type="button" className="mx-tk-button is-primary" aria-disabled={problem !== null} onClick={() => { if (problem === null) setReviewing(true) }}>Review</button>
           ) : (
-            <button type="button" className="mx-tk-button is-primary" disabled={busy} onClick={confirm}>{busy ? 'Writing…' : kind === 'close' ? `Mark done on ${look.name}` : `Post comment to ${look.name}`}</button>
+            <button key="confirm" type="button" className="mx-tk-button is-primary" disabled={busy} onClick={confirm}>{busy ? 'Writing…' : kind === 'close' ? `Mark done on ${look.name}` : `Post comment to ${look.name}`}</button>
           )}
         </div>
       </DialogContent>
