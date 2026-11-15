@@ -1,20 +1,7 @@
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { commentProblem, TICKET_COMMENT_MAX_CHARS, trimmedComment, type TicketFailure, type TicketSummary, type TicketWrite } from '@/api/tickets'
+import { commentLength, commentProblem, TICKET_COMMENT_MAX_CHARS, trimmedComment, type TicketSummary, type TicketWrite } from '@/api/tickets'
 import { PROVIDER_LOOK, ticketKey, type Provider } from './model/tickets'
-
-/** What a write that did not happen says, in the words the dialog shows. Nothing was written. */
-export function writeFailureWords(failure: TicketFailure, provider: Provider): string {
-  const name = PROVIDER_LOOK[provider].name
-  switch (failure.kind) {
-    case 'no-key': return `Add your ${name} key in Settings first.`
-    case 'signed-out': return provider === 'github' ? 'GitHub is not signed in. Run gh auth login in a terminal.' : `${name} refused the key, so nothing was written.`
-    case 'not-found': return `${name} has no such ticket, or this key cannot see it.`
-    case 'rate-limited': return `${name} says too many requests. Try again in a minute.`
-    case 'unreachable': return failure.line
-    case 'invalid': return failure.line
-  }
-}
 
 type Props = {
   container: HTMLElement | null
@@ -64,7 +51,7 @@ export function TicketWriteDialog({ container, provider, ticket, kind, onConfirm
               <label className="mx-tk-section-head" htmlFor="mx-tk-comment">Your comment</label>
               <textarea id="mx-tk-comment" className="mx-tk-compose" rows={7} value={draft} autoFocus onChange={(event) => { setDraft(event.target.value) }} />
               <span className={`mx-tk-note${draft !== '' && problem !== null ? ' mx-tk-danger' : ''}`}>
-                {draft !== '' && problem !== null ? problem : `${String([...text].length)} of ${String(TICKET_COMMENT_MAX_CHARS)} characters. You review it before anything is posted.`}
+                {draft !== '' && problem !== null ? problem : `${String(commentLength(text))} of ${String(TICKET_COMMENT_MAX_CHARS)} characters. You review it before anything is posted.`}
               </span>
             </div>
           ) : (

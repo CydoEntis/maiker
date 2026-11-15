@@ -2,7 +2,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TicketSummary, TicketWrite } from '@/api/tickets'
-import { TicketWriteDialog, writeFailureWords } from './TicketWriteDialog'
+import { writeFailureWords } from './model/ticketWrite'
+import { TicketWriteDialog } from './TicketWriteDialog'
 
 afterEach(cleanup)
 

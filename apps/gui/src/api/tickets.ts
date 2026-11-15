@@ -235,11 +235,16 @@ export function trimmedComment(text: string): string {
   return text.replace(/\r\n/g, '\n').trim()
 }
 
+/** How many characters a comment has, as the daemon counts them: whole characters, not UTF-16 halves. */
+export function commentLength(text: string): number {
+  return (text.match(/[\s\S]/gu) ?? []).length
+}
+
 /** Why a comment cannot be sent, or null when it can. The daemon checks it again and has the last word. */
 export function commentProblem(text: string): string | null {
   const comment = trimmedComment(text)
   if (comment === '') return 'Write something to say.'
-  if ([...comment].length > TICKET_COMMENT_MAX_CHARS) return `A comment can be at most ${String(TICKET_COMMENT_MAX_CHARS)} characters.`
+  if (commentLength(comment) > TICKET_COMMENT_MAX_CHARS) return `A comment can be at most ${String(TICKET_COMMENT_MAX_CHARS)} characters.`
   if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(comment.replace(/\n/g, ''))) return 'A comment cannot hold tabs or hidden characters.'
   return null
 }
