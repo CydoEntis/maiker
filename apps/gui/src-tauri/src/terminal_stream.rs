@@ -24,7 +24,7 @@ use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
 use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, Snapshot, Status, TermId, TicketKeyChange};
-use maitty_shared::tickets::{TicketError, TicketKeyState, TicketsReply, TicketsRequest};
+use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWrite, TicketWritten, TicketsReply, TicketsRequest};
 use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -65,6 +65,7 @@ const MOST_GITHUB_WORD_BYTES: usize = 256;
 const TICKETS_EVENT: &str = "tickets";
 /// Where the ticket providers' keys stand: `{machine, tag, answer}`, never a key.
 const TICKET_KEYS_EVENT: &str = "ticket-keys";
+const TICKET_WRITE_EVENT: &str = "ticket-write";
 /// A machine's home folder, as its daemon reads it.
 const REMOTE_HOME: &str = "~";
 /// Longest repository address the daemon accepts.
@@ -495,6 +496,22 @@ impl Wire {
         self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketKeys { change, tag }))
     }
 
+    /// Ask this computer's daemon to write one change to a ticket: a comment, or closing it. `confirmed` is the
+    /// person's click on the confirm step, passed on as it is; the daemon writes nothing without it and refuses
+    /// an agent's connection. The answer comes back as a `ticket-write` event carrying `tag`.
+    pub fn ticket_write(&self, source: &str, id: &str, write: TicketWrite, confirmed: bool, tag: u64) -> Result<(), String> {
+        let (source, id) = (source.trim(), id.trim());
+        for text in [source, id] {
+            if text.is_empty() || text.len() > MOST_TICKET_SOURCE_BYTES || text.chars().any(char::is_control) {
+                return Err("That ticket cannot be written to".to_string());
+            }
+        }
+        self.send(
+            MachineId::LOCAL,
+            ClientMsg::Query(Query::TicketWrite { source: source.to_owned(), id: id.to_owned(), write, confirmed, tag }),
+        )
+    }
+
     /// Ask a machine's daemon (this computer's when none is named) whose repositories it can list.
     /// The answer comes back as a `github-owners` event carrying `tag`.
     pub fn github_owners(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
@@ -579,6 +596,20 @@ pub fn tickets(wire: tauri::State<'_, Wire>, source: String, request: TicketsReq
 #[tauri::command]
 pub fn ticket_keys(wire: tauri::State<'_, Wire>, change: TicketKeyChange, tag: u64) -> Result<(), String> {
     wire.ticket_keys(change, tag)
+}
+
+/// Asks this computer's daemon to add a comment to a ticket or close it, after the person confirmed exactly what
+/// is shown. The answer arrives as a `ticket-write` event with the same `tag`.
+#[tauri::command]
+pub fn ticket_write(
+    wire: tauri::State<'_, Wire>,
+    source: String,
+    id: String,
+    write: TicketWrite,
+    confirmed: bool,
+    tag: u64,
+) -> Result<(), String> {
+    wire.ticket_write(&source, &id, write, confirmed, tag)
 }
 
 /// Asks another machine for its whole list; it arrives as `machine-sessions-changed`.
@@ -866,6 +897,12 @@ pub enum Reaction {
         tag: u64,
         answer: Result<Vec<TicketKeyState>, TicketError>,
     },
+    /// What a confirmed write to a ticket did, for the window that asked.
+    TicketWrite {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketWritten, TicketError>,
+    },
     /// A machine's whole snapshot, or none when this computer's line ended.
     Sessions {
         machine: MachineId,
@@ -957,6 +994,7 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::GitHubOwners { machine, tag, answer } => Some(Reaction::GitHubOwners { machine, tag, answer }),
             Out::Tickets { machine, tag, answer } => Some(Reaction::Tickets { machine, tag, answer }),
             Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
+            Out::TicketWrite { machine, tag, answer } => Some(Reaction::TicketWrite { machine, tag, answer }),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
                 let _ = handle.send(Outgoing {
@@ -1165,6 +1203,9 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::TicketKeys { machine, tag, answer } => {
                 let _ = app.emit(TICKET_KEYS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
+            Reaction::TicketWrite { machine, tag, answer } => {
+                let _ = app.emit(TICKET_WRITE_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
             Reaction::Removed { machine } => {
                 maitty_desktop_client::forget_remote(machine.0);
                 if let Ok(mut states) = app.state::<MachineStates>().0.lock() {
@@ -1249,6 +1290,16 @@ mod tests {
         assert_eq!(serde_json::to_value(refused).unwrap(), serde_json::json!({"machine": 0, "tag": 4, "answer": {"Err": "SignedOut"}}));
         let none = TaggedAnswer { machine: 0, tag: 5, answer: Ok::<_, TicketError>(Vec::<TicketKeyState>::new()) };
         assert_eq!(serde_json::to_value(none).unwrap(), serde_json::json!({"machine": 0, "tag": 5, "answer": {"Ok": []}}));
+    }
+
+    #[test]
+    fn a_ticket_write_and_its_answer_keep_their_shapes() {
+        let comment: TicketWrite = serde_json::from_value(serde_json::json!({"Comment": {"text": "done"}})).unwrap();
+        assert_eq!(comment, TicketWrite::Comment { text: "done".into() });
+        assert_eq!(serde_json::from_value::<TicketWrite>(serde_json::json!("Close")).unwrap(), TicketWrite::Close);
+        assert!(serde_json::from_value::<TicketWrite>(serde_json::json!({"Delete": {}})).is_err());
+        let done = TaggedAnswer { machine: 0, tag: 6, answer: Ok::<_, TicketError>(TicketWritten::Commented) };
+        assert_eq!(serde_json::to_value(done).unwrap(), serde_json::json!({"machine": 0, "tag": 6, "answer": {"Ok": "Commented"}}));
     }
 
     fn state(machine: u16, name: &str, kind: &'static str) -> MachineState {

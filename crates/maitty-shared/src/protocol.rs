@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 106;
+pub const PROTOCOL_VERSION: u32 = 107;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -193,6 +193,10 @@ pub const TICKETS_SINCE: u32 = 105;
 /// The first version whose daemon keeps the key of a ticket provider on request
 /// (`Query::TicketKeys`).
 pub const TICKET_KEYS_SINCE: u32 = 106;
+
+/// The first version whose daemon writes a confirmed comment or a close to a ticket
+/// (`Query::TicketWrite`).
+pub const TICKET_WRITE_SINCE: u32 = 107;
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
@@ -1235,6 +1239,17 @@ pub enum Query {
         change: TicketKeyChange,
         tag: u64,
     },
+    /// Write one confirmed change to a ticket of `source` (as for `Tickets`) on this daemon's
+    /// computer (human clients only): add a comment to the ticket `id`, or close it. `confirmed`
+    /// says a person saw exactly what will be written and agreed; the daemon writes nothing when it
+    /// is false. The answer is `Reply::TicketWrite` with the same `tag`.
+    TicketWrite {
+        source: String,
+        id: String,
+        write: crate::tickets::TicketWrite,
+        confirmed: bool,
+        tag: u64,
+    },
     /// Which commit name and email git uses on this daemon's computer, and the folders where a
     /// rule gives another (human clients only). Nothing is written. The answer is
     /// `Reply::GitIdentities` with the same `tag`.
@@ -1530,6 +1545,11 @@ pub enum Reply {
     TicketKeys {
         tag: u64,
         answer: Result<Vec<crate::tickets::TicketKeyState>, crate::tickets::TicketError>,
+    },
+    /// What a `Query::TicketWrite` did, or why it did nothing.
+    TicketWrite {
+        tag: u64,
+        answer: Result<crate::tickets::TicketWritten, crate::tickets::TicketError>,
     },
     /// How a `Query::Git` ended: one line saying what happened ("Pulled", "Pushed main"), or one
     /// line saying why nothing did.
@@ -2444,6 +2464,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
             ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
             ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
+            ServerMsg::Reply(Reply::TicketWrite { .. }) => TICKET_WRITE_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2466,6 +2487,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::GitHubRepos { .. } | Query::GitHubOwners { .. }) => GITHUB_REPOS_SINCE,
             ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
             ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
+            ClientMsg::Query(Query::TicketWrite { .. }) => TICKET_WRITE_SINCE,
             ClientMsg::Query(Query::GitIdentities { .. }) => GIT_IDENTITIES_SINCE,
             ClientMsg::Query(Query::GitIdentityRule { .. }) => GIT_RULES_SINCE,
             ClientMsg::Query(Query::Git { request: GitRequest::Commit { .. }, .. }) => GIT_COMMIT_SINCE,
@@ -2916,7 +2938,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 106);
+        assert_eq!(PROTOCOL_VERSION, 107);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3406,7 +3428,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 106);
+        assert_eq!(PROTOCOL_VERSION, 107);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4478,6 +4500,30 @@ mod tests {
         }
         // A message an older peer already reads is not changed, so the window stays where it was.
         const { assert!(TICKET_KEYS_SINCE > TICKETS_SINCE && TICKET_KEYS_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_KEYS_SINCE) };
+    }
+
+    /// Writing to a ticket is a new request and a new reply, so the window stays open and a daemon
+    /// is asked only when it is new enough; an older one is never sent a write.
+    #[test]
+    fn writing_a_ticket_is_asked_only_of_a_daemon_that_knows_it_and_changes_nothing_older() {
+        use crate::tickets::{TicketError, TicketWrite, TicketWritten};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            GitIdentities { tag: u64 },
+        }
+        let write = Query::TicketWrite { source: "me/widgets".into(), id: "github:me/widgets#1".into(), write: TicketWrite::Close, confirmed: true, tag: 5 };
+        let bytes = encode(&write).unwrap();
+        assert!(decode::<OldQuery>(&bytes).is_err());
+        assert!(matches!(decode::<Query>(&bytes), Ok(Query::TicketWrite { tag: 5, confirmed: true, write: TicketWrite::Close, .. })));
+        assert_eq!(ClientMsg::Query(write).introduced_in(), TICKET_WRITE_SINCE);
+        for answer in [Ok(TicketWritten::Commented), Err(TicketError::SignedOut)] {
+            let reply = ServerMsg::Reply(Reply::TicketWrite { tag: 5, answer });
+            assert_eq!(reply.introduced_in(), TICKET_WRITE_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        const { assert!(TICKET_WRITE_SINCE > TICKET_KEYS_SINCE && TICKET_WRITE_SINCE == PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_WRITE_SINCE) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never

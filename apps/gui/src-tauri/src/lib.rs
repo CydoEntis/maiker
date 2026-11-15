@@ -1725,6 +1725,7 @@ pub fn run() {
             terminal_stream::tickets,
             github_repo_of,
             terminal_stream::ticket_keys,
+            terminal_stream::ticket_write,
             terminal_stream::get_shared_settings,
             terminal_stream::set_shared_setting,
             output_socket::open_terminal_socket,

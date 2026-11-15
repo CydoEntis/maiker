@@ -1,5 +1,6 @@
 //! GitHub issues as tickets, read through this machine's own GitHub command line (`gh`): the
-//! repository's milestones, a page of its issues, one issue with its comments. Read-only. No token
+//! repository's milestones, a page of its issues, one issue with its comments. Read-only here (the
+//! confirmed writes are `tickets_write`). No token
 //! is asked for, kept, logged or sent: signing in and the credentials stay `gh`'s own.
 //!
 //! What `gh` prints is other people's writing. Every string is cleaned and cut and every list is
@@ -21,7 +22,7 @@ use std::ffi::OsStr;
 use std::time::Duration;
 
 /// How long `gh` has to answer one question about issues.
-const LIMIT: Duration = Duration::from_secs(30);
+pub(super) const LIMIT: Duration = Duration::from_secs(30);
 /// The most `gh` may print before what it printed is not read. Far more than a full page, a full
 /// set of milestones or an issue with its comments is.
 const OUTPUT_MAX_BYTES: usize = 4 * 1024 * 1024;
@@ -51,13 +52,13 @@ fn answer_from(program: &OsStr, source: &str, request: TicketsRequest, limit: Du
     reply.cleaned().ok_or_else(|| invalid("gh did not give a ticket"))
 }
 
-fn invalid(why: &str) -> TicketError {
+pub(super) fn invalid(why: &str) -> TicketError {
     TicketError::Invalid(why.into())
 }
 
 /// What `gh` printed when it ran to its end and said it worked, or the typed error that says why
 /// not. Its own words are read to tell the kinds apart and are never passed on.
-fn run(command: &mut std::process::Command, limit: Duration) -> Result<String, TicketError> {
+pub(super) fn run(command: &mut std::process::Command, limit: Duration) -> Result<String, TicketError> {
     let ran = run_within(command, limit).map_err(|error| match error {
         RunError::Missing => TicketError::NotInstalled,
         RunError::Start(_) => TicketError::Unreachable("gh could not be started".into()),

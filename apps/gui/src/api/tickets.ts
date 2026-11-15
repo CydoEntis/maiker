@@ -4,9 +4,11 @@ import { LOCAL_MACHINE } from './machines'
 import { taggedAnswers } from './taggedAnswers'
 
 /**
- * Tickets, read through this computer's daemon (`Query::Tickets`, `Query::TicketKeys`). Read-only: nothing here
- * changes a ticket. Every string was cleaned and cut by the daemon; it is still other people's text, so the window
- * shows it as text and never as markup.
+ * Tickets, read through this computer's daemon (`Query::Tickets`, `Query::TicketKeys`). Reading changes nothing. The
+ * only writes are `writeTicket`'s two (a comment, or closing), which the daemon performs only for a request marked
+ * confirmed, so `writeTicket` is called from the confirm button of the write dialog and nowhere else. Every string
+ * was cleaned and cut by the daemon; it is still other people's text, so the window shows it as text and never as
+ * markup.
  */
 
 const StateCategorySchema = z.enum(['Open', 'Started', 'Closed'])
@@ -65,6 +67,12 @@ const KeysAnswerSchema = z.object({
   answer: z.union([z.object({ Ok: z.array(KeyStateSchema) }), z.object({ Err: ErrorSchema })]),
 })
 
+const WriteAnswerSchema = z.object({
+  machine: z.number().int(),
+  tag: z.number().int(),
+  answer: z.union([z.object({ Ok: z.enum(['Commented', 'Closed']) }), z.object({ Err: ErrorSchema })]),
+})
+
 export type StateCategory = z.infer<typeof StateCategorySchema>
 export type GroupKind = z.infer<typeof GroupKindSchema>
 
@@ -118,6 +126,9 @@ const NOT_ANSWERED = 'The Maitty service did not answer in time'
 
 const askTickets = taggedAnswers('tickets', TicketsAnswerSchema)
 const askKeys = taggedAnswers('ticket-keys', KeysAnswerSchema)
+const askWrite = taggedAnswers('ticket-write', WriteAnswerSchema)
+/** A write runs `gh` or up to two requests (thirty and twenty seconds); the host waits that long and a little more. */
+const WRITE_ANSWER_MS = 95_000
 
 function summaryOf(summary: z.infer<typeof SummarySchema>): TicketSummary {
   return {
@@ -210,6 +221,44 @@ export function saveTicketKey(provider: KeyedProvider, address: string, workspac
 
 export function removeTicketKey(provider: KeyedProvider): Promise<TicketsResult<TicketKeyState[]>> {
   return changeKeys({ Remove: { provider } })
+}
+
+/** The two changes a person may confirm: a comment with exactly this text, or closing the ticket. Nothing else. */
+export type TicketWrite = { kind: 'comment'; text: string } | { kind: 'close' }
+export type TicketWritten = 'Commented' | 'Closed'
+
+/** The most characters of a comment, as the daemon allows (`TICKET_COMMENT_MAX_CHARS`). */
+export const TICKET_COMMENT_MAX_CHARS = 4000
+
+/** The line breaks in a comment are `\n` and its ends are trimmed. */
+export function trimmedComment(text: string): string {
+  return text.replace(/\r\n/g, '\n').trim()
+}
+
+/** How many characters a comment has, as the daemon counts them: whole characters, not UTF-16 halves. */
+export function commentLength(text: string): number {
+  return (text.match(/[\s\S]/gu) ?? []).length
+}
+
+/** Why a comment cannot be sent, or null when it can. The daemon checks it again and has the last word. */
+export function commentProblem(text: string): string | null {
+  const comment = trimmedComment(text)
+  if (comment === '') return 'Write something to say.'
+  if (commentLength(comment) > TICKET_COMMENT_MAX_CHARS) return `A comment can be at most ${String(TICKET_COMMENT_MAX_CHARS)} characters.`
+  if (/[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(comment.replace(/\n/g, ''))) return 'A comment cannot hold tabs or hidden characters.'
+  return null
+}
+
+/**
+ * Adds a comment to a ticket or closes it, once the person has seen exactly what will be written and clicked to
+ * confirm: `confirmed` can only be `true`, which is the click. The daemon refuses anything else and writes nothing.
+ * It is sent once, never retried. A write that was not answered in time may or may not have happened.
+ */
+export async function writeTicket(source: string, id: string, write: TicketWrite, confirmed: true): Promise<TicketsResult<TicketWritten>> {
+  const sent = write.kind === 'close' ? 'Close' : { Comment: { text: trimmedComment(write.text) } }
+  const send = (tag: number) => invoke('ticket_write', { source, id, write: sent, confirmed, tag })
+  const told = await askWrite(send, WRITE_ANSWER_MS, NOT_ANSWERED)
+  return 'Ok' in told.answer ? { ok: true, value: told.answer.Ok } : { ok: false, failure: failureOf(told.answer.Err) }
 }
 
 /** The GitHub repository a folder of this computer pushes to (`owner/name`), or null when it has none. */

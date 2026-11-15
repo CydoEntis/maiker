@@ -50,6 +50,7 @@ mod tickets;
 mod tickets_github;
 mod tickets_linear;
 mod tickets_plane;
+mod tickets_write;
 mod usage;
 mod usage_store;
 mod warm;
@@ -3140,6 +3141,22 @@ impl Daemon {
                         }) =>
                     {
                         ServerMsg::Error("Only a human client can keep a ticket provider's key".into())
+                    }
+                    Query::TicketWrite { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can write to a ticket".into())
+                    }
+                    Query::TicketWrite { source, id, write, confirmed, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = tickets_write::perform(&source, &id, write, confirmed);
+                            let reply = Reply::TicketWrite { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
                     }
                     Query::TicketKeys { change, tag } => {
                         let tx = self.tx.clone();
