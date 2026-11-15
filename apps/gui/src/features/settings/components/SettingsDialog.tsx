@@ -117,7 +117,7 @@ function SettingsDialog({ open, onClose, theme, onThemeChange, preferences, onPr
             </div></div>
             <label className="settings-row"><span><strong>Reduce motion</strong><small>Stop animated transitions and activity indicators.</small></span><input type="checkbox" checked={preferences.reduceMotion} onChange={(event) => { updatePreference('reduceMotion', event.target.checked) }} /></label>
             <label className="settings-row"><span><strong>Animate sidebar activity</strong><small>Show motion while a conversation is working.</small></span><input type="checkbox" checked={preferences.animateSidebarActivity} disabled={preferences.reduceMotion} onChange={(event) => { updatePreference('animateSidebarActivity', event.target.checked) }} /></label>
-            <label className="settings-row"><span><strong>Compact sidebar</strong><small>Keep the conversation list collapsed.</small></span><input type="checkbox" checked={preferences.compactSidebar} onChange={(event) => { updatePreference('compactSidebar', event.target.checked) }} /></label>
+            <label className="settings-row"><span><strong>Hide sidebar</strong><small>Keep the conversation list hidden until you show it.</small></span><input type="checkbox" checked={preferences.compactSidebar} onChange={(event) => { updatePreference('compactSidebar', event.target.checked) }} /></label>
           </>}
           {section === 'notifications' && <>
             <div className="settings-section-title"><h3>Notifications</h3><p>Choose which conversation updates appear as desktop toasts.</p></div>

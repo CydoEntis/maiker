@@ -1,4 +1,4 @@
-import { useCallback, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { ChangesTab, type TurnScope } from './ChangesTab'
 import { ChecksTab } from './ChecksTab'
@@ -15,15 +15,14 @@ import { localOnlyMessage } from '@/lib/localOnly'
 import { Icon, type IconName } from '@/features/workspace/components/glyphs'
 import './inspect.css'
 
-/** The side panel's views (layout 2h): the tools bar picks one. A shell's further terminals still open here too. */
-export type InspectView = 'changes' | 'files' | 'history' | 'checks' | 'terminal'
+/** The side panel's views (layout 2h): the tools bar picks one. Terminals live in the terminal dock, not here. */
+export type InspectView = 'changes' | 'files' | 'history' | 'checks'
 
 const VIEWS: Record<InspectView, { label: string; icon: IconName }> = {
   changes: { label: 'Changes', icon: 'changes' },
   files: { label: 'Files', icon: 'files' },
   history: { label: 'History', icon: 'history' },
   checks: { label: 'Checks', icon: 'list' },
-  terminal: { label: 'Terminal', icon: 'terminal' },
 }
 
 /** The panel opens this wide; its edge drags between the two bounds, and the width is remembered. */
@@ -60,8 +59,6 @@ function writeWidth(width: number | null): void {
 type Props = {
   /** The daemon's pane number every repository question is about; null when there is none to ask, and Changes and Files are left out. */
   term: number | null
-  /** The session's own terminals, for the Terminal view; null when it has none here. */
-  terminals: ReactNode | null
   /** How many files the repository says changed, shown beside Changes. */
   changedFiles: number
   /** The branch the session's checkout is on. */
@@ -87,12 +84,6 @@ type Props = {
   leaving?: boolean
   onClose: () => void
   onNotice: (text: string) => void
-}
-
-/** The asked view when the panel can show it: a session with no repository to ask has only its terminals. */
-function shownView(view: InspectView, hasRepo: boolean, hasTerminals: boolean): InspectView {
-  if (view === 'terminal') return hasTerminals || !hasRepo ? 'terminal' : 'changes'
-  return hasRepo ? view : 'terminal'
 }
 
 function HistoryView({ term, agentWorking, elsewhere, machineName, timeline, onNotice }: { term: number; agentWorking: boolean; elsewhere: boolean; machineName: string | null; timeline: TerminalDetails['timeline']; onNotice: (text: string) => void }) {
@@ -132,8 +123,7 @@ function FilesView({ term, machine, machineName, lookAt }: { term: number; machi
  * The side panel (layout 2h): docked beside the chat, which narrows to make room, with no scrim. It slides in from the
  * window's edge; its header names the view the tools bar picked, with that view's count, and a close button.
  */
-export function InspectPanel({ term, terminals, changedFiles, branch, view: asked, agentWorking, timeline, checks = [], machine = 0, machineName = null, lookAt, comments, changeActions, turnScope, leaving = false, onClose, onNotice }: Props) {
-  const view = shownView(asked, term !== null, terminals !== null)
+export function InspectPanel({ term, changedFiles, branch, view, agentWorking, timeline, checks = [], machine = 0, machineName = null, lookAt, comments, changeActions, turnScope, leaving = false, onClose, onNotice }: Props) {
   const [dragged, setDragged] = useState(readWidth)
   const width = dragged ?? DEFAULT_WIDTH_PX
   const save = useCallback((next: number | null) => {
@@ -170,7 +160,7 @@ export function InspectPanel({ term, terminals, changedFiles, branch, view: aske
       inert={leaving}
       onKeyDown={(event) => {
         // Esc closes the panel, except in a terminal, where it belongs to the program running there.
-        if (event.key !== 'Escape' || (event.target instanceof Element && event.target.closest('.mx-terms-screen'))) return
+        if (event.key !== 'Escape' || (event.target instanceof Element && event.target.closest('.mx-tdock'))) return
         event.stopPropagation()
         onClose()
       }}
@@ -183,8 +173,7 @@ export function InspectPanel({ term, terminals, changedFiles, branch, view: aske
         <span className="mx-spacer" />
         <button type="button" className="mx-inspect-close" aria-label="Close" title="Close (Esc)" onClick={onClose}><Icon name="close" size={12} /></button>
       </header>
-      {view === 'terminal' && <div className="mx-inspect-terminals">{terminals}</div>}
-      {view !== 'terminal' && term !== null && (
+      {term !== null && (
         <div className="mx-inspect-scroll">
           {view === 'files' && <FilesView term={term} machine={machine} machineName={machineName} lookAt={lookAt} />}
           {view === 'changes' && <ChangesTab term={term} machine={machine} {...(branch !== undefined ? { branch } : {})} {...(comments ? { comments } : {})} {...(changeActions ? { actions: changeActions } : {})} {...(turnScope ? { scope: turnScope } : {})} onNotice={onNotice} />}

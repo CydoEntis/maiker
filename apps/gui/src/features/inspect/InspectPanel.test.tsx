@@ -26,7 +26,7 @@ function renderPanel(view: InspectView, extra: { agentWorking?: boolean } = {}) 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <InspectPanel term={5} terminals={null} changedFiles={2} view={view} agentWorking={extra.agentWorking ?? false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={onNotice} />
+      <InspectPanel term={5} changedFiles={2} view={view} agentWorking={extra.agentWorking ?? false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={onNotice} />
     </QueryClientProvider>,
   )
   return { onNotice }
@@ -37,7 +37,7 @@ function renderOnBuild(view: InspectView) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <InspectPanel term={5} machine={1} machineName="build" terminals={null} changedFiles={1} view={view} agentWorking={false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
+      <InspectPanel term={5} machine={1} machineName="build" changedFiles={1} view={view} agentWorking={false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
     </QueryClientProvider>,
   )
 }
@@ -45,30 +45,16 @@ function renderOnBuild(view: InspectView) {
 beforeEach(() => { vi.mocked(isTauri).mockReturnValue(true) })
 
 describe('Inspect panel', () => {
-  it('names the picked view in its header, and shows the session’s terminals on the Terminal view', () => {
+  it('names the picked view in its header', () => {
     daemonAnswers({})
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} terminals={<p>its terminals</p>} changedFiles={0} view="terminal" agentWorking={false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
+        <InspectPanel term={5} changedFiles={0} view="history" agentWorking={false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
-    expect(screen.getByRole('heading', { name: 'Terminal' })).toBeTruthy()
-    expect(screen.queryByRole('tab')).toBeNull()
-    expect(screen.getByText('its terminals')).toBeTruthy()
-    cleanup()
-  })
-
-  it('shows the terminals for a session with no repository to ask about, whatever view was asked', () => {
-    daemonAnswers({})
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={client}>
-        <InspectPanel term={null} terminals={<p>its terminals</p>} changedFiles={0} view="changes" agentWorking={false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
-      </QueryClientProvider>,
-    )
-    expect(screen.getByRole('heading', { name: 'Terminal' })).toBeTruthy()
-    expect(screen.getByText('its terminals')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'History' })).toBeTruthy()
+    expect(screen.queryByRole('tab', { name: 'Terminal' })).toBeNull()
     cleanup()
   })
 
@@ -122,7 +108,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} machine={1} machineName="build" terminals={null} changedFiles={2} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onClose={vi.fn()} onNotice={onNotice} />
+        <InspectPanel term={5} machine={1} machineName="build" changedFiles={2} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onClose={vi.fn()} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Commit b.txt' }))
@@ -148,7 +134,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} machine={1} machineName="build" terminals={null} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onClose={vi.fn()} onNotice={onNotice} />
+        <InspectPanel term={5} machine={1} machineName="build" changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onClose={vi.fn()} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Pull 2' }))
@@ -167,7 +153,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} machine={1} machineName="build" terminals={null} changedFiles={0} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onClose={vi.fn()} onNotice={vi.fn()} />
+        <InspectPanel term={5} machine={1} machineName="build" changedFiles={0} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onClose={vi.fn()} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Push 1' }))
@@ -201,7 +187,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} terminals={null} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} comments={{ agent: 'Claude', onSend }} onClose={vi.fn()} onNotice={vi.fn()} />
+        <InspectPanel term={5} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} comments={{ agent: 'Claude', onSend }} onClose={vi.fn()} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByText(/\+new/))
@@ -228,7 +214,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} terminals={null} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onClose={vi.fn()} onNotice={onNotice} />
+        <InspectPanel term={5} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onClose={vi.fn()} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     expect(await screen.findByLabelText('Commit message')).toHaveValue('Add refunds')
@@ -251,7 +237,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} terminals={null} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onClose={vi.fn()} onNotice={vi.fn()} />
+        <InspectPanel term={5} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onClose={vi.fn()} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Commit 1 file' }))
@@ -435,7 +421,7 @@ describe('Inspect history', () => {
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
       const panel = (shown: Turn) => (
         <QueryClientProvider client={client}>
-          <InspectPanel term={5} terminals={null} changedFiles={2} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onClose={vi.fn()} onNotice={vi.fn()} />
+          <InspectPanel term={5} changedFiles={2} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onClose={vi.fn()} onNotice={vi.fn()} />
         </QueryClientProvider>
       )
       const { rerender } = render(panel(turn))

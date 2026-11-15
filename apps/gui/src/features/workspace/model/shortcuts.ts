@@ -51,6 +51,7 @@ export type ShortcutAction =
   | 'usage'
   | 'performance'
   | 'chat-toggle'
+  | 'terminal'
 
 /** The sections of the shortcut overlay, in the order it shows them. */
 export const HOTKEY_GROUPS = ['Sessions', 'Panes', 'Find & jump', 'Window'] as const
@@ -110,6 +111,8 @@ export const BINDINGS: readonly Binding[] = [
   { action: 'find', label: 'Find in the pane or every session', group: 'Find & jump', mac: [cmd('F')], other: [ctrlShift('F')], available: true },
   { action: 'toggle-sidebar', label: 'Collapse sidebar', group: 'Window', mac: [cmd('B')], other: [ctrlShift('B')], available: true },
   { action: 'chat-toggle', label: 'Terminal or chat', group: 'Window', mac: [cmd('E', 'shift')], other: [ctrlShift('E')], available: true },
+  // The terminal dock. ⌃` is the usual terminal key on macOS, where Ctrl is not the shell's; elsewhere Shift joins it (the contract above).
+  { action: 'terminal', label: 'Show or hide the terminal', group: 'Window', mac: [{ mods: ['ctrl'], key: '`' }], other: [ctrlShift('`')], available: true },
   { action: 'usage', label: 'Usage and cost', group: 'Window', mac: [cmd('U', 'shift')], other: [ctrlShift('U')], available: true },
   { action: 'performance', label: 'Performance', group: 'Window', mac: [cmd('P', 'shift')], other: [ctrlShift('P')], available: true },
   { action: 'focus-mode', label: 'Focus mode', group: 'Window', mac: [cmd('.')], other: [{ mods: ['ctrl'], key: '.' }], available: true },
@@ -125,8 +128,8 @@ const TERMINAL_KEYS: readonly { label: string; group: HotkeyGroup; letter: strin
   { label: 'Clear screen', group: 'Sessions', letter: 'L' },
 ]
 
-/** What `KeyboardEvent.key` reports for the keycaps whose character differs, or has a second spelling (Shift+= is `+`). */
-const EVENT_KEYS: Readonly<Record<string, readonly string[]>> = { '−': ['-'], '=': ['=', '+'], Space: [' '] }
+/** What `KeyboardEvent.key` reports for the keycaps whose character differs, or has a second spelling (Shift+= is `+`, Shift+` is `~`). */
+const EVENT_KEYS: Readonly<Record<string, readonly string[]>> = { '−': ['-'], '=': ['=', '+'], Space: [' '], '`': ['`', '~'] }
 
 /**
  * The keys chosen in Settings › Hotkeys: one combination per action, in place of the action's own keys. Saved with the

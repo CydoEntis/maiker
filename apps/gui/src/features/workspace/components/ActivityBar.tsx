@@ -3,7 +3,6 @@ import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { checksNeedingYou } from '@/features/inspect/checks'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import { useWorkspace } from '../workspaceContext'
-import { useTerminalToggle } from '../useTerminalToggle'
 
 /** The 24px stroke paths of the bar's icons (layout 2h). */
 const PATHS = {
@@ -42,8 +41,7 @@ const PANEL_TOOLS: readonly { view: InspectView; label: string }[] = [
  */
 export function ActivityBar() {
   const tip = useTipWithKeys()
-  const { focusedSession, inspectOpen, inspectView, setInspectView, setInspectOpen, inspectRefusal, setTurnDiff, diffStat, ticketsOpen, setTicketsOpen, paneViews, newChatOpen } = useWorkspace()
-  const terminal = useTerminalToggle()
+  const { focusedSession, inspectOpen, inspectView, setInspectView, setInspectOpen, inspectRefusal, setTurnDiff, diffStat, ticketsOpen, setTicketsOpen, paneViews, newChatOpen, terminalShown, canDock, toggleTerminal } = useWorkspace()
   const session = focusedSession ?? null
   const pick = (view: InspectView) => {
     if (inspectOpen && inspectView === view) {
@@ -109,7 +107,13 @@ export function ActivityBar() {
         }}
       />
       <span className="mx-tools-fill" />
-      <ToolButton label="Terminal" tip={terminal.tip} path={PATHS.terminal} on={terminal.shown} onClick={terminal.toggle} />
+      <ToolButton
+        label="Terminal"
+        tip={canDock ? tip(terminalShown ? 'Hide terminal' : 'Open terminal', 'terminal') : 'Terminal: open a session of this computer first'}
+        path={PATHS.terminal}
+        on={terminalShown}
+        onClick={toggleTerminal}
+      />
     </nav>
   )
 }

@@ -482,7 +482,7 @@ const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as c
 const TOAST_POSITIONS = [['top-left', 'Top left'], ['top-center', 'Top center'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-center', 'Bottom center'], ['bottom-right', 'Bottom right']] as const
 const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creation', 'Creation'], ['priority', 'Priority']]
 const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
-const DOCK_OPTIONS = [['panel', 'Side panel'], ['under', 'Under the chat']] as const
+const DOCK_OPTIONS = [['bottom', 'Bottom'], ['right', 'Right'], ['full', 'Full']] as const
 const SIDE_OPTIONS = [['left', 'Left'], ['right', 'Right']] as const
 const ICON_OPTIONS = [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']] as const
 const DENSITY_OPTIONS = [['compact', 'Compact'], ['comfortable', 'Comfortable'], ['spacious', 'Spacious']] as const
@@ -562,7 +562,7 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         </Row>
       </Card>
       <Card title="Panes">
-        <Row label="Terminals open in" detail="An agent's own terminals: a tab of the side panel, or a drawer pinned under its chat.">
+        <Row label="Terminals open in" detail="Where the terminal opens beside the chat: under it, on its right, or in its place. The terminal's own bar changes it too.">
           <SegmentedChoice label="Terminals open in" value={preferences.terminalDock} options={DOCK_OPTIONS} onChange={(value) => { update('terminalDock', value) }} />
         </Row>
       </Card>
