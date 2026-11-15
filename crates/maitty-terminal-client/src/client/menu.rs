@@ -69,7 +69,7 @@ pub enum Act {
     /// The clean-up list for a project's worktrees.
     TidyOpen(usize),
     /// Remove these worktrees (each: its folder, and whether to lose uncommitted changes).
-    Tidy(Vec<(PathBuf, bool)>),
+    Tidy(MachineId, Vec<(PathBuf, bool)>),
     /// Remove the folder of a worktree you just closed, which holds commits found nowhere
     /// else; its branch stays.
     RemoveKept(PathBuf),
@@ -891,7 +891,8 @@ impl App {
     }
 
     pub(super) fn menu_do(&mut self, a: Act) {
-        if let Act::NewWorktree(pi) | Act::OpenWorktree(pi) | Act::TidyOpen(pi) = a {
+        // Tidy works on another machine too: its daemon says where each worktree stands.
+        if let Act::NewWorktree(pi) | Act::OpenWorktree(pi) = a {
             let machine = self
                 .screen_model()
                 .get(pi)
@@ -1062,9 +1063,9 @@ impl App {
                 });
             }
             Act::RemoveReference(root, path, name) => self.remove_reference(root, path, name),
-            Act::Tidy(items) => {
+            Act::Tidy(machine, items) => {
                 self.notify("Cleaning up worktrees…".into(), false);
-                self.cmd(Command::TidyWorktrees { items });
+                self.cmd_on(machine, Command::TidyWorktrees { items });
             }
             Act::RemoveKept(path) => {
                 self.notify("Removing the worktree's folder…".into(), false);

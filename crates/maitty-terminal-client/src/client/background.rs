@@ -382,6 +382,7 @@ impl App {
                 if machine == MachineId::LOCAL {
                     self.resume_failed();
                 }
+                self.tidy_failed(machine);
                 self.notify(e, true);
             }
             ServerMsg::Notice(n) if machine != MachineId::LOCAL => self.notify(n, false),
@@ -436,6 +437,7 @@ impl App {
             ServerMsg::Reply(Reply::HelperRead(record)) if machine == MachineId::LOCAL => {
                 self.helper_arrived(record)
             }
+            ServerMsg::Reply(Reply::WorktreeStanding(standing)) => self.tidy_standing_arrived(machine, standing),
             ServerMsg::Reply(Reply::Text(text)) if self.check_asked_of(machine) => {
                 self.check_output_arrived(text)
             }

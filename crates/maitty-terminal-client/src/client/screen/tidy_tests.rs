@@ -35,6 +35,9 @@ fn list(rows: Vec<TidyRow>) -> TidyView {
         name: "app".into(),
         rows: Some(rows),
         sel: 0,
+        machine: MachineId::LOCAL,
+        asking: Vec::new(),
+        answered: Vec::new(),
     }
 }
 
@@ -86,7 +89,7 @@ fn removing_a_ticked_inactive_worktree_with_unmerged_commits_still_asks() {
     assert!(asked.note.contains("isn't merged"), "{}", asked.note);
     assert_eq!(asked.list, ["old-spike (not merged)"]);
     assert!(
-        matches!(&asked.act, Act::Tidy(items) if items == &[(PathBuf::from("/code/app-worktrees/old-spike"), false)]),
+        matches!(&asked.act, Act::Tidy(MachineId::LOCAL, items) if items == &[(PathBuf::from("/code/app-worktrees/old-spike"), false)]),
         "its folder goes without force, so its branch and commits stay"
     );
 }

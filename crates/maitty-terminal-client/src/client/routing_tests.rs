@@ -297,7 +297,6 @@ fn every_gated_action_is_refused_on_a_remote_pane_and_none_opens_anything() {
         Action::AgentStatusSetup,
         Action::NewWorktree(None),
         Action::RemoveWorktree,
-        Action::TidyWorktrees,
         Action::ResumeConversation,
     ] {
         let (mut app, mut rx) = two_machines();

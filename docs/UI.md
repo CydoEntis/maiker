@@ -808,7 +808,7 @@ Not applicable: the Hairline look was removed; Floating is the only look.
 ## Project-specific: features that need a pane's files
 
 Files, Changes, Find, Branches, References, connecting an agent, worktree
-actions and the TUI's Resume a conversation here read or change the files of the pane they apply to. (Pasting an image is not on this list in
+actions (but Clean up worktrees, below) and the TUI's Resume a conversation here read or change the files of the pane they apply to. (Pasting an image is not on this list in
 the desktop app: it works for panes on other machines, see below. The terminal app's own list is
 unchanged.) For a pane on another machine they do
 nothing but show one error toast, always in this form: "<Feature> is local-only in v1: the files
@@ -860,6 +860,15 @@ far-side path typed only if it is absolute, at most 4096 characters and free of 
 A machine that is not `connected`, one reached by a custom transport (`via`), or an unknown one is refused with one
 error toast, in the words used for dropped files. The image never goes through an event and is never logged: it is
 the raw body of the command.
+
+**What the TUI asks another machine's daemon instead** (each answer is taken only as the reply to
+this window's own question, as every reply from another machine is, and what it names is drawn with
+control and hidden characters taken out):
+
+- **Clean up worktrees** works for another machine's project: its daemon says where each worktree stands
+  (`Query::WorktreeStanding`, asked one after another since the answer names none; a worktree whose
+  folder is gone is left out) and removes the ticked ones (`Command::TidyWorktrees` to that machine).
+  This computer's are still read with git here.
 
 **The TUI's worktree picker** lists, after the worktrees, each branch with none (local ones, then
 remote ones by their short name, read with git off the UI thread) as `+ add a worktree on <branch>`;

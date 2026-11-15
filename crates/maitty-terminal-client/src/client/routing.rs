@@ -102,7 +102,7 @@ impl Feature {
             Action::Branches => Feature::Branches,
             Action::References => Feature::References,
             Action::AgentStatusSetup => Feature::AgentStatus,
-            Action::NewWorktree(_) | Action::RemoveWorktree | Action::TidyWorktrees => {
+            Action::NewWorktree(_) | Action::RemoveWorktree => {
                 Feature::Worktrees
             }
             Action::ResumeConversation => Feature::ResumeConversation,
