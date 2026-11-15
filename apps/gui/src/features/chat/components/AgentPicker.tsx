@@ -88,12 +88,12 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
   const summary = `${AGENT_LABEL[agent]} · ${model?.label ?? ''} · ${inUseWord ?? REASONING_LABEL[choice.reasoning]}`
   const pickModel = (option: ModelOption) => {
     onChange({ model: choiceFor(option) })
-    live?.(`/model ${choiceFor(option)}\r`)
+    live?.(`/model ${choiceFor(option)}`)
     if (choice.reasoning !== DEFAULT_PICK && !effortAllowed(agent, option, choice.reasoning)) pickLevel(effortAllowed(agent, option, FALLBACK_LEVEL) ? FALLBACK_LEVEL : DEFAULT_PICK)
   }
   const pickLevel = (level: ReasoningPick) => {
     onChange({ reasoning: level })
-    if (level !== DEFAULT_PICK) live?.(`/effort ${level}\r`)
+    if (level !== DEFAULT_PICK) live?.(`/effort ${level}`)
   }
   return (
     // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.

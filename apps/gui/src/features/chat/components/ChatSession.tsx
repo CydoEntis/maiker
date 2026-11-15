@@ -224,6 +224,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // The chips stay drawn while their keys would land in a turn or nowhere; they are only greyed out, so the box does not rearrange.
   const pickerLocked = !online ? 'The daemon is offline' : stoppedOnPrompt ? `${agent} is asking something. Answer it first.` : null
   const chipsLocked = !online ? 'The daemon is offline' : working ? `${agent} is working. Change this when it finishes.` : null
+  // Picked commands are typed one after another: each waits for its Enter, so a model and an effort picked together do not interleave.
+  const commandChain = useRef<Promise<void>>(Promise.resolve())
   const agentControls = useMemo(() => {
     if (canPickCodexMode) {
       return {
@@ -264,7 +266,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         if (pickerLocked !== null) return
         const model = /^\/model (\S+)/.exec(text)?.[1]
         if (model !== undefined) setLiveModel({ base: metaModel, value: model })
-        void typeInto(text).then(refresh)
+        // Through typeMessage, so Claude Code gets its Enter after a pause: sent with the command, the Enter is taken
+        // for the completion it is showing and the command never runs.
+        const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(refresh)
+        commandChain.current = typed.catch((error: unknown) => { toast.error(errorMessage(error, 'Could not type the command')) })
       },
       onPickMode: (target: string) => {
         if (sessionId === undefined || chipsLocked !== null) return
@@ -290,7 +295,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         void step().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not change the permission mode')) })
       },
     }
-  }, [canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, shownMode, pickerLocked])
+  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, shownMode, pickerLocked])
   const composer = useChatComposer({ link, agent, feed, online, refresh, answersPrompt, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
