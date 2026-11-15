@@ -15,6 +15,7 @@ use crate::remote_snapshot::{ITEMS_MAX, PANE_DIM_MAX, sanitize_snapshot, sanitiz
 use maitty_shared::hidden::sanitize;
 use maitty_shared::github::{clone_address, is_login, is_time};
 use maitty_shared::protocol::{GitHubAnswer, GitHubRepoList, Reply, ServerMsg};
+use maitty_shared::tickets::TicketError;
 
 /// Most bytes of a remote clipboard write that are honoured.
 pub const CLIPBOARD_MAX_BYTES: usize = 64 * 1024;
@@ -86,6 +87,9 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::Reply(Reply::SavedConversations { .. }) => {
             Verdict::Ignore("saved conversations are listed for this computer's folders only")
         }
+        // Another person's words about a repository this window asked that machine for; cleaned
+        // in `vet` and only while the question is out.
+        ServerMsg::Reply(Reply::Tickets { .. } | Reply::TicketKeys { .. }) => Verdict::Answer,
         ServerMsg::Error(_) | ServerMsg::Reply(_) => Verdict::Answer,
         ServerMsg::AskRemoveWorktree { .. } => {
             Verdict::Ignore("a worktree prompt names a folder on this computer")
@@ -212,6 +216,20 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
                 owners.retain(|owner| is_login(owner));
                 owners
             }),
+        }),
+        ServerMsg::Reply(Reply::Tickets { tag, answer }) => ServerMsg::Reply(Reply::Tickets {
+            tag,
+            answer: match answer {
+                Ok(reply) => reply.cleaned().ok_or_else(|| TicketError::Invalid("that machine sent a ticket that is not one".into())),
+                Err(error) => Err(error.cleaned()),
+            },
+        }),
+        // Only whether a key is set and where it points; the words are cleaned, the list capped.
+        ServerMsg::Reply(Reply::TicketKeys { tag, answer }) => ServerMsg::Reply(Reply::TicketKeys {
+            tag,
+            answer: answer
+                .map(|states| states.into_iter().take(maitty_shared::tickets::TicketProvider::ALL.len()).map(|state| state.cleaned()).collect())
+                .map_err(|error| error.cleaned()),
         }),
         other => other,
     })
@@ -615,6 +633,69 @@ mod tests {
             panic!("a reason is kept");
         };
         assert!(!why.contains(['\u{1b}', '\n']));
+    }
+
+    #[test]
+    fn tickets_from_another_machine_are_answers_and_are_cleaned_and_capped() {
+        use maitty_shared::tickets::{
+            StateCategory, TICKET_BODY_MAX_CHARS, TICKET_COMMENTS_MAX, Ticket, TicketComment, TicketState, TicketSummary, TicketsReply,
+        };
+        let summary = |id: &str| TicketSummary {
+            id: id.into(),
+            title: "t\u{1b}[31m\u{202e}x\n".into(),
+            state: TicketState { name: "Open".into(), category: StateCategory::Open },
+            labels: Vec::new(),
+            assignee: None,
+            url: "javascript:alert(1)".into(),
+            groups: Vec::new(),
+            updated_at: "<b>".into(),
+        };
+        let ticket = |id: &str| Ticket {
+            summary: summary(id),
+            body: format!("a\u{1b}[0m\u{200b}b{}", "z".repeat(TICKET_BODY_MAX_CHARS)),
+            comments: (0..TICKET_COMMENTS_MAX + 5).map(|_| TicketComment { author: "a".into(), body: "b".into(), created_at: String::new() }).collect(),
+            comments_more: false,
+            links: vec!["javascript:x".into()],
+            blocked_by: Vec::new(),
+        };
+        let reply = |tag, answer| ServerMsg::Reply(Reply::Tickets { tag, answer });
+
+        // It is an answer: kept while a question is out, dropped when none is.
+        let sent = reply(3, Ok(TicketsReply::Ticket(Box::new(ticket("github:o/r#1")))));
+        assert_eq!(allow(&nothing_on(), &sent), Verdict::Answer);
+        assert!(vet(&nothing_on(), false, "box", sent.clone()).is_none());
+        let Some(ServerMsg::Reply(Reply::Tickets { tag: 3, answer: Ok(TicketsReply::Ticket(clean)) })) = vet(&nothing_on(), true, "box", sent) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(clean.summary.title, "t[31mx");
+        assert_eq!((clean.summary.url.as_str(), clean.summary.updated_at.as_str()), ("", ""));
+        assert!(clean.body.starts_with("a[0mb") && clean.body.chars().count() == TICKET_BODY_MAX_CHARS);
+        assert_eq!((clean.comments.len(), clean.comments_more, clean.links.len()), (TICKET_COMMENTS_MAX, true, 0));
+
+        // A ticket with an id that is not one is refused, and an error is one clean line.
+        let forged = reply(4, Ok(TicketsReply::Ticket(Box::new(ticket("x y")))));
+        let Some(ServerMsg::Reply(Reply::Tickets { answer: Err(TicketError::Invalid(_)), .. })) = vet(&nothing_on(), true, "box", forged) else {
+            panic!("a ticket without an id is refused");
+        };
+        let failed = reply(5, Err(TicketError::Unreachable("no\u{1b}[0m\nway".into())));
+        let Some(ServerMsg::Reply(Reply::Tickets { answer: Err(TicketError::Unreachable(why)), .. })) = vet(&nothing_on(), true, "box", failed) else {
+            panic!("a reason is kept");
+        };
+        assert!(!why.contains(['\u{1b}', '\n']));
+    }
+
+    #[test]
+    fn where_another_machines_keys_stand_is_cleaned_and_capped() {
+        use maitty_shared::tickets::{TicketKeyState, TicketProvider};
+        let state = |provider| TicketKeyState { provider, set: true, address: "https://p\u{1b}[0m.example\u{202e}".into(), workspace: "w\n".into() };
+        let sent = ServerMsg::Reply(Reply::TicketKeys { tag: 2, answer: Ok(vec![state(TicketProvider::Plane), state(TicketProvider::Linear), state(TicketProvider::Plane)]) });
+        assert_eq!(allow(&nothing_on(), &sent), Verdict::Answer);
+        assert!(vet(&nothing_on(), false, "box", sent.clone()).is_none());
+        let Some(ServerMsg::Reply(Reply::TicketKeys { answer: Ok(states), .. })) = vet(&nothing_on(), true, "box", sent) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(states.len(), TicketProvider::ALL.len());
+        assert_eq!((states[0].address.as_str(), states[0].workspace.as_str()), ("https://p[0m.example", "w"));
     }
 
     #[test]

@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 104;
+pub const PROTOCOL_VERSION: u32 = 106;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -186,9 +186,27 @@ pub struct ClosedSession {
 /// The first version whose daemon writes and removes a folder's GitHub account and commit identity
 /// rule on request (`Query::GitIdentityRule`).
 pub const GIT_RULES_SINCE: u32 = 103;
+
+/// The first version whose daemon reads the tickets of a source on request (`Query::Tickets`).
+pub const TICKETS_SINCE: u32 = 105;
+
+/// The first version whose daemon keeps the key of a ticket provider on request
+/// (`Query::TicketKeys`).
+pub const TICKET_KEYS_SINCE: u32 = 106;
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
+
+/// What a `Query::TicketKeys` does to the keys of ticket providers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TicketKeyChange {
+    /// Change nothing; say which providers have a key.
+    Status,
+    /// Keep `key` for `provider`, replacing any. `address` and `workspace` are what that provider
+    /// needs besides a key (Plane's server and workspace; Linear's are fixed and must be empty).
+    Set { provider: crate::tickets::TicketProvider, address: String, workspace: String, key: SecretText },
+    Remove { provider: crate::tickets::TicketProvider },
+}
 
 /// What a `Query::GitIdentityRule` does to a folder's rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1200,6 +1218,23 @@ pub enum Query {
     GitHubOwners {
         tag: u64,
     },
+    /// Read tickets from `source` on this daemon's computer (human clients only): its groups, a
+    /// page of its tickets or one ticket. `source` is a GitHub repository, `owner/name`, read
+    /// with the machine's own `gh`, or `plane` or `linear`, read with the key the daemon kept
+    /// (`TicketKeys`). Nothing is written. The answer is `Reply::Tickets` with the
+    /// same `tag`.
+    Tickets {
+        source: String,
+        request: crate::tickets::TicketsRequest,
+        tag: u64,
+    },
+    /// Say, set or remove the key of a ticket provider (Plane, Linear) on this daemon's computer
+    /// (human clients only). The daemon keeps the key; the answer, `Reply::TicketKeys` with the
+    /// same `tag`, says only whether each provider has one, never its value.
+    TicketKeys {
+        change: TicketKeyChange,
+        tag: u64,
+    },
     /// Which commit name and email git uses on this daemon's computer, and the folders where a
     /// rule gives another (human clients only). Nothing is written. The answer is
     /// `Reply::GitIdentities` with the same `tag`.
@@ -1485,6 +1520,16 @@ pub enum Reply {
     GitHubOwners {
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
+    },
+    /// What a `Query::Tickets` found, or why it found nothing.
+    Tickets {
+        tag: u64,
+        answer: Result<crate::tickets::TicketsReply, crate::tickets::TicketError>,
+    },
+    /// Where each ticket provider's key stands after a `Query::TicketKeys`, or why it was refused.
+    TicketKeys {
+        tag: u64,
+        answer: Result<Vec<crate::tickets::TicketKeyState>, crate::tickets::TicketError>,
     },
     /// How a `Query::Git` ended: one line saying what happened ("Pulled", "Pushed main"), or one
     /// line saying why nothing did.
@@ -2397,6 +2442,8 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::Specialists(_)) => SPECIALISTS_SINCE,
             ServerMsg::Reply(Reply::WorktreeStanding(_)) => WORKTREE_STANDING_SINCE,
             ServerMsg::Reply(Reply::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
+            ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
+            ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2417,6 +2464,8 @@ impl ClientMsg {
             ClientMsg::Query(Query::CloneRepo { .. }) => CLONE_SINCE,
             ClientMsg::Query(Query::GitHubAccounts { .. }) => GITHUB_ACCOUNTS_SINCE,
             ClientMsg::Query(Query::GitHubRepos { .. } | Query::GitHubOwners { .. }) => GITHUB_REPOS_SINCE,
+            ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
+            ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ClientMsg::Query(Query::GitIdentities { .. }) => GIT_IDENTITIES_SINCE,
             ClientMsg::Query(Query::GitIdentityRule { .. }) => GIT_RULES_SINCE,
             ClientMsg::Query(Query::Git { request: GitRequest::Commit { .. }, .. }) => GIT_COMMIT_SINCE,
@@ -2867,7 +2916,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 104);
+        assert_eq!(PROTOCOL_VERSION, 106);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3357,7 +3406,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 104);
+        assert_eq!(PROTOCOL_VERSION, 106);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4370,6 +4419,65 @@ mod tests {
         let remove = Query::GitIdentityRule { change: GitRuleChange::Remove { folder: "/code".into() }, tag: 1 };
         assert_eq!(ClientMsg::Query(remove).introduced_in(), GIT_RULES_SINCE);
         const { assert!(GIT_RULES_SINCE > GIT_IDENTITIES_SINCE && GIT_RULES_SINCE <= PROTOCOL_VERSION) };
+    }
+
+    /// Reading tickets is a new request and a new reply: a peer built before them cannot read
+    /// either, but nothing an older peer already sends or reads changed, so the window stays open
+    /// and the daemon is asked only when it is new enough.
+    #[test]
+    fn reading_tickets_is_asked_only_of_a_daemon_that_knows_it_and_changes_nothing_older() {
+        use crate::tickets::{TicketError, TicketsReply, TicketsRequest};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            GitIdentities { tag: u64 },
+        }
+        let ask = Query::Tickets { source: "me/widgets".into(), request: TicketsRequest::Groups, tag: 7 };
+        let bytes = encode(&ask).unwrap();
+        assert!(decode::<OldQuery>(&bytes).is_err());
+        assert!(matches!(decode::<Query>(&bytes), Ok(Query::Tickets { tag: 7, request: TicketsRequest::Groups, .. })));
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), TICKETS_SINCE);
+
+        let found = ServerMsg::Reply(Reply::Tickets { tag: 7, answer: Ok(TicketsReply::Groups(Vec::new())) });
+        let refused = ServerMsg::Reply(Reply::Tickets { tag: 8, answer: Err(TicketError::SignedOut) });
+        for reply in [found, refused] {
+            assert_eq!(reply.introduced_in(), TICKETS_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        const { assert!(TICKETS_SINCE > COMPATIBLE_SINCE && TICKETS_SINCE <= PROTOCOL_VERSION) };
+    }
+
+    /// Keeping a provider's key is a new request and a new reply, so the window stays open and a
+    /// daemon is asked only when it is new enough. The key rides in a type that never prints, and
+    /// the reply carries no key.
+    #[test]
+    fn ticket_keys_are_asked_only_of_a_daemon_that_knows_them_and_the_key_never_prints() {
+        use crate::tickets::{TicketError, TicketKeyState, TicketProvider};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            GitIdentities { tag: u64 },
+        }
+        let set = Query::TicketKeys {
+            change: TicketKeyChange::Set { provider: TicketProvider::Plane, address: "https://plane.example".into(), workspace: "w".into(), key: SecretText("plane_api_SECRET123".into()) },
+            tag: 4,
+        };
+        assert!(!format!("{set:?} {:?}", ClientMsg::Query(set.clone())).contains("SECRET123"));
+        let bytes = encode(&set).unwrap();
+        assert!(decode::<OldQuery>(&bytes).is_err());
+        assert!(matches!(decode::<Query>(&bytes), Ok(Query::TicketKeys { tag: 4, change: TicketKeyChange::Set { .. } })));
+        assert_eq!(ClientMsg::Query(set).introduced_in(), TICKET_KEYS_SINCE);
+
+        let state = TicketKeyState { provider: TicketProvider::Linear, set: true, address: String::new(), workspace: String::new() };
+        for answer in [Ok(vec![state]), Err(TicketError::Invalid("no".into()))] {
+            let reply = ServerMsg::Reply(Reply::TicketKeys { tag: 4, answer });
+            assert_eq!(reply.introduced_in(), TICKET_KEYS_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        // A message an older peer already reads is not changed, so the window stays where it was.
+        const { assert!(TICKET_KEYS_SINCE > TICKETS_SINCE && TICKET_KEYS_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_KEYS_SINCE) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never

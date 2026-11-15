@@ -130,7 +130,7 @@ fn listed<T>(command: &mut Command, limit: Duration, what: &str) -> Result<Ran, 
 
 /// Whether a client's search is words only: no `:` that GitHub would read as a qualifier, and
 /// nothing a command line could read as anything but text.
-fn is_search(text: &str) -> bool {
+pub(super) fn is_search(text: &str) -> bool {
     text.chars().count() <= SEARCH_MAX_CHARS && text.chars().all(|c| c.is_alphanumeric() || matches!(c, ' ' | '.' | '_' | '-'))
 }
 

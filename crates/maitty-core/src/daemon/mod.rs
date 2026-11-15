@@ -44,6 +44,12 @@ mod status;
 mod sync;
 mod term;
 mod terminal_sends;
+mod ticket_http;
+mod ticket_keys;
+mod tickets;
+mod tickets_github;
+mod tickets_linear;
+mod tickets_plane;
 mod usage;
 mod usage_store;
 mod warm;
@@ -3120,6 +3126,38 @@ impl Daemon {
                         }) =>
                     {
                         ServerMsg::Error("Only a human client can ask about this machine's GitHub account".into())
+                    }
+                    Query::Tickets { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can read tickets from this machine".into())
+                    }
+                    Query::TicketKeys { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can keep a ticket provider's key".into())
+                    }
+                    Query::TicketKeys { change, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = ticket_keys::change(&ticket_keys::KeyStore::real(), change);
+                            let reply = Reply::TicketKeys { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::Tickets { source, request, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = tickets::answer(&source, request);
+                            let reply = Reply::Tickets { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
                     }
                     Query::GitIdentities { .. } | Query::GitIdentityRule { .. }
                         if self.clients.get(&client).is_some_and(|client| {

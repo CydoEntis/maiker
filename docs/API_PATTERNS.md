@@ -920,7 +920,7 @@ clients display it. Only a person snoozes: an agent pane's connection is refused
 the pane without the field.
 The desktop app sends it through the `snooze_terminal_session { machine, term, until }` command (`PaneCommand::Snooze`).
 
-Protocol 86 adds `Query::CloneRepo { address, parent, tag }` and `Reply::Cloned { tag, outcome }`
+Protocol 95 adds `Query::CloneRepo { address, parent, tag }` and `Reply::Cloned { tag, outcome }`
 (`CLONE_SINCE`; `COMPATIBLE_SINCE` stays): `git clone` of `address` into a new folder, named after the
 repository, inside `parent` on the daemon's computer (`crates/maitty-core/src/daemon/clone.rs`).
 `outcome` is the new folder's path with `/` separators, or one line saying why nothing was cloned; a
@@ -937,7 +937,7 @@ character); the daemon is the judge of the address. A reply from another machine
 answer for 30 seconds after a request; a clone's is expected for the daemon's limit plus 30 seconds
 (`routing::answer_window`), and a quick answer to something else never uses up that wait.
 
-Protocol 87 adds `Query::GitHubAccounts { tag }` and `Reply::GitHubAccounts { tag, report }`
+Protocol 96 adds `Query::GitHubAccounts { tag }` and `Reply::GitHubAccounts { tag, report }`
 (`GITHUB_ACCOUNTS_SINCE`; `COMPATIBLE_SINCE` stays): who is signed in to github.com on the daemon's
 computer, as its GitHub command line says (`gh auth status --json hosts`,
 `crates/maitty-core/src/daemon/github.rs`). `report` is `installed` (false when the machine has no
@@ -950,7 +950,55 @@ another machine keeps only logins GitHub could have given out and one clean `pro
 host sends it through `github_accounts(machine, tag)` and raises a `github-accounts` event with the tag
 and the report (`apps/gui/src/api/githubAccounts.ts` waits on it for 20 seconds).
 
-Protocol 93 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
+Protocol 105 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets { tag, answer }`
+(`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
+arm, and nothing an older peer sends or reads changed). It reads tickets, read-only; there is no
+request that writes. `source` is a GitHub repository, `owner/name`, read with the machine's own
+`gh` (`daemon/tickets_github.rs`), or `plane` or `linear`, read with the key the daemon kept
+(`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`; below). A repository name has a slash and the
+providers' do not, so the one message carries all three and an older daemon answers `Invalid`. `request` is a `TicketsRequest`: `Groups` (the repository as a
+`Project` group and its milestones as `Milestone` groups with their ticket count), `List(Filter)`
+(`group`, `state` category, `assignee`, `label`, `search`, `page`; `TICKETS_PAGE_SIZE` (30) a page,
+page 0 to `TICKETS_PAGE_MAX`; `gh` pages only by size, so it is asked for everything up to one past
+the page; GitHub has no `Started` state, so that filter lists nothing) or `Get { id }`. `answer` is
+`Ok(TicketsReply)` (`Groups`, `List(TicketPage)` or `Ticket`) or `Err(TicketError)`: `NotInstalled`,
+`SignedOut`, `NotFound`, `RateLimited`, or `Unreachable(line)` and `Invalid(line)`, whose lines are
+fixed words, never `gh`'s own. Ids are `provider:key`: `github:owner/name#12` for an issue,
+`github:owner/name!3` for a milestone, `github:owner/name` for the repository; an address is built
+from the checked repository and number, never copied. A ticket carries its body, at most
+`TICKET_COMMENTS_MAX` (50, the oldest first, `comments_more` says there were more), the pull
+requests that close it as `links`, and `blocked_by` ids (`gh api …/dependencies/blocked_by`; a GitHub
+that does not know it gives none). Every string is cleaned and cut and every list capped by the pure
+rules in `crates/maitty-shared/src/tickets.rs` (`TicketsReply::cleaned`), by the daemon and again
+for an answer from another machine (`remote_policy::vet`; the verdict is *answer*). Human clients
+only: a pane or a structured runtime gets `ServerMsg::Error`. `gh` runs off the event loop, at most
+twice (30 seconds each), and `gh`'s output is read only up to 4 MiB.
+
+Protocol 106 adds `Query::TicketKeys { change, tag }` with `Reply::TicketKeys { tag, answer }`
+(`TICKET_KEYS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own
+`introduced_in` arm, and no field or variant an older peer reads changed). It keeps the key a keyed
+ticket provider needs. `change` is a `TicketKeyChange`: `Status`, `Set { provider, address, workspace,
+key }` (the key is a `SecretText`, which prints as hidden) or `Remove { provider }`; `provider` is
+`Plane` or `Linear`. `answer` is the state after the change, one `TicketKeyState { provider, set, address,
+workspace }` per provider, or an `Invalid(line)`; it never holds a key. Plane takes a server address
+(`check_base_url`: https anywhere, http only to your own network) and a workspace; Linear takes a key
+alone, because its one server is fixed in the code. Human clients only: a pane or a structured runtime
+gets `ServerMsg::Error`. A request for a provider with no key answers `TicketError::NotInstalled` (the
+client shows "add your key"); a key the provider refuses is `SignedOut`. The files are written off the
+event loop. Where the key lives: [SECURITY](SECURITY.md) and [DATABASE](DATABASE.md#project-specific-ticket-keys).
+
+Plane and Linear ids follow `provider:key` with `.`, `!` and `#` as separators: Plane `plane:<project>`
+(a project), `plane:<project>!<module>` (a module), `plane:<project>#<work item>`; Linear
+`linear:team.<id>` (a `Project` group), `linear:project.<id>` (a `Module`), `linear:cycle.<id>` (a
+`Cycle`) and `linear:issue.<id>`. A Plane list needs a `group` (a project or module); a Linear list may
+have none. Plane filters nothing server-side, so a page is cut from at most five pages of 100 work items
+read in Plane's order; Linear is asked for the state, assignee, label, title text and group, and read a
+cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 seconds each) before
+`RateLimited`; Linear's is reported at once. A Plane `blocked_by` comes from
+`work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
+inverse `blocks` relations.
+
+Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
 (`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`
 answers the lines `Apply` would write and writes nothing; `Apply { folder, identity }` writes them;
 `Remove { folder }` takes away the rule Maitty wrote for a folder (named as the report names it). `outcome`
@@ -968,7 +1016,7 @@ one entry. Everything is written with `git config --global` and `--file`, never 
 sends it with `git_identity_rule(machine, change)`, and an answer from another machine is cleaned and cut
 to 4 files of 16 lines (`remote_policy::vet_rule_reply`). Human clients only.
 
-Protocol 92 adds `Query::GitIdentities { tag }` with `Reply::GitIdentities { tag, report }`
+Protocol 101 adds `Query::GitIdentities { tag }` with `Reply::GitIdentities { tag, report }`
 (`GIT_IDENTITIES_SINCE`; `COMPATIBLE_SINCE` stays). The report is the machine's global `user.name`
 and `user.email` (each absent when not set) and its folder rules: every
 `includeIf "gitdir:<folder>/"` (or `gitdir/i:`) entry of the global git config, in git's order, the
@@ -983,7 +1031,7 @@ The desktop host asks with `git_identities(machine)`, which answers the report a
 (`apps/gui/src/api/gitIdentities.ts`); from another machine only that report is taken, cleaned
 (`remote_policy::vet_identities_reply`).
 
-Protocol 91 adds `GitRequest::PullRequest` to `Query::Git` (`GIT_PULL_REQUEST_SINCE`;
+Protocol 100 adds `GitRequest::PullRequest` to `Query::Git` (`GIT_PULL_REQUEST_SINCE`;
 `COMPATIBLE_SINCE` stays). The daemon pushes the branch as `Push` does, then runs
 `gh pr create --fill --head <branch>` in the checkout. The answer's line is the pull request's
 address, kept only when it is `https://github.com/<owner>/<repo>/pull/<number>` (`pr::pull_request_url`,
@@ -993,7 +1041,7 @@ cli.github.com; any other failure is the first line `gh` said, cleaned and cut t
 (nobody signed in reads "To get started with GitHub CLI, please run:  gh auth login"). No token is
 read. git and `gh` together are stopped after `GIT_SYNC_LIMIT_SECS` (60).
 
-Protocol 90 adds `GitRequest::Commit { message, paths }` to `Query::Git` (`GIT_COMMIT_SINCE`;
+Protocol 99 adds `GitRequest::Commit { message, paths }` to `Query::Git` (`GIT_COMMIT_SINCE`;
 `COMPATIBLE_SINCE` stays). With `paths` the daemon stages and commits those files only (`git add -A --`
 then `git commit --only --`), and whatever else is staged stays staged and out of the commit; with none
 it commits everything that changed. The answer's line is the new commit's short id, a space and its
@@ -1005,7 +1053,7 @@ or a tab; an empty one is refused. The paths together may be at most `GIT_COMMIT
 (24 KiB). The repository's hooks run and signing is as the repository has it; nothing is amended. The
 request is stopped after `GIT_COMMIT_LIMIT_SECS` (120).
 
-Protocol 89 adds `Query::Git { term, request, tag }` with `Reply::GitDone { tag, outcome }`
+Protocol 98 adds `Query::Git { term, request, tag }` with `Reply::GitDone { tag, outcome }`
 (`GIT_SYNC_SINCE`; `COMPATIBLE_SINCE` stays). `request` is a `GitRequest`: `Fetch` (`git fetch --prune`),
 `Pull` (`git pull --ff-only`) or `Push` (`git push`, or `git push -u origin <branch>` for a branch with
 no upstream yet), run in the folder pane `term` is in. `outcome` is one line either way: `Fetched`,
@@ -1016,7 +1064,7 @@ with the same pane checks as `Query::Repo` (an unknown pane is `ServerMsg::Error
 event loop with `GIT_TERMINAL_PROMPT=0` and the whole request is stopped after `GIT_SYNC_LIMIT_SECS`
 (60). An answer from another machine is cut and cleaned to one line (`remote_policy::vet`).
 
-Protocol 88 adds `Query::GitHubRepos { owner, search, tag }` with `Reply::GitHubRepos { tag, answer }`,
+Protocol 97 adds `Query::GitHubRepos { owner, search, tag }` with `Reply::GitHubRepos { tag, answer }`,
 and `Query::GitHubOwners { tag }` with `Reply::GitHubOwners { tag, answer }` (`GITHUB_REPOS_SINCE`;
 `COMPATIBLE_SINCE` stays). Each `answer` is a `GitHubAnswer`: `NotInstalled`, `NotSignedIn`,
 `Failed(one line)` or `Listed(…)`; having no `gh` and nobody signed in are answers, not

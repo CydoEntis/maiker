@@ -253,3 +253,15 @@ in a loop: a count kept in memory would start at zero with each daemon. The time
 is recorded before the send, and the send commits the snapshot before the message
 reaches the provider. Times older than five minutes are dropped at the next send;
 a time ahead of the clock still counts.
+
+## Project-specific: ticket keys
+
+`daemon/ticket_keys.rs` keeps the key of each ticket provider that needs one (Plane, Linear), one
+file each, `ticket-keys/<provider>.json` in the data folder: `{"address", "workspace", "key"}`. The
+file is not synced, not in `config.toml` and not in a snapshot. It is written the way the usage store
+is (`write_file`: a private temporary file, synced, renamed over the old one; `0700` folder and `0600`
+file on unix), so a crash leaves the old key or the new one. A file that does not parse is reported as
+"set it again", never read as a key that is not there and never deleted; setting a key replaces it.
+Removing a key deletes its file. There is no migration: a field added later is `#[serde(default)]`.
+See [SECURITY](SECURITY.md) for who may set a key
+and what a client can read back.
