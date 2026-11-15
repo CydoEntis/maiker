@@ -254,6 +254,7 @@ impl App {
             Action::StatusLog => self.open_status_log(),
             Action::RecentSessions => self.ask_closed_sessions(),
             Action::Broadcast => self.toggle_broadcast(),
+            Action::ResetWidths => self.reset_widths(),
             Action::None => {}
             // The rest are handled by screen_act above.
             _ => {}
@@ -341,6 +342,7 @@ impl App {
             Action::WorkBoard,
             Action::StatusLog,
             Action::Broadcast,
+            Action::ResetWidths,
             Action::CloseSplit,
             Action::StopAgent,
             Action::Message,

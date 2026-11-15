@@ -1684,6 +1684,7 @@ mod tidy;
 mod workflow_runs;
 mod work_board;
 mod broadcast;
+mod even_widths;
 mod status_log;
 mod helper_view;
 pub(in crate::client) use self::{

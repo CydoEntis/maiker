@@ -3,7 +3,7 @@
 //! --nocapture` prints the frames.
 use super::*;
 use crate::client::reference_fixture::{self, Stage};
-use crate::layout::Dir;
+use crate::layout::{Dir, Node};
 use crate::protocol::{ClientMsg, ClosedSession, PROTOCOL_VERSION, Reply, ServerMsg, TurnEvent, TurnKind};
 use crate::workflow::{StepState::{self, *}, WorkflowRun, WorkflowStep, WorkflowTicket};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
@@ -217,6 +217,19 @@ fn broadcast_wants_two_panes() {
     let mut app = reference_fixture::world(Stage::None);
     app.act(Action::Broadcast);
     assert!(app.broadcasting().is_none(), "one pane: nothing to broadcast to");
+}
+
+#[test]
+fn reset_widths_shares_the_room_out() {
+    let mut app = reference_fixture::world(Stage::None);
+    let focus = app.focused().expect("a focused pane");
+    let tab = app.screen.tab;
+    let layout = &mut app.screen.tabs[tab].layout;
+    layout.split(focus.term, Dir::Right, 2);
+    layout.resize(focus.term, Dir::Right, 0.3);
+    app.act(Action::ResetWidths);
+    let Node::Split { ratio, .. } = &app.screen.tabs[tab].layout else { panic!("a split") };
+    assert!((ratio - 0.5).abs() < 1e-6, "{ratio}");
 }
 
 #[test]

@@ -311,6 +311,8 @@ pub enum Action {
     RecentSessions,
     /// Type into every pane of this tab at once, or stop.
     Broadcast,
+    /// Give the panes of this tab equal room again.
+    ResetWidths,
     /// Explicitly unbind a default.
     None,
 }
@@ -410,6 +412,7 @@ impl Action {
             Action::StatusLog => "Status log".into(),
             Action::RecentSessions => "Recent sessions…".into(),
             Action::Broadcast => "Broadcast typing to this tab".into(),
+            Action::ResetWidths => "Reset pane widths".into(),
             Action::None => "Unbound".into(),
         }
     }
@@ -511,6 +514,7 @@ impl Action {
             Action::StatusLog => "status-log".into(),
             Action::RecentSessions => "recent-sessions".into(),
             Action::Broadcast => "broadcast".into(),
+            Action::ResetWidths => "reset-widths".into(),
             Action::None => return None,
         })
     }
@@ -635,6 +639,7 @@ impl FromStr for Action {
             "status-log" => Action::StatusLog,
             "recent-sessions" => Action::RecentSessions,
             "broadcast" => Action::Broadcast,
+            "reset-widths" => Action::ResetWidths,
             // The fleet and the why popover are gone; a binding written for one stays
             // harmless, not a config error.
             "none" | "unbind" | "start-fleet" | "why" => Action::None,

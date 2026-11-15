@@ -122,6 +122,7 @@ pub(in crate::client) fn key_groups() -> Vec<(&'static str, Vec<KeyRow>)> {
                 r("Paste image", vec![A::PasteImage], false),
                 r("Send a file to the machine", vec![A::SendFile], false),
                 r("Broadcast typing to this tab", vec![A::Broadcast], false),
+                r("Reset pane widths", vec![A::ResetWidths], false),
             ],
         ),
         (
@@ -201,7 +202,7 @@ fn category_of(act: Option<&Action>) -> &'static str {
             | A::FocusNext | A::FocusPrev | A::Resize(_) | A::Swap(_) | A::ScrollUp | A::ScrollDown
             | A::CopyMode | A::CloseSplit | A::PaneInfo | A::PrevPrompt | A::NextPrompt | A::Spawn(..)
             | A::UndoClose | A::NewTab | A::NextTab | A::PrevTab | A::CloseTab | A::SelectTab(_)
-            | A::Broadcast,
+            | A::Broadcast | A::ResetWidths,
         ) => "Panes",
         Some(
             A::Files | A::Changes | A::Branches | A::History | A::References | A::Worktrees
