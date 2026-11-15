@@ -73,6 +73,7 @@ conversation continuity are planned in phases 34–37:
 - Fleets, ships, the tab bar and the Crewmates switch are gone from the desktop app (the redesign supersedes them); `features/crew/` stays in the tree, unmounted, until Crewmates is designed
 - Tickets (2h handoff): GitHub, Plane and Linear tickets of the current chat's project, read-only, over the chat area from the title bar; list, Mine, Board and group views, the ticket page, Start an agent or Send to this chat with exactly what will be sent, Send to Kitchen, and Settings › Tickets for keys and links — built 2026-11-15, not yet seen in the desktop app; Plane and Linear not yet tried against a live server — `apps/gui/src/features/tickets/`
 - Sliding panels: the side panel, sidebar, terminals under the chat and Tickets slide in over 0.28s and out over 0.22s, and Reduce motion turns it off — built 2026-11-15 — `--panel-in`/`--panel-out` in `apps/gui/src/features/workspace/workspace.css`
+- Settings in the 2h design: the update box at the foot of the nav, Remote machines as a tile grid with a filter, search and a picked machine's cards, Add machine with a host list and one Connect, Full access in new chats, Blocks and Line spinners, 100k scrollback and 11px terminal text — built 2026-11-15, not yet seen in the desktop app — `apps/gui/src/features/settings/components/MachinesPage.tsx`, `UpdateBox.tsx`, `DesktopSettings.tsx`
 
 **Code and git**
 - Worktrees per agent, create / move / remove with hooks — shipped — `crates/maitty-core/src/daemon/git.rs`, `crates/maitty-core/src/project.rs`

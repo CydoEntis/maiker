@@ -77,14 +77,14 @@ export function UsagePage({ budget, onBudget, sessionForTerm, onOpenSession }: P
 
 function PeriodSwitch({ period, onChange }: { period: UsagePeriod; onChange: (period: UsagePeriod) => void }) {
   return (
-    <div role="group" aria-label="Period" className="inline-flex rounded-lg bg-raise p-0.5">
+    <div role="group" aria-label="Period" className="inline-flex gap-0.5 rounded-(--r-control) border border-(--line) bg-(--m-well) p-0.5">
       {PERIOD_CHOICES.map((choice) => (
         <button
           key={choice.period}
           type="button"
           aria-pressed={choice.period === period}
           title={choice.window}
-          className={`rounded-md px-3 py-1 text-[12.5px] font-medium ${choice.period === period ? 'bg-[var(--accent-soft)] text-fg' : 'text-dim hover:text-fg'}`}
+          className={`rounded-(--r-control) px-3 py-1 text-[12.5px] font-medium ${choice.period === period ? 'bg-raise text-fg shadow-[inset_0_0_0_1px_var(--line2)]' : 'text-dim hover:text-fg'}`}
           onClick={() => { onChange(choice.period) }}
         >
           {choice.label}
@@ -99,7 +99,7 @@ function Summary({ report, period, budget, onBudget }: { report: UsageReport; pe
   const tokens = totalTokens(totals)
   const ring = budgetRing(period, totals.cost, budget)
   return (
-    <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-lg border border-pane-line bg-raise px-4 py-3">
+    <div className="flex flex-wrap items-center gap-x-8 gap-y-3 rounded-(--r-panel) border border-pane-line bg-raise px-4 py-3">
       <div className="min-w-0">
         <p className="text-[10.5px] font-semibold uppercase tracking-[.08em] text-dim">{windowLabel(period)} · {shortDay(report.from)} to {shortDay(report.to)}</p>
         <p className="text-[12px] text-dim">Reported by the agents, never estimated</p>
@@ -182,12 +182,12 @@ function BudgetForm({ initial, onSave, onCancel }: { initial: number | null; onS
         value={text}
         aria-invalid={invalid}
         aria-describedby={invalid ? 'usage-budget-error' : undefined}
-        className="w-24 rounded-md border border-pane-line bg-term px-2 py-1 font-mono text-fg"
+        className="w-24 rounded-(--r-control) border border-pane-line bg-term px-2 py-1 font-mono text-fg"
         onChange={(event) => { setText(event.target.value); setInvalid(false) }}
       />
-      <button type="submit" className="rounded-md bg-[var(--accent)] px-2.5 py-1 font-medium text-[var(--on-accent)]">Save</button>
-      <button type="button" className="rounded-md px-2.5 py-1 text-dim hover:text-fg" onClick={() => { onSave(null) }}>No budget</button>
-      <button type="button" className="rounded-md px-2.5 py-1 text-dim hover:text-fg" onClick={onCancel}>Cancel</button>
+      <button type="submit" className="rounded-(--r-control) bg-[var(--accent)] px-2.5 py-1 font-medium text-[var(--on-accent)]">Save</button>
+      <button type="button" className="rounded-(--r-control) px-2.5 py-1 text-dim hover:text-fg" onClick={() => { onSave(null) }}>No budget</button>
+      <button type="button" className="rounded-(--r-control) px-2.5 py-1 text-dim hover:text-fg" onClick={onCancel}>Cancel</button>
       {invalid && <span id="usage-budget-error" role="alert" className="basis-full text-[var(--danger)]">Enter an amount in dollars, such as 50 or 12.50.</span>}
     </form>
   )
@@ -196,7 +196,7 @@ function BudgetForm({ initial, onSave, onCancel }: { initial: number | null; onS
 /** Shown once: subscription sessions report no cost, and their rows show a dash instead of repeating this. */
 function NoCostNote({ count }: { count: number }) {
   return (
-    <p role="note" className="rounded-lg border border-pane-line px-3 py-2 text-[12.5px] text-fg2">
+    <p role="note" className="rounded-(--r-panel) border border-pane-line px-3 py-2 text-[12.5px] text-fg2">
       {count === 1 ? '1 session reported no cost' : `${String(count)} sessions reported no cost`}: subscription plans and some agents do not report one, so their cost shows {DASH}. Cost is never estimated.
     </p>
   )
@@ -262,7 +262,7 @@ function LoadFailed({ onRetry, retrying }: { onRetry: () => void; retrying: bool
     <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 py-12 text-center">
       <h2 className="text-[15px] font-semibold">Could not load usage</h2>
       <p className="max-w-sm text-[12.5px] text-dim">Maitty could not read the usage figures from maittyd. Your sessions are not affected.</p>
-      <button type="button" disabled={retrying} className="rounded-md bg-raise px-3 py-1.5 text-[12.5px] font-medium hover:bg-hover" onClick={onRetry}>Retry</button>
+      <button type="button" disabled={retrying} className="rounded-(--r-control) bg-raise px-3 py-1.5 text-[12.5px] font-medium hover:bg-hover" onClick={onRetry}>Retry</button>
     </div>
   )
 }
@@ -270,7 +270,7 @@ function LoadFailed({ onRetry, retrying }: { onRetry: () => void; retrying: bool
 /** A refresh failed while older figures are still on the page: keep them, and say they may be out of date. */
 function RefreshFailed({ onRetry, retrying }: { onRetry: () => void; retrying: boolean }) {
   return (
-    <p role="alert" className="flex items-center gap-3 rounded-lg border border-[var(--warn-line)] px-3 py-2 text-[12.5px] text-fg2">
+    <p role="alert" className="flex items-center gap-3 rounded-(--r-panel) border border-[var(--warn-line)] px-3 py-2 text-[12.5px] text-fg2">
       Could not refresh usage; these figures may be out of date.
       <button type="button" disabled={retrying} className="font-medium text-[var(--accent-text)] hover:underline" onClick={onRetry}>Retry</button>
     </p>

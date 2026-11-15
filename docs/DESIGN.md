@@ -295,14 +295,32 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
   widths are `COMPACT_WIDTH_PX` and `NARROW_WIDTH_PX` in `model/windowSize.ts`.
 - **Settings dialog** (⌘,). A nav on `--m-well` at the left, in three groups under dim caps: **APP** (General,
-  Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal) and **MACHINES** (Machines). Each item
-  is 32px with a plain 15px glyph tinted by section and its jump key at the right; the current one is on `--m-raise`
-  with an inset `--line`. At the right, a fixed header (the page title, a one-line description and a 30x30 **×** icon
+  Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal) and **MACHINES** (Remote machines, M;
+  Tickets, I). Each item is 32px with a plain 15px glyph stroked in its section's colour and its jump key at the right;
+  the current one is on `--m-raise` with an inset `--line`. The nav's foot is the **update box** (`UpdateBox.tsx`): a
+  dot in the state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Up to date", "Update
+  failed"), the running version at its right, a dim note when there is one, the download bar while it downloads, and
+  the one button the state offers (Restart to update, Download, Check now, Try again). General keeps only the two
+  update switches. At the right, a fixed header (the page title, a one-line description and a 30x30 **×** icon
   button, tooltip "Close (Esc)", no label) above a body that scrolls; the page itself never scrolls. The title and
   description slide with the page. A page is groups (`Card`) of up to 640px: an uppercase 11px `--dim` title over
   rows of 14px padding, each with a `--line` above it, and a dim foot note. A group has no box of its own. The
-  sidebar settings sit in Appearance, the daemon's in Machines ("This computer") and the approved commands in
-  Permissions. **Usage** and **Performance** have no nav item: Ctrl+Shift+U and Ctrl+Shift+P or the palette open them.
+  sidebar settings sit in Appearance, the daemon's in Remote machines ("This computer") and the approved commands in
+  Permissions. **Usage** and **Performance** have no nav item: Ctrl+Shift+U and Ctrl+Shift+P or the palette open them,
+  and they take the whole dialog, with no nav (Usage's groups run full width).
+  **Remote machines** (`MachinesPage.tsx`) is a wide **This computer** tile (a monitor glyph with a status square, its
+  version and sessions), a toolbar (a segmented All | Connected | Needs attention, each with its count, a "Find a
+  machine" field and **+ Add machine**), a summary line of the real counts ("3 machines · 2 connected · 1
+  unreachable"), and a two-column grid of machine tiles, the troubled first: a server glyph with a status square, the
+  name, the state word in its colour (with how long it has been down) and its sessions, with "Update" or "Install" when
+  its app needs one. A click selects a tile (accent border, `--m-raise`) and draws its cards under the grid, with a
+  bar naming it and **Close**: Connection (Link, or the down state with **Retry now**; Since; Sessions), Version (only
+  when its app needs installing or updating: the command, Copy command, and the confirm before it runs), Allow
+  (clipboard, notifications), GitHub (when connected) and Remove (asks first). This computer's are the daemon card and
+  its GitHub row. **Add machine** replaces the page with a breadcrumb back and a box: From ~/.ssh/config (a radio list
+  of the hosts, name and address) or By address, **Name in Maitty**, and **Connect <name>**; then one stage, "Reaching
+  <target> over ssh…" with Cancel (Esc), and either the failure in the machine's words with **Edit and try again**, or
+  what was added with **Add another** and **Open its settings**.
   **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
   (not Usage, which holds figures): while it has text the body is the pages' groups, each titled "Page · Group", whole
   when the page name or the group title matches, else with only the rows whose label or detail match, and a group with
@@ -439,8 +457,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   by conversation number and belongs to its session: when the daemon gives the session's chat a new number, it moves
   to that number (`followComposer`).
 - **Settings pages.** ESSENTIALS: **General** (start and export folders, each the folder shown with **Browse…**, which
-  opens the system's folder picker, and a way back to the default; nothing is typed; updates; sessions) and **Chat** (how a
-  chat starts and is drawn: default agent, the view each agent's sessions open in, width, text size, Yolo) and **Agents** (the account each
+  opens the system's folder picker, and a way back to the default; nothing is typed; the start folder reads as `cd <folder>`
+  and says "Saved" for two seconds after a change; updates; sessions) and **Chat** (how a
+  chat starts and is drawn: default agent, the view each agent's sessions open in, width, text size, **Full access in new
+  chats**, which ticks Full access on a pane's "start a chat" offer at first (`fullAccessNewChats`, off by default), Yolo) and **Agents** (the account each
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). TERMINAL: **Terminal** (text,
   scrollback, and Panes: where an agent's terminals open), **Appearance** (look, surfaces, density and pane
@@ -549,7 +569,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   `--tab-fs`, `--icon-scale`), so every size rule that reads one follows it. The docked sidebar's right edge is a
   drag handle (`role=separator`, 208–440 px, default 264): the width follows the pointer and is saved
   on release; arrow keys step 16 px, Home or a double-click resets. The collapsed rail is fixed at 60px.
-- **Terminal text.** Settings › Terminal sets the size (12 to 16), the font family, the normal weight
+- **Terminal text.** Settings › Terminal sets, in one Text group of rows, the size (11 to 16), the cursor and its
+  blink, the font family, the normal weight
   (Light 300, Regular 400, Medium 500, Semibold 600) and the bold weight (Semibold, Bold 700, Extra bold 800).
   The family is one font name typed or picked from the monospace fonts this computer has (the
   webview cannot list fonts, so a short list of well-known ones is measured against generic families); empty is
@@ -558,6 +579,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   The settings are `look` fields on the terminal (`fontFamily`, `fontWeight`, `fontWeightBold`, `lib/terminalFont.ts`)
   and are applied to open terminals in place, followed by a refit, never by recreating them. Regular is 400 by
   default; Medium is the fix when Geist Mono looks thin in WebKitGTK on Linux.
+  Scrollback keeps 5k, 10k, 50k or 100k lines per pane in the window (maittyd keeps the full history).
 - **What a session is using.** The agent the daemon detects (claude, codex, deepseek, ...), else the
   program running in it, else `shell` for a bare shell. Claude, Codex, DeepSeek, Gemini and opencode
   show their own mark on a tile in their own colours, the same in every theme; cargo and rustc have
@@ -979,7 +1001,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Working spinner** (Settings › Appearance › Theme, `spinner`) is a dropdown row under the dark and light theme:
   a 220x40 button with a live preview tile, the name, its source ("From the Maitty TUI" or "Web icon") and a
   chevron. The list is the Radix dropdown menu (`SpinnerPicker`, 260px wide, at most 340px tall, flipping upward
-  when there is no room) in two groups, **Maitty TUI** (Braille, Snake, Bars) and **Web** (Circle, Dots,
+  when there is no room) in two groups, **Maitty TUI** (Blocks, Braille, Snake, Bars, Line; the frames of the terminal app's presets of those names) and **Web** (Circle, Dots,
   Equalizer, Spokes, Ping), each with a live preview and the picked one ticked. TUI spinners keep the TUI's exact
   frame strings, stepped by the shared clock. Web spinners are inline SVG in the text colour, 1em square
   (`WebSpinner`), each in its own `display: inline-block; contain: paint; will-change: transform` span, moved by

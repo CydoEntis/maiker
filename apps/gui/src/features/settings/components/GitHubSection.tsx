@@ -56,8 +56,8 @@ function askable(machines: readonly MachineHead[]): Array<{ machine: number; lab
  * commits carry and its folder rules. The window keeps no credentials and asks for none: it shows
  * logins only.
  */
-export function GitHubSection({ machines, signIn }: { machines: readonly MachineHead[]; signIn?: GitHubSignIn | undefined }) {
-  const rows = askable(machines)
+export function GitHubSection({ machines, signIn, only }: { machines: readonly MachineHead[]; signIn?: GitHubSignIn | undefined; /** One machine's row alone, as a card of that machine's settings. */ only?: number }) {
+  const rows = askable(machines).filter((row) => only === undefined || row.machine === only)
   const asking = rows.map((row) => String(row.machine)).join(',')
   const [states, setStates] = useState<Readonly<Record<number, SignInState>>>({})
   const [asked, setAsked] = useState(0)
@@ -75,7 +75,7 @@ export function GitHubSection({ machines, signIn }: { machines: readonly Machine
     return () => { current = false }
   }, [asking, asked, signInsEnded])
   return (
-    <Card title="Signed in"
+    <Card title={only === undefined ? 'Signed in' : 'GitHub'}
       meta={<button type="button" className="mx-text-button" onClick={() => { setAsked((count) => count + 1) }}>Check again</button>}
       foot="Sign in opens GitHub's own sign-in in a terminal on that machine: finish it there and in your browser, then close the terminal. Maitty reads who is signed in and keeps no passwords or tokens."
     >
