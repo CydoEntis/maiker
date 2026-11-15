@@ -632,13 +632,18 @@ describe('the new chat page on another machine', () => {
     expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, machineName: 'Shipyard', folder: '/srv/app', message: 'hello', branch: null }))
   })
 
-  it('offers the agent only on the model button: no model list or effort that this computer would have to guess', async () => {
-    remotePage(() => Promise.resolve())
+  it('offers the model and effort on the model button, and starts with what was picked', async () => {
+    const onStart = vi.fn(() => Promise.resolve())
+    remotePage(onStart)
     await pickProject('app')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, / }))
     expect(screen.getByRole('button', { name: /^Agent: / })).toBeInTheDocument()
-    expect(screen.queryByRole('radiogroup', { name: 'Model' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('radiogroup', { name: 'Effort' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: /Opus/ }))
+    await userEvent.click(screen.getByRole('radio', { name: 'High' }))
+    await userEvent.keyboard('{Escape}')
+    await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'hello')
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, model: 'opus', reasoning: 'high' }))
   })
 
   it('offers this computer as another place to start', async () => {

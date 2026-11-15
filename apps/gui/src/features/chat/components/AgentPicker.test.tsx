@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { forgetChoices, forgetDiscoveredModels, noteAgentSaid, setDiscoveredModels, readChoice, useAgentChoice, wireChoice, writeChoice } from '../agentChoice'
+import { everywhereModel, forgetChoices, forgetDiscoveredModels, noteAgentSaid, setDiscoveredModels, readChoice, useAgentChoice, wireChoice, writeChoice } from '../agentChoice'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { AgentPicker } from './AgentPicker'
 
@@ -228,5 +228,23 @@ describe('what the picker sends with a message', () => {
   it('ignores a stored model the agent does not offer', () => {
     writeChoiceFor(9, { model: 'opus' })
     expect(wireChoice(9, 'codex')).toBeNull()
+  })
+})
+
+describe('the picker for a chat on another machine', () => {
+  it('offers the models every install takes by name, not the extras read from this computer, and the effort', async () => {
+    setDiscoveredModels('claude', [{ id: 'claude-fable-5-1[1m]', label: 'Fable 5.1', blurb: 'Most capable' }])
+    render(<AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} fixedModels />)
+    await userEvent.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
+    const models = within(screen.getByRole('radiogroup', { name: 'Model' })).getAllByRole('radio').map((row) => row.textContent)
+    expect(models.join(' ')).not.toContain('Fable')
+    expect(models.join(' ')).toContain('Opus')
+    expect(screen.getByRole('radiogroup', { name: 'Effort' })).toBeInTheDocument()
+  })
+
+  it('starts there with a fixed alias as picked, and with the default for a model only this computer knows', () => {
+    expect(everywhereModel('claude', 'opus')).toBe('opus')
+    expect(everywhereModel('claude', 'claude-fable-5-1[1m]')).toBe('default')
+    expect(everywhereModel('codex', 'gpt-x')).toBe('default')
   })
 })

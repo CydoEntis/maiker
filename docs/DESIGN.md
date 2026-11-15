@@ -739,7 +739,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   adds nothing.
 - **No Inbox.** What needs you, what stopped and what finished are the first sections of the sidebar's status list, and
   the notification card and the tray menu say the same; the desktop app has no separate Inbox panel.
-- **New chat page on another machine.** The same page as on this computer (layout 2f), titled by the machine's tray fact `On <nickname or name>`: its projects, a pasted path, no Browse…, no branch, worktree or attach controls, and a model button that holds only the agent switch. There is no New session dialog.
+- **New chat page on another machine.** The same page as on this computer (layout 2f), titled by the machine's tray fact `On <nickname or name>`: its projects, a pasted path, no Browse…, no branch, worktree or attach controls, and a model button with the agent switch, the fixed models (Default, Opus, Sonnet, Haiku for Claude) and the effort. There is no New session dialog.
 - **Focus mode (⌘.).** Hides the sidebar; a pill at the bottom says where you are and
   how many sessions need you elsewhere. Esc or the pill's Exit leaves it.
 - **Broadcast (⌘⇧B).** Per layout. While on, every pane of the layout has a violet outline and a

@@ -3,7 +3,7 @@ import { type Dispatch, type RefObject, type SetStateAction, useCallback, useMem
 import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
-import { DEFAULT_PICK } from '@/features/chat/agentChoice'
+import { everywhereModel } from '@/features/chat/agentChoice'
 import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
 import { LOCAL_MACHINE, startSessionOnMachine } from '@/api/machines'
 import { startGitHubSignIn } from '@/api/githubAccounts'
@@ -300,8 +300,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
 
   // A chat on another machine is its daemon's terminal session with the agent typed into the shell, shown as its chat once the
   // agent reports a conversation. The line is built from the closed set `launchFlags` allows (the agent, a permission mode from
-  // the fixed list), so no free text reaches the remote shell; the first message waits until the agent takes input.
-  // The model and effort are the agent's own there, and a worktree is that daemon's own setting.
+  // the fixed list, a model the agent takes by name everywhere, an effort level), so no free text reaches the remote shell;
+  // the first message waits until the agent takes input. A worktree is that daemon's own setting.
   const startRemoteChat = useCallback(async (request: NewChatRequest): Promise<void> => {
     const id = await startOnMachine({ machine: request.machine, name: request.machineName }, request.folder)
     if (id === null) throw new Error(`${request.machineName} did not report the new session`)
@@ -312,7 +312,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     setExpectedAgents((current) => ({ ...current, [id]: request.agent }))
     window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
     paneViews.choose(id, 'chat')
-    await sendTerminalInput({ id, generation: 0 }, `${request.agent}${launchFlags(request.agent, DEFAULT_PICK, DEFAULT_PICK, request.mode)}\r`)
+    await sendTerminalInput({ id, generation: 0 }, `${request.agent}${launchFlags(request.agent, everywhereModel(request.agent, request.model), request.reasoning, request.mode)}\r`)
     setNewChatOpen(false)
   }, [startOnMachine, setExpectedAgents, paneViews, setNewChatOpen])
 

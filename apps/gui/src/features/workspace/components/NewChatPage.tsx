@@ -99,7 +99,7 @@ const BACKGROUND_KEY = isMacPlatform(navigator.userAgent) ? '⌘Enter' : 'Ctrl+E
  * starts it in the background and keeps the page for the next one, Esc goes back.
  */
 export function NewChatPage({ machines, machine, projects, defaultAgent, bypassAllowed = false, codexYolo = false, browse, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, seed = null }: Props) {
-  // On another machine the chat is the agent started in a shell there: this computer's models, branches, files and installed agents say nothing of it.
+  // On another machine the chat is the agent started in a shell there: this computer's extra models, branches, files and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
   const targetLabel = target?.label ?? 'This computer'
@@ -450,7 +450,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
               <div className="mx-box-row">
                 {!remote && <button type="button" className="mx-box-attach" aria-label="Attach files" title="Attach files" onClick={attach.pick}><Icon name="plus" size={16} /></button>}
                 <span className="mx-spacer" />
-                <AgentPicker agentOnly={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} onAgent={pickAgent} />
+                <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} onAgent={pickAgent} />
                 <button type="button" className={`mx-send${busy || folder === '' || agentMissing ? ' is-off' : ''}`} aria-label={empty ? 'Start chat' : 'Send message'} title={folder === '' ? 'Pick a folder first' : `${empty ? 'Start an empty chat' : 'Send (Enter)'}${remote ? '' : ` · ${BACKGROUND_KEY} starts it and keeps this page open`}`} disabled={busy || folder === '' || agentMissing} onClick={() => { start() }}>
                   <Icon name="arrowUp" size={15} strokeWidth={2.2} />
                 </button>
@@ -518,7 +518,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
                 <span className="mx-tray-fact" title="This chat asks before it runs a tool">Asks before running</span>
               )}
               <span className="mx-spacer" />
-              {remote && <span className="mx-tray-fact" title={`Model and effort are the agent's own on ${targetLabel}`}>On {targetLabel}</span>}
+              {remote && <span className="mx-tray-fact" title={`The agent starts on ${targetLabel}`}>On {targetLabel}</span>}
             </div>
           </div>
           {alsoOffered.length > 0 && (
