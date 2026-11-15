@@ -63,9 +63,9 @@
 .mx-nc-head { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); container: pane-head / inline-size; }
 .mx-nc-agent { flex: none; display: inline-flex; }
 .mx-nc-where { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
-.mx-nc-name { flex: 0 1 200px; min-width: 80px; height: 28px; padding: 0 6px; margin-left: -6px; border: 1px solid transparent; outline: none; background: transparent; font: 600 14px var(--ui); color: var(--fg); }
+.mx-nc-name { flex: 0 1 132px; min-width: 80px; height: 28px; padding: 0 6px; margin-left: -6px; border: 1px solid transparent; outline: none; background: transparent; font: 600 15px var(--ui); color: var(--fg); }
 .mx-nc-name::placeholder { color: var(--dim); font-weight: 500; }
-.mx-nc-name:hover { background: var(--m-hover); }
+.mx-nc-name:hover { border-color: var(--line2); }
 .mx-nc-name:focus { background: var(--m-well); border-color: var(--accent); }
 .mx-nc-crumb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--fg2); }
 .mx-nc-crumb-machine { color: var(--dim); }

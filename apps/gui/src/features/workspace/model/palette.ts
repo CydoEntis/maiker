@@ -1,3 +1,4 @@
+import type { SessionStatus } from './session'
 import type { SearchHit } from '@/features/find/api'
 
 export type PaletteKind = 'Action' | 'Session' | 'Project' | 'Theme' | 'Output'
@@ -12,6 +13,8 @@ export type PaletteItem = {
   shortcut?: string
   /** Shown instead of the kind, such as "needs you". */
   badge?: string
+  /** A chat's status, drawn as its mark at the row's left. */
+  status?: SessionStatus
   /** Themes only appear once something is typed. */
   needsQuery?: boolean
   run: () => void

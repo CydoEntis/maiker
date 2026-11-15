@@ -57,6 +57,7 @@ export function usePaletteItems({ paletteOpen, platform, layout, sessions, proje
       label: rowTitle(member),
       detail: `${member.process} · ${projectOf.get(member.id)?.name ?? member.cwdLabel}`,
       kind: 'Session',
+      status: member.status,
       ...(member.status === 'needs' ? { badge: 'Needs you' } : {}),
       run: () => { showSessionById(member.id) },
     }))

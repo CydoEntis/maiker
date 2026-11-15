@@ -165,13 +165,12 @@
 .mx-rail-session:hover { background: rgba(var(--hl), calc(.045 * var(--hk))); }
 .mx-rail-session.is-selected { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); }
 
-/* A chat that is still a draft: a grey box on its machine with three dots bouncing one after the other, like a wave. */
-/* A draft is a session row's twin: the same box and icon square, with bars where the name and project go. */
-.mx-draft { pointer-events: none; }
+/* A chat that is still a draft: a session row's twin, named "New chat" in italics with a "draft" tag at its right. */
+.mx-draft { pointer-events: none; align-items: center; }
 .mx-draft-tile { opacity: .75; }
-.mx-draft .mx-row-text { display: flex; align-items: center; gap: 6px; }
+.mx-draft .mx-row-text { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
 .mx-draft-name { font-style: italic; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-draft-tag { padding: 0 5px; border-radius: 4px; font: 600 9.5px/15px var(--mono, ui-monospace, monospace); text-transform: uppercase; letter-spacing: .04em; color: var(--dim); background: var(--m-raise); }
+.mx-draft-tag { flex: none; font: 400 11px/15px var(--mono, ui-monospace, monospace); color: var(--dim); }
 
 /* While a machine updates: its percentage replaces the Update button, and a 2px line runs under the header. */
 .mx-machine-pct { flex: none; padding: 0 4px; font-size: 11px; color: var(--dim); }

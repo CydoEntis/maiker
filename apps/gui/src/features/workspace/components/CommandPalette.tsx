@@ -5,6 +5,8 @@ import { firstHitPerPane, searchPalette, withOutputHits, type PaletteItem } from
 import type { SearchHit } from '@/features/find/api'
 import { usePaletteOutput } from '../usePaletteOutput'
 import { Icon, type IconName } from './glyphs'
+import { StatusMark, type StatusMarkState } from '@/components/StatusMark'
+import type { SessionStatus } from '../model/session'
 
 /** The palette's groups (layout 2h), in the order they are listed; a theme is something to do, so it sits with the actions. */
 const GROUPS: ReadonlyArray<{ id: string; name: string; kinds: readonly PaletteItem['kind'][] }> = [
@@ -16,6 +18,8 @@ const GROUPS: ReadonlyArray<{ id: string; name: string; kinds: readonly PaletteI
 
 /** The mark at a row's left, so a chat, a project and an action read apart before their words do. */
 const MARKS: Record<PaletteItem['kind'], IconName> = { Session: 'chat', Project: 'folder', Action: 'prompt', Theme: 'palette', Output: 'terminal' }
+/** A chat's mark (layout 2h): its status, the same shape the sidebar uses, so the palette reads like the list. */
+const STATUS_MARKS: Record<SessionStatus, StatusMarkState> = { needs: 'needs-you', working: 'working', limited: 'needs-you', error: 'needs-you', done: 'done', idle: 'idle', unknown: 'unknown' }
 const optionId = (index: number) => `mx-palette-option-${String(index)}`
 
 type Props = {
@@ -48,7 +52,7 @@ export function CommandPalette({ items, outputItem, onClose }: Props) {
   }
   const row = (item: PaletteItem, index: number) => (
     <ResultsOption key={item.id} id={optionId(index)} selected={index === active} className={`mx-palette-row${index === active ? ' is-selected' : ''}`} onMouseMove={() => { setSelected(index) }} onClick={() => { run(item) }}>
-      <span className="mx-palette-mark" aria-hidden="true"><Icon name={MARKS[item.kind]} size={14} /></span>
+      <span className="mx-palette-mark" aria-hidden="true">{item.status ? <StatusMark status={STATUS_MARKS[item.status]} /> : <Icon name={MARKS[item.kind]} size={14} />}</span>
       <span className="mx-palette-label">{item.label}</span>
       {item.detail && <span className={`mx-palette-detail${item.kind === 'Output' ? ' is-output' : ''}`}>{item.detail}</span>}
       <span className="mx-spacer" />
