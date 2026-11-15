@@ -11,7 +11,7 @@ import { MenuPopup, type MenuEntry } from './MenuPopup'
 const MENU_GAP_PX = 4
 
 /** One of the title bar's view toggles: on in `--fg`, off in `--dim`, its state in `aria-pressed`. */
-function Toggle({ label, tip, pressed, icon, onClick }: { label: string; tip: string; pressed: boolean; icon: 'panelLeft' | 'panelBottom' | 'panelRight'; onClick: () => void }) {
+function Toggle({ label, tip, pressed, icon, onClick }: { label: string; tip: string; pressed: boolean; icon: 'panelLeft' | 'panelBottom' | 'panelRight' | 'ticket'; onClick: () => void }) {
   return (
     <button type="button" className={`mx-tbar-toggle${pressed ? ' is-on' : ''}`} aria-label={label} title={tip} aria-pressed={pressed} onClick={onClick}>
       <Icon name={icon} />
@@ -21,14 +21,14 @@ function Toggle({ label, tip, pressed, icon, onClick }: { label: string; tip: st
 
 /**
  * The window's title bar as the workspace fills it: the Maitty menu behind the logo (New chat, Open a folder, Search,
- * Settings and the rest that starts something), and the Sidebar, Terminal and Changes and files toggles for the
- * focused session.
+ * Settings and the rest that starts something), and the Sidebar, Terminal, Changes and files and Tickets toggles for
+ * the focused session.
  */
 export function AppTitleBar() {
   const tip = useTipWithKeys()
   const shortcutText = useShortcutText()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
-  const { root, canStart, newSession, newTerminal, focusedMachineNumber, setPaletteOpen, setSettingsSection, setRecentOpen, sidebarMode, drawerShown, toggleSidebar, focusMode, focusedSession, layout, preferences, agentTerminals, drawerFoldedOf, setDrawerFolded, addAgentTerminal, inspectOpen, inspectView, setInspectView, setInspectOpen, toggleInspect, togglePanel, chooseStartFolder, home, startFolderLabel, setNewChatSeed, setNewChatOpen } = useWorkspace()
+  const { root, canStart, newSession, newTerminal, focusedMachineNumber, setPaletteOpen, setSettingsSection, setRecentOpen, sidebarMode, drawerShown, toggleSidebar, focusMode, focusedSession, layout, preferences, agentTerminals, drawerFoldedOf, setDrawerFolded, addAgentTerminal, inspectOpen, inspectView, setInspectView, setInspectOpen, toggleInspect, togglePanel, chooseStartFolder, home, startFolderLabel, setNewChatSeed, setNewChatOpen, ticketsOpen, setTicketsOpen } = useWorkspace()
   const items: MenuEntry[] = [
     { label: 'New chat', hint: shortcutText('new-agent-chat'), disabled: !canStart, run: () => { newSession(focusedMachineNumber) } },
     { label: 'New shell', hint: shortcutText('new-terminal'), disabled: !canStart, run: () => { newTerminal(focusedMachineNumber) } },
@@ -91,6 +91,7 @@ export function AppTitleBar() {
       {!focusMode && <Toggle label="Sidebar" tip={tip('Sidebar', 'toggle-sidebar')} pressed={sidebarMode === 'docked' || drawerShown} icon="panelLeft" onClick={toggleSidebar} />}
       <Toggle label="Terminal" tip={session === null ? 'Terminal: open a session first' : 'Terminal'} pressed={terminalShown} icon="panelBottom" onClick={toggleTerminal} />
       <Toggle label="Changes and files" tip={tip('Changes and files', 'inspect')} pressed={changesShown} icon="panelRight" onClick={toggleChanges} />
+      <Toggle label="Tickets" tip={session === null ? 'Tickets: open a chat first' : 'Tickets for this project'} pressed={ticketsOpen} icon="ticket" onClick={() => { setTicketsOpen(!ticketsOpen) }} />
     </span>
   )
   return (

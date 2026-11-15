@@ -15,6 +15,8 @@ import { Switch } from '@/components/ui/switch'
 import { SpinnerPicker } from './SpinnerPicker'
 import { PerformanceSection } from './PerformanceSection'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
+import { TicketsSection } from '@/features/tickets/TicketsSettings'
+import type { TicketsProject } from '@/features/tickets/model/ticketProjects'
 import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
 import { CHAT_AGENTS } from '@/features/workspace/model/chatView'
 import { AGENT_LABEL } from '@/features/chat/modelName'
@@ -31,7 +33,7 @@ import type { OpenSession } from '@/features/usage/UsageTable'
 import { BRANCH_PATH } from '@/features/workspace/components/paths'
 import { CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
 
-export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'machines' | 'github' | 'usage' | 'performance'
+export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'machines' | 'github' | 'tickets' | 'usage' | 'performance'
 
 /** The other machines, for the Machines page: what the window knows of each, and what it can ask of the host. */
 export type MachinesInfo = {
@@ -106,8 +108,13 @@ type DesktopSettingsProps = {
   onSignInAgent?: (agent: 'claude' | 'codex') => void
   /** Starts GitHub's own sign-in in a terminal on a machine, and how many of those have ended; without it the GitHub page offers no sign-in. */
   github?: GitHubSignIn
+  /** The projects the open sessions work in, for Settings › Tickets to link. */
+  ticketProjects?: readonly TicketsProject[]
   onClose: () => void
 }
+
+/** The ticket of the title bar's Tickets toggle. */
+const TICKET_PATH = 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6zM10 5v14'
 
 type NavItem = { id: DesktopSettingsSection; label: string; key: string; tint: string; path: string }
 
@@ -136,6 +143,7 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { id: 'machines', label: 'Machines', key: 'M', tint: 'var(--ok)', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01M17 7h.01M17 17h.01' },
       { id: 'github', label: 'GitHub', key: 'H', tint: 'var(--ansi-blue)', path: BRANCH_PATH },
+      { id: 'tickets', label: 'Tickets', key: 'K', tint: 'var(--ansi-mag)', path: TICKET_PATH },
     ],
   },
 ]
@@ -150,11 +158,12 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
   machines: ['Machines', 'This computer and the others whose sessions show up beside it.'],
   github: ['GitHub', 'Who each machine is signed in to GitHub as.'],
+  tickets: ['Tickets', 'Where Maitty reads tickets from. It only reads them.'],
   usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
   performance: ['Performance', 'What the window is spending its time on, measured live.'],
 }
 
-const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', m: 'machines', h: 'github' }
+const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', m: 'machines', h: 'github', k: 'tickets' }
 
 /** Esc ends an open theme list, or a running add-machine, first; Settings stays. A part that handles Esc itself is marked `data-owns-escape`. */
 const keepForOpenList = (event: globalThis.KeyboardEvent) => {
@@ -250,6 +259,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <><DaemonSection daemon={props.daemon} /><MachinesSection machines={props.machines} /></>
       case 'github': return <GitHubSection machines={props.machines.list} signIn={props.github} />
+      case 'tickets': return <TicketsSection projects={props.ticketProjects ?? []} signIn={props.github} />
       case 'keys': return <HotkeysSection platform={props.platform} overrides={preferences.keyOverrides} onOverrides={(next) => { update('keyOverrides', next) }} />
       case 'performance': return <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />
     }

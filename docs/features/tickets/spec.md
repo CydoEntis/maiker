@@ -1,6 +1,6 @@
 # Spec: tickets in the app
 
-Type: feature · Status: in progress. The model, the read-only GitHub provider (MAITTY-392) and the read-only Plane (MAITTY-395) and Linear (MAITTY-396) providers are built, with the shared `curl` sender and the daemon's key store: `maitty_shared::tickets`, `daemon/tickets_github.rs`, `tickets_plane.rs`, `tickets_linear.rs`, `ticket_keys.rs`, `Query::Tickets` (protocol 105) and `Query::TicketKeys` (protocol 106); no window yet; Plane and Linear are not yet checked against a live server · Decision from MAITTY-391 · Date: 2026-11-14
+Type: feature · Status: in progress. The model, the read-only GitHub provider (MAITTY-392) and the read-only Plane (MAITTY-395) and Linear (MAITTY-396) providers are built, with the shared `curl` sender and the daemon's key store: `maitty_shared::tickets`, `daemon/tickets_github.rs`, `tickets_plane.rs`, `tickets_linear.rs`, `ticket_keys.rs`, `Query::Tickets` (protocol 105) and `Query::TicketKeys` (protocol 106); the desktop Tickets view and Settings › Tickets are built (UI › *Tickets view*); Plane and Linear are not yet checked against a live server · Decision from MAITTY-391 · Date: 2026-11-14
 
 Read your tickets from GitHub, Plane and Linear inside Maitty: browse by project or module,
 search and filter, open one with its comments, start an agent on it, and later hand a group to

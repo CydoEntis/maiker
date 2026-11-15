@@ -19,11 +19,15 @@ import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
 import { displayName } from '../model/session'
 import { resolveStartFolder } from '../model/startFolder'
 import { WorkspacePane } from './WorkspacePane'
+import { TicketsOverlay, TICKETS_EXIT_MS } from '@/features/tickets/TicketsOverlay'
+import { usePresence } from '@/lib/usePresence'
+import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
 
 /** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber } = useWorkspace()
+  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen } = useWorkspace()
+  const tickets = usePresence(ticketsOpen, TICKETS_EXIT_MS, useReducedMotion())
   const newChatMachineLabel = sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine'
   const remotePick = useRemoteFolderPick(newChatMachine, newChatMachineLabel)
   const newChatBrowse = newChatMachine === LOCAL_MACHINE ? chooseProjectFolder : remotePick.browse
@@ -128,6 +132,7 @@ export function WorkspaceMain() {
                     onChangeStartFolder={() => { setSettingsSection('general') }}
                   />
                 )}
+                {tickets.shown && !newChatOpen && <TicketsOverlay leaving={tickets.leaving} />}
               </main>
             </div>
   )

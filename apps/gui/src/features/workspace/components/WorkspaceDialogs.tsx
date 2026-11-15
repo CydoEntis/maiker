@@ -1,3 +1,4 @@
+import { ticketProjects } from '@/features/tickets/model/ticketProjects'
 import { listSshHosts, machineActivity } from '@/api/machines'
 import { DesktopSettings } from '@/features/settings/components/DesktopSettings'
 import { PerfOverlay } from './PerfOverlay'
@@ -175,6 +176,7 @@ export function WorkspaceDialogs() {
                 usage={usageInfo}
                 onSignInAgent={signInAgent}
                 github={{ onSignIn: signInGitHub, signInsEnded: gitHubSignInsEnded }}
+                ticketProjects={ticketProjects(sessions)}
                 onChooseFolder={chooseStartFolder}
                 onClose={() => { setPreviewTheme(null); setSettingsSection(null) }}
               />

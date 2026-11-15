@@ -279,9 +279,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Title bar** (`AppTitleBar`, `frame.css`; the whole-app mock). 38px on the window ground (`--bg`), the rest of it a
   drag area. At the left the **Maitty menu**: the 16px logo and "m**AI**tty" (13px 600, the AI in `--accent-text`), a
   button that opens New chat, New shell, Open a folder…, Search, Recent sessions, Add a remote machine… and Settings. At
-  the right three 28px toggles, `--fg` while on: **Sidebar** (docked, or the overlay of a narrow window), **Terminal**
-  (shows or hides the focused session's terminals, adding the first when it has none) and **Changes and files** (the
-  side panel), then the platform's window buttons (38px tall captions on Windows).
+  the right four 28px toggles, `--fg` while on: **Sidebar** (docked, or the overlay of a narrow window), **Terminal**
+  (shows or hides the focused session's terminals, adding the first when it has none), **Changes and files** (the
+  side panel) and **Tickets** (the Tickets view over the chat area, UI › *Tickets view*), then the platform's window
+  buttons (38px tall captions on Windows).
   There is no activity bar, no middle column and no tab bar: the window is the sidebar and the workspace.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   60px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;

@@ -319,7 +319,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // The new chat is the agent in a terminal the daemon owns, shown as its chat: one session whose view
   // switches to the terminal at any time (ADR 0003), the same for every agent. Starts from the page run alongside each
   // other; one in the `background` is not opened and leaves the page open for the next.
-  const startNewChat = useCallback(async (request: NewChatRequest, { background = false }: NewChatStartOptions = {}): Promise<void> => {
+  const startNewChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (!online) throw new Error('The daemon is not reachable')
     if (request.machine !== LOCAL_MACHINE) return startRemoteChat(request)
     const resume = request.resume === null ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
@@ -336,6 +336,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       const codexMode = yolo.codex ? CODEX_FULL_MODE : request.mode === 'default' ? null : request.mode
       holdStartChoice(id, { model: request.model, reasoning: request.reasoning, mode: request.agent === 'claude' ? request.mode : request.agent === 'codex' ? codexMode : null })
       if (!background) setNewChatOpen(false)
+      onPlaced?.(id)
     } })
   }, [online, setNewChatOpen, startAgentSession, startRemoteChat, yolo.codex])
 

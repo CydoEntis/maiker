@@ -872,6 +872,36 @@ when at least three screen corners use one explicit background color. Preserve
 the pane insets; isolated colored panels keep their existing theme treatment.
 Preserve colors applications paint explicitly.
 
+## Project-specific: Tickets view (desktop)
+
+Tickets shows the tickets of the project the chat in front works in, from GitHub, Plane and Linear, read-only
+([spec](features/tickets/spec.md), the [2h handoff](features/chat-gui/design-handoff/2h/README.md)). Code:
+`apps/gui/src/features/tickets/`, data from `apps/gui/src/api/tickets.ts`. Rules:
+
+- **Where it is.** The title bar's **Tickets** toggle opens it over the chat area (`TicketsOverlay` in `.mx-main`);
+  ✕ or the toggle closes it. The handoff's right activity bar is not built: the window has none (DESIGN › title bar).
+- **Project scope.** A project is a machine and a folder (the repository's root, else the folder;
+  `model/ticketProjects.ts`). Its links (a GitHub repo, a Plane project, a Linear team) and your names in Plane and
+  Linear are kept by the window (`model/ticketLinks.ts`, `localStorage`, nothing secret). GitHub follows the folder's
+  `origin` (`github_repo_of`) until a repo is typed. Every read goes through this computer's daemon.
+- **Ticket text is text.** Titles, bodies, comments and labels are drawn as React text, never as Markdown or HTML;
+  links show as text with ↗ and open in the browser only on a click (`openLink`, http and https only).
+- **What is sent.** Start an agent and Send to this chat show **exactly what will be sent** before anything goes:
+  Maitty's lines (the title kept to one line) and the ticket's words, every line quoted with `> ` (`ticketMessage`).
+  A blocked ticket warns in red and can still be started. Send to Kitchen types Kitchen's own `/kitchen run <key>
+  (<url>)`, one per ticket, into a chat already running Kitchen in the project or a new Claude chat; blocked ones are
+  skipped unless ticked, and a ticket Kitchen already runs is "Already in Kitchen".
+- **States.** Loading (skeleton rows), no matches (Clear filters), no sources (Connect a source), not linked (Link …,
+  opening Settings › Tickets), gh signed out (Open terminal), key refused (red, Replace key), offline (last good copy
+  with Retry), rate-limited (no button). Banners are never amber.
+- **Keys.** `/` search, ↑↓ move, Space or X ticks, Enter opens, S starts an agent, K sends to Kitchen, Esc closes the
+  ticket page, then empties the search, then the selection.
+- **Settings › Tickets** (`TicketsSettings.tsx`, nav key K): the gh login with Check again (Open terminal when signed
+  out); Plane's address, workspace and key, Linear's key (`type=password`, `autocomplete=off`), Connect, then
+  "Connected · key saved" with Replace key and Remove, and "Key refused" when the provider refused it. A saved key is
+  never shown. Keys are kept by the Maitty service in its data folder, not the system keychain. Then each open
+  project's repo, Plane project and Linear team, and your names for Mine.
+
 ## Project-specific: desktop chat view
 
 The desktop app's chat view is a second view of a Claude Code or Codex session, never a second session

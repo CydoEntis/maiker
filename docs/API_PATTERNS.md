@@ -998,6 +998,14 @@ cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 se
 `work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
 inverse `blocks` relations.
 
+The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
+`ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
+`{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them
+with zod). A source longer than 256 bytes is refused in the host. Ticket answers are expected for 60 seconds plus
+the clone margin (`routing::TICKETS_ANSWER_WINDOW`); the window waits 95 seconds. `github_repo_of(folder)` answers
+the `owner/name` a folder of this computer pushes to (`git remote get-url origin`, read by
+`maitty_shared::github::repo_of_remote`), or null.
+
 Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
 (`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`
 answers the lines `Apply` would write and writes nothing; `Apply { folder, identity }` writes them;

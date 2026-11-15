@@ -37,8 +37,8 @@ export type BranchChoice = { name: string; create: boolean; worktree: boolean }
 /** What the page asks the window to start: a chat with this agent, model and effort, in this folder, and its first message; `resume` names a saved conversation to continue. */
 export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null }
 
-/** How a start is asked for: `background` starts the chat without opening it, and the page stays for the next. */
-export type NewChatStartOptions = { background?: boolean }
+/** How a start is asked for: `background` starts the chat without opening it, and the page stays for the next; `onPlaced` hears its id. */
+export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's chats only). */ onPlaced?: (id: string) => void }
 
 /** The key the first message's files are kept under: no conversation exists yet, and a real one is never negative. */
 const NEW_CHAT_DRAFT = -1
