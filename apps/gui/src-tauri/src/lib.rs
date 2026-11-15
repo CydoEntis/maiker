@@ -1119,6 +1119,14 @@ async fn answer_secret(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// The GitHub repository a folder's `origin` points at (`owner/name`), or none. This computer's folders only: the
+/// Tickets view links a project to its repository with it.
+#[tauri::command]
+async fn github_repo_of(wire: tauri::State<'_, terminal_stream::Wire>, machine: Option<u16>, folder: String) -> Result<Option<String>, String> {
+    wire.require_local(machine, "Reading a folder's GitHub repository")?;
+    maitty_desktop_client::github_repo_of(PathBuf::from(folder)).await.map_err(|error| format!("{error:#}"))
+}
+
 /// The files more than one of a project's checkouts changed (name, folder per checkout). This computer's only.
 #[tauri::command]
 async fn worktree_overlaps(
@@ -1714,6 +1722,9 @@ pub fn run() {
             terminal_stream::github_accounts,
             terminal_stream::github_repos,
             terminal_stream::github_owners,
+            terminal_stream::tickets,
+            github_repo_of,
+            terminal_stream::ticket_keys,
             terminal_stream::get_shared_settings,
             terminal_stream::set_shared_setting,
             output_socket::open_terminal_socket,

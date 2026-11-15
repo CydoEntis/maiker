@@ -23,7 +23,8 @@ use maitty_machines::link::Timing;
 use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
-use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, Snapshot, Status, TermId};
+use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, Snapshot, Status, TermId, TicketKeyChange};
+use maitty_shared::tickets::{TicketError, TicketKeyState, TicketsReply, TicketsRequest};
 use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -60,10 +61,16 @@ const GITHUB_REPOS_EVENT: &str = "github-repos";
 const GITHUB_OWNERS_EVENT: &str = "github-owners";
 /// Longer than any owner or search the daemon takes.
 const MOST_GITHUB_WORD_BYTES: usize = 256;
+/// What this computer's daemon read of a ticket source: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
+const TICKETS_EVENT: &str = "tickets";
+/// Where the ticket providers' keys stand: `{machine, tag, answer}`, never a key.
+const TICKET_KEYS_EVENT: &str = "ticket-keys";
 /// A machine's home folder, as its daemon reads it.
 const REMOTE_HOME: &str = "~";
 /// Longest repository address the daemon accepts.
 const MOST_ADDRESS_BYTES: usize = 2048;
+/// Longer than any ticket source the daemon takes (`owner/name`, `plane` or `linear`).
+const MOST_TICKET_SOURCE_BYTES: usize = 256;
 /// The shared settings, whenever the daemon says them: the answer to a question, or a change.
 const SHARED_SETTINGS_EVENT: &str = "shared-settings";
 
@@ -471,6 +478,23 @@ impl Wire {
         self.send(machine_of(machine), ClientMsg::Query(Query::GitHubRepos { owner, search, tag }))
     }
 
+    /// Ask this computer's daemon to read a ticket source: `owner/name` for GitHub (its own `gh`), or `plane` or
+    /// `linear` (the key it keeps). The daemon checks the source and the request and cleans the answer; only what
+    /// could not be a source is refused here. The answer comes back as a `tickets` event carrying `tag`.
+    pub fn tickets(&self, source: &str, request: TicketsRequest, tag: u64) -> Result<(), String> {
+        let source = source.trim();
+        if source.is_empty() || source.len() > MOST_TICKET_SOURCE_BYTES || source.chars().any(char::is_control) {
+            return Err("That ticket source cannot be sent".to_string());
+        }
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::Tickets { source: source.to_owned(), request, tag }))
+    }
+
+    /// Ask this computer's daemon to keep, remove or report a ticket provider's key. The key goes to the daemon
+    /// and nowhere else; the answer, a `ticket-keys` event carrying `tag`, says only whether one is set.
+    pub fn ticket_keys(&self, change: TicketKeyChange, tag: u64) -> Result<(), String> {
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketKeys { change, tag }))
+    }
+
     /// Ask a machine's daemon (this computer's when none is named) whose repositories it can list.
     /// The answer comes back as a `github-owners` event carrying `tag`.
     pub fn github_owners(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
@@ -542,6 +566,19 @@ pub fn list_folders(
     tag: u64,
 ) -> Result<(), String> {
     wire.list_folders(machine, &path, tag)
+}
+
+/// Asks this computer's daemon to read a ticket source. The answer arrives as a `tickets` event with the same `tag`.
+#[tauri::command]
+pub fn tickets(wire: tauri::State<'_, Wire>, source: String, request: TicketsRequest, tag: u64) -> Result<(), String> {
+    wire.tickets(&source, request, tag)
+}
+
+/// Asks this computer's daemon to keep, remove or report a ticket provider's key. The answer arrives as a
+/// `ticket-keys` event with the same `tag`, and never holds a key.
+#[tauri::command]
+pub fn ticket_keys(wire: tauri::State<'_, Wire>, change: TicketKeyChange, tag: u64) -> Result<(), String> {
+    wire.ticket_keys(change, tag)
 }
 
 /// Asks another machine for its whole list; it arrives as `machine-sessions-changed`.
@@ -817,6 +854,18 @@ pub enum Reaction {
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
     },
+    /// What a ticket source gave, for the window that asked.
+    Tickets {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketsReply, TicketError>,
+    },
+    /// Where the ticket providers' keys stand, for the window that asked.
+    TicketKeys {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<Vec<TicketKeyState>, TicketError>,
+    },
     /// A machine's whole snapshot, or none when this computer's line ended.
     Sessions {
         machine: MachineId,
@@ -906,6 +955,8 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
             Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
             Out::GitHubOwners { machine, tag, answer } => Some(Reaction::GitHubOwners { machine, tag, answer }),
+            Out::Tickets { machine, tag, answer } => Some(Reaction::Tickets { machine, tag, answer }),
+            Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
                 let _ = handle.send(Outgoing {
@@ -981,6 +1032,14 @@ struct GitHubListAnswer<T> {
     state: &'static str,
     why: Option<String>,
     listed: Option<T>,
+}
+
+/// An answer to a tagged question as the window reads it: the machine, the question's tag and what came back.
+#[derive(Clone, Serialize, Debug, PartialEq)]
+struct TaggedAnswer<T> {
+    machine: u16,
+    tag: u64,
+    answer: T,
 }
 
 fn github_list_answer<T>(machine: MachineId, tag: u64, answer: GitHubAnswer<T>) -> GitHubListAnswer<T> {
@@ -1100,6 +1159,12 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::GitHubOwners { machine, tag, answer } => {
                 let _ = app.emit(GITHUB_OWNERS_EVENT, github_list_answer(machine, tag, answer));
             }
+            Reaction::Tickets { machine, tag, answer } => {
+                let _ = app.emit(TICKETS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
+            Reaction::TicketKeys { machine, tag, answer } => {
+                let _ = app.emit(TICKET_KEYS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
             Reaction::Removed { machine } => {
                 maitty_desktop_client::forget_remote(machine.0);
                 if let Ok(mut states) = app.state::<MachineStates>().0.lock() {
@@ -1171,6 +1236,19 @@ mod tests {
         assert_eq!(said(GitHubAnswer::NotSignedIn)["state"], "not-signed-in");
         let failed = said(GitHubAnswer::Failed("rate limited".into()));
         assert_eq!((failed["state"].as_str(), failed["why"].as_str()), (Some("failed"), Some("rate limited")));
+    }
+
+    #[test]
+    fn the_window_s_ticket_questions_and_answers_keep_their_shapes() {
+        let list: TicketsRequest = serde_json::from_value(serde_json::json!({"List": {"group": "plane:p1", "state": null, "assignee": null, "label": null, "search": "cart", "page": 2}})).unwrap();
+        assert!(matches!(list, TicketsRequest::List(_)));
+        assert_eq!(serde_json::from_value::<TicketsRequest>(serde_json::json!("Groups")).unwrap(), TicketsRequest::Groups);
+        let set: TicketKeyChange = serde_json::from_value(serde_json::json!({"Set": {"provider": "Linear", "address": "", "workspace": "", "key": "lin_api_x"}})).unwrap();
+        assert!(!format!("{set:?}").contains("lin_api_x"));
+        let refused = TaggedAnswer { machine: 0, tag: 4, answer: Err::<Vec<TicketKeyState>, _>(TicketError::SignedOut) };
+        assert_eq!(serde_json::to_value(refused).unwrap(), serde_json::json!({"machine": 0, "tag": 4, "answer": {"Err": "SignedOut"}}));
+        let none = TaggedAnswer { machine: 0, tag: 5, answer: Ok::<_, TicketError>(Vec::<TicketKeyState>::new()) };
+        assert_eq!(serde_json::to_value(none).unwrap(), serde_json::json!({"machine": 0, "tag": 5, "answer": {"Ok": []}}));
     }
 
     fn state(machine: u16, name: &str, kind: &'static str) -> MachineState {

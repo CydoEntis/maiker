@@ -88,6 +88,8 @@ impl Host {
                 | Reaction::GitHubAccounts { .. }
                 | Reaction::GitHubRepos { .. }
                 | Reaction::GitHubOwners { .. }
+                | Reaction::Tickets { .. }
+                | Reaction::TicketKeys { .. }
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),
                 Reaction::Sessions { machine, snapshot } => {

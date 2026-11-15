@@ -16,6 +16,7 @@ use maitty_machines::MachineId;
 use maitty_machines::remote_snapshot::sanitize_snapshot;
 use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, Snapshot, Status, TermId};
 use maitty_shared::settings_view::SharedSettings;
+use maitty_shared::tickets::{TicketError, TicketKeyState, TicketsReply};
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
@@ -124,6 +125,18 @@ pub enum Out {
         machine: MachineId,
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
+    },
+    /// What a machine read of a ticket source, already cleaned by the daemon (and vetted for another machine's).
+    Tickets {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketsReply, TicketError>,
+    },
+    /// Where this computer's ticket provider keys stand. Never a key.
+    TicketKeys {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<Vec<TicketKeyState>, TicketError>,
     },
 }
 
@@ -247,6 +260,12 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::GitHubOwners { tag, answer }) => {
                 out.push(Out::GitHubOwners { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::Tickets { tag, answer }) => {
+                out.push(Out::Tickets { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::TicketKeys { tag, answer }) => {
+                out.push(Out::TicketKeys { machine, tag, answer });
             }
             ServerMsg::State(snapshot) => self.publish(machine, snapshot, &mut out),
             // What the host asked for after a missed update; nothing else asks on this line.

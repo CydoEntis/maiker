@@ -653,6 +653,16 @@ fn run_git(dir: &std::path::Path, args: &[&str]) -> std::result::Result<String, 
     }
 }
 
+/// The GitHub repository (`owner/name`) a folder's `origin` remote points at, or `None` when it has no such remote.
+/// Git runs off the caller's thread with fixed arguments; a folder git cannot read has none.
+pub async fn github_repo_of(folder: PathBuf) -> Result<Option<String>> {
+    tokio::task::spawn_blocking(move || {
+        run_git(&folder, &["remote", "get-url", "origin"]).ok().and_then(|address| maitty_shared::github::repo_of_remote(&address))
+    })
+    .await
+    .context("reading the folder's remote")
+}
+
 /// The files that more than one of these checkouts (name, folder) changed since their branches parted. Git runs
 /// off the caller's thread; a checkout git cannot read is left out.
 pub async fn checkout_overlaps(checkouts: Vec<(String, PathBuf)>) -> Result<Vec<maitty_shared::overlap::Overlap>> {

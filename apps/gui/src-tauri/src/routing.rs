@@ -19,6 +19,12 @@ const ASKED_MAX: usize = 64;
 /// takes to cross the line.
 const CLONE_ANSWER_MARGIN: Duration = Duration::from_secs(30);
 
+/// The longest one ticket read can take in the daemon: `gh` run twice, 30 seconds each (a Plane rate limit is
+/// waited out for less).
+const TICKET_READ_LIMIT: Duration = Duration::from_secs(2 * 30);
+/// How long a ticket read's answer is waited for: the daemon's limit, then the time the answer takes to cross.
+const TICKETS_ANSWER_WINDOW: Duration = TICKET_READ_LIMIT.saturating_add(CLONE_ANSWER_MARGIN);
+
 /// How long a list of GitHub repositories or owners is waited for. The daemon gives `gh` 15 seconds
 /// to say who is signed in, then `GITHUB_LIST_LIMIT_SECS` to list, and the answer has to cross.
 const GITHUB_LIST_ANSWER_WINDOW: Duration = Duration::from_secs(15 + maitty_shared::protocol::GITHUB_LIST_LIMIT_SECS + 30);
@@ -72,6 +78,7 @@ pub fn answer_window(msg: &ClientMsg) -> Option<Duration> {
         ClientMsg::Query(
             maitty_shared::protocol::Query::GitHubRepos { .. } | maitty_shared::protocol::Query::GitHubOwners { .. },
         ) => Some(GITHUB_LIST_ANSWER_WINDOW),
+        ClientMsg::Query(maitty_shared::protocol::Query::Tickets { .. }) => Some(TICKETS_ANSWER_WINDOW),
         ClientMsg::Command(_) | ClientMsg::Query(_) => Some(ANSWER_WINDOW),
         _ => None,
     }
