@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { toast } from '@/lib/toast'
 import { pasteFromHost, pickFromClipboard, unsupportedMessage } from '@/features/terminal/clipboardImage'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
@@ -11,6 +11,7 @@ import { defaultChoice, useAgentChoice, type AgentChoice } from '../agentChoice'
 import { DraftAttachments } from './Attachments'
 import { AgentPicker } from './AgentPicker'
 import { modelName } from '../modelName'
+import { PLAN_MODE } from '../chatMeta'
 import { PermissionMenu } from './PermissionMenu'
 import { QueuedMessages } from './QueuedMessages'
 import { MAX_SHOWN, SlashPicker } from './SlashPicker'
@@ -22,7 +23,6 @@ import { CLAUDE_HIDDEN_COMMANDS, CLAUDE_TERMINAL_COMMANDS } from '../terminalCom
 import { terminalOnlyNote, typedCommand, windowRouteOf, withWindowRoutes, type WindowRoute } from '../windowCommands'
 import { CODEX_COMMANDS } from '../codexCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
-import { BranchMenu, type BranchMenuSpec } from './BranchMenu'
 import { usageItems, type SessionUsage } from '../usageStrip'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
 import { useKeepTyping } from '../useKeepTyping'
@@ -30,25 +30,20 @@ import { useKeepTyping } from '../useKeepTyping'
 /** A key with nothing stored under it, for a composer whose view holds its own draft. */
 const NO_CONVERSATION = -1
 
-/** What the settings tray under the box says about the session. */
+/** What the box's bottom row says about the session: its model, permission mode and usage. */
 export type ComposerFacts = {
-  /** What the session's agent reported using; the strip under the tray shows it, and is not drawn when there is nothing. */
+  /** What the session's agent reported using; the meters at the right of the box show it, and are not drawn when there is nothing. */
   usage?: SessionUsage | undefined
+  /** Opens Usage & cost, from a click on a meter; without it the meters are only read. */
+  onOpenUsage?: (() => void) | undefined
   /** The permission mode in words, from the agent's own file; null when it has not said. */
   mode: string | null
   /** The mode asks about nothing, so it is drawn in the danger colour. */
   modeDanger: boolean
-  /** Whether the folder is a worktree of its repository, not the main checkout; null when that is not known. */
-  worktree?: boolean | null | undefined
-  /** Given where the branch can be changed from the tray (a session on this computer); without it the branch is only said. */
-  branchMenu?: BranchMenuSpec | undefined
-  folder: string
-  branch: string | null
   /** The model the agent's own file says it uses; null when it has not said. */
   model: string | null
   /** The effort the agent's own files say it runs at, when they do. */
   effort?: string | null | undefined
-  onOpenFolder: (() => void) | null
   /** For a chat that follows the agent's terminal and can type into it: send the agent one of its own commands (`/model x`). */
   onCommand?: ((text: string) => void) | undefined
   /** The same, for the permission mode: moves the agent to the picked mode (by its Shift+Tab). */
@@ -102,8 +97,8 @@ const NO_CHANGE = () => undefined
 const PERCENT = 100
 
 /**
- * The message box, in three layers (README: message box): the question tray when the agent asks, the
- * box (text, attach, model picker, send), and the settings tray under it. Enter sends, Shift+Enter
+ * The message box (layout 2h): the question tray when the agent asks, then one box: the text with attach at its top
+ * right, and under it the model, the permission mode, the usage meters and send. Enter sends, Shift+Enter
  * adds a line, Esc interrupts the running turn. While the agent works, sending queues the message;
  * while a request waits for an answer, or the daemon is offline, the box is off and says why.
  */
@@ -142,7 +137,8 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     else toast.error(unsupportedMessage(pick.type))
   }
   const attachLabel = off ? `Attach files: ${disabledReason}` : 'Attach files'
-  const placeholder = disabledReason ?? (running ? `Queue a message for when ${agent} finishes` : `Message ${agent}`)
+  const planning = facts.modeKey === PLAN_MODE
+  const placeholder = disabledReason ?? (running ? `Queue a message for when ${agent} finishes` : planning ? 'Reply to the plan…' : 'Message the agent, or type / for commands')
   const empty = draft.trim() === '' && attachments.length === 0
   // With nothing typed while a turn runs, the round button stops the agent instead of sending.
   const stopping = running && empty && !off
@@ -320,14 +316,19 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
             onKeyDown={onKeyDown}
             onPaste={onPaste}
           />
+          {(composer.attachable ?? !readOnly) && (
+            // aria-disabled, not disabled: a disabled button gets no focus or tooltip, and the reason is the point.
+            <button type="button" className="mx-box-attach" aria-label={attachLabel} title={attachLabel} aria-disabled={off} onClick={() => { if (!off) attach.pick() }}>
+              <Icon name="plus" size={16} />
+            </button>
+          )}
+          {planning && (
+            <p className="mx-plan-strip">
+              <span className="mx-plan-strip-name">Plan mode</span>
+              <span>Reads and plans. Changes nothing until you approve.</span>
+            </p>
+          )}
           <div className="mx-box-row">
-            {(composer.attachable ?? !readOnly) && (
-              // aria-disabled, not disabled: a disabled button gets no focus or tooltip, and the reason is the point.
-              <button type="button" className="mx-box-attach" aria-label={attachLabel} title={attachLabel} aria-disabled={off} onClick={() => { if (!off) attach.pick() }}>
-                <Icon name="plus" size={16} />
-              </button>
-            )}
-            <span className="mx-spacer" />
             {facts.agentChips !== undefined ? (
               conversation !== undefined
                 ? <ModelPicker agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={facts.agentChips.pickerLocked === undefined ? facts.agentChips.locked : facts.agentChips.pickerLocked} />
@@ -338,6 +339,9 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
                 {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} />}
               </>
             )}
+            <ModeControl facts={facts} />
+            <span className="mx-spacer" />
+            {facts.usage !== undefined && <UsageMeters usage={facts.usage} onOpen={facts.onOpenUsage} />}
             {stopping ? (
               <button type="button" className="mx-send is-stop" aria-label={`Stop ${agent}`} title={`${agent} is working. Stop it (Esc)`} onClick={stop}><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : busy ? (
@@ -350,7 +354,6 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
             )}
           </div>
         </div>
-        <SettingsTray facts={facts} />
         {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Open the terminal to answer anything it asks.</p>}
         {restoreNote !== null && composer.conversationKey !== undefined && (
           <p className="mx-composer-note">
@@ -364,85 +367,80 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   )
 }
 
-function ModeIcon() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z" /></svg>
-}
-
 function modeLockedWhy(facts: Pick<ComposerFacts, 'modeLocked' | 'agentChips'>): string {
   return facts.modeLocked ?? facts.agentChips?.locked ?? 'Not available for this chat'
 }
 
-/** The short name a meter wears beside its figure: Context, 5h, Week. */
-const usageName = (item: { window: string | null }): string => (item.window === null ? 'Context' : item.window === 'week' ? 'Week' : item.window)
+/** The short name a meter wears beside its figure. */
+const usageName = (item: { window: string | null }): string => (item.window === null ? 'Ctx' : item.window === 'week' ? 'Wk' : item.window)
+/** The meter's ring, square as the window's corners are: a path round a 12px box, starting at the top middle. */
+const METER_PATH = 'M6 1H11V11H1V1H6'
 
 /**
- * The meters at the right of the tray: how full the session's context is and how much of each of the plan's limits is
- * used, each a name, a ring and the figure, in the theme's meter colour for its quarter. A meter under half used stays
- * out of sight until the message box is hovered or focused. Only what the agent reported is drawn (ADR 0009); with
- * nothing reported there is none. When a limit starts over is in its tooltip.
+ * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
+ * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. Only what the agent
+ * reported is drawn (ADR 0009); with nothing reported there is none. A click opens Usage & cost.
  */
-function UsageMeters({ usage }: { usage: SessionUsage }) {
+function UsageMeters({ usage, onOpen }: { usage: SessionUsage; onOpen: (() => void) | undefined }) {
   const items = usageItems(usage, nowSeconds())
   if (items.length === 0) return null
   return (
     <span className="mx-usage" role="group" aria-label="Usage">
       {items.map((item) => {
         const used = item.window === null ? `How much of this chat's memory is used: ${String(item.percent)}%` : item.resetsIn === null ? `${item.label}: ${String(item.percent)}% used` : `${item.label}: ${String(item.percent)}% used · resets in ${item.resetsIn}`
-        return (
-          <span key={item.key} className={`mx-usage-item is-${item.tone}${item.low ? ' is-low' : ''}`} title={used}>
+        const meter = (
+          <>
             <span className="mx-usage-name">{usageName(item)}</span>
-            <span className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={item.percent} style={{ '--share': `${String(item.percent)}%` } as CSSProperties} />
+            <svg className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={item.percent} width="12" height="12" viewBox="0 0 12 12">
+              <path d={METER_PATH} className="mx-usage-track" />
+              <path d={METER_PATH} className="mx-usage-fill" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
+            </svg>
             <span className="mx-usage-figure">{item.percent}%</span>
-          </span>
+          </>
         )
+        return onOpen === undefined
+          ? <span key={item.key} className={`mx-usage-item is-${item.tone}`} title={used}>{meter}</span>
+          : <button key={item.key} type="button" className={`mx-usage-item is-${item.tone}`} title={`${used} · Open Usage & cost`} onClick={onOpen}>{meter}</button>
       })}
     </span>
   )
 }
 
-/** The darker tray under the box, one line: the folder, the branch (or the worktree, in its own colour and with its tree), how the agent is set up, and at the right what it has used. */
-function SettingsTray({ facts }: { facts: ComposerFacts }) {
+/**
+ * The permission mode, as a shield and a chevron in the box's bottom row: the mode's name is in its tooltip, and the
+ * shield turns red in a mode that asks about nothing. It opens the agent's modes when they can be picked from here.
+ */
+function ModeControl({ facts }: { facts: ComposerFacts }) {
+  const name = facts.mode ?? 'not reported yet'
+  const danger = facts.modeDanger ? ' is-danger' : ''
+  if (facts.modeLocked !== undefined || (facts.agentChips !== undefined && (facts.agentChips.locked !== null || facts.onPickMode === undefined))) {
+    // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.
+    return (
+      <button type="button" aria-disabled="true" className={`mx-mode-button is-locked${danger}`} title={`Permissions: ${name}. ${modeLockedWhy(facts)}`} aria-label={`Permission mode: ${name}. ${modeLockedWhy(facts)}`}>
+        <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />
+      </button>
+    )
+  }
+  if (facts.onPickMode === undefined) {
+    return (
+      <span className={`mx-mode-button is-static${danger}`} role="img" aria-label={`Permission mode: ${name}`} title={facts.mode === null ? 'Permissions: not reported by the agent yet' : `Permissions: ${name}. Cycle it in the terminal with Shift+Tab.`}>
+        <Icon name="shield" size={13} />
+      </span>
+    )
+  }
   return (
-    <div className="mx-settings-tray">
-      {facts.onOpenFolder === null
-        ? <span className="mx-tray-fact"><Icon name="folder" />{facts.folder}</span>
-        : <button type="button" className="mx-tray-fact is-button" title="Show its files" onClick={facts.onOpenFolder}><Icon name="folder" />{facts.folder}</button>}
-      {facts.branch !== null && facts.branchMenu !== undefined && <BranchMenu spec={facts.branchMenu} branch={facts.branch} worktree={facts.worktree === true} />}
-      {facts.branch !== null && facts.branchMenu === undefined && (
-        <span className={`mx-tray-fact is-branch${facts.worktree === true ? ' is-worktree' : ''}`} title={facts.worktree === true ? `Worktree: its own copy of the project, on branch ${facts.branch}` : facts.worktree === false ? `Branch ${facts.branch}, in the project's own folder` : `Branch ${facts.branch}`} aria-label={`${facts.worktree === true ? 'Worktree' : 'Branch'} ${facts.branch}`}>
-          <Icon name={facts.worktree === true ? 'worktree' : 'branch'} size={13} strokeWidth={1.9} stroke="currentColor" />
-          <span className="mx-tray-branch">{facts.branch}</span>
-        </span>
-      )}
-      {facts.modeLocked !== undefined || (facts.agentChips !== undefined && (facts.agentChips.locked !== null || facts.onPickMode === undefined)) ? (
-        // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.
-        <button type="button" aria-disabled="true" className={`mx-tray-fact is-locked${facts.modeDanger ? ' is-danger' : ''}`} title={modeLockedWhy(facts)} aria-label={`Permission mode: ${facts.mode ?? 'not reported yet'}. ${modeLockedWhy(facts)}`}>
-          <ModeIcon />
-          {facts.mode ?? 'Permissions'}
-          <Icon name="chevronDown" size={10} />
-        </button>
-      ) : facts.onPickMode === undefined ? (
-        <span className={`mx-tray-fact${facts.modeDanger ? ' is-danger' : ''}`} title={facts.mode === null ? 'Not reported by the agent yet' : "The permission mode, from the agent's own file. Cycle it in the terminal with Shift+Tab."}>
-          <ModeIcon />
-          {facts.mode ?? 'Permissions'}
-        </span>
-      ) : (
-        <PermissionMenu
-          agent={facts.modeAgent ?? 'Claude'}
-          label="Permission mode"
-          mode={facts.modeKey ?? ''}
-          {...(facts.modes === undefined ? {} : { modes: facts.modes })}
-          onPick={facts.onPickMode}
-          bypassOff={facts.bypassAllowed === true ? undefined : { note: 'needs a new session', why: 'Claude only allows this when it starts with Yolo mode on (Settings, General). This session started without it: turn the setting on and start a new session.' }}
-        >
-          <button type="button" className={`mx-tray-fact is-button${facts.modeDanger ? ' is-danger' : ''}`} title="Permission mode" aria-label={`Permission mode: ${facts.mode ?? 'not reported yet'}. Pick another.`}>
-            <ModeIcon />{facts.mode ?? 'Permissions'}<Icon name="chevronDown" size={10} />
-          </button>
-        </PermissionMenu>
-      )}
-      <span className="mx-spacer" />
-      {facts.usage !== undefined && <UsageMeters usage={facts.usage} />}
-    </div>
+    <PermissionMenu
+      agent={facts.modeAgent ?? 'Claude'}
+      label="Permission mode"
+      mode={facts.modeKey ?? ''}
+      {...(facts.modes === undefined ? {} : { modes: facts.modes })}
+      onPick={facts.onPickMode}
+      bypassOff={facts.bypassAllowed === true ? undefined : { note: 'needs a new session', why: 'Claude only allows this when it starts with Yolo mode on (Settings, General). This session started without it: turn the setting on and start a new session.' }}
+    >
+      <button type="button" className={`mx-mode-button${danger}`} title={`Permissions: ${name}`} aria-label={`Permission mode: ${name}. Pick another.`}>
+        <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />
+      </button>
+    </PermissionMenu>
   )
 }
 

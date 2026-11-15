@@ -18,7 +18,6 @@ import { RunningSubagents } from '@/features/chat/components/RunningSubagents'
 import { ChatPane } from '@/features/chat/components/ChatPane'
 import { NoTerminalNote } from '@/features/chat/components/NoTerminalNote'
 import { type Arrangement, focusPane, type PaneSlot, toggleMaximize } from '../model/layout'
-import { folderNameOf } from '../model/session'
 import { toSubagentView } from '../model/subagents'
 import { isShell } from '../model/sidebar'
 import { moveRefusal } from '../model/moveToWorktree'
@@ -98,6 +97,8 @@ export function WorkspacePane({ shown, pane, kept }: {
   const pinned = terminals && !shell && dock === 'under' && !kept
   const drawerFolded = drawerFoldedOf(session.id)
   // The panel has something for this pane: its repository, or terminals that live there. A pane of another machine keeps the button, which says why not.
+  // The header's branch crumb switches the branch of a session on this computer; elsewhere it only says it.
+  const branchMenu = chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? undefined : { folder: session.cwd, onNewWorktree: () => { void moveToWorktree(session) }, ...(moveRefusal(session) === null ? {} : { newWorktreeBlocked: moveRefusal(session) ?? '' }) }
   const hasPanel = session.machine !== LOCAL_MACHINE || repoPaneOf(session) !== null || (terminals && (shell || dock === 'panel'))
   return (
     <PaneCard
@@ -118,7 +119,6 @@ export function WorkspacePane({ shown, pane, kept }: {
         <ChatPane
           availability={chat.availability}
           hasTerminal={!chatOnly}
-          worktree={chatOnly ? undefined : session.worktree}
           root={session.repoRoot ?? session.cwd}
           onOpenDiff={openDiff}
           onOpenFile={(path, line) => { openPath(session, path, line ?? undefined) }}
@@ -131,16 +131,12 @@ export function WorkspacePane({ shown, pane, kept }: {
           effort={session.agentEffort ?? null}
           rewind={rewind}
           {...(fileSearch === null ? {} : { fileSearch })}
-          {...(chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? {} : { branchMenu: { folder: session.cwd, onNewWorktree: () => { void moveToWorktree(session) }, ...(moveRefusal(session) === null ? {} : { newWorktreeBlocked: moveRefusal(session) ?? '' }) } })}
           paneStatus={session.status}
           usage={{ context: session.usage.context, limits: session.limits }}
           process={session.process}
           online={online}
-          folder={folderNameOf(session)}
-          branch={session.branch}
           subagent={subagent ?? null}
           onBackToMain={() => { setOpenSubagent(null) }}
-          onOpenFiles={() => { togglePanel(pane.id, session.id, 'files') }}
           windowActions={{ openSettings: setSettingsSection, openPanel: (view) => { openPanel(pane.id, session.id, view) }, openRecent: () => { setRecentOpen(true) }, renameSession: (name) => { saveName(session.id, name) } }}
           onBackToTerminal={showTerminal}
           onStartAgent={(agent) => {
@@ -192,6 +188,8 @@ export function WorkspacePane({ shown, pane, kept }: {
       onClear={() => { void sendTo(session, CLEAR_SCREEN).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not clear the screen')) }) }}
       onCopyPath={() => { copyPathOf(session.id) }}
       onRename={() => { setRenameId(session.id) }}
+      onSaveName={(name) => { saveName(session.id, name) }}
+      branchMenu={branchMenu}
       onHandoff={(agent) => { void handoffSession(session, agent) }}
       onRestart={restartPane}
       onAnswerHelpers={(choice) => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not answer the helper request')) }) }}

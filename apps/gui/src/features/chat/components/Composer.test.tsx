@@ -70,7 +70,7 @@ async function open(setup: (daemon: FakeDaemonHistory) => void = () => undefined
 }
 
 describe('the usage strip', () => {
-  it('shows what the agent reported using at the right of the tray: the context, and each plan limit with its window', async () => {
+  it('shows what the agent reported using at the right of the box: the context, and each plan limit with its window', async () => {
     const soon = Math.floor(Date.now() / 1000) + 3 * 3600 + 30
     const daemon = new FakeDaemonHistory()
     fake.current = daemon
@@ -80,7 +80,7 @@ describe('the usage strip', () => {
     const strip = screen.getByRole('group', { name: 'Usage' })
     expect(within(strip).getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '9')
     expect(within(strip).getByRole('meter', { name: '5-hour limit' })).toHaveAttribute('aria-valuenow', '12')
-    expect(strip).toHaveTextContent('Context9%5h12%')
+    expect(strip).toHaveTextContent('Ctx9%5h12%')
     // When a limit starts over is in its tooltip, not on the line.
     expect(within(strip).getByRole('meter', { name: '5-hour limit' }).parentElement).toHaveAttribute('title', '5-hour limit: 12% used · resets in 3h')
   })

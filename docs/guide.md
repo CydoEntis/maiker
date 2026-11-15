@@ -960,47 +960,33 @@ the runs; the workflow itself decides every step.
 ### Starting a chat
 
 **New chat** (the `+` at the top of the sidebar, the Maitty menu at the top left of the window, or **New agent chat…** in the command palette, Ctrl+Shift+T, ⌘T
-on a Mac) opens a page that asks "What
-should we work on?". Pick a project (or paste a path, or **Browse…**), write the first message and
-press Enter. The page opens on your most recent project, and shows the project list only when you
-have none. The agent starts in its own terminal and the chat opens. (**New agent chat** without the
-dots, Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in the start
-folder.)
+on a Mac) opens a page that asks "What are we building today?". When nothing is running, the window
+opens on this page. It starts on your most recent project: write the first message and press Enter.
+The agent starts in its own terminal and the chat opens. (**New agent chat** without the dots,
+Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in the start folder.)
 
-**Where the chat runs** is the first button under the message box: the project and its branch. Click it
-to choose them. Its **Branch** and **Work in** choices, and **Also send to**, are left out when the
-folder is not a git repository, and for a session on another machine. Done, Esc or a click outside
-closes it.
+**Where the chat runs** is in the page's header, as it is on a running chat's pane:
 
-- **Project.** Pick another project, paste a path, or **Browse for a folder…**. **Clone from GitHub…**
-  takes a GitHub link or owner/repo, clones it into a new folder (beside your current project unless you
-  pick another) and opens it as the project. A private repository uses the sign-in git already has on
-  this computer; Maitty never asks for a password.
-- **Branch.** Pick a branch, or type a new name to create one.
-- **Work in: New worktree** is chosen by default. The agent works in a worktree of its own, on a new
-  branch with a short two-word name (like `quiet-otter`), so your checkout stays as it is. A line under it says what it
-  starts from, and how far behind its upstream it is. Choose **This folder** and the agent edits the
-  checkout. Then, if the checkout is behind, a **↓ Pull** button runs `git pull --ff-only`. It is
-  refused while you have uncommitted changes.
-- **Model and effort** are on the model button in the message box, and the **permission mode** is
-  in the row under it. The agent is on
-  the model button too. If an agent is not installed, the page says so and offers **set it up**.
-- **Suggested tasks** under the heading start a chat on that task with one click, and **Resume**
-  lists the conversations Claude or Codex saved for the folder. Resuming starts in that folder
-  without a worktree.
+- **Name.** Type a name for the chat, or leave it empty and the first message names it.
+- **Project.** Pick another project, paste a path, **Browse…**, or **Clone from GitHub…**. The
+  **Machine** switch at the top picks this computer or another machine.
+- **Branch.** Pick a branch, or type a new name to create one. A branch another chat is working on
+  says **in use**.
+- **Work in.** The chat works in the folder as it is, unless another chat is already on that branch
+  there: then it gets a worktree of its own, on a new branch with a short two-word name (like
+  `quiet-otter`), so the two never edit the same files, and the menu says why. Choose **This folder**
+  or **New worktree** to decide yourself.
+- **Open as.** Chat or Terminal, at the right. Each agent's default is in Settings › Chat. With
+  Terminal, the page shows the terminal the agent will start in; type the first task on its prompt line.
 
-**Several agents at once.** Under the message box, **Also send to** lists the other agents
-installed on this computer. Tick one or more and the same message goes to each, every one in its own
-worktree and on its own new branch with a two-word name. That needs New worktree. In This
-folder the boxes cannot be ticked, and the page says "Each agent needs a copy of its own. Choose New
-worktree to start several." The chat you
-see open is the agent on the model button. The others start on their own default model, effort and
-permission mode, and they are listed in the sidebar. They start only when you start a new chat, not
-when you resume a saved one,.
+Branch and Work in are left out when the folder is not a git repository, and on another machine.
+**Model and effort** are on the model button in the message box, and the **permission mode** is the
+shield beside it. The agent is on the model button too. If an agent is not installed, the page says
+so and offers **set it up**.
 
 **Keep drafting.** Press Ctrl+Enter (⌘Enter on a Mac) instead of Enter. The chat starts and is listed
 in the sidebar, but it is not opened. The page stays, the message box and its files are emptied, and
-every other choice is kept, so you can write the next chat while the first one starts. With New worktree,
+every other choice is kept, so you can write the next chat while the first one starts. In a new worktree,
 the next one gets a new branch name. If a start fails, a line under the box says why, with **Put back**,
 which puts the message and its files back in the box after whatever you typed since, and **Dismiss**.
 On another machine Ctrl+Enter is a plain start. Esc closes the page.

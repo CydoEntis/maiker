@@ -11,12 +11,10 @@ export type UsageItem = {
   readonly percent: number
   /** How long until the limit starts over (`2d 4h`); null for the context, which does not. */
   readonly resetsIn: string | null
-  /** The limit's window as the tray says it after the figure (`week`, `5h`); null for the context. */
+  /** The limit's window as the meter says it beside the figure (`week`, `5h`); null for the context. */
   readonly window: string | null
   /** Which of the theme's four meter colours it wears. */
   readonly tone: 'ok' | 'mid' | 'high' | 'max'
-  /** Under half used: the tray keeps it out of sight until the message box is hovered or focused. */
-  readonly low: boolean
 }
 
 const FULL = 100
@@ -50,7 +48,7 @@ export function waitWords(seconds: number): string {
  * them. A figure the agent did not report has no meter, never a zero (ADR 0009). `now` is unix seconds.
  */
 export function usageItems(usage: SessionUsage, now: number): UsageItem[] {
-  const context: UsageItem[] = usage.context === null ? [] : [{ key: 'context', label: 'Context', percent: whole(usage.context), resetsIn: null, window: null, tone: toneOf(whole(usage.context)), low: whole(usage.context) < HIGH_FROM }]
+  const context: UsageItem[] = usage.context === null ? [] : [{ key: 'context', label: 'Context', percent: whole(usage.context), resetsIn: null, window: null, tone: toneOf(whole(usage.context)) }]
   const limits = usage.limits.map((limit): UsageItem => ({
     key: `limit-${limit.name}`,
     label: LIMIT_LABEL[limit.name] ?? limit.name,
@@ -58,7 +56,6 @@ export function usageItems(usage: SessionUsage, now: number): UsageItem[] {
     resetsIn: limit.resetsAt > 0 ? waitWords(limit.resetsAt - now) : null,
     window: limit.name,
     tone: toneOf(whole(limit.used)),
-    low: whole(limit.used) < HIGH_FROM,
   }))
   return [...context, ...limits]
 }

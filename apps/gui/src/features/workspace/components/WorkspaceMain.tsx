@@ -10,13 +10,14 @@ import { RestoreBanner } from './RestoreBanner'
 import { chatFindOf } from '@/features/chat/chatSearch'
 import { chooseProjectFolder } from '@/api/folderPicker'
 import { useCloneRepo } from './useCloneRepo'
-import { machineProjects } from '../model/newSession'
+import { busyBranchesOf, machineProjects } from '../model/newSession'
 import { NewChatPage } from './NewChatPage'
 import { useRemoteFolderPick } from './useRemoteFolderPick'
 import { EmptyState } from './states'
 import { ServiceStatus } from './ServiceStatus'
 import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
 import { displayName } from '../model/session'
+import { rowTitle } from '../model/sidebar'
 import { resolveStartFolder } from '../model/startFolder'
 import { WorkspacePane } from './WorkspacePane'
 import { TicketsOverlay, TICKETS_EXIT_MS } from '@/features/tickets/TicketsOverlay'
@@ -27,6 +28,8 @@ import { useWorkspace } from '../workspaceContext'
 /** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
   const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen } = useWorkspace()
+  // With no chat at all, the window is the new chat page: there is nothing else to show (layout 2h).
+  const noChats = sessions.length === 0 && online && sessionsQuery.isSuccess
   const tickets = usePresence(ticketsOpen, TICKETS_EXIT_MS, useReducedMotion())
   const newChatMachineLabel = sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine'
   const remotePick = useRemoteFolderPick(newChatMachine, newChatMachineLabel)
@@ -38,7 +41,7 @@ export function WorkspaceMain() {
               {cloneRepo.dialog}
               {remotePick.dialog}
               <main className="mx-main" aria-label="Terminals">
-                {newChatOpen && (
+                {(newChatOpen || noChats) && (
                   <NewChatPage
                     key={`${String(newChatMachine)}:${newChatSeed?.folder ?? ''}`}
                     seed={newChatSeed}
@@ -46,6 +49,8 @@ export function WorkspaceMain() {
                     machines={sidebarMachineHeads.filter((head) => head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok').map((head) => ({ machine: head.machine, label: head.label, local: head.machine === LOCAL_MACHINE }))}
                     onOtherMachine={setNewChatMachine}
                     projects={machineProjects(sessions, newChatMachine, focusedSession, newChatStartFolder)}
+                    busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}
+                    viewDefaults={preferences.chatViewDefault}
                     defaultAgent={preferences.defaultAgent}
                     bypassAllowed={preferences.yoloClaude}
                     codexYolo={preferences.yoloCodex}
@@ -54,7 +59,7 @@ export function WorkspaceMain() {
                     onStart={startNewChat}
                     onWarm={warmNewChat}
                     onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}
-                    onCancel={() => { setNewChatOpen(false); setNewChatSeed(null) }}
+                    onCancel={noChats ? undefined : () => { setNewChatOpen(false); setNewChatSeed(null) }}
                   />
                 )}
                 {findOpen && (

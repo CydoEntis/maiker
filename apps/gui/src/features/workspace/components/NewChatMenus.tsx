@@ -29,10 +29,14 @@ type Props = {
   width?: number
   /** Which way the list opens from the chip: up from the message box, or down from the top of a page. */
   side?: 'top' | 'bottom'
+  /** `crumb`: a plain header button (a breadcrumb of the chat's place) instead of a filled chip. */
+  variant?: 'chip' | 'crumb'
+  /** A small heading over the list, in place of the section headings (`Branch in shop`). */
+  heading?: string
 }
 
 /** One fact of the context row over the message box, as a small chip that opens a searchable list above it. */
-export function ChipMenu({ label, summary, title, icon, search, sections, footer, extra, below, fromQuery, width = 340, side = 'top' }: Props) {
+export function ChipMenu({ label, summary, title, icon, search, sections, footer, extra, below, fromQuery, width = 340, side = 'top', variant = 'chip', heading }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
@@ -45,9 +49,10 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
   return (
     <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery('') }}>
       <Popover.Trigger asChild>
-        <button type="button" className="mx-chip" title={title} aria-label={`${title}: ${summary ?? (typeof label === 'string' ? label : '')}`}>{icon}{label}<Icon name="chevronDown" /></button>
+        <button type="button" className={variant === 'crumb' ? 'mx-crumb' : 'mx-chip'} title={title} aria-label={`${title}: ${summary ?? (typeof label === 'string' ? label : '')}`}>{icon}{label}<Icon name="chevronDown" /></button>
       </Popover.Trigger>
-      <PopupContent side={side} align="start" aria-label={title} className="mx-chip-menu" style={{ width: `min(${String(width)}px, calc(100vw - 32px))` }}>
+      <PopupContent side={side} align="start" aria-label={title} className={`mx-chip-menu${variant === 'crumb' ? ' is-crumb' : ''}`} style={{ width: `min(${String(width)}px, calc(100vw - 32px))` }}>
+        {heading !== undefined && <h3 className="mx-chip-title">{heading}</h3>}
         {search !== undefined && (
           <label className="mx-chip-search">
             <Icon name="search" size={13} />
@@ -61,7 +66,7 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
           {made && <ChipRow item={made} onPick={pick} />}
           {kept.map((section) => (
             <div key={section.heading} role="group" aria-label={section.heading}>
-              <h3 className="mx-chip-heading"><span>{section.heading}</span><span>{section.items.length}</span></h3>
+              {heading === undefined && <h3 className="mx-chip-heading"><span>{section.heading}</span><span>{section.items.length}</span></h3>}
               {section.items.map((item) => <ChipRow key={item.key} item={item} onPick={pick} />)}
             </div>
           ))}

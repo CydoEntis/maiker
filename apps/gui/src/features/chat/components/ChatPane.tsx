@@ -12,7 +12,6 @@ import { FULL_ACCESS_LABEL, FULL_ACCESS_WARNING } from '../fullAccess'
 import { AGENT_LABEL } from '../modelName'
 import { ChatSession, type WindowActions } from './ChatSession'
 import type { SessionUsage } from '../usageStrip'
-import type { BranchMenuSpec } from './BranchMenu'
 import type { ChatProblem } from '../problem'
 import { StartingChat } from './StartingChat'
 import type { RewindPlace } from '../editFromHere'
@@ -47,24 +46,15 @@ export type ChatPaneProps = {
   hasTerminal?: boolean
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage | undefined
-  /** The pane runs in a linked worktree, as the daemon says; absent for a chat session, which has no pane to ask about. */
-  worktree?: boolean | undefined
   /** Types the agent's command into the shell (a shell tab only). */
   onStartAgent: (agent: ChatAgent) => void
   /** Starts a chat session (a structured conversation the daemon owns) in the shell's folder (a shell tab only). */
   onStartChat?: (agent: ChatAgent, fullAccess: boolean) => void
-  /** The project folder's name and the branch, for the tray under the message box. */
-  folder?: string
-  branch?: string | null
   /** A subagent whose own chat shows instead of the session's, and the way back. */
   subagent?: SubagentView | null
   onBackToMain?: () => void
-  /** Shows the session's files beside the pane. */
-  onOpenFiles?: () => void
   /** What is wrong with the chat, for the banner over its message box. */
   problem?: ChatProblem | null
-  /** Where the tray's branch button can move the chat. */
-  branchMenu?: BranchMenuSpec | undefined
   /** The effort the agent's own files say it runs at. */
   effort?: string | null | undefined
   /** Where a sent message's Edit from here restores the files from. */
@@ -100,16 +90,11 @@ export function ChatPane(props: ChatPaneProps) {
             paneQueue={props.paneQueue}
             ask={props.ask ?? null}
             asking={props.asking ?? ''}
-            folder={props.folder ?? ''}
-            branch={props.branch ?? null}
             subagent={props.subagent ?? null}
-            onOpenFolder={props.onOpenFiles ?? null}
-            {...(props.worktree === undefined ? {} : { worktree: props.worktree })}
             {...(props.usage === undefined ? {} : { usage: props.usage })}
             {...(props.hasTerminal === false ? {} : { onShowTerminal: props.onBackToTerminal })}
             {...(props.onBackToMain === undefined ? {} : { onBackToMain: props.onBackToMain })}
             problem={props.problem ?? null}
-            {...(props.branchMenu === undefined ? {} : { branchMenu: props.branchMenu })}
             effort={props.effort ?? null}
             hideSuccessfulTools={props.hideSuccessfulTools ?? false}
             {...(props.rewind === undefined ? {} : { rewind: props.rewind })}
@@ -120,7 +105,7 @@ export function ChatPane(props: ChatPaneProps) {
           />
         )
         : availability.kind === 'no-events' && props.sessionId !== undefined
-          ? <StartingChat {...(props.worktree === undefined ? {} : { worktree: props.worktree })} agent={availability.agent} sessionId={props.sessionId} onBackToTerminal={props.onBackToTerminal} folder={props.folder ?? ''} branch={props.branch ?? null} root={props.root ?? null} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
+          ? <StartingChat agent={availability.agent} sessionId={props.sessionId} onBackToTerminal={props.onBackToTerminal} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
           : <NoChat {...props} availability={availability} />}
     </section>
   )

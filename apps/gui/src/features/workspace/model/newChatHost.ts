@@ -1,17 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { agentsInstalled, folderBranches, folderSyncState, pullFolder, savedConversations, type FolderBranches, type SavedConversation, type SyncState } from '@/api/daemon'
+import { agentsInstalled, folderBranches, type FolderBranches } from '@/api/daemon'
 import { DEFAULT_PICK, type ReasoningPick } from '@/features/chat/agentChoice'
 import { CODEX_FULL_MODE, PICKABLE_MODES } from '@/features/chat/chatMeta'
 import type { ChatAgent } from './chatView'
-import type { NewSessionProject } from './newSession'
-
-/** Projects the list calls recent: the focused one and the newest. */
-const RECENT_PROJECTS = 3
-
-/** The projects split into the few used most recently and the rest. `projects` is already newest first. */
-export function splitRecent(projects: readonly NewSessionProject[]): { recent: NewSessionProject[]; rest: NewSessionProject[] } {
-  return { recent: projects.slice(0, RECENT_PROJECTS), rest: projects.slice(RECENT_PROJECTS) }
-}
 
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]*$/
 const CLAUDE_EFFORT = new Set<ReasoningPick>(['low', 'medium', 'high', 'max'])
@@ -94,16 +85,6 @@ export function useInstalledAgents(): readonly string[] | null {
 }
 
 /** A folder's branches and worktrees (null when it is not a git repository or is still being read), and a way to read them again. */
-/** One spelling of a path, to compare what git wrote with what the session has: forward slashes, no trailing one, and no case (Windows has none). */
-const samePath = (path: string): string => path.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
-
-/** Whether a folder is a worktree of its repository and not the main checkout; null when git has not said, or it is not a repository's folder. */
-export function isWorktree(branches: FolderBranches | null, folder: string | null): boolean | null {
-  if (branches === null || folder === null) return null
-  const here = branches.worktrees.find((tree) => samePath(tree.path) === samePath(folder))
-  return here === undefined ? null : !here.main
-}
-
 export function useFolderBranches(folder: string): [FolderBranches | null, () => void] {
   const [read, setRead] = useState<{ folder: string; data: FolderBranches | null }>({ folder: '', data: null })
   const [again, setAgain] = useState(0)
@@ -123,86 +104,4 @@ export function useFolderBranches(folder: string): [FolderBranches | null, () =>
   }, [folder, again])
   const reload = useCallback(() => { setAgain((count) => count + 1) }, [])
   return [read.folder === folder ? read.data : null, reload]
-}
-
-/** What the page knows of a folder's saved conversations: nothing yet, the list, or why there is none. */
-export type SavedRead = { kind: 'none' } | { kind: 'listed'; list: readonly SavedConversation[] } | { kind: 'older' } | { kind: 'failed' }
-
-const NOT_READ: SavedRead = { kind: 'none' }
-
-/** The conversations `agent` saved for `folder`, read off the UI thread; a null agent asks nothing. An answer for another folder or agent is dropped. */
-export function useSavedConversations(folder: string, agent: 'claude' | 'codex' | null): SavedRead {
-  const key = agent === null || folder === '' ? '' : `${agent}\n${folder}`
-  const [read, setRead] = useState<{ key: string; found: SavedRead }>({ key: '', found: NOT_READ })
-  useEffect(() => {
-    if (agent === null || folder === '') return undefined
-    const asked = `${agent}\n${folder}`
-    const stop = new AbortController()
-    void (async () => {
-      try {
-        const list = await savedConversations(agent, folder)
-        if (!stop.signal.aborted) setRead({ key: asked, found: list === null ? { kind: 'older' } : { kind: 'listed', list } })
-      } catch (error) {
-        if (!stop.signal.aborted) setRead({ key: asked, found: { kind: 'failed' } })
-        console.warn('Could not read the saved conversations', error)
-      }
-    })()
-    return () => { stop.abort() }
-  }, [agent, folder])
-  return key !== '' && read.key === key ? read.found : NOT_READ
-}
-
-/**
- * How a folder's checkout stands against its upstream. With `fetch` the remote is asked once when the folder is
- * picked (off the UI thread, in the host), so the page can say "fetched just now"; without it only what git already
- * knows is read. `pull` fast-forwards and reads again.
- */
-export function useSyncState(folder: string, fetch: boolean): { state: SyncState | null; busy: boolean; pull: () => Promise<void> } {
-  const [read, setRead] = useState<{ folder: string; state: SyncState | null }>({ folder: '', state: null })
-  const [busy, setBusy] = useState(false)
-  useEffect(() => {
-    if (folder === '') return undefined
-    const stop = new AbortController()
-    void (async () => {
-      try {
-        const state = await folderSyncState(folder, fetch)
-        if (!stop.signal.aborted) setRead({ folder, state })
-      } catch (error) {
-        if (!stop.signal.aborted) setRead({ folder, state: null })
-        console.warn('Could not read how the folder stands against its upstream', error)
-      }
-    })()
-    return () => { stop.abort() }
-  }, [folder, fetch])
-  const pull = useCallback(async () => {
-    setBusy(true)
-    try {
-      await pullFolder(folder)
-      setRead({ folder, state: await folderSyncState(folder, false) })
-    } finally {
-      setBusy(false)
-    }
-  }, [folder])
-  return { state: read.folder === folder ? read.state : null, busy, pull }
-}
-
-/** The branch and how far behind its upstream each of several folders is, for the page's "switch to" chips. Nothing is fetched. */
-export function useGlances(folders: readonly string[]): ReadonlyMap<string, SyncState> {
-  const key = folders.join('\n')
-  const [found, setFound] = useState<ReadonlyMap<string, SyncState>>(() => new Map())
-  useEffect(() => {
-    const stop = new AbortController()
-    for (const folder of key === '' ? [] : key.split('\n')) {
-      void (async () => {
-        try {
-          const state = await folderSyncState(folder, false)
-          if (state !== null && !stop.signal.aborted) setFound((before) => new Map(before).set(folder, state))
-        } catch (error) {
-          console.warn('Could not read a project\'s branch', error)
-        }
-      })()
-    }
-    return () => { stop.abort() }
-  }, [key])
-  return found
 }

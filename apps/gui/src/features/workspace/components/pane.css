@@ -37,7 +37,28 @@
 .mx-pane-head { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); cursor: default; }
 .mx-pane-head.is-draggable { cursor: grab; }
 .mx-pane-icon { position: relative; width: 20px; height: 20px; flex: none; }
+.mx-pane-head { container: pane-head / inline-size; }
 .mx-pane-title { flex: 1; min-width: 64px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
+.mx-pane-title .mx-inline-name { flex: 0 1 220px; min-width: 60px; height: 28px; padding: 0 6px; margin-left: -6px; font: 600 14px var(--ui); color: var(--fg); background: var(--m-well); border: 1px solid var(--accent); outline: none; }
+
+/* Where the chat works, after its name (layout 2h): the project, locked, then the branch. The project goes first as the
+   pane narrows, then the branch's name, leaving its mark. */
+.mx-crumbs { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.mx-crumb-sep { flex: none; color: var(--line2); }
+.mx-crumb-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.mx-crumb-project svg { flex: none; color: var(--dim); }
+.mx-crumb-square { flex: none; width: 7px; height: 7px; }
+.mx-crumb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-crumb { flex: 0 1 auto; min-width: 0; height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; border-radius: var(--r-control); white-space: nowrap; outline: none; }
+.mx-crumb:not(.is-static):hover, .mx-crumb[data-state="open"] { background: var(--m-hover); }
+.mx-crumb:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent-line); }
+.mx-crumb > svg:last-child { flex: none; color: var(--dim); }
+.mx-crumb-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); color: var(--branch); }
+.mx-crumb-branch-icon { flex: none; display: inline-flex; color: var(--branch); }
+.mx-crumb-branch-icon svg { stroke: currentColor; }
+.mx-crumb-branch.is-worktree, .mx-crumb-branch-icon.is-worktree { color: var(--ansi-blue); }
+@container pane-head (max-width: 700px) { .mx-crumb-project, .mx-crumb-sep.is-project { display: none; } }
+@container pane-head (max-width: 560px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child { display: none; } }
 .mx-pane-name { font-size: 14px; line-height: 18px; font-weight: 600; letter-spacing: -.01em; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
 .mx-pane-pr { flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
 .mx-pane-pr.is-bad { color: var(--danger); }

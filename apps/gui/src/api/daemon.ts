@@ -1240,20 +1240,6 @@ export async function folderBranches(folder: string): Promise<FolderBranches | n
   return invokeParsed('git_branches', FolderBranchesSchema, { folder })
 }
 
-const SavedConversationSchema = z.object({ id: z.string(), first_message: z.string(), last_active: z.number().int().nonnegative() })
-export type SavedConversation = z.infer<typeof SavedConversationSchema>
-const SavedConversationsSchema = z.union([z.null(), z.literal('NotSupported'), z.object({ Listed: z.array(SavedConversationSchema) })])
-
-/**
- * The conversations an agent saved for a folder on this computer, newest first; empty for an agent the daemon reads
- * none of. Null when the service running is older than the question.
- */
-export async function savedConversations(agent: 'claude' | 'codex', folder: string): Promise<SavedConversation[] | null> {
-  const found = await invokeParsed('saved_conversations', SavedConversationsSchema, { agent, folder })
-  if (found === null) return null
-  return found === 'NotSupported' ? [] : found.Listed
-}
-
 /** The commands Claude Code answers beside a conversation, with nothing after the name: each only reports. */
 export const SIDE_COMMANDS = ['context', 'usage', 'skill-doctor', 'goal', 'advisor', 'config', 'mcp'] as const
 export type SideCommand = (typeof SIDE_COMMANDS)[number]
@@ -1344,34 +1330,6 @@ export async function switchBranch(folder: string, branch: string, create: boole
  */
 export async function addWorktree(folder: string, branch: string): Promise<string> {
   return invokeParsed('add_branch_worktree', z.string(), { folder, branch })
-}
-
-const SyncStateSchema = z.object({
-  branch: z.string().nullable(),
-  upstream: z.string().nullable(),
-  behind: z.number().int().nonnegative(),
-  ahead: z.number().int().nonnegative(),
-  dirty: z.boolean(),
-  fetched: z.boolean(),
-}).nullable()
-export type SyncState = NonNullable<z.infer<typeof SyncStateSchema>>
-
-/** How a folder's checkout stands against its upstream, asking the remote first when `fetch`; null outside a git repository. */
-export async function folderSyncState(folder: string, fetch: boolean): Promise<SyncState | null> {
-  return invokeParsed('git_sync_state', SyncStateSchema, { folder, fetch })
-}
-
-/**
- * Clones a GitHub repository (a link or owner/repo) into a new folder inside `parent`, and gives that folder. The
- * host reads the link as a GitHub owner and name and refuses anything else (`clone.rs`).
- */
-export async function cloneRepository(link: string, parent: string): Promise<string> {
-  return invokeParsed('git_clone', z.string().min(1), { link, parent })
-}
-
-/** Fast-forwards the folder's checkout to its upstream; refused with the reason when it has uncommitted changes. */
-export async function pullFolder(folder: string): Promise<void> {
-  await invokeParsed('git_pull', NullSchema, { folder })
 }
 
 /** Opens an agent's official setup page in the browser. */

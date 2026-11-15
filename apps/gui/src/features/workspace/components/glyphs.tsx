@@ -103,6 +103,14 @@ const ICON_DRAWINGS = {
   fleets: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 3v13M12 5l6 9H12M12 8l-5 6h5M4 18c2 2.5 5 3 8 1 3 2 6 1.5 8-1" /></Svg>,
   priority: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 7h16M4 12h11M4 17h6" /></Svg>,
   caret: () => <Svg className="mx-caret-icon" size={12} strokeWidth={2.5} stroke="currentColor"><path d="m9 6 6 6-6 6" /></Svg>,
+  lock: ({ size = 10 }: IconProps) => <Svg size={size} strokeWidth={2}><rect x="5" y="11" width="14" height="9" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></Svg>,
+  /** A tool step's own mark: a page read, a pencil for an edit, a prompt for a command run (layout 2h). */
+  toolRead: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M4 4h12l4 4v12H4zM8 12h8M8 16h5" /></Svg>,
+  toolEdit: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" /></Svg>,
+  toolRun: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M5 8l4 4-4 4M11 16h8" /></Svg>,
+  /** The side panel beside a card it opens in. */
+  openSide: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M4 4h16v16H4zM14 4v16" /></Svg>,
+  shield: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z" /></Svg>,
   bang: () => <Svg size={9} strokeWidth={3.5} stroke="var(--danger)"><path d="M12 6v7" /><path d="M12 18h.01" /></Svg>,
 } satisfies Record<string, (props: IconProps) => ReactNode>
 

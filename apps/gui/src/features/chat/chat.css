@@ -351,7 +351,7 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
   border: 1px solid var(--line2); background: var(--main);
   transition: opacity .25s, border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-.mx-box:focus-within { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.mx-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 /* The agent's commands, over the box while a slash and a name are typed. It floats, so the box and the chat stay put. */
 .mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(320px, 50vh); padding: 6px; border-radius: 12px; border: 1px solid var(--line2); background: var(--main); box-shadow: 0 16px 44px rgba(0, 0, 0, .45); animation: v7fade .12s var(--ease-out); }
 .mx-slash-list { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
@@ -367,12 +367,12 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-slash-keys { flex: none; margin: 4px 0 0; padding: 5px 9px 1px; border-top: 1px solid rgba(var(--hl), calc(.07 * var(--hk))); font-size: 11px; color: var(--dim); }
 .mx-slash-keys kbd { margin-right: 3px; padding: 0 4px; border-radius: 4px; background: rgba(var(--hl), calc(.08 * var(--hk))); font-family: var(--mono); font-size: 10.5px; }
 @media (prefers-reduced-motion: reduce) { .mx-slash { animation: none; } }
-.mx-box-text { width: 100%; min-height: 44px; max-height: 160px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
+.mx-box-text { width: calc(100% - 32px); min-height: 44px; max-height: 160px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
 .mx-box-text:focus-visible { outline: none; }
 .mx-box-text::placeholder { color: var(--dim); }
 .mx-box-text:disabled { cursor: not-allowed; }
 .mx-box-row { display: flex; align-items: center; gap: 4px; }
-.mx-box-attach { width: 30px; height: 30px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; color: var(--fg2); }
+.mx-box-attach { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; color: var(--fg2); }
 .mx-box-attach:hover { background: var(--m-hover); color: var(--fg); }
 .mx-box-attach[aria-disabled="true"] { cursor: not-allowed; }
 .mx-model-button { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; outline: none; }
@@ -450,35 +450,35 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-send.is-stop.is-off { color: var(--dim); }
 .mx-send.is-busy { cursor: progress; }
 /* A chip that cannot be changed right now keeps its place and size; only its look says so. */
-.mx-model-button.is-locked, .mx-tray-fact.is-locked { cursor: not-allowed; opacity: .6; }
+.mx-model-button.is-locked { cursor: not-allowed; opacity: .6; }
 .mx-model-button.is-locked:hover { background: none; }
-.mx-tray-fact.is-locked:hover { background: none; color: var(--fg2); }
 
-/* Layer three: the settings tray, narrower, hanging from the box. It does not slide under the box: with a
-   see-through field the overlap would show as a seam. */
-.mx-settings-tray {
-  width: calc(100% - 28px); margin-top: -1px; padding: 7px 8px 6px; border-radius: 0 0 var(--r-panel) var(--r-panel); display: flex; align-items: center; gap: 2px;
-  background: var(--main); border: 1px solid var(--line); border-top: 0;
-}
-/* What the agent has used, at the right of the tray: a name, a ring and the figure for each, in the theme's meter colours. */
+/* What the agent has used, at the right of the box's bottom row: a name, a ring and the figure for each, in the theme's meter colours. */
 .mx-usage { display: inline-flex; align-items: center; gap: 10px; padding: 0 6px 0 8px; font: 500 11px/12px var(--mono); font-variant-numeric: tabular-nums; }
-.mx-usage-ring { --share: 0%; flex: none; width: 12px; height: 12px; border-radius: 50%; background: conic-gradient(var(--usage-ink) var(--share), var(--line2) 0); -webkit-mask: radial-gradient(circle, transparent 4px, #000 4.5px); mask: radial-gradient(circle, transparent 4px, #000 4.5px); }
+.mx-usage-ring { flex: none; display: block; overflow: visible; }
+.mx-usage-ring path { fill: none; stroke-width: 2; }
+.mx-usage-track { stroke: var(--line2); }
+.mx-usage-fill { stroke: var(--usage-ink); }
 .mx-usage-name { font-family: var(--ui); font-weight: 400; color: var(--dim); }
 .mx-usage-item.is-ok { --usage-ink: var(--m-ok); }
 .mx-usage-item.is-mid { --usage-ink: var(--m-mid); }
 .mx-usage-item.is-high { --usage-ink: var(--m-or); }
 .mx-usage-item.is-max { --usage-ink: var(--m-hi); }
 /* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
-.mx-composer:not(:hover, :focus-within) .mx-usage-item.is-low { display: none; }
-.mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; white-space: nowrap; }
+.mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
+button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* The short names go first on a narrow window; the rings and figures stay. */
+@media (max-width: 1180px) { .mx-usage-name { display: none; } }
+/* The permission mode: a shield and a chevron, its name in the tooltip; red in a mode that asks about nothing. */
+.mx-mode-button { flex: none; height: 26px; display: inline-flex; align-items: center; gap: 3px; padding: 0 5px 0 7px; border-radius: var(--r-control); color: var(--muted); white-space: nowrap; }
+.mx-mode-button:not(.is-static, .is-locked):hover { background: var(--m-hover); color: var(--fg); }
+.mx-mode-button.is-danger { color: var(--danger); }
+.mx-mode-button.is-static { padding: 0 7px; }
+.mx-mode-button.is-locked { cursor: not-allowed; opacity: .6; }
+/* Plan mode, said inside the box while it is on. */
+.mx-plan-strip { margin: 0; display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); }
+.mx-plan-strip-name { font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ansi-blue); }
 .mx-usage-figure { color: var(--usage-ink); }
-.mx-tray-fact { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: var(--r-control); color: var(--fg2); font-size: 12.5px; white-space: nowrap; }
-.mx-tray-fact.is-button:hover { background: var(--m-hover); color: var(--fg); }
-.mx-tray-fact.is-danger { color: var(--danger); }
-.mx-tray-fact.is-branch { min-width: 0; color: var(--branch); }
-.mx-tray-fact.is-branch svg { flex: none; }
-.mx-tray-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: 12px; }
-.mx-tray-fact.is-worktree { color: var(--ansi-blue); }
 
 /* A subagent's own chat: the bar that names it and leads back. */
 .mx-sub-bar { flex: none; display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; margin: 10px 20px 0; padding: 0 6px 0 10px; border: 1px solid var(--line); background: var(--m-well); font-size: 12.5px; color: var(--muted); }
