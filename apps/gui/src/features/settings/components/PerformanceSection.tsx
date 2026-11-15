@@ -67,9 +67,7 @@ export function PerformanceSection({ preferences, update, appVersion }: Performa
       </Card>
       <Card
         title="Processes"
-        meta={<span className="mx-scard-value">CPU is a share of one core{loads ? ` of ${String(loads.cores)}` : ''}</span>}
-        footRow
-        foot={<><button type="button" className="mx-text-button" onClick={copyReport}>Copy report</button><span>Paste it into a bug report, or hand it to an agent.</span></>}
+        meta={<span className="mx-scard-meta">CPU is a share of one core{loads ? ` of ${String(loads.cores)}` : ''}</span>}
       >
         <Row label="Window" detail="The native host that talks to the daemon.">
           <Value>{loads ? loadText([loads.host]) : PENDING}</Value>
@@ -86,6 +84,9 @@ export function PerformanceSection({ preferences, update, appVersion }: Performa
           </Row>
         ))}
         {processes.isError && <Row label="Process figures are unavailable" detail={processes.error.message}><Value>{''}</Value></Row>}
+        <Row label="Copy report" detail="Paste it into a bug report, or hand it to an agent.">
+          <button type="button" className="mx-text-button" onClick={copyReport}>Copy report</button>
+        </Row>
       </Card>
       <Card title="Overlay">
         <Row label="Show the readout over the window" detail="Frames and process load in a corner while you work, so a lag spike can be matched with what caused it.">
