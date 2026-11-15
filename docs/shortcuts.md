@@ -96,7 +96,16 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `Ctrl+R` | Reload the config |
 
 **Search only** (`Ctrl+K`, then type): new tab, Updates, find in the pane, previous / next
-command in history, send the prefix itself to the program.
+command in history, send the prefix itself to the program, Work board.
+
+## Work board and run
+
+| Key | Action |
+|---|---|
+| `↑` `↓` (`k` `j`) | The card before / after, column by column |
+| `←` `→` (`h` `l`) | The first card of the column before / after |
+| `Enter` or a click | Open the card's run: its steps; `Esc` goes back to the board on that card |
+| `Esc` | Close the board |
 
 ## How key mode works
 

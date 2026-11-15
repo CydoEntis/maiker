@@ -1453,6 +1453,10 @@ pub(super) enum ScreenHit {
     SubagentsDone(usize),
     /// A workflow run's line under the open session (its place in `Screen::run_rows`): its steps.
     Run(usize),
+    /// A session's "N runs done" line: its Work board.
+    Board(ClientTerm),
+    /// A card of the Work board (its place in the board's walk).
+    BoardCard(usize),
     /// The release chip on the sidebar's foot: its menu, opening upward.
     ReleaseMenu,
     /// The `n new session` chip in a workspace with no pane open.
@@ -1657,6 +1661,8 @@ mod secret_ask;
 #[cfg(test)]
 mod flat_tests;
 #[cfg(test)]
+mod board_tests;
+#[cfg(test)]
 mod frame_tests;
 mod inbox;
 mod mode_bar;
@@ -1672,10 +1678,11 @@ mod splash_wide;
 mod usage;
 mod tidy;
 mod workflow_runs;
+mod work_board;
 mod helper_view;
 pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
     popups::*, references_sheet::*, secret_ask::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
-    helper_view::*, workflow_runs::*, workspace::*,
+    helper_view::*, workflow_runs::*, work_board::*, workspace::*,
 };

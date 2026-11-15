@@ -250,6 +250,7 @@ impl App {
             Action::TidyWorktrees => self.tidy_open_here(),
             Action::ResumeConversation => self.ask_saved_conversations(),
             Action::PutAway => self.put_away_list(),
+            Action::WorkBoard => self.open_work_board(),
             Action::None => {}
             // The rest are handled by screen_act above.
             _ => {}
@@ -333,6 +334,7 @@ impl App {
             Action::NewSession,
             Action::ResumeConversation,
             Action::PutAway,
+            Action::WorkBoard,
             Action::CloseSplit,
             Action::StopAgent,
             Action::Message,

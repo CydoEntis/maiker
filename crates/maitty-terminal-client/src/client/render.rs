@@ -208,9 +208,13 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
             let v = (**v).clone();
             super::screen::draw_helper(app, f, area, &t, &v);
         }
-        Mode::Run { term, key } => {
+        Mode::Run { term, key, .. } => {
             let (term, key) = (*term, key.clone());
             super::screen::draw_run(app, f, area, &t, term, &key);
+        }
+        Mode::Work { term, sel } => {
+            let (term, sel) = (*term, *sel);
+            super::screen::draw_board(app, f, area, &t, term, sel);
         }
         Mode::History { sel } => {
             let sel = *sel;

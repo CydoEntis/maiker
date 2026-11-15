@@ -302,6 +302,9 @@ pub enum Action {
     ResumeConversation,
     /// The sessions put away (still running, out of the lists), each to bring back.
     PutAway,
+    /// The workflow runs of the session you're on as a board: a column per reported step, then
+    /// those that need you and those done (ADR 0010).
+    WorkBoard,
     /// Explicitly unbind a default.
     None,
 }
@@ -397,6 +400,7 @@ impl Action {
             Action::Worktrees => "Worktrees…".into(),
             Action::ResumeConversation => "Resume a conversation here".into(),
             Action::PutAway => "Sessions put away".into(),
+            Action::WorkBoard => "Work board".into(),
             Action::None => "Unbound".into(),
         }
     }
@@ -494,6 +498,7 @@ impl Action {
             Action::Worktrees => "worktrees".into(),
             Action::ResumeConversation => "resume-conversation".into(),
             Action::PutAway => "put-away".into(),
+            Action::WorkBoard => "work-board".into(),
             Action::None => return None,
         })
     }
@@ -614,6 +619,7 @@ impl FromStr for Action {
             "worktrees" => Action::Worktrees,
             "resume-conversation" => Action::ResumeConversation,
             "put-away" => Action::PutAway,
+            "work-board" => Action::WorkBoard,
             // The fleet and the why popover are gone; a binding written for one stays
             // harmless, not a config error.
             "none" | "unbind" | "start-fleet" | "why" => Action::None,

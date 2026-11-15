@@ -175,6 +175,13 @@ enum Mode {
     Run {
         term: ClientTerm,
         key: String,
+        /// Opened from the Work board on this card: Esc goes back there.
+        board: Option<usize>,
+    },
+    /// The Work board of a session's workflow runs, on the chosen card (ADR 0010).
+    Work {
+        term: ClientTerm,
+        sel: usize,
     },
     History {
         sel: usize,

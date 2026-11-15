@@ -100,6 +100,8 @@ pub enum Act {
     /// Start an agent in a folder of this computer with a conversation it saved: (folder,
     /// agent, the agent's id for the conversation).
     Resume(PathBuf, String, String),
+    /// The Work board of this session's workflow runs.
+    Board(ClientTerm),
     /// A row saying the list is on its way; picking it only closes the menu.
     Waiting,
 }
@@ -540,6 +542,9 @@ impl App {
         if let Some(check) = info.and_then(|t| t.check()) {
             items.extend(super::screen::check_menu_items(term, check));
         }
+        if info.is_some_and(|t| !t.workflows.is_empty()) {
+            items.push(("Work board".to_string(), Act::Board(term)));
+        }
         if self.can_put_away(term) {
             items.push(("Put away".to_string(), Act::PutAway(term)));
         } else if self.can_bring_back(term) {
@@ -911,6 +916,7 @@ impl App {
             }
             Act::MachineOpen(machine) => self.open_machines_on(machine),
             Act::Resume(dir, agent, id) => self.resume_saved(dir, &agent, &id),
+            Act::Board(term) => self.open_board_of(term),
             Act::Waiting => {}
             // A terminal that belongs to a chat is named through the chat, so every client
             // shows the same name.

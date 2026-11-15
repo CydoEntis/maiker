@@ -37,7 +37,8 @@ pub(in crate::client) fn run_key(run: &WorkflowRun) -> String {
     format!("{}:{}", run.workflow, run.run)
 }
 
-fn run_label(run: &WorkflowRun) -> String {
+/// The ticket's key, else the workflow and run id.
+pub(in crate::client) fn run_label(run: &WorkflowRun) -> String {
     run.ticket
         .as_ref()
         .map_or_else(|| format!("{} {}", run.workflow, run.run), |t| t.key.clone())
@@ -100,7 +101,9 @@ pub(super) fn draw_runs(app: &mut App, buf: &mut Buffer, r: Rect, y: u16, row: &
     }
     if row.runs_done > 0 {
         let yy = y + row.runs.len() as u16;
-        fill(buf, Rect { x: r.x + 1, y: yy, width: r.width.saturating_sub(2), height: 1 }, t.bg);
+        let line = Rect { x: r.x + 1, y: yy, width: r.width.saturating_sub(2), height: 1 };
+        fill(buf, line, t.bg);
+        hit(app, line, ScreenHit::Board(term));
         let word = if row.runs_done == 1 { "run" } else { "runs" };
         let segs = vec![seg("└", base.fg(t.faint())), seg(" ", base), seg(format!("{} {word} done", row.runs_done), base.fg(t.muted))];
         put_cut(buf, r.x + TREE_X, yy, segs, end);
@@ -110,12 +113,14 @@ pub(super) fn draw_runs(app: &mut App, buf: &mut Buffer, r: Rect, y: u16, row: &
 /// The widest the run modal grows.
 const RUN_W: u16 = 72;
 
-/// One run's steps: each with its mark, name, note and the helper doing it.
+/// One run, as the board's drawer shows it: its key and word, title and where it runs, its steps as a
+/// strip, then each step with its mark, name, note, the helper doing it and its word.
 pub(in crate::client) fn draw_run(app: &mut App, f: &mut Frame, area: Rect, t: &Theme, term: ClientTerm, key: &str) {
     let run = app
         .term_info(term)
         .and_then(|info| info.workflows.iter().find(|r| run_key(r) == key))
         .cloned();
+    let meta = run.as_ref().map(|run| run_meta(app, term, run)).unwrap_or_default();
     let buf = f.buffer_mut();
     dim_all(app, buf, area, t);
     let Some(run) = run else {
@@ -124,15 +129,28 @@ pub(in crate::client) fn draw_run(app: &mut App, f: &mut Frame, area: Rect, t: &
         return;
     };
     let title = run.ticket.as_ref().and_then(|t| t.title.clone());
-    let h = run.steps.len() as u16 + 5 + u16::from(title.is_some());
+    let h = run.steps.len() as u16 + 10 + u16::from(title.is_some());
     let r = panel(app, buf, area, RUN_W, h, &format!("run {}", run_label(&run)), &[], t);
     let ground = Style::default().bg(t.card);
     let (x, end) = (r.x + 3, r.right().saturating_sub(3));
     let mut y = r.y + 2;
+    let state = super::work_board::run_state(&run);
+    let word_tone = match state {
+        super::work_board::RunState::Needs => t.blocked,
+        super::work_board::RunState::Failed => t.err,
+        super::work_board::RunState::Done => t.done,
+        _ => t.muted,
+    };
+    put_cut(buf, x, y, vec![seg(run_label(&run), ground.fg(t.strong).bold()), seg("  ", ground), seg(state.word(), ground.fg(word_tone))], end);
+    y += 1;
     if let Some(title) = title {
-        put(buf, x, y, &[seg(title, ground.fg(t.strong))], end);
+        put_cut(buf, x, y, vec![seg(title, ground.fg(t.strong))], end);
         y += 1;
     }
+    put_cut(buf, x, y, vec![seg(meta, ground.fg(t.muted))], end);
+    y += 2;
+    put_cut(buf, x, y, step_strip(app, &run.steps, t, ground), end);
+    y += 2;
     let current = current_step(&run).map(|s| s.name.clone());
     for step in &run.steps {
         let (glyph, color) = step_mark(app, step.state, t);
@@ -144,15 +162,51 @@ pub(in crate::client) fn draw_run(app: &mut App, f: &mut Frame, area: Rect, t: &
         if let Some(helper) = &step.helper {
             segs.extend([seg("  · ", ground.fg(t.muted)), seg(helper.clone(), ground.fg(t.muted))]);
         }
-        put_cut(buf, x, y, segs, end);
+        let word = super::work_board::step_word(step.state);
+        let word_x = end.saturating_sub(word.len() as u16);
+        put_cut(buf, x, y, segs, word_x.saturating_sub(1));
+        put(buf, word_x, y, &[seg(word, ground.fg(if step.state == StepState::NeedsYou { t.blocked } else { t.muted }))], end);
         y += 1;
     }
 }
 
+/// `updated 3m ago · this computer · dsa-tool · ⑂ feat/export`: a still picture of when the run last
+/// reported and where its session runs.
+fn run_meta(app: &App, term: ClientTerm, run: &WorkflowRun) -> String {
+    let machine = app.machine_label_of(term.machine);
+    let mut parts = vec![format!("updated {} ago", age(run.reported_at)), if machine.is_empty() { "this computer".into() } else { machine }];
+    if let Some(info) = app.term_info(term) {
+        let dir = info.root.as_deref().unwrap_or(info.cwd.as_path());
+        parts.push(folder_name(dir));
+        if let Some(branch) = info.branch.as_ref().filter(|b| !b.is_empty()) {
+            parts.push(format!("⑂ {branch}"));
+        }
+    }
+    parts.join(" · ")
+}
+
+/// The steps left to right, each mark and name joined by a line that is solid once the step before
+/// it passed: `✓ intake ━━ ↺ build ── · review`.
+fn step_strip(app: &App, steps: &[WorkflowStep], t: &Theme, ground: Style) -> Vec<Seg> {
+    let mut segs = Vec::new();
+    for (i, step) in steps.iter().enumerate() {
+        if i > 0 {
+            let filled = matches!(steps[i - 1].state, StepState::Passed | StepState::Skipped);
+            segs.push(if filled { seg(" ━━ ", ground.fg(t.done)) } else { seg(" ── ", ground.fg(t.faint())) });
+        }
+        let (glyph, color) = step_mark(app, step.state, t);
+        segs.extend([seg(glyph, ground.fg(color)), seg(" ", ground), seg(step.name.clone(), ground.fg(t.text))]);
+    }
+    segs
+}
+
 impl App {
-    pub(in crate::client) fn on_run_key(&mut self, k: &KeyEvent) {
+    pub(in crate::client) fn on_run_key(&mut self, term: ClientTerm, board: Option<usize>, k: &KeyEvent) {
         if matches!(k.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q')) {
-            self.mode = Mode::Normal;
+            self.mode = match board {
+                Some(sel) => Mode::Work { term, sel },
+                None => Mode::Normal,
+            };
         }
     }
 }
