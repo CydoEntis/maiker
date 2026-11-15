@@ -3,11 +3,12 @@
 //! --nocapture` prints the frames.
 use super::*;
 use crate::client::reference_fixture::{self, Stage};
-use crate::protocol::{TurnEvent, TurnKind};
+use crate::protocol::{ClientMsg, ClosedSession, PROTOCOL_VERSION, Reply, ServerMsg, TurnEvent, TurnKind};
 use crate::workflow::{StepState::{self, *}, WorkflowRun, WorkflowStep, WorkflowTicket};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Terminal;
 use ratatui::backend::TestBackend;
+use tokio::sync::mpsc;
 
 fn text(app: &mut App, w: u16, h: u16) -> Vec<String> {
     app.screen_fresh();
@@ -182,3 +183,48 @@ fn the_status_log_says_why_newest_first_with_how_long_each_turn_ran() {
     assert!(items.iter().any(|(l, _)| l == "Status log"));
 }
 
+#[test]
+fn recent_sessions_lists_what_the_daemon_kept_and_reopens_the_pick() {
+    let mut app = reference_fixture::world(Stage::None);
+    app.local_protocol = PROTOCOL_VERSION;
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    app.out = tx;
+    text(&mut app, 140, 36);
+    app.act(Action::RecentSessions);
+    let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert!(sent.iter().any(|o| matches!(o.msg, ClientMsg::Query(crate::protocol::Query::ClosedSessions))));
+    let closed = |agent: &str, session: &str, at: u64, title: &str| ClosedSession {
+        agent: agent.into(),
+        session: session.into(),
+        cwd: "/code/dsa-tool".into(),
+        branch: Some("feat/export".into()),
+        title: Some(title.into()),
+        at,
+        worktree: None,
+        repo: None,
+    };
+    let now = super::now_secs();
+    app.on_server(ServerMsg::Reply(Reply::ClosedSessions(vec![
+        closed("claude", "abc-1", now - 7200, "add export"),
+        closed("gemini", "g-2", now - 60, "old idea"),
+    ])));
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "recent sessions");
+    let Mode::ScreenMenu(m) = &app.mode else { panic!("{:?}", app.mode) };
+    assert_eq!(m.items.len(), 2);
+    assert!(m.items[0].0.starts_with("gemini · 1m ago · can't be reopened"), "newest first: {}", m.items[0].0);
+    assert!(m.items[1].0.starts_with("Claude · 2h ago · add export · dsa-tool"), "{}", m.items[1].0);
+    app.menu_do(m.items[1].1.clone());
+    let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert!(sent.iter().any(|o| matches!(&o.msg, ClientMsg::Command(Command::ReopenClosedSession { agent, session }) if agent == "claude" && session == "abc-1")));
+}
+
+#[test]
+fn a_reply_after_the_list_closed_opens_nothing() {
+    let mut app = reference_fixture::world(Stage::None);
+    app.local_protocol = PROTOCOL_VERSION;
+    app.act(Action::RecentSessions);
+    key(&mut app, KeyCode::Esc);
+    app.on_server(ServerMsg::Reply(Reply::ClosedSessions(Vec::new())));
+    assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
+}

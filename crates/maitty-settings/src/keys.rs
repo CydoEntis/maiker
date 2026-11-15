@@ -307,6 +307,8 @@ pub enum Action {
     WorkBoard,
     /// Why the status of the session you're on changed, newest first.
     StatusLog,
+    /// Agent sessions that closed lately, each to reopen with its conversation.
+    RecentSessions,
     /// Explicitly unbind a default.
     None,
 }
@@ -404,6 +406,7 @@ impl Action {
             Action::PutAway => "Sessions put away".into(),
             Action::WorkBoard => "Work board".into(),
             Action::StatusLog => "Status log".into(),
+            Action::RecentSessions => "Recent sessions…".into(),
             Action::None => "Unbound".into(),
         }
     }
@@ -503,6 +506,7 @@ impl Action {
             Action::PutAway => "put-away".into(),
             Action::WorkBoard => "work-board".into(),
             Action::StatusLog => "status-log".into(),
+            Action::RecentSessions => "recent-sessions".into(),
             Action::None => return None,
         })
     }
@@ -625,6 +629,7 @@ impl FromStr for Action {
             "put-away" => Action::PutAway,
             "work-board" => Action::WorkBoard,
             "status-log" => Action::StatusLog,
+            "recent-sessions" => Action::RecentSessions,
             // The fleet and the why popover are gone; a binding written for one stays
             // harmless, not a config error.
             "none" | "unbind" | "start-fleet" | "why" => Action::None,

@@ -35,6 +35,7 @@ mod remote_image_tests;
 mod remote_snapshot_tests;
 mod render;
 pub mod restart_prompt;
+mod recent;
 mod resume;
 mod routing;
 mod screen;

@@ -100,6 +100,8 @@ pub enum Act {
     /// Start an agent in a folder of this computer with a conversation it saved: (folder,
     /// agent, the agent's id for the conversation).
     Resume(PathBuf, String, String),
+    /// Start a closed session again with its conversation: (agent, the agent's id for it).
+    Reopen(String, String),
     /// The Work board of this session's workflow runs.
     Board(ClientTerm),
     /// Why this session's status changed.
@@ -921,6 +923,7 @@ impl App {
             }
             Act::MachineOpen(machine) => self.open_machines_on(machine),
             Act::Resume(dir, agent, id) => self.resume_saved(dir, &agent, &id),
+            Act::Reopen(agent, session) => self.reopen_closed(agent, session),
             Act::Board(term) => self.open_board_of(term),
             Act::StatusLog(term) => self.mode = Mode::StatusLog { term, top: 0 },
             Act::Waiting => {}

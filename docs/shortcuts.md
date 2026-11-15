@@ -96,7 +96,8 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `Ctrl+R` | Reload the config |
 
 **Search only** (`Ctrl+K`, then type): new tab, Updates, find in the pane, previous / next
-command in history, send the prefix itself to the program, Work board, Status log.
+command in history, send the prefix itself to the program, Work board, Status log, Recent
+sessions….
 
 ## Work board, run and status log
 

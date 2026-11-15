@@ -252,6 +252,7 @@ impl App {
             Action::PutAway => self.put_away_list(),
             Action::WorkBoard => self.open_work_board(),
             Action::StatusLog => self.open_status_log(),
+            Action::RecentSessions => self.ask_closed_sessions(),
             Action::None => {}
             // The rest are handled by screen_act above.
             _ => {}
@@ -334,6 +335,7 @@ impl App {
             Action::Worktrees,
             Action::NewSession,
             Action::ResumeConversation,
+            Action::RecentSessions,
             Action::PutAway,
             Action::WorkBoard,
             Action::StatusLog,
