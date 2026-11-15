@@ -546,7 +546,9 @@ pub enum ClientMsg {
         model: Option<String>,
         /// The name you gave the conversation in the agent (Claude's /rename).
         name: Option<String>,
-        /// Ids of the background tasks (shells, helpers) still running when a turn stopped.
+        /// Ids of the background tasks (shells, helpers) still running when a turn stopped, or a
+        /// helper's turn did (`SubagentStop`). On a helper's tool report, the one background task
+        /// that call started, so the daemon knows the helper waits on it.
         #[serde(default)]
         background: Vec<String>,
         /// Those of `background` that are helper agents. A helper always ends and wakes the
