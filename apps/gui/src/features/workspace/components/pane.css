@@ -116,10 +116,10 @@
   position: relative; flex: none; height: min(var(--terms-open), 60cqh); min-height: 42px; overflow: hidden;
   border-radius: var(--r14); border: 1px solid rgba(var(--hl), calc(.11 * var(--hk)));
   background: color-mix(in srgb, var(--main) 70%, transparent);
-  transition: height .28s cubic-bezier(.2, .8, .2, 1);
-  animation: mx-rise .3s cubic-bezier(.2, .8, .2, 1);
+  transition: height var(--panel-in);
+  animation: mx-rise var(--panel-in);
 }
-.mx-terms.is-under.is-folded { height: 42px; }
+.mx-terms.is-under.is-folded { height: 42px; transition: height var(--panel-out); }
 .mx-terms.is-under.is-resizing { transition: none; }
 @keyframes mx-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 .mx-terms-body { flex: none; height: calc(min(var(--terms-open), 60cqh) - 42px); min-height: 0; display: flex; flex-direction: column; transition: opacity .2s; }

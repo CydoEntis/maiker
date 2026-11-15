@@ -38,8 +38,8 @@ const EDGE_PX = 24
 const KEY_STEP_PX = 24
 // A new key when the opening width changes, so a width kept from the wider panel does not undo it.
 const WIDTH_KEY = 'maitty.inspect.width.v3'
-/** The exit animation's length: the panel is unmounted when it ends, not at once. */
-const EXIT_MS = 190
+/** The exit animation's length (`--panel-out`): the panel is unmounted when it ends, not at once. */
+const EXIT_MS = 220
 
 /** The widest the panel may be: it never covers the sidebar, and leaves a strip of the chat. */
 function roomPx(): number {

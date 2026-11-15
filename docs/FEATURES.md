@@ -70,6 +70,7 @@ conversation continuity are planned in phases 34–37:
 - Put away a finished or idle session on its own once its pull request merges, behind `[sessions] put_away_merged` (off by default); one brought back stays back — built 2026-11-13, not yet seen in the desktop app — `put_away_merged` in `crates/maitty-core/src/daemon/pr.rs`
 - Put away in the TUI: the row menu's Put away with a six-second Undo; the sidebar menu's Put away… (or Search commands) lists them with Bring back; one that needs you stays listed while it does — built 2026-11-13, seen in frame tests only — `crates/maitty-terminal-client/src/client/screen/put_away.rs`
 - Fleets, ships, the tab bar and the Crewmates switch are gone from the desktop app (the redesign supersedes them); `features/crew/` stays in the tree, unmounted, until Crewmates is designed
+- Sliding panels: the side panel, sidebar, terminals under the chat and Tickets slide in over 0.28s and out over 0.22s, and Reduce motion turns it off — built 2026-11-15 — `--panel-in`/`--panel-out` in `apps/gui/src/features/workspace/workspace.css`
 
 **Code and git**
 - Worktrees per agent, create / move / remove with hooks — shipped — `crates/maitty-core/src/daemon/git.rs`, `crates/maitty-core/src/project.rs`

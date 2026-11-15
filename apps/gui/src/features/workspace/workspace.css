@@ -9,14 +9,18 @@
 @keyframes v8tabin { from { opacity: 0; transform: translateY(-3px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes v8pane { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
 @keyframes v18grow { from { opacity: .55; transform: scale(.97); } to { opacity: 1; transform: none; } }
-@keyframes v8insp { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
 @keyframes v9dialog { from { opacity: 0; transform: translate(-50%, calc(-50% + 8px)) scale(.97); } to { opacity: 1; transform: translate(-50%, -50%); } }
 @keyframes mxDrop { 0% { transform: translateY(-120%); opacity: 0; } 25% { opacity: 1; } 60% { transform: translateY(0); opacity: 1; } 85% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(120%); opacity: 0; } }
 @keyframes mxSheen { 0% { transform: translateX(-120%); } 55%, 100% { transform: translateX(260%); } }
+@keyframes mx-panel-from-left { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes mx-panel-from-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
 @keyframes v8row { from { opacity: 0; transform: translateX(-4px); } to { opacity: 1; transform: none; } }
 
 .mx-app {
   --ease-out: cubic-bezier(.2, .8, .2, 1);
+  /* Every panel that opens from a side (the 2h handoff, §1): in eases out fast, out eases in and is a little quicker. */
+  --panel-in: .28s cubic-bezier(.22, .9, .24, 1);
+  --panel-out: .22s cubic-bezier(.4, 0, .7, .2);
   /* The look (`theme/corners.ts`) sets --ui and --mono inline; these are the fallbacks. */
   --ui: "Geist Variable", Geist, system-ui, sans-serif;
   --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
@@ -91,10 +95,10 @@
   flex-direction: column;
   overflow: hidden;
   box-shadow: var(--sh);
-  transition: width .32s var(--ease-out), background-color .35s ease;
+  transition: width var(--panel-in), background-color .35s ease;
 }
 .mx-drawer-scrim { position: absolute; inset: 0; z-index: 54; background: rgba(0, 0, 0, .45); animation: v7scrim .2s ease-out; }
-.mx-drawer { position: absolute; top: 0; bottom: 0; left: 0; display: flex; animation: v8insp .32s var(--ease-out); }
+.mx-drawer { position: absolute; top: 0; bottom: 0; left: 0; display: flex; animation: mx-panel-from-left var(--panel-in); }
 .mx-drawer .mx-sidebar { margin: 8px; max-width: calc(100vw - 48px); }
 
 .mx-sidebar.is-rail { width: calc(60px * var(--icon-scale, 1)); }
@@ -701,9 +705,8 @@
 .mx-restarting span { font-size: 13px; color: var(--muted); }
 
 /* Sidebar on the right: the window mirrors. The panels that open from the right open from the left instead. */
-@keyframes v14inspL { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: none; } }
 .mx-app[data-side="right"] .mx-window { flex-direction: row-reverse; }
-.mx-app[data-side="right"] .mx-drawer { left: auto; right: 0; animation-name: v14inspL; }
+.mx-app[data-side="right"] .mx-drawer { left: auto; right: 0; animation-name: mx-panel-from-right; }
 .mx-app[data-side="right"] .mx-sidebar-resizer { right: auto; left: 0; }
 .mx-app[data-side="right"] .mx-sidebar-resizer::after { right: auto; left: 0; }
 

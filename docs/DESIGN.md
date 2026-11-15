@@ -241,7 +241,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   needs colour), spacing `--s1`..`--s9` (2, 4, 6, 8, 12, 16, 20, 24, 32px), the type scale (`--text-h1` 22px down to
   `--text-tag` 10.5px mono, `--text-reply` 14.5/1.65, `--text-code` 12.5/1.65), the corner radii (`--r-control`,
   `--r-panel`, `--r-badge`) and motion (`--t-fast` 120ms, `--t-base` 180ms, `--t-slow` 260ms, `--t-spin` 900ms, one
-  `--ease` of `cubic-bezier(.2,.8,.2,1)`; Reduce motion zeroes the three durations). The usage meters read `--m-ok`,
+  `--ease` of `cubic-bezier(.2,.8,.2,1)`; Reduce motion zeroes the three durations). A panel that opens from a side (the side panel, the sidebar's width and its narrow-window overlay, the terminals under the chat, Tickets and its ticket page) moves 28px and fades: in over `--panel-in` (0.28s, `cubic-bezier(.22,.9,.24,1)`), out over `--panel-out` (0.22s, `cubic-bezier(.4,0,.7,.2)`; the ticket page 0.19s), and stays on screen, unclickable, until it has gone (`usePresence`); with motion reduced it comes and goes at once (the 2h handoff, §1). The usage meters read `--m-ok`,
   `--m-mid`, `--m-or` and `--m-hi`, which every theme sets. `--card`, `--done` and `--sh-pop` are set in `index.css`
   and `workspace.css`.
 - **Primitives (`apps/gui/src/components/ui/`).** The chat handoff's shared pieces, each on the tokens above and named
