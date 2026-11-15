@@ -10,4 +10,5 @@ pub mod overlap;
 pub mod protocol;
 pub mod repo;
 pub mod settings_view;
+pub mod tickets;
 pub mod usage_report;
