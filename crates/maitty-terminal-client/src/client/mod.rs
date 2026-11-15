@@ -220,6 +220,8 @@ enum Mode {
     Machines(Box<screen::machines::MachinesView>),
     /// Clone a repository onto a machine.
     Clone(Box<screen::CloneView>),
+    /// A pane's specialist agent files, read-only (ADR 0010).
+    Specialists(Box<screen::SpecialistsView>),
 }
 
 /// A view that replaces the pane area.

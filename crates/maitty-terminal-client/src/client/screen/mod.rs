@@ -1583,6 +1583,8 @@ pub(super) enum ScreenHit {
     /// A repository in the clone dialog's list, and its Clone button.
     ClonePick(usize),
     CloneGo,
+    /// A file in the specialist agents list.
+    SpecialistRow(usize),
 }
 
 pub(super) fn hit(app: &mut App, r: Rect, h: ScreenHit) {
@@ -1690,7 +1692,10 @@ mod tidy;
 mod workflow_runs;
 mod helper_view;
 mod clone_repo;
-pub(in crate::client) use self::clone_repo::*;
+mod specialists;
+#[cfg(test)]
+mod repos_tests;
+pub(in crate::client) use self::{clone_repo::*, specialists::*};
 pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,

@@ -306,6 +306,8 @@ pub enum Action {
     CloneRepo,
     /// Browse the folders of a machine (this computer or another) and open one.
     OpenFolderOn,
+    /// The Claude Code and Codex agent files of the pane's project and home, read-only.
+    Specialists,
     /// Explicitly unbind a default.
     None,
 }
@@ -403,6 +405,7 @@ impl Action {
             Action::PutAway => "Sessions put away".into(),
             Action::CloneRepo => "Clone a repository…".into(),
             Action::OpenFolderOn => "Open a folder on a machine…".into(),
+            Action::Specialists => "Specialist agents…".into(),
             Action::None => "Unbound".into(),
         }
     }
@@ -502,6 +505,7 @@ impl Action {
             Action::PutAway => "put-away".into(),
             Action::CloneRepo => "clone-repo".into(),
             Action::OpenFolderOn => "open-folder-on".into(),
+            Action::Specialists => "specialists".into(),
             Action::None => return None,
         })
     }
@@ -624,6 +628,7 @@ impl FromStr for Action {
             "put-away" => Action::PutAway,
             "clone-repo" => Action::CloneRepo,
             "open-folder-on" => Action::OpenFolderOn,
+            "specialists" => Action::Specialists,
             // The fleet and the why popover are gone; a binding written for one stays
             // harmless, not a config error.
             "none" | "unbind" | "start-fleet" | "why" => Action::None,

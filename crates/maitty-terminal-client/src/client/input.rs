@@ -401,6 +401,7 @@ impl App {
             Mode::Run { .. } => self.on_run_key(&k),
             Mode::Helper(v) => self.on_helper_key(*v, &k),
             Mode::Clone(v) => self.on_clone_key(*v, &k),
+            Mode::Specialists(v) => self.on_specialists_key(*v, &k),
             Mode::History { sel } => self.on_history_key(sel, &k),
             Mode::Tidy(v) => self.on_tidy_key(*v, &k),
             Mode::Machines(v) => self.on_machines_key(*v, &k),

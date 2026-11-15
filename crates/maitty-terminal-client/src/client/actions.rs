@@ -255,6 +255,7 @@ impl App {
             Action::PutAway => self.put_away_list(),
             Action::CloneRepo => self.open_clone_repo(),
             Action::OpenFolderOn => self.pick_folder_machine(),
+            Action::Specialists => self.open_specialists(),
             Action::None => {}
             // The rest are handled by screen_act above.
             _ => {}
@@ -340,6 +341,7 @@ impl App {
             Action::PutAway,
             Action::CloneRepo,
             Action::OpenFolderOn,
+            Action::Specialists,
             Action::CloseSplit,
             Action::StopAgent,
             Action::Message,

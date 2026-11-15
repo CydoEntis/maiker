@@ -658,6 +658,7 @@ impl App {
         }) {
             items.push(("Snapshots…".to_string(), Act::Snapshots(d, term)));
         }
+        items.push(("Specialist agents…".to_string(), Act::Tool(Action::Specialists)));
         if let Some(check) = self.term_info(term).and_then(|t| t.check()) {
             items.extend(super::screen::check_menu_items(term, check));
         }

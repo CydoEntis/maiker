@@ -235,6 +235,18 @@ Search commands' **Clone a repository…**, the Menu's NEW section, or a machine
 
 Search commands' **Open a folder on a machine…** (a menu of this computer and each connected machine), or a machine heading's right-click **Open a folder…**. The keys are the folder picker's; paths are written with `/`.
 
+## Specialist agents
+
+Search commands' **Specialist agents…**, or the pane's right-click Project… menu.
+
+| Keys | Action |
+| --- | --- |
+| Up / k, Down / j | Choose a file |
+| Enter, Right | Read it |
+| Up, Down, PgUp, PgDn, Space while reading | Scroll |
+| Esc, Backspace, Left while reading | Back to the list |
+| Esc, q | Close |
+
 ## New session
 
 There is no dialog. Leader `n`, leader `t`, `Alt+N`, `Ctrl+T`, the ` n new session ` chip of an empty workspace and a machine's ` + ` chip all start a shell at once where you are (a machine's chip on that machine). Start an agent by typing `claude` (or any other) in the shell.

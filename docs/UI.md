@@ -888,6 +888,12 @@ control and hidden characters taken out):
   `.` or a repository starts a shell there on that machine; another folder is gone into by the path its
   daemon gave. A machine that is not connected is refused with a toast. With no other machine connected
   the command opens this computer's picker.
+- **Specialist agents** (`client/screen/specialists.rs`, `Action::Specialists`; Search commands, the
+  pane's Project… menu). A read-only modal `Specialist agents · <session>` from `Query::Specialists` for
+  the pane's machine: THIS PROJECT, YOUR HOME FOLDER, ELSEWHERE, each file's name, tool and description;
+  Enter shows the file as text (`Claude Code · <path>`, `The file is longer; only its start is shown.`).
+  Nothing is written; Claude Code's `/agents` and the files themselves are where they are changed (ADR
+  0010).
 - **Clean up worktrees** works for another machine's project: its daemon says where each worktree stands
   (`Query::WorktreeStanding`, asked one after another since the answer names none; a worktree whose
   folder is gone is left out) and removes the ticked ones (`Command::TidyWorktrees` to that machine).

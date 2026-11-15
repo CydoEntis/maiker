@@ -1950,6 +1950,7 @@ impl App {
             ScreenHit::TidyRow(i) => self.tidy_click(i),
             ScreenHit::ClonePick(i) => self.clone_click(i),
             ScreenHit::CloneGo => self.clone_click_go(),
+            ScreenHit::SpecialistRow(i) => self.specialists_click(i),
             ScreenHit::TidyGo => {
                 if let Mode::Tidy(v) = std::mem::replace(&mut self.mode, Mode::Normal) {
                     self.tidy_ask(*v);

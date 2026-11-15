@@ -415,6 +415,7 @@ fn keys_holder(app: &App) -> Option<Holder> {
         Mode::Run { .. } => holder("RUN", &[], ("Esc", "close")),
         Mode::Helper(_) => holder("SUBAGENT", &[("Enter", "its pane")], ("Esc", "close")),
         Mode::Clone(_) => holder("CLONE", &[("Tab", "next line"), ("Enter", "clone")], ("Esc", "close")),
+        Mode::Specialists(_) => holder("SPECIALISTS", &[("Enter", "read it")], ("Esc", "close")),
         Mode::History { .. } => holder(
             "HISTORY",
             &[("↑↓", "move"), ("Enter", "go to it"), ("c", "clear")],
