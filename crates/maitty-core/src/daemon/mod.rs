@@ -46,6 +46,7 @@ mod term;
 mod terminal_sends;
 mod ticket_http;
 mod ticket_keys;
+mod ticket_links;
 mod tickets;
 mod tickets_github;
 mod tickets_linear;
@@ -3148,6 +3149,22 @@ impl Daemon {
                         }) =>
                     {
                         ServerMsg::Error("Only a human client can write to a ticket".into())
+                    }
+                    Query::TicketLinks { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can change which tickets a project reads".into())
+                    }
+                    Query::TicketLinks { place, change, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = ticket_links::change(&ticket_links::LinkStore::real(), place, change, ticket_links::main_checkout);
+                            let reply = Reply::TicketLinks { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
                     }
                     Query::TicketWrite { source, id, write, confirmed, tag } => {
                         let tx = self.tx.clone();

@@ -1012,6 +1012,22 @@ GitHub runs `gh issue comment` / `gh issue close` (30 seconds); Plane `POST`s `â
 team's first `completed` state and runs `issueUpdate`. A write is never retried. Details and limits:
 [SECURITY](SECURITY.md).
 
+Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
+(`TICKET_LINKS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm).
+The daemon keeps which sources each project reads (`maitty_shared::ticket_links`, `daemon/ticket_links.rs`,
+`<data folder>/ticket-links.json`), so every client of a computer shows a project the same tickets. A provider's key is
+set once for all projects (`TicketKeys`); a link is per project: `github` (`Origin`, the default; `Repo("owner/name")`;
+`Off`), a Plane project and a Linear team (`TicketPick { id, name }`). A project is a `TicketPlace { machine, folder }`:
+`machine` is `None` for this computer, whose folder the daemon takes to its repository's main checkout (the parent of
+`git rev-parse --git-common-dir`), so every worktree of a repository shares one link; another machine's folder (by its
+`[[machines]]` name) is kept as the client gave it. `place` is the folder in front, answered back resolved in
+`answer.project` (with an empty link when it has none); `change` is `Read`, `Set { place, link }`, `Unlink { place }`,
+`SetMe { provider, name }` (your name in Plane or Linear, for Mine) or `Import { projects, me }` (links a client kept
+before protocol 108: each added only when its project has none, a name only when unset). `answer` is
+`Ok(TicketLinks { project, projects, me })`, every linked project sorted by machine and folder, or `Invalid` for a
+folder that is not absolute, a repository not written `owner/name`, or a pick whose id is not a ticket id; nothing
+refused is written. At most 500 projects. Human clients only. A damaged file is logged and read as no links.
+
 The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
 `ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
 `{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them

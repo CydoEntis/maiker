@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 107;
+pub const PROTOCOL_VERSION: u32 = 108;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -197,6 +197,10 @@ pub const TICKET_KEYS_SINCE: u32 = 106;
 /// The first version whose daemon writes a confirmed comment or a close to a ticket
 /// (`Query::TicketWrite`).
 pub const TICKET_WRITE_SINCE: u32 = 107;
+
+/// The first version whose daemon keeps which ticket sources each project reads
+/// (`Query::TicketLinks`).
+pub const TICKET_LINKS_SINCE: u32 = 108;
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
@@ -1256,6 +1260,16 @@ pub enum Query {
         confirmed: bool,
         tag: u64,
     },
+    /// Say or change which ticket sources a project reads on this daemon's computer (human clients
+    /// only). `place` is the folder in front, which the answer resolves to its project (this
+    /// computer's folders to their repository's main checkout); `None` asks only for the list. The
+    /// answer is `Reply::TicketLinks` with the same `tag`.
+    TicketLinks {
+        #[serde(default)]
+        place: Option<crate::ticket_links::TicketPlace>,
+        change: crate::ticket_links::TicketLinkChange,
+        tag: u64,
+    },
     /// Which commit name and email git uses on this daemon's computer, and the folders where a
     /// rule gives another (human clients only). Nothing is written. The answer is
     /// `Reply::GitIdentities` with the same `tag`.
@@ -1556,6 +1570,11 @@ pub enum Reply {
     TicketWrite {
         tag: u64,
         answer: Result<crate::tickets::TicketWritten, crate::tickets::TicketError>,
+    },
+    /// The projects' ticket links after a `Query::TicketLinks`, or why the change was refused.
+    TicketLinks {
+        tag: u64,
+        answer: Result<crate::ticket_links::TicketLinks, crate::tickets::TicketError>,
     },
     /// How a `Query::Git` ended: one line saying what happened ("Pulled", "Pushed main"), or one
     /// line saying why nothing did.
@@ -2471,6 +2490,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
             ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ServerMsg::Reply(Reply::TicketWrite { .. }) => TICKET_WRITE_SINCE,
+            ServerMsg::Reply(Reply::TicketLinks { .. }) => TICKET_LINKS_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2494,6 +2514,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
             ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ClientMsg::Query(Query::TicketWrite { .. }) => TICKET_WRITE_SINCE,
+            ClientMsg::Query(Query::TicketLinks { .. }) => TICKET_LINKS_SINCE,
             ClientMsg::Query(Query::GitIdentities { .. }) => GIT_IDENTITIES_SINCE,
             ClientMsg::Query(Query::GitIdentityRule { .. }) => GIT_RULES_SINCE,
             ClientMsg::Query(Query::Git { request: GitRequest::Commit { .. }, .. }) => GIT_COMMIT_SINCE,
@@ -2944,7 +2965,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 107);
+        assert_eq!(PROTOCOL_VERSION, 108);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3434,7 +3455,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 107);
+        assert_eq!(PROTOCOL_VERSION, 108);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4529,7 +4550,35 @@ mod tests {
             let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
             assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
         }
-        const { assert!(TICKET_WRITE_SINCE > TICKET_KEYS_SINCE && TICKET_WRITE_SINCE == PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_WRITE_SINCE) };
+        const { assert!(TICKET_WRITE_SINCE > TICKET_KEYS_SINCE && TICKET_WRITE_SINCE < PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_WRITE_SINCE) };
+    }
+
+    /// A project's ticket links are a new request and a new reply: a daemon built before them is
+    /// never asked, a client built before them is never sent the answer, and the window stays open.
+    #[test]
+    fn ticket_links_are_asked_only_of_a_daemon_that_keeps_them() {
+        use crate::ticket_links::{GitHubLink, LinkedProject, TicketLink, TicketLinkChange, TicketLinks, TicketPlace};
+        use crate::tickets::TicketError;
+        let place = TicketPlace { machine: None, folder: "/home/me/shop".into() };
+        let set = Query::TicketLinks {
+            place: Some(place.clone()),
+            change: TicketLinkChange::Set { place, link: TicketLink { github: GitHubLink::Off, ..TicketLink::default() } },
+            tag: 9,
+        };
+        let bytes = encode(&set).unwrap();
+        assert!(matches!(decode::<Query>(&bytes), Ok(Query::TicketLinks { tag: 9, change: TicketLinkChange::Set { .. }, .. })));
+        assert_eq!(ClientMsg::Query(set).introduced_in(), TICKET_LINKS_SINCE);
+        let found = TicketLinks {
+            project: Some(LinkedProject { machine: None, folder: "/home/me/shop".into(), link: TicketLink::default() }),
+            ..TicketLinks::default()
+        };
+        for answer in [Ok(found), Err(TicketError::Invalid("no".into()))] {
+            let reply = ServerMsg::Reply(Reply::TicketLinks { tag: 9, answer });
+            assert_eq!(reply.introduced_in(), TICKET_LINKS_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        const { assert!(TICKET_LINKS_SINCE == PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_LINKS_SINCE) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never
