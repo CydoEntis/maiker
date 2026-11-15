@@ -40,6 +40,10 @@ pub enum MachineStep {
     Remove {
         name: String,
     },
+    /// Asking before a machine's programs may write this computer's clipboard.
+    AllowClipboard {
+        name: String,
+    },
     /// ssh is being asked, without a prompt, whether the machine can be reached.
     Checking {
         target: String,
@@ -118,6 +122,8 @@ pub struct MachineRow {
     /// Whether it may raise toasts here (`n`) and play alert sounds (`s`). Both are off until you turn them on.
     pub notices: bool,
     pub sounds: bool,
+    /// Whether its programs may write this computer's clipboard (`c`); on unless turned off.
+    pub clipboard: bool,
 }
 
 impl App {
@@ -190,6 +196,7 @@ impl App {
             fix,
             notices: def.notices,
             sounds: def.sounds,
+            clipboard: def.clipboard,
         }
     }
 }
@@ -313,6 +320,12 @@ impl App {
                 self.machines_edit_key(&mut v, name, target, k)
             }
             MachineStep::Remove { name } => self.machines_remove_key(&mut v, &name, k),
+            MachineStep::AllowClipboard { name } => {
+                v.step = MachineStep::Browse;
+                if k.code == KeyCode::Enter {
+                    v.notice = Some(self.machine_toggle_grant(&name, Grant::Clipboard));
+                }
+            }
             MachineStep::Checking { .. } => {
                 if k.code == KeyCode::Esc {
                     self.machines_cancel_probe(&mut v);
@@ -361,6 +374,12 @@ impl App {
             KeyCode::Enter | KeyCode::Char('r') => v.notice = Some(self.machine_retry(&name)),
             KeyCode::Char('n') => v.notice = Some(self.machine_toggle_grant(&name, Grant::Notices)),
             KeyCode::Char('s') => v.notice = Some(self.machine_toggle_grant(&name, Grant::Sounds)),
+            // Turning it off needs no question; letting a machine write here does.
+            KeyCode::Char('c') if self.configured(&name).is_some_and(|d| !d.clipboard) => {
+                v.notice = None;
+                v.step = MachineStep::AllowClipboard { name };
+            }
+            KeyCode::Char('c') => v.notice = Some(self.machine_toggle_grant(&name, Grant::Clipboard)),
             KeyCode::Char('u') => {
                 let said = self.machine_update(&name);
                 // The update's popup takes the keys, so the dialog is closed: say it in a toast.
@@ -616,6 +635,7 @@ pub(in crate::client) fn draw_machines(
             draw_name(buf, inner, &ask, target, error.as_deref(), t)
         }
         MachineStep::Remove { name } => draw_remove(buf, inner, name, t),
+        MachineStep::AllowClipboard { name } => draw_allow_clipboard(buf, inner, name, t),
         MachineStep::Checking { target } => {
             let who = parse_target(target).unwrap_or_default();
             let steps = checklist(&who, None);
@@ -915,10 +935,11 @@ fn draw_your_machines(
             y,
             &[seg(
                 format!(
-                    "Alerts from {}: toasts {} · sounds {}.   n toasts · s sounds",
+                    "From {}: toasts {} · sounds {} · copies to your clipboard {}",
                     row.name,
                     word(row.notices),
-                    word(row.sounds)
+                    word(row.sounds),
+                    word(row.clipboard)
                 ),
                 Style::default().bg(t.card).fg(t.muted),
             )],
@@ -1010,6 +1031,19 @@ fn draw_remove(buf: &mut Buffer, inner: Rect, name: &str, t: &Theme) {
         &[seg(said.to_string(), c.fg(t.muted))],
         inner.right(),
     );
+}
+
+fn draw_allow_clipboard(buf: &mut Buffer, inner: Rect, name: &str, t: &Theme) {
+    let c = Style::default().bg(t.card);
+    let name = sanitize(name, false);
+    let ask = format!("Let {name} copy to your clipboard?");
+    let said = format!(
+        "A program on {name} that copies text puts it in this computer's clipboard, where your next paste reads it."
+    );
+    put(buf, inner.x, inner.y, &[seg(ask, c.fg(t.strong).add_modifier(Modifier::BOLD))], inner.right());
+    for (i, line) in popover::wrap(&said, inner.width as usize).into_iter().enumerate() {
+        put(buf, inner.x, inner.y + 2 + i as u16, &[seg(line, c.fg(t.muted))], inner.right());
+    }
 }
 
 /// The steps connecting takes, in order. `how` is None while ssh is being asked.
@@ -1123,7 +1157,7 @@ fn bar_keys(v: &MachinesView, fix: Option<AppFix>) -> Vec<(&'static str, &'stati
         MachineStep::Browse if v.machine_sel.is_some() => vec![
             ("r", "reconnect"),
             ("u", fix.map_or("update", AppFix::verb)),
-            ("n s", "alerts"),
+            ("n s c", "toasts sounds copies"),
             ("e", "edit"),
             ("x", "remove"),
             ("↑↓", "move"),
@@ -1141,6 +1175,7 @@ fn bar_keys(v: &MachinesView, fix: Option<AppFix>) -> Vec<(&'static str, &'stati
             vec![("", "type where it is"), ("Enter", "save"), ("Esc", "back")]
         }
         MachineStep::Remove { .. } => vec![("Enter", "remove"), ("Esc", "keep it")],
+        MachineStep::AllowClipboard { .. } => vec![("Enter", "allow"), ("Esc", "keep it off")],
         MachineStep::Checking { .. } => vec![("Esc", "cancel")],
         MachineStep::Added { .. } => vec![("Enter", "done"), ("Esc", "close")],
     }
