@@ -399,6 +399,7 @@ impl App {
             Mode::Usage => self.on_usage_key(&k),
             Mode::Run { term, board, .. } => self.on_run_key(term, board, &k),
             Mode::Work { term, sel } => self.on_board_key(term, sel, &k),
+            Mode::StatusLog { term, top } => self.on_status_log_key(term, top, &k),
             Mode::Helper(v) => self.on_helper_key(*v, &k),
             Mode::History { sel } => self.on_history_key(sel, &k),
             Mode::Tidy(v) => self.on_tidy_key(*v, &k),

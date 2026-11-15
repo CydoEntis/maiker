@@ -3,6 +3,7 @@
 //! --nocapture` prints the frames.
 use super::*;
 use crate::client::reference_fixture::{self, Stage};
+use crate::protocol::{TurnEvent, TurnKind};
 use crate::workflow::{StepState::{self, *}, WorkflowRun, WorkflowStep, WorkflowTicket};
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Terminal;
@@ -155,5 +156,29 @@ fn the_runs_done_line_and_the_row_menu_open_the_board() {
     assert!(matches!(app.mode, Mode::Work { .. }), "{:?}", app.mode);
     let items = app.session_items(ClientTerm::local(2)).unwrap().1;
     assert!(items.iter().any(|(l, a)| l == "Work board" && *a == crate::client::menu::Act::Board(ClientTerm::local(2))));
+}
+
+#[test]
+fn the_status_log_says_why_newest_first_with_how_long_each_turn_ran() {
+    let mut app = reference_fixture::world(Stage::None);
+    reference_fixture::focus(&mut app, 2);
+    let info = app.snap.terms.get_mut(&2).unwrap();
+    info.status_why = "hook: Stop".into();
+    info.timeline = vec![
+        TurnEvent { at: 1_000, kind: TurnKind::Working, detail: "hook: UserPromptSubmit".into() },
+        TurnEvent { at: 1_192, kind: TurnKind::Done, detail: "hook: Stop".into() },
+        TurnEvent { at: 1_200, kind: TurnKind::CommandFinished, detail: "1".into() },
+    ];
+    app.act(Action::StatusLog);
+    let rows = text(&mut app, 100, 30);
+    show(&rows, "the status log");
+    let at = |s: &str| rows.iter().position(|r| r.contains(s)).unwrap_or_else(|| panic!("{s}"));
+    assert!(rows[at("Now")].contains("hook: Stop"), "the reason for the status now");
+    assert!(at("Command finished (exit 1)") < at("Finished the turn"), "newest first");
+    assert!(rows[at("Started working")].contains("ran 3m 12s") && rows[at("Started working")].contains("hook: UserPromptSubmit"));
+    key(&mut app, KeyCode::Esc);
+    assert!(matches!(app.mode, Mode::Normal));
+    let items = app.session_items(ClientTerm::local(2)).unwrap().1;
+    assert!(items.iter().any(|(l, _)| l == "Status log"));
 }
 

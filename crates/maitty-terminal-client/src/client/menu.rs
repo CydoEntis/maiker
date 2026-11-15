@@ -102,6 +102,8 @@ pub enum Act {
     Resume(PathBuf, String, String),
     /// The Work board of this session's workflow runs.
     Board(ClientTerm),
+    /// Why this session's status changed.
+    StatusLog(ClientTerm),
     /// A row saying the list is on its way; picking it only closes the menu.
     Waiting,
 }
@@ -545,6 +547,9 @@ impl App {
         if info.is_some_and(|t| !t.workflows.is_empty()) {
             items.push(("Work board".to_string(), Act::Board(term)));
         }
+        if info.is_some_and(|t| !t.timeline.is_empty()) {
+            items.push(("Status log".to_string(), Act::StatusLog(term)));
+        }
         if self.can_put_away(term) {
             items.push(("Put away".to_string(), Act::PutAway(term)));
         } else if self.can_bring_back(term) {
@@ -917,6 +922,7 @@ impl App {
             Act::MachineOpen(machine) => self.open_machines_on(machine),
             Act::Resume(dir, agent, id) => self.resume_saved(dir, &agent, &id),
             Act::Board(term) => self.open_board_of(term),
+            Act::StatusLog(term) => self.mode = Mode::StatusLog { term, top: 0 },
             Act::Waiting => {}
             // A terminal that belongs to a chat is named through the chat, so every client
             // shows the same name.

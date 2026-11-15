@@ -216,6 +216,10 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
             let (term, sel) = (*term, *sel);
             super::screen::draw_board(app, f, area, &t, term, sel);
         }
+        Mode::StatusLog { term, top } => {
+            let (term, top) = (*term, *top);
+            super::screen::draw_status_log(app, f, area, &t, term, top);
+        }
         Mode::History { sel } => {
             let sel = *sel;
             super::screen::draw_history(app, f, area, &t, sel);

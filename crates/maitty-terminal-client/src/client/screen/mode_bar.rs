@@ -415,6 +415,7 @@ fn keys_holder(app: &App) -> Option<Holder> {
         Mode::Run { board: Some(_), .. } => holder("RUN", &[], ("Esc", "back")),
         Mode::Run { .. } => holder("RUN", &[], ("Esc", "close")),
         Mode::Work { .. } => holder("WORK", &[("Enter", "open run")], ("Esc", "close")),
+        Mode::StatusLog { .. } => holder("STATUS LOG", &[], ("Esc", "close")),
         Mode::Helper(_) => holder("SUBAGENT", &[("Enter", "its pane")], ("Esc", "close")),
         Mode::History { .. } => holder(
             "HISTORY",

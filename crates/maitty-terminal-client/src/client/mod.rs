@@ -183,6 +183,11 @@ enum Mode {
         term: ClientTerm,
         sel: usize,
     },
+    /// Why a session's status changed, newest first, scrolled `top` lines down.
+    StatusLog {
+        term: ClientTerm,
+        top: usize,
+    },
     History {
         sel: usize,
     },

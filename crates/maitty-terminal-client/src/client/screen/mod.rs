@@ -1679,10 +1679,11 @@ mod usage;
 mod tidy;
 mod workflow_runs;
 mod work_board;
+mod status_log;
 mod helper_view;
 pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
     popups::*, references_sheet::*, secret_ask::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
-    helper_view::*, workflow_runs::*, work_board::*, workspace::*,
+    helper_view::*, workflow_runs::*, work_board::*, status_log::*, workspace::*,
 };
