@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><script src="./kitchen-data.js"></script><style>@keyframes kSpin { to { transform: rotate(360deg); } }
+@keyframes kWork { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--working) 22%, transparent); } }
+@keyframes kNeed { 0%,100% { opacity: 1; } 50% { opacity: .55; } }
+@keyframes kPop { 0% { transform: scale(.6); } 60% { transform: scale(1.15); } 100% { transform: none; } }
+@keyframes kBack { from { transform: rotate(180deg); opacity: .3; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { [data-ks] { animation: none !important; } } @keyframes kIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }[data-rundrawer="true"] [role="dialog"] { left: auto !important; right: auto !important; max-width: calc(100cqw - 64px) !important; } [data-rundrawer="true"] { container-type: inline-size; position: absolute; top: 0; right: 0; bottom: 0; z-index: 30; width: min(480px, 60%); background: var(--main); border-left: 1px solid var(--line2); box-shadow: -4px 0 14px rgba(0,0,0,.22); animation: kSlide .22s cubic-bezier(.2,.8,.2,1); } [data-inpane="true"] [data-boardbody] { overflow-x: auto !important; padding: 10px 14px 14px !important; } @keyframes kSlide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } } @keyframes kFade { from { opacity: 0; } to { opacity: 1; } }[data-has="false"] { display: none !important; }
+</style></helmet>
+<div data-screen-label="Work panel" data-inpane="{{ inPane }}" style="position:relative;height:100%;min-height:0;display:flex;flex-direction:column;background:{{ panelBg }};color:var(--fg);font-family:'Inter',system-ui,sans-serif;">
+
+        <sc-if value="{{ showBoard }}" hint-placeholder-val="{{ true }}">
+          <div style="flex:none;height:44px;display:flex;align-items:center;gap:8px;padding:0 10px 0 14px;border-bottom:1px solid var(--line);">
+            <sc-if value="{{ tabs.hide }}" hint-placeholder-val="{{ true }}"><span style="flex:none;font-size:13.5px;font-weight:600;white-space:nowrap;">Runs</span></sc-if><sc-if value="{{ tabs.show }}" hint-placeholder-val="{{ false }}"><div role="tablist" aria-label="Work" style="display:flex;align-items:center;gap:14px;margin-left:6px;"><sc-for list="{{ tabs.items }}" as="tb" hint-placeholder-count="2"><button type="button" role="tab" aria-selected="{{ tb.on }}" onClick="{{ tb.pick }}" style="height:44px;display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ tb.c }};box-shadow:{{ tb.sh }};" style-hover="color:var(--fg);">{{ tb.l }}<span style="font:400 11px var(--mono);color:var(--dim);">{{ tb.n }}</span></button></sc-for></div></sc-if><span style="flex:1 1 auto;min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ board.sum }}</span>
+            <sc-if value="{{ canClose }}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{ close }}" aria-label="Close" style="width:26px;height:26px;color:var(--muted);" style-hover="background:var(--hover);color:var(--fg);">✕</button></sc-if>
+          </div>
+          <div data-boardbody="1" style="flex:1;min-height:0;overflow-y:auto;padding:6px 12px 16px;display:flex;flex-direction:column;gap:10px;">
+            <sc-if value="{{ inPaneB }}" hint-placeholder-val="{{ false }}">
+              <div data-screen-label="Columns" style="flex:1 0 auto;display:grid;grid-template-columns:{{ board.colTpl }};gap:8px;min-width:min-content;min-height:100%;">
+                <sc-for list="{{ board.cols }}" as="g" hint-placeholder-count="5">
+                  <div style="min-width:0;display:flex;flex-direction:column;gap:8px;padding:0 8px 10px;background:var(--well);box-shadow:inset 0 0 0 1px var(--line);">
+                    <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 2px;border-bottom:1px solid var(--line);"><span style="min-width:0;font-size:12.5px;font-weight:600;color:{{ g.c }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ g.title }}</span><span style="font:400 11px var(--mono);color:var(--dim);">{{ g.n }}</span></div>
+                    <sc-for list="{{ g.cards }}" as="k" hint-placeholder-count="1">
+                      <button type="button" onClick="{{ k.open }}" aria-pressed="{{ k.on }}" style="display:flex;flex-direction:column;gap:7px;padding:10px 11px 11px;text-align:left;background:{{ k.cbg }};box-shadow:inset 0 0 0 1px {{ k.bd }};animation:kIn .25s ease-out;" style-hover="background:var(--hover);">
+                        <span style="display:flex;align-items:center;gap:8px;min-width:0;">
+                          <span style="flex:none;width:14px;height:14px;display:flex;align-items:center;justify-content:center;color:{{ k.mk.c }};font:700 12px/1 var(--mono);">{{ k.mk.g }}<sc-if value="{{ k.mk.spin }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;box-sizing:border-box;border:1.5px solid var(--line2);border-top-color:var(--working);animation:kSpin .9s linear infinite;"></span></sc-if></span>
+                          <span style="flex:none;font:600 12px var(--mono);">{{ k.key }}</span>
+                          <span style="flex:1;"></span>
+                          <sc-if value="{{ k.hasTag }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-size:11px;font-weight:600;color:{{ k.tagC }};">{{ k.tag }}</span></sc-if>
+                        </span>
+                        <span style="font-size:13px;line-height:1.4;color:var(--fg);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ k.title }}</span>
+                        <span data-has="{{ k.hasTrack }}" style="display:flex;flex-direction:column;gap:4px;"><sc-for list="{{ k.rounds }}" as="rr" hint-placeholder-count="1"><span role="list" aria-label="{{ rr.label }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;"><sc-if value="{{ rr.multi }}" hint-placeholder-val="{{ false }}"><span title="Fix round" style="flex:none;font:600 10.5px var(--mono);color:var(--muted);margin-right:2px;">{{ rr.round }}</span></sc-if><sc-for list="{{ rr.track }}" as="t" hint-placeholder-count="5"><span role="listitem" title="{{ t.tip }}" data-ks="{{ t.s }}" style="flex:none;height:20px;display:inline-flex;align-items:center;gap:4px;padding:0 7px;box-sizing:border-box;font:500 10.5px/1 var(--mono);color:{{ t.cc }};background:{{ t.cb }};border:1px {{ t.cs }} {{ t.cd }};text-decoration:{{ t.td }};transition:background-color .3s ease, border-color .3s ease, color .3s ease;animation:{{ t.anim }};"><sc-if value="{{ t.spin }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;box-sizing:border-box;border:1.5px solid color-mix(in srgb, var(--working) 30%, transparent);border-top-color:var(--working);animation:kSpin .8s linear infinite;"></span></sc-if><sc-if value="{{ t.hasG }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true">{{ t.g }}</span></sc-if>{{ t.short }}</span></sc-for></span></sc-for></span>
+                        <sc-if value="{{ k.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;line-height:1.45;color:var(--muted);text-wrap:pretty;">{{ k.note }}</span></sc-if>
+                        
+                      </button>
+                    </sc-for>
+                    <sc-if value="{{ g.empty }}" hint-placeholder-val="{{ false }}"><span style="padding:10px 4px;font-size:11.5px;color:var(--dim);">Nothing here</span></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{ inPaneN }}" hint-placeholder-val="{{ true }}">
+            <sc-for list="{{ board.lanes }}" as="g" hint-placeholder-count="5">
+              <div style="position:relative;display:flex;flex-direction:column;gap:6px;padding:0 0 10px 22px;">
+                <span aria-hidden="true" style="position:absolute;left:6px;top:14px;bottom:{{ g.lineB }};width:1px;background:var(--line2);"></span>
+                <div style="display:flex;align-items:center;gap:8px;height:28px;">
+                  <span aria-hidden="true" style="position:absolute;left:2px;top:9px;width:9px;height:9px;box-sizing:border-box;background:{{ g.dotBg }};border:1.5px solid {{ g.dotBd }};"></span>
+                  <span style="font-size:12.5px;font-weight:600;color:{{ g.c }};">{{ g.title }}</span>
+                  <span style="font:400 11px var(--mono);color:var(--dim);">{{ g.n }}</span>
+                  
+                </div>
+                <sc-for list="{{ g.cards }}" as="k" hint-placeholder-count="1">
+                  <div style="display:flex;flex-direction:column;background:{{ k.bg }};box-shadow:inset 0 0 0 1px {{ k.bd }};animation:kIn .25s ease-out;">
+                  <button type="button" onClick="{{ k.toggle }}" aria-expanded="{{ k.exp }}" style="display:flex;flex-direction:column;gap:6px;padding:9px 11px 10px;text-align:left;" style-hover="background:var(--hover);">
+                    <span style="display:flex;align-items:center;gap:8px;min-width:0;">
+                      <span style="flex:none;width:14px;height:14px;display:flex;align-items:center;justify-content:center;color:{{ k.mk.c }};font:700 12px/1 var(--mono);">{{ k.mk.g }}<sc-if value="{{ k.mk.spin }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;box-sizing:border-box;border:1.5px solid var(--line2);border-top-color:var(--working);animation:kSpin .9s linear infinite;"></span></sc-if></span>
+                      <span style="flex:none;font:600 12px var(--mono);">{{ k.key }}</span>
+                      <span style="flex:1;min-width:0;font-size:12.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ k.title }}</span>
+                      <sc-if value="{{ k.hasTag }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-size:11px;font-weight:600;color:{{ k.tagC }};">{{ k.tag }}</span></sc-if>
+                    </span>
+                    <span role="list" data-has="{{ k.hasTrack }}" aria-label="{{ k.trackLabel }}" style="display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding-left:22px;"><sc-if value="{{ k.hasRound }}" hint-placeholder-val="{{ false }}"><span title="Fix round" style="flex:none;font:600 10.5px var(--mono);color:var(--muted);margin-right:2px;">{{ k.round }}</span></sc-if><sc-for list="{{ k.track }}" as="t" hint-placeholder-count="5"><span role="listitem" title="{{ t.tip }}" data-ks="{{ t.s }}" style="flex:none;height:20px;display:inline-flex;align-items:center;gap:4px;padding:0 7px;box-sizing:border-box;font:500 10.5px/1 var(--mono);color:{{ t.cc }};background:{{ t.cb }};border:1px {{ t.cs }} {{ t.cd }};text-decoration:{{ t.td }};transition:background-color .3s ease, border-color .3s ease, color .3s ease;animation:{{ t.anim }};"><sc-if value="{{ t.spin }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;box-sizing:border-box;border:1.5px solid color-mix(in srgb, var(--working) 30%, transparent);border-top-color:var(--working);animation:kSpin .8s linear infinite;"></span></sc-if><sc-if value="{{ t.hasG }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true">{{ t.g }}</span></sc-if>{{ t.short }}</span></sc-for></span>
+                    <span style="display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;padding-left:22px;">
+                      <sc-for list="{{ k.helpers }}" as="hp" hint-placeholder-count="1"><span title="{{ hp }}" style="max-width:100%;height:18px;display:inline-flex;align-items:center;padding:0 6px;font:500 10.5px var(--mono);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ hp }}</span></sc-for>
+                      <sc-if value="{{ k.hasNote }}" hint-placeholder-val="{{ false }}"><span style="flex:1 1 160px;min-width:0;font-size:12px;line-height:1.45;color:var(--muted);text-wrap:pretty;">{{ k.note }}</span></sc-if>
+                    </span>
+                  </button>
+                  <sc-if value="{{ k.expOn }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;padding:2px 11px 10px 11px;border-top:1px solid var(--line);animation:kIn .18s ease-out;">
+                      <sc-for list="{{ k.steps }}" as="s" hint-placeholder-count="5">
+                        <div style="position:relative;display:flex;gap:9px;padding:8px 0 2px;">
+                          <span aria-hidden="true" style="position:absolute;left:6px;top:24px;bottom:-6px;width:1px;background:{{ s.lineC }};"></span>
+                          <span style="flex:none;width:14px;height:14px;margin-top:1px;display:flex;align-items:center;justify-content:center;color:{{ s.mk.c }};font:700 11px/1 var(--mono);">{{ s.mk.g }}<sc-if value="{{ s.mk.spin }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;box-sizing:border-box;border:1.5px solid var(--line2);border-top-color:var(--working);animation:kSpin .9s linear infinite;"></span></sc-if></span>
+                          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+                            <span style="display:flex;align-items:center;gap:6px;min-width:0;"><span style="min-width:0;font-size:12px;font-weight:{{ s.fw }};color:{{ s.nc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ s.name }}</span><sc-if value="{{ s.hasHelper }}" hint-placeholder-val="{{ false }}"><span style="flex:none;height:16px;display:inline-flex;align-items:center;padding:0 5px;font:500 10px var(--mono);color:var(--muted);box-shadow:inset 0 0 0 1px var(--line);">{{ s.helper }}</span></sc-if><span style="flex:1;"></span><span style="flex:none;font-size:11px;color:{{ s.mk.c }};">{{ s.word }}</span></span>
+                            <sc-if value="{{ s.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font-size:11.5px;line-height:1.45;color:var(--muted);text-wrap:pretty;">{{ s.note }}</span></sc-if>
+                          </div>
+                        </div>
+                      </sc-for>
+                      <button type="button" onClick="{{ k.open }}" style="align-self:flex-start;margin:8px 0 0 23px;height:24px;display:flex;align-items:center;gap:5px;padding:0 8px;font-size:11.5px;color:var(--fg2);box-shadow:inset 0 0 0 1px var(--line2);" style-hover="background:var(--hover);color:var(--fg);">Open full run<span style="color:var(--dim);">›</span></button>
+                    </div>
+                  </sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+            </sc-if>
+            <sc-if value="{{ board.hasDone }}" hint-placeholder-val="{{ false }}">
+              <button type="button" onClick="{{ board.toggleDone }}" style="display:flex;align-items:center;gap:8px;height:30px;margin-top:8px;padding:0 10px;font-size:12px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line);" style-hover="background:var(--hover);"><span style="color:var(--ok);font:700 11px var(--mono);">✓</span>{{ board.doneLabel }}<span style="flex:1;"></span>{{ board.doneAct }}</button>
+              <sc-if value="{{ board.doneOpen }}" hint-placeholder-val="{{ false }}">
+                <sc-for list="{{ board.done }}" as="k" hint-placeholder-count="3">
+                  <button type="button" onClick="{{ k.open }}" style="display:flex;align-items:center;gap:8px;height:30px;padding:0 11px;text-align:left;animation:kIn .2s ease-out;" style-hover="background:var(--hover);"><span style="flex:none;width:14px;text-align:center;color:{{ k.mk.c }};font:700 11px var(--mono);">{{ k.mk.g }}</span><span style="flex:none;font:500 11.5px var(--mono);color:var(--fg2);">{{ k.key }}</span><span style="flex:1;min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ k.title }}</span><span style="flex:none;font-size:11px;font-weight:600;color:{{ k.tagC }};">{{ k.tag }}</span></button>
+                </sc-for>
+              </sc-if>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        
+        <sc-if value="{{ showSubs }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:none;height:44px;display:flex;align-items:center;gap:8px;padding:0 10px 0 14px;border-bottom:1px solid var(--line);"><sc-if value="{{ tabs.hide }}" hint-placeholder-val="{{ true }}"><span style="flex:none;font-size:13.5px;font-weight:600;">Subagents</span></sc-if><sc-if value="{{ tabs.show }}" hint-placeholder-val="{{ false }}"><div role="tablist" aria-label="Work" style="display:flex;align-items:center;gap:14px;margin-left:6px;"><sc-for list="{{ tabs.items }}" as="tb" hint-placeholder-count="2"><button type="button" role="tab" aria-selected="{{ tb.on }}" onClick="{{ tb.pick }}" style="height:44px;display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:{{ tb.c }};box-shadow:{{ tb.sh }};" style-hover="color:var(--fg);">{{ tb.l }}<span style="font:400 11px var(--mono);color:var(--dim);">{{ tb.n }}</span></button></sc-for></div></sc-if><span style="flex:1 1 auto;min-width:0;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ sl.sum }}</span></div>
+          <div data-runbody="1" style="flex:1;min-height:0;overflow-y:auto;padding:8px 14px 18px;display:flex;flex-direction:column;gap:2px;">
+            <sc-for list="{{ sl.groups }}" as="g" hint-placeholder-count="2">
+              <div style="display:flex;align-items:baseline;gap:8px;padding:12px 2px 6px;"><span style="font-size:11.5px;font-weight:600;color:var(--fg2);">{{ g.title }}</span><span style="font:400 11px var(--mono);color:var(--dim);">{{ g.n }}</span></div>
+              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="2">
+                <button type="button" onClick="{{ r.open }}" aria-pressed="{{ r.on }}" style="display:flex;align-items:flex-start;gap:10px;padding:9px 10px;text-align:left;background:{{ r.bg }};box-shadow:inset 0 0 0 1px {{ r.bd }};" style-hover="background:var(--hover);">
+                  <span style="flex:none;width:14px;height:14px;display:flex;align-items:center;justify-content:center;color:{{ r.mk.c }};font:700 12px/1 var(--mono);">{{ r.mk.g }}<sc-if value="{{ r.mk.spin }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;box-sizing:border-box;border:1.5px solid var(--line2);border-top-color:var(--working);animation:kSpin .9s linear infinite;"></span></sc-if></span>
+                  <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+                    <span style="display:flex;align-items:baseline;gap:8px;min-width:0;"><span style="min-width:0;font-size:13px;font-weight:500;color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.label }}</span><span style="flex:1;"></span><span style="flex:none;font:400 11px var(--mono);color:var(--dim);">{{ r.model }}</span></span>
+                    <span style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.line }}</span>
+                  </span>
+                </button>
+              </sc-for>
+            </sc-for>
+            <sc-if value="{{ sl.hasDone }}" hint-placeholder-val="{{ false }}">
+              <button type="button" onClick="{{ sl.toggleDone }}" style="display:flex;align-items:center;gap:8px;height:30px;margin-top:10px;padding:0 10px;font-size:12px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line);" style-hover="background:var(--hover);"><span style="color:var(--ok);font:700 11px var(--mono);">✓</span>{{ sl.doneLabel }}<span style="flex:1;"></span>{{ sl.doneAct }}</button>
+              <sc-if value="{{ sl.doneOpen }}" hint-placeholder-val="{{ false }}"><sc-for list="{{ sl.done }}" as="r" hint-placeholder-count="2">
+                <button type="button" onClick="{{ r.open }}" aria-pressed="{{ r.on }}" style="display:flex;align-items:center;gap:10px;height:32px;padding:0 10px;text-align:left;background:{{ r.bg }};box-shadow:inset 0 0 0 1px {{ r.bd }};animation:kIn .2s ease-out;" style-hover="background:var(--hover);"><span style="flex:none;width:14px;height:14px;display:flex;align-items:center;justify-content:center;color:{{ r.mk.c }};font:700 12px/1 var(--mono);">{{ r.mk.g }}<sc-if value="{{ r.mk.spin }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;box-sizing:border-box;border:1.5px solid var(--line2);border-top-color:var(--working);animation:kSpin .9s linear infinite;"></span></sc-if></span><span style="flex:1;min-width:0;font-size:12.5px;color:var(--fg2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.label }}</span><span style="flex:none;font:400 11px var(--mono);color:var(--dim);">{{ r.model }}</span></button>
+              </sc-for></sc-if>
+            </sc-if>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showEmpty }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:24px;text-align:center;"><span style="font-size:13.5px;font-weight:600;color:var(--fg);">Nothing running in this chat</span><span style="max-width:340px;font-size:12.5px;line-height:1.5;color:var(--muted);text-wrap:pretty;">When this chat starts subagents or a workflow reports runs, they show up here.</span></div>
+        </sc-if>
+        <sc-if value="{{ showSubDetail }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ sd.close }}" style="position:absolute;inset:0;z-index:29;background:rgba(0,0,0,.18);animation:kFade .15s ease-out;"></div>
+          <div data-rundrawer="true" role="dialog" aria-label="{{ sd.label }}" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+            <div style="flex:none;height:44px;display:flex;align-items:center;gap:8px;padding:0 8px 0 14px;border-bottom:1px solid var(--line);"><span style="font-size:12.5px;color:var(--muted);">Subagent</span><span style="color:var(--dim);">›</span><span style="flex:1;min-width:0;font:600 12.5px var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ sd.label }}</span><button type="button" onClick="{{ sd.close }}" aria-label="Close details" style="width:26px;height:26px;color:var(--muted);" style-hover="background:var(--hover);color:var(--fg);">✕</button></div>
+            <div style="flex:1;min-height:0;overflow-y:auto;padding:14px 16px 18px;display:flex;flex-direction:column;gap:14px;">
+              <span style="display:flex;align-items:center;gap:8px;"><span style="flex:none;width:14px;height:14px;display:flex;align-items:center;justify-content:center;color:{{ sd.mk.c }};font:700 12px/1 var(--mono);">{{ sd.mk.g }}<sc-if value="{{ sd.mk.spin }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;box-sizing:border-box;border:1.5px solid var(--line2);border-top-color:var(--working);animation:kSpin .9s linear infinite;"></span></sc-if></span><span style="font-size:12.5px;font-weight:600;color:{{ sd.mk.c }};">{{ sd.mk.word }}</span><span style="flex:1;"></span><span style="font:400 11.5px var(--mono);color:var(--dim);">{{ sd.model }}</span></span>
+              <div style="display:flex;flex-direction:column;gap:4px;"><span style="font-size:11px;font-weight:600;color:var(--dim);">Asked to</span><span style="font-size:13px;line-height:1.5;color:var(--fg);text-wrap:pretty;">{{ sd.asked }}</span></div>
+              <sc-if value="{{ sd.hasAct }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:4px;"><span style="font-size:11px;font-weight:600;color:var(--dim);">Now</span><span style="font:400 12px var(--mono);color:var(--fg2);">{{ sd.act }}</span></div></sc-if>
+              <sc-if value="{{ sd.hasRan }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:4px;"><span style="font-size:11px;font-weight:600;color:var(--dim);">Ran</span><sc-for list="{{ sd.ran }}" as="c" hint-placeholder-count="1"><code style="display:block;padding:6px 9px;font:400 12px var(--mono);color:var(--fg2);background:var(--well);box-shadow:inset 0 0 0 1px var(--line);white-space:pre-wrap;word-break:break-all;">{{ c }}</code></sc-for></div></sc-if>
+              <sc-if value="{{ sd.hasAnswer }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:4px;"><span style="font-size:11px;font-weight:600;color:var(--dim);">Final answer</span><span style="font-size:13px;line-height:1.55;color:var(--fg);text-wrap:pretty;">{{ sd.answer }}</span></div></sc-if>
+              <span style="padding-top:10px;border-top:1px solid var(--line);font-size:11.5px;color:var(--dim);">Read-only. To change anything, ask in the main chat.</span>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showRun }}" hint-placeholder-val="{{ false }}"><sc-if value="{{ inPaneB }}" hint-placeholder-val="{{ false }}"><div onClick="{{ rv.back }}" style="position:absolute;inset:0;z-index:29;background:rgba(0,0,0,.18);animation:kFade .15s ease-out;"></div></sc-if><div data-rundrawer="{{ inPane }}" style="flex:1;min-height:0;display:flex;flex-direction:column;">
+          <div style="flex:none;height:44px;display:flex;align-items:center;gap:8px;padding:0 10px 0 8px;border-bottom:1px solid var(--line);">
+            <nav aria-label="Breadcrumb" style="min-width:0;display:flex;align-items:center;gap:4px;font-size:12.5px;"><button type="button" onClick="{{ rv.back }}" style="height:28px;padding:0 6px;color:var(--muted);" style-hover="background:var(--hover);color:var(--fg);">Work</button><span style="color:var(--dim);">›</span><span style="min-width:0;padding:0 4px;font:600 12.5px var(--mono);color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ rv.key }}</span></nav>
+            <span style="flex:1;"></span>
+            <sc-if value="{{ rv.hasLink }}" hint-placeholder-val="{{ false }}"><a href="#" style="font-size:12px;">Open ticket ↗</a></sc-if><sc-if value="{{ inPaneB }}" hint-placeholder-val="{{ false }}"><button type="button" onClick="{{ rv.back }}" aria-label="Close details" style="width:26px;height:26px;color:var(--muted);" style-hover="background:var(--hover);color:var(--fg);">✕</button></sc-if>
+            <sc-if value="{{ canClose }}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{ close }}" aria-label="Close" style="width:26px;height:26px;color:var(--muted);" style-hover="background:var(--hover);color:var(--fg);">✕</button></sc-if>
+          </div>
+          <div data-runbody="1" style="flex:1;min-height:0;overflow-y:auto;padding:14px 14px 18px;display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <span style="display:flex;align-items:center;gap:8px;"><span style="font:700 13px var(--mono);">{{ rv.key }}</span><span style="font-size:11.5px;font-weight:600;color:{{ rv.sc }};">{{ rv.sw }}</span></span>
+              <sc-if value="{{ rv.hasTitle }}" hint-placeholder-val="{{ true }}"><span style="font-size:14px;line-height:1.45;font-weight:600;text-wrap:pretty;">{{ rv.title }}</span></sc-if>
+              <span style="font-size:11.5px;color:var(--dim);">{{ rv.meta }}</span>
+            </div>
+            <div role="img" aria-label="{{ rv.stripLabel }}" style="display:flex;align-items:flex-start;"><sc-for list="{{ rv.strip }}" as="t" hint-placeholder-count="6"><span style="display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:0;"><span style="position:relative;width:100%;display:flex;align-items:center;justify-content:center;height:20px;"><sc-if value="{{ t.hasLine }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position:absolute;left:0;right:calc(50% + 14px);top:9px;height:2px;background:var(--line2);overflow:hidden;"><span style="position:absolute;inset:0;background:{{ t.lineC }};transform-origin:left;transform:scaleX({{ t.lineFill }});transition:transform .5s cubic-bezier(.2,.8,.2,1);"></span></span></sc-if><sc-if value="{{ t.hasNext }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position:absolute;left:calc(50% + 14px);right:0;top:9px;height:2px;background:var(--line2);overflow:hidden;"><span style="position:absolute;inset:0;background:{{ t.nextC }};transform-origin:left;transform:scaleX({{ t.nextFill }});transition:transform .5s cubic-bezier(.2,.8,.2,1);"></span></span></sc-if><span title="{{ t.tip }}" data-ks="{{ t.s }}" style="position:relative;width:20px;height:20px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;background:{{ t.bg }};border:1.5px solid {{ t.bd }};color:{{ t.fc }};font:700 11px/1 var(--mono);transition:background-color .3s ease, border-color .3s ease;animation:{{ t.anim }};">{{ t.g }}<sc-if value="{{ t.spin }}" hint-placeholder-val="{{ false }}"><span style="width:9px;height:9px;box-sizing:border-box;border:1.5px solid color-mix(in srgb, var(--working) 30%, transparent);border-top-color:var(--working);animation:kSpin .8s linear infinite;"></span></sc-if></span></span><span style="max-width:100%;padding:0 2px;font-size:10.5px;color:{{ t.nc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.n }}</span></span></sc-for></div>
+            <div style="display:flex;flex-direction:column;">
+              <sc-for list="{{ rv.steps }}" as="p" hint-placeholder-count="6">
+                <div style="display:flex;gap:10px;padding:10px 8px;border-top:1px solid var(--line);background:{{ p.bg }};">
+                  <span style="flex:none;width:14px;height:18px;display:flex;align-items:center;justify-content:center;color:{{ p.mk.c }};font:700 12px/1 var(--mono);">{{ p.mk.g }}<sc-if value="{{ p.mk.spin }}" hint-placeholder-val="{{ false }}"><span style="width:8px;height:8px;box-sizing:border-box;border:1.5px solid var(--line2);border-top-color:var(--working);animation:kSpin .9s linear infinite;"></span></sc-if></span>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+                    <span style="display:flex;align-items:baseline;gap:8px;"><span style="flex:1;min-width:0;font-size:13px;line-height:18px;font-weight:{{ p.fw }};color:{{ p.nc }};text-wrap:pretty;">{{ p.name }}</span><span style="flex:none;font-size:11.5px;color:{{ p.mk.c }};">{{ p.mk.word }}</span></span>
+                    <sc-if value="{{ p.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font-size:12px;line-height:1.45;color:var(--fg2);text-wrap:pretty;">{{ p.note }}</span></sc-if>
+                    <sc-if value="{{ p.hasHelper }}" hint-placeholder-val="{{ false }}"><span style="position:relative;display:inline-flex;align-self:flex-start;"><button type="button" onClick="{{ p.openHelper }}" aria-expanded="{{ p.hvOn }}" style="align-self:flex-start;margin-top:2px;font:400 11.5px var(--mono);color:var(--blue);" style-hover="color:var(--fg);">{{ p.helper }} ›</button>
+                <sc-if value="{{ p.hvOn }}" hint-placeholder-val="{{ false }}"><div onClick="{{ p.closeHelper }}" style="position:fixed;inset:0;z-index:40;"></div><div role="dialog" aria-label="{{ p.hv.label }}" style="position:absolute;left:0;top:calc(100% + 6px);z-index:41;width:min(300px, calc(100vw - 48px));max-width:var(--hvmax, 300px);display:flex;flex-direction:column;gap:10px;padding:12px 14px;background:var(--main);border:1px solid var(--line2);box-shadow:0 3px 8px rgba(0,0,0,.28);animation:kIn .14s ease-out;">
+                  <span style="display:flex;align-items:center;gap:8px;min-width:0;"><span style="min-width:0;font:600 12px var(--mono);color:var(--fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.hv.label }}</span><span style="flex:none;font-size:11.5px;font-weight:600;color:{{ p.hv.sc }};">{{ p.hv.sw }}</span></span>
+                  <span style="font-size:12.5px;line-height:1.45;color:var(--fg2);">{{ p.hv.task }}</span>
+                  <sc-if value="{{ p.hv.local }}" hint-placeholder-val="{{ true }}"><span style="font:400 11.5px var(--mono);color:var(--dim);">{{ p.hv.model }}</span></sc-if>
+                  <sc-if value="{{ p.hv.hasAct }}" hint-placeholder-val="{{ false }}"><span style="display:flex;flex-direction:column;gap:3px;"><span style="font-size:11px;font-weight:600;color:var(--dim);">Latest</span><span style="font:400 12px var(--mono);color:var(--fg2);">{{ p.hv.act }}</span></span></sc-if>
+                  <sc-if value="{{ p.hv.hasResult }}" hint-placeholder-val="{{ false }}"><span style="display:flex;flex-direction:column;gap:3px;"><span style="font-size:11px;font-weight:600;color:var(--dim);">Result</span><span style="font-size:12.5px;line-height:1.45;color:var(--fg2);text-wrap:pretty;">{{ p.hv.result }}</span></span></sc-if>
+                  <span style="padding-top:8px;border-top:1px solid var(--line);font-size:11.5px;line-height:1.45;color:var(--dim);">{{ p.hv.foot }}</span>
+                </div></sc-if></span></sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div></sc-if>
+
+        <sc-if value="{{ showHelper }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:none;height:44px;display:flex;align-items:center;gap:8px;padding:0 10px 0 8px;border-bottom:1px solid var(--line);">
+            <button type="button" onClick="{{ hv.back }}" style="height:28px;padding:0 8px;font-size:12.5px;color:var(--fg2);" style-hover="background:var(--hover);color:var(--fg);">‹ {{ hv.backTo }}</button>
+            <span style="flex:1;"></span>
+            <sc-if value="{{ canClose }}" hint-placeholder-val="{{ true }}"><button type="button" onClick="{{ close }}" aria-label="Close" style="width:26px;height:26px;color:var(--muted);" style-hover="background:var(--hover);color:var(--fg);">✕</button></sc-if>
+          </div>
+          <div style="flex:1;min-height:0;overflow-y:auto;padding:16px 14px;display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;flex-direction:column;gap:5px;">
+              <span style="display:flex;align-items:center;gap:8px;"><span style="font:600 12.5px var(--mono);">{{ hv.label }}</span><span style="font-size:11.5px;font-weight:600;color:{{ hv.sc }};">{{ hv.sw }}</span></span>
+              <span style="font-size:14px;line-height:1.45;font-weight:600;text-wrap:pretty;">{{ hv.task }}</span>
+              <sc-if value="{{ hv.local }}" hint-placeholder-val="{{ true }}"><span style="font-size:11.5px;color:var(--dim);">{{ hv.model }}</span></sc-if>
+            </div>
+            <sc-if value="{{ hv.hasAct }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:4px;"><span style="font-size:11px;font-weight:600;color:var(--dim);">Latest</span><span style="font:400 12px/1.5 var(--mono);color:var(--fg2);">{{ hv.act }}</span></div></sc-if>
+            <sc-if value="{{ hv.hasResult }}" hint-placeholder-val="{{ false }}"><div style="display:flex;flex-direction:column;gap:4px;"><span style="font-size:11px;font-weight:600;color:var(--dim);">Result</span><span style="font-size:13px;line-height:1.6;color:var(--fg2);text-wrap:pretty;">{{ hv.result }}</span></div></sc-if>
+            <span style="padding-top:12px;border-top:1px solid var(--line);font-size:12px;line-height:1.5;color:var(--dim);text-wrap:pretty;">{{ hv.foot }}</span>
+          </div>
+        </sc-if>
+      </div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:400,&quot;height&quot;:640},&quot;runs&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number[]&quot;},&quot;done&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number[]&quot;},&quot;sel&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;number | null&quot;},&quot;remote&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onSel&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;(id) =&gt; void&quot;},&quot;onClose&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+const KD = () => window.KitchenData;
+class Component extends DCLogic {
+  state = { helper: null, doneOpen: false, selLocal: null, exp: null, tab: null, subSel: null, subDoneOpen: false };
+  componentDidUpdate(pp) { if (pp.sel !== this.props.sel && this.state.helper) this.setState({ helper: null }); }
+  info(id) { return KD().info.call(this, id); }
+  renderVals() {
+    const D = KD(); if (!D) return { showBoard: false, showRun: false, showHelper: false, board: { groups: [], done: [] }, rv: { strip: [], steps: [] }, hv: {} };
+    const { C, MK, mk, RUNS, H } = D;
+    const CELL = { passed: [C.ok, C.ok, 'var(--main)', '✓', ''], merged: [C.ok, C.ok, 'var(--main)', '✓', ''], ready: [C.ok, C.ok, 'var(--main)', '✓', ''], failed: [C.bad, C.bad, 'var(--main)', '✕', 'kPop .35s ease-out'], 'sent back': ['transparent', C.mu, C.mu, '↺', 'kBack .5s ease-out'], needs: [C.warn, C.warn, 'var(--main)', '!', 'kNeed 1.6s ease-in-out infinite'], working: ['transparent', C.work, C.work, '', 'kWork 1.6s ease-in-out infinite'], waiting: ['transparent', C.line2, C.dim, '', ''], skipped: ['transparent', 'transparent', C.dim, '–', ''], unknown: ['transparent', C.line2, C.dim, '?', ''] };
+    const DONE = { passed: 1, merged: 1, ready: 1 };
+    const trackOf = steps => steps.map((z, i) => { const c = CELL[z.s] || CELL.unknown; const prev = steps[i - 1], nxt = steps[i + 1]; const pf = prev && DONE[prev.s]; const nf = DONE[z.s];
+      return { s: z.s, n: z.n, tip: z.n + ': ' + (MK[z.s] ? MK[z.s][1] : z.s) + (z.note ? ' · ' + z.note : ''), bg: c[0], bd: c[1], fc: c[2], g: c[3], anim: c[4] || 'none', spin: z.s === 'working', flex: i === 0 ? '0 0 auto' : '1 1 0',
+        hasLine: i > 0, short: z.n.replace(/^review /, ''), hasG: ['failed', 'sent back', 'needs'].includes(z.s), td: z.s === 'skipped' ? 'line-through' : 'none',
+        cc: { passed: C.ok, merged: C.ok, ready: C.ok, working: C.work, needs: C.warn, failed: C.bad, 'sent back': C.mu }[z.s] || C.dim,
+        cb: { passed: 'color-mix(in srgb, ' + C.ok + ' 14%, transparent)', merged: 'color-mix(in srgb, ' + C.ok + ' 14%, transparent)', ready: 'color-mix(in srgb, ' + C.ok + ' 14%, transparent)', working: 'color-mix(in srgb, ' + C.work + ' 10%, transparent)', needs: 'color-mix(in srgb, ' + C.warn + ' 16%, transparent)', failed: 'color-mix(in srgb, ' + C.bad + ' 14%, transparent)' }[z.s] || 'transparent',
+        cd: { passed: 'transparent', merged: 'transparent', ready: 'transparent', working: 'color-mix(in srgb, ' + C.work + ' 55%, transparent)', needs: C.warn, failed: 'transparent', 'sent back': C.line2, skipped: 'transparent' }[z.s] || C.line2,
+        cs: z.s === 'waiting' || z.s === 'unknown' ? 'dashed' : 'solid', lineFill: pf ? '1' : '0', lineC: pf ? C.ok : C.work, hasNext: !!nxt, nextFill: nf ? '1' : '0', nextC: nf ? C.ok : C.work, nc: z.s === 'working' || z.s === 'needs' ? C.fg : z.s === 'waiting' || z.s === 'skipped' ? C.dim : C.mu }; });
+    const st = { ...this.state, sel: this.props.sel ?? null, panel: true };
+    const runsP = this.props.runs || [], doneP = this.props.done || [];
+    const c = { runs: runsP, done: doneP, remote: !!this.props.remote };
+    const remote = c.remote, machine = remote ? (this.props.machine || 'devbox') : 'This computer';
+    const all = [...c.runs, ...c.done].map(id => this.info(id));
+    const act = c.runs.map(id => this.info(id)), fin = c.done.map(id => this.info(id));
+    const pick = this.props.onSel || (() => {});
+    const open = id => () => { this.setState({ helper: null }); pick(id); };
+    const ORDER = ['intake', 'spec', 'build', 'review code', 'review security', 'review ui', 'approve'];
+    const card = x => ({ mk: mk(x.st), key: x.name, title: x.title || 'No ticket', tag: x.tag, tagC: x.tagC, hasTag: !!x.tag && x.st !== 'needs', note: x.note, hasNote: !!x.note, bg: x.st === 'needs' ? 'rgba(240,164,58,.07)' : 'transparent', bd: x.st === 'needs' ? 'rgba(240,164,58,.45)' : C.line, open: open(x.id) });
+    const groups = [];
+    const nd = act.filter(x => x.st === 'needs'); if (nd.length) groups.push({ title: 'Needs you', c: C.warn, n: String(nd.length), cards: nd.map(card) });
+    const rest = act.filter(x => x.st !== 'needs'); const gk = x => x.step.endsWith('reviews') ? 'review code' : x.cur.n;
+    [...new Set(rest.map(gk))].sort((a, b) => (ORDER.indexOf(a) + 99) % 99 - (ORDER.indexOf(b) + 99) % 99).forEach(k => { const cs = rest.filter(x => gk(x) === k); groups.push({ title: k.startsWith('review') && cs.some(x => x.step.endsWith('reviews')) ? 'review' : k, c: C.fg2, n: String(cs.length), cards: cs.map(card) }); });
+    const moving = act.filter(x => x.st === 'working').length;
+    const TC = { passed: C.ok, working: C.work, needs: C.warn, failed: C.bad, 'sent back': C.mu, waiting: C.line, skipped: C.line, unknown: C.line };
+    const curStep = x => x.r.steps.find(z => z.s === 'needs') || x.r.steps.find(z => z.s !== 'passed' && z.s !== 'skipped') || x.r.steps[x.r.steps.length - 1];
+    const names = []; act.forEach(x => x.r.steps.forEach((z, zi) => { if (names.includes(z.n)) return; const prev = zi > 0 ? names.indexOf(x.r.steps[zi - 1].n) : -1; names.splice(prev + 1, 0, z.n); }));
+    const lcard = x => { const cs = curStep(x); const live = x.r.steps.filter(z => (z.s === 'working' || z.s === 'needs') && z.helper); const hs = [...new Set((live.length ? live : (cs.helper ? [cs] : [])).map(z => z.helper))];
+      const on = st.sel === x.id; return { ...card(x), on: on ? 'true' : 'false', cbg: x.st === 'needs' ? 'color-mix(in srgb, var(--warn) 7%, var(--main))' : 'var(--main)', bd: on ? C.fg2 : card(x).bd, toggle: open(x.id), track: [], rounds: (() => { const rv = x.r.steps.filter(z => /^review/.test(z.n)); const m = x.r.steps.map(z => /round (\d)/i.exec(z.note || '')).find(Boolean); const failed = rv.some(z => z.s === 'sent back' || z.s === 'failed'); const n = m && failed ? +m[1] : 1; const building = x.r.steps.some(y => y.n === 'build' && y.s === 'working'); const out = []; for (let r = 1; r < n; r++) out.push({ round: 'R' + r, label: 'Round ' + r, multi: true, track: trackOf(rv.map(z => ({ ...z, s: z.s === 'sent back' || z.s === 'failed' ? 'failed' : 'passed', note: z.s === 'sent back' || z.s === 'failed' ? 'Failed in round ' + r + '. Sent back to build.' : z.note }))) }); out.push({ round: 'R' + n, label: 'Round ' + n, multi: n > 1, track: trackOf(rv.map(z => ({ ...z, s: n > 1 && building ? 'waiting' : z.s === 'sent back' ? 'failed' : z.s }))) }); return out; })(), hasTrack: x.r.steps.some(z => /^review/.test(z.n)) && !['intake', 'spec'].includes(curStep(x).n), round: (() => { const m = x.r.steps.map(z => /round (\d)/i.exec(z.note || '')).find(Boolean); return m ? 'R' + m[1] : 'R1'; })(), hasRound: x.r.steps.some(z => /^review/.test(z.n)), trackLabel: 'Steps: ' + x.r.steps.map(z => z.n + ' ' + (MK[z.s] ? MK[z.s][1] : z.s)).join(', '), cols: 'repeat(' + x.r.steps.length + ',minmax(0,1fr))', helpers: hs }; };
+    const used = names.filter(n => act.some(x => curStep(x).n === n));
+    const lanes = used.map((title, li) => { const cs = act.filter(x => curStep(x).n === title); const nd2 = cs.some(x => x.st === 'needs'); return { title, sub: '', n: String(cs.length), c: nd2 ? C.warn : C.fg, dotBg: nd2 ? C.warn : C.fg2, dotBd: nd2 ? C.warn : C.fg2, lineB: li === used.length - 1 ? 'calc(100% - 14px)' : '-4px', cards: cs.map(lcard) }; });
+    const colOf = x => { if (x.st === 'needs' || x.r.steps.some(z => z.s === 'needs')) return 'needs human'; const n = curStep(x).n; if (n === 'intake' || n === 'spec') return 'spec'; if (/^review/.test(n)) return 'review'; return n; }; const COLS = ['spec', 'build', 'review', 'approve', 'merged', 'needs human']; const cols = COLS.map(title => { const cs = title === 'merged' ? fin : act.filter(x => colOf(x) === title); const nd2 = cs.some(x => x.st === 'needs'); return { title: title === 'needs human' ? 'Needs human' : title[0].toUpperCase() + title.slice(1), n: String(cs.length), c: title === 'needs human' && cs.length ? C.warn : cs.length ? C.fg : C.mu, empty: !cs.length, w: cs.length ? 'minmax(260px, 1fr)' : '132px', cards: cs.map(lcard) }; });
+    const board = { cols, colTpl: 'repeat(6, minmax(168px, 1fr))', lanes, groups, sum: [nd.length ? nd.length + ' needs you' : '', moving ? moving + ' working' : '', fin.length ? fin.length + ' done' : ''].filter(Boolean).join(' · ') || 'Nothing running',
+      hasDone: fin.length > 0, doneOpen: st.doneOpen, doneLabel: fin.length + (fin.length === 1 ? ' run done' : ' runs done'), doneAct: st.doneOpen ? 'Hide' : 'Show', toggleDone: () => this.setState(x => ({ doneOpen: !x.doneOpen })),
+      done: fin.map(x => ({ mk: mk(x.st), key: x.name, title: x.title, tag: MK[x.st][1], tagC: x.tagC, open: open(x.id) })) };
+    const sel = st.sel != null && RUNS[st.sel] && (c.runs.includes(st.sel) || c.done.includes(st.sel)) ? this.info(st.sel) : null;
+    const inPane = !!this.props.inPane;
+    const hvOf = lab => { const hd = H[lab]; if (!hd) return {}; return { label: lab, task: hd[0], model: hd[1], local: !remote, sw: { working: 'working', done: 'done', failed: 'failed', stopped: 'stopped' }[hd[2]] || hd[2], sc: { working: C.work, done: C.ok, failed: C.bad, stopped: C.warn }[hd[2]] || C.mu, act: hd[3], hasAct: !remote && hd[2] === 'working', result: hd[4] || '', hasResult: !!hd[4], foot: remote ? 'Runs on devbox. Helpers on other machines show their task and result only. To change anything, ask in the main chat.' : 'Read-only. To change anything, ask in the main chat.' }; };
+    const SC = { passed: C.ok, working: C.work, needs: C.warn, failed: C.bad, 'sent back': C.mu, waiting: C.line2, skipped: 'transparent', unknown: C.line2 };
+    const rv = sel ? { key: sel.name, title: sel.title, hasTitle: !!sel.title, hasLink: !!sel.r.link, sw: MK[sel.st][1], sc: MK[sel.st][2],
+      meta: 'Updated ' + sel.r.upd + ' · ' + machine + ' · ' + (this.props.project || 'acme-store') + ' · ⑂ ' + (this.props.branch || 'main'),
+      strip: trackOf(sel.r.steps), stripLabel: 'Steps: ' + sel.r.steps.map(z => z.n + ' ' + (MK[z.s] ? MK[z.s][1] : z.s)).join(', '),
+      steps: sel.r.steps.map(s => ({ mk: mk(s.s), name: s.n, note: s.note, hasNote: !!s.note, helper: s.helper, hasHelper: !!(s.helper && H[s.helper]), openHelper: () => this.setState(x => ({ helper: inPane && x.helper === s.helper ? null : s.helper })), hvOn: inPane && st.helper === s.helper, hv: inPane && st.helper === s.helper ? { ...hvOf(s.helper), sw: MK[s.s] ? MK[s.s][1] : s.s, sc: MK[s.s] ? MK[s.s][2] : C.mu, hasAct: !remote && s.s === 'working' } : {}, closeHelper: () => this.setState({ helper: null }), bg: s.s === 'needs' ? 'rgba(240,164,58,.07)' : 'transparent', fw: s.s === 'working' || s.s === 'needs' ? 600 : 500, nc: s.s === 'skipped' || s.s === 'waiting' ? C.mu : C.fg })),
+      back: () => { this.setState({ helper: null }); pick(null); } } : { strip: [], steps: [] };
+    const hd = st.helper && H[st.helper];
+    const hv = hd ? { label: st.helper, task: hd[0], model: hd[1], local: !remote, sw: { working: 'working', done: 'done', failed: 'failed' }[hd[2]], sc: { working: C.work, done: C.ok, failed: C.bad }[hd[2]], act: hd[3], hasAct: !remote && hd[2] === 'working', result: hd[4] || (hd[2] === 'working' ? '' : ''), hasResult: !!hd[4],
+      backTo: sel ? sel.name : 'Work', back: () => this.setState({ helper: null }),
+      foot: remote ? 'Runs on devbox. Helpers on other machines show their task and result only. To change anything, ask in the main chat.' : 'Read-only. To change anything, ask in the main chat.' } : {};
+
+    const subs = this.props.subs || []; const hasRuns = c.runs.length + c.done.length > 0, hasSubs = subs.length > 0;
+    const tab = this.state.tab === 'subs' && hasSubs ? 'subs' : this.state.tab === 'runs' && hasRuns ? 'runs' : hasRuns ? 'runs' : hasSubs ? 'subs' : 'none';
+    const both = hasRuns && hasSubs; const on2 = 'inset 0 -2px 0 var(--accent)';
+    const tabs = { show: both, hide: !both, items: [['runs', 'Runs', String(c.runs.length)], ['subs', 'Subagents', String(subs.filter(x => x.s === 'working').length || subs.length)]].map(([k2, l, n]) => ({ l, n, on: tab === k2 ? 'true' : 'false', c: tab === k2 ? C.fg : C.mu, sh: tab === k2 ? on2 : 'none', pick: () => this.setState({ tab: k2, subSel: null }) })) };
+    const SM = { working: 'working', done: 'passed', failed: 'failed' };
+    const srow = (x, i) => { const on = this.state.subSel === i; return { label: x.label, model: x.model, mk: mk(x.mkKey || SM[x.s] || 'unknown'), line: x.s === 'working' ? (x.act || 'Working') : x.s === 'failed' ? (x.answer || 'Failed') : (x.answer || 'Done'), on: on ? 'true' : 'false', bg: on ? 'var(--hover)' : 'transparent', bd: on ? C.line2 : 'transparent', open: () => this.setState({ subSel: i }) }; };
+    const idx = subs.map((x, i) => [x, i]);
+    const sgroups = [['Working', 'working'], ['Failed', 'failed']].map(([title, s2]) => ({ title, n: String(idx.filter(([x]) => x.s === s2).length), rows: idx.filter(([x]) => x.s === s2).map(([x, i]) => srow(x, i)) })).filter(g => g.rows.length);
+    const sdone = idx.filter(([x]) => x.s === 'done');
+    const sl = { groups: sgroups, sum: [subs.filter(x => x.s === 'working').length + ' working', sdone.length ? sdone.length + ' done' : '', subs.filter(x => x.s === 'failed').length ? subs.filter(x => x.s === 'failed').length + ' failed' : ''].filter(Boolean).join(' · '), hasDone: sdone.length > 0, doneOpen: this.state.subDoneOpen, doneLabel: sdone.length + ' done', doneAct: this.state.subDoneOpen ? 'Hide' : 'Show', toggleDone: () => this.setState(x => ({ subDoneOpen: !x.subDoneOpen })), done: sdone.map(([x, i]) => srow(x, i)) };
+    const sx = this.state.subSel != null && tab === 'subs' ? subs[this.state.subSel] : null;
+    const sd = sx ? { label: sx.label, model: sx.model, mk: mk(sx.mkKey || SM[sx.s] || 'unknown'), asked: sx.asked, act: sx.act, hasAct: sx.s === 'working' && !!sx.act, ran: sx.ran || [], hasRan: !!(sx.ran && sx.ran.length), answer: sx.answer, hasAnswer: !!sx.answer, close: () => this.setState({ subSel: null }) } : { mk: mk('unknown'), ran: [] };
+    const hdShow = !inPane && !!hd; return { tabs, sl, sd, showSubs: inPane && tab === 'subs', showEmpty: inPane && tab === 'none', showSubDetail: !!sx, inPaneB: inPane, inPaneN: !inPane, board, rv, hv, inPane: inPane ? 'true' : 'false', panelBg: inPane ? 'transparent' : 'var(--main)', canClose: !inPane, close: this.props.onClose || (() => {}), showBoard: (inPane ? tab === 'runs' : !sel) && !hdShow, showRun: !!sel && !hdShow, showHelper: hdShow };
+  }
+}
+</script>
+</body>
+</html>
