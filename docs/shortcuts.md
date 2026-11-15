@@ -122,6 +122,8 @@ To send `Ctrl+Space` itself to the pane, search commands for "Send the leader ke
 - **Search commands** (`Ctrl+K`, `Space` after the prefix, `Tab` from the map, or typing a letter
   that is not a key): every command, including ones with no key, and your sessions. Matching is
   an in-order subsequence (`spld` finds Split down). With nothing typed it lists the commands you ran last.
+  From three characters it also lists, under IN SESSIONS, a line each session printed that holds
+  them; Enter goes to that line in copy mode.
 - **Keys help** (`?` after the prefix, or the sidebar's menu → Keys): three columns, sessions, panes
   and window, each key as it is bound now; under them "Keys only work in key mode (Ctrl+Space).
   Everything else goes to the pane." `esc close` on its top border closes it.
@@ -328,6 +330,17 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Up, Down, PgUp, PgDn | Choose result |
 | Enter, Ctrl+E, Ctrl+Y | Put path/line into prompt, open in editor, copy path |
 | Esc | Close search |
+
+## Find in every session
+
+Search commands → **Find in every session**.
+
+| Keys | Action |
+| --- | --- |
+| Type, Backspace, Ctrl+U | Edit the words (three or more search) |
+| Up, Down, PgUp, PgDn | Choose a line |
+| Enter | Go to the session, in copy mode at that line (`n` / `N` next and previous match) |
+| Esc | Close |
 
 ## Changes and shared-file diffs
 

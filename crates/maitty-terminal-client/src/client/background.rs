@@ -381,6 +381,7 @@ impl App {
                 self.screen.failure_ask = None;
                 if machine == MachineId::LOCAL {
                     self.resume_failed();
+                    self.pane_search_failed();
                 }
                 self.notify(e, true);
             }
@@ -432,6 +433,10 @@ impl App {
                 if machine == MachineId::LOCAL =>
             {
                 self.saved_conversations_arrived(tag, found)
+            }
+            // Find in every session asks this computer's daemon only.
+            ServerMsg::Reply(Reply::Search(hits)) if machine == MachineId::LOCAL => {
+                self.pane_search_arrived(hits)
             }
             ServerMsg::Reply(Reply::HelperRead(record)) if machine == MachineId::LOCAL => {
                 self.helper_arrived(record)

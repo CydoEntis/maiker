@@ -75,6 +75,7 @@ impl App {
             Action::PasteImage => self.paste_image(),
             Action::SendFile => self.send_file_action(),
             Action::Find(tab) => self.open_find(tab),
+            Action::FindSessions => self.open_session_find(),
             Action::AgentStatusSetup => self.menu(
                 "Connect an agent · it then reports working, needs you and done itself".into(),
                 maitty_agent_integrations::STATUS_AGENTS
@@ -341,6 +342,7 @@ impl App {
             Action::Files,
             Action::Find(0),
             Action::Find(1),
+            Action::FindSessions,
             Action::Changes,
             Action::Branches,
             Action::References,

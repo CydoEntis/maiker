@@ -216,6 +216,8 @@ enum Mode {
     RenameTab(Box<screen::TabName>),
     /// The computers reached over ssh: how each stands, and adding or removing one.
     Machines(Box<screen::machines::MachinesView>),
+    /// Find in every session: lines this computer's sessions printed.
+    FindSessions(Box<screen::SessionFind>),
 }
 
 /// A view that replaces the pane area.
@@ -505,6 +507,8 @@ pub struct App {
     codex_hooks_asked: bool,
     /// The saved-conversation lists asked of the daemon and not all answered yet.
     resume: resume::Resume,
+    /// Find in every session's one search at a time.
+    pane_search: screen::PaneSearch,
     /// The protocol this computer's daemon said it speaks when this window last connected.
     local_protocol: u32,
     /// The theme browser's tab: the Light themes when true, else the Dark ones.
@@ -832,6 +836,7 @@ impl App {
             codex_hooks: None,
             codex_hooks_asked: false,
             resume: Default::default(),
+            pane_search: Default::default(),
             local_protocol: crate::protocol::PROTOCOL_VERSION,
             theme_tab_light: false,
             update_notes: Vec::new(),
@@ -1062,6 +1067,7 @@ impl App {
             self.request_diff();
             self.request_files_preview();
             self.request_folder_list();
+            self.pane_search_tick();
             if self.dirty
                 && last_draw.elapsed() >= frame
                 && self.sync_hold_until().is_none_or(|h| Instant::now() >= h)

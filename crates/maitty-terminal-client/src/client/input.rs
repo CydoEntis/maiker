@@ -131,6 +131,7 @@ impl App {
             }
             // The app's own text boxes take the paste, not the pane behind them.
             Mode::Find(v) => v.query.push_str(s.lines().next().unwrap_or("")),
+            Mode::FindSessions(v) => App::session_find_paste(v, &s),
             Mode::GoTo { query, .. } => query.push_str(s.lines().next().unwrap_or("").trim()),
             Mode::KeyMap(km) if km.view == screen::KeyView::Search && km.step.is_none() => {
                 themes::append_query(&mut km.query, s.lines().next().unwrap_or(""));
@@ -395,6 +396,7 @@ impl App {
             Mode::Side => self.on_side_key(&k),
             Mode::ScreenMenu(m) => self.on_hy_menu_key(*m, &k),
             Mode::Find(v) => self.on_find_key(*v, &k),
+            Mode::FindSessions(v) => self.on_session_find_key(*v, &k),
             Mode::Branch(v) => self.on_branch_key(*v, &k),
             Mode::Usage => self.on_usage_key(&k),
             Mode::Run { .. } => self.on_run_key(&k),

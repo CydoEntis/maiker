@@ -380,6 +380,11 @@ fn keys_holder(app: &App) -> Option<Holder> {
             &[("↑↓", "move"), ("Enter", "run")],
             ("Esc", "close"),
         ),
+        Mode::FindSessions(_) => holder(
+            "FIND IN SESSIONS",
+            &[("", "type to search"), ("Enter", "go to the line")],
+            ("Esc", "close"),
+        ),
         Mode::Find(_) => holder(
             "FIND",
             &[

@@ -143,6 +143,7 @@ pub(in crate::client) fn key_groups() -> Vec<(&'static str, Vec<KeyRow>)> {
                 r("New worktree", vec![A::NewWorktree(None)], false),
                 r("Find a file", vec![A::Find(0)], false),
                 r("Search the code", vec![A::Find(1)], false),
+                r("Find in every session", vec![A::FindSessions], false),
             ],
         ),
         (
@@ -203,7 +204,7 @@ fn category_of(act: Option<&Action>) -> &'static str {
             A::Files | A::Changes | A::Branches | A::History | A::References | A::Worktrees
             | A::NewWorktree(_) | A::RemoveWorktree | A::TidyWorktrees | A::Machines,
         ) => "Tools",
-        Some(A::Jump | A::Palette | A::Help | A::Find(_) | A::Search | A::Menu) => "Find",
+        Some(A::Jump | A::Palette | A::Help | A::Find(_) | A::FindSessions | A::Search | A::Menu) => "Find",
         Some(
             A::ToggleSidebar | A::HideSidebar | A::BrowseTree | A::SidebarWider | A::SidebarNarrower
             | A::SideMove(_) | A::PutAway,
@@ -1130,10 +1131,11 @@ fn draw_grid(app: &mut App, buf: &mut Buffer, area: Rect, t: &Theme, km: &KeyMap
 fn draw_search(app: &mut App, buf: &mut Buffer, area: Rect, t: &Theme, km: &KeyMap) {
     let list = found(app, &km.query);
     let sessions = session_hits(app, &km.query);
+    let printed = app.palette_output_hits(&km.query);
     dim_all(app, buf, area, t);
     hit(app, area, ScreenHit::Close);
     let w = SEARCH_MAX_W.min(area.width.saturating_sub(4));
-    let want = 8 + (list.len() + sessions.len()).min(usize::from(SEARCH_MAX_H)) as u16;
+    let want = 9 + (list.len() + sessions.len() + printed.len()).min(usize::from(SEARCH_MAX_H)) as u16;
     let h = want.min(SEARCH_MAX_H).min(area.height.saturating_sub(2));
     let r = Rect {
         x: area.x + (area.width - w) / 2,
@@ -1171,6 +1173,11 @@ fn draw_search(app: &mut App, buf: &mut Buffer, area: Rect, t: &Theme, km: &KeyM
     if !sessions.is_empty() {
         lines.push((None, vec![seg("SESSIONS", head_style)]));
         lines.extend((0..sessions.len()).map(|i| (Some(list.len() + i), Vec::new())));
+    }
+    if !printed.is_empty() {
+        lines.push((None, vec![seg("IN SESSIONS", head_style)]));
+        let first = list.len() + sessions.len();
+        lines.extend((0..printed.len()).map(|i| (Some(first + i), Vec::new())));
     }
     let at = lines.iter().position(|(i, _)| *i == Some(km.sel)).unwrap_or(0);
     let start = at.saturating_sub(cap.saturating_sub(1));
@@ -1211,10 +1218,15 @@ fn draw_search(app: &mut App, buf: &mut Buffer, area: Rect, t: &Theme, km: &KeyM
             put(buf, r.x + 5, y, &[seg(mark.glyph, Style::default().bg(bg).fg(mark.color))], r.x + 7);
             put(buf, r.x + 7, y, &fuzzy_segs(&sh.name, &needle, plain, lit), r.right().saturating_sub(34));
             put(buf, r.right().saturating_sub(32), y, &[seg(sh.place.clone(), Style::default().bg(bg).fg(t.muted))], r.right().saturating_sub(4));
+        } else if let Some(oh) = printed.get(i - list.len() - sessions.len()) {
+            // What a session printed: the line, then whose it is where a command's category goes.
+            put(buf, r.x + 5, y, &[seg(">_", Style::default().bg(bg).fg(t.muted))], r.x + 7);
+            put(buf, r.x + 8, y, &[seg(oh.snippet.clone(), Style::default().bg(bg).fg(t.text))], r.right().saturating_sub(34));
+            put(buf, r.right().saturating_sub(32), y, &[seg(oh.name.clone(), Style::default().bg(bg).fg(t.muted))], r.right().saturating_sub(4));
         }
         hit(app, rr, ScreenHit::KeyRow(i));
     }
-    if list.is_empty() && sessions.is_empty() {
+    if list.is_empty() && sessions.is_empty() && printed.is_empty() {
         put(
             buf,
             r.x + 5,
@@ -1387,11 +1399,19 @@ impl App {
     pub(in crate::client) fn keymap_run(&mut self, km: &KeyMap, i: usize) {
         let commands = keymap_actions(self, km);
         if km.view == KeyView::Search && km.step.is_none() && i >= commands.len() {
+            let sessions = session_hits(self, &km.query);
             // A row of the SESSIONS group: go to it.
-            if let Some(hit) = session_hits(self, &km.query).get(i - commands.len()) {
+            if let Some(hit) = sessions.get(i - commands.len()) {
                 let term = hit.term;
                 self.mode = Mode::Normal;
                 self.screen_focus(term);
+            } else if let Some(hit) = self
+                .palette_output_hits(&km.query)
+                .get(i - commands.len() - sessions.len())
+            {
+                // A row of IN SESSIONS: the session, at the line.
+                let term = hit.term;
+                self.open_output_hit(term, &km.query);
             }
             return;
         }
@@ -1401,10 +1421,10 @@ impl App {
     }
 
     /// How many rows the overlay's list has: the commands, then in Search the sessions.
-    fn keymap_rows(&self, km: &KeyMap) -> usize {
+    pub(in crate::client) fn keymap_rows(&self, km: &KeyMap) -> usize {
         let n = keymap_actions(self, km).len();
         if km.view == KeyView::Search && km.step.is_none() {
-            n + session_hits(self, &km.query).len()
+            n + session_hits(self, &km.query).len() + self.palette_output_hits(&km.query).len()
         } else {
             n
         }

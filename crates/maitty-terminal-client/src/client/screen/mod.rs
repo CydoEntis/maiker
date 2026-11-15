@@ -1555,6 +1555,8 @@ pub(super) enum ScreenHit {
     ToBottom(ClientTerm),
     FindTab(u8),
     FindRow(usize),
+    /// A line found by Find in every session.
+    SessionFindRow(usize),
     BranchRow(usize),
     GoPick(usize),
     HistRow(usize),
@@ -1654,6 +1656,7 @@ mod popover;
 mod popups;
 mod references_sheet;
 mod secret_ask;
+mod session_find;
 #[cfg(test)]
 mod flat_tests;
 #[cfg(test)]
@@ -1676,6 +1679,6 @@ mod helper_view;
 pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
-    popups::*, references_sheet::*, secret_ask::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
+    popups::*, references_sheet::*, secret_ask::*, session_find::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
     helper_view::*, workflow_runs::*, workspace::*,
 };
