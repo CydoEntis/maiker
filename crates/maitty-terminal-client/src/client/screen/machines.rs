@@ -389,6 +389,12 @@ impl App {
                     self.notify(said.text, said.error);
                 }
             }
+            KeyCode::Char('i') => {
+                if let Some(id) = self.remotes.iter().find(|(_, r)| r.name.eq_ignore_ascii_case(&name)).map(|(id, _)| *id) {
+                    return self.open_machine_info(id);
+                }
+                v.notice = Some(MachineNotice { text: format!("{name} has not started: r reconnects it."), error: true });
+            }
             KeyCode::Char('e') => {
                 let target = self
                     .cfg
@@ -1158,6 +1164,7 @@ fn bar_keys(v: &MachinesView, fix: Option<AppFix>) -> Vec<(&'static str, &'stati
             ("r", "reconnect"),
             ("u", fix.map_or("update", AppFix::verb)),
             ("n s c", "toasts sounds copies"),
+            ("i", "details"),
             ("e", "edit"),
             ("x", "remove"),
             ("↑↓", "move"),

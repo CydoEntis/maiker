@@ -171,6 +171,8 @@ enum Mode {
     Usage,
     /// The commands chats may run "always in this project", and forgetting one.
     Approved(Box<screen::approved::ApprovedView>),
+    /// A machine's details: its service, GitHub sign-in and git identity rules.
+    MachineInfo(Box<screen::machine_info::MachineInfoView>),
     /// A subagent's own steps, from its record (ADR 0010).
     Helper(Box<screen::HelperView>),
     /// One workflow run's steps (ADR 0010).

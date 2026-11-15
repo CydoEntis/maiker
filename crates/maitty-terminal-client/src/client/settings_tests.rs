@@ -226,3 +226,202 @@ fn forgetting_asks_first_and_esc_keeps_it() {
     let after = frame(&mut app, "approved · forgotten", 100, 30);
     assert!(after.contains("None yet."), "{after}");
 }
+
+mod machine_details {
+    use super::*;
+    use crate::client::ids::Remote;
+    use crate::client::link::ConnectionState;
+    use crate::protocol::{
+        GITHUB_SIGN_IN_COMMAND, GitConfigWrite, GitHubAccount, GitHubReport, GitIdentity,
+        GitIdentityReport, GitIdentityRule, GitRuleChange,
+    };
+
+    const BUILD: MachineId = MachineId(1);
+
+    fn with_build() -> (App, mpsc::UnboundedReceiver<Outgoing>) {
+        let (mut app, rx) = app_with_outbox();
+        app.cfg.machines = vec![maitty_settings::config::MachineDef {
+            name: "build".into(),
+            target: "ci@build.lan".into(),
+            ..Default::default()
+        }];
+        let mut remote = Remote {
+            name: "build".into(),
+            state: ConnectionState::Connected,
+            ..Remote::default()
+        };
+        remote.snap.daemon_version = "0.76.0".into();
+        app.remotes.insert(BUILD, remote);
+        (app, rx)
+    }
+
+    /// The tags asked of `machine`, GitHub's first.
+    fn asked(out: &[Outgoing], machine: MachineId) -> (u64, u64) {
+        let mut github = None;
+        let mut git = None;
+        for o in out.iter().filter(|o| o.machine == machine) {
+            match o.msg {
+                ClientMsg::Query(Query::GitHubAccounts { tag }) => github = Some(tag),
+                ClientMsg::Query(Query::GitIdentities { tag }) => git = Some(tag),
+                _ => {}
+            }
+        }
+        (github.expect("GitHub asked"), git.expect("git asked"))
+    }
+
+    fn reports(app: &mut App, machine: MachineId, (github, git): (u64, u64)) {
+        let report = GitHubReport {
+            installed: true,
+            accounts: vec![
+                GitHubAccount { login: "cydo".into(), active: true },
+                GitHubAccount { login: "cydo-work".into(), active: false },
+            ],
+            problem: None,
+        };
+        app.on_machine_server(machine, ServerMsg::Reply(Reply::GitHubAccounts { tag: github, report }));
+        let report = GitIdentityReport {
+            installed: true,
+            name: Some("Cydo".into()),
+            email: Some("cydo@home.example".into()),
+            rules: vec![
+                GitIdentityRule {
+                    folder: "~/work".into(),
+                    identity: Some(GitIdentity {
+                        name: "Cydo W".into(),
+                        email: "cydo@work.example".into(),
+                        login: "cydo-work".into(),
+                    }),
+                },
+                GitIdentityRule { folder: "~/oss".into(), identity: None },
+            ],
+            problem: None,
+        };
+        app.on_machine_server(machine, ServerMsg::Reply(Reply::GitIdentities { tag: git, report }));
+    }
+
+    #[test]
+    fn this_computer_says_its_service_socket_and_log_and_who_commits() {
+        let (mut app, mut rx) = app_with_outbox();
+        app.snap.daemon_version = "0.76.0".into();
+        sent(&mut rx);
+        app.open_machine_info(MachineId::LOCAL);
+        let tags = asked(&sent(&mut rx), MachineId::LOCAL);
+        let asking = frame(&mut app, "this computer · asking", 100, 30);
+        assert!(asking.contains("asking this computer…"), "{asking}");
+        reports(&mut app, MachineId::LOCAL, tags);
+        for (w, h) in [(100, 30), (80, 24), (160, 45)] {
+            let text = frame(&mut app, "this computer", w, h);
+            assert!(text.contains("service 0.76.0 · 5 sessions · socket"), "{text}");
+            assert!(text.contains("daemon.log"), "{text}");
+            assert!(text.contains("cydo") && text.contains("active"), "{text}");
+            assert!(text.contains("Cydo <cydo@home.example>"), "{text}");
+            assert!(text.contains("~/work") && text.contains("set outside Maitty"), "{text}");
+        }
+    }
+
+    #[test]
+    fn a_heading_menu_opens_another_machines_details_and_asks_that_machine() {
+        let (mut app, mut rx) = with_build();
+        app.menu_for_machine(BUILD, (2, 2));
+        let Mode::ScreenMenu(m) = &app.mode else { panic!("{:?}", app.mode) };
+        assert!(m.items.iter().any(|(label, _)| label == "Details…"));
+        sent(&mut rx);
+        app.open_machine_info(BUILD);
+        let tags = asked(&sent(&mut rx), BUILD);
+        reports(&mut app, BUILD, tags);
+        let text = frame(&mut app, "machine · build", 100, 30);
+        assert!(text.contains("machine · build"), "{text}");
+        assert!(text.contains("ci@build.lan · version 0.76.0 · 0 sessions · connected"), "{text}");
+        assert!(!text.contains("daemon.log"), "the log is this computer's only");
+    }
+
+    #[test]
+    fn an_answer_from_another_machine_or_an_old_question_changes_nothing() {
+        let (mut app, mut rx) = with_build();
+        sent(&mut rx);
+        app.open_machine_info(BUILD);
+        let (github, git) = asked(&sent(&mut rx), BUILD);
+        reports(&mut app, MachineId::LOCAL, (github, git));
+        reports(&mut app, BUILD, (github + 100, git + 100));
+        let text = frame(&mut app, "machine · build, answers not its", 100, 30);
+        assert!(text.contains("asking build…"), "{text}");
+    }
+
+    #[test]
+    fn g_starts_githubs_own_sign_in_in_a_new_session_there() {
+        let (mut app, mut rx) = with_build();
+        app.open_machine_info(BUILD);
+        sent(&mut rx);
+        key(&mut app, KeyCode::Char('g'));
+        let out = sent(&mut rx);
+        assert!(out.iter().any(|o| o.machine == BUILD && matches!(&o.msg,
+            ClientMsg::Command(Command::NewWorkspace { cmd: Some(cmd), .. }) if cmd == GITHUB_SIGN_IN_COMMAND)));
+        assert!(matches!(app.mode, Mode::Normal), "the session has the keys");
+    }
+
+    #[test]
+    fn a_rule_is_previewed_then_written_only_on_enter() {
+        let (mut app, mut rx) = with_build();
+        app.open_machine_info(BUILD);
+        let tags = asked(&sent(&mut rx), BUILD);
+        reports(&mut app, BUILD, tags);
+        key(&mut app, KeyCode::Char('a'));
+        for c in "~/clients".chars() {
+            key(&mut app, KeyCode::Char(c));
+        }
+        key(&mut app, KeyCode::Tab);
+        key(&mut app, KeyCode::Tab);
+        key(&mut app, KeyCode::Tab);
+        key(&mut app, KeyCode::Right);
+        let form = frame(&mut app, "machine · new rule", 100, 30);
+        assert!(form.contains("~/clients") && form.contains("cydo-work") && form.contains("2/2"), "{form}");
+        key(&mut app, KeyCode::Enter);
+        let out = sent(&mut rx);
+        let preview = out.iter().find_map(|o| match &o.msg {
+            ClientMsg::Query(Query::GitIdentityRule { change: GitRuleChange::Preview { folder, identity }, tag }) => {
+                assert_eq!(o.machine, BUILD);
+                assert_eq!(folder, "~/clients");
+                assert_eq!((identity.name.as_str(), identity.email.as_str(), identity.login.as_str()), ("Cydo", "cydo@home.example", "cydo-work"));
+                Some(*tag)
+            }
+            _ => None,
+        }).expect("a preview asked");
+        assert!(!out.iter().any(|o| matches!(&o.msg, ClientMsg::Query(Query::GitIdentityRule { change: GitRuleChange::Apply { .. }, .. }))));
+        let lines = vec![GitConfigWrite { file: "~/.gitconfig".into(), lines: vec!["[includeIf \"gitdir:~/clients/\"]".into(), "path = ~/.config/maitty/git/clients.gitconfig".into()] }];
+        app.on_machine_server(BUILD, ServerMsg::Reply(Reply::GitIdentityRuleDone { tag: preview, outcome: Ok(lines) }));
+        let shown = frame(&mut app, "machine · preview", 100, 30);
+        assert!(shown.contains("Enter writes these lines on build") && shown.contains("gitdir:~/clients/"), "{shown}");
+        key(&mut app, KeyCode::Enter);
+        let out = sent(&mut rx);
+        let apply = out.iter().find_map(|o| match &o.msg {
+            ClientMsg::Query(Query::GitIdentityRule { change: GitRuleChange::Apply { .. }, tag }) => Some(*tag),
+            _ => None,
+        }).expect("Enter writes it");
+        app.on_machine_server(BUILD, ServerMsg::Reply(Reply::GitIdentityRuleDone { tag: apply, outcome: Ok(Vec::new()) }));
+        let done = frame(&mut app, "machine · written", 100, 30);
+        assert!(done.contains("Rule written"), "{done}");
+        assert!(sent(&mut rx).iter().any(|o| matches!(o.msg, ClientMsg::Query(Query::GitIdentities { .. }))), "the rules are read again");
+    }
+
+    #[test]
+    fn removing_asks_first_and_a_rule_set_outside_maitty_is_not_touched() {
+        let (mut app, mut rx) = with_build();
+        app.open_machine_info(BUILD);
+        let tags = asked(&sent(&mut rx), BUILD);
+        reports(&mut app, BUILD, tags);
+        key(&mut app, KeyCode::Down);
+        key(&mut app, KeyCode::Char('x'));
+        let text = frame(&mut app, "machine · outside rule", 100, 30);
+        assert!(text.contains("set outside Maitty: change it in your git config"), "{text}");
+        key(&mut app, KeyCode::Up);
+        key(&mut app, KeyCode::Char('x'));
+        let ask = frame(&mut app, "machine · remove?", 100, 30);
+        assert!(ask.contains("Remove the rule for ~/work?"), "{ask}");
+        key(&mut app, KeyCode::Esc);
+        assert!(!sent(&mut rx).iter().any(|o| matches!(o.msg, ClientMsg::Query(Query::GitIdentityRule { .. }))), "Esc keeps it");
+        key(&mut app, KeyCode::Char('x'));
+        key(&mut app, KeyCode::Enter);
+        assert!(sent(&mut rx).iter().any(|o| matches!(&o.msg,
+            ClientMsg::Query(Query::GitIdentityRule { change: GitRuleChange::Remove { folder }, .. }) if folder == "~/work")));
+    }
+}

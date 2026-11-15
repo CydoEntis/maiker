@@ -204,6 +204,10 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
         // Popovers beside a sidebar row (drawn with the screen).
         Mode::Compose(_) | Mode::Helpers { .. } | Mode::Secret { .. } => {}
         Mode::Usage => super::screen::draw_usage(app, f, area, &t),
+        Mode::MachineInfo(v) => {
+            let v = (**v).clone();
+            super::screen::machine_info::draw_machine_info(app, f, area, &t, &v);
+        }
         Mode::Approved(v) => {
             let v = (**v).clone();
             super::screen::approved::draw_approved(app, f, area, &t, &v);

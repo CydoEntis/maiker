@@ -443,6 +443,12 @@ impl App {
             ServerMsg::Reply(Reply::UsageReport(report)) if machine == MachineId::LOCAL => {
                 self.usage_report_arrived(report)
             }
+            // A machine's details ask its own daemon.
+            ServerMsg::Reply(
+                reply @ (Reply::GitHubAccounts { .. }
+                | Reply::GitIdentities { .. }
+                | Reply::GitIdentityRuleDone { .. }),
+            ) => self.machine_info_reply(machine, reply),
             // Approvals are kept by this computer's daemon only.
             ServerMsg::Reply(Reply::AllowedCommands(list)) if machine == MachineId::LOCAL => {
                 self.approved_arrived(list)
