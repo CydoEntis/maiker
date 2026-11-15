@@ -76,6 +76,7 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `g` | Branches (in the side panel; its first row switches branch) |
 | `h` | History: what happened |
 | `e` | References (in the side panel) |
+| `p` | Tickets: the project's GitHub, Plane and Linear tickets (in the side panel) |
 | `o` | Find a file |
 | `l` | Worktrees: new, clean up, merge, delete (a second step) |
 | `y` | Copy mode: select text in the pane |
@@ -284,7 +285,7 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Drag its left edge | Resize it (not the Inbox) |
 | Click a pane | Type into that pane; the view stays open, unlit |
 | Click the panel | Give the view the keys again |
-| Tab, Shift+Tab | Files, Changes, Branch, References: the next or previous tab, for the same checkout (not while Files filters or edits) |
+| Tab, Shift+Tab | Files, Changes, Branch, References, Tickets: the next or previous tab, for the same checkout (not while Files filters or edits, or while Tickets types into a field) |
 | Click a tab | Switch to it |
 
 ## Inbox
@@ -463,6 +464,34 @@ In `[keys.prefix]` its action is `references`. It has the keys while open.
 | d, Delete | Remove it (asks first) |
 | y | Copy its absolute path |
 | e, Esc | Close it |
+
+## Tickets view
+
+Leader + `p` opens the tickets of the project the session in front works in. In `[keys.prefix]` its
+action is `tickets`. It has the keys while open. Nothing is written to a ticket without `y` on a
+review page (or a click on its confirm button); Enter never writes.
+
+| Keys | Action |
+| --- | --- |
+| Up / k, Down / j, PgUp, PgDn, Home, End | Choose a ticket (the next page is read at the end) |
+| Left / h, Right / l | GitHub, Plane, Linear |
+| / | Search: type, Enter asks the provider, Esc stops typing |
+| m | Only yours (asks your name at that provider the first time) |
+| a | Show closed tickets too |
+| g | Narrow to a milestone, module or cycle |
+| r | Read again |
+| , | Sources: link a repo, add a Plane or Linear key, pick the project or team, your names |
+| t | Signed out of GitHub: a shell running `gh auth login` |
+| Enter, o | Open the ticket |
+| s | Start an agent on it (review first) |
+| Esc, p | Clear the search, then close |
+
+On a ticket: Up / Down scroll, `s` start an agent in a new worktree, `t` send it to the session in
+front, `c` comment, `d` mark done, `o` open its link, `y` copy its link, `r` read again, Esc back.
+The start and send pages show exactly what will be sent; Left / Right picks the agent; `y` starts or
+sends. The comment page takes text (Enter is a new line); Tab reviews it, and on the review `y`
+posts it, `e` edits it, Esc cancels. Sources: Enter changes the row, `x` turns GitHub off or removes
+a key (asks first); in the key form Tab moves between fields and Enter connects.
 
 ## Branches and worktree cleanup
 

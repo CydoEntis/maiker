@@ -12,6 +12,7 @@ impl App {
             Some(View::Changes(v)) => {
                 v.confirm.is_some() || v.extra.message.is_some() || v.extra.commenting.is_some()
             }
+            Some(View::Tickets(v)) => v.typing(),
             _ => false,
         };
         if !typing && (self.sheet_size_key(k) || self.drawer_tab_key(k)) {
@@ -47,6 +48,11 @@ impl App {
             View::References(mut v) => {
                 if self.on_references_key(&mut v, k) {
                     self.view = Some(View::References(v));
+                }
+            }
+            View::Tickets(mut v) => {
+                if self.on_tickets_key(&mut v, k) {
+                    self.view = Some(View::Tickets(v));
                 }
             }
         }

@@ -46,6 +46,7 @@ mod spinners;
 pub mod ssh_hosts;
 mod tasks;
 mod themes;
+mod tickets;
 mod view_keys;
 mod views;
 
@@ -241,6 +242,8 @@ pub(super) enum View {
     Branch(Box<screen::BranchSheet>),
     /// The project's reference images and design files (in the sheet).
     References(Box<screen::ReferencesSheet>),
+    /// The project's tickets from GitHub, Plane and Linear (in the sheet).
+    Tickets(Box<screen::TicketsView>),
 }
 
 /// Clickable chips and buttons.
