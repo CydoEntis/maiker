@@ -4,7 +4,7 @@
 //! passed on, and neither is the key.
 
 use crate::http::HttpError;
-use maitty_shared::tickets::TicketError;
+use maitty_shared::tickets::{TicketError, clean_line};
 use serde_json::Value;
 
 impl From<HttpError> for TicketError {
@@ -31,6 +31,17 @@ pub(super) fn status_error(status: u16) -> TicketError {
 /// An answer's body as JSON, or the fixed line that says it was not.
 pub(super) fn parse_json(body: &str) -> Result<Value, TicketError> {
     serde_json::from_str(body).map_err(|_| TicketError::Invalid("The server did not give tickets".into()))
+}
+
+/// A part of a filter that is words a person typed: `None` when there are none, the words in lower
+/// case when they are plain (no control or hidden characters, at most `max` characters), else the
+/// fixed line that says what was not.
+pub(super) fn plain_words(text: &Option<String>, max: usize, what: &str) -> Result<Option<String>, TicketError> {
+    match text.as_deref().map(str::trim) {
+        None | Some("") => Ok(None),
+        Some(text) if text.chars().count() <= max && clean_line(text, usize::MAX) == text => Ok(Some(text.to_lowercase())),
+        Some(_) => Err(TicketError::Invalid(format!("That is not {what}"))),
+    }
 }
 
 #[cfg(test)]

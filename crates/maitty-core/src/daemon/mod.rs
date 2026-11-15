@@ -47,6 +47,7 @@ mod ticket_http;
 mod ticket_keys;
 mod tickets;
 mod tickets_github;
+mod tickets_linear;
 mod tickets_plane;
 mod usage;
 mod usage_store;

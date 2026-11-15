@@ -14,12 +14,12 @@
 //! `id`, `sequence_id`, `name`, `state`, `labels`, `assignees`, `updated_at` and a description, and
 //! its relations come from `work-items/<id>/relations/` (a Plane without that route has none).
 
-use super::ticket_http::{parse_json, status_error};
+use super::ticket_http::{parse_json, plain_words, status_error};
 use super::ticket_keys::{Saved, is_workspace};
 use crate::http::{Http, Method, Request, check_base_url};
 use maitty_shared::tickets::{
     Filter, Group, GroupKind, StateCategory, TICKET_COMMENTS_MAX, TICKET_GROUPS_MAX, TICKET_NAME_MAX_CHARS, TICKET_SEARCH_MAX_CHARS, TICKETS_PAGE_MAX,
-    TICKETS_PAGE_SIZE, Ticket, TicketComment, TicketError, TicketPage, TicketState, TicketSummary, TicketsReply, TicketsRequest, clean_line,
+    TICKETS_PAGE_SIZE, Ticket, TicketComment, TicketError, TicketPage, TicketState, TicketSummary, TicketsReply, TicketsRequest,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -275,16 +275,9 @@ impl Plane<'_> {
         }
         let group = filter.group.as_deref().ok_or_else(|| invalid("Choose a Plane project or module"))?;
         let (project_key, module) = parse_group(group).ok_or_else(|| invalid("That is not a Plane project or module"))?;
-        let plain = |text: &Option<String>, max: usize, what: &str| -> Result<Option<String>, TicketError> {
-            match text.as_deref().map(str::trim) {
-                None | Some("") => Ok(None),
-                Some(text) if text.chars().count() <= max && clean_line(text, usize::MAX) == text => Ok(Some(text.to_lowercase())),
-                Some(_) => Err(TicketError::Invalid(format!("That is not {what}"))),
-            }
-        };
-        let search = plain(&filter.search, TICKET_SEARCH_MAX_CHARS, "something to search for")?;
-        let label = plain(&filter.label, TICKET_NAME_MAX_CHARS, "a label")?;
-        let assignee = plain(&filter.assignee, TICKET_NAME_MAX_CHARS, "a person")?;
+        let search = plain_words(&filter.search, TICKET_SEARCH_MAX_CHARS, "something to search for")?;
+        let label = plain_words(&filter.label, TICKET_NAME_MAX_CHARS, "a label")?;
+        let assignee = plain_words(&filter.assignee, TICKET_NAME_MAX_CHARS, "a person")?;
         let project = self.project(project_key)?;
         let skip = filter.page as usize * TICKETS_PAGE_SIZE;
         let wanted = skip + TICKETS_PAGE_SIZE + 1;

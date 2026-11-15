@@ -4,7 +4,7 @@
 //! answer a client turns into "add your key".
 
 use super::ticket_keys::{KeyStore, Saved};
-use super::{tickets_github, tickets_plane};
+use super::{tickets_github, tickets_linear, tickets_plane};
 use crate::curl_http::CurlHttp;
 use maitty_shared::tickets::{TicketError, TicketProvider, TicketsReply, TicketsRequest};
 
@@ -16,7 +16,7 @@ pub(super) fn answer(source: &str, request: TicketsRequest) -> Result<TicketsRep
     let saved = keyed(&KeyStore::real(), provider)?;
     match provider {
         TicketProvider::Plane => tickets_plane::answer(&CurlHttp, &saved, request, tickets_plane::RETRY_WAIT),
-        TicketProvider::Linear => Err(TicketError::Invalid("Linear is not read yet".into())),
+        TicketProvider::Linear => tickets_linear::answer(&CurlHttp, &saved, request),
     }
 }
 
