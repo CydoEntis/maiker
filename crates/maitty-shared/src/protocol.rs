@@ -324,6 +324,10 @@ pub const GITHUB_REPOS_SINCE: u32 = 98;
 /// How long the daemon gives `gh` to list repositories or organisations.
 pub const GITHUB_LIST_LIMIT_SECS: u64 = 30;
 
+/// GitHub's own sign-in, as a terminal session runs it: the person finishes it there and in their
+/// browser. Both clients start exactly this line; nothing a window sends is part of it.
+pub const GITHUB_SIGN_IN_COMMAND: &str = "gh auth login --web --git-protocol https";
+
 /// The first version whose daemon says who is signed in to GitHub on its machine
 /// (`Query::GitHubAccounts`).
 pub const GITHUB_ACCOUNTS_SINCE: u32 = 97;

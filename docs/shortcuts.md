@@ -204,7 +204,7 @@ menu runs its items by letter while it is open.
 | Menu key (`.` after the prefix), right-click | The session's menu |
 | `+` on a machine heading | A shell on that machine at once |
 | `install` / `update` on a machine heading | Shown instead of `+` while the machine needs maitty installed or updated: runs it in a popup that asks first |
-| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Open a folder…, Clone a repository…, Reconnect, Machines… |
+| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Open a folder…, Clone a repository…, Details…, Reconnect, Machines… |
 | Enter on a row of an agent a restart stopped | Types its resume command, then opens the session |
 | Esc | Return keyboard focus to the active pane |
 
@@ -219,8 +219,43 @@ Leader `w`, or a click on a remote machine's heading in the sidebar. These keys 
 | `r` or Enter | On one of your machines: reconnect |
 | `u` | Install or update maitty there (the bar says which) |
 | `n`, `s` | Turn that machine's toasts, then its alert sounds, on or off. Both are off until you turn them on; the line under the chosen machine says where they stand |
+| `c` | Turn copying to your clipboard from that machine off, or on (asked first: Enter allows, Esc keeps it off) |
+| `i` | That machine's details (below) |
 | `e` | Edit where it is |
 | `x` or Delete | Remove it (Enter confirms, Esc keeps it) |
+| Esc | Close |
+
+## Machine details
+
+`i` on a machine in Machines, or Details… on a machine heading's right-click menu.
+
+| Keys | Action |
+| --- | --- |
+| `g` | Start GitHub's sign-in (`gh auth login`) in a new session on that machine |
+| `a` | Add a folder rule: Tab between Folder, Name, Email and GitHub account (Left, Right pick the account); Enter previews the lines it writes, Enter again writes them, Esc goes back |
+| Up, Down | Choose a folder rule |
+| `x` or Delete | Remove the chosen rule Maitty wrote (Enter confirms, Esc keeps it) |
+| `o`, `y` | This computer only: open the service log, copy its path |
+| `r` | Read it all again |
+| Esc | Close |
+
+## Usage and cost
+
+| Keys | Action |
+| --- | --- |
+| Tab, Shift+Tab, Left, Right | Step through `now`, `today`, `7 days`, `30 days` |
+| Up, Down | Choose a session |
+| Enter | Go to the chosen session while it is open |
+| Esc, `u`, `q` | Close |
+
+## Approved commands
+
+Settings › Agents › Approved commands…
+
+| Keys | Action |
+| --- | --- |
+| Up, Down | Choose a command |
+| `x` or Delete | Forget it (Enter confirms, Esc keeps it); the chat asks again before it runs it |
 | Esc | Close |
 
 ## Text prompts and worktree picker

@@ -905,9 +905,7 @@ pub async fn start_agent_session(
     }
 }
 
-/// GitHub's own sign-in, as a terminal session runs it: the person finishes it there and in their browser. The whole
-/// line is this constant; nothing a window sends is part of it.
-pub const GITHUB_SIGN_IN_COMMAND: &str = "gh auth login --web --git-protocol https";
+pub use maitty_shared::protocol::GITHUB_SIGN_IN_COMMAND;
 
 /// The request that starts a terminal session in `cwd` running GitHub's sign-in, for this computer's daemon or
 /// another machine's.

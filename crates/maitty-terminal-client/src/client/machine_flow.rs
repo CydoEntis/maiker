@@ -81,12 +81,12 @@ impl Default for Flow {
 
 /// What the page says after a grant is switched, so it is never a guess whether it took.
 fn grant_words(grant: Grant, on: bool, name: &str) -> String {
-    let what = match grant {
-        Grant::Clipboard => "Copying to your clipboard from",
-        Grant::Notices => "Toasts from",
-        Grant::Sounds => "Alert sounds from",
+    let (what, are) = match grant {
+        Grant::Clipboard => ("Copying to your clipboard from", "is"),
+        Grant::Notices => ("Toasts from", "are"),
+        Grant::Sounds => ("Alert sounds from", "are"),
     };
-    format!("{what} {name} are now {}.", if on { "on" } else { "off" })
+    format!("{what} {name} {are} now {}.", if on { "on" } else { "off" })
 }
 
 fn say(text: impl Into<String>, error: bool) -> MachineNotice {
@@ -473,7 +473,7 @@ impl App {
         }
     }
 
-    fn configured(&self, name: &str) -> Option<MachineDef> {
+    pub(in crate::client) fn configured(&self, name: &str) -> Option<MachineDef> {
         self.cfg
             .machines
             .iter()

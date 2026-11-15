@@ -101,6 +101,8 @@ pub enum Act {
     MachineReconnect(MachineId),
     /// The Machines dialog with this machine chosen.
     MachineOpen(MachineId),
+    /// A machine's details: its service, GitHub and git identity.
+    MachineInfo(MachineId),
     /// Start an agent in a folder of this computer with a conversation it saved: (folder,
     /// agent, the agent's id for the conversation).
     Resume(PathBuf, String, String),
@@ -412,6 +414,7 @@ impl App {
         items.push(("New shell here".to_string(), Act::MachineShell(machine)));
         items.push(("Open a folder…".to_string(), Act::MachineFolder(machine)));
         items.push(("Clone a repository…".to_string(), Act::MachineClone(machine)));
+        items.push(("Details…".to_string(), Act::MachineInfo(machine)));
         let title = match self.remotes.get(&machine) {
             Some(remote) => {
                 items.push(("Reconnect".to_string(), Act::MachineReconnect(machine)));
@@ -933,6 +936,7 @@ impl App {
                 }
             }
             Act::MachineOpen(machine) => self.open_machines_on(machine),
+            Act::MachineInfo(machine) => self.open_machine_info(machine),
             Act::Resume(dir, agent, id) => self.resume_saved(dir, &agent, &id),
             Act::Reopen(agent, session) => self.reopen_closed(agent, session),
             Act::Board(term) => self.open_board_of(term),

@@ -409,6 +409,8 @@ impl App {
             Mode::Run { term, board, .. } => self.on_run_key(term, board, &k),
             Mode::Work { term, sel } => self.on_board_key(term, sel, &k),
             Mode::StatusLog { term, top } => self.on_status_log_key(term, top, &k),
+            Mode::Approved(v) => self.on_approved_key(*v, &k),
+            Mode::MachineInfo(v) => self.on_machine_info_key(*v, &k),
             Mode::Helper(v) => self.on_helper_key(*v, &k),
             Mode::Clone(v) => self.on_clone_key(*v, &k),
             Mode::Specialists(v) => self.on_specialists_key(*v, &k),

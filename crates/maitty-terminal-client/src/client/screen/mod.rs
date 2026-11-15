@@ -1706,6 +1706,8 @@ mod splash;
 mod workspace;
 mod splash_wide;
 mod usage;
+pub(in crate::client) mod approved;
+pub(in crate::client) mod machine_info;
 mod tidy;
 mod workflow_runs;
 mod work_board;

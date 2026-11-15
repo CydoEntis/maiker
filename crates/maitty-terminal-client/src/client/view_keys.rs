@@ -708,6 +708,7 @@ impl App {
                 Some(design::SRow::Agent(design::AgentRow::SetUp)) => {
                     self.act(Action::AgentStatusSetup)
                 }
+                Some(design::SRow::Agent(design::AgentRow::Approved)) => self.open_approved(),
                 // Version: install what was found, else look again.
                 Some(design::SRow::Version) if self.update_available.is_some() => {
                     self.act(Action::Update)

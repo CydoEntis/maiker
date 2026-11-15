@@ -176,6 +176,10 @@ enum Mode {
     /// Notification history (the selected row, newest first).
     /// Usage and cost: what each agent reported using, and the plan limits.
     Usage,
+    /// The commands chats may run "always in this project", and forgetting one.
+    Approved(Box<screen::approved::ApprovedView>),
+    /// A machine's details: its service, GitHub sign-in and git identity rules.
+    MachineInfo(Box<screen::machine_info::MachineInfoView>),
     /// A subagent's own steps, from its record (ADR 0010).
     Helper(Box<screen::HelperView>),
     /// One workflow run's steps (ADR 0010).
@@ -536,6 +540,8 @@ pub struct App {
     resume: resume::Resume,
     /// Find in every session's one search at a time.
     pane_search: screen::PaneSearch,
+    /// Usage and cost's tab, chosen row and the reports this computer's daemon sent.
+    usage_view: screen::UsageView,
     /// The protocol this computer's daemon said it speaks when this window last connected.
     local_protocol: u32,
     /// The theme browser's tab: the Light themes when true, else the Dark ones.
@@ -864,6 +870,7 @@ impl App {
             codex_hooks_asked: false,
             resume: Default::default(),
             pane_search: Default::default(),
+            usage_view: Default::default(),
             local_protocol: crate::protocol::PROTOCOL_VERSION,
             theme_tab_light: false,
             update_notes: Vec::new(),
@@ -2304,6 +2311,8 @@ fn same_dir(a: &std::path::Path, b: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod reference_fixture;
+#[cfg(test)]
+mod settings_tests;
 #[cfg(test)]
 mod site_frames;
 #[cfg(test)]
