@@ -47,6 +47,14 @@ export const KNOWN_MODELS: Readonly<Record<ChatAgent, readonly ModelOption[]>> =
   ],
 }
 
+/**
+ * The model to start an agent with on another machine: one every install takes by name, else the account's default
+ * there. A model read from this computer's agent may not exist on that one.
+ */
+export function everywhereModel(agent: ChatAgent, model: string): string {
+  return KNOWN_MODELS[agent].some((known) => known.id === model) ? model : DEFAULT_PICK
+}
+
 const modelListeners = new Set<() => void>()
 let discovered: Partial<Record<ChatAgent, readonly ModelOption[]>> = {}
 

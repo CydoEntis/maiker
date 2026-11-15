@@ -93,7 +93,7 @@ const BACKGROUND_KEY = isMacPlatform(navigator.userAgent) ? '⌘Enter' : 'Ctrl+E
  * starts it in the background and keeps the page for the next one, Esc goes back.
  */
 export function NewChatPage({ machines, machine, projects, defaultAgent, bypassAllowed = false, codexYolo = false, browse, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, seed = null }: Props) {
-  // On another machine the chat is the agent started in a shell there: this computer's models, branches, files and installed agents say nothing of it.
+  // On another machine the chat is the agent started in a shell there: this computer's extra models, branches, files and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
   const targetLabel = target?.label ?? 'This computer'
@@ -475,7 +475,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
               </div>
             </div>
             <div className="mx-ctxtray">
-              <AgentPicker agentOnly={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} onAgent={pickAgent} />
+              <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} onAgent={pickAgent} />
               {forcedFull ? (
                 <span className="mx-tray-fact is-danger" title="Yolo mode is on for Codex (Settings, General), so it starts with full access. Turn the setting off to pick another mode.">{modeLabel(CODEX_FULL_MODE)}</span>
               ) : modes.length > 0 ? (
@@ -490,7 +490,7 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
                 <span className="mx-tray-fact" title="This chat asks before it runs a tool">Asks before running</span>
               )}
               <span className="mx-spacer" />
-              {remote && <span className="mx-tray-fact" title={`Model and effort are the agent's own on ${targetLabel}`}>On {targetLabel}</span>}
+              {remote && <span className="mx-tray-fact" title={`The agent starts on ${targetLabel}`}>On {targetLabel}</span>}
               {folder !== '' && <span className="mx-tray-fact" title={folder}>{folder}</span>}
             </div>
           </div>

@@ -7,7 +7,7 @@ import { CHAT_AGENTS, type ChatAgent } from '@/features/workspace/model/chatView
 import { AppIcon, Icon } from '@/features/workspace/components/glyphs'
 import { AGENT_LABEL, modelName } from '../modelName'
 import {
-  choiceFor, DEFAULT_PICK, effortAllowed, effortBars, effortWord, leadingModels, menuModels, pickedModel, REASONING_LABEL, REASONING_LEVELS, useAgentModels, useDiscoveredModels,
+  choiceFor, DEFAULT_PICK, effortAllowed, KNOWN_MODELS, effortBars, effortWord, leadingModels, menuModels, pickedModel, REASONING_LABEL, REASONING_LEVELS, useAgentModels, useDiscoveredModels,
   type AgentChoice, type ModelOption, type Reasoning, type ReasoningPick,
 } from '../agentChoice'
 
@@ -38,8 +38,11 @@ type PickerProps = {
   live?: (command: string) => void
   /** Why the choice cannot be changed right now. The button stays where it is, greyed out, so the message box never rearranges. */
   locked?: string | undefined
-  /** Only the agent is a choice: no model list or effort, because they are read from this computer and mean nothing elsewhere. */
-  agentOnly?: boolean
+  /**
+   * Only the models every install of the agent takes by name. The account's extra models are read from this computer's
+   * agent, so for a chat on another machine they may not exist there.
+   */
+  fixedModels?: boolean
 }
 
 /**
@@ -49,11 +52,12 @@ type PickerProps = {
  * What is picked goes to the agent with the next message; the account's default model and a level
  * that was never picked send nothing, so the chat keeps what it started with.
  */
-export function AgentPicker({ agent, choice, onChange, currentModel = null, currentEffort = null, onAgent, live, locked, agentOnly = false }: PickerProps) {
+export function AgentPicker({ agent, choice, onChange, currentModel = null, currentEffort = null, onAgent, live, locked, fixedModels = false }: PickerProps) {
   const [open, setOpen] = useState(false)
   const [allModels, setAllModels] = useState(false)
   useDiscoveredModels(agent)
-  const models = useAgentModels(agent)
+  const read = useAgentModels(agent)
+  const models = fixedModels ? KNOWN_MODELS[agent] : read
   const rows = menuModels(models)
   const model = pickedModel(models, choice.model)
   const modelId = model?.id ?? DEFAULT_PICK
@@ -79,9 +83,9 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
         <button type="button" aria-label={`Agent, model and reasoning: ${summary}`} title={locked ?? 'Model and effort'} aria-disabled={locked !== undefined} className={`mx-model-button${locked === undefined ? '' : ' is-locked'}`}>
           <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>
           <span className="mx-model-name">{/* With nothing picked, what the agent says it runs is the better name than the row that stands for it. */}
-            {agentOnly ? AGENT_LABEL[agent] : modelName(agent, choice.model === DEFAULT_PICK && currentModel !== null ? undefined : model, currentModel)}</span>
-          {!agentOnly && inUseWord !== null && <span className="mx-model-level">{inUseWord}</span>}
-          {!agentOnly && <MiniMeter level={inUse ?? DEFAULT_PICK} />}
+            {modelName(agent, choice.model === DEFAULT_PICK && currentModel !== null ? undefined : model, currentModel)}</span>
+          {inUseWord !== null && <span className="mx-model-level">{inUseWord}</span>}
+          <MiniMeter level={inUse ?? DEFAULT_PICK} />
           <Icon name="chevronDown" />
         </button>
       </Popover.Trigger>
@@ -93,7 +97,6 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
             ))}
           </Segmented>
         )}
-        {!agentOnly && (<>
         <RadioGroup aria-label="Model" value={modelId} onValueChange={(value) => { const option = rows.find((row) => row.id === value); if (option) pickModel(option) }} className="mx-mm-models">
           {shown.map((option) => (
             <RadioGroupItem key={option.id} value={option.id} title={option.blurb === '' ? undefined : option.blurb} className="mx-mm-model">
@@ -134,7 +137,6 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
           <span className="mx-spacer" />
           <span className="mx-mm-level">{choice.reasoning !== DEFAULT_PICK ? REASONING_LABEL[choice.reasoning] : inUseWord !== null ? `${inUseWord} · agent's own` : "Agent's own"}</span>
         </div>
-        </>)}
       </PopupContent>
     </Popover.Root>
   )
