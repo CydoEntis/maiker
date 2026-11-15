@@ -333,6 +333,8 @@ pub(super) struct ScreenTab {
     pub used: u64,
     /// What you called it; empty: named after what runs in it.
     pub name: String,
+    /// What is typed into its focused pane goes to every pane of it.
+    pub broadcast: bool,
 }
 
 impl ScreenTab {
@@ -344,6 +346,7 @@ impl ScreenTab {
             owner,
             used: 0,
             name: String::new(),
+            broadcast: false,
         }
     }
     /// Its panes are the daemon's, so they are on `owner`'s machine.
@@ -1139,6 +1142,7 @@ impl App {
                             }
                         },
                     ),
+                    broadcast: prior.is_some_and(|tab| tab.broadcast),
                 }
             })
             .collect();
@@ -1470,6 +1474,10 @@ pub(super) enum ScreenHit {
     SubagentsDone(usize),
     /// A workflow run's line under the open session (its place in `Screen::run_rows`): its steps.
     Run(usize),
+    /// A session's "N runs done" line: its Work board.
+    Board(ClientTerm),
+    /// A card of the Work board (its place in the board's walk).
+    BoardCard(usize),
     /// The release chip on the sidebar's foot: its menu, opening upward.
     ReleaseMenu,
     /// The `n new session` chip in a workspace with no pane open.
@@ -1683,6 +1691,8 @@ mod tickets_view;
 #[cfg(test)]
 mod flat_tests;
 #[cfg(test)]
+mod board_tests;
+#[cfg(test)]
 mod frame_tests;
 mod inbox;
 mod mode_bar;
@@ -1698,6 +1708,10 @@ mod splash_wide;
 mod usage;
 mod tidy;
 mod workflow_runs;
+mod work_board;
+mod broadcast;
+mod even_widths;
+mod status_log;
 mod helper_view;
 mod clone_repo;
 mod specialists;
@@ -1708,5 +1722,5 @@ pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
     popups::*, references_sheet::*, secret_ask::*, session_find::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
-    helper_view::*, tickets_view::*, workflow_runs::*, workspace::*,
+    helper_view::*, tickets_view::*, workflow_runs::*, work_board::*, status_log::*, workspace::*,
 };

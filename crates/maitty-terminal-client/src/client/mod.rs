@@ -38,6 +38,7 @@ mod remote_image_tests;
 mod remote_snapshot_tests;
 mod render;
 pub mod restart_prompt;
+mod recent;
 mod resume;
 mod routing;
 mod screen;
@@ -181,6 +182,18 @@ enum Mode {
     Run {
         term: ClientTerm,
         key: String,
+        /// Opened from the Work board on this card: Esc goes back there.
+        board: Option<usize>,
+    },
+    /// The Work board of a session's workflow runs, on the chosen card (ADR 0010).
+    Work {
+        term: ClientTerm,
+        sel: usize,
+    },
+    /// Why a session's status changed, newest first, scrolled `top` lines down.
+    StatusLog {
+        term: ClientTerm,
+        top: usize,
     },
     History {
         sel: usize,

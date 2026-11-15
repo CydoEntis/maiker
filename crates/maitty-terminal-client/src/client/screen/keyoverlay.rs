@@ -121,6 +121,8 @@ pub(in crate::client) fn key_groups() -> Vec<(&'static str, Vec<KeyRow>)> {
                 ),
                 r("Paste image", vec![A::PasteImage], false),
                 r("Send a file to the machine", vec![A::SendFile], false),
+                r("Broadcast typing to this tab", vec![A::Broadcast], false),
+                r("Reset pane widths", vec![A::ResetWidths], false),
             ],
         ),
         (
@@ -145,6 +147,8 @@ pub(in crate::client) fn key_groups() -> Vec<(&'static str, Vec<KeyRow>)> {
                 r("Find a file", vec![A::Find(0)], false),
                 r("Search the code", vec![A::Find(1)], false),
                 r("Find in every session", vec![A::FindSessions], false),
+                r("Work board", vec![A::WorkBoard], false),
+                r("Status log", vec![A::StatusLog], false),
             ],
         ),
         (
@@ -173,7 +177,7 @@ fn group_of(a: &Action) -> &'static str {
     }
     match a {
         A::NewWorkspace | A::CloseWorkspace | A::NewSession | A::AgentStatusSetup | A::ResumeConversation
-        | A::PutAway => {
+        | A::PutAway | A::RecentSessions => {
             "SESSIONS"
         }
         A::SplitLeft
@@ -199,11 +203,13 @@ fn category_of(act: Option<&Action>) -> &'static str {
             A::SplitRight | A::SplitDown | A::SplitLeft | A::SplitUp | A::ClosePane | A::Focus(_)
             | A::FocusNext | A::FocusPrev | A::Resize(_) | A::Swap(_) | A::ScrollUp | A::ScrollDown
             | A::CopyMode | A::CloseSplit | A::PaneInfo | A::PrevPrompt | A::NextPrompt | A::Spawn(..)
-            | A::UndoClose | A::NewTab | A::NextTab | A::PrevTab | A::CloseTab | A::SelectTab(_),
+            | A::UndoClose | A::NewTab | A::NextTab | A::PrevTab | A::CloseTab | A::SelectTab(_)
+            | A::Broadcast | A::ResetWidths,
         ) => "Panes",
         Some(
             A::Files | A::Changes | A::Branches | A::History | A::References | A::Tickets | A::Worktrees
-            | A::NewWorktree(_) | A::RemoveWorktree | A::TidyWorktrees | A::Machines,
+            | A::NewWorktree(_) | A::RemoveWorktree | A::TidyWorktrees | A::Machines | A::WorkBoard
+            | A::StatusLog,
         ) => "Tools",
         Some(A::Jump | A::Palette | A::Help | A::Find(_) | A::FindSessions | A::Search | A::Menu) => "Find",
         Some(

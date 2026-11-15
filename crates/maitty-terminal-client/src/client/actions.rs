@@ -269,6 +269,11 @@ impl App {
             Action::CloneRepo => self.open_clone_repo(),
             Action::OpenFolderOn => self.pick_folder_machine(),
             Action::Specialists => self.open_specialists(),
+            Action::WorkBoard => self.open_work_board(),
+            Action::StatusLog => self.open_status_log(),
+            Action::RecentSessions => self.ask_closed_sessions(),
+            Action::Broadcast => self.toggle_broadcast(),
+            Action::ResetWidths => self.reset_widths(),
             Action::None => {}
             // The rest are handled by screen_act above.
             _ => {}
@@ -351,10 +356,15 @@ impl App {
             Action::Worktrees,
             Action::NewSession,
             Action::ResumeConversation,
+            Action::RecentSessions,
             Action::PutAway,
             Action::CloneRepo,
             Action::OpenFolderOn,
             Action::Specialists,
+            Action::WorkBoard,
+            Action::StatusLog,
+            Action::Broadcast,
+            Action::ResetWidths,
             Action::CloseSplit,
             Action::StopAgent,
             Action::Message,

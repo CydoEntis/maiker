@@ -1920,7 +1920,13 @@ impl App {
             }
             ScreenHit::Run(i) => {
                 if let Some((term, key)) = self.screen.run_rows.get(i).cloned() {
-                    self.mode = Mode::Run { term, key };
+                    self.mode = Mode::Run { term, key, board: None };
+                }
+            }
+            ScreenHit::Board(term) => self.open_board_of(term),
+            ScreenHit::BoardCard(i) => {
+                if let Mode::Work { term, .. } = self.mode {
+                    self.open_board_card(term, i);
                 }
             }
             ScreenHit::ReleaseMenu => self.release_menu(),

@@ -417,7 +417,10 @@ fn keys_holder(app: &App) -> Option<Holder> {
             ),
         },
         Mode::Usage => holder("USAGE", &[], ("Esc", "close")),
+        Mode::Run { board: Some(_), .. } => holder("RUN", &[], ("Esc", "back")),
         Mode::Run { .. } => holder("RUN", &[], ("Esc", "close")),
+        Mode::Work { .. } => holder("WORK", &[("Enter", "open run")], ("Esc", "close")),
+        Mode::StatusLog { .. } => holder("STATUS LOG", &[], ("Esc", "close")),
         Mode::Helper(_) => holder("SUBAGENT", &[("Enter", "its pane")], ("Esc", "close")),
         Mode::Clone(_) => holder("CLONE", &[("Tab", "next line"), ("Enter", "clone")], ("Esc", "close")),
         Mode::Specialists(_) => holder("SPECIALISTS", &[("Enter", "read it")], ("Esc", "close")),
@@ -672,6 +675,15 @@ pub(in crate::client) fn draw_mode_bar(app: &mut App, buf: &mut Buffer, row: Rec
     } else if armed(app) {
         let tag = mode_chip("KEYS", t.blocked, t.ink_on(t.blocked), Some(ScreenHit::Leader));
         (tag, key_hints(app, t), where_piece(app, t))
+    } else if let Some(n) = app.broadcasting() {
+        // Typing goes to more than the pane you look at: said in red, where the mode is.
+        let tag = mode_chip(&format!("BROADCAST · {n} PANES"), t.err, t.ink_on(t.err), Some(ScreenHit::ShortcutMode));
+        let mut right = pane_hints(app, t);
+        if let Some(key) = bound(app, &Action::Broadcast) {
+            let lead = short_key(&app.keymap.prefix);
+            right.insert(0, hint(format!("{lead} {}", short_key(&key)), "stop", None, t));
+        }
+        (tag, right, where_piece(app, t))
     } else {
         let tag = mode_chip("PANE", t.accent, t.acc_ink, Some(ScreenHit::ShortcutMode));
         (tag, pane_hints(app, t), where_piece(app, t))

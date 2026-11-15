@@ -312,6 +312,17 @@ pub enum Action {
     OpenFolderOn,
     /// The Claude Code and Codex agent files of the pane's project and home, read-only.
     Specialists,
+    /// The workflow runs of the session you're on as a board: a column per reported step, then
+    /// those that need you and those done (ADR 0010).
+    WorkBoard,
+    /// Why the status of the session you're on changed, newest first.
+    StatusLog,
+    /// Agent sessions that closed lately, each to reopen with its conversation.
+    RecentSessions,
+    /// Type into every pane of this tab at once, or stop.
+    Broadcast,
+    /// Give the panes of this tab equal room again.
+    ResetWidths,
     /// Explicitly unbind a default.
     None,
 }
@@ -412,6 +423,11 @@ impl Action {
             Action::CloneRepo => "Clone a repository…".into(),
             Action::OpenFolderOn => "Open a folder on a machine…".into(),
             Action::Specialists => "Specialist agents…".into(),
+            Action::WorkBoard => "Work board".into(),
+            Action::StatusLog => "Status log".into(),
+            Action::RecentSessions => "Recent sessions…".into(),
+            Action::Broadcast => "Broadcast typing to this tab".into(),
+            Action::ResetWidths => "Reset pane widths".into(),
             Action::None => "Unbound".into(),
         }
     }
@@ -514,6 +530,11 @@ impl Action {
             Action::CloneRepo => "clone-repo".into(),
             Action::OpenFolderOn => "open-folder-on".into(),
             Action::Specialists => "specialists".into(),
+            Action::WorkBoard => "work-board".into(),
+            Action::StatusLog => "status-log".into(),
+            Action::RecentSessions => "recent-sessions".into(),
+            Action::Broadcast => "broadcast".into(),
+            Action::ResetWidths => "reset-widths".into(),
             Action::None => return None,
         })
     }
@@ -639,6 +660,11 @@ impl FromStr for Action {
             "clone-repo" => Action::CloneRepo,
             "open-folder-on" => Action::OpenFolderOn,
             "specialists" => Action::Specialists,
+            "work-board" => Action::WorkBoard,
+            "status-log" => Action::StatusLog,
+            "recent-sessions" => Action::RecentSessions,
+            "broadcast" => Action::Broadcast,
+            "reset-widths" => Action::ResetWidths,
             // The fleet and the why popover are gone; a binding written for one stays
             // harmless, not a config error.
             "none" | "unbind" | "start-fleet" | "why" => Action::None,
@@ -683,6 +709,7 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
     ("_", "split-up"),
     ("\\", "split-left"),
     ("z", "zoom-pane"),
+    ("a", "broadcast"),
     ("x", "close-pane"),
     ("m", "swap-next"),
     ("ctrl+left", "resize-left"),

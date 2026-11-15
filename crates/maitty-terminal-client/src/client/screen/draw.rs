@@ -69,9 +69,11 @@ pub(in crate::client) fn bar_shown(app: &App) -> bool {
 
 /// Whether the bar has anything to say. While keys go to the panes it has nothing: the pane and the sidebar already
 /// name the session, and key mode shows on the frame. It speaks for key mode, for anything that holds the keys, for a
-/// line it flashes, and while Update or Restart waits; otherwise its rows stay blank.
+/// line it flashes, while Update or Restart waits, and while typing is broadcast to more than one pane;
+/// otherwise its rows stay blank.
 pub(in crate::client) fn bar_has_words(app: &App) -> bool {
     armed(app)
+        || app.broadcasting().is_some()
         || shortcut_waits(app)
         || app.mode != Mode::Normal
         || app.view_has_keys()

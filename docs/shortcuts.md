@@ -59,6 +59,7 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `Ctrl`+arrows | Resize the pane |
 | `Alt`+arrows | Swap the pane with the one that way |
 | `PgUp` / `PgDn` | Scroll half a pane |
+| `a` | Broadcast: what you type into the focused pane goes to every pane of the tab (the mode bar reads `BROADCAST · N PANES` in red); again stops it |
 
 ### Sidebar
 
@@ -97,7 +98,19 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `Ctrl+R` | Reload the config |
 
 **Search only** (`Ctrl+K`, then type): new tab, Updates, find in the pane, previous / next
-command in history, send the prefix itself to the program.
+command in history, send the prefix itself to the program, Work board, Status log, Recent
+sessions…, Reset pane widths.
+
+## Work board, run and status log
+
+| Key | Action |
+|---|---|
+| `↑` `↓` (`k` `j`) | The card before / after, column by column |
+| `←` `→` (`h` `l`) | The first card of the column before / after |
+| `Enter` or a click | Open the card's run: its steps; `Esc` goes back to the board on that card |
+| `Esc` | Close the board |
+
+The status log scrolls with `↑` `↓` and `PgUp` `PgDn`; `Esc` closes it.
 
 ## How key mode works
 

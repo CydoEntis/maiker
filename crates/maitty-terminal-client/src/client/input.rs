@@ -201,12 +201,18 @@ impl App {
                 let data = if bracketed {
                     format!("\x1b[200~{body}\x1b[201~")
                 } else {
-                    body
+                    body.clone()
                 };
                 if let Some(p) = self.parsers.get_mut(&term) {
                     p.screen_mut().set_scrollback(0);
                 }
                 self.send_input(term, data.into_bytes());
+                // Each pane of a broadcasting tab gets the paste the way it takes one.
+                for peer in self.broadcast_peers(term) {
+                    let bracketed = self.parsers.get(&peer).is_some_and(|p| p.screen().bracketed_paste());
+                    let data = if bracketed { format!("\x1b[200~{body}\x1b[201~") } else { body.clone() };
+                    self.send_input(peer, data.into_bytes());
+                }
             }
         }
     }
@@ -400,7 +406,9 @@ impl App {
             Mode::FindSessions(v) => self.on_session_find_key(*v, &k),
             Mode::Branch(v) => self.on_branch_key(*v, &k),
             Mode::Usage => self.on_usage_key(&k),
-            Mode::Run { .. } => self.on_run_key(&k),
+            Mode::Run { term, board, .. } => self.on_run_key(term, board, &k),
+            Mode::Work { term, sel } => self.on_board_key(term, sel, &k),
+            Mode::StatusLog { term, top } => self.on_status_log_key(term, top, &k),
             Mode::Helper(v) => self.on_helper_key(*v, &k),
             Mode::Clone(v) => self.on_clone_key(*v, &k),
             Mode::Specialists(v) => self.on_specialists_key(*v, &k),
@@ -649,6 +657,9 @@ impl App {
         {
             self.image_key_to_machine(term, data);
             return;
+        }
+        for peer in self.broadcast_peers(term) {
+            self.send_input(peer, data.clone());
         }
         self.send_input(term, data);
     }
