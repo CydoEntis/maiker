@@ -3216,6 +3216,88 @@ fn a_codex_turn_that_ends_while_its_child_agent_runs_stays_working() {
     a_turn_that_ends_while_its_helper_runs_stays_working("codex", "project");
 }
 
+/// A Claude report listing `running` as its background tasks, of which `agents` are helpers.
+fn with_background(mut msg: ClientMsg, running: &[&str], agents: &[&str], reported: bool) -> ClientMsg {
+    if let ClientMsg::Hook {
+        background,
+        background_agents,
+        background_reported,
+        ..
+    } = &mut msg
+    {
+        *background = running.iter().map(|id| id.to_string()).collect();
+        *background_agents = agents.iter().map(|id| id.to_string()).collect();
+        *background_reported = reported;
+    }
+    msg
+}
+
+/// Claude Code 2.1.325, as captured from its hooks: a background helper (`a1`) puts a shell
+/// (`b1`) in the background and ends its own turn; its `SubagentStop` lists `b1` running, and
+/// the parent's next `Stop` lists only `b1`, not the helper. When `b1` ends, Claude starts the
+/// helper again (`SubagentStart`), it finishes, and its last stop lists no work of its own.
+#[test]
+fn a_helper_waiting_on_its_own_shell_keeps_its_session_working() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let mut seen = viewer(&mut d);
+    let say = |d: &mut Daemon, msg| d.apply_hook(msg, Some(true), Vec::new());
+    let helper = |status, event, start| report_with_helper(t, "claude", status, event, Some(start));
+    say(&mut d, report_with_helper(t, "claude", HookStatus::Working, "UserPromptSubmit", None));
+    say(&mut d, helper(HookStatus::Working, "SubagentStart", true));
+    say(&mut d, turn_end_report(t, "claude", Some(&["a1"])));
+    assert_eq!(d.terms[&t].status, Status::Working, "its helper runs");
+
+    // The helper starts its shell in the background, then ends its turn waiting on it.
+    say(&mut d, with_background(helper(HookStatus::Same, "PostToolUse", true), &["b1"], &[], false));
+    say(&mut d, with_background(helper(HookStatus::Same, "SubagentStop", false), &["a1", "b1"], &["a1"], true));
+    assert_eq!(d.terms[&t].status, Status::Working, "the helper paused, it did not finish");
+    assert_eq!(d.terms[&t].subagents.len(), 1, "still listed");
+    assert_eq!(d.terms[&t].subagent_activity[0].state, SubagentState::Working);
+
+    // Claude wakes the parent to say the helper stopped; the parent's stop lists only the shell.
+    say(&mut d, report_with_helper(t, "claude", HookStatus::Working, "UserPromptSubmit", None));
+    say(&mut d, with_background(turn_end_report(t, "claude", None), &["b1"], &[], true));
+    rests_at_its_idle_prompt(&mut d, t, "✳ project");
+    assert_eq!(d.terms[&t].status, Status::Working, "held on the helper's own work");
+    assert_eq!(d.terms[&t].subagents.len(), 1, "not forgotten for missing from the list");
+    assert_eq!(times_told_done(&mut seen), 0, "nothing finished yet");
+
+    // The shell ends: Claude starts the helper again, it works and stops with nothing left.
+    say(&mut d, helper(HookStatus::Working, "SubagentStart", true));
+    say(&mut d, helper(HookStatus::Same, "PreToolUse", true));
+    say(&mut d, with_background(helper(HookStatus::Same, "SubagentStop", false), &["a1"], &["a1"], true));
+    assert!(d.terms[&t].subagents.is_empty(), "now it finished");
+    assert!(d.terms[&t].helper_work.is_empty(), "its work is forgotten with it");
+    assert_eq!(times_told_done(&mut seen), 0, "the parent still wakes to read it");
+
+    // The parent reads what it found and ends its turn: that is the finish, said once.
+    say(&mut d, report_with_helper(t, "claude", HookStatus::Working, "UserPromptSubmit", None));
+    say(&mut d, turn_end_report(t, "claude", Some(&[])));
+    assert_eq!(d.terms[&t].status, Status::Done);
+    assert_eq!(times_told_done(&mut seen), 1, "one finish, said once");
+    close(&mut d, &[t]);
+}
+
+/// A helper's shell that ended without the helper stopping again (it was lost) holds nothing:
+/// the parent's stop lists neither, so the helper is forgotten as before.
+#[test]
+fn a_helper_whose_own_work_is_gone_is_forgotten_at_the_next_stop() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let say = |d: &mut Daemon, msg| d.apply_hook(msg, Some(true), Vec::new());
+    let helper = |status, event, start| report_with_helper(t, "claude", status, event, Some(start));
+    say(&mut d, report_with_helper(t, "claude", HookStatus::Working, "UserPromptSubmit", None));
+    say(&mut d, helper(HookStatus::Working, "SubagentStart", true));
+    say(&mut d, with_background(helper(HookStatus::Same, "PostToolUse", true), &["b1"], &[], false));
+    say(&mut d, with_background(helper(HookStatus::Same, "SubagentStop", false), &["a1", "b1"], &["a1"], true));
+    say(&mut d, with_background(turn_end_report(t, "claude", None), &[], &[], true));
+    assert_eq!(d.terms[&t].status, Status::Done, "nothing of its own runs any more");
+    assert!(d.terms[&t].subagents.is_empty());
+    assert!(d.terms[&t].helper_work.is_empty());
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn a_helper_started_after_the_turn_ended_keeps_its_session_working() {
     let (mut d, _rx) = daemon();

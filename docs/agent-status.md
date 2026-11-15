@@ -277,6 +277,18 @@ same second it started. When a
 Claude stop listed the helpers as running, the last one stopping shows done unannounced, and
 the stop of the wake-up turn that follows is the finish that is announced.
 
+A Claude helper can pause too: it puts a shell in the background (its `PostToolUse` carries
+`tool_response.backgroundTaskId`, or `isAsync` with the `agentId` of a helper it launched) and
+ends its own turn. Its `SubagentStop` then lists that task still running in `background_tasks`,
+and the parent's later `Stop` lists only the task, no longer the helper. When the task ends,
+Claude starts the helper again (`SubagentStart`, same id) and it carries on (seen with Claude
+Code 2.1.325). So the daemon pairs each task with the helper that started it (`Term::helper_work`):
+a helper whose stop lists one of its own tasks still running stays listed and working, a parent
+`Stop` that lists one of them does not forget it, and the parent stays working until the helper
+stops with none of its own work left. Its starting again keeps the parent's pause, so the finish
+said is still the parent's wake-up stop. A helper's task the parent's stop no longer lists holds
+nothing, and the hour-long quiet limit still applies.
+
 When a trusted integration reports active helpers, Maitty keeps the parent
 session working until they finish or go quiet. Codex uses native lifecycle hooks
 when installed, with thread-specific local session files as fallback; Claude,

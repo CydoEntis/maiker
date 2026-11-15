@@ -197,6 +197,23 @@ impl Daemon {
                 });
                 let late_news = sa.start && finished && event != "SubagentStart";
                 let event_is_current = !late_news && (event_is_current || (!sa.start && current.is_some()));
+                // A shell (or helper) a helper put in the background is that helper's work.
+                if sa.start && !late_news && !sa.id.is_empty() && event == "PostToolUse" {
+                    for task in &background {
+                        if !t.helper_work.iter().any(|(helper, known)| *helper == sa.id && known == task) {
+                            t.helper_work.push((sa.id.clone(), task.clone()));
+                        }
+                    }
+                }
+                // A helper whose turn ends while work it started still runs has paused, not
+                // finished: Claude starts it again when that work ends. It stays listed, so its
+                // parent stays working, until a stop with none of its own work left.
+                let waiting_on_own_work = !sa.start
+                    && !sa.id.is_empty()
+                    && background_reported
+                    && t.helper_work
+                        .iter()
+                        .any(|(helper, task)| *helper == sa.id && background.contains(task));
                 if sa.start {
                     // Its start, or news from one already running (listed once; one
                     // missed while the app was away joins the list here).
@@ -238,6 +255,10 @@ impl Daemon {
                             });
                         }
                     }
+                } else if waiting_on_own_work {
+                    if !t.subagents.iter().any(|(id, _)| *id == sa.id) {
+                        t.subagents.push((sa.id.clone(), sa.kind.clone()));
+                    }
                 } else if event_is_current
                     && let Some(i) = t
                         .subagents
@@ -260,22 +281,33 @@ impl Daemon {
                     && event_is_current
                     && let Some(activity) = t.subagent_activity.iter_mut().find(|a| a.id == sa.id)
                 {
-                    activity.state = SubagentState::Completed;
                     activity.updated_at = event_at;
                     activity.task = sa.task.clone().or_else(|| activity.task.clone());
                     activity.model = sa.model.clone().or_else(|| activity.model.clone());
                     activity.effort = sa.effort.clone().or_else(|| activity.effort.clone());
-                    activity.latest_activity = sa
-                        .activity
-                        .or_else(|| Some("Runtime reported child stop".into()));
+                    if waiting_on_own_work {
+                        activity.state = SubagentState::Working;
+                        activity.latest_activity = Some("Waiting on its background work".into());
+                    } else {
+                        activity.state = SubagentState::Completed;
+                        activity.latest_activity = sa
+                            .activity
+                            .or_else(|| Some("Runtime reported child stop".into()));
+                    }
+                }
+                if !sa.start && !waiting_on_own_work {
+                    t.helper_work.retain(|(helper, _)| *helper != sa.id);
                 }
                 self.dirty = true;
             }
             // The agent's own list of what still runs outranks our count of starts and stops:
-            // a stop that never reached us must not leave a helper listed, or hold the turn.
+            // a stop that never reached us must not leave a helper listed, or hold the turn. A
+            // helper paused on work of its own that is still listed is not one of those.
             if event == "Stop" && background_reported && background_agents.is_empty() {
+                let waiting = t.helpers_waiting_on(&background);
                 self.dirty |= t.forget_unreported_subagents(
                     "The agent's turn ended with no helper running; its stop was never reported",
+                    &waiting,
                 );
             }
             // A turn over (or a new session) has no subagents left; a "done" while some
@@ -284,6 +316,7 @@ impl Daemon {
                 || (matches!(status, HookStatus::Idle) && event != "SessionStart")
             {
                 t.subagents.clear();
+                t.helper_work.clear();
                 t.done_held = None;
                 let now = term::unix_now();
                 for activity in &mut t.subagent_activity {
@@ -335,6 +368,7 @@ impl Daemon {
             }) {
                 if t.session.as_deref() != Some(&id) {
                     t.subagents.clear();
+                    t.helper_work.clear();
                     let now = term::unix_now();
                     for activity in &mut t.subagent_activity {
                         if activity.state.active() {
@@ -415,7 +449,11 @@ impl Daemon {
         let stopped = status == HookStatus::Done && event == "Stop";
         // Asked on a stop only, and on every stop: it also records what is running now.
         let began_work = stopped && t.paused_on_new_background_work(background);
-        let paused = stopped && (began_work || !background_agents.is_empty());
+        // A helper paused on a shell of its own wakes, then wakes this agent, like a running one.
+        let paused = stopped
+            && (began_work
+                || !background_agents.is_empty()
+                || !t.helpers_waiting_on(background).is_empty());
         if matches!(status, HookStatus::Done | HookStatus::Idle) {
             t.last_turn_end = now;
             if agent == "codex" {
@@ -551,7 +589,13 @@ impl Daemon {
         } else {
             format!("hook: {why}")
         };
+        // A helper Claude starts again once its own background work ended is not the agent back
+        // at work: the agent still wakes to read what it found, so its pause stands.
+        let pause_stands = event == "SubagentStart" && t.awaiting_background;
         self.set_status(term, new, &why);
+        if pause_stands && let Some(t) = self.terms.get_mut(&term) {
+            t.awaiting_background = true;
+        }
         // A turn-end report can arrive when the screen never showed the turn working, so the
         // status did not change. A paused turn is checked when the work really ends.
         if turn_end && !paused {

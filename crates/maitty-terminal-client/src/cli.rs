@@ -2260,15 +2260,21 @@ fn hook_message(origin: HookOrigin, payload_json: &Value, status: HookStatus) ->
     {
         event = format!("Notification:{kind}");
     }
-    let (background, background_agents) = if event == "Stop" {
+    // A helper's own stop lists what still runs too: a helper that ends its turn while a shell it
+    // started runs is waiting on that shell, and wakes when it ends.
+    let stopped = matches!(event.as_str(), "Stop" | "SubagentStop");
+    let (background, background_agents) = if stopped {
         (
             running_background_tasks(payload_json, false),
             running_background_tasks(payload_json, true),
         )
+    } else if inner && event == "PostToolUse" {
+        // What a helper just put in the background is its own work: the daemon pairs the two.
+        (background_work_started(payload_json).into_iter().collect(), Vec::new())
     } else {
         (Vec::new(), Vec::new())
     };
-    let background_reported = event == "Stop"
+    let background_reported = stopped
         && payload_json
             .get("background_tasks")
             .is_some_and(Value::is_array);
@@ -2473,6 +2479,24 @@ const BACKGROUND_TASK_OVER: &[&str] = &[
     "cancelled",
     "canceled",
 ];
+
+/// The background task a tool call just started: a shell run in the background
+/// (`backgroundTaskId`) or a helper agent launched without waiting (`isAsync` with its
+/// `agentId`). Its id is the one the agent's later `background_tasks` lists.
+fn background_work_started(payload: &Value) -> Option<String> {
+    let response = payload.get("tool_response")?;
+    let id = response
+        .get("backgroundTaskId")
+        .or_else(|| {
+            response
+                .get("isAsync")
+                .and_then(Value::as_bool)
+                .filter(|launched_async| *launched_async)
+                .and_then(|_| response.get("agentId"))
+        })?
+        .as_str()?;
+    (!id.is_empty()).then(|| id.to_string())
+}
 
 /// The ids of the background tasks Claude's Stop says are still in flight; it wakes itself when
 /// one ends. With `agents_only`, just the helper agents among them (`"type": "subagent"`).
@@ -4373,6 +4397,54 @@ mod tests {
         assert!(reported(json!({"hook_event_name":"Stop","background_tasks":[]})), "an empty list is nothing running");
         assert!(!reported(json!({"hook_event_name":"Stop"})), "no list is nothing said");
         assert!(!reported(json!({"hook_event_name":"PostToolUse","background_tasks":[]})), "only a stop is asked");
+        assert!(
+            reported(json!({"hook_event_name":"SubagentStop","agent_id":"a1","background_tasks":[]})),
+            "a helper's stop lists them too"
+        );
+    }
+
+    /// Claude Code 2.1.325's shapes, as captured from its hooks.
+    #[test]
+    fn a_helper_says_what_it_put_in_the_background_and_what_still_runs_when_it_stops() {
+        let message = |payload: Value| {
+            let origin = super::HookOrigin {
+                term: 1,
+                agent: "claude".into(),
+                pid: 0,
+                token: String::new(),
+            };
+            let status = super::status_from_hook(&payload).unwrap_or(HookStatus::Same);
+            let ClientMsg::Hook {
+                background,
+                background_agents,
+                background_reported,
+                subagent,
+                ..
+            } = super::hook_message(origin, &payload, status)
+            else {
+                panic!("expected hook report")
+            };
+            (background, background_agents, background_reported, subagent.map(|s| s.start))
+        };
+        let shell = json!({"hook_event_name":"PostToolUse","agent_id":"a1","agent_type":"fork","tool_name":"Bash",
+            "tool_input":{"command":"sleep 20","run_in_background":true},
+            "tool_response":{"stdout":"","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false,"backgroundTaskId":"b1"}});
+        assert_eq!(message(shell), (vec!["b1".to_string()], vec![], false, Some(true)), "the shell is the helper's own work");
+        let helper = json!({"hook_event_name":"PostToolUse","agent_id":"a1","tool_name":"Agent",
+            "tool_response":{"isAsync":true,"status":"async_launched","agentId":"a2"}});
+        assert_eq!(message(helper).0, ["a2"], "so is a helper it launched without waiting");
+        let foreground = json!({"hook_event_name":"PostToolUse","agent_id":"a1","tool_name":"Bash","tool_response":{"stdout":"ok"}});
+        assert!(message(foreground).0.is_empty(), "a call that finished started nothing");
+        let parents_own = json!({"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"backgroundTaskId":"b9"}});
+        assert!(message(parents_own).0.is_empty(), "the session's own shells are listed at its stop");
+        let stop = json!({"hook_event_name":"SubagentStop","agent_id":"a1","agent_type":"fork","stop_hook_active":false,
+            "background_tasks":[{"id":"a1","type":"subagent","status":"running","agent_type":"fork"},
+                                {"id":"b1","type":"shell","status":"running","command":"sleep 20"}]});
+        assert_eq!(
+            message(stop),
+            (vec!["a1".to_string(), "b1".to_string()], vec!["a1".to_string()], true, Some(false)),
+            "its stop lists what still runs"
+        );
     }
 
     #[test]
