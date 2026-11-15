@@ -78,9 +78,12 @@ pub(super) struct Saved {
     pub recent: Vec<String>,
     /// The side sheet's width per kind of view (`SheetKind::key`), as you sized it.
     pub sheet_w: HashMap<String, u16>,
-    /// Which ticket sources each project reads, by `project_key`: a repo and group ids, no secret.
+    /// Which ticket sources each project read, by `project_key`, from before this computer's
+    /// daemon kept them: read only to move them there once (`Query::TicketLinks` `Import`), then
+    /// emptied. A repo and group ids, no secret.
     pub ticket_links: HashMap<String, crate::client::tickets::TicketLink>,
-    /// The names you are known by at each ticket provider, for Tickets' Mine.
+    /// The name you are known by on GitHub, for Tickets' Mine. Plane's and Linear's are the
+    /// daemon's; the ones kept here before are moved there with `ticket_links`.
     pub ticket_me: crate::client::tickets::TicketMe,
     /// `session_order` and `placed` of every other machine, by its configured name. The top-level
     /// ones are this machine's, so a file from before machines reads as it always did. A machine

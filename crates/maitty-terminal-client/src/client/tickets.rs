@@ -1,6 +1,7 @@
 //! Tickets as the TUI shows them: which source a project reads (a GitHub repository through the
 //! machine's own `gh`, a Plane project or a Linear team through the key the daemon keeps), the
-//! links kept in the saved UI state, and the words Maitty draws or sends. No I/O and no drawing:
+//! links as this computer's daemon keeps them (`Query::TicketLinks`), and the words Maitty draws or
+//! sends. No I/O and no drawing:
 //! `screen/tickets_view.rs` asks the daemon and draws. Ticket text is other people's: the daemon
 //! cleaned it, it is cleaned again here (`shown`), and it is only ever drawn as plain text.
 
@@ -8,6 +9,9 @@ use crate::hidden::sanitize;
 use maitty_shared::tickets::{
     Group, GroupKind, StateCategory, Ticket, TicketError, TicketKeyState, TicketProvider,
     TicketSummary,
+};
+use maitty_shared::ticket_links::{
+    GitHubLink, LinkedProject, TicketLink as DaemonLink, TicketMe as DaemonMe, TicketPick,
 };
 use serde::{Deserialize, Serialize};
 
@@ -79,8 +83,9 @@ pub(super) struct Picked {
     pub name: String,
 }
 
-/// Which sources one project reads. Nothing here is a secret: a repository name and the ids of a
-/// Plane project and a Linear team. The keys stay with the daemon.
+/// Which sources one project reads, as this view works with it (the daemon's `TicketLink`, see
+/// `of_daemon`), and as the saved UI state kept it before the daemon kept links. Nothing here is a
+/// secret: a repository name and the ids of a Plane project and a Linear team.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(super) struct TicketLink {
@@ -90,7 +95,65 @@ pub(super) struct TicketLink {
     pub linear: Option<Picked>,
 }
 
-/// The names you are known by at each provider, for the Mine filter.
+impl TicketLink {
+    /// The daemon's link in this view's shape.
+    pub(super) fn of_daemon(link: &DaemonLink) -> TicketLink {
+        let pick = |p: &Option<TicketPick>| p.as_ref().map(|p| Picked { id: p.id.clone(), name: kept(&p.name, MOST_NAME_CHARS) });
+        TicketLink {
+            github: match &link.github {
+                GitHubLink::Origin => None,
+                GitHubLink::Off => Some(String::new()),
+                GitHubLink::Repo(repo) => Some(repo.clone()),
+            },
+            plane: pick(&link.plane),
+            linear: pick(&link.linear),
+        }
+    }
+
+    /// This link as the daemon keeps it.
+    pub(super) fn to_daemon(&self) -> DaemonLink {
+        let pick = |p: &Option<Picked>| p.as_ref().map(|p| TicketPick { id: p.id.clone(), name: p.name.clone() });
+        DaemonLink {
+            github: match self.github.as_deref() {
+                None => GitHubLink::Origin,
+                Some("") => GitHubLink::Off,
+                Some(repo) => GitHubLink::Repo(repo.to_string()),
+            },
+            plane: pick(&self.plane),
+            linear: pick(&self.linear),
+        }
+    }
+}
+
+/// The folder a saved key (`project_key`: the path with `\` for every separator, behind the
+/// machine's name and a unit separator) was made from: a key that starts with one `\` was a
+/// `/` path. On Windows the key was lowercased, which Windows folders do not mind.
+fn folder_of_key(key: &str) -> (Option<String>, String) {
+    let (machine, path) = match key.split_once('\u{1f}') {
+        Some((machine, path)) => (Some(machine.to_string()), path),
+        None => (None, key),
+    };
+    let slashed = path.starts_with('\\') && !path.starts_with("\\\\");
+    (machine, if slashed { path.replace('\\', "/") } else { path.to_string() })
+}
+
+/// The links and names the saved UI state kept before the daemon kept them, as the daemon's
+/// `Import` takes them; `None` when there is nothing to move.
+pub(super) fn saved_to_import(links: &std::collections::HashMap<String, TicketLink>, me: &TicketMe) -> Option<(Vec<LinkedProject>, DaemonMe)> {
+    let projects: Vec<LinkedProject> = links
+        .iter()
+        .map(|(key, link)| {
+            let (machine, folder) = folder_of_key(key);
+            LinkedProject { machine, folder, link: link.to_daemon() }
+        })
+        .collect();
+    let names = DaemonMe { plane: me.plane.clone(), linear: me.linear.clone() };
+    (!projects.is_empty() || !names.plane.is_empty() || !names.linear.is_empty()).then_some((projects, names))
+}
+
+/// The names you are known by at each provider, for the Mine filter. GitHub's is kept in the
+/// saved UI state; Plane's and Linear's are the daemon's (these two fields are read only to move
+/// them there once).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub(super) struct TicketMe {
@@ -189,18 +252,6 @@ pub(super) fn source_for(
     match pick {
         None => Source::Unlinked(Unlinked::NoLink),
         Some(p) => Source::Linked { source: keyed.name().to_string(), top: Some(p.id.clone()), top_name: p.name.clone() },
-    }
-}
-
-/// What to do to link `provider`, said where its tab has nothing to show.
-pub(super) fn link_how(provider: Provider, project: &str, why: Unlinked) -> String {
-    match (provider, why) {
-        (Provider::Github, _) => {
-            format!("Maitty uses your gh login, so there is no key to paste. Link the repo for {project}.")
-        }
-        (Provider::Plane, Unlinked::NoKey) => "Add your Plane address and an API key, then pick the project.".into(),
-        (Provider::Linear, Unlinked::NoKey) => "Add your Linear API key, then pick the team.".into(),
-        (_, Unlinked::NoLink) => format!("Pick the {} for {project}.", provider.top_word()),
     }
 }
 

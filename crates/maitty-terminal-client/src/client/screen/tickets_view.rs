@@ -1,7 +1,9 @@
 //! The Tickets view in the side panel: the tickets of the project the session in front works in,
 //! from GitHub (the machine's own `gh`), Plane and Linear (the key this computer's daemon keeps).
 //! Every read goes through this computer's daemon (`Query::Tickets`), tagged, and the answer comes
-//! back as a message. The only writes are a comment and marking a ticket done, each shown exactly
+//! back as a message. Which sources a project reads is the daemon's too (`Query::TicketLinks`): a
+//! link is kept per project (its repository, so every worktree and session in it), keys once per
+//! computer, and a source not set up yet is set up from its own tab. The only writes are a comment and marking a ticket done, each shown exactly
 //! as it will be written and sent only on `y` or a click on the confirm button (`TicketWrite`,
 //! `confirmed: true`); Enter alone never writes. Ticket text is other people's: drawn as plain text,
 //! cleaned of control and hidden characters, never read as Markdown or HTML.
@@ -10,8 +12,10 @@ use super::*;
 use crate::client::tickets::{self as tk, Picked, Provider, Source, TicketLink, Unlinked};
 use crate::client::{Bg, Btn, View};
 use crate::protocol::{ClientMsg, Query, TicketKeyChange};
+use maitty_shared::protocol::TICKET_LINKS_SINCE;
+use maitty_shared::ticket_links::{LinkedProject, TicketLinkChange, TicketLinks, TicketPlace};
 use maitty_shared::tickets::{
-    Group, StateCategory, TICKET_COMMENT_MAX_CHARS, TICKETS_PAGE_MAX, Ticket, TicketError,
+    Group, StateCategory, TICKET_COMMENT_MAX_CHARS, TICKET_NAME_MAX_CHARS, TICKETS_PAGE_MAX, Ticket, TicketError,
     TicketKeyState, TicketProvider, TicketSummary, TicketWrite, TicketWritten, TicketsReply,
     TicketsRequest,
 };
@@ -31,13 +35,19 @@ const FULL_ROW_FROM: u16 = 44;
 /// The most bullets a key's field shows: its length is not the screen's business.
 const KEY_BULLETS: usize = 12;
 const COMMANDS_HINT: &str = "gh auth login";
+/// Said where links would be when this computer's daemon is older than keeping them.
+const OLD_LINKS: &str = "The Maitty service on this computer is older than ticket links. Restart it (Restart maitty, in Search commands) to link Plane, Linear or another repo.";
+/// Where a link is kept, said wherever one is set.
+fn saved_for(name: &str) -> String {
+    format!("Saved for {name} and every worktree of it: every session in this project shows these tickets.")
+}
 
-/// The project Tickets reads for: its name, the key its links are kept under, its folder, the
+/// The project Tickets reads for: its name, where the daemon keeps its links, its folder, the
 /// machine it is on, and the session in front (where Send goes).
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct TicketsProject {
     pub name: String,
-    pub key: String,
+    pub place: TicketPlace,
     pub folder: PathBuf,
     pub machine: MachineId,
     pub git: bool,
@@ -51,6 +61,8 @@ pub(crate) struct TicketsProject {
 #[derive(Debug, Clone, PartialEq)]
 enum Asked {
     Keys,
+    /// The daemon's links; `moved` when the saved UI state's links went with the question.
+    Links { moved: bool },
     Groups { source: String },
     List { source: String, page: u32 },
     Ticket { id: String },
@@ -81,9 +93,12 @@ enum Page {
     Review { id: String, write: TicketWrite, state: WriteState, scroll: usize },
 }
 
-/// Settings › Tickets, as a page of the panel: the project's links, the keys, your names.
+/// Settings › Tickets, as a page of the panel: the accounts (keys and your names, once for every
+/// project) and the linked projects. With `setup` it is one source's setup for the project in
+/// front instead, opened from that source's tab, and goes back to the list when done.
 #[derive(Clone, PartialEq, Default)]
 struct Sources {
+    setup: bool,
     sel: usize,
     /// A field being typed: which row, and what is typed.
     edit: Option<(SourceRow, String)>,
@@ -109,6 +124,20 @@ struct KeyForm {
 }
 
 impl KeyForm {
+    /// An empty form for `provider`, its address and workspace as last connected.
+    fn new(provider: TicketProvider, keys: Option<&[TicketKeyState]>) -> KeyForm {
+        let known = keys.and_then(|k| k.iter().find(|k| k.provider == provider)).cloned();
+        KeyForm {
+            provider,
+            address: known.as_ref().map(|k| k.address.clone()).unwrap_or_default(),
+            workspace: known.map(|k| k.workspace).unwrap_or_default(),
+            key: crate::protocol::SecretText::default(),
+            at: 0,
+            sending: false,
+            error: None,
+        }
+    }
+
     fn fields(&self) -> usize {
         if self.provider == TicketProvider::Plane { 3 } else { 1 }
     }
@@ -125,48 +154,43 @@ impl KeyForm {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SourceRow {
-    GithubRepo,
     GithubName,
     PlaneKey,
-    PlaneProject,
     PlaneName,
     LinearKey,
-    LinearTeam,
     LinearName,
+    GithubRepo,
+    PlaneProject,
+    LinearTeam,
+    /// Another linked project, by its place among `other_projects`.
+    Other(usize),
 }
 
-const SOURCE_ROWS: [SourceRow; 8] = [
-    SourceRow::GithubRepo,
-    SourceRow::GithubName,
-    SourceRow::PlaneKey,
-    SourceRow::PlaneProject,
-    SourceRow::PlaneName,
-    SourceRow::LinearKey,
-    SourceRow::LinearTeam,
-    SourceRow::LinearName,
-];
+/// Accounts: once on this computer, for every project.
+const ACCOUNT_ROWS: [SourceRow; 5] = [SourceRow::GithubName, SourceRow::PlaneKey, SourceRow::PlaneName, SourceRow::LinearKey, SourceRow::LinearName];
+/// The project in front's links.
+const PROJECT_ROWS: [SourceRow; 3] = [SourceRow::GithubRepo, SourceRow::PlaneProject, SourceRow::LinearTeam];
 
 impl SourceRow {
-    fn provider(self) -> Provider {
+    fn provider(self) -> Option<Provider> {
         match self {
-            SourceRow::GithubRepo | SourceRow::GithubName => Provider::Github,
-            SourceRow::PlaneKey | SourceRow::PlaneProject | SourceRow::PlaneName => Provider::Plane,
-            _ => Provider::Linear,
-        }
-    }
-
-    fn label(self) -> &'static str {
-        match self {
-            SourceRow::GithubRepo => "repo",
-            SourceRow::PlaneKey | SourceRow::LinearKey => "key",
-            SourceRow::PlaneProject => "project",
-            SourceRow::LinearTeam => "team",
-            _ => "your name",
+            SourceRow::GithubRepo | SourceRow::GithubName => Some(Provider::Github),
+            SourceRow::PlaneKey | SourceRow::PlaneProject | SourceRow::PlaneName => Some(Provider::Plane),
+            SourceRow::LinearKey | SourceRow::LinearTeam | SourceRow::LinearName => Some(Provider::Linear),
+            SourceRow::Other(_) => None,
         }
     }
 
     fn is_name(self) -> bool {
         matches!(self, SourceRow::GithubName | SourceRow::PlaneName | SourceRow::LinearName)
+    }
+
+    fn name_of(provider: Provider) -> SourceRow {
+        match provider {
+            Provider::Github => SourceRow::GithubName,
+            Provider::Plane => SourceRow::PlaneName,
+            Provider::Linear => SourceRow::LinearName,
+        }
     }
 }
 
@@ -191,6 +215,8 @@ pub(crate) struct TicketsView {
     /// The repository the folder's `origin` names: None while read, Some(None) when it has none.
     origin: Option<Option<String>>,
     keys: Option<Result<Vec<TicketKeyState>, TicketError>>,
+    /// The daemon's links (this project's, every linked one, your names): None while read.
+    links: Option<Result<TicketLinks, TicketError>>,
     /// The groups of a source, by source.
     groups: HashMap<String, Result<Vec<Group>, TicketError>>,
     scope: Option<Picked>,
@@ -219,6 +245,7 @@ impl TicketsView {
             provider: Provider::Github,
             origin: None,
             keys: None,
+            links: None,
             groups: HashMap::new(),
             scope: None,
             list: Listing::default(),
@@ -246,6 +273,35 @@ impl TicketsView {
 
     fn source(&self, link: &TicketLink, provider: Provider) -> Source {
         tk::source_for(provider, link, self.origin.clone().flatten().as_deref(), self.keys_known())
+    }
+
+    fn links_known(&self) -> Option<&TicketLinks> {
+        match &self.links {
+            Some(Ok(links)) => Some(links),
+            _ => None,
+        }
+    }
+
+    /// What the project in front reads, as the daemon keeps it; nothing linked while unknown.
+    fn link(&self) -> TicketLink {
+        self.links_known().and_then(|l| l.project.as_ref()).map(|p| TicketLink::of_daemon(&p.link)).unwrap_or_default()
+    }
+
+    /// Every other linked project, as Sources lists them.
+    fn other_projects(&self) -> Vec<&LinkedProject> {
+        let Some(links) = self.links_known() else { return Vec::new() };
+        let here = links.project.as_ref().map(|p| (&p.machine, &p.folder));
+        links.projects.iter().filter(|p| Some((&p.machine, &p.folder)) != here).collect()
+    }
+
+    /// The rows Sources lists: the accounts, the project in front, then every other linked one.
+    fn source_rows(&self) -> Vec<SourceRow> {
+        ACCOUNT_ROWS.into_iter().chain(PROJECT_ROWS).chain((0..self.other_projects().len()).map(SourceRow::Other)).collect()
+    }
+
+    /// Whether the list's tab can be set up now (what it lacks is known).
+    fn setup_ready(&self) -> bool {
+        self.links.is_some() && (self.provider.keyed().is_none() || self.keys.is_some()) && (self.provider != Provider::Github || self.origin.is_some())
     }
 
     /// The tickets the list shows: the read ones that match the search, Mine and the state filter.
@@ -320,6 +376,9 @@ impl TicketsView {
     pub(in crate::client) fn hints(&self) -> (&'static [(&'static str, &'static str)], (&'static str, &'static str)) {
         match &self.page {
             Page::List if self.typing => (&[("", "type to search"), ("Enter", "ask")], ("Esc", "done")),
+            Page::List if self.setup_ready() && !self.source(&self.link(), self.provider).linked() => {
+                (&[("Enter", "set up"), ("←→", "source"), (",", "sources")], ("Esc", "close"))
+            }
             Page::List => (
                 &[("Enter", "open"), ("/", "search"), ("←→", "source"), ("m", "mine"), ("a", "closed"), ("g", "scope"), (",", "sources")],
                 ("Esc", "close"),
@@ -333,7 +392,7 @@ impl TicketsView {
             Page::Sources(s) if s.edit.is_some() => (&[("", "type"), ("Enter", "save")], ("Esc", "cancel")),
             Page::Sources(s) if s.remove.is_some() => (&[("y", "remove")], ("Esc", "keep")),
             Page::Sources(s) if s.pick.is_some() => (&[("↑↓", "choose"), ("Enter", "pick")], ("Esc", "back")),
-            Page::Sources(_) => (&[("Enter", "change"), ("x", "turn off / remove")], ("Esc", "back")),
+            Page::Sources(_) => (&[("Enter", "change"), ("x", "turn off / remove / unlink")], ("Esc", "back")),
             Page::Start { .. } => (&[("y", "start"), ("←→", "agent"), ("↑↓", "read")], ("Esc", "cancel")),
             Page::Send { .. } => (&[("y", "send"), ("↑↓", "read")], ("Esc", "cancel")),
             Page::Comment { .. } => (&[("", "type"), ("Tab", "review")], ("Esc", "cancel")),
@@ -361,10 +420,10 @@ impl App {
         let term = self.selected_term()?;
         let info = self.term_info(term)?;
         let folder = info.root.clone().or_else(|| info.top.clone()).unwrap_or_else(|| info.cwd.clone());
-        let machine = self.machine_name(term.machine).to_string();
+        let machine = (term.machine != MachineId::LOCAL).then(|| self.machine_name(term.machine).to_string());
         Some(TicketsProject {
             name: folder_name(&folder),
-            key: project_key(&machine, &folder),
+            place: TicketPlace { machine, folder: folder.to_string_lossy().into_owned() },
             git: info.root.is_some() || info.top.is_some(),
             folder,
             machine: term.machine,
@@ -374,14 +433,67 @@ impl App {
         })
     }
 
-    fn ticket_link(&self, key: &str) -> TicketLink {
-        self.screen.saved.ticket_links.get(key).cloned().unwrap_or_default()
+    /// The name you are known by at `provider`, for Mine: GitHub's is kept by this window, Plane's
+    /// and Linear's by the daemon (the saved ones until they are moved there).
+    fn ticket_me(&self, v: &TicketsView, provider: Provider) -> String {
+        let saved = &self.screen.saved.ticket_me;
+        match (provider.keyed(), v.links_known()) {
+            (Some(keyed), Some(links)) => tk::kept(links.me.of(keyed), TICKET_NAME_MAX_CHARS),
+            _ => saved.of(provider).to_string(),
+        }
     }
 
-    fn set_ticket_link(&mut self, key: &str, change: impl FnOnce(&mut TicketLink)) {
-        let link = self.screen.saved.ticket_links.entry(key.to_string()).or_default();
-        change(link);
-        self.screen.save();
+    /// Keep the name you are known by at `provider`.
+    fn set_ticket_me(&mut self, v: &mut TicketsView, provider: Provider, name: &str) {
+        let Some(keyed) = provider.keyed() else {
+            self.screen.saved.ticket_me.set(provider, name);
+            self.screen.save();
+            return;
+        };
+        let name = tk::kept(name, TICKET_NAME_MAX_CHARS);
+        if let Some(Ok(links)) = &mut v.links {
+            match keyed {
+                TicketProvider::Plane => links.me.plane = name.clone(),
+                TicketProvider::Linear => links.me.linear = name.clone(),
+            }
+        }
+        self.ask_ticket_links(v, TicketLinkChange::SetMe { provider: keyed, name });
+    }
+
+    /// Change what the project in front reads and have the daemon keep it. The view shows the change
+    /// at once; a refusal says so and reads the links again. False when the daemon can't keep links.
+    fn set_ticket_link(&mut self, v: &mut TicketsView, change: impl FnOnce(&mut TicketLink)) -> bool {
+        let Some(p) = v.project.clone() else { return false };
+        let Some(links) = v.links_known() else {
+            let why = match &v.links {
+                Some(Err(e)) => tk::read_failure(v.provider, e),
+                _ => "The links are still being read".into(),
+            };
+            self.notify(why, true);
+            return false;
+        };
+        let place = links.project.as_ref().map_or_else(|| p.place.clone(), |at| TicketPlace { machine: at.machine.clone(), folder: at.folder.clone() });
+        let mut link = v.link();
+        change(&mut link);
+        let link = link.to_daemon();
+        if let Some(Ok(links)) = &mut v.links {
+            let project = links.project.get_or_insert_with(|| LinkedProject { machine: place.machine.clone(), folder: place.folder.clone(), link: Default::default() });
+            project.link = link.clone();
+        }
+        self.ask_ticket_links(v, TicketLinkChange::Set { place, link });
+        true
+    }
+
+    /// Ask this computer's daemon for the links (or change them) for the project in front. An
+    /// older daemon is not asked: it would never answer.
+    fn ask_ticket_links(&mut self, v: &mut TicketsView, change: TicketLinkChange) {
+        if TICKET_LINKS_SINCE > self.local_protocol {
+            v.links = Some(Err(TicketError::Invalid(OLD_LINKS.into())));
+            return;
+        }
+        let place = v.project.as_ref().map(|p| p.place.clone());
+        let moved = matches!(change, TicketLinkChange::Import { .. });
+        self.ask_tickets(v, Asked::Links { moved }, |tag| Query::TicketLinks { place, change, tag });
     }
 
     /// The Tickets key: the project's tickets in the side panel, or closed again.
@@ -399,18 +511,23 @@ impl App {
         self.screen.cursor = None;
         self.mode = Mode::Normal;
         if let Some(p) = &project {
-            let link = self.ticket_link(&p.key);
-            // The first tab with something linked; GitHub until the keys are known.
-            if link.github.as_deref() == Some("") && (link.plane.is_some() || link.linear.is_some()) {
-                v.provider = if link.plane.is_some() { Provider::Plane } else { Provider::Linear };
-            }
             self.ask_ticket_keys(&mut v, TicketKeyChange::Status);
-            if p.machine == MachineId::LOCAL && link.github.is_none() {
+            // The links this window kept before the daemon kept them go with the first question,
+            // which adds only what the daemon has not got.
+            let saved = &self.screen.saved;
+            let change = match tk::saved_to_import(&saved.ticket_links, &saved.ticket_me) {
+                Some((projects, me)) => TicketLinkChange::Import { projects, me },
+                None => TicketLinkChange::Read,
+            };
+            if !v.old_daemon {
+                self.ask_ticket_links(&mut v, change);
+            }
+            if p.machine == MachineId::LOCAL {
                 self.read_origin(p.folder.clone());
             } else {
                 v.origin = Some(None);
-                self.tickets_reload(&mut v);
             }
+            self.tickets_reload(&mut v);
         }
         self.show_view(View::Tickets(Box::new(v)));
     }
@@ -466,8 +583,10 @@ impl App {
 
     /// Read the list again from its first page, for the provider, scope and search shown.
     fn tickets_reload(&self, v: &mut TicketsView) {
-        let Some(p) = &v.project else { return };
-        let link = self.ticket_link(&p.key);
+        if v.project.is_none() || v.links.is_none() {
+            return;
+        }
+        let link = v.link();
         let Source::Linked { source, top, .. } = v.source(&link, v.provider) else {
             v.list = Listing::default();
             return;
@@ -572,7 +691,7 @@ impl App {
                 (Asked::Groups { source }, Err(e)) => {
                     v.groups.insert(source, Err(e));
                 }
-                (Asked::Keys | Asked::Write { .. }, _) => {}
+                (Asked::Keys | Asked::Links { .. } | Asked::Write { .. }, _) => {}
             }
             let _ = app;
         });
@@ -586,12 +705,18 @@ impl App {
                 return;
             }
             let sent = matches!(&v.page, Page::Sources(s) if s.form.as_ref().is_some_and(|f| f.sending));
+            let mut picking = None;
             if sent && let Page::Sources(s) = &mut v.page {
                 match &answer {
                     Ok(_) => {
-                        let name = s.form.as_ref().map_or("", |f| f.provider.name());
+                        let provider = s.form.as_ref().map(|f| f.provider);
+                        let name = provider.map_or("", TicketProvider::name);
                         s.form = None;
                         s.note = Some((format!("{} connected · key saved", capital(name)), false));
+                        // Setting up: the key is for every project; this project's team or project next.
+                        if s.setup && let Some(keyed) = provider {
+                            picking = Some(keyed);
+                        }
                     }
                     Err(e) => {
                         if let Some(f) = &mut s.form {
@@ -607,7 +732,56 @@ impl App {
                 Err(e) if v.keys.is_none() => v.keys = Some(Err(e)),
                 Err(_) => {}
             }
+            if let Some(keyed) = picking {
+                let provider = if keyed == TicketProvider::Plane { Provider::Plane } else { Provider::Linear };
+                if v.source(&v.link(), provider).linked() {
+                    v.page = Page::List;
+                } else if let Page::Sources(s) = &mut v.page {
+                    s.pick = Some((provider, 0));
+                    app.ask_groups(v, keyed.name());
+                }
+            }
             if v.list.of.is_none() && !v.list.loading {
+                app.tickets_reload(v);
+            }
+        });
+    }
+
+    /// A `Reply::TicketLinks`: what the project in front reads, every linked project, your names; or
+    /// why a change was refused.
+    pub(in crate::client) fn ticket_links_arrived(&mut self, tag: u64, answer: Result<TicketLinks, TicketError>) {
+        let answer = answer.map_err(TicketError::cleaned);
+        self.with_tickets(|app, v| {
+            let Some(Asked::Links { moved }) = v.asked.remove(&tag) else { return };
+            let first = v.links.is_none();
+            let before = v.link();
+            match answer {
+                Ok(links) => {
+                    if moved {
+                        // The daemon has them now; the window keeps only GitHub's name.
+                        let saved = &mut app.screen.saved;
+                        saved.ticket_links.clear();
+                        saved.ticket_me.plane.clear();
+                        saved.ticket_me.linear.clear();
+                        app.screen.save();
+                    }
+                    v.links = Some(Ok(links));
+                }
+                Err(e) if first => v.links = Some(Err(e)),
+                Err(e) => {
+                    // A refused change: say why and read what the daemon really keeps.
+                    app.notify(format!("Not saved: {}", tk::read_failure(v.provider, &e)), true);
+                    app.ask_ticket_links(v, TicketLinkChange::Read);
+                }
+            }
+            let link = v.link();
+            if first {
+                // The first tab with something linked.
+                if link.github.as_deref() == Some("") && (link.plane.is_some() || link.linear.is_some()) {
+                    v.provider = if link.plane.is_some() { Provider::Plane } else { Provider::Linear };
+                }
+            }
+            if first || link != before {
                 app.tickets_reload(v);
             }
         });
@@ -775,8 +949,11 @@ impl App {
             }
             return Some(Page::List);
         }
-        let me = self.screen.saved.ticket_me.of(v.provider).to_string();
+        let me = self.ticket_me(v, v.provider);
         let n = v.shown(&me).len();
+        if k.code == KeyCode::Enter && v.setup_ready() && !v.source(&v.link(), v.provider).linked() {
+            return Some(self.start_setup(v));
+        }
         match k.code {
             KeyCode::Esc | KeyCode::Char('p') if k.code == KeyCode::Char('p') || v.search.is_empty() => {
                 v.closing = true;
@@ -802,7 +979,7 @@ impl App {
             KeyCode::Char('m') => {
                 if me.is_empty() {
                     return Some(Page::Sources(Sources {
-                        sel: SOURCE_ROWS.iter().position(|r| r.is_name() && r.provider() == v.provider).unwrap_or(0),
+                        sel: v.source_rows().iter().position(|r| *r == SourceRow::name_of(v.provider)).unwrap_or(0),
                         note: Some((format!("Type your {} name for Mine", v.provider.name()), false)),
                         ..Sources::default()
                     }));
@@ -820,9 +997,7 @@ impl App {
                 self.sign_in_github(v);
             }
             KeyCode::Char('g') => {
-                let Some(p) = &v.project else { return Some(Page::List) };
-                let link = self.ticket_link(&p.key);
-                if let Source::Linked { source, .. } = v.source(&link, v.provider) {
+                if let Source::Linked { source, .. } = v.source(&v.link(), v.provider) {
                     if !matches!(v.groups.get(&source), Some(Ok(_))) {
                         self.ask_groups(v, &source);
                     }
@@ -849,6 +1024,21 @@ impl App {
             }
         }
         Some(Page::List)
+    }
+
+    /// The setup of the list's source for the project in front: GitHub asks for a repository,
+    /// Plane and Linear for a key (once, for every project) and then the project or team.
+    fn start_setup(&mut self, v: &mut TicketsView) -> Page {
+        let mut s = Sources { setup: true, ..Sources::default() };
+        match (v.provider.keyed(), v.source(&v.link(), v.provider)) {
+            (None, _) => s.edit = Some((SourceRow::GithubRepo, String::new())),
+            (Some(keyed), Source::Unlinked(Unlinked::NoKey)) => s.form = Some(KeyForm::new(keyed, v.keys_known())),
+            (Some(keyed), _) => {
+                self.ask_groups(v, keyed.name());
+                s.pick = Some((v.provider, 0));
+            }
+        }
+        Page::Sources(s)
     }
 
     /// A shell on this computer running `gh auth login`: GitHub is read with this computer's `gh`.
@@ -900,7 +1090,7 @@ impl App {
     }
 
     fn on_scope_key(&mut self, v: &mut TicketsView, k: &KeyEvent, sel: usize) -> Option<Page> {
-        let groups = scope_groups(self, v);
+        let groups = scope_groups(v);
         match k.code {
             KeyCode::Esc => Some(Page::List),
             KeyCode::Enter => {
@@ -1050,13 +1240,15 @@ impl App {
 
     fn on_sources_key(&mut self, v: &mut TicketsView, k: &KeyEvent, mut s: Sources) -> Option<Page> {
         let Some(p) = v.project.clone() else { return Some(Page::List) };
+        // Setting up goes back to the list whenever it is left or done.
+        let back = |s: Sources| Some(if s.setup { Page::List } else { Page::Sources(s) });
         if let Some(mut f) = s.form.take() {
             if f.sending {
                 s.form = Some(f);
                 return Some(Page::Sources(s));
             }
             match k.code {
-                KeyCode::Esc => return Some(Page::Sources(s)),
+                KeyCode::Esc => return back(s),
                 KeyCode::Tab | KeyCode::Down => f.at = (f.at + 1) % f.fields(),
                 KeyCode::BackTab | KeyCode::Up => f.at = (f.at + f.fields() - 1) % f.fields(),
                 KeyCode::Backspace => {
@@ -1102,22 +1294,26 @@ impl App {
                 _ => Vec::new(),
             };
             match k.code {
-                KeyCode::Esc => {}
+                KeyCode::Esc => return back(s),
                 KeyCode::Enter => {
                     if let Some(chosen) = tops.get(sel).cloned() {
                         let name = chosen.name.clone();
-                        self.set_ticket_link(&p.key, |l| {
+                        let saved = self.set_ticket_link(v, |l| {
                             if provider == Provider::Plane {
                                 l.plane = Some(chosen);
                             } else {
                                 l.linear = Some(chosen);
                             }
                         });
-                        s.note = Some((format!("{} reads {name} for {}", provider.name(), p.name), false));
-                        v.provider = provider;
-                        v.scope = None;
-                        self.tickets_reload(v);
+                        if saved {
+                            self.notify(format!("{} reads {name} for {}", provider.name(), p.name), false);
+                            v.provider = provider;
+                            v.scope = None;
+                            self.tickets_reload(v);
+                            return back(s);
+                        }
                     }
+                    s.pick = Some((provider, sel));
                 }
                 _ => s.pick = Some((provider, moved(sel, tops.len(), k))),
             }
@@ -1125,7 +1321,7 @@ impl App {
         }
         if let Some((row, mut typed)) = s.edit.take() {
             match k.code {
-                KeyCode::Esc => {}
+                KeyCode::Esc => return back(s),
                 KeyCode::Enter => {
                     if row == SourceRow::GithubRepo {
                         let repo = if typed.trim().is_empty() { None } else { tk::typed_repo(&typed) };
@@ -1134,16 +1330,27 @@ impl App {
                             s.edit = Some((row, typed));
                             return Some(Page::Sources(s));
                         }
+                        if s.setup && repo.is_none() {
+                            s.note = Some(("Type the repository as owner/name".into(), true));
+                            s.edit = Some((row, typed));
+                            return Some(Page::Sources(s));
+                        }
                         let said = repo.clone().map_or_else(|| "GitHub follows the folder's origin".to_string(), |r| format!("GitHub reads {r} for {}", p.name));
-                        self.set_ticket_link(&p.key, |l| l.github = repo);
-                        s.note = Some((said, false));
+                        if !self.set_ticket_link(v, |l| l.github = repo) {
+                            s.edit = Some((row, typed));
+                            return Some(Page::Sources(s));
+                        }
+                        s.note = Some((said.clone(), false));
                         if v.provider == Provider::Github {
                             self.tickets_reload(v);
                         }
-                    } else {
-                        self.screen.saved.ticket_me.set(row.provider(), &typed);
-                        self.screen.save();
-                        s.note = Some((format!("your {} name is saved for Mine", row.provider().name()), false));
+                        if s.setup {
+                            self.notify(said, false);
+                            return back(s);
+                        }
+                    } else if let Some(provider) = row.provider() {
+                        self.set_ticket_me(v, provider, &typed);
+                        s.note = Some((format!("your {} name is saved for Mine", provider.name()), false));
                     }
                 }
                 KeyCode::Backspace => {
@@ -1158,30 +1365,26 @@ impl App {
             }
             return Some(Page::Sources(s));
         }
-        let row = SOURCE_ROWS[s.sel.min(SOURCE_ROWS.len() - 1)];
-        let link = self.ticket_link(&p.key);
+        let rows = v.source_rows();
+        let row = rows[s.sel.min(rows.len() - 1)];
+        let link = v.link();
         let has_key = |provider: TicketProvider| v.keys_known().is_some_and(|k| k.iter().any(|k| k.provider == provider && k.set));
         s.note = None;
         match k.code {
             KeyCode::Esc => return Some(Page::List),
             KeyCode::Enter => match row {
                 SourceRow::GithubRepo => s.edit = Some((row, link.github.clone().unwrap_or_default())),
-                r if r.is_name() => s.edit = Some((row, self.screen.saved.ticket_me.of(r.provider()).to_string())),
+                SourceRow::Other(_) => s.note = Some(("Open a session in that project to change what it reads; x unlinks it".into(), false)),
+                r if r.is_name() => {
+                    let provider = r.provider().unwrap_or(Provider::Github);
+                    s.edit = Some((row, self.ticket_me(v, provider)));
+                }
                 SourceRow::PlaneKey | SourceRow::LinearKey => {
-                    let provider = row.provider().keyed().unwrap_or(TicketProvider::Plane);
-                    let known = v.keys_known().and_then(|k| k.iter().find(|k| k.provider == provider)).cloned();
-                    s.form = Some(KeyForm {
-                        provider,
-                        address: known.as_ref().map(|k| k.address.clone()).unwrap_or_default(),
-                        workspace: known.map(|k| k.workspace).unwrap_or_default(),
-                        key: crate::protocol::SecretText::default(),
-                        at: 0,
-                        sending: false,
-                        error: None,
-                    });
+                    let provider = if row == SourceRow::PlaneKey { TicketProvider::Plane } else { TicketProvider::Linear };
+                    s.form = Some(KeyForm::new(provider, v.keys_known()));
                 }
                 _ => {
-                    let provider = row.provider();
+                    let provider = if row == SourceRow::PlaneProject { Provider::Plane } else { Provider::Linear };
                     let keyed = provider.keyed().unwrap_or(TicketProvider::Plane);
                     if !has_key(keyed) {
                         s.note = Some((format!("Add the {} key first", provider.name()), true));
@@ -1193,33 +1396,46 @@ impl App {
             },
             KeyCode::Char('x') | KeyCode::Delete => match row {
                 SourceRow::GithubRepo => {
-                    self.set_ticket_link(&p.key, |l| l.github = Some(String::new()));
-                    s.note = Some((format!("GitHub is off for {}", p.name), false));
+                    if self.set_ticket_link(v, |l| l.github = Some(String::new())) {
+                        s.note = Some((format!("GitHub is off for {}", p.name), false));
+                        self.tickets_reload(v);
+                    }
                 }
                 SourceRow::PlaneKey | SourceRow::LinearKey => {
-                    let provider = row.provider().keyed().unwrap_or(TicketProvider::Plane);
+                    let provider = if row == SourceRow::PlaneKey { TicketProvider::Plane } else { TicketProvider::Linear };
                     if has_key(provider) {
                         s.remove = Some(provider);
                     }
                 }
-                SourceRow::PlaneProject => self.set_ticket_link(&p.key, |l| l.plane = None),
-                SourceRow::LinearTeam => self.set_ticket_link(&p.key, |l| l.linear = None),
+                SourceRow::PlaneProject => {
+                    self.set_ticket_link(v, |l| l.plane = None);
+                }
+                SourceRow::LinearTeam => {
+                    self.set_ticket_link(v, |l| l.linear = None);
+                }
+                SourceRow::Other(i) => {
+                    if let Some(other) = v.other_projects().get(i).copied() {
+                        let place = TicketPlace { machine: other.machine.clone(), folder: other.folder.clone() };
+                        s.note = Some((format!("{} is unlinked", folder_name(Path::new(&other.folder))), false));
+                        self.ask_ticket_links(v, TicketLinkChange::Unlink { place });
+                        s.sel = s.sel.min(rows.len().saturating_sub(2));
+                    }
+                }
                 r => {
-                    self.screen.saved.ticket_me.set(r.provider(), "");
-                    self.screen.save();
+                    if let Some(provider) = r.provider() {
+                        self.set_ticket_me(v, provider, "");
+                    }
                 }
             },
-            _ => s.sel = moved(s.sel, SOURCE_ROWS.len(), k),
+            _ => s.sel = moved(s.sel, rows.len(), k),
         }
         Some(Page::Sources(s))
     }
 }
 
 /// The groups the scope page offers for the shown source.
-fn scope_groups(app: &App, v: &TicketsView) -> Vec<Group> {
-    let Some(p) = &v.project else { return Vec::new() };
-    let link = app.ticket_link(&p.key);
-    let Source::Linked { source, top, .. } = v.source(&link, v.provider) else { return Vec::new() };
+fn scope_groups(v: &TicketsView) -> Vec<Group> {
+    let Source::Linked { source, top, .. } = v.source(&v.link(), v.provider) else { return Vec::new() };
     match v.groups.get(&source) {
         Some(Ok(g)) => tk::groups_under(g, top.as_deref()).into_iter().cloned().collect(),
         _ => Vec::new(),
@@ -1327,8 +1543,8 @@ pub(in crate::client) fn draw_tickets(app: &mut App, buf: &mut Buffer, body: Rec
 }
 
 /// The provider tabs: each name, the shown one bold in the accent, an unlinked one dim.
-fn draw_tabs(app: &App, buf: &mut Buffer, inner: Rect, c: Style, t: &Theme, v: &TicketsView, p: &TicketsProject) {
-    let link = app.ticket_link(&p.key);
+fn draw_tabs(buf: &mut Buffer, inner: Rect, c: Style, t: &Theme, v: &TicketsView, p: &TicketsProject) {
+    let link = v.link();
     let mut segs = Vec::new();
     for provider in Provider::ALL {
         let linked = v.source(&link, provider).linked();
@@ -1355,9 +1571,9 @@ fn draw_tabs(app: &App, buf: &mut Buffer, inner: Rect, c: Style, t: &Theme, v: &
 
 #[allow(clippy::too_many_arguments)]
 fn draw_list(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style, t: &Theme, v: &mut TicketsView, p: &TicketsProject) {
-    draw_tabs(app, buf, inner, c, t, v, p);
-    let link = app.ticket_link(&p.key);
-    let me = app.screen.saved.ticket_me.of(v.provider).to_string();
+    draw_tabs(buf, inner, c, t, v, p);
+    let link = v.link();
+    let me = app.ticket_me(v, v.provider);
     // The search line and the filters at its right.
     let y = inner.y + 1;
     let search: Vec<Seg> = if v.typing {
@@ -1384,28 +1600,10 @@ fn draw_list(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style, t:
     };
     let source = v.source(&link, v.provider);
     if let Source::Unlinked(why) = source {
-        if v.provider.keyed().is_some() && v.keys.is_none() {
+        if !v.setup_ready() {
             return say(buf, vec![vec![seg("reading…", c.fg(t.muted).add_modifier(Modifier::ITALIC))]]);
         }
-        if v.provider == Provider::Github && v.origin.is_none() {
-            return say(buf, vec![vec![seg("reading…", c.fg(t.muted).add_modifier(Modifier::ITALIC))]]);
-        }
-        let none_linked = Provider::ALL.iter().all(|pr| !v.source(&link, *pr).linked());
-        let title = if none_linked {
-            format!("No ticket source for {}", p.name)
-        } else {
-            format!("{} is not linked", v.provider.name())
-        };
-        let mut lines = vec![vec![seg(title, c.fg(t.strong).add_modifier(Modifier::BOLD))], vec![]];
-        lines.extend(wrapped(&tk::link_how(v.provider, &p.name, why), area.width, c.fg(t.muted)));
-        lines.push(vec![]);
-        let how = if why == Unlinked::NoKey { "add the key" } else { "link it" };
-        lines.push([crate::client::design::keycap(t, ","), vec![seg(format!(" {how} in Sources"), c.fg(t.muted))]].concat());
-        if let Some(Err(e)) = &v.keys {
-            lines.push(vec![]);
-            lines.extend(wrapped(&format!("The service could not say which keys it has: {}", tk::read_failure(v.provider, e)), area.width, c.fg(t.err)));
-        }
-        return say(buf, lines);
+        return say(buf, setup_lines(v, p, why, area.width, c, t));
     }
     let shown = v.shown(&me);
     let has_data = v.list.read_at.is_some();
@@ -1524,6 +1722,47 @@ fn draw_list(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style, t:
     }
 }
 
+/// The setup of a source the project in front does not read yet, in place of its tickets: each
+/// step, done or not, says whether it is once for every project or for this one.
+fn setup_lines(v: &TicketsView, p: &TicketsProject, why: Unlinked, w: u16, c: Style, t: &Theme) -> Vec<Vec<Seg>> {
+    let name = v.provider.name();
+    let step = |n: &str, done: bool, title: String| {
+        let mark = if done { seg(" ✓ ", c.fg(t.accent).add_modifier(Modifier::BOLD)) } else { seg(format!(" {n} "), c.fg(t.muted)) };
+        vec![mark, seg(" ", c), seg(title, c.fg(if done { t.text } else { t.strong }))]
+    };
+    let mut lines = vec![vec![seg(format!("Set up {name} for {}", p.name), c.fg(t.strong).add_modifier(Modifier::BOLD))], vec![]];
+    let hint = |lines: &mut Vec<Vec<Seg>>, text: &str| {
+        lines.extend(wrapped(text, w.saturating_sub(5), c.fg(t.muted)).into_iter().map(|l| [vec![seg("     ", c)], l].concat()));
+    };
+    let enter = match v.provider.keyed() {
+        None => {
+            lines.push(step("1", true, "GitHub uses your gh login".into()));
+            hint(&mut lines, "There is no key to paste: Maitty reads issues with the GitHub command line's own sign-in.");
+            let off = v.link().github.as_deref() == Some("");
+            lines.push(step("2", false, if off { format!("GitHub is off for {}", p.name) } else { format!("Which repository are {}'s issues in?", p.name) }));
+            hint(&mut lines, if off { "Type the repository to read, or follow the folder's origin again in Sources (,)." } else { "The folder has no GitHub origin. Type the repository as owner/name." });
+            "type owner/name"
+        }
+        Some(_) => {
+            let connected = why != Unlinked::NoKey;
+            let word = v.provider.top_word();
+            lines.push(step("1", connected, if connected { format!("{name} is connected on this computer") } else { format!("Connect {name}") }));
+            hint(&mut lines, if connected { "For every project. Replace or remove the key in Sources (,)." } else { "You do this once on this computer: the key is kept by the Maitty service, used for every project, and never shown again." });
+            lines.push(step("2", false, format!("Pick the {name} {word} for {}", p.name)));
+            hint(&mut lines, &format!("Then every session in {} shows that {word}'s tickets.", p.name));
+            if connected { "pick it" } else { "connect" }
+        }
+    };
+    lines.push(vec![]);
+    lines.push([crate::client::design::keycap(t, "Enter"), vec![seg(format!(" {enter}"), c.fg(t.muted))]].concat());
+    lines.extend(wrapped(&saved_for(&p.name), w, c.fg(t.muted)));
+    for failed in [v.links.as_ref().and_then(|l| l.as_ref().err()), v.keys.as_ref().and_then(|k| k.as_ref().err())].into_iter().flatten() {
+        lines.push(vec![]);
+        lines.extend(wrapped(&tk::read_failure(v.provider, failed), w, c.fg(t.err)));
+    }
+    lines
+}
+
 /// How long ago `at` was, said short ("40s", "3m").
 fn age_of(at: Instant) -> String {
     age(now_secs().saturating_sub(at.elapsed().as_secs()))
@@ -1590,9 +1829,7 @@ fn draw_ticket(app: &mut App, buf: &mut Buffer, inner: Rect, c: Style, t: &Theme
 #[allow(clippy::too_many_arguments)]
 fn draw_scope(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style, t: &Theme, v: &TicketsView, sel: usize) {
     put(buf, inner.x, inner.y, &[seg("Narrow the list to", c.fg(t.strong).add_modifier(Modifier::BOLD))], inner.right());
-    let Some(p) = &v.project else { return };
-    let link = app.ticket_link(&p.key);
-    let Source::Linked { source, .. } = v.source(&link, v.provider) else { return };
+    let Source::Linked { source, .. } = v.source(&v.link(), v.provider) else { return };
     let mut names = vec![("all".to_string(), "everything".to_string())];
     match v.groups.get(&source) {
         None => {
@@ -1605,7 +1842,7 @@ fn draw_scope(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style, t
         }
         Some(Ok(_)) => {}
     }
-    for g in scope_groups(app, v) {
+    for g in scope_groups(v) {
         let count = g.ticket_count.map(|n| format!("  {n}")).unwrap_or_default();
         names.push((tk::kind_word(v.provider, g.kind).to_string(), format!("{}{count}", tk::shown(&g.name, false))));
     }
@@ -1637,7 +1874,8 @@ fn pick_rows(app: &mut App, buf: &mut Buffer, r: Rect, c: Style, t: &Theme, rows
 
 #[allow(clippy::too_many_arguments)]
 fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style, t: &Theme, v: &TicketsView, p: &TicketsProject, s: &Sources) {
-    put(buf, inner.x, inner.y, &[seg(format!("Ticket sources · {}", p.name), c.fg(t.strong).add_modifier(Modifier::BOLD))], inner.right());
+    let title = if s.setup { format!("Set up {} for {}", v.provider.name(), p.name) } else { "Ticket sources".to_string() };
+    put(buf, inner.x, inner.y, &[seg(title, c.fg(t.strong).add_modifier(Modifier::BOLD))], inner.right());
     let mut y = inner.y + 1;
     if let Some((note, err)) = &s.note {
         put(buf, inner.x, y, &[seg(truncate(note, inner.width as usize), c.fg(if *err { t.err } else { t.accent }))], inner.right());
@@ -1649,19 +1887,18 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
     }
     if let Some(provider) = s.remove {
         let lines = [
-            wrapped(&format!("Remove the {} key from this computer? Tickets stops reading {} until a key is added again.", capital(provider.name()), capital(provider.name())), room.width, c.fg(t.text)),
+            wrapped(&format!("Remove the {} key from this computer? Tickets stops reading {} for every project until a key is added again.", capital(provider.name()), capital(provider.name())), room.width, c.fg(t.text)),
             vec![vec![]],
         ]
         .concat();
-        let used = draw_lines(buf, room, &lines, 0);
-        let _ = used;
+        draw_lines(buf, room, &lines, 0);
         buttons(app, buf, room.x, room.y + lines.len() as u16, room.right(), t, &[('y', "y", "Remove key", BtnKind::Danger), ('\x1b', "Esc", "Keep it", BtnKind::Ghost)]);
         return;
     }
     if let Some((provider, sel)) = s.pick {
         let source = provider.keyed().map_or("", TicketProvider::name).to_string();
-        put(buf, room.x, room.y, &[seg(format!("Pick the {} {} reads for {}", provider.name(), provider.top_word(), p.name), c.fg(t.text))], room.right());
-        let list = Rect { x: r.x, y: room.y + 2, width: r.width, height: room.height.saturating_sub(2) };
+        put(buf, room.x, room.y, &[seg(format!("Pick the {} {} for {}", provider.name(), provider.top_word(), p.name), c.fg(t.text))], room.right());
+        let list = Rect { x: r.x, y: room.y + 2, width: r.width, height: room.height.saturating_sub(4) };
         match v.groups.get(&source) {
             None => {
                 put(buf, room.x, list.y, &[seg("reading…", c.fg(t.muted).add_modifier(Modifier::ITALIC))], room.right());
@@ -1675,40 +1912,70 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
                     put(buf, room.x, list.y, &[seg(format!("{} lists no {}", provider.name(), provider.top_word()), c.fg(t.muted))], room.right());
                 } else {
                     pick_rows(app, buf, list, c, t, &rows, sel);
+                    let foot = Rect { y: list.bottom(), height: room.bottom().saturating_sub(list.bottom()), ..room };
+                    draw_lines(buf, foot, &wrapped(&saved_for(&p.name), room.width, c.fg(t.muted)), 0);
                 }
             }
         }
         return;
     }
-    let link = app.ticket_link(&p.key);
-    let me = app.screen.saved.ticket_me.clone();
+    if s.setup && let Some((_, typed)) = &s.edit {
+        // GitHub's setup: only the repository, typed.
+        let lines = [
+            wrapped(&format!("Which repository are {}'s issues in? Type it as owner/name.", p.name), room.width, c.fg(t.text)),
+            vec![vec![]],
+            vec![vec![seg("repo       ", c.fg(t.accent)), seg(tk::shown(typed, false), c.fg(t.strong)), seg("▏", c.fg(t.accent))]],
+            vec![vec![]],
+            wrapped(&saved_for(&p.name), room.width, c.fg(t.muted)),
+        ]
+        .concat();
+        draw_lines(buf, room, &lines, 0);
+        return;
+    }
+    let link = v.link();
     let key_of = |provider: TicketProvider| v.keys_known().and_then(|k| k.iter().find(|k| k.provider == provider)).cloned();
-    let mut lines: Vec<(Option<usize>, Vec<Seg>)> = Vec::new();
-    let mut last: Option<Provider> = None;
-    for (i, row) in SOURCE_ROWS.iter().enumerate() {
-        if last != Some(row.provider()) {
-            if last.is_some() {
-                lines.push((None, vec![]));
-            }
-            lines.push((None, vec![seg(row.provider().name().to_uppercase(), c.fg(t.muted).add_modifier(Modifier::BOLD))]));
-            last = Some(row.provider());
+    let head = |text: &str| (None, vec![seg(text.to_string(), c.fg(t.strong).add_modifier(Modifier::BOLD))]);
+    let say = |text: &str| (None, vec![seg(text.to_string(), c.fg(t.muted))]);
+    let others = v.other_projects();
+    let rows = v.source_rows();
+    let mut lines: Vec<(Option<usize>, Vec<Seg>)> = vec![head("ACCOUNTS"), say("Once on this computer, for every project.")];
+    let mut in_projects = false;
+    for (i, row) in rows.iter().enumerate() {
+        if !in_projects && PROJECT_ROWS.contains(row) {
+            in_projects = true;
+            lines.push((None, vec![]));
+            lines.push(head("LINKED PROJECTS"));
+            lines.push(say("A project is its repository: every worktree and session in it shows the same tickets."));
+            lines.push((None, vec![seg(format!("{} · the session in front", p.name), c.fg(t.text).add_modifier(Modifier::BOLD))]));
         }
-        let (value, fg): (String, Color) = match row {
-            SourceRow::GithubRepo => match (&link.github, &v.origin) {
-                (Some(r), _) if r.is_empty() => ("off".into(), t.muted),
-                (Some(r), _) => (r.clone(), t.text),
-                (None, Some(Some(r))) => (format!("{r} (from origin)"), t.text),
-                (None, None) => ("reading the folder's origin…".into(), t.muted),
-                (None, Some(None)) => ("not linked · Enter to type owner/name".into(), t.muted),
-            },
+        if matches!(row, SourceRow::Other(0)) {
+            lines.push((None, vec![]));
+            lines.push(say("Other linked projects"));
+        }
+        if *row == SourceRow::GithubName {
+            lines.push((None, vec![seg(format!(" {:<10} ", "GitHub"), c.fg(t.muted)), seg("your gh login · no key", c.fg(t.text))]));
+        }
+        let (label, value, fg): (String, String, Color) = match row {
+            SourceRow::GithubRepo => {
+                let (value, fg) = match (&link.github, &v.origin) {
+                    _ if v.links.is_none() => ("reading…".into(), t.muted),
+                    (Some(r), _) if r.is_empty() => ("off".into(), t.muted),
+                    (Some(r), _) => (r.clone(), t.text),
+                    (None, Some(Some(r))) => (format!("{r} (from origin)"), t.text),
+                    (None, None) => ("reading the folder's origin…".into(), t.muted),
+                    (None, Some(None)) => ("not linked · Enter to type owner/name".into(), t.muted),
+                };
+                ("GitHub".into(), value, fg)
+            }
             SourceRow::PlaneKey | SourceRow::LinearKey => {
-                let provider = row.provider().keyed().unwrap_or(TicketProvider::Plane);
-                match (&v.keys, key_of(provider)) {
+                let provider = if *row == SourceRow::PlaneKey { Provider::Plane } else { Provider::Linear };
+                let keyed = provider.keyed().unwrap_or(TicketProvider::Plane);
+                let (value, fg) = match (&v.keys, key_of(keyed)) {
                     (None, _) => ("checking…".into(), t.muted),
-                    (Some(Err(e)), _) => (tk::read_failure(row.provider(), e), t.err),
+                    (Some(Err(e)), _) => (tk::read_failure(provider, e), t.err),
                     (_, Some(k)) if k.set => {
                         let at = [k.address.as_str(), k.workspace.as_str()].iter().filter(|s| !s.is_empty()).copied().collect::<Vec<_>>().join(" / ");
-                        let refused = matches!(v.list.error, Some(TicketError::SignedOut)) && v.provider == row.provider();
+                        let refused = matches!(v.list.error, Some(TicketError::SignedOut)) && v.provider == provider;
                         if refused {
                             ("key refused · Enter to replace".into(), t.err)
                         } else if at.is_empty() {
@@ -1718,13 +1985,26 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
                         }
                     }
                     _ => ("no key · Enter to connect".into(), t.muted),
-                }
+                };
+                (provider.name().into(), value, fg)
             }
-            SourceRow::PlaneProject => link.plane.as_ref().map_or(("not picked".into(), t.muted), |p| (p.name.clone(), t.text)),
-            SourceRow::LinearTeam => link.linear.as_ref().map_or(("not picked".into(), t.muted), |p| (p.name.clone(), t.text)),
+            SourceRow::PlaneProject | SourceRow::LinearTeam => {
+                let (provider, pick) = if *row == SourceRow::PlaneProject { (Provider::Plane, &link.plane) } else { (Provider::Linear, &link.linear) };
+                let (value, fg) = match pick {
+                    _ if v.links.is_none() => ("reading…".into(), t.muted),
+                    Some(pick) => (pick.name.clone(), t.text),
+                    None => (format!("no {} picked", provider.top_word()), t.muted),
+                };
+                (provider.name().into(), value, fg)
+            }
+            SourceRow::Other(i) => {
+                let Some(other) = others.get(*i) else { continue };
+                (folder_name(Path::new(&other.folder)), tk::shown(&link_summary(other), false), t.text)
+            }
             r => {
-                let name = me.of(r.provider());
-                if name.is_empty() { ("not set (for Mine)".into(), t.muted) } else { (name.to_string(), t.text) }
+                let provider = r.provider().unwrap_or(Provider::Github);
+                let name = app.ticket_me(v, provider);
+                if name.is_empty() { ("your name".into(), "not set (for Mine)".into(), t.muted) } else { ("your name".into(), name, t.text) }
             }
         };
         let editing = s.edit.as_ref().filter(|(r, _)| r == row).map(|(_, typed)| typed.clone());
@@ -1732,11 +2012,30 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
             Some(typed) => vec![seg(tk::shown(&typed, false), c.fg(t.strong)), seg("▏", c.fg(t.accent))],
             None => vec![seg(value, c.fg(fg))],
         };
-        lines.push((Some(i), [vec![seg(format!("{:<10} ", row.label()), c.fg(t.muted))], value_segs].concat()));
+        lines.push((Some(i), [vec![seg(format!("{:<10} ", truncate(&label, 10)), c.fg(t.muted))], value_segs].concat()));
     }
+    if let Some(Err(e)) = &v.links {
+        lines.push((None, vec![]));
+        lines.push((None, vec![seg(tk::read_failure(v.provider, e), c.fg(t.err))]));
+    }
+    lines.push((None, vec![]));
+    lines.push(say("Keys stay with the Maitty service on this computer and are never shown again. It keeps the links and your Plane and Linear names too, so every window shows a project the same tickets."));
+    // Long lines wrap; the selected row stays in sight.
+    let mut drawn: Vec<(Option<usize>, Vec<Seg>)> = Vec::new();
+    for (row, segs) in lines {
+        if row.is_none() && segs.len() == 1 && segs_width(&segs) > room.width {
+            for l in wrapped(&segs[0].0, room.width, segs[0].1) {
+                drawn.push((None, l));
+            }
+        } else {
+            drawn.push((row, segs));
+        }
+    }
+    let at = drawn.iter().position(|(row, _)| *row == Some(s.sel)).unwrap_or(0);
+    let skip = (at + 1).saturating_sub(room.height as usize);
     let look = Look::of(&app.cfg.ui);
     let ground = c.bg.unwrap_or(t.bg);
-    for (n, (row, segs)) in lines.iter().enumerate() {
+    for (n, (row, segs)) in drawn.iter().skip(skip).enumerate() {
         let y = room.y + n as u16;
         if y >= room.bottom() {
             break;
@@ -1756,11 +2055,25 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
         let x = if row.is_some() { room.x + 1 } else { room.x };
         put(buf, x, y, &segs, room.right());
     }
-    let foot = "Keys stay with the Maitty service on this computer and are never shown again. Links and names are kept by this window.";
-    let used = lines.len() as u16 + 1;
-    if room.height > used + 2 {
-        draw_lines(buf, Rect { y: room.y + used, height: room.height - used, ..room }, &wrapped(foot, room.width, c.fg(t.muted)), 0);
+}
+
+/// One linked project said in a line: its machine (another computer's), its folder, and what it reads.
+fn link_summary(project: &LinkedProject) -> String {
+    let link = TicketLink::of_daemon(&project.link);
+    let mut parts: Vec<String> = project.machine.iter().cloned().collect();
+    parts.push(project.folder.clone());
+    parts.push(match link.github.as_deref() {
+        None => "GitHub from origin".into(),
+        Some("") => "GitHub off".into(),
+        Some(repo) => format!("GitHub {repo}"),
+    });
+    if let Some(pick) = &link.plane {
+        parts.push(format!("Plane {}", pick.name));
     }
+    if let Some(pick) = &link.linear {
+        parts.push(format!("Linear {}", pick.name));
+    }
+    parts.join(" · ")
 }
 
 fn draw_key_form(buf: &mut Buffer, room: Rect, c: Style, t: &Theme, f: &KeyForm) {
@@ -1795,9 +2108,9 @@ fn draw_key_form(buf: &mut Buffer, room: Rect, c: Style, t: &Theme, f: &KeyForm)
         lines.push(vec![]);
     }
     let how = if f.provider == TicketProvider::Plane {
-        "Your Plane server's address (https://…), the workspace's slug, and an API key from Plane's profile settings. Paste the key: it is sent to the Maitty service on this computer, which keeps it in its data folder."
+        "Your Plane server's address (https://…), the workspace's slug, and an API key from Plane's profile settings. Paste the key: it is sent to the Maitty service on this computer, which keeps it in its data folder. You do this once on this computer, for every project; the key is never shown again."
     } else {
-        "A personal API key from Linear's settings. Paste it: it is sent to the Maitty service on this computer, which keeps it in its data folder."
+        "A personal API key from Linear's settings. Paste it: it is sent to the Maitty service on this computer, which keeps it in its data folder. You do this once on this computer, for every project; the key is never shown again."
     };
     lines.extend(wrapped(how, room.width, c.fg(t.muted)));
     draw_lines(buf, Rect { y, height: room.bottom().saturating_sub(y), ..room }, &lines, 0);

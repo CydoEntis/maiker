@@ -467,6 +467,9 @@ impl App {
             ServerMsg::Reply(Reply::TicketWrite { tag, answer }) if machine == MachineId::LOCAL => {
                 self.ticket_write_arrived(tag, answer)
             }
+            ServerMsg::Reply(Reply::TicketLinks { tag, answer }) if machine == MachineId::LOCAL => {
+                self.ticket_links_arrived(tag, answer)
+            }
             // Closed sessions are kept by this computer's daemon only.
             ServerMsg::Reply(Reply::ClosedSessions(list)) if machine == MachineId::LOCAL => {
                 self.closed_sessions_arrived(list)

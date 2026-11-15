@@ -1,15 +1,58 @@
-//! Tickets in the side panel: what is asked of this computer's daemon, every state it draws, and
-//! that nothing is written or sent without its review and `y`.
+//! Tickets in the side panel: what is asked of this computer's daemon, every state it draws, that
+//! links are the daemon's (set up in place, once per project), and that nothing is written or sent
+//! without its review and `y`.
 //! `MAITTY_SHOW=1 cargo test tickets_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::Outgoing;
 use crate::client::reference_fixture::{Layout, Stage, raw_text, world};
 use crate::protocol::{Reply, ServerMsg};
-use maitty_shared::tickets::{Ticket, TicketComment, TicketPage, TicketState};
+use maitty_shared::ticket_links::{GitHubLink, LinkedProject, TicketLinkChange, TicketLinks, TicketMe as DaemonMe, TicketPick};
+use maitty_shared::tickets::{Group, GroupKind, Ticket, TicketComment, TicketPage, TicketState};
 use tokio::sync::mpsc;
 
+const SHOP: &str = "/home/me/shop";
+
+/// Tickets opened on the shop project, the daemon answering that it reads `link`.
 fn opened_with(link: TicketLink) -> (App, mpsc::UnboundedReceiver<Outgoing>) {
+    let (mut app, mut rx) = opened();
+    // The test's folder is no repository: it has no origin.
+    app.with_tickets(|_, v| v.origin = Some(None));
+    let msgs = sent(&mut rx);
+    let tag = links_tag(&msgs);
+    links_reply(&mut app, tag, Ok(links_of(&link)));
+    // What was asked before the answer (the keys) stays to be read.
+    for m in msgs.into_iter().filter(|m| !matches!(m, ClientMsg::Query(Query::TicketLinks { .. }))) {
+        let _ = app.out.send(Outgoing { machine: MachineId::LOCAL, msg: m });
+    }
+    (app, rx)
+}
+
+fn links_of(link: &TicketLink) -> TicketLinks {
+    let here = LinkedProject { machine: None, folder: SHOP.into(), link: link.to_daemon() };
+    let projects = if link.to_daemon().is_empty() { Vec::new() } else { vec![here.clone()] };
+    TicketLinks { project: Some(here), projects, me: DaemonMe::default() }
+}
+
+fn links_tag(msgs: &[ClientMsg]) -> u64 {
+    msgs.iter()
+        .find_map(|m| match m {
+            ClientMsg::Query(Query::TicketLinks { tag, .. }) => Some(*tag),
+            _ => None,
+        })
+        .expect("the links were asked for")
+}
+
+fn links_reply(app: &mut App, tag: u64, answer: Result<TicketLinks, TicketError>) {
+    app.on_machine_server(MachineId::LOCAL, ServerMsg::Reply(Reply::TicketLinks { tag, answer }));
+}
+
+fn keys_reply(app: &mut App, tag: u64, keys: Vec<TicketKeyState>) {
+    app.on_machine_server(MachineId::LOCAL, ServerMsg::Reply(Reply::TicketKeys { tag, answer: Ok(keys) }));
+}
+
+/// Tickets opened on the shop project, nothing answered yet.
+fn opened() -> (App, mpsc::UnboundedReceiver<Outgoing>) {
     let mut app = world(Stage::None);
     let (tx, rx) = mpsc::unbounded_channel();
     app.out = tx;
@@ -21,8 +64,6 @@ fn opened_with(link: TicketLink) -> (App, mpsc::UnboundedReceiver<Outgoing>) {
         info.cwd = root;
         info.agent = Some("claude".into());
     }
-    let key = app.tickets_project().expect("a project").key;
-    app.screen.saved.ticket_links.insert(key, link);
     app.act(Action::Tickets);
     (app, rx)
 }
@@ -44,7 +85,7 @@ fn tag_of(msgs: &[ClientMsg], want: impl Fn(&Query) -> bool) -> u64 {
     msgs.iter()
         .find_map(|m| match m {
             ClientMsg::Query(q) if want(q) => Some(match q {
-                Query::Tickets { tag, .. } | Query::TicketKeys { tag, .. } | Query::TicketWrite { tag, .. } => *tag,
+                Query::Tickets { tag, .. } | Query::TicketKeys { tag, .. } | Query::TicketWrite { tag, .. } | Query::TicketLinks { tag, .. } => *tag,
                 _ => 0,
             }),
             _ => None,
@@ -207,15 +248,130 @@ fn offline_keeps_the_list_read_last_with_a_line_under_it() {
 }
 
 #[test]
-fn a_project_with_nothing_linked_says_how_to_link_one() {
+fn the_links_are_asked_of_the_daemon_for_the_folder_in_front() {
+    let (mut app, mut rx) = opened();
+    let msgs = sent(&mut rx);
+    assert!(msgs.iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { place: Some(place), change: TicketLinkChange::Read, .. }) if place.machine.is_none() && place.folder == SHOP)));
+    assert!(!msgs.iter().any(|m| matches!(m, ClientMsg::Query(Query::Tickets { .. }))), "nothing is read before the links are known");
+    assert!(frame(&mut app, "links unread").contains("reading…"));
+}
+
+#[test]
+fn links_this_window_kept_move_to_the_daemon_once() {
+    let mut app = world(Stage::None);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    app.out = tx;
+    // `project_key` of /home/me/blog on this computer.
+    let key = "\\home\\me\\blog".to_string();
+    app.screen.saved.ticket_links.insert(key, TicketLink { github: Some(String::new()), linear: Some(Picked { id: "linear:team.1".into(), name: "Core".into() }), plane: None });
+    app.screen.saved.ticket_me.set(Provider::Linear, "Ada");
+    app.screen.saved.ticket_me.set(Provider::Github, "ada-gh");
+    app.act(Action::Tickets);
+    let msgs = sent(&mut rx);
+    let Some(ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Import { projects, me }, tag, .. })) = msgs.iter().find(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { .. }))) else {
+        panic!("the saved links go with the first question: {msgs:?}");
+    };
+    assert_eq!(projects.len(), 1);
+    assert_eq!((projects[0].machine.as_deref(), projects[0].folder.as_str()), (None, "/home/me/blog"));
+    assert_eq!(projects[0].link.github, GitHubLink::Off);
+    assert_eq!(me.linear, "Ada");
+    links_reply(&mut app, *tag, Ok(TicketLinks::default()));
+    assert!(app.screen.saved.ticket_links.is_empty(), "the daemon has them now");
+    assert_eq!((app.screen.saved.ticket_me.linear.as_str(), app.screen.saved.ticket_me.github.as_str()), ("", "ada-gh"));
+    app.view = None;
+    app.act(Action::Tickets);
+    assert!(sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Read, .. }))), "and are not sent twice");
+}
+
+#[test]
+fn an_unlinked_source_is_set_up_from_its_own_tab() {
     let (mut app, mut rx) = opened_with(TicketLink { github: Some(String::new()), ..TicketLink::default() });
     let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::TicketKeys { .. }));
-    app.on_machine_server(MachineId::LOCAL, ServerMsg::Reply(Reply::TicketKeys { tag, answer: Ok(Vec::new()) }));
-    let shown = frame(&mut app, "no source");
-    assert!(shown.contains("No ticket source for shop"), "{shown}");
+    keys_reply(&mut app, tag, Vec::new());
+    let shown = frame(&mut app, "github off");
+    assert!(shown.contains("Set up GitHub for shop") && shown.contains("GitHub is off for shop"), "{shown}");
     key(&mut app, KeyCode::Right);
     let shown = frame(&mut app, "plane, no key");
-    assert!(shown.contains("Add your Plane address and an API key"), "{shown}");
+    assert!(shown.contains("Connect Plane") && shown.contains("Pick the Plane project for shop") && shown.contains("once on this computer"), "{shown}");
+    key(&mut app, KeyCode::Enter);
+    typed(&mut app, "https://plane.example");
+    key(&mut app, KeyCode::Tab);
+    typed(&mut app, "acme");
+    key(&mut app, KeyCode::Tab);
+    assert!(app.paste_into_tickets("plane_api_SECRET123"));
+    let shown = frame(&mut app, "setup key form");
+    assert!(shown.contains("Set up Plane for shop") && !shown.contains("SECRET123"), "{shown}");
+    key(&mut app, KeyCode::Enter);
+    let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::TicketKeys { change: TicketKeyChange::Set { .. }, .. }));
+    let state = TicketKeyState { provider: TicketProvider::Plane, set: true, address: "https://plane.example".into(), workspace: "acme".into() };
+    keys_reply(&mut app, tag, vec![state]);
+    // Connected: the groups are read and picked from, in place.
+    let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::Tickets { request: TicketsRequest::Groups, .. }));
+    let group = |id: &str, name: &str| Group { id: id.into(), name: name.into(), kind: GroupKind::Project, parent: None, ticket_count: None };
+    reply(&mut app, tag, Ok(TicketsReply::Groups(vec![group("plane:p1", "Acme"), group("plane:p2", "Web")])));
+    let shown = frame(&mut app, "setup pick");
+    assert!(shown.contains("Pick the Plane project for shop") && shown.contains("Web") && shown.contains("every worktree"), "{shown}");
+    key(&mut app, KeyCode::Down);
+    key(&mut app, KeyCode::Enter);
+    let msgs = sent(&mut rx);
+    assert!(msgs.iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Set { place, link }, .. }) if place.folder == SHOP && link.plane == Some(TicketPick { id: "plane:p2".into(), name: "Web".into() }) && link.github == GitHubLink::Off)));
+    assert!(msgs.iter().any(|m| matches!(m, ClientMsg::Query(Query::Tickets { source, request: TicketsRequest::List(f), .. }) if source == "plane" && f.group.as_deref() == Some("plane:p2"))), "and its tickets are read at once");
+    assert!(frame(&mut app, "set up").contains("reading tickets…"));
+}
+
+#[test]
+fn github_without_an_origin_asks_for_the_repository() {
+    let (mut app, mut rx) = opened_with(TicketLink::default());
+    sent(&mut rx);
+    let shown = frame(&mut app, "github, no origin");
+    assert!(shown.contains("Which repository are shop's issues in?"), "{shown}");
+    key(&mut app, KeyCode::Enter);
+    typed(&mut app, "me/shop");
+    key(&mut app, KeyCode::Enter);
+    assert!(sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Set { link, .. }, .. }) if link.github == GitHubLink::Repo("me/shop".into()))));
+    assert!(frame(&mut app, "repo set").contains("reading tickets…"));
+}
+
+#[test]
+fn sources_lists_the_accounts_then_every_linked_project() {
+    let (mut app, mut rx) = opened();
+    let tag = links_tag(&sent(&mut rx));
+    let here = LinkedProject { machine: None, folder: SHOP.into(), link: github().to_daemon() };
+    let blog = LinkedProject { machine: Some("kingdom".into()), folder: "/srv/blog".into(), link: maitty_shared::ticket_links::TicketLink { linear: Some(TicketPick { id: "linear:team.1".into(), name: "Core".into() }), ..Default::default() } };
+    links_reply(&mut app, tag, Ok(TicketLinks { project: Some(here.clone()), projects: vec![blog, here], me: DaemonMe { plane: String::new(), linear: "Ada".into() } }));
+    key(&mut app, KeyCode::Char(','));
+    let shown = frame_at(&mut app, "sources", 120, 40);
+    assert!(shown.contains("ACCOUNTS") && shown.contains("LINKED PROJECTS"), "{shown}");
+    assert!(shown.contains("Ada") && shown.contains("me/shop"));
+    assert!(shown.contains("blog       kingdom · /srv/blog · GitHub from origin"), "{shown}");
+    // The last row is the other project: x unlinks it.
+    key(&mut app, KeyCode::End);
+    key(&mut app, KeyCode::Char('x'));
+    assert!(sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Unlink { place }, .. }) if place.machine.as_deref() == Some("kingdom") && place.folder == "/srv/blog")));
+}
+
+#[test]
+fn an_older_daemon_reads_github_from_the_origin_and_says_why_nothing_else_links() {
+    let (mut app, mut rx) = opened_with_protocol(TICKET_LINKS_SINCE - 1);
+    let msgs = sent(&mut rx);
+    assert!(!msgs.iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { .. }))), "an older daemon is not asked");
+    let tag = tag_of(&msgs, |q| matches!(q, Query::TicketKeys { .. }));
+    keys_reply(&mut app, tag, Vec::new());
+    app.with_tickets(|app, v| {
+        v.origin = Some(None);
+        app.tickets_reload(v);
+    });
+    let shown = frame(&mut app, "old daemon, no links");
+    assert!(shown.contains("older than ticket") && shown.contains("Restart it"), "{shown}");
+}
+
+fn opened_with_protocol(protocol: u32) -> (App, mpsc::UnboundedReceiver<Outgoing>) {
+    let mut app = world(Stage::None);
+    let (tx, rx) = mpsc::unbounded_channel();
+    app.out = tx;
+    app.local_protocol = protocol;
+    app.act(Action::Tickets);
+    (app, rx)
 }
 
 #[test]
@@ -317,8 +473,7 @@ fn a_key_is_sent_once_and_never_drawn() {
     sent(&mut rx);
     key(&mut app, KeyCode::Char(','));
     frame(&mut app, "sources");
-    // The Plane key row.
-    key(&mut app, KeyCode::Down);
+    // The Plane key row, under GitHub's name.
     key(&mut app, KeyCode::Down);
     key(&mut app, KeyCode::Enter);
     typed(&mut app, "https://plane.example");

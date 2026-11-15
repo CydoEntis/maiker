@@ -1020,12 +1020,25 @@ the Project menu, Search commands, and a tab of the panel after References. It r
 daemon requests as the desktop app (*Tickets view (desktop)* above) and follows its rules:
 
 - **Project scope.** The project of the session in front: its repository's main checkout, else its
-  folder, on its machine. Its links (a GitHub repo, a Plane project, a Linear team) and your names
-  for Mine are kept in the saved UI state (`Saved::ticket_links`, `Saved::ticket_me` in
-  `maitty-ui.json`; nothing secret). GitHub follows the folder's `origin` (read off the UI thread,
-  this computer's folders only) until a repo is typed; `x` on the repo row turns GitHub off. Every
-  read and write goes to this computer's daemon (`Query::Tickets`, `TicketKeys`, `TicketWrite`,
-  tagged); a daemon older than tickets is not asked and the panel says to restart it.
+  folder, on its machine. Its links (a GitHub repo, a Plane project, a Linear team) and your Plane
+  and Linear names for Mine are the daemon's, the same ones the desktop app shows
+  (`Query::TicketLinks` with the folder in front as its place; the daemon resolves a worktree to its
+  repository, so every worktree and session of a project reads the same tickets). Only your GitHub
+  name stays in the saved UI state (`Saved::ticket_me`). Nothing is read until the links are known.
+  Links an older build kept in `Saved::ticket_links` go to the daemon once, with the first question
+  (`Import`, which adds only what it has not got), and are emptied from `maitty-ui.json` once it
+  answers. GitHub follows the folder's `origin` (read off the UI thread, this computer's folders only)
+  until a repo is typed; `x` on the repo row turns GitHub off. Every read and write goes to this
+  computer's daemon (`Query::Tickets`, `TicketKeys`, `TicketWrite`, `TicketLinks`, tagged); a daemon
+  older than tickets is not asked and the panel says to restart it, and one older than links still
+  reads GitHub from the origin and says to restart it to link anything else.
+- **Setting up in place.** A tab whose source is not set up shows its setup instead of tickets, as
+  numbered steps, each saying whether it is once for every project or for this one. GitHub: ✓ it uses
+  your gh login (no key), then the repository when the folder has no GitHub origin (or GitHub is
+  off). Plane and Linear: connect the key (once on this computer, for every project), then pick the
+  project or team for this project. Enter runs the next step on its own page (the key form, the
+  provider's list, the repo field) and goes back to the list when done; a connected key goes straight
+  on to the pick. Each step says the link is saved for the project and every worktree of it.
 - **Ticket text is text.** Every answer is cleaned again on arrival (`TicketsReply::cleaned`) and
   every string drawn goes through `tickets::shown`, so no control or escape sequence from a ticket
   reaches the terminal. Nothing is read as Markdown or HTML; a link opens only on `o` (web links
@@ -1045,11 +1058,15 @@ daemon requests as the desktop app (*Tickets view (desktop)* above) and follows 
   with `confirmed: true`, `e` goes back to editing, Esc cancels and writes nothing. A refusal stays
   on the review as "Not written." and why; a success toasts, returns to the ticket and reads it and
   the list again.
-- **States.** Reading (skeleton rows), no matches (Esc clears the search), no source for the
-  project, not linked or no key (`,` opens Sources), gh signed out (`t` opens a shell running
+- **States.** Reading (skeleton rows), no matches (Esc clears the search), not set up (the setup
+  above), gh signed out (`t` opens a shell running
   `gh auth login`), key refused (red; `,` to replace it), offline (the last list read stays with a
   red line under it, `r` retries), rate-limited (no key offered). The panel's states are never amber.
-- **Sources** (`,`): per provider, the repo / key / project or team and your name. A key is typed
+- **Sources** (`,`): two parts. *Accounts*, once on this computer for every project: GitHub (your
+  gh login, no key) and your name, each Plane and Linear key and your name there. *Linked
+  projects*: the project in front's GitHub repo, Plane project and Linear team, then every other
+  project the daemon keeps a link for (its machine, folder and what it reads; `x` unlinks it,
+  changing it needs a session in it). A key is typed
   into a form (Plane: address, workspace, key; Linear: key), held as `SecretText`, drawn as a fixed
   row of bullets (never its length), dropped from memory as soon as it is sent, never toasted (a
   paste into the form is not repeated anywhere); the answer says only "connected". Removing a key

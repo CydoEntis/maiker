@@ -528,9 +528,9 @@ review page (or a click on its confirm button); Enter never writes.
 | a | Show closed tickets too |
 | g | Narrow to a milestone, module or cycle |
 | r | Read again |
-| , | Sources: link a repo, add a Plane or Linear key, pick the project or team, your names |
+| , | Sources: your accounts (keys, names) and the linked projects |
 | t | Signed out of GitHub: a shell running `gh auth login` |
-| Enter, o | Open the ticket |
+| Enter, o | Open the ticket; on a source not set up, its next setup step |
 | s | Start an agent on it (review first) |
 | Esc, p | Clear the search, then close |
 
@@ -538,8 +538,9 @@ On a ticket: Up / Down scroll, `s` start an agent in a new worktree, `t` send it
 front, `c` comment, `d` mark done, `o` open its link, `y` copy its link, `r` read again, Esc back.
 The start and send pages show exactly what will be sent; Left / Right picks the agent; `y` starts or
 sends. The comment page takes text (Enter is a new line); Tab reviews it, and on the review `y`
-posts it, `e` edits it, Esc cancels. Sources: Enter changes the row, `x` turns GitHub off or removes
-a key (asks first); in the key form Tab moves between fields and Enter connects.
+posts it, `e` edits it, Esc cancels. Sources: Enter changes the row, `x` turns GitHub off, removes
+a key (asks first) or unlinks another project; in the key form Tab moves between fields and Enter
+connects. Setting up from a tab, Esc goes back to the list.
 
 ## Branches and worktree cleanup
 
