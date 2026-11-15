@@ -1118,7 +1118,8 @@ pub enum Query {
     },
     /// Read tickets from `source` on this daemon's computer (human clients only): its groups, a
     /// page of its tickets or one ticket. `source` is a GitHub repository, `owner/name`, read
-    /// with the machine's own `gh`. Nothing is written. The answer is `Reply::Tickets` with the
+    /// with the machine's own `gh`, or `plane` or `linear`, read with the key the daemon kept
+    /// (`TicketKeys`). Nothing is written. The answer is `Reply::Tickets` with the
     /// same `tag`.
     Tickets {
         source: String,

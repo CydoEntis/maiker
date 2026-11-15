@@ -915,7 +915,9 @@ Protocol 103 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets
 (`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
 arm, and nothing an older peer sends or reads changed). It reads tickets, read-only; there is no
 request that writes. `source` is a GitHub repository, `owner/name`, read with the machine's own
-`gh` (`daemon/tickets_github.rs`). `request` is a `TicketsRequest`: `Groups` (the repository as a
+`gh` (`daemon/tickets_github.rs`), or `plane` or `linear`, read with the key the daemon kept
+(`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`; below). A repository name has a slash and the
+providers' do not, so the one message carries all three and an older daemon answers `Invalid`. `request` is a `TicketsRequest`: `Groups` (the repository as a
 `Project` group and its milestones as `Milestone` groups with their ticket count), `List(Filter)`
 (`group`, `state` category, `assignee`, `label`, `search`, `page`; `TICKETS_PAGE_SIZE` (30) a page,
 page 0 to `TICKETS_PAGE_MAX`; `gh` pages only by size, so it is asked for everything up to one past
@@ -932,6 +934,30 @@ rules in `crates/maitty-shared/src/tickets.rs` (`TicketsReply::cleaned`), by the
 for an answer from another machine (`remote_policy::vet`; the verdict is *answer*). Human clients
 only: a pane or a structured runtime gets `ServerMsg::Error`. `gh` runs off the event loop, at most
 twice (30 seconds each), and `gh`'s output is read only up to 4 MiB.
+
+Protocol 104 adds `Query::TicketKeys { change, tag }` with `Reply::TicketKeys { tag, answer }`
+(`TICKET_KEYS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own
+`introduced_in` arm, and no field or variant an older peer reads changed). It keeps the key a keyed
+ticket provider needs. `change` is a `TicketKeyChange`: `Status`, `Set { provider, address, workspace,
+key }` (the key is a `SecretText`, which prints as hidden) or `Remove { provider }`; `provider` is
+`Plane` or `Linear`. `answer` is the state after the change, one `TicketKeyState { provider, set, address,
+workspace }` per provider, or an `Invalid(line)`; it never holds a key. Plane takes a server address
+(`check_base_url`: https anywhere, http only to your own network) and a workspace; Linear takes a key
+alone, because its one server is fixed in the code. Human clients only: a pane or a structured runtime
+gets `ServerMsg::Error`. A request for a provider with no key answers `TicketError::NotInstalled` (the
+client shows "add your key"); a key the provider refuses is `SignedOut`. The files are written off the
+event loop. Where the key lives: [SECURITY](SECURITY.md) and [DATABASE](DATABASE.md#project-specific-ticket-keys).
+
+Plane and Linear ids follow `provider:key` with `.`, `!` and `#` as separators: Plane `plane:<project>`
+(a project), `plane:<project>!<module>` (a module), `plane:<project>#<work item>`; Linear
+`linear:team.<id>` (a `Project` group), `linear:project.<id>` (a `Module`), `linear:cycle.<id>` (a
+`Cycle`) and `linear:issue.<id>`. A Plane list needs a `group` (a project or module); a Linear list may
+have none. Plane filters nothing server-side, so a page is cut from at most five pages of 100 work items
+read in Plane's order; Linear is asked for the state, assignee, label, title text and group, and read a
+cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 seconds each) before
+`RateLimited`; Linear's is reported at once. A Plane `blocked_by` comes from
+`work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
+inverse `blocks` relations.
 
 Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
 (`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`

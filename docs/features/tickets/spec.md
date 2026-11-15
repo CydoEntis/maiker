@@ -1,6 +1,6 @@
 # Spec: tickets in the app
 
-Type: feature · Status: in progress. The model and the read-only GitHub provider (MAITTY-392) are built: `maitty_shared::tickets`, `daemon/tickets_github.rs`, `Query::Tickets` (protocol 103); no window yet · Decision from MAITTY-391 · Date: 2026-11-14
+Type: feature · Status: in progress. The model, the read-only GitHub provider (MAITTY-392) and the read-only Plane (MAITTY-395) and Linear (MAITTY-396) providers are built, with the shared `curl` sender and the daemon's key store: `maitty_shared::tickets`, `daemon/tickets_github.rs`, `tickets_plane.rs`, `tickets_linear.rs`, `ticket_keys.rs`, `Query::Tickets` (protocol 103) and `Query::TicketKeys` (protocol 104); no window yet; Plane and Linear are not yet checked against a live server · Decision from MAITTY-391 · Date: 2026-11-14
 
 Read your tickets from GitHub, Plane and Linear inside Maitty: browse by project or module,
 search and filter, open one with its comments, start an agent on it, and later hand a group to
@@ -53,11 +53,15 @@ the same selection is what MAITTY-397 hands to Kitchen.
 
 ## Keys and trust
 
-- Maitty stores nothing for GitHub. For Plane and Linear the user adds their own key and server
-  address in Settings; the daemon holds it, kept in Maitty's data folder (0600, 0700 folder) and
-  never in `config.toml` (synced), a repo, a log, a snapshot or an agent's environment. Where
-  exactly it lives (file or OS keychain) is decided in the ticket that adds the first keyed
-  provider; ADR 0006 applies either way.
+- Maitty stores nothing for GitHub. For Plane and Linear the user adds their own key (and, for
+  Plane, server address and workspace); a person's client sends it with `Query::TicketKeys` and the
+  daemon holds it in Maitty's data folder, `ticket-keys/<provider>.json` (0600 file, 0700 folder;
+  on Windows the user's own app data), never in `config.toml` (synced), a repo, a log, a snapshot,
+  an agent's environment or a reply: a client can read back only whether a key is set. A file, not
+  the OS keychain, because the daemon runs without a login session on a remote machine and a
+  keychain would be a new dependency per platform; the file has the protection of the user's
+  account and no more, which [SECURITY](../../SECURITY.md) says. ADR 0006 applies. There is no
+  window for it yet.
 - Ticket text is written by other people and is untrusted. It is cleaned (control and hidden
   characters dropped), capped, shown as text and never as HTML. When it is sent to an agent it
   is framed as the ticket's words, not instructions, as pull-request comments already are.

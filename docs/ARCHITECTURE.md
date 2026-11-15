@@ -67,6 +67,8 @@ src/
   remote_paste.rs (now `maitty-machines`' `remote_paste`, re-exported here) sending a pasted image or a file to another machine ([ADR 0007](adr/0007-multiple-machines.md)): the file name, the check of the path the far side prints, the failure words; the script itself is also in `maitty-machines`, as is `remote_send` (the upload) and `ssh_run` (the runner that counts bytes and takes a cancel flag; the desktop app uses them too)
   remote_install.rs installing the app on another machine, as pure rules: the `uname -sm` parser, the installed-version check, the decision table (nothing is installed without a yes), the destination, the install script's exit-code table (the script itself is in `maitty-machines`)
   machine_probe.rs (now `maitty-machines`' `machine_probe`, re-exported here) a look at a machine before it is added: `ssh ... maitty --version` with no prompt, ended by a limit or a cancel flag, and its result classified (ready, a failure class, cancelled); `locate` asks the same way where the login shell finds the app (`command -v`)
+  http.rs        the seam a keyed request goes through: `Http`, `Request`, `Response`, a `Secret` that never prints, and `check_base_url` (https anywhere, http only to your own network); a fake `Http` for tests
+  curl_http.rs   the one sender: the system `curl`, the key on its standard input as a config, no redirects, 20 seconds, 4 MiB, every failure a fixed line (no HTTP crate is added)
   config.rs      config.toml (+ config.local.toml) loading, atomic state files
   keys.rs        actions, default bindings, key parsing
   theme.rs       built-in themes and contrast audit
@@ -93,6 +95,11 @@ src/
     identity.rs  the daemon's random id, made on first start and kept in the data folder (daemon-id); sent in every snapshot
     secrets.rs   secrets agents ask you for: the pending requests, and what you typed, held in memory as single-use references (ADR 0006)
     pr.rs        each pane's pull request read through `gh`: the poll, the answer parsed, what changed between two readings, and the message queued for the agent
+    tickets.rs   which provider answers a `Query::Tickets`: `owner/name` is GitHub, `plane` and `linear` read with the key the daemon kept
+    ticket_keys.rs  the key, server and workspace of Plane and Linear: one 0600 file each in a 0700 folder of the data folder, set by a person's client (`Query::TicketKeys`), read back only as set or not
+    ticket_http.rs  what Plane and Linear share: a failure or a status as a fixed `TicketError`, JSON from an answer, a filter's plain words
+    tickets_plane.rs  Plane's projects, modules and work items over REST (`curl_http`): groups, a page, one work item with comments and blockers; read-only, cleaned and capped
+    tickets_linear.rs  Linear's teams, projects, cycles and issues over GraphQL to api.linear.app: the same three questions, every query a read with its cost capped
     tickets_github.rs  a repository's milestones and issues read through `gh` (`Query::Tickets`): groups, a page of issues, one issue with its comments; read-only, cleaned and capped, `gh`'s words never in an error
     approvals.rs your Always / Never / Once for repo-supplied check commands (kept in Maitty's data folder, read at start), and the ApproveCheck / ForgetCheckApproval commands
     term.rs      one pane: PTY, input thread, vt100 emulator

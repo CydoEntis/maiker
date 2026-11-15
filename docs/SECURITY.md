@@ -624,6 +624,32 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   checked on the way in (printable ASCII, 8 to 200 characters); Plane's address must pass the same
   `check_base_url` that every request does, so a key cannot be saved for an address it could not be
   sent to; Linear's server is fixed and a key for it takes no address.
+- **Reading Plane and Linear** (`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`, over
+  `daemon/ticket_http.rs`) sends a stored key to a server, so what goes where is fixed. *Sent:* the key
+  in one header (`X-API-Key` for Plane, `Authorization` for Linear), the request path, and for Linear a
+  GraphQL query; a person's search words, label and name go to Linear as query *variables*, never into
+  the query text, and to Plane not at all (it is filtered here). *Sent to:* Plane's address from the key
+  file, which must pass `check_base_url` on every call (https anywhere; http only to loopback, a private
+  or link-local address, a name with no dots or ending `.local`/`.lan`), with its workspace and every id
+  restricted to letters, digits and dashes before it enters a path; Linear's one server,
+  `https://api.linear.app/graphql`, a constant that the key file cannot change. Every request is a read:
+  Plane's calls are all `GET`, Linear's are all `query`, and there is no `mutation` in the code. *How:*
+  the system `curl` (no new dependency), with the key on its standard input as a config, never on the
+  command line where `ps` shows it; `--disable` so a user's `.curlrc` cannot change it; no redirect is
+  followed, so a key is never forwarded; Plane may be spoken to over http or https, Linear over https
+  only; 20 seconds and 4 MiB at most (the reader stops at the cap even when the server does not say how
+  long its answer is). *Refused:* a control character in a request, a header name that is not plain, an
+  address that fails `check_base_url`. *What comes back is other people's writing and is not trusted:*
+  cleaned and capped as GitHub's is, an id that is not plain characters is dropped, a ticket's address
+  is built here (Plane) or kept only when it is `https://linear.app/…` (Linear), a pull request link
+  must be exactly a GitHub pull request's address, HTML in a Plane description is reduced to text.
+  *Never in any message, log or `Debug`:* the key, a ticket's text, and the server's own words: a
+  failure is one of a few fixed lines (key refused, not found, rate limited, "the server had an error",
+  "could not be reached", "larger than can be read"), and a refused key is `SignedOut`. Linear's cost is
+  capped (at most 50 nodes a connection, 8 pages a list, small fixed nested lists) so a query cannot be
+  refused as too complex or used up a rate limit. A ticket's text that looks like an instruction is
+  still only text. Not yet checked against a live Plane or Linear server; the shapes follow their public
+  APIs.
 
 No user accounts. Access to the daemon is access to its local socket: a named
 pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
