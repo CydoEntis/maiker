@@ -644,7 +644,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   build ›") that opens a 300px read-only card: the label and the step's word, what the helper was asked, its latest
   activity while it works on this computer, its result, **Open its chat**, and "Read-only. To change anything, ask in the
   main chat." (on another machine: "Runs on devbox. Helpers on other machines show their task and result only. …").
-  Escape, the crumb, close or a click outside closes the drawer. The sidebar shows no runs. Marks are StatusMark's, with ↺ for sent back, – for skipped and ? for a state added later.
+  Escape, the crumb, close or a click outside closes the drawer. The sidebar shows no runs, and a session with runs
+  shows no subagent bar: its helpers are on the board. Marks are StatusMark's, with ↺ for sent back, – for skipped and ? for a state added later.
 - **Chat · Terminal tabs.** An agent's pane header carries text tabs, Chat then Terminal (and Work when it applies). The
   chat covers the pane body while the terminal stays mounted underneath, hidden by `visibility`, so it keeps streaming
   and keeps its size: switching sends nothing to the daemon, except that going to the terminal moves the text waiting
