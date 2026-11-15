@@ -2113,6 +2113,24 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             "{answered:?}"
         );
 
+        // A write needs a person: a pane is refused even when it says it was confirmed, and a person's
+        // client that did not confirm is answered with a refusal and nothing is written.
+        let close = |confirmed| Query::TicketWrite {
+            source: "me/widgets".into(),
+            id: "github:me/widgets#1".into(),
+            write: maitty_shared::tickets::TicketWrite::Close,
+            confirmed,
+            tag: 9,
+        };
+        let from = authenticated_pane(&mut session);
+        let refused = exchange(&mut session, 461, crate::protocol::ClientMsg::Query(close(true)), Some(from)).await;
+        assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
+        let unconfirmed = exchange(&mut session, 462, crate::protocol::ClientMsg::Query(close(false)), None).await;
+        assert!(
+            matches!(unconfirmed, ServerMsg::Reply(crate::protocol::Reply::TicketWrite { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(_)) })),
+            "{unconfirmed:?}"
+        );
+
         let from = authenticated_pane(&mut session);
         let push = Query::Git { term: from.0, request: crate::protocol::GitRequest::Push, tag: 9 };
         let refused = exchange(&mut session, 450, crate::protocol::ClientMsg::Query(push), Some(from)).await;

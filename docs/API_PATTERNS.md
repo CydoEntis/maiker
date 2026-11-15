@@ -998,6 +998,20 @@ cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 se
 `work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
 inverse `blocks` relations.
 
+Protocol 107 adds `Query::TicketWrite { source, id, write, confirmed, tag }` with `Reply::TicketWrite { tag, answer }`
+(`TICKET_WRITE_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in`
+arm). `write` is a `TicketWrite`: `Comment { text }` or `Close`; `source` and `id` are as for `Tickets`.
+`answer` is `Ok(TicketWritten::Commented | Closed)` or a `TicketError`. These are the only two writes, and the
+only ones the feature will have: no edit, no delete. The daemon writes only when `confirmed` is true, which a
+client sets after showing the person the provider, the ticket and the exact text; an unconfirmed request is
+answered `Invalid("The write was not confirmed")` and nothing is sent anywhere. Human clients only: a pane or a
+structured runtime gets `ServerMsg::Error`. The comment is checked by `maitty_shared::tickets::clean_comment`
+(1 to 4,000 characters, no control, hidden or tab characters; a bad one is refused, never trimmed to fit).
+GitHub runs `gh issue comment` / `gh issue close` (30 seconds); Plane `POST`s `…/issues/<id>/comments/` or
+`PATCH`es the work item to the project's first `completed` state; Linear runs `commentCreate`, or finds its
+team's first `completed` state and runs `issueUpdate`. A write is never retried. Details and limits:
+[SECURITY](SECURITY.md).
+
 The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
 `ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
 `{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them
