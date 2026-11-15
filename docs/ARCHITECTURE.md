@@ -93,6 +93,7 @@ src/
     identity.rs  the daemon's random id, made on first start and kept in the data folder (daemon-id); sent in every snapshot
     secrets.rs   secrets agents ask you for: the pending requests, and what you typed, held in memory as single-use references (ADR 0006)
     pr.rs        each pane's pull request read through `gh`: the poll, the answer parsed, what changed between two readings, and the message queued for the agent
+    tickets_github.rs  a repository's milestones and issues read through `gh` (`Query::Tickets`): groups, a page of issues, one issue with its comments; read-only, cleaned and capped, `gh`'s words never in an error
     approvals.rs your Always / Never / Once for repo-supplied check commands (kept in Maitty's data folder, read at start), and the ApproveCheck / ForgetCheckApproval commands
     term.rs      one pane: PTY, input thread, vt100 emulator
     scan.rs, git.rs, persist.rs
@@ -308,7 +309,7 @@ crates/
   maitty-core/                    daemon, PTYs, persistence and process lifetime
   maitty-terminal-client/         terminal CLI and TUI implementation
   maitty-desktop-client/          desktop IPC client
-  maitty-shared/                  wire protocol and shared contracts
+  maitty-shared/                  wire protocol and shared contracts, including `tickets.rs`: the read-only, provider-neutral ticket model (groups, summaries, tickets, filter, typed error) and the pure rules that clean and cap it, with no I/O
   maitty-settings/                preference schemas, key actions and themes
   maitty-ipc-transport/           shared IPC framing and handshake
   maitty-machines/                the `[[machines]]` definition and its checks and edits, the ssh line, failure classes, dial, connection registry and link supervisors, the cleaning and policy for what another machine sends, the daemon-id store, the `~/.ssh/config` parser, the reader of this computer's machine list (`local_machines`: `config.local.toml`, as both apps read it), and the atomic state-file helpers (`write_atomic`, `read_state`, which `maitty-core` re-exports), shared by both apps

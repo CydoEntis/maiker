@@ -911,6 +911,28 @@ another machine keeps only logins GitHub could have given out and one clean `pro
 host sends it through `github_accounts(machine, tag)` and raises a `github-accounts` event with the tag
 and the report (`apps/gui/src/api/githubAccounts.ts` waits on it for 20 seconds).
 
+Protocol 103 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets { tag, answer }`
+(`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
+arm, and nothing an older peer sends or reads changed). It reads tickets, read-only; there is no
+request that writes. `source` is a GitHub repository, `owner/name`, read with the machine's own
+`gh` (`daemon/tickets_github.rs`). `request` is a `TicketsRequest`: `Groups` (the repository as a
+`Project` group and its milestones as `Milestone` groups with their ticket count), `List(Filter)`
+(`group`, `state` category, `assignee`, `label`, `search`, `page`; `TICKETS_PAGE_SIZE` (30) a page,
+page 0 to `TICKETS_PAGE_MAX`; `gh` pages only by size, so it is asked for everything up to one past
+the page; GitHub has no `Started` state, so that filter lists nothing) or `Get { id }`. `answer` is
+`Ok(TicketsReply)` (`Groups`, `List(TicketPage)` or `Ticket`) or `Err(TicketError)`: `NotInstalled`,
+`SignedOut`, `NotFound`, `RateLimited`, or `Unreachable(line)` and `Invalid(line)`, whose lines are
+fixed words, never `gh`'s own. Ids are `provider:key`: `github:owner/name#12` for an issue,
+`github:owner/name!3` for a milestone, `github:owner/name` for the repository; an address is built
+from the checked repository and number, never copied. A ticket carries its body, at most
+`TICKET_COMMENTS_MAX` (50, the oldest first, `comments_more` says there were more), the pull
+requests that close it as `links`, and `blocked_by` ids (`gh api …/dependencies/blocked_by`; a GitHub
+that does not know it gives none). Every string is cleaned and cut and every list capped by the pure
+rules in `crates/maitty-shared/src/tickets.rs` (`TicketsReply::cleaned`), by the daemon and again
+for an answer from another machine (`remote_policy::vet`; the verdict is *answer*). Human clients
+only: a pane or a structured runtime gets `ServerMsg::Error`. `gh` runs off the event loop, at most
+twice (30 seconds each), and `gh`'s output is read only up to 4 MiB.
+
 Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
 (`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`
 answers the lines `Apply` would write and writes nothing; `Apply { folder, identity }` writes them;

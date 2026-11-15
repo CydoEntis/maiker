@@ -596,6 +596,21 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   is passed on only when its name is `owner/name` in GitHub's own characters, and the address to clone
   is built from that name (`clone_address`), so text from `gh` or from another machine never becomes an
   address by itself. Only a person's client may ask.
+- **Reading tickets** (`Query::Tickets`, `daemon/tickets_github.rs`, `maitty_shared::tickets`) reads a
+  repository's milestones, issues and issue comments through the machine's own `gh`, and writes
+  nothing: there is no request that comments, labels, closes or edits. The repository must be
+  `owner/name` (`is_repo`); an assignee must be a login; a label and a search are checked, and each is
+  joined to its flag (`--label=…`) so it can never be read as a flag of its own; a milestone or an
+  issue must belong to that repository. Everything is an argument list, never a shell line, and `gh`'s
+  prompts are off. No token is asked for, kept, logged or sent. **What comes back is other people's
+  writing and is not trusted**: control and hidden characters are dropped (`hidden::sanitize`), every
+  string is cut, lists and comments are capped, a number that is not a whole number is refused, an
+  address is built from the checked repository and number (a pull request link must be exactly a
+  GitHub pull request's address), and `gh`'s output is read only up to 4 MiB. No ticket text is
+  logged, and a failure is one of a few fixed lines, never `gh`'s own words (which may echo a token).
+  A ticket's text that looks like an instruction is still only text; it reaches an agent only framed
+  as the ticket's words (MAITTY-394). The same cleaning is applied again to an answer from another
+  machine (`remote_policy::vet`), and only a person's client may ask.
 
 No user accounts. Access to the daemon is access to its local socket: a named
 pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
