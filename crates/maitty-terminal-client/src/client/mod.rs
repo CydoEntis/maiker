@@ -143,6 +143,8 @@ enum Mode {
         ws: WsId,
         cmd: Option<String>,
         items: Option<Vec<WorktreeEntry>>,
+        /// The repo's branches no worktree has, each offered as a worktree to add.
+        branches: Option<Vec<String>>,
         query: String,
         sel: usize,
     },
@@ -441,6 +443,8 @@ fn remove_worktree_dir(dir: &std::path::Path) -> Result<String, String> {
 #[derive(Debug, Clone)]
 enum WtRow {
     Existing(WorktreeEntry),
+    /// A branch that has no worktree yet: picking it makes one on it.
+    Branch(String),
     Create(String),
 }
 

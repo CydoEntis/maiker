@@ -788,9 +788,10 @@ impl App {
 
     /// Rows for the worktree picker: matching worktrees, then "create <query>" when the
     /// query isn't already an existing branch.
-    pub(super) fn worktree_rows(&self, items: Option<&[WorktreeEntry]>, query: &str) -> Vec<WtRow> {
+    pub(super) fn worktree_rows(&self, items: Option<&[WorktreeEntry]>, branches: Option<&[String]>, query: &str) -> Vec<WtRow> {
         let q = query.trim().to_lowercase();
         let items = items.unwrap_or_default();
+        let branches = branches.unwrap_or_default();
         let mut rows: Vec<WtRow> = items
             .iter()
             .filter(|w| {
@@ -801,11 +802,50 @@ impl App {
             .cloned()
             .map(WtRow::Existing)
             .collect();
+        // Branches a worktree already has are its rows above, not another to add.
+        rows.extend(
+            branches
+                .iter()
+                .filter(|b| !items.iter().any(|w| &w.branch == *b))
+                .filter(|b| q.is_empty() || b.to_lowercase().contains(&q))
+                .cloned()
+                .map(WtRow::Branch),
+        );
         let first = q.split_whitespace().next().unwrap_or("");
-        if !first.is_empty() && !items.iter().any(|w| w.branch.to_lowercase() == first) {
+        if !first.is_empty()
+            && !items.iter().any(|w| w.branch.to_lowercase() == first)
+            && !branches.iter().any(|b| b.to_lowercase() == first)
+        {
             rows.push(WtRow::Create(query.trim().to_string()));
         }
         rows
+    }
+
+    /// The branches of the repo at `dir` that no worktree has, read off the UI thread, for the
+    /// worktree picker of `ws` while it is open: local ones, then remote ones with no local branch
+    /// by their short name, newest first as `branch::load` lists them.
+    pub(super) fn load_worktree_branches(&self, ws: WsId, dir: PathBuf) {
+        self.spawn_bg(move || {
+            let (current, list, _) = super::branch::load(&dir);
+            let mut names: Vec<String> = Vec::new();
+            for b in list.into_iter().filter(|b| b.elsewhere.is_none() && b.name != current) {
+                let name = if b.remote {
+                    b.name.split_once('/').map_or(b.name.clone(), |(_, short)| short.to_string())
+                } else {
+                    b.name
+                };
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+            Bg::Then(Box::new(move |app: &mut App| {
+                if let Mode::Worktrees { ws: open, branches, .. } = &mut app.mode
+                    && *open == ws
+                {
+                    *branches = Some(names);
+                }
+            }))
+        });
     }
 
     /// Switch to the workspace already open on this worktree, or open one.

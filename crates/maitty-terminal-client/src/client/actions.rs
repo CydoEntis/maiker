@@ -201,6 +201,7 @@ impl App {
                     return;
                 }
                 let ws = w.id;
+                let dir = w.cwd.clone();
                 self.send(
                     self.focus_machine(),
                     ClientMsg::Query(Query::Worktrees { ws }),
@@ -209,9 +210,11 @@ impl App {
                     ws,
                     cmd,
                     items: None,
+                    branches: None,
                     query: String::new(),
                     sel: 0,
                 };
+                self.load_worktree_branches(ws, dir);
             }
             Action::RemoveWorktree => {
                 let Some(w) = self.active_ws() else { return };

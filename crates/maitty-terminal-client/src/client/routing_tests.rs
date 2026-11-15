@@ -483,6 +483,7 @@ fn a_remote_worktree_listing_never_fills_this_computers_picker() {
         ws: 1,
         cmd: None,
         items: None,
+        branches: None,
         query: String::new(),
         sel: 0,
     };

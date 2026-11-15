@@ -1139,6 +1139,7 @@ impl App {
                         })
                     })
                 });
+                let dir = p.path.clone();
                 match ws.map(|w| w.id) {
                     Some(ws) => {
                         self.send(
@@ -1151,9 +1152,11 @@ impl App {
                             ws,
                             cmd: None,
                             items: None,
+                            branches: None,
                             query: String::new(),
                             sel: 0,
                         };
+                        self.load_worktree_branches(ws, dir);
                     }
                     None => self.notify("start something in this project first".into(), true),
                 }

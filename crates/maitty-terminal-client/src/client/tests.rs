@@ -6436,6 +6436,7 @@ second line
             ws,
             cmd: None,
             items: Some(vec![entry]),
+            branches: None,
             query: String::new(),
             sel: 0,
         };
@@ -6447,6 +6448,7 @@ second line
             ws,
             cmd: None,
             items: Some(Vec::new()),
+            branches: None,
             query: "fresh".into(),
             sel: 0,
         };

@@ -287,9 +287,9 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
             );
         }
         Mode::Worktrees {
-            items, query, sel, ..
+            items, branches, query, sel, ..
         } => {
-            let rows = app.worktree_rows(items.as_deref(), query);
+            let rows = app.worktree_rows(items.as_deref(), branches.as_deref(), query);
             let (loading, query, sel) = (items.is_none(), query.clone(), *sel);
             draw_worktrees(app, f, area, &t, &rows, &query, sel, loading);
         }
@@ -705,6 +705,11 @@ fn draw_worktrees(
                 ));
                 l
             }
+            super::WtRow::Branch(name) => vec![
+                seg("+ ", st.fg(t.accent)),
+                seg("add a worktree on ", st.fg(t.text)),
+                seg(truncate(name, 40), st.fg(if on { t.strong } else { t.text }).add_modifier(Modifier::BOLD)),
+            ],
             super::WtRow::Create(text) => vec![
                 seg("+ ", st.fg(t.done)),
                 seg("new worktree ", st.fg(t.text)),

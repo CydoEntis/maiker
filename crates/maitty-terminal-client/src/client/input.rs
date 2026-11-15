@@ -487,10 +487,11 @@ impl App {
                 ws,
                 cmd,
                 items,
+                branches,
                 mut query,
                 mut sel,
             } => {
-                let rows = self.worktree_rows(items.as_deref(), &query);
+                let rows = self.worktree_rows(items.as_deref(), branches.as_deref(), &query);
                 let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
                 match k.code {
                     KeyCode::Esc => {
@@ -501,6 +502,20 @@ impl App {
                         self.mode = Mode::Normal;
                         match rows.get(sel) {
                             Some(WtRow::Existing(w)) => self.open_worktree(w, cmd),
+                            Some(WtRow::Branch(branch)) => {
+                                self.leave_shortcut_mode();
+                                self.notify(format!("adding a worktree on {branch}…"), false);
+                                self.cmd(Command::NewWorktree {
+                                    ws,
+                                    branch: branch.clone(),
+                                    base: None,
+                                    cmd,
+                                    split: None,
+                                    from: None,
+                                    agent: None,
+                                    prompt: None,
+                                });
+                            }
                             Some(WtRow::Create(text)) => {
                                 let mut words = text.split_whitespace();
                                 if let Some(branch) = words.next().map(str::to_string) {
@@ -543,6 +558,7 @@ impl App {
                     ws,
                     cmd,
                     items,
+                    branches,
                     query,
                     sel,
                 };

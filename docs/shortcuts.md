@@ -212,7 +212,7 @@ Leader `w`, or a click on a remote machine's heading in the sidebar. These keys 
 | Keys | Action |
 | --- | --- |
 | Type, Backspace | Edit text |
-| Up / Shift+Tab / Ctrl+P, Down / Tab / Ctrl+N | Move through worktree-picker results |
+| Up / Shift+Tab / Ctrl+P, Down / Tab / Ctrl+N | Move through worktree-picker results (worktrees, then branches with none, offered as "add a worktree on …") |
 | Ctrl+U in text prompts | Clear prompt text |
 | Enter, Esc | Open the selected result / submit prompt, or cancel |
 | y / Y / Enter in close-group or remove-worktree prompt | Confirm; f / F forces worktree removal when offered; other keys cancel |

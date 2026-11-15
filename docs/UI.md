@@ -861,6 +861,11 @@ A machine that is not `connected`, one reached by a custom transport (`via`), or
 error toast, in the words used for dropped files. The image never goes through an event and is never logged: it is
 the raw body of the command.
 
+**The TUI's worktree picker** lists, after the worktrees, each branch with none (local ones, then
+remote ones by their short name, read with git off the UI thread) as `+ add a worktree on <branch>`;
+Enter makes it with `Command::NewWorktree` and opens it, as a typed branch does. A typed name that is
+an existing branch is that row, not a new branch.
+
 ## Project-specific: frame presentation
 
 Wrap each outer terminal frame in synchronized-update markers; end the update
