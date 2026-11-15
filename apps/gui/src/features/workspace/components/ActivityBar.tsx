@@ -37,20 +37,18 @@ const PANEL_TOOLS: readonly { view: InspectView; label: string }[] = [
 /**
  * The tools bar down the window's right edge (layout 2h §3): Changes, Files, History and Checks open the side panel on
  * that view and close it when it already shows it; Tickets opens over the chat area; Terminal, at the foot, shows and
- * hides the focused session's terminal. A chat that runs a workflow gets Work at the top.
+ * hides the focused session's terminal. A chat that runs a workflow gets Work at the top. Every tool works on a project,
+ * so the bar shows only while a session is in front.
  */
 export function ActivityBar() {
   const tip = useTipWithKeys()
   const { focusedSession, inspectOpen, inspectView, setInspectView, setInspectOpen, inspectRefusal, setTurnDiff, diffStat, ticketsOpen, setTicketsOpen, paneViews, newChatOpen, terminalShown, canDock, toggleTerminal } = useWorkspace()
-  const session = focusedSession ?? null
+  if (focusedSession === undefined) return null
+  const session = focusedSession
   const pick = (view: InspectView) => {
     if (inspectOpen && inspectView === view) {
       setInspectOpen(false)
       setTurnDiff(null)
-      return
-    }
-    if (session === null) {
-      toast.message('Open a session first')
       return
     }
     if (inspectRefusal !== null) {
@@ -62,19 +60,19 @@ export function ActivityBar() {
     setInspectOpen(true)
   }
   const changed = diffStat.data?.files ?? 0
-  const failing = session === null ? 0 : checksNeedingYou(session.checks)
+  const failing = checksNeedingYou(session.checks)
   const badgeOf = (view: InspectView): Badge | null => {
     if (view === 'changes' && changed > 0) return { text: String(changed), tone: 'plain' }
     if (view === 'checks' && failing > 0) return { text: String(failing), tone: 'danger' }
     return null
   }
-  const runs = session?.workflows ?? []
-  const workOn = session !== null && paneViews.work.has(session.id)
+  const runs = session.workflows
+  const workOn = paneViews.work.has(session.id)
   const live = runs.filter((run) => run.active).length
   const needs = runs.some((run) => run.active && run.needsYou)
   return (
     <nav className="mx-tools" aria-label="Tools">
-      {session !== null && runs.length > 0 && !newChatOpen && (
+      {runs.length > 0 && !newChatOpen && (
         <>
           <ToolButton
             label="Work"
@@ -98,7 +96,7 @@ export function ActivityBar() {
       ))}
       <ToolButton
         label="Tickets"
-        tip={session === null ? 'Tickets: open a chat first' : 'Tickets for this project'}
+        tip="Tickets for this project"
         path={PATHS.tickets}
         on={ticketsOpen}
         onClick={() => {

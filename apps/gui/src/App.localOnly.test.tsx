@@ -99,6 +99,11 @@ describe('a pane of another machine and the features that need its files', () =>
     daemon.suggestProjectFolders.mockResolvedValue([])
   })
 
+  it('shows the tools bar for the session in front', async () => {
+    await openRemotePane()
+    expect(screen.getByRole('navigation', { name: 'Tools' })).toBeInTheDocument()
+  })
+
   it('opens the side panel on the machine\'s changes, and its views that read files say they are local-only', async () => {
     const user = await openRemotePane()
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
