@@ -165,18 +165,23 @@ function Choice({ label, index, picked, busy, onPick, group, several = false }: 
 function formNote(questions: readonly AskedQuestion[], left: number): string {
   if (left === 0) return 'Ready to send.'
   if (questions.length === 1) return 'Pick at least one.'
-  return left === questions.length ? 'Pick an answer for each question.' : `${String(left)} more to answer`
+  return `${String(left)} more to answer`
 }
 
 /**
- * A form of questions: each with its choices to pick from (one, or any number of them for a question that takes
- * several), and one button that sends them all once every question has an answer. Nothing is typed into the agent
- * until then, so an answer can be changed first.
+ * A form of questions, shown one at a time (layout 2h): a tab per question at the top, marked ✓ once answered, then
+ * the question with its choices to pick from (one, or any number of them for a question that takes several), Back and
+ * Next, and on the last one the button that sends them all once every question has an answer. Nothing is typed into
+ * the agent until then, so an answer can be changed first.
  */
 function QuestionsForm({ questions, busy, onSend }: { questions: readonly AskedQuestion[]; busy: boolean; onSend: (picked: readonly (readonly number[])[]) => void }) {
   const name = useId()
   const [picked, setPicked] = useState<readonly (readonly number[])[]>(() => questions.map(() => []))
   const left = picked.filter((chosen) => chosen.length === 0).length
+  const [step, setStep] = useState(0)
+  const at = Math.min(step, questions.length - 1)
+  const asked = questions[at]
+  const last = at === questions.length - 1
   const choose = (at: number, index: number, several: boolean) => {
     setPicked((now) => now.map((was, place) => {
       if (place !== at) return was
@@ -192,18 +197,34 @@ function QuestionsForm({ questions, busy, onSend }: { questions: readonly AskedQ
         if (left === 0 && !busy) onSend(picked)
       }}
     >
-      {questions.map((asked, at) => (
+      {questions.length > 1 && (
+        <div className="mx-waiting-steps" role="tablist" aria-label="Questions">
+          {questions.map((each, place) => {
+            const done = (picked[place]?.length ?? 0) > 0
+            return (
+              <button key={`${String(place)}-${each.question}`} type="button" role="tab" aria-selected={place === at} title={each.question} className={`mx-waiting-step${place === at ? ' is-on' : ''}${done ? ' is-done' : ''}`} onClick={() => { setStep(place) }}>
+                <span className="mx-waiting-step-mark" aria-hidden="true">{done ? '✓' : place + 1}</span>
+                <span className="mx-waiting-step-text">{each.question}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {asked !== undefined && (
         <fieldset key={`${String(at)}-${asked.question}`} className="mx-waiting-question">
           <legend>{asked.question}{asked.multi === true && <>{' '}<span className="mx-waiting-any">Pick any</span></>}</legend>
           {asked.choices.map((choice, index) => (
             <Choice key={`${String(index)}-${choice}`} label={choice} index={index} picked={picked[at]?.includes(index) === true} busy={busy} group={`${name}-${String(at)}`} several={asked.multi === true} onPick={() => { choose(at, index, asked.multi === true) }} />
           ))}
         </fieldset>
-      ))}
+      )}
       <div className="mx-waiting-foot is-form">
         <span className="mx-waiting-note">{formNote(questions, left)}</span>
         <span className="mx-spacer" />
-        <Button type="submit" variant="needs" keyHint="⏎" disabled={busy || left > 0}>{busy ? 'Sending…' : questions.length === 1 ? 'Send answer' : 'Send answers'}</Button>
+        {at > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => { setStep(at - 1) }}>Back</Button>}
+        {last
+          ? <Button type="submit" variant="needs" keyHint="⏎" disabled={busy || left > 0}>{busy ? 'Sending…' : questions.length === 1 ? 'Send answer' : 'Send answers'}</Button>
+          : <Button type="button" variant="needs" onClick={() => { setStep(at + 1) }}>Next</Button>}
       </div>
     </form>
   )

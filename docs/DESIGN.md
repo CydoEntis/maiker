@@ -420,9 +420,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Running subagents** (`RunningSubagents`, the daemon's `subagent_activity`, `model/subagents.ts`). A 34px bar floats
   under the pane's header, as wide as the chat's column, on the menu surface (`--card`, a `--line2` edge, `--sh-pop`),
   over the chat and the terminal alike, only while one or more subagents run: the spinner, "N subagents running", the
-  first one's task and what it is doing (mono, `--dim`), "+N more" and **Show** / **Hide**. Opening extends it
-  downward over the feed (at most `min(440px, 60vh)`, scrolling past that) without moving it; the feed fades behind it
-  (22px closed, 44px open, a slight blur). Each row is its mark, its task and kind, what it is doing and its time; a
+  first one's task and what it is doing (plain text, `--dim`), "+N more" and a chevron. The whole bar is the toggle
+  (named Show / Hide the subagents), and the chevron turns over while it is open. Opening extends it downward over the
+  feed (at most `min(440px, 60vh)`, scrolling past that) without moving it; the feed fades behind it into `--main`
+  (22px closed, 44px open). Each row is its mark, its task and kind, what it is doing and its time; a
   click unfolds **Asked to** and **Ran**, with **Open its chat**. The runtime reports no model or effort for a
   subagent, so the rows show none. A finished one clears itself, and the bar goes with the last. The daemon
   takes a helper's own report that it finished as final, whatever second its other reports were stamped with, and only
@@ -474,7 +475,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   it (`SlashPicker`, the shared `ResultsList`): its own, and the person's and the project's commands, skills and
   plugins, as Claude Code itself lists them for the session's folder (`agent_commands`, asked as the chat opens and
   again after five minutes), each with what it does and what it takes. Typing narrows them (the exact name, then names
-  that start with it, then a plugin's command by its own name, then names that hold it); ↑ ↓ move, **Tab** completes
+  that start with it, then a plugin's command by its own name, then names that hold it). The list is square, headed
+  "Commands" with the number that match, with the keys at its foot (↑↓ choose, Tab complete, Enter run, Esc close);
+  with none it says "No command by that name" and "Press Enter to send <typed> to the agent as a message.". ↑ ↓ move, **Tab** completes
   the name, **Enter** or a click runs a command that takes nothing and completes one that takes something, **Esc**
   puts the list away until the text changes. The list goes once a space ends the name. A one-line message that
   starts with a slash is typed into a terminal agent instead of pasted, so it is read as a command, and its Enter
@@ -517,15 +520,16 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   A command run in the terminal shows in the chat as the person's bubble with what it printed beneath as a quiet
   "↳ Set model to Haiku 5.5" line, never as a shell step, and a turn that was only that gets no divider. What the
   agent then says it runs (`/model`, `/effort`) replaces the model and effort picked in the chat.
-- **The tray under the message box** is one line (`SettingsTray`). At the left: the folder, the branch in mono in
-  the theme's magenta with the branch mark (or the tree and the worktree's blue; the tooltip says which), then the
-  permission mode. At the right, what the agent reported using (`UsageMeters`, `usageStrip.ts`): the context, then
-  each plan limit, each a name (`Context`, `5h`, `Week`), a 12px ring and the figure in mono, ring and figure in the
-  theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid` under 50%, `--m-or` under 75%, `--m-hi`
-  from there). A meter under 50% stays out of sight until the message box is hovered or focused. When a limit starts
-  over is in its tooltip. Only what the
-  agent reported is drawn (ADR 0009); a chat session with no pane has none yet. Tokens and cost stay in Settings ›
-  Usage & cost.
+- **The message box** is one box (layout 2h): the text, with attach (+) at its top right, a plan strip while Plan
+  mode is on (`PLAN MODE` in mono blue, then what it means), and a bottom row: the model picker, the permission mode
+  as a shield and a chevron (`ModeControl`; the mode's name is in its tooltip, and the shield is `--danger` in a mode
+  that asks about nothing), a spacer, the usage meters and send. The focus ring is the accent. The meters
+  (`UsageMeters`, `usageStrip.ts`) are the context, then each plan limit, each a short name (`Ctx`, `5h`, `Wk`, which
+  go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
+  figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
+  under 50%, `--m-or` under 75%, `--m-hi` from there). They always show, and each opens Settings › Usage & cost. When
+  a limit starts over is in its tooltip. Only what the agent reported is drawn (ADR 0009); a chat session with no pane
+  has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
   list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from Codex CLI
   0.167.0). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
@@ -683,7 +687,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   main chat." (on another machine: "Runs on devbox. Helpers on other machines show their task and result only. …").
   Escape, the crumb, close or a click outside closes the drawer. The sidebar shows no runs, and a session with runs
   shows no subagent bar: its helpers are on the board. Marks are StatusMark's, with ↺ for sent back, – for skipped and ? for a state added later.
-- **Chat · Terminal tabs.** An agent's pane header carries text tabs, Chat then Terminal (and Work when it applies). The
+- **Chat · Terminal tabs.** An agent's pane header carries text tabs, Chat then Terminal; Work is on the activity bar, and while the Work board covers the pane neither tab is underlined. The
   chat covers the pane body while the terminal stays mounted underneath, hidden by `visibility`, so it keeps streaming
   and keeps its size: switching sends nothing to the daemon, except that going to the terminal moves the text waiting
   in the chat box into the agent's prompt (one paste, no Enter; `model/draftCarry.ts`), under the message box's rule: only while
@@ -773,10 +777,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   Claude's model chip and mode chip are always there, from the first frame of a new chat: while the agent starts or works they
   stay where they are, greyed out with the reason as their tooltip, so the box never gains or loses a control. A chat that
   follows another agent (Codex, Gemini) draws its model label from the start, with just the agent's name until it says its
-  model. The "agent has not reported" hint of a starting chat floats over the conversation and moves nothing. Placeholders: "Message claude", "Queue a
+  model. The "agent has not reported" hint of a starting chat floats over the conversation and moves nothing. Placeholders: "Message the agent, or type / for commands" ("Reply to the plan…" in Plan mode), "Queue a
   message for when claude finishes" while it works, "Answer the request above first" (and off) while a question
-  waits. **3. The settings tray**: 14px in from each side and hanging from the box (`--main`, a `--line` border, no top edge): the permission mode from the agent's own file
-  ("Ask before edits", "Plan mode", "Bypass permissions" in red, or "Permissions" before it has said; its menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead). The tray reads project folder (opens Files) first, then the mode, and at the right the word **Worktree** or **Branch** before the branch's name, so a chat in a worktree never reads as one on the main checkout. It does not list subagents: the sidebar does. Queued messages are dashed bubbles above (`QueuedMessages`): each has an **×** in its top right corner (remove) and **Edit**, which takes it out of the queue and puts its words back in the box, ahead of anything typed there, with its files back as attachments. A queued message shows its files as the chips a sent message has, never as the lines that name them to the agent. Two or more sit as a **stack**: the first one sent in front, showing its first two lines and "first of N", with the edges of up to two more under it. A click on a message spreads them all out, oldest first, each with its own × and Edit; a click again stacks them, and a queue down to one message starts stacked the next time it grows.
+  waits. **3. The bottom row** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar does. Queued messages are dashed bubbles above (`QueuedMessages`): each has an **×** in its top right corner (remove) and **Edit**, which takes it out of the queue and puts its words back in the box, ahead of anything typed there, with its files back as attachments. A queued message shows its files as the chips a sent message has, never as the lines that name them to the agent. Two or more sit as a **stack**: the first one sent in front, showing its first two lines and "first of N", with the edges of up to two more under it. A click on a message spreads them all out, oldest first, each with its own × and Edit; a click again stacks them, and a queue down to one message starts stacked the next time it grows.
 - **Esc ladder.** Esc closes the topmost open layer and reaches the terminal only when none is
   open (`model/escLadder.ts`): What's new, palette, Settings, the sidebar drawer,
   Focus mode. A new dialog adds its id there.
@@ -797,7 +800,23 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   adds nothing.
 - **No Inbox.** What needs you, what stopped and what finished are the first sections of the sidebar's status list, and
   the notification card and the tray menu say the same; the desktop app has no separate Inbox panel.
-- **New chat page on another machine.** The same page as on this computer (layout 2f), titled by the machine's tray fact `On <nickname or name>`: its projects, a pasted path, no Browse…, no branch, worktree or attach controls, and a model button with the agent switch, the fixed models (Default, Opus, Sonnet, Haiku for Claude) and the effort. There is no New session dialog.
+- **Pane header crumbs (layout 2h).** After the pane's name, `/` in `--line2`, the project in `--muted` with a 7px
+  square in its colour and a lock (set when the chat started), `/`, then the branch in mono `--branch` with its mark
+  (or the tree and `--ansi-blue` in a worktree), a plain button that opens "Branch in <project>". The header is a size
+  container: under 700px the project crumb goes, under 560px the branch's name (its mark stays).
+- **New chat page (layout 2h).** The header is a pane's: the agent's 26px tile, the name field (14px semibold, a
+  hover fill, the accent border while typing), then the same crumbs, project, branch and `·` work in (`new worktree` in
+  `--ansi-blue`, `this folder` in `--muted`), each a menu with a small `--dim` heading; a branch another chat is on says
+  **in use** in `--warn`. Open as Chat | Terminal and the × at the right. "What are we building today?" is
+  `clamp(26px, 3.4vw, 36px)` at 650, centred and low, just over the message box. Open as Terminal draws the terminal
+  on `--term` in mono: a box ringed in the accent line naming the agent and its folder, two dim lines, and a prompt
+  line.
+- **Model menu (layout 2h).** 300px, square, on `--main` with a `--line2` edge, opening up from the right of the
+  message box. The agent switch is a segmented control across the top (a column per agent, the picked one raised with a
+  `--line2` ring), then 32px model rows (dim "default", an accent ✓), then a 44px foot in a grid: Effort in `--muted`,
+  four bars 16px wide at 6, 9.3, 12.6 and 15.9px filled in `--accent` up to the level (`--line2` past it), and the
+  level's name at the right in 12.5px semibold.
+- **New chat page on another machine.** The same page as on this computer, with the machine after the project (`app@Shipyard`) and the Machine switch on Remote machine: its projects, a pasted path, no Browse…, no branch, worktree or attach controls, and a model button with the agent switch, the fixed models (Default, Opus, Sonnet, Haiku for Claude) and the effort. There is no New session dialog.
 - **Focus mode (⌘.).** Hides the sidebar; a pill at the bottom says where you are and
   how many sessions need you elsewhere. Esc or the pill's Exit leaves it.
 - **Broadcast (⌘⇧B).** Per layout. While on, every pane of the layout has a violet outline and a
@@ -890,8 +909,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   only its name: a branch belongs to a session, and a worktree's branch is not the folder's.
 - **Branch or worktree.** A session in the project's own folder shows its branch in `--branch` (violet: #A78BFA on a dark ground, #6B46C1 on a light one, set by `themeStyle`; every branch name and icon uses it) with the branch mark;
   one in a linked worktree (the daemon's `TermInfo.linked`, never worked out from the folder) shows it in `--branch`
-  with a tree, on its sidebar row, its pane header and under the message box, where the word reads **Worktree** or
-  **Branch**. The tooltip says which.
+  with a tree, on its sidebar row, and its pane header's branch crumb. The tooltip says which.
 - **A session whose agent asks for a secret** (`maitty_request_secret`) shows a bar across the top of its pane with the
   label and the reason the agent gave, and **Provide…** (a masked box; Enter gives it) and **Decline**. The value goes
   from that box to the daemon and nowhere else: it is not kept in the window's state and not shown in the chat, and the

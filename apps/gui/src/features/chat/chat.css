@@ -70,6 +70,7 @@
 .mx-md-table :is(th, td) { padding: 7px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow-wrap: normal; word-break: normal; }
 .mx-md-table th { font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .mx-md-table td { color: var(--fg2); }
+.mx-md-table td.mx-md-num { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .mx-md-table tbody tr:last-child td { border-bottom: 0; }
 .mx-code-chip { padding: 1px 5px; background: var(--m-sel); font-family: var(--mono); font-size: .9em; color: var(--fg); }
 .mx-code-lang { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--muted); }
@@ -91,6 +92,7 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 /* Amber is the one colour that means "needs you", so only a step a request is waiting on wears it: a tint and a left edge. */
 .mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); box-shadow: inset 2px 0 0 var(--needs); }
 .mx-step-glyph { flex: none; display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; }
+.mx-step-tool { flex: none; display: inline-flex; color: var(--muted); }
 .mx-step-verb { flex: none; font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .mx-step-target { display: inline-flex; min-width: 0; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12.5px; color: var(--fg2); white-space: nowrap; }
 .mx-step-target > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -323,6 +325,15 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-terminal-key { min-width: 34px; justify-content: center; font-family: var(--mono); }
 /* Questions: each a group of option boxes, the picked one on the amber edge. */
 .mx-waiting-form { display: flex; flex-direction: column; gap: 10px; margin: 0; }
+/* One tab per question; the one shown in the needs colour, an answered one ticked. */
+.mx-waiting-steps { display: flex; gap: 4px; min-width: 0; }
+.mx-waiting-step { flex: 0 1 auto; min-width: 0; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.mx-waiting-step:hover { background: var(--m-hover); color: var(--fg); }
+.mx-waiting-step.is-on { color: var(--fg); box-shadow: inset 0 0 0 1px var(--needs); }
+.mx-waiting-step-mark { flex: none; font: 600 11px var(--mono); color: var(--dim); }
+.mx-waiting-step.is-on .mx-waiting-step-mark { color: var(--needs); }
+.mx-waiting-step.is-done .mx-waiting-step-mark { color: var(--done); }
+.mx-waiting-step-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-waiting-question { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px; }
 .mx-waiting-question > legend { padding: 0; margin-bottom: 6px; font-size: 14px; font-weight: 600; color: var(--fg); }
 /* A question that takes several answers says so beside it, and its boxes tick rather than fill. */
@@ -351,28 +362,34 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
   border: 1px solid var(--line2); background: var(--main);
   transition: opacity .25s, border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-.mx-box:focus-within { border-color: var(--focus); box-shadow: 0 0 0 1px var(--focus); }
+.mx-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 /* The agent's commands, over the box while a slash and a name are typed. It floats, so the box and the chat stay put. */
-.mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(320px, 50vh); padding: 6px; border-radius: 12px; border: 1px solid var(--line2); background: var(--main); box-shadow: 0 16px 44px rgba(0, 0, 0, .45); animation: v7fade .12s var(--ease-out); }
+/* Square, as the window's corners are: a head that counts the matches, the rows, and the keys at its foot. */
+.mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(340px, 50vh); border: 1px solid var(--line2); background: var(--main); box-shadow: 0 3px 10px rgba(var(--sd), calc(.35 * var(--sk))); animation: v7fade .12s var(--ease-out); }
+.mx-slash-head { flex: none; margin: 0; display: flex; align-items: center; gap: 8px; padding: 7px 10px 5px; font-size: 11px; font-weight: 600; color: var(--dim); }
+.mx-slash-count { font-weight: 400; }
+.mx-slash-none { display: flex; flex-direction: column; gap: 4px; padding: 4px 12px 12px; font-size: 12px; color: var(--muted); }
+.mx-slash-none-title { font-size: 13px; color: var(--fg); }
+.mx-slash-none code { font-family: var(--mono); }
 .mx-slash-list { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
-.mx-slash-row { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr); align-items: baseline; gap: 14px; padding: 5px 9px; border-radius: 7px; cursor: pointer; }
+.mx-slash-row { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr); align-items: baseline; gap: 14px; padding: 6px 10px; cursor: pointer; }
 .mx-slash-row.is-active { background: var(--accent-soft); }
 .mx-slash-row.is-file { grid-template-columns: minmax(0, 1fr); }
 .mx-slash-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; color: var(--fg); }
 .mx-slash-row.is-active .mx-slash-name { color: var(--accent-text, var(--accent)); }
 .mx-slash-hint { color: var(--dim); }
 .mx-slash-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; color: var(--muted); }
-.mx-slash-tag { margin-right: 6px; padding: 0 5px; border-radius: 4px; border: 1px solid var(--line2); font-size: 10.5px; color: var(--dim); }
+.mx-slash-tag { margin-right: 6px; padding: 0 5px; border: 1px solid var(--line); font-size: 10.5px; color: var(--dim); }
 .mx-slash-note { margin: 0; padding: 6px 9px; font-size: 12px; color: var(--muted); }
-.mx-slash-keys { flex: none; margin: 4px 0 0; padding: 5px 9px 1px; border-top: 1px solid rgba(var(--hl), calc(.07 * var(--hk))); font-size: 11px; color: var(--dim); }
-.mx-slash-keys kbd { margin-right: 3px; padding: 0 4px; border-radius: 4px; background: rgba(var(--hl), calc(.08 * var(--hk))); font-family: var(--mono); font-size: 10.5px; }
+.mx-slash-keys { flex: none; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--dim); }
+.mx-slash-keys kbd { margin-right: 4px; font: 500 11px var(--mono); }
 @media (prefers-reduced-motion: reduce) { .mx-slash { animation: none; } }
-.mx-box-text { width: 100%; min-height: 44px; max-height: 160px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
+.mx-box-text { width: calc(100% - 32px); min-height: 44px; max-height: 160px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
 .mx-box-text:focus-visible { outline: none; }
 .mx-box-text::placeholder { color: var(--dim); }
 .mx-box-text:disabled { cursor: not-allowed; }
 .mx-box-row { display: flex; align-items: center; gap: 4px; }
-.mx-box-attach { width: 30px; height: 30px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; color: var(--fg2); }
+.mx-box-attach { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; color: var(--fg2); }
 .mx-box-attach:hover { background: var(--m-hover); color: var(--fg); }
 .mx-box-attach[aria-disabled="true"] { cursor: not-allowed; }
 .mx-model-button { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; outline: none; }
@@ -383,41 +400,38 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-model-name { color: var(--fg); font-weight: 500; white-space: nowrap; }
 .mx-model-level { color: var(--muted); white-space: nowrap; }
 .mx-model-effort { color: var(--dim); white-space: nowrap; }
-/* The model menu: one column of models, then the effort as four rising bars. */
-.mx-mm { width: 248px; display: flex; flex-direction: column; padding: 6px; border-radius: 12px; }
-/* The agent, before a chat starts: a word and a dropdown button the width of the menu. */
-.mx-mm-agent-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 0 2px 0 8px; }
-.mx-mm-agent-word { font-size: 12px; color: var(--dim); }
-.mx-mm-agent-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: var(--r-control); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); font-size: 12.5px; color: var(--fg); }
-.mx-mm-agent-pick:hover, .mx-mm-agent-pick[data-state="open"] { box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-mm-agent-pick:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
-.mx-mm-agent-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-.mx-mm-agent-list { min-width: var(--radix-dropdown-menu-trigger-width); padding: 4px; border-radius: 10px; }
-.mx-mm-agent-item { gap: 8px; height: 30px; font-size: 12.5px; }
-.mx-mm-agent-pick .mx-app-icon, .mx-mm-agent-item .mx-app-icon { box-shadow: none; }
-.mx-mm-models { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; }
-.mx-mm-model { flex: none; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 7px; font-size: 13px; color: var(--fg); text-align: left; outline: none; }
+/* The model menu (layout 2h): 300px, square, opening up from the right of the message box. */
+.mx-mm { width: min(300px, calc(100vw - 32px)); display: flex; flex-direction: column; padding: 0; border-radius: 0; background: var(--main); border: 1px solid var(--line2); box-shadow: 0 8px 24px rgba(var(--sd), calc(.35 * var(--sk))); }
+.mx-mm-agents { display: grid; gap: 2px; margin: 8px; padding: 2px; border-radius: 0; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); }
+.mx-mm-agent { height: 28px; display: flex; align-items: center; justify-content: center; gap: 7px; border-radius: 0; font-size: 12.5px; color: var(--muted); }
+.mx-mm-agent:hover { color: var(--fg); }
+.mx-mm-agent[data-state="checked"] { font-weight: 600; color: var(--fg); background: var(--m-sel); box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-mm-agent:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.mx-mm-agent .mx-app-icon { box-shadow: none; }
+.mx-mm-models { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; padding: 0 6px 6px; }
+.mx-mm .mx-mm-models:first-child { padding-top: 6px; }
+.mx-mm-model { flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; font-size: 13px; font-weight: 500; color: var(--fg); text-align: left; outline: none; }
 .mx-mm-model > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-mm-model:hover, .mx-mm-model:focus-visible { background: rgba(var(--hl), calc(.07 * var(--hk))); }
-.mx-mm-model[aria-checked="true"] { font-weight: 600; background: rgba(var(--hl), calc(.06 * var(--hk))); }
-.mx-mm-model small { font-size: 11.5px; font-weight: 400; color: var(--dim); }
-.mx-mm-more { flex: none; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 7px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
-.mx-mm-more:hover, .mx-mm-more:focus-visible { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
+.mx-mm-model:hover, .mx-mm-model:focus-visible { background: var(--m-hover); }
+.mx-mm-model[aria-checked="true"] { font-weight: 600; background: var(--m-hover); }
+.mx-mm-model small { font-size: 11px; font-weight: 400; color: var(--dim); }
+.mx-mm-more { flex: none; display: flex; align-items: center; gap: 8px; height: 28px; margin: 0 6px 6px; padding: 0 8px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
+.mx-mm-more:hover, .mx-mm-more:focus-visible { background: var(--m-hover); color: var(--fg); }
 .mx-mm-more[aria-expanded="true"] svg { transform: rotate(180deg); }
 .mx-mm-check { width: 13px; height: 13px; flex: none; color: var(--accent-text); }
-.mx-mm-rule { height: 1px; margin: 6px 4px; background: rgba(var(--hl), calc(.08 * var(--hk))); }
-.mx-mm-effort { display: flex; align-items: center; gap: 10px; height: 30px; padding: 0 8px; font-size: 12.5px; }
-.mx-mm-effort-word { color: var(--muted); }
-.mx-mm-level { color: var(--fg); }
+/* The foot: the word, the four rising bars, and the level's name at the right. */
+.mx-mm-effort { display: grid; grid-template-columns: auto 1fr 9ch; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-top: 1px solid var(--line); }
+.mx-mm-effort-word { font-size: 12px; color: var(--muted); }
+.mx-mm-level { text-align: right; font-size: 12.5px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .mx-mm-bars { display: flex; align-items: flex-end; gap: 3px; height: 16px; }
-.mx-mm-bar { width: 14px; height: 7px; border-radius: 3px; background: rgba(var(--hl), calc(.16 * var(--hk))); outline: none; transition: background .12s; }
-.mx-mm-bar:nth-child(2) { height: 10px; }
-.mx-mm-bar:nth-child(3) { height: 13px; }
-.mx-mm-bar:nth-child(4) { height: 16px; }
+.mx-mm-bar { width: 16px; height: 6px; border-radius: 0; background: var(--line2); outline: none; transition: background .12s; }
+.mx-mm-bar:nth-child(2) { height: 9.3px; }
+.mx-mm-bar:nth-child(3) { height: 12.6px; }
+.mx-mm-bar:nth-child(4) { height: 15.9px; }
 .mx-mm-bar.is-on { background: var(--accent); }
 .mx-mm-bar:hover:not(:disabled) { filter: brightness(1.25); }
 .mx-mm-bar:focus-visible { box-shadow: 0 0 0 2px var(--accent-line); }
-.mx-mm-bar:disabled { opacity: .3; cursor: not-allowed; }
+.mx-mm-bar:disabled { opacity: .35; cursor: not-allowed; }
 .mx-mm-mini { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; margin-left: 2px; }
 /* The bars of a level that was never picked are still drawn as bars: at half the old strength the meter read as missing. */
 .mx-mm-mini span { width: 2.5px; height: 4px; border-radius: 1px; background: rgba(var(--hl), calc(.34 * var(--hk))); }
@@ -450,35 +464,35 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-send.is-stop.is-off { color: var(--dim); }
 .mx-send.is-busy { cursor: progress; }
 /* A chip that cannot be changed right now keeps its place and size; only its look says so. */
-.mx-model-button.is-locked, .mx-tray-fact.is-locked { cursor: not-allowed; opacity: .6; }
+.mx-model-button.is-locked { cursor: not-allowed; opacity: .6; }
 .mx-model-button.is-locked:hover { background: none; }
-.mx-tray-fact.is-locked:hover { background: none; color: var(--fg2); }
 
-/* Layer three: the settings tray, narrower, hanging from the box. It does not slide under the box: with a
-   see-through field the overlap would show as a seam. */
-.mx-settings-tray {
-  width: calc(100% - 28px); margin-top: -1px; padding: 7px 8px 6px; border-radius: 0 0 var(--r-panel) var(--r-panel); display: flex; align-items: center; gap: 2px;
-  background: var(--main); border: 1px solid var(--line); border-top: 0;
-}
-/* What the agent has used, at the right of the tray: a name, a ring and the figure for each, in the theme's meter colours. */
+/* What the agent has used, at the right of the box's bottom row: a name, a ring and the figure for each, in the theme's meter colours. */
 .mx-usage { display: inline-flex; align-items: center; gap: 10px; padding: 0 6px 0 8px; font: 500 11px/12px var(--mono); font-variant-numeric: tabular-nums; }
-.mx-usage-ring { --share: 0%; flex: none; width: 12px; height: 12px; border-radius: 50%; background: conic-gradient(var(--usage-ink) var(--share), var(--line2) 0); -webkit-mask: radial-gradient(circle, transparent 4px, #000 4.5px); mask: radial-gradient(circle, transparent 4px, #000 4.5px); }
+.mx-usage-ring { flex: none; display: block; overflow: visible; }
+.mx-usage-ring path { fill: none; stroke-width: 2; }
+.mx-usage-track { stroke: var(--line2); }
+.mx-usage-fill { stroke: var(--usage-ink); }
 .mx-usage-name { font-family: var(--ui); font-weight: 400; color: var(--dim); }
 .mx-usage-item.is-ok { --usage-ink: var(--m-ok); }
 .mx-usage-item.is-mid { --usage-ink: var(--m-mid); }
 .mx-usage-item.is-high { --usage-ink: var(--m-or); }
 .mx-usage-item.is-max { --usage-ink: var(--m-hi); }
 /* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
-.mx-composer:not(:hover, :focus-within) .mx-usage-item.is-low { display: none; }
-.mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; white-space: nowrap; }
+.mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
+button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+/* The short names go first on a narrow window; the rings and figures stay. */
+@media (max-width: 1180px) { .mx-usage-name { display: none; } }
+/* The permission mode: a shield and a chevron, its name in the tooltip; red in a mode that asks about nothing. */
+.mx-mode-button { flex: none; height: 26px; display: inline-flex; align-items: center; gap: 3px; padding: 0 5px 0 7px; border-radius: var(--r-control); color: var(--muted); white-space: nowrap; }
+.mx-mode-button:not(.is-static, .is-locked):hover { background: var(--m-hover); color: var(--fg); }
+.mx-mode-button.is-danger { color: var(--danger); }
+.mx-mode-button.is-static { padding: 0 7px; }
+.mx-mode-button.is-locked { cursor: not-allowed; opacity: .6; }
+/* Plan mode, said inside the box while it is on. */
+.mx-plan-strip { margin: 0; display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); }
+.mx-plan-strip-name { font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ansi-blue); }
 .mx-usage-figure { color: var(--usage-ink); }
-.mx-tray-fact { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: var(--r-control); color: var(--fg2); font-size: 12.5px; white-space: nowrap; }
-.mx-tray-fact.is-button:hover { background: var(--m-hover); color: var(--fg); }
-.mx-tray-fact.is-danger { color: var(--danger); }
-.mx-tray-fact.is-branch { min-width: 0; color: var(--branch); }
-.mx-tray-fact.is-branch svg { flex: none; }
-.mx-tray-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); font-size: 12px; }
-.mx-tray-fact.is-worktree { color: var(--ansi-blue); }
 
 /* A subagent's own chat: the bar that names it and leads back. */
 .mx-sub-bar { flex: none; display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; margin: 10px 20px 0; padding: 0 6px 0 10px; border: 1px solid var(--line); background: var(--m-well); font-size: 12.5px; color: var(--muted); }
@@ -510,15 +524,19 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
    column, on the menu surface. Opening it extends it downward over the feed without moving it; the feed fades behind
    it, more while it is open. It floats over the terminal view the same way. */
 .mx-subs { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; justify-content: center; padding: 8px 12px 0; pointer-events: none; }
-.mx-subs-fade { position: absolute; top: 0; left: 0; right: 0; height: 22px; background: linear-gradient(var(--bg), transparent); -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent); transition: height var(--t-base, .18s) var(--ease, ease); }
+.mx-subs-fade { position: absolute; top: 0; left: 0; right: 0; height: 22px; background: linear-gradient(var(--main), transparent); -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent); transition: height var(--t-base, .18s) var(--ease, ease); }
 .mx-subs.is-open .mx-subs-fade { height: 44px; }
 .mx-subs-card { position: relative; display: flex; width: 100%; max-width: var(--chat-width, 760px); flex-direction: column; border: 1px solid var(--line2); border-radius: var(--r-panel); background: var(--card); box-shadow: var(--sh-pop); font-family: var(--ui); line-height: normal; pointer-events: auto; animation: mxRise .2s var(--ease, ease) both; }
-.mx-subs-bar { display: flex; min-width: 0; height: 34px; align-items: center; gap: 8px; padding: 0 4px 0 12px; font-size: 12.5px; color: var(--muted); }
+.mx-subs-bar { display: flex; width: 100%; min-width: 0; height: 34px; align-items: center; gap: 8px; padding: 0 12px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
+.mx-subs-bar:hover { background: var(--m-hover); }
+.mx-subs-bar:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.mx-subs-chevron { flex: none; display: inline-flex; transition: transform var(--t-base, .18s) var(--ease, ease); }
+.mx-subs.is-open .mx-subs-chevron { transform: rotate(180deg); }
 .mx-subs-spin { display: inline-flex; width: 14px; flex: none; justify-content: center; color: var(--working); }
 .mx-subs-count { flex: none; font-weight: 600; color: var(--fg); }
 .mx-subs-first { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-subs-task { color: var(--fg2); }
-.mx-subs-activity { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
+.mx-subs-activity { color: var(--dim); }
 .mx-subs-more { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--dim); }
 .mx-subs-list { list-style: none; margin: 0; padding: 0; max-height: min(440px, 60vh); overflow: auto; border-top: 1px solid var(--line); }
 .mx-subs-item + .mx-subs-item { border-top: 1px solid var(--line); }
@@ -534,4 +552,4 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-subs-detail p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-subs-detail p.is-mono { font-family: var(--mono); font-size: 12px; }
 .mx-subs-label { font-size: 11px; font-weight: 600; color: var(--dim); }
-@media (prefers-reduced-motion: reduce) { .mx-subs-card { animation: none; } .mx-subs-fade { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mx-subs-card { animation: none; } .mx-subs-fade, .mx-subs-chevron { transition: none; } }

@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { StatusMark } from '@/components/ui/status-mark'
-import { Spinner } from '@/features/workspace/components/glyphs'
+import { Icon, Spinner } from '@/features/workspace/components/glyphs'
 import { runningSubagents, subagentWord, type SubagentView } from '@/features/workspace/model/subagents'
 
 const SECOND_MS = 1000
@@ -56,8 +56,8 @@ type Props = {
 
 /**
  * The subagents an agent has running, in a bar floating under the pane's header (`RunningSubagents`), over the chat or
- * the terminal alike. It shows only while one runs: how many, the first one's task and what it is doing. Show opens the
- * list downward over the feed without moving the bar. A subagent that finishes clears itself, and the bar goes with
+ * the terminal alike. It shows only while one runs: how many, the first one's task and what it is doing. A click on the
+ * bar opens the list downward over the feed without moving the bar. A subagent that finishes clears itself, and the bar goes with
  * the last one.
  */
 export function RunningSubagents({ subagents, onOpen, startOpen = false }: Props) {
@@ -69,17 +69,19 @@ export function RunningSubagents({ subagents, onOpen, startOpen = false }: Props
   if (first === undefined) return null
   const more = running.length - 1
   const count = `${String(running.length)} ${running.length === 1 ? 'subagent' : 'subagents'} running`
+  const toggle = open ? 'Hide the subagents' : 'Show the subagents'
   return (
     <div className={`mx-subs${open ? ' is-open' : ''}`}>
       <div className="mx-subs-fade" aria-hidden="true" />
       <section className="mx-subs-card" aria-label={count}>
-        <div className="mx-subs-bar">
+        {/* The whole bar is the toggle; its name says what a click does, so the first task is not read twice. */}
+        <button type="button" className="mx-subs-bar" aria-expanded={open} aria-controls={list} aria-label={toggle} title={toggle} onClick={() => { setOpen(!open) }}>
           <span className="mx-subs-spin" aria-hidden="true"><Spinner /></span>
           <strong className="mx-subs-count">{count}</strong>
           <span className="mx-subs-first"><span className="mx-subs-task">{first.name}</span>{first.latest !== null && <span className="mx-subs-activity"> · {first.latest}</span>}</span>
           {more > 0 && <span className="mx-subs-more">+{more} more</span>}
-          <Button variant="ghost" size="sm" aria-expanded={open} aria-controls={list} onClick={() => { setOpen(!open) }}>{open ? 'Hide' : 'Show'}</Button>
-        </div>
+          <span className="mx-subs-chevron" aria-hidden="true"><Icon name="chevronDown" size={12} /></span>
+        </button>
         {open && <ul id={list} className="mx-subs-list">{running.map((subagent) => <SubagentRow key={subagent.id} subagent={subagent} now={now} onOpen={onOpen} />)}</ul>}
       </section>
     </div>

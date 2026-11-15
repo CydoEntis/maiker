@@ -18,6 +18,10 @@ import { MachineUpdateDialog } from './MachineUpdateDialog'
 import { ConfirmCloseDialog } from './ConfirmCloseDialog'
 import { RenameDialog, RenameMachineDialog } from './RenameDialog'
 import { RecentSessionsDialog } from './RecentSessionsDialog'
+import { ResumeSavedDialog } from './ResumeSavedDialog'
+import { machineProjects } from '../model/newSession'
+import { resolveStartFolder } from '../model/startFolder'
+import { LOCAL_MACHINE } from '@/api/machines'
 import { withNickname, writeMachineNicknames } from '@/data/machineNicknames'
 import { Toast } from './states'
 import type { SessionView } from '../model/session'
@@ -27,7 +31,7 @@ import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, specialistsId, setSpecialistsId } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId } = useWorkspace()
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
@@ -109,6 +113,10 @@ export function WorkspaceDialogs() {
                 }}
                 onCancel={() => { setRenamingMachine(null) }}
               />
+            )}
+            {savedOpen && (
+              <ResumeSavedDialog projects={machineProjects(sessions, LOCAL_MACHINE, focusedSession, resolveStartFolder(preferences.startFolder, home))} defaultAgent={preferences.defaultAgent === 'codex' ? 'codex' : 'claude'}
+                locked={!canStart} onPick={resumeSaved} onCancel={() => { setSavedOpen(false) }} />
             )}
             {recentOpen && <RecentSessionsDialog home={home} onPick={reopenSession} onReopened={() => { setRecentOpen(false) }} onCancel={() => { setRecentOpen(false) }} />}
             {renameId !== null && !renameInline && sessionMap.get(renameId) && (

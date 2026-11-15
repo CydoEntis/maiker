@@ -17,7 +17,6 @@ import type { ChatComposer } from '../useChatComposer'
 import { Composer } from './Composer'
 import { ScreenMenuTray } from './QuestionTray'
 import { parseScreenMenu } from '../screenMenu'
-import { isWorktree, useFolderBranches } from '@/features/workspace/model/newChatHost'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
 
 type StartingChatProps = {
@@ -25,13 +24,6 @@ type StartingChatProps = {
   /** The session this chat belongs to: its held message and draft are kept under it. */
   sessionId: string
   onBackToTerminal: () => void
-  /** The project folder's name and the branch, for the tray under the message box. */
-  folder?: string
-  branch?: string | null
-  /** The folder's full path, to say whether it is a worktree, as the real chat will. */
-  root?: string | null
-  /** The pane runs in a linked worktree, as the daemon says; it comes before what the folder's list says. */
-  worktree?: boolean
   /** What the daemon says the session is doing: Needs before any chat events means a question only the terminal shows. */
   paneStatus?: SessionStatus
   /** The question on the agent's screen, as the daemon read it: shown here with its choices so it can be answered without the terminal. */
@@ -58,9 +50,8 @@ function echoed(message: string) {
  * box are there at once. A message sent now is held and goes out when the real chat takes over; a
  * half-typed one is carried across.
  */
-export function StartingChat({ agent, sessionId, onBackToTerminal, folder = '', branch = null, root = null, worktree: paneWorktree, paneStatus, asking = '', typeInto }: StartingChatProps) {
+export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, asking = '', typeInto }: StartingChatProps) {
   const waiting = paneStatus === 'needs'
-  const [branches] = useFolderBranches(root ?? '')
   const menu = waiting && typeInto !== undefined ? parseScreenMenu(asking) : null
   const sendKeys = async (keys: string[]) => {
     for (const key of keys) await typeInto?.(key)
@@ -154,11 +145,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, folder = '', 
           mode: modeLabel(started?.mode ?? null),
           modeDanger: started?.mode === BYPASS_MODE,
           modeKey: started?.mode ?? null,
-          folder,
-          branch,
-          worktree: paneWorktree ?? isWorktree(branches, root),
           model: null,
-          onOpenFolder: null,
           // The chips the real chat will have are drawn now, with what was picked, so nothing is added or removed when it takes over.
           ...(abilities.permissionModes?.switchBy === 'command' && typeInto !== undefined ? { modeLocked: `${AGENT_LABEL[agent]} is starting. Change this once it is ready.` } : {}),
           ...(abilities.changeAgent ? { agentChips: { locked: `${AGENT_LABEL[agent]} is starting. Change this once it is ready.`, ...(started === null ? {} : { start: { model: started.model, reasoning: started.reasoning } }) } } : {}),

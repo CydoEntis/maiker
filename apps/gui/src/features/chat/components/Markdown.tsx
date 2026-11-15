@@ -12,6 +12,7 @@ import { extensionForLanguage } from '@/lib/highlight'
 import { followLink } from '../followLink'
 import { parseMarkdown, parseInline, type Block, type Inline, type TableAlign } from '../markdown'
 import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBlock'
+import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
 import { copyBlock, saveBlock } from '../saveBlock'
 import { FileBadge } from './cardParts'
@@ -59,6 +60,8 @@ function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {
 
 const ALIGN: Record<'left' | 'center' | 'right', string> = { left: 'text-left', center: 'text-center', right: 'text-right whitespace-nowrap' }
 const alignClass = (align: TableAlign | undefined) => ALIGN[align ?? 'left']
+/** A column's class: the alignment the table gave it, or right and mono for a column of figures it left alone. */
+const columnClass = (align: TableAlign | undefined, figures: boolean | undefined) => ((align ?? null) === null && figures === true ? `${ALIGN.right} mx-md-num` : alignClass(align))
 
 /** Headings 1 to 6 as the design sizes them: 22, 18, 16, 14.5, 13 and 12 (the last in capitals, muted). */
 const HEADING_SIZE = [
@@ -105,11 +108,12 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
 type TableBlock = Extract<Block, { kind: 'table' }>
 
 /**
- * A table (`TableCard`): its head says how many rows it has, with Copy and Save as (Markdown, CSV, HTML). Cells never
- * wrap; a table wider than the card scrolls sideways inside its own region, which the keyboard can reach.
+ * A table (`TableCard`): its head says how many rows it has, with Copy and Save as (Markdown, CSV, HTML). A column of
+ * figures sits right, in mono. Cells never wrap; a table wider than the card scrolls sideways inside its own region, which the keyboard can reach.
  */
 function TableCard({ block }: { block: TableBlock }) {
   const rows = block.rows.length
+  const figures = numericColumns(block)
   return (
     <Card className="mx-step-card mx-md-tablecard">
       <CardHead className="mx-md-tableacts" role="group" aria-label="Copy or save this table">
@@ -133,7 +137,7 @@ function TableCard({ block }: { block: TableBlock }) {
           <thead>
             <tr>
               {block.header.map((cell, column) => (
-                <th key={column} scope="col" className={alignClass(block.align[column])}><Inlines nodes={cell} /></th>
+                <th key={column} scope="col" className={columnClass(block.align[column], figures[column])}><Inlines nodes={cell} /></th>
               ))}
             </tr>
           </thead>
@@ -141,7 +145,7 @@ function TableCard({ block }: { block: TableBlock }) {
             {block.rows.map((row, at) => (
               <tr key={at}>
                 {row.map((cell, column) => (
-                  <td key={column} className={alignClass(block.align[column])}><Inlines nodes={cell} /></td>
+                  <td key={column} className={columnClass(block.align[column], figures[column])}><Inlines nodes={cell} /></td>
                 ))}
               </tr>
             ))}

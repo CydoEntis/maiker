@@ -30,14 +30,12 @@ import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
 import { noteAgentSaid, writeChoice } from '../agentChoice'
-import { isWorktree, useFolderBranches } from '@/features/workspace/model/newChatHost'
 import { Composer } from './Composer'
 import { ChatItem, type ChatItemContext } from './ChatItems'
 import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
-import type { BranchMenuSpec } from './BranchMenu'
 import { ProblemBanner } from './ProblemBanner'
 import { summaryOf } from '../summary'
 import type { ChatProblem } from '../problem'
@@ -115,8 +113,6 @@ type Props = {
   online: boolean
   /** False for a chat session: the agent has no terminal to type in, so no text sends the reader there. */
   hasTerminal?: boolean
-  /** The pane runs in a linked worktree, as the daemon says. Without it the folder's own worktree list is asked. */
-  worktree?: boolean
   /** The session's folder, so file names read relative to it. */
   root?: string | null
   /** Opens a file's diff, or a turn's, in the Changes panel; absent where there is none. */
@@ -135,11 +131,6 @@ type Props = {
   paneStatus?: SessionStatus
   /** The session's id: a message typed while its agent was starting is held under it, and goes out from here. */
   sessionId?: string
-  /** The project folder's name and the branch, for the tray under the message box. */
-  folder?: string
-  branch?: string | null
-  /** Shows the session's files beside the pane (the tray's folder). */
-  onOpenFolder?: (() => void) | null
   /** A subagent whose own chat shows instead of the session's, and the way back. */
   subagent?: SubagentView | null
   onBackToMain?: () => void
@@ -149,8 +140,6 @@ type Props = {
   onShowTerminal?: () => void
   /** What is wrong with the chat, if anything: shown as a banner over the message box when nothing else is asked of the person. */
   problem?: ChatProblem | null
-  /** Where the tray's branch button can move this chat; without it the branch is only said. */
-  branchMenu?: BranchMenuSpec | undefined
   /** The effort the agent's own files say it runs at; null when they do not say. */
   effort?: string | null | undefined
   /** Where a sent message's Edit from here restores the files from; absent where it is not offered. */
@@ -173,12 +162,9 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, worktree: paneWorktree, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, folder = '', branch = null, onOpenFolder = null, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, branchMenu, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
+export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
   const paneWorking = paneStatus === 'working'
-  const [branches] = useFolderBranches(root ?? '')
-  // `root` is the repository's main folder, which is never a worktree, so the pane's own answer comes first.
-  const worktree = paneWorktree ?? isWorktree(branches, root)
   const working = feed.status === 'Working' || paneWorking
   const workingSince = working ? runningTurnStartedAt(feed) : null
   const incomplete = incompleteReason(feed.completeness)
@@ -587,7 +573,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, worktree:
         question={question}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(branchMenu === undefined ? {} : { branchMenu }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), folder, branch, worktree, model: shownModel, effort, onOpenFolder, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
       />
     </div>
   )

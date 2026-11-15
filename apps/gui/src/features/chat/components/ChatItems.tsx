@@ -1,5 +1,5 @@
 import { memo, useContext, useEffect, type ReactNode } from 'react'
-import { FileText } from 'lucide-react'
+import { Icon } from '@/features/workspace/components/glyphs'
 import { Button } from '@/components/ui/button'
 import { Card, CardHead } from '@/components/ui/card'
 import { StatusMark } from '@/components/ui/status-mark'
@@ -202,7 +202,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
         <Frame>
           <Card className="mx-changed">
             <CardHead>
-              <FileText className="size-[13px] shrink-0 text-(--muted)" aria-hidden="true" />
+              <span className="flex shrink-0 text-(--muted)" aria-hidden="true"><Icon name="toolEdit" size={13} /></span>
               <span className="mx-changed-said">{row.files.length} changed {row.files.length === 1 ? 'file' : 'files'}</span>
               {row.lines !== null && <span className="mx-changed-counts"><span className="is-add">+{row.lines.added}</span><span className="is-remove">−{row.lines.removed}</span></span>}
               <span className="mx-spacer" />

@@ -97,13 +97,11 @@
 /* ---- field ---- */
 /* A field sits one step off the pane it is on, so the message box can be told from its ground. */
 .mx-app .mx-box,
-.mx-app .mx-settings-tray,
 .mx-field {
   background: var(--raise);
   border: 1px solid var(--line2);
   box-shadow: none;
 }
-.mx-app .mx-settings-tray { border-top: 0; }
 
 /* The new chat page sits over the panes, so it stays opaque. */
 .mx-app .mx-newchat { background: var(--main, var(--popover)); }

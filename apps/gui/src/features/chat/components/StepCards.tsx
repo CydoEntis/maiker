@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { ArrowUpRight, Copy, Lock } from 'lucide-react'
 import { HighlightedLine } from '@/components/HighlightedLine'
-import { Spinner } from '@/features/workspace/components/glyphs'
+import { Icon, Spinner } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
 import type { CommandEvent, EditEvent, ToolEvent } from '../chatEvents'
 import { isOmitted, redactionNote } from '../redaction'
@@ -82,6 +82,7 @@ export function ToolStep({ event, root = null, waiting = false }: ToolStepProps)
       <StepRow
         status={event.status}
         verb={facts.kind === 'extension' ? <><span className="mx-step-server">{facts.server}</span>{facts.tool}</> : facts.verb}
+        {...(facts.kind === 'extension' ? {} : { tool: 'read' as const })}
         target={<ToolTarget facts={facts} />}
         meta={meta}
         metaTone={event.status === 'failed' ? 'danger' : 'dim'}
@@ -138,11 +139,11 @@ function CommandOutput({ event }: { event: CommandEvent }) {
 /**
  * A command the agent ran. In a run it is one line, the command's first line and how it ended, as the
  * agent's own terminal shows it; opened it is the whole command and the last lines of its output (all
- * of it on request). On its own it is a card with the command in its head. One that failed starts
- * open: that is the one worth reading.
+ * of it on request). On its own it is a card with the command in its head, open on its output once it
+ * has ended. One that failed starts open anywhere: that is the one worth reading.
  */
 export function CommandStep({ event, alone = false, waiting = false }: CommandStepProps) {
-  const [open, toggle] = useOpen(event.status === 'failed')
+  const [open, toggle] = useOpen(event.status === 'failed' || (alone && event.status === 'completed'))
   const typed = event.command.split('\n')
   const first = typed[0] ?? ''
   const running = event.status === 'running'
@@ -174,6 +175,7 @@ export function CommandStep({ event, alone = false, waiting = false }: CommandSt
       <StepRow
         status={event.status}
         verb="Run"
+        tool="run"
         target={<code className="mx-code-chip">{short}</code>}
         meta={meta}
         metaTone={metaTone}
@@ -283,7 +285,7 @@ export function EditStep({ event, root, onOpen, startOpen = false, alone = false
             {target}
           </button>
           {waiting ? <span className="mx-step-meta is-warn">waiting for you ↓</span> : <span className={`mx-step-meta is-${metaTone}`}><EditMeta event={event} /></span>}
-          {openFile !== null && <IconButton label="Open in side panel" onClick={openFile}><ArrowUpRight className="size-3.5" aria-hidden="true" /></IconButton>}
+          {openFile !== null && <IconButton label="Open in side panel" onClick={openFile}><Icon name="openSide" size={15} /></IconButton>}
         </CardHead>
         {open && <div className="mx-step-cardbody"><EditBody event={event} file={file} sidePanel={null} /></div>}
       </Card>
@@ -293,7 +295,7 @@ export function EditStep({ event, root, onOpen, startOpen = false, alone = false
   const hasDiff = event.diff.status === 'available' && !event.diff.truncated && event.status !== 'running'
   return (
     <div role="group" aria-label={`${verb} ${name}`} className="mx-step">
-      <StepRow status={event.status} verb={verb} target={target} meta={<EditMeta event={event} />} metaTone={metaTone} open={open} onToggle={toggle} waiting={waiting} />
+      <StepRow status={event.status} verb={verb} tool="edit" target={target} meta={<EditMeta event={event} />} metaTone={metaTone} open={open} onToggle={toggle} waiting={waiting} />
       {open && (
         <div className="mx-step-body">
           {hasDiff ? (

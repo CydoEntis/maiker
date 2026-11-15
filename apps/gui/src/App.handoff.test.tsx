@@ -161,14 +161,21 @@ describe('desktop terminal multiplexer', () => {
     expect(screen.getByRole('region', { name: /^Terminal 1: ~/ })).toBeInTheDocument()
   })
 
+  it('opens on the new agent chat page when nothing runs, with nothing to close it to', async () => {
+    renderDesktopApp()
+    const page = await screen.findByRole('region', { name: 'New agent chat' })
+    expect(within(page).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
+  })
+
   it('opens the new agent chat page with Ctrl+T, and Escape goes back to the panes', async () => {
     const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
     renderDesktopApp()
-    await screen.findByRole('heading', { name: 'No sessions running' })
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
 
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
     const page = await screen.findByRole('region', { name: 'New agent chat' })
-    // The model button sits in the tray under the box, as in a chat; it opens on the start folder, ready to type.
+    // The model button sits in the box's bottom row, as in a chat; it opens on the start folder, ready to type.
     expect(within(page).getByRole('button', { name: /^Agent, model and reasoning/ })).toBeInTheDocument()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
 

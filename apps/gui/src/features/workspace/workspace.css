@@ -886,3 +886,4 @@
 .mx-hotkey-row .mx-hotkey-actions .mx-text-button { opacity: 0; transition: opacity var(--t-fast) var(--ease); }
 .mx-hotkey-row:hover .mx-hotkey-actions .mx-text-button, .mx-hotkey-row:focus-within .mx-hotkey-actions .mx-text-button { opacity: 1; }
 .mx-mach-hostlist { display: flex; flex-direction: column; gap: 4px; }
+.mx-resume-pick { display: flex; align-items: center; gap: 8px; }

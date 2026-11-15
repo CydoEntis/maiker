@@ -187,12 +187,13 @@ describe('how the chat feels while it waits', () => {
     expect(box).toHaveFocus()
   })
 
-  it('says under the message box how the agent is set up, from its own file', async () => {
+  it('says in the message box how the agent is set up, from its own file', async () => {
     const { daemon } = open()
     daemon.meta = { mode: 'auto', model: 'claude-sonnet-5-5' }
     await settle(IDLE_POLL_MS)
 
-    expect(screen.getByText('Auto')).toBeInTheDocument()
+    // The mode is a shield; its name is in the button's name and tooltip.
+    expect(screen.getByRole('button', { name: /^Permission mode: Auto/ })).toHaveAttribute('title', expect.stringContaining('Auto'))
     expect(screen.getByText('Claude Sonnet 5.5')).toBeInTheDocument()
   })
 
@@ -200,13 +201,13 @@ describe('how the chat feels while it waits', () => {
     const { daemon } = open()
     await settle()
     // This chat can type into its terminal, so the mode is a button (it cycles the mode); it says when the agent has not reported one.
-    expect(screen.getByRole('button', { name: /not reported yet/ })).toHaveTextContent('Permissions')
+    expect(screen.getByRole('button', { name: /not reported yet/ })).toHaveAttribute('title', expect.stringContaining('Permissions'))
 
     daemon.meta = { mode: 'bypassPermissions', model: null }
     await settle(IDLE_POLL_MS)
 
-    const chip = screen.getByText('Bypass permissions')
-    expect(chip.className).toContain('danger')
+    const shield = screen.getByRole('button', { name: /^Permission mode: Bypass permissions/ })
+    expect(shield.className).toContain('danger')
   })
 
   it('drops a message the history never showed, rather than leaving it standing as sent', async () => {

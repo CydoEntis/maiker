@@ -27,6 +27,7 @@ import { guardLocal } from '@/lib/localOnly'
 import type { RewindPlace } from '@/features/chat/editFromHere'
 import { fileSearchOf } from '@/features/chat/fileMention'
 import { WorkBoard } from '@/features/work/components/WorkBoard'
+import { ShowSidebarButton } from './ShowSidebarButton'
 
 /** Whether a session can show a chat at all: an agent the app reads. A shell or another program has none, so it gets no switch. */
 function hasChat(availability: ReturnType<typeof chatAvailability>): boolean {
@@ -98,13 +99,15 @@ export function WorkspacePane({ shown, pane, kept }: {
   const rewind: RewindPlace | undefined = rewindRefusal !== null ? { refusal: rewindRefusal } : rewindTerm !== null ? { term: rewindTerm } : undefined
   // A shell is a terminal already: its menu keeps Clear and Copy folder path in place of New terminal.
   const shell = isShell(session)
+  // The header's branch crumb switches the branch of a session on this computer; elsewhere it only says it.
+  const branchMenu = chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? undefined : { folder: session.cwd, onNewWorktree: () => { void moveToWorktree(session) }, ...(moveRefusal(session) === null ? {} : { newWorktreeBlocked: moveRefusal(session) ?? '' }) }
   // The panel has something for this pane: its repository. A pane of another machine keeps the button, which says why not.
   const hasPanel = session.machine !== LOCAL_MACHINE || repoPaneOf(session) !== null
   return (
     <PaneCard
       pane={pane}
       index={shown.panes.findIndex((candidate) => candidate.id === pane.id)}
-      {...(sidebarMode === 'hidden' && !focusMode && shown.panes[0]?.id === pane.id ? { onShowSidebar: toggleSidebar, showSidebarTip: tip('Show sidebar', 'toggle-sidebar') } : {})}
+      leading={sidebarMode === 'hidden' && !focusMode && shown.panes[0]?.id === pane.id ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
       session={session}
       paneCount={shown.panes.length}
       broadcast={shown.broadcast === true}
@@ -120,7 +123,6 @@ export function WorkspacePane({ shown, pane, kept }: {
         <ChatPane
           availability={chat.availability}
           hasTerminal={!chatOnly}
-          worktree={chatOnly ? undefined : session.worktree}
           root={session.repoRoot ?? session.cwd}
           onOpenDiff={openDiff}
           onOpenFile={(path, line) => { openPath(session, path, line ?? undefined) }}
@@ -133,16 +135,12 @@ export function WorkspacePane({ shown, pane, kept }: {
           effort={session.agentEffort ?? null}
           rewind={rewind}
           {...(fileSearch === null ? {} : { fileSearch })}
-          {...(chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? {} : { branchMenu: { folder: session.cwd, onNewWorktree: () => { void moveToWorktree(session) }, ...(moveRefusal(session) === null ? {} : { newWorktreeBlocked: moveRefusal(session) ?? '' }) } })}
           paneStatus={session.status}
           usage={{ context: session.usage.context, limits: session.limits }}
           process={session.process}
           online={online}
-          folder={folderNameOf(session)}
-          branch={session.branch}
           subagent={subagent ?? null}
           onBackToMain={() => { setOpenSubagent(null) }}
-          onOpenFiles={() => { togglePanel(pane.id, session.id, 'files') }}
           windowActions={{ openSettings: setSettingsSection, openPanel: (view) => { openPanel(pane.id, session.id, view) }, openRecent: () => { setRecentOpen(true) }, renameSession: (name) => { saveName(session.id, name) } }}
           onBackToTerminal={showTerminal}
           onStartAgent={(agent) => {
@@ -192,6 +190,8 @@ export function WorkspacePane({ shown, pane, kept }: {
       onClear={() => { void sendTo(session, CLEAR_SCREEN).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not clear the screen')) }) }}
       onCopyPath={() => { copyPathOf(session.id) }}
       onRename={() => { setRenameId(session.id) }}
+      onSaveName={(name) => { saveName(session.id, name) }}
+      branchMenu={branchMenu}
       onHandoff={(agent) => { void handoffSession(session, agent) }}
       onRestart={restartPane}
       onAnswerHelpers={(choice) => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not answer the helper request')) }) }}

@@ -33,8 +33,8 @@ describe('the running subagents bar', () => {
     const onOpen = vi.fn()
     render(<RunningSubagents subagents={[child('a', 'Find call sites', 'Working', 'Grep refundable'), child('b', 'Check limits', 'AwaitingApproval')]} onOpen={onOpen} />)
 
-    await user.click(screen.getByRole('button', { name: 'Show' }))
-    expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-expanded', 'true')
+    await user.click(screen.getByRole('button', { name: 'Show the subagents' }))
+    expect(screen.getByRole('button', { name: 'Hide the subagents' })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByText('Waiting for an answer in the terminal')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /Find call sites/ }))
     expect(screen.getByText('Asked to')).toBeInTheDocument()

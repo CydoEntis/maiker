@@ -10,13 +10,14 @@ import { RestoreBanner } from './RestoreBanner'
 import { chatFindOf } from '@/features/chat/chatSearch'
 import { chooseProjectFolder } from '@/api/folderPicker'
 import { useCloneRepo } from './useCloneRepo'
-import { machineProjects } from '../model/newSession'
+import { busyBranchesOf, machineProjects } from '../model/newSession'
 import { NewChatPage } from './NewChatPage'
 import { useRemoteFolderPick } from './useRemoteFolderPick'
 import { EmptyState } from './states'
 import { ServiceStatus, UpdateReadyBanner } from './ServiceStatus'
 import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
 import { displayName } from '../model/session'
+import { rowTitle } from '../model/sidebar'
 import { resolveStartFolder } from '../model/startFolder'
 import { WorkspacePane } from './WorkspacePane'
 import { TicketsOverlay, TICKETS_EXIT_MS } from '@/features/tickets/TicketsOverlay'
@@ -24,12 +25,17 @@ import { usePresence } from '@/lib/usePresence'
 import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
 import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
+import { useTipWithKeys } from '@/features/shortcuts/platform'
+import { ShowSidebarButton } from './ShowSidebarButton'
 
 /** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow, terminalShown, setDockFocused, sessionMap } = useWorkspace()
+  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow, terminalShown, setDockFocused, sessionMap, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const tip = useTipWithKeys()
   // The version whose Update ready banner Later put away; the sidebar's chip still offers the restart.
   const [updateLater, setUpdateLater] = useState<string | null>(null)
+  // With no chat at all, the window is the new chat page: there is nothing else to show (layout 2h).
+  const noChats = sessions.length === 0 && online && sessionsQuery.isSuccess
   const reduced = useReducedMotion()
   const tickets = usePresence(ticketsOpen, TICKETS_EXIT_MS, reduced)
   const terminal = usePresence(terminalShown, TERMINAL_DOCK_EXIT_MS, reduced)
@@ -49,7 +55,7 @@ export function WorkspaceMain() {
               {remotePick.dialog}
               <div className="mx-termwrap" data-dock={dock ?? undefined} data-leaving={terminal.leaving ? 'true' : undefined}>
               <main className="mx-main" aria-label="Terminals" onPointerDownCapture={() => { setDockFocused(false) }}>
-                {newChatOpen && (
+                {(newChatOpen || noChats) && (
                   <NewChatPage
                     key={`${String(newChatMachine)}:${newChatSeed?.folder ?? ''}`}
                     seed={newChatSeed}
@@ -57,15 +63,19 @@ export function WorkspaceMain() {
                     machines={sidebarMachineHeads.filter((head) => head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok').map((head) => ({ machine: head.machine, label: head.label, local: head.machine === LOCAL_MACHINE }))}
                     onOtherMachine={setNewChatMachine}
                     projects={machineProjects(sessions, newChatMachine, focusedSession, newChatStartFolder)}
+                    busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}
+                    viewDefaults={preferences.chatViewDefault}
                     defaultAgent={preferences.defaultAgent}
                     bypassAllowed={preferences.yoloClaude}
                     codexYolo={preferences.yoloCodex}
+                    fullAccess={preferences.fullAccessNewChats}
+                    leading={sidebarMode === 'hidden' && !focusMode ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
                     browse={newChatBrowse}
                     clone={cloneRepo.open}
                     onStart={startNewChat}
                     onWarm={warmNewChat}
                     onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}
-                    onCancel={() => { setNewChatOpen(false); setNewChatSeed(null) }}
+                    onCancel={noChats ? undefined : () => { setNewChatOpen(false); setNewChatSeed(null) }}
                   />
                 )}
                 {findOpen && (

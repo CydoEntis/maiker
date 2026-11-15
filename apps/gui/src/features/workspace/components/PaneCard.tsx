@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { MAX_PANES, type PaneSlot, type SplitDirection } from '../model/layout'
-import { STATUS_WORD, type SessionView } from '../model/session'
+import { MAX_SESSION_NAME_LENGTH, STATUS_WORD, type SessionView } from '../model/session'
 import { headerFit } from '../model/paneHeader'
-import { keepsRunningUnseen, rowTitle } from '../model/sidebar'
+import { keepsRunningUnseen, projectColor, projectOf, rowTitle } from '../model/sidebar'
+import { InlineName } from './InlineName'
+import { BranchMenu, type BranchMenuSpec } from '@/features/chat/components/BranchMenu'
 import { AppIcon, Icon, StatusBadge } from './glyphs'
 import { beginPointerDrag } from './dragSession'
 import { PaneViewSwitch, type WorkCount } from './PaneViewSwitch'
@@ -35,7 +37,7 @@ export type PaneCardProps = {
   onViewChange?: (view: PaneView) => void
   /** The chat that covers the terminal while `view` is `chat`. */
   chat?: ReactNode
-  /** Present when the session reported workflow runs: the switch's Work option, and the board it shows while open. */
+  /** Present when the session reported workflow runs: the board it shows while open (opened from the window's Work button). */
   work?: WorkCount & { open: boolean; board: ReactNode; onOpen: () => void }
   /** What floats over the top of the body in either view: the agent's running subagents. */
   overlay?: ReactNode
@@ -58,16 +60,18 @@ export type PaneCardProps = {
   onClear: () => void
   onCopyPath: () => void
   onRename: () => void
+  /** Saves a name typed into the title, which a double-click on it opens; without it the title is only shown. */
+  onSaveName?: (name: string) => void
+  /** Before the agent's tile: a control the window puts there (Show sidebar, while the sidebar is hidden). */
+  leading?: ReactNode
+  /** Where the branch crumb can switch the chat's branch (a session on this computer); without it the branch is only said. */
+  branchMenu?: BranchMenuSpec | undefined
   /** Starts another agent beside this one's work, with a brief of it. */
   onHandoff: (agent: ChatAgent) => void
   /** Starts a new shell in an ended pane's folder, in its place. */
   onRestart: (paneId: string) => void
   /** Answers the session's request to start helpers; absent where it cannot be answered. */
   onAnswerHelpers?: (choice: 'allow' | 'always' | 'no') => void
-  /** Set while the sidebar is hidden, on the first pane only: its header starts with Show sidebar (layout 2h). */
-  onShowSidebar?: () => void
-  /** That button's tooltip, with the keys that do the same. */
-  showSidebarTip?: string
 }
 
 /** The pane's width as it is laid out, so its header can give up controls as it narrows. */
@@ -94,6 +98,7 @@ export function PaneCard(props: PaneCardProps) {
   const shortcutText = useShortcutText()
   const [box, width] = useWidth()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  const [naming, setNaming] = useState(false)
   const multi = paneCount > 1
   const full = paneCount >= MAX_PANES
   const ended = session.ended
@@ -152,30 +157,31 @@ export function PaneCard(props: PaneCardProps) {
           // Buttons in the header keep their own clicks; only the bar itself starts a drag.
           if (multi && !(event.target instanceof Element && event.target.closest('button, input'))) beginPointerDrag(event, { kind: 'pane', id: pane.id, label: title })
         }}
-        onDoubleClick={() => { props.onToggleMaximize(pane.id) }}
       >
-        {props.onShowSidebar !== undefined && <button type="button" className="mx-pane-show-sidebar" aria-label="Show sidebar" title={props.showSidebarTip ?? 'Show sidebar'} onClick={props.onShowSidebar}><Icon name="panelLeft" size={14} /></button>}
+        {props.leading}
         <span className="mx-pane-icon" role="img" aria-label={`${agentName(session.process)} · ${STATUS_WORD[session.status]}`}>
           <AppIcon process={session.process} size={20} flat dimmed={session.status === 'unknown' || session.status === 'idle'} />
           <StatusBadge status={session.status} />
         </span>
-        <span className="mx-pane-title" title={session.branch ? `${session.cwd} · ${session.branch}` : session.cwd}>
-          <span className="mx-pane-name">{title}</span>
+        <span className="mx-pane-title">
+          {naming && props.onSaveName !== undefined ? (
+            <InlineName value={session.name ?? ''} placeholder={title} label="Session name" maxLength={MAX_SESSION_NAME_LENGTH} onCommit={(name) => { setNaming(false); props.onSaveName?.(name) }} onCancel={() => { setNaming(false) }} />
+          ) : (
+            <span className="mx-pane-name" title={props.onSaveName === undefined ? undefined : 'Double-click to rename'} onDoubleClick={props.onSaveName === undefined ? undefined : () => { setNaming(true) }}>{title}</span>
+          )}
+          <PaneCrumbs session={session} branchMenu={props.branchMenu} />
           {session.pr && (
             <span className={`mx-pane-pr is-${pullRequestTone(session.pr)}`} title={`${session.pr.title} (${session.pr.url})`}>{pullRequestHeadline(session.pr)}</span>
           )}
         </span>
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
         <span className="mx-pane-controls">
-          {(props.onViewChange !== undefined || work !== undefined) && fit.switcher && (
-            <PaneViewSwitch
-              views={[...(props.onViewChange === undefined ? ['chat' as const] : ['chat' as const, 'terminal' as const]), ...(work === undefined ? [] : ['work' as const])]}
-              view={shown}
-              work={work ?? null}
-              onChange={(next) => { if (next === 'work') work?.onOpen(); else props.onViewChange?.(next) }}
-            />
+          {props.onViewChange !== undefined && fit.switcher && (
+            // While the Work board shows, neither view is underlined; choosing one leaves the board.
+            <PaneViewSwitch views={['chat', 'terminal']} view={shown} work={null} onChange={(next) => { if (next !== 'work') props.onViewChange?.(next) }} />
           )}
           <button type="button" className="mx-pane-control mx-pane-more" aria-label="More pane actions" title="More pane actions" aria-haspopup="menu" onMouseDown={stop} onClick={(event) => { setMenuAt(menuPoint(event, true)) }}>⋯</button>
+          {/* Kept on the only pane too: with the sidebar hidden, it is the one close in reach. */}
           <button type="button" className="mx-pane-control is-close" aria-label={closeLabel} title={closeLabel} onMouseDown={stop} onClick={() => { props.onClose(pane.id) }}><Icon name="close" /></button>
         </span>
       </div>
@@ -218,5 +224,36 @@ export function PaneCard(props: PaneCardProps) {
     {/* Beside the pane, not in it: a pane has `contain: paint`, which would place the menu's fixed anchor from the pane's corner. */}
     {menuAt && <MenuPopup key={`${String(menuAt.x)},${String(menuAt.y)}`} title={title} untitled at={menuAt} items={menuItems} portalContainer={props.portalContainer} onClose={() => { setMenuAt(null) }} />}
     </>
+  )
+}
+
+/**
+ * Where the chat works, after its name (layout 2h): its project, set when the chat started and so locked, then its branch,
+ * which a session on this computer can switch from here. The pane's width decides how much shows (`pane.css`).
+ */
+function PaneCrumbs({ session, branchMenu }: { session: SessionView; branchMenu: BranchMenuSpec | undefined }) {
+  const project = projectOf(session)
+  return (
+    <nav className="mx-crumbs" aria-label="Chat location">
+      <span className="mx-crumb-sep is-project" aria-hidden="true">/</span>
+      <span className="mx-crumb-project" title="Project · set when the chat started">
+        <span className="mx-crumb-square" style={{ background: projectColor(project) }} aria-hidden="true" />
+        <span className="mx-crumb-name">{project}</span>
+        <Icon name="lock" size={10} />
+      </span>
+      {session.branch !== null && (
+        <>
+          <span className="mx-crumb-sep" aria-hidden="true">/</span>
+          {branchMenu !== undefined ? (
+            <BranchMenu spec={branchMenu} branch={session.branch} worktree={session.worktree} project={project} />
+          ) : (
+            <span className="mx-crumb is-static" title={session.worktree ? `Worktree: its own copy of the project, on branch ${session.branch}` : `Branch ${session.branch}`}>
+              <span className={`mx-crumb-branch-icon${session.worktree ? ' is-worktree' : ''}`}><Icon name={session.worktree ? 'worktree' : 'branch'} size={12} /></span>
+              <span className={`mx-crumb-branch${session.worktree ? ' is-worktree' : ''}`}>{session.branch}</span>
+            </span>
+          )}
+        </>
+      )}
+    </nav>
   )
 }

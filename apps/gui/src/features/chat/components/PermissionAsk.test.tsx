@@ -123,27 +123,31 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
   })
 
-  it('shows each of several questions with its choices, and answers them all at once: a key each in order, then the one that submits', async () => {
+  it('shows several questions one at a time, and answers them all at once: a key each in order, then the one that submits', async () => {
     const questions = [
       { question: 'Which database?', choices: ['SQLite', 'Postgres', 'MySQL'] },
       { question: 'Which language?', choices: ['Rust', 'Go'] },
     ]
     const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which database? 1 SQLite · 2 Postgres · 3 MySQL / Which language? 1 Rust · 2 Go', answerable: false, choices: [], questions })
 
-    // Each question is its own group; the line that ran them together is gone, and so is "Answer in the terminal".
+    // One question shows at a time, with a tab for each; the line that ran them together is gone, and so is "Answer in the terminal".
+    expect(screen.getAllByRole('tab')).toHaveLength(2)
     expect(screen.getByRole('group', { name: 'Which database?' })).toBeInTheDocument()
-    expect(screen.getByRole('group', { name: 'Which language?' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Which language?' })).not.toBeInTheDocument()
     expect(screen.queryByText(/1 SQLite · 2 Postgres/)).not.toBeInTheDocument()
     expect(screen.queryByText('Answer in the terminal.')).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
 
     // Nothing is typed until every question has an answer, so one can be changed first.
-    const send = screen.getByRole('button', { name: 'Send answers' })
-    expect(send).toBeDisabled()
     await user.click(screen.getByRole('radio', { name: 'SQLite' }))
     await user.click(screen.getByRole('radio', { name: 'Postgres' }))
-    expect(send).toBeDisabled()
     expect(screen.getByText('1 more to answer')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    const send = screen.getByRole('button', { name: 'Send answers' })
+    expect(send).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('radio', { name: 'Postgres' })).toBeChecked()
+    await user.click(screen.getByRole('tab', { name: /Which language\?/ }))
     await user.click(screen.getByRole('radio', { name: 'Go' }))
     expect(typeInto).not.toHaveBeenCalled()
 
@@ -160,9 +164,10 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     ]
     const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which size? … / Which toppings? …', answerable: false, choices: [], questions: [], form })
 
+    await user.click(screen.getByRole('radio', { name: 'Large' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(screen.getByRole('group', { name: 'Which toppings? Pick any' })).toBeInTheDocument()
     const send = screen.getByRole('button', { name: 'Send answers' })
-    await user.click(screen.getByRole('radio', { name: 'Large' }))
     await user.click(screen.getByRole('checkbox', { name: 'Fruit' }))
     await user.click(screen.getByRole('checkbox', { name: 'Nuts' }))
     await user.click(screen.getByRole('checkbox', { name: 'Cream' }))

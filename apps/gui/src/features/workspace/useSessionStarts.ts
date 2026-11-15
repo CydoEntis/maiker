@@ -214,14 +214,15 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   }, [online, startWords])
 
   // `background` leaves the new session unopened, listed in the sidebar, and the window as it was.
-  const startAgentSession = useCallback((folder: () => Promise<string>, agent: ChatAgent, view: PaneView, firstMessage = '', flags = '', placed: { afterPlace?: (id: string) => void; alongside?: boolean; background?: boolean } = {}): Promise<boolean> => {
+  const startAgentSession = useCallback((folder: () => Promise<string>, agent: ChatAgent, view: PaneView, firstMessage = '', flags = '', placed: { afterPlace?: (id: string) => void; alongside?: boolean; background?: boolean; /** A name typed for it, in place of the first message's words. */ name?: string } = {}): Promise<boolean> => {
     return runStart(folder, (id) => {
       // A first message waits under the session and goes out once the agent takes input; its words name the session.
       if (firstMessage !== '') {
         holdFirstMessage(id, firstMessage)
         entrustFirstMessage(id, firstMessage, sendWhenAgentReady)
-        void renameConversationOnDaemon({ id }, nameFromMessage(firstMessage)).catch((error: unknown) => { console.warn('Could not name the new session', error) })
       }
+      const named = placed.name ?? (firstMessage === '' ? '' : nameFromMessage(firstMessage))
+      if (named !== '') void renameConversationOnDaemon({ id }, named).catch((error: unknown) => { console.warn('Could not name the new session', error) })
       // The daemon learns which agent runs from the agent's own hook, a moment after it starts; until then the
       // session is known to be this agent, so it never shows as a shell.
       setExpectedAgents((current) => ({ ...current, [id]: agent }))
@@ -229,7 +230,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
       if (placed.background) setStartedFrom((current) => (current === null ? null : new Set([...current, id])))
       else movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
-      if (view === 'chat') paneViews.choose(id, 'chat')
+      // The view asked for wins over the agent's default (the new chat page's Open as).
+      paneViews.choose(id, view)
       // In the same update as the new session opens, so the window never shows the page between the two.
       placed.afterPlace?.(id)
     }, launchAgent(agent, flags), placed.background ? 'background' : placed.alongside ? 'alongside' : 'alone')
@@ -311,7 +313,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     setExpectedAgents((current) => ({ ...current, [id]: request.agent }))
     window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
-    paneViews.choose(id, 'chat')
+    paneViews.choose(id, request.view ?? 'chat')
+    if (request.name !== undefined) void renameConversationOnDaemon({ id }, request.name).catch((error: unknown) => { console.warn('Could not name the new session', error) })
     await sendTerminalInput({ id, generation: 0 }, `${request.agent}${launchFlags(request.agent, everywhereModel(request.agent, request.model), request.reasoning, request.mode)}\r`)
     setNewChatOpen(false)
   }, [startOnMachine, setExpectedAgents, paneViews, setNewChatOpen])
@@ -331,7 +334,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the
     // empty window (or the last chat) for a moment between the two.
-    await startAgentSession(() => Promise.resolve(folder), request.agent, 'chat', request.message, flags, { alongside: true, background, afterPlace: (id) => {
+    await startAgentSession(() => Promise.resolve(folder), request.agent, request.view ?? 'chat', request.message, flags, { alongside: true, background, ...(request.name === undefined ? {} : { name: request.name }), afterPlace: (id) => {
       // Codex has no file that says its mode, so what it was started in is what its chat shows: Full access under its Yolo setting.
       const codexMode = yolo.codex ? CODEX_FULL_MODE : request.mode === 'default' ? null : request.mode
       holdStartChoice(id, { model: request.model, reasoning: request.reasoning, mode: request.agent === 'claude' ? request.mode : request.agent === 'codex' ? codexMode : null })
