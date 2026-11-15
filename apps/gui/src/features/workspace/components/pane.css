@@ -67,9 +67,9 @@
 .mx-pane.is-terminal { background: var(--main); }
 /* Two or more panes are separate cards on the window's ground with a gap between them, not boxes inside one big card. */
 /* A pane with terminals pinned under it is a card too, so the two read as a pair. */
-.mx-pane.is-card, .mx-pane-cell:has(> .mx-terms) > .mx-pane { background: var(--main); border: 1px solid var(--line); }
-.mx-main:has(> .mx-pane-stack > .mx-panes.is-split:not(.is-kept)), .mx-main:has(> .mx-pane-stack > .mx-panes:not(.is-kept) .mx-terms.is-under) { background: none; border-color: transparent; box-shadow: none; overflow: visible; }
-.mx-panes.is-split, .mx-panes:has(.mx-terms.is-under) { padding: 0; }
+.mx-pane.is-card { background: var(--main); border: 1px solid var(--line); }
+.mx-main:has(> .mx-pane-stack > .mx-panes.is-split:not(.is-kept)) { background: none; border-color: transparent; box-shadow: none; overflow: visible; }
+.mx-panes.is-split { padding: 0; }
 
 /* The gap between two columns, or two panes of a column, is the handle: it lights while hovered or dragged. */
 .mx-split-handle { flex: none; position: relative; z-index: 6; touch-action: none; }
@@ -107,55 +107,71 @@
 ::view-transition-old(*):only-child { animation: mx-pane-leave .22s cubic-bezier(.4, 0, 1, 1) both; }
 ::view-transition-new(*):only-child { animation: mx-pane-enter .3s cubic-bezier(.2, .8, .2, 1) both; }
 
-/* An agent's own terminals: a tab of the side panel, or a drawer under its chat. */
-.mx-terms { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.mx-terms.is-panel { flex: 1; }
-/* Under the chat: a card of its own. Its height eases between folded and open; the terminal inside keeps the
-   open size throughout and is only uncovered, so its text is never fitted again on the way. */
-.mx-terms.is-under {
-  position: relative; flex: none; height: min(var(--terms-open), 60cqh); min-height: 42px; overflow: hidden;
-  border-radius: var(--r14); border: 1px solid rgba(var(--hl), calc(.11 * var(--hk)));
-  background: color-mix(in srgb, var(--main) 70%, transparent);
-  transition: height var(--panel-in);
-  animation: mx-rise var(--panel-in);
+/* The terminal dock (layout 2h): one card beside the chat for the focused session's own terminals. At the bottom and on
+   the right it shares the room with the chat; full, the chat steps aside. It slides in and out on the panel timing. */
+.mx-termwrap { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.mx-termwrap[data-dock="right"] { flex-direction: row; }
+.mx-termwrap[data-dock="full"]:not([data-leaving]) > .mx-main { display: none; }
+.mx-tdock {
+  position: relative; flex: none; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel);
+  container: tdock / inline-size;
 }
-.mx-terms.is-under.is-folded { height: 42px; transition: height var(--panel-out); }
-.mx-terms.is-under.is-resizing { transition: none; }
-@keyframes mx-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.mx-terms-body { flex: none; height: calc(min(var(--terms-open), 60cqh) - 42px); min-height: 0; display: flex; flex-direction: column; transition: opacity .2s; }
-.mx-terms.is-folded .mx-terms-body { opacity: 0; pointer-events: none; }
-.mx-terms-grip { position: absolute; top: 0; left: 40%; right: 40%; height: 8px; cursor: row-resize; z-index: 2; display: flex; justify-content: center; }
-.mx-terms-grip::after { content: ""; width: 36px; height: 3px; margin-top: 2px; border-radius: 3px; background: rgba(var(--hl), calc(.16 * var(--hk))); transition: background .15s; }
-.mx-terms-grip:hover::after, .mx-terms.is-resizing .mx-terms-grip::after { background: var(--accent); }
-.mx-terms-head { flex: none; height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 8px; min-width: 0; }
-.mx-terms.is-panel .mx-terms-head { height: 42px; border-bottom: 1px solid var(--pane-line); }
-.mx-terms-fold { flex: none; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--fg2); }
-.mx-terms-fold:not(:disabled):hover { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
-.mx-terms-rule { flex: none; width: 1px; height: 16px; margin: 0 2px; background: rgba(var(--hl), calc(.1 * var(--hk))); }
-.mx-terms-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.mx-terms-tab { flex: none; height: 26px; display: flex; align-items: center; border-radius: 999px; color: var(--muted); transition: background .15s, color .15s; }
-.mx-terms-tab:hover { color: var(--fg); }
-.mx-terms-tab.is-current { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
-.mx-terms-pick { height: 100%; display: flex; align-items: center; gap: 7px; padding: 0 4px 0 10px; font-size: 12px; color: inherit; white-space: nowrap; }
-.mx-terms-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
-.mx-terms-dot.is-ended { background: var(--dim); }
-.mx-terms-close { width: 20px; height: 20px; margin-right: 3px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--dim); }
-.mx-terms-add { width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--dim); }
-.mx-terms-tool { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 7px; color: var(--dim); }
-.mx-terms-pin { flex: none; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; font-size: 12px; color: var(--muted); }
-.mx-terms-close:not(:disabled):hover, .mx-terms-add:not(:disabled):hover, .mx-terms-tool:hover, .mx-terms-pin:hover { background: rgba(var(--hl), calc(.09 * var(--hk))); color: var(--fg); }
-.mx-terms-close:disabled, .mx-terms-add:disabled { opacity: .35; }
-/* The path gives its room up before a tab does. */
-.mx-terms-where { flex: 0 1000 auto; min-width: 0; font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The well is the terminal's own ground: the terminal paints that colour itself, so a tinted well would show as a frame around it. */
-.mx-terms-screen { flex: 1; min-height: 0; display: flex; margin: 0 6px 6px; padding: 10px 12px; border-radius: 10px; font-family: var(--mono); line-height: 1.6; background: var(--main); box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.07 * var(--hk))); cursor: text; }
-.mx-terms.is-panel .mx-terms-screen { margin: 8px; border-radius: 12px; }
-.mx-terms-screen > * { flex: 1; min-width: 0; min-height: 0; }
-.mx-terms-screen .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
-.mx-terms-screen .terminal-screen { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; padding: 0; }
-.mx-terms-screen .terminal-screen:focus-within { border-color: transparent; box-shadow: none; }
-.mx-terms-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; font-size: 12.5px; line-height: 1.5; color: var(--dim); text-align: center; }
-.mx-terms-empty strong { font-size: 13.5px; font-weight: 600; color: var(--fg2); }
-.mx-terms-start { margin-top: 8px; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
-.mx-terms-start:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 88%, #fff); }
-.mx-terms-start:disabled { opacity: .5; }
+.mx-tdock[data-dock="bottom"] { height: var(--tdock-h, clamp(120px, calc(100vh - 480px), 260px)); animation: mx-dock-from-bottom var(--panel-in); }
+.mx-tdock[data-dock="right"] { width: var(--tdock-w, min(440px, 45%)); animation: mx-panel-from-right var(--panel-in); }
+.mx-tdock[data-dock="full"] { flex: 1; animation: mx-dock-fade .2s ease-out; }
+.mx-tdock[data-leaving] { pointer-events: none; animation: mx-dock-to-bottom var(--panel-out) forwards; }
+.mx-tdock[data-dock="right"][data-leaving] { animation-name: mx-panel-to-right; }
+.mx-tdock.is-resizing { user-select: none; }
+@keyframes mx-dock-from-bottom { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes mx-dock-to-bottom { to { opacity: 0; transform: translateY(24px); } }
+@keyframes mx-panel-to-right { to { opacity: 0; transform: translateX(28px); } }
+@keyframes mx-dock-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.mx-tdock-grip { position: absolute; z-index: 2; }
+.mx-tdock-grip.is-height { top: 0; left: 0; right: 0; height: 5px; cursor: row-resize; }
+.mx-tdock-grip.is-width { top: 0; bottom: 0; left: 0; width: 6px; cursor: col-resize; }
+.mx-tdock-grip:hover, .mx-tdock.is-resizing .mx-tdock-grip { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+.mx-tdock-head { flex: none; height: 44px; display: flex; align-items: center; gap: 4px; padding: 0 6px 0 8px; min-width: 0; }
+.mx-tdock-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
+.mx-tdock-tab { position: relative; flex: none; height: 26px; display: flex; align-items: center; color: var(--muted); }
+.mx-tdock-tab:hover { color: var(--fg); }
+.mx-tdock-tab.is-on { color: var(--fg); background: var(--m-hover); box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-tdock-pick { height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 10px; font: 500 12px var(--mono); color: inherit; white-space: nowrap; }
+.mx-tdock-prompt { color: var(--accent-text); }
+/* Closing a tab ends its shells, so its × waits for the pointer instead of sitting on every tab. */
+.mx-tdock-tab-close { width: 0; height: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: 0; transition: opacity .12s ease; }
+.mx-tdock-tab:hover .mx-tdock-tab-close, .mx-tdock-tab-close:focus-visible { width: 18px; margin-right: 4px; opacity: 1; }
+.mx-tdock-tab-close:not(:disabled):hover { color: var(--fg); background: var(--m-hover); }
+.mx-tdock-tool { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); }
+.mx-tdock-tool.is-menu { width: auto; height: 28px; gap: 4px; padding: 0 6px; color: var(--muted); }
+.mx-tdock-tool:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
+.mx-tdock-tool:disabled { opacity: .35; }
+.mx-tdock-spacer { flex: 1; min-width: 8px; }
+.mx-tdock-path { min-width: 0; font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-tdock-rule { flex: none; width: 1px; height: 16px; margin: 0 4px; background: var(--line2); }
+.mx-tdock-inline { display: contents; }
+.mx-tdock-menu { display: none; }
+.mx-tdock .mx-tdock-docks { flex: none; height: 28px; display: flex; align-items: center; gap: 2px; padding: 2px; margin: 0 2px; background: var(--m-well); border: 1px solid var(--line); box-shadow: none; border-radius: var(--r-control); }
+.mx-tdock-docks .mx-tdock-dock { width: 26px; height: 22px; padding: 0; justify-content: center; }
+.mx-tdock-dock svg, .mx-tdock-menu-list svg { width: 14px; height: 14px; }
+.mx-tdock-menu-list { min-width: 200px; }
+/* A narrow dock drops its path first, then folds its split and dock buttons into one menu. */
+@container tdock (max-width: 600px) { .mx-tdock-path { display: none; } }
+@container tdock (max-width: 380px) { .mx-tdock-inline { display: none; } .mx-tdock-menu { display: block; } }
+
+.mx-tdock-body { flex: 1; min-height: 0; display: flex; gap: 6px; padding: 0 6px 6px; }
+.mx-tdock-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: 9px 12px; font-family: var(--mono); line-height: 1.6; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); cursor: text; transition: box-shadow .15s ease; }
+.mx-tdock-split.is-focus { box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-tdock-split > :first-child { flex: 1; min-width: 0; min-height: 0; }
+.mx-tdock-split .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
+.mx-tdock-split .terminal-screen { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; padding: 0; }
+.mx-tdock-split-close { position: absolute; top: 5px; right: 5px; z-index: 1; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
+.mx-tdock-split-close:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
+.mx-tdock-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; font-size: 12.5px; line-height: 1.5; color: var(--dim); text-align: center; }
+.mx-tdock-empty strong { font-size: 13.5px; font-weight: 600; color: var(--fg2); }
+.mx-tdock-start { margin-top: 8px; height: 30px; padding: 0 14px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
+.mx-tdock-start:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
+.mx-tdock-start:disabled { opacity: .5; }

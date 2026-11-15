@@ -241,7 +241,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   needs colour), spacing `--s1`..`--s9` (2, 4, 6, 8, 12, 16, 20, 24, 32px), the type scale (`--text-h1` 22px down to
   `--text-tag` 10.5px mono, `--text-reply` 14.5/1.65, `--text-code` 12.5/1.65), the corner radii (`--r-control`,
   `--r-panel`, `--r-badge`) and motion (`--t-fast` 120ms, `--t-base` 180ms, `--t-slow` 260ms, `--t-spin` 900ms, one
-  `--ease` of `cubic-bezier(.2,.8,.2,1)`; Reduce motion zeroes the three durations). A panel that opens from a side (the side panel, the sidebar's width and its narrow-window overlay, the terminals under the chat, Tickets and its ticket page) moves 28px and fades: in over `--panel-in` (0.28s, `cubic-bezier(.22,.9,.24,1)`), out over `--panel-out` (0.22s, `cubic-bezier(.4,0,.7,.2)`; the ticket page 0.19s), and stays on screen, unclickable, until it has gone (`usePresence`); with motion reduced it comes and goes at once (the 2h handoff, §1). The usage meters read `--m-ok`,
+  `--ease` of `cubic-bezier(.2,.8,.2,1)`; Reduce motion zeroes the three durations). A panel that opens from a side (the side panel, the sidebar's width and its narrow-window overlay, the terminal dock, Tickets and its ticket page) moves 28px and fades: in over `--panel-in` (0.28s, `cubic-bezier(.22,.9,.24,1)`), out over `--panel-out` (0.22s, `cubic-bezier(.4,0,.7,.2)`; the ticket page 0.19s), and stays on screen, unclickable, until it has gone (`usePresence`); with motion reduced it comes and goes at once (the 2h handoff, §1). The usage meters read `--m-ok`,
   `--m-mid`, `--m-or` and `--m-hi`, which every theme sets. `--card`, `--done` and `--sh-pop` are set in `index.css`
   and `workspace.css`.
 - **Primitives (`apps/gui/src/components/ui/`).** The chat handoff's shared pieces, each on the tokens above and named
@@ -280,7 +280,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   drag area. At the left the **Maitty menu**: the 16px logo and "m**AI**tty" (13px 600, the AI in `--accent-text`), a
   button that opens New chat, New shell, Open a folder…, Search, Recent sessions, Add a remote machine… and Settings. At
   the right four 28px toggles, `--fg` while on: **Sidebar** (docked, or the overlay of a narrow window), **Terminal**
-  (shows or hides the focused session's terminals, adding the first when it has none), **Changes and files** (the
+  (shows or hides the terminal dock with the focused session's terminals, adding the first when it has none; `toggleTerminal`), **Changes and files** (the
   side panel) and **Tickets** (the Tickets view over the chat area, UI › *Tickets view*), then the platform's window
   buttons (38px tall captions on Windows).
   There is no activity bar, no middle column and no tab bar: the window is the sidebar and the workspace.
@@ -639,18 +639,24 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   in the chat box into the agent's prompt (one paste, no Enter; `model/draftCarry.ts`), under the message box's rule: only while
   the agent is idle or done, and not when files are attached. Text typed in the terminal's prompt does not come back to the box. **An agent opens as its chat**; a shell opens as a
   terminal, and stays one when an agent is typed into it (the view tabs still show its chat): only New chat opens a chat.
-  Every session on this computer, agent or shell, has terminals of its own in its folder
-  (`components/AgentTerminals.tsx`): a pill tab each with a status dot, **+** for another, × to end one. The first
-  opens by itself the first time they are shown; closing the last leaves a note with **New terminal**.
-  They are tabs of the agent, not rows of the sidebar; which shell is whose is the window's own memory
-  (`data/agentTerminals.ts`), so the terminal app lists them as sessions, and one whose agent is gone is a row again.
-  They show in the side panel's Terminal tab, or pinned under the agent's chat (Settings › Terminal › Panes ›
-  Terminals open in, the layout buttons (the drawer icon pins them under, the side-panel icon moves them back), or
-  the pane menu): a card of its own 8px under the pane, with a centred handle to size it (120 to 640px, at most
-  60% of the two together; `model/terminalDrawer.ts`), folding to its 42px header (the **Terminals** button or ×),
-  and starting folded in a window under 760px tall. The card's height eases over .28s; the terminal inside stays
-  mounted at its open size and is only uncovered, so its text is never fitted again on the way. A shell's terminals
-  stay in the side panel: a shell is never given a card under it.
+  Every session on this computer, agent or shell, has terminals of its own in its folder, shown in the **terminal
+  dock** (`components/TerminalDock.tsx`, layout 2h): one card beside the chat, for the focused session, opened and
+  closed by the title bar's Terminal button, the pane menu's New terminal or ⌃\` (Ctrl+Shift+\` on Windows and Linux,
+  where a plain Ctrl key is the shell's), all through one `toggleTerminal`. Whether it is open is the window's, so
+  switching chats keeps it open on that chat's terminals. It docks at the **bottom** (`clamp(120px, 100vh − 480px,
+  260px)` tall), on the **right** (`min(440px, 45%)` wide) or **full** (the chat steps aside), picked by the three
+  icons in its bar or Settings › Terminal › Panes › Terminals open in; a dragged edge keeps its own size
+  (`model/terminalDock.ts`, at most 60% of the room) and a double-click puts the design's back. It slides in from its
+  side on `--panel-in` and out on `--panel-out`. Its 44px bar: mono tabs "shell", "shell 2" with an accent `>_`
+  (× on hover ends the tab's shells), **+** for another tab, the folder in mono, Split right, Split down, the dock
+  choice, then hide and close; under 600px wide the folder goes, and under 380px the split and dock buttons fold into
+  one **Split and dock** menu. A tab splits into up to four shells in columns and rows (`model/terminalTabs.ts`),
+  each a shell of its own with a focus ring and its own ×; the keys go to the dock's focused shell from a click in it
+  until a pane is clicked. A session with no terminal gets one when the dock opens for it, once; closing the last
+  leaves a note with **New terminal**. The terminals are tabs of the session, not rows of the sidebar; which shell
+  is whose, and how they are split, is the window's own memory (`data/agentTerminals.ts`, `data/terminalTabs.ts`),
+  so the terminal app lists them as sessions, and one whose agent is gone is a row again. Closing the dock only
+  hides them.
   Settings › Chat › Chat view picks the view each of Claude and
   Codex opens in (Chat by default). A shell, an unsupported agent or a session on another machine shows the chat
   card's empty state, "Chat view is for agent sessions", with the reason and the ways to start one.
@@ -769,9 +775,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   **Changes** is two columns: the branch, the changed files (a letter for added, modified or deleted, the name over
   its folder, the lines added and removed) and under them the commit message with Commit and Create PR; beside it
   the picked file's path, what happened to it, and its diff with both line numbers and without git's header lines.
-  Every session on this computer has the Terminal tab: with an agent's terminals pinned under the chat the tab says
-  so and offers to show them there. A chat session has no pane to ask about its repository, so Changes and
-  Files appear for it once it has a terminal.
+  A session's own terminals are in the terminal dock, not here. A chat session has no pane to ask about its
+  repository, so Changes and Files appear for it once it has a terminal.
   **Checks** lists what the repository's checks said about the agent's last turns: each check's command, its state in
   words (Running, Passed, Failed, Accepted as it is, Could not run, Needs your approval, …) and the first failing
   line, with **Run again**, **Accept the failure…** (an optional reason, up to 280 characters; **Undo accept** takes it

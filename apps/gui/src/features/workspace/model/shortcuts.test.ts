@@ -34,6 +34,7 @@ const TABLE: readonly [ShortcutAction, string, string][] = [
   ['find', '⌘F', 'Ctrl+Shift+F'],
   ['toggle-sidebar', '⌘B', 'Ctrl+Shift+B'],
   ['chat-toggle', '⌘⇧E', 'Ctrl+Shift+E'],
+  ['terminal', '⌃`', 'Ctrl+Shift+`'],
   ['usage', '⌘⇧U', 'Ctrl+Shift+U'],
   ['performance', '⌘⇧P', 'Ctrl+Shift+P'],
   ['focus-mode', '⌘.', 'Ctrl+.'],
@@ -110,6 +111,14 @@ describe('matching a key press', () => {
   it('leaves Ctrl alone on macOS and Cmd alone elsewhere', () => {
     expect(matchShortcut(pressOf('Ctrl+d', 'linux'), 'mac')).toBeNull()
     expect(matchShortcut({ key: 't', ctrlKey: false, metaKey: true, shiftKey: false, altKey: false }, 'linux')).toBeNull()
+  })
+
+  it('shows or hides the terminal with Shift+` as the layout types it, ~ on most keyboards', () => {
+    expect(matchShortcut({ key: '~', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }, 'windows')).toEqual({ action: 'terminal' })
+    expect(matchShortcut({ key: '`', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toEqual({ action: 'terminal' })
+    expect(matchShortcut({ key: '`', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false }, 'mac')).toEqual({ action: 'terminal' })
+    // Plain Ctrl+` stays the shell's on Windows and Linux.
+    expect(matchShortcut({ key: '`', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false }, 'linux')).toBeNull()
   })
 
   it('needs the modifiers exactly, so Ctrl+Shift+T is a new session and Ctrl+Alt+T (or Ctrl+Alt+Shift+T) a new shell', () => {

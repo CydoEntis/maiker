@@ -6,7 +6,6 @@ import { CommandPalette } from './CommandPalette'
 import { InspectPanel } from '@/features/inspect/InspectPanel'
 import { repoTree } from '@/features/inspect/api'
 import { usePreloadFiles } from '@/features/inspect/useRepoQuery'
-import { AgentTerminals } from './AgentTerminals'
 import { HoverTips } from './HoverTips'
 import { ShortcutOverlay } from '@/features/shortcuts/ShortcutOverlay'
 import { WelcomeDialog } from '@/features/welcome/WelcomeDialog'
@@ -35,28 +34,19 @@ const loadTopFolder = (term: number) => repoTree(term, null)
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, inspectOpen, focusMode, inspectTerm, ownsTerminals, focusedSession, projectOf, diffStat, inspectView, lookAt, turnDiff, setTurnDiff, setInspectView, setInspectOpen, flash, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, specialistsId, setSpecialistsId } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, inspectOpen, focusMode, inspectTerm, focusedSession, projectOf, diffStat, inspectView, lookAt, turnDiff, setTurnDiff, setInspectView, setInspectOpen, flash, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, specialistsId, setSpecialistsId } = useWorkspace()
   // An agent always has a Terminal tab. Pinned under the chat, its terminals are in the pane, and the tab offers to bring them back.
-  const hasTerminals = focusedSession !== undefined && ownsTerminals(focusedSession)
   // Files reads this computer's checkouts, so nothing is read ahead for a session of another machine.
   usePreloadFiles(focusedSession?.machineName === null ? inspectTerm : null, loadTopFolder)
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
       {mismatch === null && <ServiceBehindNotice sessionsQuery={sessionsQuery} restartWhenIdle={preferences.restartWhenIdle} />}
-      {inspectOpen && !focusMode && focusedSession && (inspectTerm !== null || hasTerminals) && (
+      {inspectOpen && !focusMode && focusedSession && inspectTerm !== null && (
               <InspectPanel
                 key={focusedSession.id}
                 term={inspectTerm}
-                terminals={!hasTerminals ? null : preferences.terminalDock === 'panel' || isShell(focusedSession)
-                  ? <AgentTerminals agent={focusedSession} dock="panel" focused={inspectView === 'terminal'} canPin={!isShell(focusedSession)} />
-                  : (
-                    <div className="mx-terms-empty">
-                      <strong>Terminals are pinned under the chat</strong>
-                      <span>They show at the bottom of this agent's pane.</span>
-                      <button type="button" className="mx-terms-start" onClick={() => { setPreferences((current) => ({ ...current, terminalDock: 'panel' })) }}>Show them here</button>
-                    </div>
-                  )}
+                terminals={null}
                 changedFiles={diffStat.data?.files ?? 0}
                 {...(focusedSession.branch ? { branch: focusedSession.branch } : {})}
                 view={inspectView}
@@ -69,7 +59,7 @@ export function WorkspaceDialogs() {
                 {...(isShell(focusedSession) ? {} : { comments: { agent: agentName(focusedSession.process), onSend: (message: string) => sendAgentMessage(focusedSession, message) } })}
                 {...(focusedSession.machineName === null && focusedSession.repoRoot !== null ? { changeActions: { folder: focusedSession.repoRoot, machine: focusedSession.machine, suggested: suggestedCommitMessage(focusedSession) } } : {})}
                 {...(turnDiff?.sessionId === focusedSession.id ? { turnScope: { turn: turnDiff.turn, onAllChanges: () => { setTurnDiff(null) } } } : {})}
-                {...(focusedSession.machineName !== null && inspectTerm !== null ? { changeActions: { folder: focusedSession.repoRoot ?? '', machine: focusedSession.machine, term: inspectTerm, suggested: suggestedCommitMessage(focusedSession) } } : {})}
+                {...(focusedSession.machineName !== null ? { changeActions: { folder: focusedSession.repoRoot ?? '', machine: focusedSession.machine, term: inspectTerm, suggested: suggestedCommitMessage(focusedSession) } } : {})}
                 onView={setInspectView}
                 onClose={() => { setInspectOpen(false); setTurnDiff(null) }}
                 onNotice={flash}

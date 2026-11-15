@@ -1,4 +1,4 @@
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { toast } from '@/lib/toast'
 import { openDaemonLog } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
@@ -23,11 +23,19 @@ import { TicketsOverlay, TICKETS_EXIT_MS } from '@/features/tickets/TicketsOverl
 import { usePresence } from '@/lib/usePresence'
 import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
+import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
 /** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen } = useWorkspace()
-  const tickets = usePresence(ticketsOpen, TICKETS_EXIT_MS, useReducedMotion())
+  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, terminalShown, setDockFocused, sessionMap } = useWorkspace()
+  const reduced = useReducedMotion()
+  const tickets = usePresence(ticketsOpen, TICKETS_EXIT_MS, reduced)
+  const terminal = usePresence(terminalShown, TERMINAL_DOCK_EXIT_MS, reduced)
+  // The dock shows the focused session's terminals; while it slides out it keeps the session it was showing.
+  const [dockAgentId, setDockAgentId] = useState(focusedSession?.id)
+  if (terminalShown && focusedSession !== undefined && focusedSession.id !== dockAgentId) setDockAgentId(focusedSession.id)
+  const dockAgent = dockAgentId === undefined ? undefined : sessionMap.get(dockAgentId)
+  const dock = terminal.shown && dockAgent !== undefined ? preferences.terminalDock : null
   const newChatMachineLabel = sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine'
   const remotePick = useRemoteFolderPick(newChatMachine, newChatMachineLabel)
   const newChatBrowse = newChatMachine === LOCAL_MACHINE ? chooseProjectFolder : remotePick.browse
@@ -37,7 +45,8 @@ export function WorkspaceMain() {
     <div className="mx-main-wrap">
               {cloneRepo.dialog}
               {remotePick.dialog}
-              <main className="mx-main" aria-label="Terminals">
+              <div className="mx-termwrap" data-dock={dock ?? undefined} data-leaving={terminal.leaving ? 'true' : undefined}>
+              <main className="mx-main" aria-label="Terminals" onPointerDownCapture={() => { setDockFocused(false) }}>
                 {newChatOpen && (
                   <NewChatPage
                     key={`${String(newChatMachine)}:${newChatSeed?.folder ?? ''}`}
@@ -134,6 +143,8 @@ export function WorkspaceMain() {
                 )}
                 {tickets.shown && !newChatOpen && <TicketsOverlay leaving={tickets.leaving} />}
               </main>
+              {dock !== null && dockAgent !== undefined && <TerminalDock agent={dockAgent} leaving={terminal.leaving} />}
+              </div>
             </div>
   )
 }

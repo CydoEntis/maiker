@@ -29,8 +29,8 @@ export type SidebarSide = 'left' | 'right'
 export type SidebarOrder = 'creation' | 'priority'
 /** What the sidebar's headings are: what each session is doing, its project, or its machine. */
 export type SidebarGroup = 'status' | 'project' | 'machine'
-/** Where an agent's own terminals show: a tab of the side panel, or a drawer under its chat. */
-export type TerminalDock = 'panel' | 'under'
+/** Where the terminal dock sits beside the chat: under it, on its right, or in its place. */
+export type TerminalDock = 'bottom' | 'right' | 'full'
 /** Square or rounded corners, the one shape choice of the desktop's look (`theme/corners.ts`). Kept by this window alone. */
 export type CornersChoice = Corners
 /** App and folder icons keep their colours, or drop to neutral gray tiles. Independent of the style. */
@@ -192,7 +192,7 @@ function defaults(): SettingsPreferences {
     sidebarSide: 'left',
     sidebarOrder: 'creation',
     sidebarGroup: 'status',
-    terminalDock: 'panel',
+    terminalDock: 'bottom',
     iconSize: 'medium',
     iconColor: 'color',
     keyOverrides: NO_OVERRIDES,
@@ -270,7 +270,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       sidebarSide: preferences.sidebarSide === 'left' || preferences.sidebarSide === 'right' ? preferences.sidebarSide : fallback.sidebarSide,
       sidebarOrder: preferences.sidebarOrder === 'creation' || preferences.sidebarOrder === 'priority' ? preferences.sidebarOrder : fallback.sidebarOrder,
       sidebarGroup: preferences.sidebarGroup === 'status' || preferences.sidebarGroup === 'project' || preferences.sidebarGroup === 'machine' ? preferences.sidebarGroup : fallback.sidebarGroup,
-      terminalDock: preferences.terminalDock === 'panel' || preferences.terminalDock === 'under' ? preferences.terminalDock : fallback.terminalDock,
+      terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       iconSize: preferences.iconSize === 'small' || preferences.iconSize === 'medium' || preferences.iconSize === 'large' ? preferences.iconSize : fallback.iconSize,
       // Before the corner switch a window style was saved under `style`; its corners carry over.
       corners: (isCorners(preferences.corners) ? preferences.corners : null) ?? cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
@@ -360,4 +360,15 @@ function isScrollSpeed(value: unknown): value is ScrollSpeed {
 
 function isScrollback(value: unknown): value is ScrollbackLines {
   return SCROLLBACK_CHOICES.some((choice) => choice === value)
+}
+
+/**
+ * A stored dock. Before the window-wide dock (layout 2h) terminals were a side panel tab or a drawer under the chat:
+ * those carry over to the right and to the bottom.
+ */
+function terminalDockOf(value: unknown): TerminalDock | null {
+  if (value === 'bottom' || value === 'right' || value === 'full') return value
+  if (value === 'panel') return 'right'
+  if (value === 'under') return 'bottom'
+  return null
 }

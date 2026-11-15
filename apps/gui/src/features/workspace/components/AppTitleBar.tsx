@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { TitleBar } from '@/components/TitleBar'
 import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
-import { activeArrangement } from '../model/layout'
-import { isShell } from '../model/sidebar'
 import { useWorkspace } from '../workspaceContext'
 import { Icon } from './glyphs'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
@@ -28,7 +26,7 @@ export function AppTitleBar() {
   const tip = useTipWithKeys()
   const shortcutText = useShortcutText()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
-  const { root, canStart, newSession, newTerminal, focusedMachineNumber, setPaletteOpen, setSettingsSection, setRecentOpen, sidebarMode, drawerShown, toggleSidebar, focusMode, focusedSession, layout, preferences, agentTerminals, drawerFoldedOf, setDrawerFolded, addAgentTerminal, inspectOpen, inspectView, setInspectView, setInspectOpen, toggleInspect, togglePanel, chooseStartFolder, home, startFolderLabel, setNewChatSeed, setNewChatOpen, ticketsOpen, setTicketsOpen } = useWorkspace()
+  const { root, canStart, newSession, newTerminal, focusedMachineNumber, setPaletteOpen, setSettingsSection, setRecentOpen, sidebarMode, drawerShown, toggleSidebar, focusMode, focusedSession, inspectOpen, inspectView, setInspectView, setInspectOpen, toggleInspect, terminalShown, canDock, toggleTerminal, chooseStartFolder, home, startFolderLabel, setNewChatSeed, setNewChatOpen, ticketsOpen, setTicketsOpen } = useWorkspace()
   const items: MenuEntry[] = [
     { label: 'New chat', hint: shortcutText('new-agent-chat'), disabled: !canStart, run: () => { newSession(focusedMachineNumber) } },
     { label: 'New shell', hint: shortcutText('new-terminal'), disabled: !canStart, run: () => { newTerminal(focusedMachineNumber) } },
@@ -49,18 +47,7 @@ export function AppTitleBar() {
     { label: 'Add a remote machine…', run: () => { setSettingsSection('machines') } },
     { label: 'Settings', hint: shortcutText('settings'), run: () => { setSettingsSection('appearance') } },
   ]
-  const focusedPane = activeArrangement(layout)?.focus ?? null
   const session = focusedSession ?? null
-  const terminals = session === null ? [] : agentTerminals.get(session.id) ?? []
-  // A shell's further terminals live in the side panel; an agent's where Settings docks them.
-  const underChat = session !== null && !isShell(session) && preferences.terminalDock === 'under'
-  const terminalShown = session !== null && terminals.length > 0 && (underChat ? !drawerFoldedOf(session.id) : inspectOpen && inspectView === 'terminal')
-  const toggleTerminal = () => {
-    if (session === null) return
-    if (terminals.length === 0) addAgentTerminal(session.id)
-    else if (underChat) setDrawerFolded(session.id, terminalShown)
-    else if (focusedPane !== null) togglePanel(focusedPane, session.id, 'terminal')
-  }
   const changesShown = inspectOpen && inspectView !== 'terminal'
   const toggleChanges = () => {
     if (changesShown) {
@@ -89,7 +76,7 @@ export function AppTitleBar() {
   const end = (
     <span className="mx-tbar-toggles">
       {!focusMode && <Toggle label="Sidebar" tip={tip('Sidebar', 'toggle-sidebar')} pressed={sidebarMode === 'docked' || drawerShown} icon="panelLeft" onClick={toggleSidebar} />}
-      <Toggle label="Terminal" tip={session === null ? 'Terminal: open a session first' : 'Terminal'} pressed={terminalShown} icon="panelBottom" onClick={toggleTerminal} />
+      <Toggle label="Terminal" tip={canDock ? tip('Terminal', 'terminal') : 'Terminal: open a session of this computer first'} pressed={terminalShown} icon="panelBottom" onClick={toggleTerminal} />
       <Toggle label="Changes and files" tip={tip('Changes and files', 'inspect')} pressed={changesShown} icon="panelRight" onClick={toggleChanges} />
       <Toggle label="Tickets" tip={session === null ? 'Tickets: open a chat first' : 'Tickets for this project'} pressed={ticketsOpen} icon="ticket" onClick={() => { setTicketsOpen(!ticketsOpen) }} />
     </span>

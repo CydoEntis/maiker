@@ -165,7 +165,7 @@ export function InspectPanel({ term, terminals, changedFiles, branch, view: aske
         aria-label="Side panel"
         onKeyDown={(event) => {
           // Esc closes the panel, except in a terminal, where it belongs to the program running there.
-          if (event.key !== 'Escape' || (event.target instanceof Element && event.target.closest('.mx-terms-screen'))) return
+          if (event.key !== 'Escape' || (event.target instanceof Element && event.target.closest('.mx-tdock'))) return
           event.stopPropagation()
           close()
         }}

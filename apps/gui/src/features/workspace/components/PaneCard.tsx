@@ -12,7 +12,6 @@ import { CHAT_AGENTS, type ChatAgent, type PaneShow, type PaneView } from '../mo
 import { agentName } from '../model/agentMessage'
 import { SecretAskBar } from './SecretAskBar'
 import { pullRequestHeadline, pullRequestTone } from '../model/pullRequest'
-import type { TerminalDock } from '@/features/settings/preferences'
 import { useShortcutText } from '@/features/shortcuts/platform'
 
 export type PaneCardProps = {
@@ -46,14 +45,8 @@ export type PaneCardProps = {
   onPanel?: () => void
   /** Lines the repository says changed, for the dot on the side-panel button. */
   changed: { added: number; removed: number }
-  /** For an agent that can have terminals of its own: where they show. Null for a shell, which is one. */
-  terminalDock: TerminalDock | null
-  onNewTerminal: () => void
-  onDock: (dock: TerminalDock) => void
-  /** The agent's terminals when they are pinned under its chat, and whether that drawer is folded away. */
-  drawer?: ReactNode
-  drawerFolded?: boolean
-  onDrawerFold?: (folded: boolean) => void
+  /** For an agent that can have terminals of its own: opens another in the terminal dock. Absent for a shell, which is one. */
+  onNewTerminal?: () => void
   online: boolean
   /** Where portalled menus mount, so they read the theme's colours. */
   portalContainer: HTMLElement | null
@@ -118,12 +111,6 @@ export function PaneCard(props: PaneCardProps) {
     { label: 'Split right', hint: shortcutText('split-right'), disabled: full, run: () => { props.onSplit(pane.id, 'right') } },
     { label: 'Split down', hint: shortcutText('split-down'), disabled: full, run: () => { props.onSplit(pane.id, 'down') } },
     ...(props.onPanel ? [{ label: 'Changes and files', hint: shortcutText('inspect'), run: props.onPanel }] : []),
-    ...(props.drawer !== undefined && props.onDrawerFold ? [{ label: props.drawerFolded === true ? 'Show the terminals' : 'Hide the terminals', run: () => { props.onDrawerFold?.(props.drawerFolded !== true) } }] : []),
-    ...(props.terminalDock === null ? [] : [
-      props.terminalDock === 'panel'
-        ? { label: 'Pin terminals under chat', run: () => { props.onDock('under') } }
-        : { label: 'Move terminals to side panel', run: () => { props.onDock('panel') } },
-    ]),
     ...handoffItems,
     'separator',
     { label: 'Rename…', hint: 'F2', run: props.onRename },
@@ -131,7 +118,7 @@ export function PaneCard(props: PaneCardProps) {
     ...(props.onViewChange
       ? [{ label: view === 'chat' ? 'Show terminal' : 'Show chat', hint: shortcutText('chat-toggle'), run: () => { props.onViewChange?.(view === 'chat' ? 'terminal' : 'chat') } }]
       : []),
-    ...(props.terminalDock === null
+    ...(props.onNewTerminal === undefined
       ? [{ label: 'Clear', hint: 'Ctrl+L', disabled: !props.online || ended, run: props.onClear }, { label: 'Copy folder path', run: props.onCopyPath }]
       : [{ label: 'New terminal', disabled: !props.online, run: props.onNewTerminal }]),
     // The only pane has nothing to close but its session, which the sidebar's row does.
@@ -223,8 +210,6 @@ export function PaneCard(props: PaneCardProps) {
       {props.dropTarget && <span className="mx-pane-drop" aria-hidden="true">{props.dropWord}</span>}
       <span className="mx-pane-ring" aria-hidden="true" />
     </section>
-    {/* A card of its own under the pane, not a part of it. */}
-    {props.drawer}
     {/* Beside the pane, not in it: a pane has `contain: paint`, which would place the menu's fixed anchor from the pane's corner. */}
     {menuAt && <MenuPopup key={`${String(menuAt.x)},${String(menuAt.y)}`} title={title} untitled at={menuAt} items={menuItems} portalContainer={props.portalContainer} onClose={() => { setMenuAt(null) }} />}
     </>

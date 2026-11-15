@@ -96,7 +96,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
 }
 
 /** What each shortcut does. The palette and the keyboard both go through it. */
-export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences, home, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, chatOf, paneViews, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom }: {
+export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences, home, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, chatOf, paneViews, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
   newSession: (machine?: number) => void
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
@@ -125,6 +125,7 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
   setFindOpen: Dispatch<SetStateAction<boolean>>
   online: boolean
   setWorktreeFrom: Dispatch<SetStateAction<SessionView | null>>
+  toggleTerminal: () => void
 }) {
   const runShortcut = useCallback((action: ShortcutAction) => {
     switch (action) {
@@ -211,6 +212,9 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
       case 'inspect':
         toggleInspect()
         return
+      case 'terminal':
+        toggleTerminal()
+        return
       case 'find':
         setFindOpen((open) => !open)
         return
@@ -228,6 +232,6 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
         }
         return
     }
-  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences.defaultAgent, preferences.terminalFontSize, preferences.startFolder, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, home, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, chatOf, paneViews, online, setWorktreeFrom])
+  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences.defaultAgent, preferences.terminalFontSize, preferences.startFolder, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, home, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, chatOf, paneViews, online, setWorktreeFrom, toggleTerminal])
   return { runShortcut }
 }

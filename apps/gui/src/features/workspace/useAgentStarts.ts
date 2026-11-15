@@ -10,6 +10,7 @@ import { errorMessage } from '@/lib/error-message'
 import { remoteStartRefusal } from './model/machines'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
+import type { SplitPlace } from './model/terminalTabs'
 import { resolveStartFolder } from './model/startFolder'
 import { makeId } from './makeId'
 
@@ -18,8 +19,8 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
   sessionMap: Map<string, SessionView>
   endSessions: (ids: string[]) => void
   setAgentTerminals: Dispatch<SetStateAction<AgentTerminals>>
-  /** A terminal was started for an agent: the window shows it where terminals open. */
-  onTerminalAdded: (agentId: string, terminalId: string) => void
+  /** A terminal was started for an agent: the window shows it in the terminal dock, as a tab or split in at `place`. */
+  onTerminalAdded: (agentId: string, terminalId: string, place?: SplitPlace) => void
   runStart: (folder: () => Promise<string>, place: (sessionId: string) => void, launch?: (folder: string) => Promise<void>) => Promise<boolean>
   setLayout: Dispatch<SetStateAction<Layout>>
   focusedSession: SessionView | undefined
@@ -27,8 +28,8 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
   preferences: SettingsPreferences
   home: string
 }) {
-  // "New terminal" on an agent: a shell in its folder, as another of its terminal tabs.
-  const addAgentTerminal = useCallback((agentId: string) => {
+  // "New terminal" on an agent: a shell in its folder, as another of its terminal tabs, or split in beside one of them.
+  const addAgentTerminal = useCallback((agentId: string, place?: SplitPlace) => {
     const agent = sessionMap.get(agentId)
     if (!agent) return
     const refusal = remoteStartRefusal(agent.machine !== LOCAL_MACHINE, agent.machineName, 'Opening a terminal here')
@@ -38,7 +39,7 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
     }
     void runStart(() => Promise.resolve(agent.cwd), (id) => {
       setAgentTerminals((current) => withAgentTerminal(current, agentId, id, new Set([...sessionMap.keys(), id])))
-      onTerminalAdded(agentId, id)
+      onTerminalAdded(agentId, id, place)
     })
   }, [sessionMap, runStart, setAgentTerminals, onTerminalAdded])
 

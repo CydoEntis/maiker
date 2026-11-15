@@ -80,7 +80,7 @@
 .mx-app .mx-main { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: none; }
 .mx-panes:not(.is-split) { padding: 0; }
 .mx-app .mx-pane { border-radius: var(--r-panel); }
-.mx-app .mx-pane.is-card, .mx-app .mx-pane-cell:has(> .mx-terms) > .mx-pane { background: var(--card); border-color: var(--line); box-shadow: none; }
+.mx-app .mx-pane.is-card { background: var(--card); border-color: var(--line); box-shadow: none; }
 
 /* The side panel (section 5): a flat card on `--main` with a hairline, a 44px header, and its views as plain pills
    (the open one on a faint wash) rather than a sunken tray. It still opens over the panes. */
@@ -92,9 +92,3 @@
 .mx-app .mx-inspect-tabs button.is-current { background: var(--m-hover); box-shadow: none; }
 .mx-app .mx-inspect-count, .mx-app .mx-inspect-tabs button.is-current .mx-inspect-count { min-width: 0; padding: 0; background: none; font: 500 11px var(--mono); color: var(--dim); }
 
-/* The terminal tabs (section 6.2): mono names on square-cornered pills, the open one on a wash with a hairline. */
-.mx-app .mx-terms-head { height: 44px; gap: 4px; padding: 0 6px 0 8px; }
-.mx-app .mx-terms-tabs { gap: 2px; }
-.mx-app .mx-terms-tab { border-radius: var(--r-control); font-family: var(--mono); font-weight: 500; }
-.mx-app .mx-terms-tab.is-current { background: var(--m-hover); box-shadow: inset 0 0 0 1px var(--line); }
-.mx-app .mx-terms-add { width: 26px; height: 26px; border-radius: var(--r-control); }
