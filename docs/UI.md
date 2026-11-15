@@ -1251,7 +1251,10 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   Where an agent ran out of room and carried on from its own summary of the conversation, the daemon sends the summary
   as a `contextSummary` tool step and the chat shows a **summary row** (`ContextSummary`): a divider reading "Earlier
   conversation summarised to make room" that opens to the summary as formatted text. It is never a user bubble, never
-  folds into a work row, and Find does not look inside it.
+  folds into a work row, and Find does not look inside it. A turn that held only the summary gets no "Finished in"
+  divider. What `/compact` prints ("Compacted (ctrl+o …)" and its hooks' output) is drawn as a **compacted line**
+  (`compactionOf`, `CompactedLine`): a pill in `--link` across the chat reading "Conversation compacted", with the hook
+  events that ran named ("PreCompact hook ran"), never their command lines; the whole output is its tooltip.
 - **Cards** (`features/chat/components/`). Every fact the history carries is shown, and a missing one is said to be
   unavailable (a diff the history did not keep, a checklist without items, a command time or exit code the provider
   does not report, a turn without the daemon's times shows "Turn finished", not an invented duration). Only a step

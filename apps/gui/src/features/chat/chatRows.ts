@@ -84,10 +84,10 @@ function mergedStatus(a: ItemStatus, b: ItemStatus): ItemStatus {
  * step between two messages ends the first, so the text and the steps keep the order they happened in.
  * `hideSuccessfulTools` leaves out the runs `isQuietRun` allows to go (Settings › Chat).
  */
-/** Whether a turn held nothing but a slash command's own lines: what the person typed and what it printed. */
+/** Whether a turn held nothing but a slash command's own lines: what the person typed and what it printed, or the summary a compaction made. */
 function onlyCommands(events: readonly ChatEvent[], turnId: string): boolean {
   const own = events.filter((event) => event.turnId === turnId && event.kind !== 'turn')
-  return own.some((event) => event.kind === 'note') && own.every((event) => event.kind === 'note' || (event.kind === 'message' && event.role === 'user'))
+  return own.some((event) => event.kind === 'note' || event.kind === 'summary') && own.every((event) => event.kind === 'note' || event.kind === 'summary' || (event.kind === 'message' && event.role === 'user'))
 }
 
 export function buildRows(events: readonly ChatEvent[], working: boolean, root: string | null = null, echoText: string | null = null, echoThinking = true, hideSuccessfulTools = false): ChatRow[] {

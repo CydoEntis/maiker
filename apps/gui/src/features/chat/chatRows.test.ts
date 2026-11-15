@@ -19,6 +19,11 @@ describe('buildRows', () => {
     expect(buildRows([message('u1', 'user', 'hi'), message('a1', 'agent', 'Hello.'), turn('completed', true)], false).at(-1)?.kind).toBe('divider')
   })
 
+  it('draws no "Finished in 0s" under a turn that only summarised the conversation', () => {
+    const summary = { ...message('s1', 'agent', ''), kind: 'summary' as const, text: 'Earlier: we fixed the tests.' }
+    expect(buildRows([summary, turn('completed', true)], false)).toMatchObject([{ kind: 'summary' }])
+  })
+
   it('shows reasoning between two tool steps as its own row, so the steps do not fold across it', () => {
     const rows = buildRows([command('c1'), reasoningEvent('r1', 'Weighing two fixes'), command('c2')], false)
 

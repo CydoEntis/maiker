@@ -17,6 +17,7 @@ import { parseAttachmentMessage } from '../attachmentMessage'
 import { AgentsCard } from './AgentsCard'
 import { SentAttachments } from './Attachments'
 import { ApprovalCard, type ApprovalActions } from './ApprovalCard'
+import { compactionOf, type Compaction } from '../compaction'
 import { ContextSummary } from './ContextSummary'
 import { InlineMarkdown, Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
@@ -161,8 +162,11 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
         </Frame>
       )
     }
-    case 'report':
+    case 'report': {
+      const compaction = compactionOf(row.text)
+      if (compaction !== null) return <Frame><CompactedLine compaction={compaction} text={row.text} /></Frame>
       return <Frame><p className="mx-report" title={row.text}><span className="mx-report-arrow" aria-hidden="true">↳</span><span className="mx-report-text">{row.text}</span></p></Frame>
+    }
     case 'echo':
       return (
         <Frame>
@@ -225,3 +229,15 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
       )
   }
 }, sameProps)
+
+/** Where the person compacted the conversation: a marked line across the chat, with the hooks that ran named, not printed. */
+function CompactedLine({ compaction, text }: { compaction: Compaction; text: string }) {
+  const hooks = compaction.hooks.length === 0 ? null : `${compaction.hooks.join(', ')} ${compaction.hooks.length === 1 ? 'hook' : 'hooks'} ran`
+  return (
+    <div className="mx-divider mx-compacted" title={text}>
+      <span className="mx-divider-line" />
+      <span className="mx-compacted-pill"><Icon name="collapse" />Conversation compacted{hooks !== null && <span className="mx-compacted-hooks">· {hooks}</span>}</span>
+      <span className="mx-divider-line" />
+    </div>
+  )
+}
