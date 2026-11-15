@@ -43,8 +43,11 @@ mod status;
 mod sync;
 mod term;
 mod terminal_sends;
+mod ticket_http;
 mod ticket_keys;
+mod tickets;
 mod tickets_github;
+mod tickets_plane;
 mod usage;
 mod usage_store;
 mod warm;
@@ -3046,7 +3049,7 @@ impl Daemon {
                     Query::Tickets { source, request, tag } => {
                         let tx = self.tx.clone();
                         tokio::task::spawn_blocking(move || {
-                            let answer = tickets_github::answer(&source, request);
+                            let answer = tickets::answer(&source, request);
                             let reply = Reply::Tickets { tag, answer };
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });

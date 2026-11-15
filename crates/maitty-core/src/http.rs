@@ -142,7 +142,7 @@ fn is_private_host(host: &str) -> bool {
 }
 
 /// A pretend server for the tests of whatever sends requests: answers are scripted by a piece of
-/// the address and body, and every request is kept to be looked at.
+/// the address and body (the longest match wins; a piece ending in `$` must end the address), and every request is kept to be looked at.
 #[cfg(test)]
 pub mod fake {
     use super::*;
@@ -163,7 +163,7 @@ pub mod fake {
         }
 
         /// Answer a request whose address or body contains `piece` with `status` and `body`. The
-        /// first route that matches answers; a route with several answers gives them in order and
+        /// longest piece that matches answers; a route with several answers gives them in order and
         /// repeats the last.
         pub fn on(self, piece: &str, status: u16, body: &str) -> FakeHttp {
             self.route(piece, Ok(Response { status, body: body.into() }))
@@ -194,7 +194,12 @@ pub mod fake {
             self.seen.lock().unwrap().push(request.clone());
             let haystack = format!("{}\n{}", request.url, request.body.as_deref().unwrap_or_default());
             let mut routes = self.routes.lock().unwrap();
-            let Some((_, answers)) = routes.iter_mut().find(|(piece, _)| haystack.contains(piece.as_str())) else {
+            // The most specific piece that matches answers, so a route for a folder does not hide one
+            // for something inside it.
+            let Some((_, answers)) = routes.iter_mut().filter(|(piece, _)| match piece.strip_suffix('$') {
+                    Some(end) => request.url.ends_with(end),
+                    None => haystack.contains(piece.as_str()),
+                }).max_by_key(|(piece, _)| piece.len()) else {
                 return Err(HttpError::Unreachable("no route in the fake"));
             };
             if answers.len() > 1 { answers.pop_front().unwrap() } else { answers.front().cloned().unwrap() }
