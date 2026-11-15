@@ -397,6 +397,7 @@ impl App {
             Mode::Find(v) => self.on_find_key(*v, &k),
             Mode::Branch(v) => self.on_branch_key(*v, &k),
             Mode::Usage => self.on_usage_key(&k),
+            Mode::Approved(v) => self.on_approved_key(*v, &k),
             Mode::Run { .. } => self.on_run_key(&k),
             Mode::Helper(v) => self.on_helper_key(*v, &k),
             Mode::History { sel } => self.on_history_key(sel, &k),

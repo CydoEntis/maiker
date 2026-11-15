@@ -1505,9 +1505,12 @@ pub(super) enum AgentRow {
     Codex,
     /// Opens the Connect agents popup.
     SetUp,
+    /// Opens the commands chats may run "always in this project".
+    Approved,
 }
 
 pub(super) const AGENT_STATUS_GROUP: &str = "AGENT STATUS";
+pub(super) const PERMISSIONS_GROUP: &str = "PERMISSIONS";
 
 impl AgentRow {
     pub(super) fn label(self) -> &'static str {
@@ -1515,6 +1518,7 @@ impl AgentRow {
             AgentRow::Claude => "Claude Code",
             AgentRow::Codex => "Codex",
             AgentRow::SetUp => "Connect agents…",
+            AgentRow::Approved => "Approved commands…",
         }
     }
 
@@ -1533,12 +1537,15 @@ impl AgentRow {
             AgentRow::SetUp => {
                 "Connect an agent so it reports working, needs you and done itself. Enter opens the list."
             }
+            AgentRow::Approved => {
+                "The commands you let a chat run “always in this project”. Enter lists them; forget one and the chat asks again."
+            }
         }
     }
 }
 
 /// The settings' headings in the order they come, each tab's in turn.
-const GROUP_ORDER: [&str; 19] = [
+const GROUP_ORDER: [&str; 20] = [
     "UPDATES",
     "STARTUP",
     "INPUT",
@@ -1555,6 +1562,7 @@ const GROUP_ORDER: [&str; 19] = [
     "SOUND",
     "PHONE",
     AGENT_STATUS_GROUP,
+    PERMISSIONS_GROUP,
     "HELPERS",
     "LIMITS",
     "AGENTS TALKING TO AGENTS",
@@ -1569,6 +1577,7 @@ pub(super) fn settings_group(row: &SRow) -> &'static str {
             .find(|(_, items)| items.iter().any(|(l, _)| l == label))
             .map(|(g, _)| g)
             .unwrap_or("KEYS"),
+        SRow::Agent(AgentRow::Approved) => PERMISSIONS_GROUP,
         SRow::Agent(_) => AGENT_STATUS_GROUP,
         SRow::Version => "UPDATES",
         SRow::Setting(s) => match s.path {
@@ -1616,7 +1625,7 @@ pub(super) fn theme_label(name: &str) -> String {
 pub(super) fn settings_rows(cat: super::modal::Cat) -> Vec<SRow> {
     let mut rows: Vec<SRow> = Vec::new();
     if cat == super::modal::Cat::Agents {
-        rows.extend([AgentRow::Claude, AgentRow::Codex, AgentRow::SetUp].map(SRow::Agent));
+        rows.extend([AgentRow::Claude, AgentRow::Codex, AgentRow::SetUp, AgentRow::Approved].map(SRow::Agent));
     }
     // Updates first, so a waiting one is in your face: the version row heads General.
     if cat == super::modal::Cat::General {
@@ -1866,7 +1875,7 @@ fn agent_control(app: &App, t: &Theme, row: AgentRow) -> Vec<Seg> {
                 vec![seg("✓ hooks installed and trusted", ok)]
             }
         },
-        AgentRow::SetUp => vec![seg("Enter", Style::default().fg(t.accent))],
+        AgentRow::SetUp | AgentRow::Approved => vec![seg("Enter", Style::default().fg(t.accent))],
     }
 }
 

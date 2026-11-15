@@ -1670,6 +1670,7 @@ mod splash;
 mod workspace;
 mod splash_wide;
 mod usage;
+pub(in crate::client) mod approved;
 mod tidy;
 mod workflow_runs;
 mod helper_view;

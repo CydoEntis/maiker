@@ -443,6 +443,10 @@ impl App {
             ServerMsg::Reply(Reply::UsageReport(report)) if machine == MachineId::LOCAL => {
                 self.usage_report_arrived(report)
             }
+            // Approvals are kept by this computer's daemon only.
+            ServerMsg::Reply(Reply::AllowedCommands(list)) if machine == MachineId::LOCAL => {
+                self.approved_arrived(list)
+            }
             ServerMsg::Welcome { .. } | ServerMsg::Reply(_) => {}
         }
     }

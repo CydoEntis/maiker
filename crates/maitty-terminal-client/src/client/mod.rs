@@ -169,6 +169,8 @@ enum Mode {
     /// Notification history (the selected row, newest first).
     /// Usage and cost: what each agent reported using, and the plan limits.
     Usage,
+    /// The commands chats may run "always in this project", and forgetting one.
+    Approved(Box<screen::approved::ApprovedView>),
     /// A subagent's own steps, from its record (ADR 0010).
     Helper(Box<screen::HelperView>),
     /// One workflow run's steps (ADR 0010).

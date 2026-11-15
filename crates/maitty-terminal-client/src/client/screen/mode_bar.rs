@@ -411,6 +411,14 @@ fn keys_holder(app: &App) -> Option<Holder> {
                 ("", "any other key back"),
             ),
         },
+        Mode::Approved(v) if v.confirming => {
+            holder("APPROVED COMMANDS", &[("Enter", "forget it")], ("Esc", "keep it"))
+        }
+        Mode::Approved(_) => holder(
+            "APPROVED COMMANDS",
+            &[("↑↓", "move"), ("x", "forget")],
+            ("Esc", "close"),
+        ),
         Mode::Usage => holder("USAGE", &[("Tab", "period"), ("Enter", "open")], ("Esc", "close")),
         Mode::Run { .. } => holder("RUN", &[], ("Esc", "close")),
         Mode::Helper(_) => holder("SUBAGENT", &[("Enter", "its pane")], ("Esc", "close")),

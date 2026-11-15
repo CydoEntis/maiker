@@ -149,3 +149,80 @@ fn an_older_service_is_not_asked_for_a_report() {
     let text = frame(&mut app, "usage · older service", 100, 30);
     assert!(text.contains("Restart the service to see usage by day."));
 }
+
+fn allowed(project: &str, command: &str, sha: &str) -> crate::protocol::AllowedCommand {
+    crate::protocol::AllowedCommand {
+        project: PathBuf::from(project),
+        command: command.into(),
+        command_sha256: sha.into(),
+        at: crate::client::reference_fixture::now() - 3 * 86_400,
+    }
+}
+
+fn open_settings_row(app: &mut App, cat: modal::Cat, label: &str) {
+    let sel = design::settings_rows(cat)
+        .iter()
+        .position(|r| matches!(r, design::SRow::Agent(a) if a.label() == label))
+        .unwrap_or_else(|| panic!("{label} is on the page"));
+    let cat = modal::Cat::ALL.iter().position(|c| *c == cat).unwrap();
+    app.mode = Mode::ScreenSettings(Box::new(design::SettingsView {
+        cat,
+        sel,
+        editing: None,
+        capturing: false,
+        scroll: 0,
+    }));
+}
+
+#[test]
+fn settings_agents_opens_the_approved_commands_and_asks_this_computer() {
+    let (mut app, mut rx) = app_with_outbox();
+    open_settings_row(&mut app, modal::Cat::Agents, "Approved commands…");
+    let page = frame(&mut app, "settings · agents · permissions", 120, 34);
+    assert!(page.contains("PERMISSIONS") && page.contains("Approved commands…"), "{page}");
+    sent(&mut rx);
+    key(&mut app, KeyCode::Enter);
+    let out = sent(&mut rx);
+    assert!(out.iter().any(|o| o.machine == MachineId::LOCAL
+        && matches!(o.msg, ClientMsg::Query(Query::AllowedCommands))));
+    let asking = frame(&mut app, "approved · asking", 100, 30);
+    assert!(asking.contains("asking this computer…"));
+    app.on_machine_server(
+        MachineId::LOCAL,
+        ServerMsg::Reply(Reply::AllowedCommands(vec![
+            allowed("/code/shop-api", "npm test -- checkout", "aa"),
+            allowed("/code/pixls", "cargo build \x1b[31m--release", "bb"),
+        ])),
+    );
+    for (w, h) in [(100, 30), (80, 24)] {
+        let text = frame(&mut app, "approved · listed", w, h);
+        assert!(text.contains("npm test -- checkout") && text.contains("approved 3d ago"), "{text}");
+        assert!(!text.contains('\x1b'), "a command is drawn as text");
+    }
+}
+
+#[test]
+fn forgetting_asks_first_and_esc_keeps_it() {
+    let (mut app, mut rx) = app_with_outbox();
+    app.open_approved();
+    app.on_machine_server(
+        MachineId::LOCAL,
+        ServerMsg::Reply(Reply::AllowedCommands(vec![allowed("/code/shop-api", "npm test", "aa")])),
+    );
+    sent(&mut rx);
+    key(&mut app, KeyCode::Char('x'));
+    let asking = frame(&mut app, "approved · forget?", 100, 30);
+    assert!(asking.contains("Forget this command?"));
+    assert!(sent(&mut rx).is_empty(), "x alone forgets nothing");
+    key(&mut app, KeyCode::Esc);
+    assert!(sent(&mut rx).is_empty(), "Esc keeps it");
+    assert!(matches!(app.mode, Mode::Approved(_)));
+    key(&mut app, KeyCode::Char('x'));
+    key(&mut app, KeyCode::Enter);
+    let out = sent(&mut rx);
+    assert!(out.iter().any(|o| matches!(&o.msg,
+        ClientMsg::Command(Command::ForgetAllowedCommand { project, command_sha256 })
+            if project == std::path::Path::new("/code/shop-api") && command_sha256 == "aa")));
+    let after = frame(&mut app, "approved · forgotten", 100, 30);
+    assert!(after.contains("None yet."), "{after}");
+}
