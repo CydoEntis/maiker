@@ -634,20 +634,33 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Work tab** (`features/work/`, the daemon's `workflows`, ADR 0010, `model/workflows.ts`). A session that reported
   workflow runs gets a **Work** tab, after Chat and Terminal, with the count of runs going (mono, `--dim`) and
   a 7px `--needs` square while one needs you. Work covers the pane like the chat (the terminal stays mounted, paused)
-  until Chat or Terminal is chosen. Its bar says "N runs going", "needs you" with the square, and at the right "N runs
-  done" with **Show** / **Hide**. The board (`WorkBoard`) is one column per step name the runs reported, in their order
-  (a name one run lacks goes in after the step before it, `model/board.ts`), equal width, 230px at least, as tall as
-  the pane, scrolling sideways when they do not fit; each column a `--m-well` card with its name and count. A run sits
-  in its first step that has not passed (skipped counts as passed), a finished one in its last step, dimmed, and only
-  while shown. A run's card (`--card`, a `--line` edge, `--needs` when its step needs you) holds that step's mark, the
-  ticket key in mono (else "kitchen 007"), the title in two lines at most, one 4px segment per step in its state's
-  colour, and the step's note and helper label as sent. A click opens the run in a drawer (`RunDrawer`,
-  `min(480px, 60%)`, `--card`, `--sh-pop`) over the board dimmed to 55%: **Work › MAITTY-42**, **Open ticket** (a web
-  address only, opened in the browser), close; the title; each step with its mark, name, word and note, the step it is
-  on on `--m-sel` and one that needs you tinted with the needs edge. A helper label opens a small read-only card: the
-  label, and where it names one of the session's subagents its name, kind, state, what it was asked and what it is
-  doing or reported, with **Open its chat**. Escape, close or a click outside closes the drawer. The sidebar shows no
-  runs. Marks are StatusMark's, with ↺ for sent back, – for skipped and ? for a state added later.
+  until Chat or Terminal is chosen. Its 44px bar says **Runs** (13.5px, 600) and, in 12px `--muted`, "1 needs you ·
+  4 working · 3 done" or "Nothing running". The board (`WorkBoard`) is one column per step name the runs reported, in
+  their order (a name one run lacks goes in after the step before it, `model/board.ts`), first letter capital, then
+  **Needs human** (every run going with a step that needs you; its title `--needs` while it holds one) and **Done**
+  (every finished run): equal width, 168px at least, as tall as the pane, gap 8, scrolling sideways when they do not
+  fit. A column is a `--m-well` strip with an inset `--line`, a 36px head with its name (12.5px, 600, `--muted` when
+  empty) and mono count, and "Nothing here" when empty. A run going sits in its first step that has not passed (skipped
+  counts as passed). A run's card (`--main`, inset `--line`; `--fg2` while open; a 7% `--needs` wash with a 45% edge
+  when it needs you) holds the run's mark (needs, working, waiting, done or failed, `runState`), the ticket key in mono
+  12px 600 (else "kitchen 007"), at the right "done" in `--done` or "failed" in `--err` once over, the title in two
+  lines at most ("No ticket" muted without one), the run's **review** steps (named "review …") as 20px mono chips once
+  its first step passed (the name without "review": passed `--done` on a 14% wash, working `--working` with a spinner
+  and a pulse, needs you `--needs` with "!", failed `--err` with ✕, sent back `--muted` with ↺, waiting dashed, skipped
+  struck through), and the step's note wrapped, or "a and b are working." when several steps are in hand. A click opens
+  the run in a drawer (`RunDrawer`, `min(480px, 60%)`, `--main`, a `--line2` edge, sliding 24px in .22s) over the board
+  dimmed to 18% black: a 44px head with **Work** (a button back to the board) › the key in mono, **Open ticket ↗** (a
+  web address only, opened in the browser) and close; the key in mono 13px 700 with the run's word in its colour
+  ("needs you", "working", "done"), the title (14px, 600) and "Updated 2m ago · This computer · project · ⑂ branch"
+  (11.5px `--dim`); a strip of 20px nodes, one per step, joined by lines that fill `--done` as steps pass, each named
+  underneath in its state's colour; then each step as a row ruled off by `--line`: its mark, name (600 while working or
+  needing you, `--muted` while waiting or skipped), the word in lower case in its state's colour, the note in `--fg2`,
+  and a step needing you on a 7% `--needs` wash. A step's helper label is a mono `--link` button under its note ("MAITTY-42
+  build ›") that opens a 300px read-only card: the label and the step's word, what the helper was asked, its latest
+  activity while it works on this computer, its result, **Open its chat**, and "Read-only. To change anything, ask in the
+  main chat." (on another machine: "Runs on devbox. Helpers on other machines show their task and result only. …").
+  Escape, the crumb, close or a click outside closes the drawer. The sidebar shows no runs, and a session with runs
+  shows no subagent bar: its helpers are on the board. Marks are StatusMark's, with ↺ for sent back, – for skipped and ? for a state added later.
 - **Chat · Terminal tabs.** An agent's pane header carries text tabs, Chat then Terminal (and Work when it applies). The
   chat covers the pane body while the terminal stays mounted underneath, hidden by `visibility`, so it keeps streaming
   and keeps its size: switching sends nothing to the daemon, except that going to the terminal moves the text waiting

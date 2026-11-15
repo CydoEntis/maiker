@@ -20,6 +20,7 @@ import { ChatPane } from '@/features/chat/components/ChatPane'
 import { NoTerminalNote } from '@/features/chat/components/NoTerminalNote'
 import { type Arrangement, focusPane, type PaneSlot, toggleMaximize } from '../model/layout'
 import { folderNameOf } from '../model/session'
+import { LOCAL_HEAD, machineTitle } from '../model/machines'
 import { toSubagentView } from '../model/subagents'
 import { isShell } from '../model/sidebar'
 import { moveRefusal } from '../model/moveToWorktree'
@@ -59,12 +60,14 @@ export function WorkspacePane({ shown, pane, kept }: {
   const opened = openSubagent?.sessionId === session.id ? openSubagent : null
   const subagent = opened === null ? undefined : helpers.find((child) => child.id === opened.subagentId)
   const workOpen = session.workflows.length > 0 && paneViews.work.has(session.id)
+  const remoteHead = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
+  const runWhere = { machine: machineTitle(remoteHead ?? LOCAL_HEAD), remote: session.machine !== LOCAL_MACHINE, project: folderNameOf(session), branch: session.branch }
   const work = session.workflows.length === 0 ? undefined : {
     going: session.workflows.filter((run) => run.active).length,
     needsYou: session.workflows.some((run) => run.active && run.needsYou),
     open: workOpen,
     onOpen: () => { paneViews.showWork(session.id) },
-    board: <WorkBoard runs={session.workflows} helpers={helpers} onOpenHelper={(id) => { showSubagent(session.id, id) }} />,
+    board: <WorkBoard runs={session.workflows} helpers={helpers} onOpenHelper={(id) => { showSubagent(session.id, id) }} where={runWhere} />,
   }
   const typeInto = chatOnly ? undefined : (text: string) => sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, text)
   // A pane's daemon holds what is sent while its agent works; a chat session's own daemon queue is its conversation's.
@@ -154,7 +157,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
         />
       ) : undefined}
-      overlay={kept || workOpen ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
+      overlay={kept || session.workflows.length > 0 ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
       panelOpen={inspectOpen && focused}
       {...(hasPanel ? { onPanel: () => { togglePanel(pane.id, session.id) } } : {})}
       changed={{ added: session.diffAdded, removed: session.diffRemoved }}

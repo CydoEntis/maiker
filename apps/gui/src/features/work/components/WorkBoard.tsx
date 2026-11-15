@@ -1,42 +1,63 @@
 import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Counter } from '@/components/ui/progress'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { STEP_WORDS, type WorkflowView } from '@/features/workspace/model/workflows'
-import { workBoard, type BoardTicket } from '../model/board'
-import { RunDrawer } from './RunDrawer'
-import { WorkStepMark } from './WorkStepMark'
+import { boardSummary, cardNote, reviewShort, reviewTrack, runState, workBoard, type BoardColumn, type BoardTicket, type RunState } from '../model/board'
+import { RunDrawer, type RunWhere } from './RunDrawer'
+import { RunMark, StepChip } from './WorkStepMark'
 
-/** A run's card in the column of the step it sits in: that step's mark, the key, the title, the run's progress. */
+/** A finished run's word at its card's right; a run going has none, its mark and column say it. */
+const DONE_TAG: Partial<Record<RunState, string>> = { done: 'done', failed: 'failed' }
+
+/** A run's card in its column: the run's mark, key and end word, the title, its reviews as chips, and its note. */
 function TicketCard({ ticket, open, onOpen }: { ticket: BoardTicket; open: boolean; onOpen: () => void }) {
   const { run, step } = ticket
-  const passed = run.steps.filter((one) => one.state === 'passed' || one.state === 'skipped').length
+  const state = runState(run)
+  const tag = DONE_TAG[state]
+  const reviews = reviewTrack(run)
+  const note = cardNote(ticket)
   return (
     <li>
       <button
         type="button"
-        className={`mx-board-card is-${step.state}${run.active ? '' : ' is-over'}${open ? ' is-open' : ''}`}
+        className={`mx-board-card is-${state}${open ? ' is-open' : ''}`}
         aria-label={`${run.label}${run.title === null ? '' : `, ${run.title}`}: ${step.name}, ${STEP_WORDS[step.state]}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={onOpen}
       >
         <span className="mx-board-card-head">
-          <WorkStepMark state={step.state} />
+          <RunMark state={state} />
           <span className="mx-board-card-key">{run.label}</span>
+          <span className="mx-spacer" />
+          {tag !== undefined && <span className={`mx-board-card-tag is-${state}`}>{tag}</span>}
         </span>
-        {run.title !== null && <span className="mx-board-card-title">{run.title}</span>}
-        <span className="mx-board-segments" role="img" aria-label={`${String(passed)} of ${String(run.steps.length)} steps passed`}>
-          {run.steps.map((one) => <span key={one.name} className={`mx-board-segment is-${one.state}`} />)}
-        </span>
-        {(step.note !== null || step.helper !== null) && (
-          <span className="mx-board-card-foot">
-            {step.note !== null && <span className="mx-board-card-note">{step.note}</span>}
-            {step.helper !== null && <span className="mx-board-card-helper">{step.helper}</span>}
+        <span className={`mx-board-card-title${run.title === null ? ' is-none' : ''}`}>{run.title ?? 'No ticket'}</span>
+        {reviews.length > 0 && (
+          <span className="mx-board-track" role="list" aria-label="Reviews">
+            {reviews.map((one) => <StepChip key={one.name} name={reviewShort(one.name)} full={one.name} state={one.state} note={one.note} />)}
           </span>
         )}
+        {note !== null && <span className="mx-board-card-note">{note}</span>}
       </button>
     </li>
+  )
+}
+
+/** One column: its title and count over its cards, or "Nothing here". */
+function Column({ column, openKey, onOpen }: { column: BoardColumn; openKey: string | null; onOpen: (key: string) => void }) {
+  const count = column.tickets.length
+  return (
+    <section className={`mx-board-column is-${column.kind}${count === 0 ? ' is-empty' : ''}`} aria-label={column.name}>
+      <header className="mx-board-column-head">
+        <span className="mx-board-column-name">{column.name}</span>
+        <span className="mx-board-column-count">{count}</span>
+      </header>
+      {count === 0 ? <span className="mx-board-column-empty">Nothing here</span> : (
+        <ul className="mx-board-tickets">
+          {column.tickets.map((ticket) => <TicketCard key={ticket.run.key} ticket={ticket} open={ticket.run.key === openKey} onOpen={() => { onOpen(ticket.run.key) }} />)}
+        </ul>
+      )}
+    </section>
   )
 }
 
@@ -45,52 +66,35 @@ type Props = {
   /** The session's subagents, which a step's helper label may name. */
   helpers: readonly SubagentView[]
   onOpenHelper: (id: string) => void
+  /** Where the session runs, for a run's drawer: the runs report their steps, not their place. */
+  where?: RunWhere
   /** The run whose drawer starts open, as the gallery draws it. */
   startOpen?: string
 }
 
 /**
- * A session's workflow runs as a board (ADR 0010): one equal column per step name the workflows reported, in order,
- * each run in the step it sits in. Finished runs fold into one line until shown. A run opens in a drawer.
+ * A session's workflow runs as a board (ADR 0010): one column per step name the workflows reported, in order, each run
+ * going in the step it sits in, then "Needs human" and "Done". A run opens in a drawer.
  */
-export function WorkBoard({ runs, helpers, onOpenHelper, startOpen }: Props) {
-  const [showDone, setShowDone] = useState(false)
+export function WorkBoard({ runs, helpers, onOpenHelper, where, startOpen }: Props) {
   const [openKey, setOpenKey] = useState<string | null>(startOpen ?? null)
   const [root, setRoot] = useState<HTMLDivElement | null>(null)
-  const board = workBoard(runs, showDone)
+  const board = workBoard(runs)
   const opened = runs.find((run) => run.key === openKey)
-  const going = `${String(board.goingCount)} ${board.goingCount === 1 ? 'run' : 'runs'} going`
   return (
     <div ref={setRoot} className="mx-board" role="region" aria-label="Work">
       <div className="mx-board-bar">
-        <strong>{going}</strong>
-        {board.needsYou && <span className="mx-board-needs">needs you</span>}
-        <span className="mx-spacer" />
-        {board.doneCount > 0 && (
-          <span className="mx-board-fold">
-            <Counter>{board.doneCount} {board.doneCount === 1 ? 'run' : 'runs'} done</Counter>
-            <Button variant="ghost" size="sm" aria-expanded={showDone} onClick={() => { setShowDone(!showDone) }}>{showDone ? 'Hide' : 'Show'}</Button>
-          </span>
-        )}
+        <span className="mx-board-title">Runs</span>
+        <span className="mx-board-summary">{boardSummary(board)}</span>
       </div>
-      {board.columns.length === 0 ? (
+      {runs.every((run) => run.steps.length === 0) ? (
         <p className="mx-board-empty">No steps reported yet.</p>
       ) : (
         <div className="mx-board-columns" style={{ ['--work-columns' as string]: board.columns.length }}>
-          {board.columns.map((column) => (
-            <section key={column.name} className="mx-board-column" aria-label={column.name}>
-              <header className="mx-board-column-head">
-                <span className="mx-board-column-name">{column.name}</span>
-                <Counter>{column.tickets.length}</Counter>
-              </header>
-              <ul className="mx-board-tickets">
-                {column.tickets.map((ticket) => <TicketCard key={ticket.run.key} ticket={ticket} open={ticket.run.key === openKey} onOpen={() => { setOpenKey(ticket.run.key) }} />)}
-              </ul>
-            </section>
-          ))}
+          {board.columns.map((column) => <Column key={`${column.kind}:${column.name}`} column={column} openKey={openKey} onOpen={setOpenKey} />)}
         </div>
       )}
-      <RunDrawer run={opened ?? null} helpers={helpers} onOpenHelper={onOpenHelper} onClose={() => { setOpenKey(null) }} container={root} />
+      <RunDrawer run={opened ?? null} helpers={helpers} onOpenHelper={onOpenHelper} onClose={() => { setOpenKey(null) }} container={root} {...(where === undefined ? {} : { where })} />
     </div>
   )
 }
