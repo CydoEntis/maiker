@@ -9,9 +9,11 @@ vi.mock('@/lib/toast', () => ({ toast: { message: vi.fn() } }))
 const TURN = { startedAtMs: 1_000, endedAtMs: 9_000 }
 
 function mount() {
-  const here = { id: 'here', machine: 0, machineName: null } as unknown as SessionView
-  const other = { id: 'other', machine: 0, machineName: null } as unknown as SessionView
-  const far = { id: 'far', machine: 2, machineName: 'build' } as unknown as SessionView
+  // A terminal session has a pane to ask about its folder; `far` has none, so another machine is refused.
+  const terminal = { kind: 'terminal', execution: 'Native' }
+  const here = { id: 'here', machine: 0, machineName: null, pane: 1, conversation: terminal } as unknown as SessionView
+  const other = { id: 'other', machine: 0, machineName: null, pane: 2, conversation: terminal } as unknown as SessionView
+  const far = { id: 'far', machine: 2, machineName: 'build', pane: null, conversation: terminal } as unknown as SessionView
   const spies = { setInspectOpen: vi.fn(), setInspectView: vi.fn(), setTurnDiff: vi.fn(), showSessionById: vi.fn(), setLayout: vi.fn() }
   const { result } = renderHook(() => useInspectActions({
     ...spies,
