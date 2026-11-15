@@ -27,9 +27,9 @@ export function rowText(row: ChatRow): string {
     // An approval is answered in its tray, and the divider and the working line say nothing of the conversation.
     case 'changes':
       return row.files.join('\n')
-    // A summary stays folded, so a match inside it would land on a row that does not show the words.
+    // A summary and a thought stay folded, so a match inside one would land on a row that does not show
+    // the words; both are left out of the search.
     case 'summary':
-    // A thought is folded, so what it says is not yet a word a person can see; it is left out of the search.
     case 'thought':
     case 'approval':
     case 'divider':
