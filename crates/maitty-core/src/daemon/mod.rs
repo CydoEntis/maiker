@@ -43,6 +43,7 @@ mod status;
 mod sync;
 mod term;
 mod terminal_sends;
+mod tickets_github;
 mod usage;
 mod usage_store;
 mod warm;
