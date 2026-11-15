@@ -58,10 +58,10 @@ impl App {
         let list = v.list.clone().unwrap_or_default();
         if v.confirming {
             v.confirming = false;
-            if k.code == KeyCode::Enter {
-                if let Some(c) = list.get(v.sel) {
-                    self.forget_approved(&mut v, c.clone());
-                }
+            if k.code == KeyCode::Enter
+                && let Some(c) = list.get(v.sel)
+            {
+                self.forget_approved(&mut v, c.clone());
             }
             self.mode = Mode::Approved(Box::new(v));
             return;
