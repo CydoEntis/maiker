@@ -149,6 +149,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           }}
           hideSuccessfulTools={preferences.hideSuccessfulTools}
           onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
+          fullAccessDefault={preferences.fullAccessNewChats}
         />
       ) : undefined}
       overlay={kept || workOpen ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}

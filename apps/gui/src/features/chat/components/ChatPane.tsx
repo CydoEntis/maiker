@@ -53,6 +53,8 @@ export type ChatPaneProps = {
   onStartAgent: (agent: ChatAgent) => void
   /** Starts a chat session (a structured conversation the daemon owns) in the shell's folder (a shell tab only). */
   onStartChat?: (agent: ChatAgent, fullAccess: boolean) => void
+  /** Whether the full-access box starts ticked (Settings › Chat › Full access in new chats). */
+  fullAccessDefault?: boolean
   /** The project folder's name and the branch, for the tray under the message box. */
   folder?: string
   branch?: string | null
@@ -129,8 +131,8 @@ export function ChatPane(props: ChatPaneProps) {
 type NoChatProps = ChatPaneProps & { availability: Exclude<ChatAvailability, { kind: 'ready' }> }
 
 /** A session that has no chat: why, what runs here, and the way back (v18 B.3, shell tabs). */
-function NoChat({ availability, process, online, onBackToTerminal, onStartAgent, onStartChat }: NoChatProps) {
-  const [fullAccess, setFullAccess] = useState(false)
+function NoChat({ availability, process, online, onBackToTerminal, onStartAgent, onStartChat, fullAccessDefault = false }: NoChatProps) {
+  const [fullAccess, setFullAccess] = useState(fullAccessDefault)
   return (
     <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
       <div className="flex w-full max-w-[420px] flex-col items-center gap-3 text-center">

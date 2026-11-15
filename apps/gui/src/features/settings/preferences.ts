@@ -39,7 +39,8 @@ export type IconColor = 'color' | 'grayscale'
 const SCROLLBACK_SHORT = 5000
 const SCROLLBACK_DEFAULT = 10000
 const SCROLLBACK_LONG = 50000
-export const SCROLLBACK_CHOICES = [SCROLLBACK_SHORT, SCROLLBACK_DEFAULT, SCROLLBACK_LONG] as const
+const SCROLLBACK_LONGEST = 100000
+export const SCROLLBACK_CHOICES = [SCROLLBACK_SHORT, SCROLLBACK_DEFAULT, SCROLLBACK_LONG, SCROLLBACK_LONGEST] as const
 export type ScrollbackLines = (typeof SCROLLBACK_CHOICES)[number]
 /** Lines scrolled per wheel notch, as a multiple of xterm's default (`scrollSensitivity`). */
 const SCROLL_NORMAL = 1
@@ -115,6 +116,8 @@ export type SettingsPreferences = {
   yoloClaude: boolean
   yoloCodex: boolean
   yoloGemini: boolean
+  /** New chats start with the agent's skip-permissions mode ticked: no sandbox and no approval prompts. Off by default. */
+  fullAccessNewChats: boolean
   /** A small readout of frames and process load over the window, for finding what lags. */
   perfOverlay: boolean
   /** Draw terminals with xterm's DOM renderer instead of WebGL; for a web view that shows typed text late. */
@@ -139,7 +142,7 @@ export function validBudget(value: unknown): number | null {
   return value > 0 && value <= MONTHLY_BUDGET_MAX ? value : null
 }
 
-export const TERMINAL_FONT_SIZE_MIN = 12
+export const TERMINAL_FONT_SIZE_MIN = 11
 export const TERMINAL_FONT_SIZE_MAX = 16
 export const SIDEBAR_WIDTH_MIN = 208
 export const SIDEBAR_WIDTH_MAX = 440
@@ -204,6 +207,7 @@ function defaults(): SettingsPreferences {
     yoloClaude: false,
     yoloCodex: false,
     yoloGemini: false,
+    fullAccessNewChats: false,
     perfOverlay: false,
     // WebGL everywhere. The late letters it once showed on Linux came from a page drawn on the CPU, which the host now prevents (docs/PERFORMANCE.md).
     terminalPlainDrawing: false,
@@ -282,6 +286,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       yoloClaude: bool(preferences.yoloClaude, fallback.yoloClaude),
       yoloCodex: bool(preferences.yoloCodex, fallback.yoloCodex),
       yoloGemini: bool(preferences.yoloGemini, fallback.yoloGemini),
+      fullAccessNewChats: bool(preferences.fullAccessNewChats, fallback.fullAccessNewChats),
       perfOverlay: bool(preferences.perfOverlay, fallback.perfOverlay),
       terminalPlainDrawing: bool(preferences.terminalPlainDrawing, fallback.terminalPlainDrawing),
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
@@ -305,7 +310,7 @@ function isToastPosition(value: unknown): value is ToastPosition {
   return value === 'top-left' || value === 'top-center' || value === 'top-right' || value === 'bottom-left' || value === 'bottom-center' || value === 'bottom-right'
 }
 
-// Sizes saved before the 12–16 range are kept as the nearest size in it.
+// Sizes saved outside the 11–16 range are kept as the nearest size in it.
 function terminalFontSize(value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isInteger(value)) return fallback
   return Math.min(TERMINAL_FONT_SIZE_MAX, Math.max(TERMINAL_FONT_SIZE_MIN, value))
