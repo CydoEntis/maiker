@@ -89,7 +89,7 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         }
         // Another person's words about a repository this window asked that machine for; cleaned
         // in `vet` and only while the question is out.
-        ServerMsg::Reply(Reply::Tickets { .. }) => Verdict::Answer,
+        ServerMsg::Reply(Reply::Tickets { .. } | Reply::TicketKeys { .. }) => Verdict::Answer,
         ServerMsg::Error(_) | ServerMsg::Reply(_) => Verdict::Answer,
         ServerMsg::AskRemoveWorktree { .. } => {
             Verdict::Ignore("a worktree prompt names a folder on this computer")
@@ -220,6 +220,13 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
                 Ok(reply) => reply.cleaned().ok_or_else(|| TicketError::Invalid("that machine sent a ticket that is not one".into())),
                 Err(error) => Err(error.cleaned()),
             },
+        }),
+        // Only whether a key is set and where it points; the words are cleaned, the list capped.
+        ServerMsg::Reply(Reply::TicketKeys { tag, answer }) => ServerMsg::Reply(Reply::TicketKeys {
+            tag,
+            answer: answer
+                .map(|states| states.into_iter().take(maitty_shared::tickets::TicketProvider::ALL.len()).map(|state| state.cleaned()).collect())
+                .map_err(|error| error.cleaned()),
         }),
         ServerMsg::Reply(Reply::ClosedSessions(sessions)) => {
             ServerMsg::Reply(Reply::ClosedSessions(sanitize_closed(sessions)))
@@ -637,6 +644,20 @@ mod tests {
             panic!("a reason is kept");
         };
         assert!(!why.contains(['\u{1b}', '\n']));
+    }
+
+    #[test]
+    fn where_another_machines_keys_stand_is_cleaned_and_capped() {
+        use maitty_shared::tickets::{TicketKeyState, TicketProvider};
+        let state = |provider| TicketKeyState { provider, set: true, address: "https://p\u{1b}[0m.example\u{202e}".into(), workspace: "w\n".into() };
+        let sent = ServerMsg::Reply(Reply::TicketKeys { tag: 2, answer: Ok(vec![state(TicketProvider::Plane), state(TicketProvider::Linear), state(TicketProvider::Plane)]) });
+        assert_eq!(allow(&nothing_on(), &sent), Verdict::Answer);
+        assert!(vet(&nothing_on(), false, "box", sent.clone()).is_none());
+        let Some(ServerMsg::Reply(Reply::TicketKeys { answer: Ok(states), .. })) = vet(&nothing_on(), true, "box", sent) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(states.len(), TicketProvider::ALL.len());
+        assert_eq!((states[0].address.as_str(), states[0].workspace.as_str()), ("https://p[0m.example", "w"));
     }
 
     #[test]

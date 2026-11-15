@@ -2048,6 +2048,16 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             Query::GitHubRepos { owner: None, search: None, tag: 9 },
             Query::GitHubOwners { tag: 9 },
             Query::Tickets { source: "me/widgets".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 },
+            Query::TicketKeys {
+                change: crate::protocol::TicketKeyChange::Set {
+                    provider: maitty_shared::tickets::TicketProvider::Plane,
+                    address: "https://plane.example.com".into(),
+                    workspace: "w".into(),
+                    key: crate::protocol::SecretText("plane_api_SECRETVALUE0123".into()),
+                },
+                tag: 9,
+            },
+            Query::TicketKeys { change: crate::protocol::TicketKeyChange::Remove { provider: maitty_shared::tickets::TicketProvider::Linear }, tag: 9 },
         ];
         for (client, query) in (442..).zip(about_github) {
             let from = authenticated_pane(&mut session);

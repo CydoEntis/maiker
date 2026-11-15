@@ -36,6 +36,10 @@ pub const TICKET_NAME_MAX_CHARS: usize = 100;
 pub const TICKET_ID_MAX_CHARS: usize = 200;
 /// The most characters of the words a person searches for.
 pub const TICKET_SEARCH_MAX_CHARS: usize = 100;
+/// The most characters of a key's server address.
+pub const TICKET_ADDRESS_MAX_CHARS: usize = 200;
+/// The most characters of a Plane workspace name.
+pub const TICKET_WORKSPACE_MAX_CHARS: usize = 64;
 /// The most characters of the one line that says why a request failed.
 pub const TICKET_ERROR_MAX_CHARS: usize = 200;
 /// The most characters of a time as the provider writes it.
@@ -149,11 +153,61 @@ pub enum TicketsReply {
     Ticket(Box<Ticket>),
 }
 
+/// A provider that keeps tickets behind a key the user adds. GitHub is not one: it is read through
+/// the machine's own `gh`, which holds its own sign-in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum TicketProvider {
+    Plane,
+    Linear,
+}
+
+impl TicketProvider {
+    pub const ALL: [TicketProvider; 2] = [TicketProvider::Plane, TicketProvider::Linear];
+
+    /// The name a ticket id and a request's source start with.
+    pub fn name(self) -> &'static str {
+        match self {
+            TicketProvider::Plane => "plane",
+            TicketProvider::Linear => "linear",
+        }
+    }
+
+    /// The provider a request's source names, or `None` for a GitHub repository.
+    pub fn from_source(source: &str) -> Option<TicketProvider> {
+        TicketProvider::ALL.into_iter().find(|provider| provider.name() == source)
+    }
+}
+
+/// Whether a provider's key is set on a machine, and where it points. Never the key itself: no
+/// message carries it back from the daemon that holds it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TicketKeyState {
+    pub provider: TicketProvider,
+    pub set: bool,
+    /// The server the key is for (empty for a provider with a fixed one, and when none is set).
+    pub address: String,
+    /// The Plane workspace (empty for another provider, and when none is set).
+    pub workspace: String,
+}
+
+impl TicketKeyState {
+    /// This state with its words clean and cut, as another machine's report must be before it is used.
+    pub fn cleaned(self) -> TicketKeyState {
+        TicketKeyState {
+            provider: self.provider,
+            set: self.set,
+            address: clean_line(&self.address, TICKET_ADDRESS_MAX_CHARS),
+            workspace: clean_line(&self.workspace, TICKET_WORKSPACE_MAX_CHARS),
+        }
+    }
+}
+
 /// Why a request got no tickets. Each is an answer a client shows a way out of.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TicketError {
-    /// The provider's command line or key is not set up on that machine.
+    /// The provider's command line is not installed on that machine, or no key is set for it.
     NotInstalled,
+    /// Signed out, or the provider refused the key.
     SignedOut,
     NotFound,
     /// One fixed line; never the provider's own words.

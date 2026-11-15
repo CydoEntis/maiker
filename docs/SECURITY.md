@@ -611,6 +611,19 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   A ticket's text that looks like an instruction is still only text; it reaches an agent only framed
   as the ticket's words (MAITTY-394). The same cleaning is applied again to an answer from another
   machine (`remote_policy::vet`), and only a person's client may ask.
+- **A ticket provider's key** (Plane, Linear; `Query::TicketKeys`, `daemon/ticket_keys.rs`) is held by the
+  daemon of the computer that reads the tickets, in one small file per provider in Maitty's data
+  folder (`ticket-keys/plane.json`, `ticket-keys/linear.json`: the folder `0700`, the file `0600` on
+  unix; on Windows the user's own app data, which only they and administrators can read). It is never
+  in `config.toml` (which is synced), a repository, a log line, a snapshot, an agent's environment or
+  a reply to a client. A person's client sets or removes a key; a pane and a structured runtime are
+  refused before the request is read ([ADR 0006](adr/0006-secrets-never-enter-chat.md): a secret is
+  never typed into a conversation). The only thing a client can read back is whether a key is set, and
+  Plane's server address and workspace, which are not secret. In the daemon the key is a `Secret`: it
+  prints as `Secret(..)`, and on the wire it is a `SecretText`, which prints as `<hidden>`. A key is
+  checked on the way in (printable ASCII, 8 to 200 characters); Plane's address must pass the same
+  `check_base_url` that every request does, so a key cannot be saved for an address it could not be
+  sent to; Linear's server is fixed and a key for it takes no address.
 
 No user accounts. Access to the daemon is access to its local socket: a named
 pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
