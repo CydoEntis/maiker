@@ -238,7 +238,7 @@ describe('the new chat page', () => {
   it('has the agent, model and effort on one button in the box, and the permission mode beside it', async () => {
     page()
     await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude/ }))
-    expect(screen.getByRole('button', { name: 'Agent: Claude' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Claude' })).toBeChecked()
     expect(screen.getByRole('radiogroup', { name: 'Model' })).toBeInTheDocument()
     expect(screen.getByRole('radiogroup', { name: 'Effort' })).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
@@ -373,7 +373,7 @@ describe('the new chat page on another machine', () => {
     remotePage(onStart)
     await pickProject('app on Shipyard')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, / }))
-    expect(screen.getByRole('button', { name: /^Agent: / })).toBeInTheDocument()
+    expect(screen.getByRole('radiogroup', { name: 'Agent' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('radio', { name: /Opus/ }))
     await userEvent.click(screen.getByRole('radio', { name: 'High' }))
     await userEvent.keyboard('{Escape}')

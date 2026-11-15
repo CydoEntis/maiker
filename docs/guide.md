@@ -984,6 +984,10 @@ Branch and Work in are left out when the folder is not a git repository, and on 
 shield beside it. The agent is on the model button too. If an agent is not installed, the page says
 so and offers **set it up**.
 
+**Resume a saved chat.** In the command palette, **Resume a saved chat…** lists the conversations
+Claude or Codex saved for a project on this computer. Pick one and its agent starts in that folder
+with that conversation.
+
 **Keep drafting.** Press Ctrl+Enter (⌘Enter on a Mac) instead of Enter. The chat starts and is listed
 in the sidebar, but it is not opened. The page stays, the message box and its files are emptied, and
 every other choice is kept, so you can write the next chat while the first one starts. In a new worktree,

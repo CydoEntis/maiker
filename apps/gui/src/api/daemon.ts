@@ -1240,6 +1240,20 @@ export async function folderBranches(folder: string): Promise<FolderBranches | n
   return invokeParsed('git_branches', FolderBranchesSchema, { folder })
 }
 
+const SavedConversationSchema = z.object({ id: z.string(), first_message: z.string(), last_active: z.number().int().nonnegative() })
+export type SavedConversation = z.infer<typeof SavedConversationSchema>
+const SavedConversationsSchema = z.union([z.null(), z.literal('NotSupported'), z.object({ Listed: z.array(SavedConversationSchema) })])
+
+/**
+ * The conversations an agent saved for a folder on this computer, newest first; empty for an agent the daemon reads
+ * none of. Null when the service running is older than the question.
+ */
+export async function savedConversations(agent: 'claude' | 'codex', folder: string): Promise<SavedConversation[] | null> {
+  const found = await invokeParsed('saved_conversations', SavedConversationsSchema, { agent, folder })
+  if (found === null) return null
+  return found === 'NotSupported' ? [] : found.Listed
+}
+
 /** The commands Claude Code answers beside a conversation, with nothing after the name: each only reports. */
 export const SIDE_COMMANDS = ['context', 'usage', 'skill-doctor', 'goal', 'advisor', 'config', 'mcp'] as const
 export type SideCommand = (typeof SIDE_COMMANDS)[number]

@@ -58,14 +58,14 @@ describe('the model button and its menu', () => {
     const user = userEvent.setup()
     const { unmount } = render(<Harness />)
     await user.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
-    expect(screen.queryByRole('button', { name: /^Agent: / })).toBeNull()
+    expect(screen.queryByRole('radiogroup', { name: 'Agent' })).toBeNull()
     unmount()
 
     const onAgent = vi.fn()
     render(<AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} onAgent={onAgent} />)
     await user.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
-    await user.click(screen.getByRole('button', { name: /^Agent: / }))
-    await user.click(await screen.findByRole('menuitemradio', { name: 'Codex' }))
+    expect(screen.getByRole('radio', { name: 'Claude' })).toBeChecked()
+    await user.click(screen.getByRole('radio', { name: 'Codex' }))
     expect(onAgent).toHaveBeenCalledWith('codex')
   })
 

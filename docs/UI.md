@@ -175,6 +175,8 @@ daemon does not take it. There is no New session dialog. A chat running in the p
 Ctrl+Shift+T) opens the page above (**New agent chat** without the dots, ⌘⇧A or Ctrl+Shift+A, starts a chat at once with the default agent in the start folder), and **New shell** (⌘⇧T, Ctrl+Alt+T, the sidebar's terminal button, a
 machine's New shell here) starts a plain shell in the start folder with no dialog; another machine asks for a folder there first, so it opens the dialog. A screen reader is told when a machine goes down (`build disconnected: unreachable`) and when it is back, once each and not for every retry, through a polite live region; every state is a word as well as a shape and a colour, nothing about machines animates, and the Machines page works with the keyboard alone (Tab, Enter, Esc ends a look in progress without closing Settings). Features that read a pane's files (Inspect, worktreesFeatures that read a pane's files (Inspect, worktrees, opening a file from the output, dropping files, the screen text) are for this computer's panes only: each says `<Feature> is local-only in v1: the files are on <machine>, not on this computer.` and the Repository button shows disabled with that text.
 
+**Resume a saved chat…** (the palette's Actions; `ResumeSavedDialog`, `ResumeList`, `useSavedConversations`) lists the conversations Claude or Codex saved for a folder on this computer (`saved_conversations`, API_PATTERNS), with an agent switch and a folder menu of this computer's projects: each its first message and how long ago it was active, newest first. A pick starts the agent in that folder, as it is, with that conversation (`resumeWords`, through the new chat's resume start); a failed read and a service older than protocol 85 each say so in one line.
+
 **Recent sessions** (`RecentSessionsDialog`, `model/recentSessions.ts`, `useRecentSessions`; the title bar's Maitty
 menu, the clock in the rail's foot, and **Recent sessions…** in the palette) lists the agent sessions that closed on this
 computer, newest first (`closed_sessions`, API_PATTERNS; read when the list opens, off the UI thread): each its title
@@ -968,11 +970,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   (the default is marked); the + still starts the default from Settings. It starts the chosen agent in the start folder and
   opens in the view Settings names. Beside a session on another machine it opens the new chat page on that machine, as + does.
 - **Agent, model and effort.** A button names the agent's mark and the model (the one picked, else the one the agent's
-  own file says, else just the agent) with a four-bar meter for the effort, and opens one small menu (`AgentPicker`, 248px,
-  one column): the agent, only before a chat starts (after that its agent is already running), as an **Agent** dropdown
-  that lists every agent with its mark and whole name (a switch squeezed the names out of the 248px menu); the models, a row
-  each with its description as the tooltip, a tick on the picked one and a dim "default" on the model the agent's settings
-  name; then **Effort** as four rising bars (Low, Medium, High, Max) with the level's name beside them. Earlier models wait
+  own file says, else just the agent) with a four-bar meter for the effort, and opens one small menu (`AgentPicker`, layout 2h: 300px, square,
+  opening up from the right of the box): the agent, only before a chat starts (after that its agent is already running), as an **Agent**
+  segmented control with a column per agent, each its mark and name; the models, a 32px row
+  each with its description as the tooltip, an accent tick on the picked one and a dim "default" on the model the agent's settings
+  name; then a foot of **Effort**, four rising bars (Low, Medium, High, Max) and the level's name at the right. Earlier models wait
   under a **More models** row, so the newest lead; the picked one shows wherever it is. Picking leaves the menu open; Esc
   or a click outside closes it. The default model (the one the settings name, else the one Claude Code says it
   would pick) stands for "nothing picked": there is no separate Default row then, and picking it sends no model. Where

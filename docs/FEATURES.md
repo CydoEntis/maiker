@@ -117,7 +117,7 @@ conversation continuity are planned in phases 34–37:
 - Fleet work declined 2026-10-24 (the fleet was removed in phase 19): the phase 9 live fleet check, the designed team view, pause the fleet, stop all, cost per fleet.
 - Maitty writing Codex hook trust hashes itself — declined 2026-11-01: it would bypass Codex's own review of hook commands. You trust Maitty's hooks once in Codex's `/hooks`; a pane without trusted hooks keeps the screen guess.
 
-- From the new chat page, with layout 2h (2026-11-15; the redesign's call, to be confirmed by the user): resuming a saved conversation (the palette's Recent sessions reopens closed sessions; the TUI keeps Resume a conversation here), Also send to (one message to several agents at once), the suggested tasks, the Switch to project chips, and the checkout's ↓N behind line with ↓ Pull. The host commands behind them (`saved_conversations`, `git_sync_state`, `git_pull`, `git_clone`) stay in Rust; the window no longer calls them.
+- From the new chat page, with layout 2h (2026-11-15; the redesign's call, to be confirmed by the user): resuming a saved conversation from the page (it moved to the palette's **Resume a saved chat…**), Also send to (one message to several agents at once), the suggested tasks, the Switch to project chips, and the checkout's ↓N behind line with ↓ Pull. The host commands behind the others (`git_sync_state`, `git_pull`, `git_clone`) stay in Rust; the window no longer calls them.
 - Brain dump (split a pasted plan into sessions, v19 section 12) — declined 2026-11-06, the user's call.
 - Community mods (a gallery of scripts that change the app, as other multiplexers have) — declined 2026-11-09, the user's call.
 
