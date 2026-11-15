@@ -439,7 +439,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   and nothing sits beside the stack. A click anywhere on the card spreads them all out. For an agent in a terminal
   the header also has **Send now** (an up arrow): it types the message into the turn that is running, as typing in the
   terminal does, so the agent reads it at its next step; it is off while the agent asks something, since typed text
-  would answer the question. A chat the daemon runs has no such button: it takes a message only when the turn ends.
+  would answer the question. A chat the daemon runs has the same button on every queued message
+  (`send_conversation_now`): the daemon steers it into the turn (Codex) or stops the turn and sends it next, and
+  answers only once it has taken it. Its refusal (the turn ended a moment ago, an approval waits) is shown under the
+  box and the message stays queued; the button is hidden while a question or approval shows. The button is off while its answer is
+  awaited. A local service older than the command (protocol 94) is told so in words; another machine's older one
+  cannot be told apart and times out, and the message stays queued either way.
 - **Pane** (`components/PaneCard.tsx`, `pane.css`). Agents and shells share one 42px header: the 26px app icon with its
   status badge, the name (15px, 600) over the folder (11px `--dim`) and the branch (mono 10.5px `--branch`), then at
   the right, icons only (layout 2e): the terminal | chat switch (agents with a chat), split right, the terminals
@@ -707,7 +712,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   worktrees, and a **New worktree…** row. The dialog also lists the project's other worktrees with where each stands
   ("merged, nothing uncommitted", "3 uncommitted changes", "not merged anywhere"), each with **Merge** (its committed
   work into the main checkout's branch, no fast-forward; refused while either side has uncommitted changes, and a
-  conflict leaves the main checkout as it was) and **Remove** (the daemon closes what runs in it and removes the folder;
+  conflict leaves the main checkout as it was) and **Remove** (removes the folder, but not one something still runs in, so close its sessions first;
   it asks again first when that would lose changes or unmerged commits). This computer's worktrees only
   (`WorktreeManager.tsx`, `src-tauri/src/worktrees.rs`). Worktrees group under their parent repo. A folder's row shows
   only its name: a branch belongs to a session, and a worktree's branch is not the folder's.

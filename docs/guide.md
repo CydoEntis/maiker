@@ -239,6 +239,60 @@ Maitty no longer stops idle agents automatically; they keep running until you cl
 their own agent process exits. Sessions saved while sleeping by an older version recover when you open them. Maitty does not
 show a separate sleep screen or wake animation.
 
+## What a session's status means
+
+Every agent session has one status. Maitty works it out from the agent's own reports, its screen and its process, in that
+order of trust; how to connect an agent so it reports for itself is in [agent-status](agent-status.md).
+
+| Status | What it means | Desktop app | Terminal app |
+| --- | --- | --- | --- |
+| Working | The agent is busy on a turn. | Spinner; listed under **Working**. | Spinner in the accent colour. |
+| Needs you | It asks a question, wants permission, asks for a secret or wants to start helpers. | Amber mark; under **Needs you**. | Amber `●`, and it is in the Inbox. |
+| Done | A turn finished and you have not looked yet. | Green check; under **Finished**. | Green mark. |
+| Idle | Nothing to do: you looked at a finished turn, or the agent has not been given work. | Under **Idle**. | A muted `●` (`○` with Unicode status glyphs on). |
+| Limited | It hit its plan limit and is waiting for it to reset (see below). | Under **Needs you**. | Amber `limited 16:30`. |
+| Failed | The last command in the session failed (in the terminal app, a failed check too). | A shell reads `exited`, an agent `stopped`; listed under **Needs you**. | Red mark. |
+
+A finished turn stays **done** until you look at it: open the session in the desktop app, or focus its pane in the
+terminal app. Then it becomes **idle**. In the desktop app a finished session's menu also has **Mark as done**, which files it
+under Idle without opening it. A session you cannot reach (its machine is down) is shown as not known, with its last status,
+until the machine is back.
+
+### Why a session has its status
+
+Every status change records a short reason, in the daemon's own words. Typical ones:
+
+- `hook: Stop`: the agent reported the event itself (here, the end of a turn).
+- `screen: matched …` or `screen: it's printing`: Maitty read it off the agent's terminal.
+- `process: an agent started`: Maitty saw an agent start in the pane.
+- `you looked at it`: you opened a finished session, so it went from done to idle.
+- `you answered it`: you answered a question the agent asked through Maitty.
+
+**In the desktop app**, rest the pointer on a session's row for about half a second. A card opens beside it with the
+agent, its changes and, under **Set by**, the reason and how long ago it happened (`hook: Stop, 3 s ago`). The line is left
+out where it would be about some other status: when the status is not known, for a stopped or a limited session, and
+for one waiting for you to allow helpers.
+
+**In the terminal app** there is no such card. The reason goes to `daemon.log` in the data folder, one line per change
+(`pane 4 (claude): Working -> Done: hook: Stop`), and `maitty ls --json` carries it as `status_why`.
+
+### Limited
+
+When an agent stops at a plan limit (the screen says things like "usage limit reached", "you've hit your weekly limit" or
+"out of extra usage"), Maitty works out when it can go on. That time is the reset of a limit its usage tracking shows as
+95% used or more; with none, it tries again in half an hour. Exactly one minute after that time Maitty types `continue`
+into the agent and says so in a notice. This needs auto-continue, which is on by default; with it off, nothing is typed
+and the session is not marked limited.
+
+Until then the session is **limited**: its row says when, in your computer's time (`limited until 14:05` in the desktop app,
+`limited 16:30` in the terminal app; with the weekday when that is not today). It goes back to its normal status when the
+time comes. If you continue the agent yourself, the limit is forgotten.
+
+Only a session that was done or idle becomes limited; one that is working, asking or failed keeps that status. In the
+desktop app a limited session is listed under **Needs you**, but it waits on the limit and not on you, so it is left out of
+the count of sessions elsewhere that need you, the jump to the next session that needs you, the tray and the notices. (A
+failed session is counted in the jump and the tray.) A limited session cannot be put away; you can [snooze](#snooze) it.
+
 ## Session visibility
 
 Sessions stay visible in the sidebar until you close them. By default, idle, completed, and merged-worktree sessions are
@@ -257,6 +311,30 @@ The TUI does the same from a session's row menu (`.` or right-click): **Put away
 then Ctrl+Z). The row leaves the sidebar while the session keeps running. The sidebar's **Menu** chip → **Put away…** (or
 **Sessions put away** in Search commands) lists them; pick one to bring it back. Putting away in either app puts the
 session away in both.
+
+A session that needs you is not hidden. In the terminal app it stays in the sidebar while it needs you, and in the desktop
+app it moves to **Needs you**; either way it keeps its put-away mark and goes back out of the way once it no longer needs you.
+A session whose last command failed, or a limited one, cannot be put away; an agent that fails or becomes limited after being put away is listed again until that passes.
+
+### Snooze
+
+Snooze puts a session away until a time, then brings it back by itself. It is in the desktop app only; the terminal app
+has no snooze. Right-click a done, idle or limited session (an agent in a terminal, or a shell; not a chat) and choose one of:
+
+- **Snooze 1 hour**;
+- **Snooze until tomorrow 9:00**, by your computer's clock;
+- **Snooze until the limit resets**, offered only for a limited session whose reset is less than a week away.
+
+A toast offers **Undo** for 6 seconds. A snoozed session waits in the **Put away** section with `until 14:05` (`until Thu 09:00`
+on another day) beside it, and **Unsnooze** on hover and in its menu. **Bring back** ends the snooze too. A snooze ends by
+itself when its time comes, and at once when the session needs you: you cannot snooze one that needs you now. A snooze
+lasts at most a week and is kept by the daemon, so every window sees it.
+
+### Undo close
+
+A closed session is not gone at once. It leaves the list but keeps running for 6 seconds, and **Undo** brings it back. In the desktop app, click **Undo** in the toast, or press
+`Cmd+Z` on macOS and `Ctrl+Shift+Z` elsewhere. In the terminal app, press the leader (`Ctrl+Space`), then `Ctrl+Z`, while the banner
+shows. After 6 seconds the process ends. Putting away has the same 6-second Undo; it ends nothing, so Undo only lists it again.
 
 ## Follow-ups and snapshots
 
@@ -832,6 +910,156 @@ and per agent with `resume` / `resume_last`. Each pane's recent output is kept o
 there after a restart; it can hold secrets that were on screen, so `output = false` (Settings ›
 Sessions › Keep each pane's recent output) stops saving it and deletes what was saved.
 
+## The desktop chat
+
+In the desktop app an agent has a chat view as well as its terminal. For an agent that runs in a
+terminal it is the same session: the Terminal and Chat switch never restarts the agent. (A chat that
+Maitty's background service runs, see [Worktrees](#worktrees), has no terminal.) This part is about working in the chat and
+checking what the agent did. What the status marks mean is in [What a session's status
+means](#what-a-sessions-status-means).
+
+### Starting a chat
+
+**New chat** (the top of the sidebar, or **New agent chat…** in the command palette, Ctrl+Shift+T, ⌘T
+on a Mac) opens a page that asks "What
+should we work on?". Pick a project (or paste a path, or **Browse…**), write the first message and
+press Enter. The page opens on your most recent project, and shows the project list only when you
+have none. The agent starts in its own terminal and the chat opens. (**New agent chat** without the
+dots, Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in the start
+folder.)
+
+Under the project there are a few more choices. **Branch**, **Own copy** and **Also start with**
+are left out when the folder is not a git repository, and for a session on another machine.
+
+- **Branch.** Pick a branch, or type a new name to create one.
+- **Own copy** is on by default. The agent works in a worktree of its own, on a new branch named
+  from your message, so your checkout stays as it is. A line under it says what it starts from, and
+  how far behind its upstream it is. Turn it off and the agent edits the checkout. Then, if the
+  checkout is behind, a **↓ Pull** button runs `git pull --ff-only`. It is refused while you have
+  uncommitted changes.
+- **Model, effort and permission mode** sit on the buttons under the message box. The agent is on
+  the model button too. If an agent is not installed, the page says so and offers **set it up**.
+- **Suggested tasks** under the choices start a chat on that task with one click, and **Resume**
+  lists the conversations Claude or Codex saved for the folder. Resuming starts in that folder
+  without a worktree.
+
+**Several agents at once.** Under the message box, **Also start with** lists the other agents
+installed on this computer. Tick one or more and the same message goes to each, every one in its own
+worktree and on its own new branch (`fix-login`, `fix-login-2`, …). That needs Own copy. With it off
+the boxes cannot be ticked, and the page says "Each agent needs a copy of its own. Turn on Own copy
+to start several." The chat you
+see open is the agent on the model button. The others start on their own default model, effort and
+permission mode, and they are listed in the sidebar. They start only when you start a new chat, not
+when you resume a saved one,.
+
+**Keep drafting.** Press Ctrl+Enter (⌘Enter on a Mac) instead of Enter. The chat starts and is listed
+in the sidebar, but it is not opened. The page stays, the message box and its files are emptied, and
+every other choice is kept, so you can write the next chat while the first one starts. With Own copy on,
+the next one gets a new branch name. If a start fails, a line under the box says why, with **Put back**,
+which puts the message and its files back in the box after whatever you typed since, and **Dismiss**.
+On another machine Ctrl+Enter is a plain start. Esc closes the page.
+
+### Answering prompts
+
+When an agent stops to ask you something, its session needs you and the chat shows a card over the
+message box. The message box is off, and says why, until you have answered.
+
+- **Wants to run a command** (or "Wants to use <tool>"). For Claude the card has **Yes, once** and
+  **No**, and the keys `y` and `n` do the same from anywhere in the chat except a text field. They
+  type Claude's own answer into its terminal.
+- **A question Claude asks.** Each choice is a button. A prompt with several questions (up to 4, each
+  with 2 to 4 choices) shows each one with its choices and one **Send answers** button, which stays
+  off until every question has an answer. Nothing is typed to the agent before then, so you can still
+  change an answer. A question beyond those limits, or "Type something", is answered in the terminal.
+- **Codex, and any menu the chat has no buttons for.** Maitty does not press a button for these,
+  because it has not checked that those keys are right. The card shows the question as the terminal
+  draws it, with a row of **↑ ↓ ← → Enter Esc** buttons. They press those keys in the agent's terminal,
+  the way you would. For a session on another machine the screen cannot be read: the card says the
+  question is in the terminal and keeps the keys.
+
+A chat that Maitty's background service runs (see [Worktrees](#worktrees)) shows **Yes, once**,
+**This session** and **No** instead, with **Always in this project** for a command.
+
+### Queue and Send now
+
+While the agent works you can still write. Enter queues the message, and it goes in when the turn
+ends. The queue is kept by the daemon, so closing the window loses nothing. Each queued message is a
+dashed card above the box that says **Queued**. With several, they stack with the next one in front
+and show `1 of 3`; click the stack to spread them out. A card has:
+
+- **Edit**, which takes the message back into the box, with its files, to change it. Nothing has been
+  sent.
+- **Remove**, which drops it.
+- **Send now** (an up arrow), which does not wait for the turn to end.
+
+What Send now does depends on the chat. For an agent in a terminal it types the message into the turn
+that is running, as typing there would, so the agent reads it at its next step. For a chat that
+Maitty's service runs, Codex takes the message into the running turn where its version supports that.
+Otherwise, and for Claude, the turn is interrupted and your message is sent next, ahead of the others
+in the queue. If the agent refuses (the turn just ended, or it is waiting on an approval), the reason
+shows under the box and the message stays queued. The button is hidden while a question is showing, and
+off while Maitty waits for the answer.
+
+### Naming a file with @
+
+Type `@` at the start of the message, or after a space, then a few letters of a name at the end of
+what you have written. A list of the
+session's files that match opens over the box. The arrow keys move, Enter or Tab inserts, Esc closes,
+and a click picks one. The path goes in relative to the session's folder, followed by a space. A path
+with a space in it is put in quotes. At most 50 are listed, so keep typing to narrow them. An `@`
+inside a word, such as an email address, opens nothing.
+
+### What a turn changed
+
+A turn that edited files ends with a row such as "3 changed files +111 −0" and **Review**. Click it
+and the side panel opens on **Changes** with only what that turn changed, headed "This turn's
+changes". **All changes** goes back to the whole working tree.
+
+This works from the snapshots Maitty keeps of the checkout. If none from before the turn (or from
+after it) is kept, or the turn has no times, or the snapshots cannot be read, the panel shows the whole working tree
+instead, and says why: "Whole working tree · no snapshot from before this turn is kept" (or "this
+turn has no times to find its snapshots by", or "couldn't read the snapshots"). The turn's diff covers the
+checkout, not the agent, so a file you or another agent in the same checkout edited meanwhile is in
+it. This is for sessions on this computer.
+
+### Edit from here
+
+Point at a message you sent and open its **⋯** menu, then choose **Edit from here**. Maitty puts the
+files back to how they were before that message, and puts the message back in the box so you can change
+it and send it again. It asks first. The prompt says how many files change back (**Restore 3
+files**), and that what is there now is kept as a "before a restore" snapshot. Nothing is changed
+until you confirm. If you had typed something in the box, the message goes above it.
+
+The agent's own conversation is not rewound. The next message you send starts with one line telling
+it the files were restored, and a line under the box lets you drop it (**Leave it out**).
+
+It is greyed out, with the reason in the menu, while the agent works, while the service is offline,
+for a session on another machine, and, with the reason "Another session is using this folder", when
+another open session on this computer, other than a plain shell, is in the same checkout, even if it
+is idle. A restore would undo that session's files too. If no snapshot from before the message
+is kept, a notice says so and nothing is restored.
+
+### The worktree manager
+
+**New worktree** (Ctrl+Shift+N, ⌘⇧N on a Mac, or the command palette) opens a dialog that makes a branch in its own folder next to the
+project. When the project already has other worktrees, the dialog lists them below. Each row says
+where that worktree stands, for example "inactive 3 days · not merged anywhere · last commit …" or "2
+uncommitted changes", and has:
+
+- **Merge**, which merges its branch into the main checkout's branch (never a fast-forward). It is off,
+  with the reason, when the worktree has uncommitted changes, has no branch, or its work is already on
+  another branch. After you click, it can still be refused because the main checkout has uncommitted
+  changes, or because of a conflict; a conflict aborts the merge and leaves the main checkout as it
+  was. Merge leaves the worktree and its sessions in place (the terminal app's `m` removes them).
+- **Remove**, which removes the worktree's folder. It does not remove one something still runs in, so
+  close its sessions first. The branch stays unless it is merged. When that would lose uncommitted changes, or commits that are on no other branch, the
+  button first becomes "Lose … ? Remove" and you press it again.
+- **Recreate**, for a worktree whose folder is gone, which makes it again from its branch.
+
+If two worktrees changed the same file, a line at the top says so, so you hear about a merge conflict
+before the merge. The list is for projects on this computer. For the rest of how maitty names and
+cleans up worktrees, see [Worktrees](#worktrees).
+
 ## Worktrees
 
 ```sh
@@ -951,5 +1179,4 @@ Hook authority ends when a recognized agent's process exits. Maitty recognizes
 Herdr's 24 agent identities plus its five additional existing agents.
 See [status setup and its limits](agent-status.md).
 Terminal bells do not replace the status icon or add musical-note history entries.
-Click a status icon/tag (or `<leader> y`) for a plain-language explanation and the ages of
-hook, screen and process evidence; a status without confirmation is shown as uncertain.
+The reason for each status is described under *What a session's status means* above.
