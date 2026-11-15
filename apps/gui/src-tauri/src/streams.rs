@@ -144,6 +144,12 @@ pub enum Out {
         tag: u64,
         answer: Result<TicketWritten, TicketError>,
     },
+    /// Which sources each project reads on this computer, or why a change was refused.
+    TicketLinks {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<maitty_shared::ticket_links::TicketLinks, TicketError>,
+    },
 }
 
 #[derive(Default)]
@@ -275,6 +281,9 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::TicketWrite { tag, answer }) => {
                 out.push(Out::TicketWrite { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::TicketLinks { tag, answer }) => {
+                out.push(Out::TicketLinks { machine, tag, answer });
             }
             ServerMsg::State(snapshot) => self.publish(machine, snapshot, &mut out),
             // What the host asked for after a missed update; nothing else asks on this line.

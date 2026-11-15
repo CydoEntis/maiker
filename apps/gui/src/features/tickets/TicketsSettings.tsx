@@ -1,28 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { loadGitHubAccounts } from '@/api/githubAccounts'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { githubRepoOf, loadTicketKeys, removeTicketKey, saveTicketKey, type KeyedProvider, type TicketGroup, type TicketKeyState, type TicketsResult } from '@/api/tickets'
 import { Card, Row } from '@/features/settings/components/DesktopSettings'
+import { SettingsSearch } from '@/features/settings/settingsSearch'
 import { PickerSelect, type PickerItem } from '@/features/settings/components/PickerSelect'
 import type { GitHubSignIn } from '@/features/settings/components/GitHubSection'
 import { errorMessage } from '@/lib/error-message'
-import { linkOf, setMyName, setProjectLink, useTicketLinks, type ProjectLink } from './model/ticketLinks'
+import type { LinkedProject, TicketPlace } from '@/api/ticketLinks'
+import { NO_LINK, useLinkChanges, useTicketLinks, type ProjectLink } from './model/ticketLinks'
+import { KEY_ONCE, PLANE_CLOUD, REPO_SHAPE } from './TicketSetup'
 import type { TicketsProject } from './model/ticketProjects'
 import { PROVIDER_LOOK, type Provider } from './model/tickets'
 import { failureOf, useTicketGroups } from './useTicketData'
 import './tickets.css'
 
-/** Plane Cloud's address, the one most people use. A self-hosted Plane has its own. */
-const PLANE_CLOUD = 'https://app.plane.so'
 /** Longest key or address the fields take; the daemon checks them again. */
 const MOST_FIELD_CHARS = 512
 const MOST_NAME_CHARS = 100
 const NOTHING = 'none'
-/** `owner/name`, as GitHub spells a repository. */
-const REPO_SHAPE = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/
-/** Where a key goes once saved (the service's choice, not the system keychain). */
-const KEPT_WHERE = 'The key is kept by the Maitty service in its data folder on this computer, not in the system keychain, and never shown again.'
 const KEYS_QUERY = ['tickets', 'keys'] as const
 
 type Keyed = { provider: KeyedProvider; source: 'plane' | 'linear' }
@@ -112,7 +109,7 @@ function KeyCard({ provider, source }: Keyed) {
       : `Connected · key saved${plane && state !== null ? ` · ${state.address}/${state.workspace}` : ''}`
   const where = plane ? 'Your Plane address (Plane Cloud is app.plane.so), its workspace slug, and an API key from Profile › API tokens.' : 'An API key from Linear › Settings › Security & access.'
   return (
-    <Card title={provider} foot={`${where} ${KEPT_WHERE}`}>
+    <Card title={provider} foot={`${where} ${KEY_ONCE}`}>
       <Row label={provider} detail={status}>
         <Mark provider={source} />
         {set && !formOpen && <button type="button" className="mx-scard-button" disabled={busy} onClick={() => { setReplacing(true) }}>Replace key</button>}
@@ -149,18 +146,41 @@ function groupItems(provider: Provider, groups: readonly TicketGroup[] | undefin
   return [{ value: NOTHING, label: 'Not linked', tile }, ...top]
 }
 
-function GroupPick({ project, source, link, keyed }: { project: TicketsProject; source: 'plane' | 'linear'; link: ProjectLink; keyed: boolean }) {
+/** A project as Settings lists it: its name, where the daemon keeps it, and whether its folder is on this computer. */
+type ListedProject = { name: string; place: TicketPlace; local: boolean; link: ProjectLink }
+
+/** A part of the page: its heading and what it is for. Search results show only groups, so it is left out there. */
+function Part({ title, sub }: { title: string; sub: string }) {
+  if (useContext(SettingsSearch) !== null) return null
+  return (
+    <>
+      <h3 className="mx-tk-settings-part">{title}</h3>
+      <p className="mx-tk-settings-sub">{sub}</p>
+    </>
+  )
+}
+
+/** Settles a change: a refusal is said in place, never dropped. */
+function useSaved() {
+  const [note, setNote] = useState<string | null>(null)
+  const settle = (work: Promise<TicketsResult<unknown>>, failed: string) => {
+    work.then((told) => { setNote(told.ok ? null : told.failure.kind === 'invalid' || told.failure.kind === 'unreachable' ? `${failed}: ${told.failure.line}` : failed) }, (error: unknown) => { setNote(errorMessage(error, failed)) })
+  }
+  return { note, settle }
+}
+
+function GroupPick({ project, source, keyed, onSave }: { project: ListedProject; source: 'plane' | 'linear'; keyed: boolean; onSave: (link: ProjectLink) => void }) {
   const groups = useTicketGroups(keyed ? source : null)
-  const picked = link[source]
+  const picked = project.link[source]
   const what = source === 'plane' ? 'Plane project' : 'Linear team'
   const items = groupItems(source, groups.data)
   if (picked !== null && !items.some((item) => item.value === picked.id)) items.push({ value: picked.id, label: picked.name, tile: <Mark provider={source} /> })
-  const detail = !keyed ? `Connect ${PROVIDER_LOOK[source].name} above first.` : groups.isPending ? 'Reading…' : groups.isError ? 'Could not read them.' : undefined
+  const detail = !keyed ? `Connect ${PROVIDER_LOOK[source].name} under Accounts first.` : groups.isPending ? 'Reading…' : groups.isError ? 'Could not read them.' : undefined
   return (
-    <Row label={`${project.name} · ${what}`} {...(detail === undefined ? {} : { detail })}>
+    <Row label={what} {...(detail === undefined ? {} : { detail })}>
       {keyed && (
         <PickerSelect label={`${what} for ${project.name}`} value={picked?.id ?? NOTHING} groups={[{ items }]} width={220}
-          onPick={(value) => { setProjectLink(project.linkKey, { [source]: value === NOTHING ? null : { id: value, name: items.find((item) => item.value === value)?.label ?? value } }) }} />
+          onPick={(value) => { onSave({ ...project.link, [source]: value === NOTHING ? null : { id: value, name: items.find((item) => item.value === value)?.label ?? value } }) }} />
       )}
     </Row>
   )
@@ -177,49 +197,102 @@ function KeptField({ label, value, placeholder, valid, maxLength, onKeep }: { la
   )
 }
 
-function ProjectRows({ project, keyed }: { project: TicketsProject; keyed: Readonly<Record<'plane' | 'linear', boolean>> }) {
-  const links = useTicketLinks()
-  const link = linkOf(links, project.linkKey)
-  const local = project.machine === LOCAL_MACHINE
-  const origin = useQuery({ queryKey: ['tickets', 'origin', project.machine, project.folder], queryFn: () => githubRepoOf(project.folder), enabled: local, retry: false, staleTime: Infinity })
+/** What a project reads, in one line: "GitHub me/shop · Linear Core". */
+function readsLine(link: ProjectLink): string {
+  const github = link.github === null ? 'GitHub from origin' : link.github === '' ? 'GitHub off' : `GitHub ${link.github}`
+  return [github, link.plane === null ? null : `Plane ${link.plane.name}`, link.linear === null ? null : `Linear ${link.linear.name}`].filter((part) => part !== null).join(' · ')
+}
+
+/** The last part of a folder, as a project's name when no open session names it. */
+function folderName(folder: string): string {
+  return folder.split(/[\\/]/).filter((part) => part !== '').pop() ?? folder
+}
+
+/** One project: what it reads in a line, Change to set its sources here, Unlink to forget them. */
+function ProjectEntry({ project, keyed, linked }: { project: ListedProject; keyed: Readonly<Record<'plane' | 'linear', boolean>>; linked: boolean }) {
+  const { save, unlink } = useLinkChanges()
+  const { note, settle } = useSaved()
+  const [open, setOpen] = useState(false)
+  const origin = useQuery({ queryKey: ['tickets', 'origin', project.place.machine, project.place.folder], queryFn: () => githubRepoOf(project.place.folder), enabled: open && project.local, retry: false, staleTime: Infinity })
   const detected = origin.data ?? null
-  const repoDetail = link.github !== null && link.github !== '' ? 'Set here. Empty it to follow the folder\'s origin.'
-    : detected !== null ? `From the folder's origin: ${detected}` : local ? 'No GitHub origin found. Type owner/name.' : 'Type owner/name.'
+  const keep = (link: ProjectLink) => { settle(save(project.place, link), 'Could not save the link') }
+  const repoDetail = project.link.github !== null && project.link.github !== '' ? 'Set here. Empty it to follow the folder\'s origin.'
+    : detected !== null ? `From the folder's origin: ${detected}` : project.local ? 'No GitHub origin found. Type owner/name.' : 'Type owner/name.'
+  const where = `${project.place.machine === null ? '' : `${project.place.machine} · `}${project.place.folder}`
   return (
     <>
-      <Row label={`${project.name} · GitHub repo`} detail={repoDetail}>
-        <KeptField key={link.github ?? ''} label={`GitHub repo for ${project.name}`} value={link.github ?? ''} placeholder={detected ?? 'owner/name'} maxLength={140}
-          valid={(text) => text === '' || REPO_SHAPE.test(text)} onKeep={(text) => { setProjectLink(project.linkKey, { github: text === '' ? null : text }) }} />
+      <Row label={project.name} detail={`${where} · ${linked ? readsLine(project.link) : 'Not set up yet'}`}>
+        <button type="button" className="mx-scard-button" aria-expanded={open} onClick={() => { setOpen((now) => !now) }}>{open ? 'Done' : linked ? 'Change' : 'Set up'}</button>
+        {linked && <button type="button" className="mx-scard-button is-danger" onClick={() => { settle(unlink(project.place), 'Could not unlink it') }}>Unlink</button>}
       </Row>
-      <GroupPick project={project} source="plane" link={link} keyed={keyed.plane} />
-      <GroupPick project={project} source="linear" link={link} keyed={keyed.linear} />
+      {open && (
+        <>
+          <Row label="GitHub repo" detail={repoDetail}>
+            <KeptField key={project.link.github ?? ''} label={`GitHub repo for ${project.name}`} value={project.link.github ?? ''} placeholder={detected ?? 'owner/name'} maxLength={140}
+              valid={(text) => text === '' || REPO_SHAPE.test(text)} onKeep={(text) => { keep({ ...project.link, github: text === '' ? null : text }) }} />
+          </Row>
+          <GroupPick project={project} source="plane" keyed={keyed.plane} onSave={keep} />
+          <GroupPick project={project} source="linear" keyed={keyed.linear} onSave={keep} />
+        </>
+      )}
+      {note !== null && <p className="mx-scard-note" role="alert">{note}</p>}
     </>
   )
 }
 
+/** An open project not linked yet: listed under its resolved root unless that root is linked already (it is listed there). */
+function OpenProject({ project, keyed, linkedRoots }: { project: TicketsProject; keyed: Readonly<Record<'plane' | 'linear', boolean>>; linkedRoots: ReadonlySet<string> }) {
+  const links = useTicketLinks(project)
+  const resolved = links.data?.project
+  if (resolved === undefined || resolved === null || linkedRoots.has(rootKey(resolved))) return null
+  return <ProjectEntry project={{ name: project.name, place: { machine: resolved.machine, folder: resolved.folder }, local: project.machine === LOCAL_MACHINE, link: NO_LINK }} keyed={keyed} linked={false} />
+}
+
+function rootKey(place: TicketPlace): string {
+  return `${place.machine ?? ''}:${place.folder}`
+}
+
 /**
- * Settings › Tickets: where Tickets reads from, one card per source, then which repo, Plane project and Linear team
- * each open project reads, and the names you go by for Mine. Keys go to the Maitty service and are never shown again.
+ * Settings › Tickets, in two parts. Accounts: GitHub's gh login and the Plane and Linear keys, each set once for every
+ * project on this computer. Linked projects: which repo, Plane project and Linear team each project reads, kept by the
+ * Maitty service per project (and so for every worktree of it), then the names you go by for Mine.
  */
 export function TicketsSection({ projects, signIn }: { projects: readonly TicketsProject[]; signIn: GitHubSignIn | undefined }) {
   const keys = useKeys()
-  const links = useTicketLinks()
+  const links = useTicketLinks(null)
+  const { saveName } = useLinkChanges()
+  const { note, settle } = useSaved()
   const keyed = { plane: keyStateOf(keys.data, 'Plane')?.set ?? false, linear: keyStateOf(keys.data, 'Linear')?.set ?? false }
+  const linked: readonly LinkedProject[] = links.data?.projects ?? []
+  const linkedRoots = new Set(linked.map(rootKey))
+  const nameOf = (project: LinkedProject) => projects.find((open) => open.machineName === project.machine && open.folder === project.folder)?.name ?? folderName(project.folder)
+  const me = links.data?.me ?? { plane: '', linear: '' }
   return (
     <>
+      <Part title="Accounts" sub="Set up once on this computer, for every project." />
       <GitHubCard signIn={signIn} />
       {KEYED.map((each) => <KeyCard key={each.provider} {...each} />)}
-      <Card title="Projects" foot="Tickets shows only the tickets of the project the chat in front works in. Links are kept by this window.">
-        {projects.length === 0
-          ? <p className="mx-scard-note">Open a chat in a project to link it here.</p>
-          : projects.map((project) => <ProjectRows key={project.linkKey} project={project} keyed={keyed} />)}
+      <Part title="Linked projects" sub="Which tickets each project shows. A project is its repository, so every worktree and every session in it shows the same tickets." />
+      <Card title="Projects" foot="Kept by the Maitty service, so the desktop app and the terminal app show a project the same tickets. A GitHub repository needs no setup: the folder's origin is used.">
+        {links.isPending ? <p className="mx-scard-note">Reading…</p>
+          : links.isError ? <p className="mx-scard-note" role="alert">{errorMessage(links.error, 'Could not read the linked projects')}</p>
+            : (
+              <>
+                {linked.map((project) => (
+                  <ProjectEntry key={rootKey(project)} project={{ name: nameOf(project), place: project, local: project.machine === null, link: project.link }} keyed={keyed} linked />
+                ))}
+                {projects.map((project) => <OpenProject key={project.linkKey} project={project} keyed={keyed} linkedRoots={linkedRoots} />)}
+                {linked.length === 0 && projects.length === 0 && <p className="mx-scard-note">Open a chat in a project to set up its tickets, or open Tickets there.</p>}
+              </>
+            )}
       </Card>
       <Card title="You" foot="Mine shows the tickets assigned to you. GitHub knows you by your gh login.">
         {KEYED.map(({ provider, source }) => (
           <Row key={provider} label={`Your name in ${provider}`} detail="As it shows on tickets assigned to you.">
-            <KeptField key={links.me[source]} label={`Your name in ${provider}`} value={links.me[source]} placeholder="Display name" maxLength={MOST_NAME_CHARS} valid={() => true} onKeep={(text) => { setMyName(source, text) }} />
+            <KeptField key={me[source]} label={`Your name in ${provider}`} value={me[source]} placeholder="Display name" maxLength={MOST_NAME_CHARS} valid={() => true} onKeep={(text) => { settle(saveName(provider, text), 'Could not save the name') }} />
           </Row>
         ))}
+        {note !== null && <p className="mx-scard-note" role="alert">{note}</p>}
       </Card>
     </>
   )

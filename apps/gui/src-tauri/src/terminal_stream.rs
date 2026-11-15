@@ -24,6 +24,7 @@ use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
 use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, Snapshot, Status, TermId, TicketKeyChange};
+use maitty_shared::ticket_links::{TicketLinkChange, TicketLinks, TicketPlace};
 use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWrite, TicketWritten, TicketsReply, TicketsRequest};
 use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
 use serde::Serialize;
@@ -66,6 +67,8 @@ const TICKETS_EVENT: &str = "tickets";
 /// Where the ticket providers' keys stand: `{machine, tag, answer}`, never a key.
 const TICKET_KEYS_EVENT: &str = "ticket-keys";
 const TICKET_WRITE_EVENT: &str = "ticket-write";
+/// Which sources each project reads: `{machine, tag, answer}`, `answer` `{Ok}` (the asked project, every linked one, your names) or `{Err}`.
+const TICKET_LINKS_EVENT: &str = "ticket-links";
 /// A machine's home folder, as its daemon reads it.
 const REMOTE_HOME: &str = "~";
 /// Longest repository address the daemon accepts.
@@ -499,6 +502,12 @@ impl Wire {
     /// Ask this computer's daemon to write one change to a ticket: a comment, or closing it. `confirmed` is the
     /// person's click on the confirm step, passed on as it is; the daemon writes nothing without it and refuses
     /// an agent's connection. The answer comes back as a `ticket-write` event carrying `tag`.
+    /// Ask this computer's daemon which sources a project reads, or change them. The answer is a `ticket-links`
+    /// event carrying `tag`.
+    pub fn ticket_links(&self, place: Option<TicketPlace>, change: TicketLinkChange, tag: u64) -> Result<(), String> {
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketLinks { place, change, tag }))
+    }
+
     pub fn ticket_write(&self, source: &str, id: &str, write: TicketWrite, confirmed: bool, tag: u64) -> Result<(), String> {
         let (source, id) = (source.trim(), id.trim());
         for text in [source, id] {
@@ -596,6 +605,13 @@ pub fn tickets(wire: tauri::State<'_, Wire>, source: String, request: TicketsReq
 #[tauri::command]
 pub fn ticket_keys(wire: tauri::State<'_, Wire>, change: TicketKeyChange, tag: u64) -> Result<(), String> {
     wire.ticket_keys(change, tag)
+}
+
+/// Asks this computer's daemon which ticket sources a project reads, or changes them (`place` is the folder in
+/// front, resolved by the daemon to its project). The answer arrives as a `ticket-links` event with the same `tag`.
+#[tauri::command]
+pub fn ticket_links(wire: tauri::State<'_, Wire>, place: Option<TicketPlace>, change: TicketLinkChange, tag: u64) -> Result<(), String> {
+    wire.ticket_links(place, change, tag)
 }
 
 /// Asks this computer's daemon to add a comment to a ticket or close it, after the person confirmed exactly what
@@ -903,6 +919,12 @@ pub enum Reaction {
         tag: u64,
         answer: Result<TicketWritten, TicketError>,
     },
+    /// The projects' ticket links, for the window that asked.
+    TicketLinks {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketLinks, TicketError>,
+    },
     /// A machine's whole snapshot, or none when this computer's line ended.
     Sessions {
         machine: MachineId,
@@ -995,6 +1017,7 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::Tickets { machine, tag, answer } => Some(Reaction::Tickets { machine, tag, answer }),
             Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
             Out::TicketWrite { machine, tag, answer } => Some(Reaction::TicketWrite { machine, tag, answer }),
+            Out::TicketLinks { machine, tag, answer } => Some(Reaction::TicketLinks { machine, tag, answer }),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
                 let _ = handle.send(Outgoing {
@@ -1206,6 +1229,9 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::TicketWrite { machine, tag, answer } => {
                 let _ = app.emit(TICKET_WRITE_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
+            Reaction::TicketLinks { machine, tag, answer } => {
+                let _ = app.emit(TICKET_LINKS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
             Reaction::Removed { machine } => {
                 maitty_desktop_client::forget_remote(machine.0);
                 if let Ok(mut states) = app.state::<MachineStates>().0.lock() {
@@ -1300,6 +1326,25 @@ mod tests {
         assert!(serde_json::from_value::<TicketWrite>(serde_json::json!({"Delete": {}})).is_err());
         let done = TaggedAnswer { machine: 0, tag: 6, answer: Ok::<_, TicketError>(TicketWritten::Commented) };
         assert_eq!(serde_json::to_value(done).unwrap(), serde_json::json!({"machine": 0, "tag": 6, "answer": {"Ok": "Commented"}}));
+    }
+
+    #[test]
+    fn a_ticket_link_change_and_its_answer_keep_their_shapes() {
+        use maitty_shared::ticket_links::{GitHubLink, LinkedProject, TicketLink, TicketPick};
+        let place: TicketPlace = serde_json::from_value(serde_json::json!({"machine": null, "folder": "/home/me/shop"})).unwrap();
+        assert_eq!(place.folder, "/home/me/shop");
+        let set: TicketLinkChange = serde_json::from_value(serde_json::json!({"Set": {"place": {"machine": null, "folder": "/home/me/shop"}, "link": {"github": "Off", "plane": null, "linear": {"id": "linear:team.1", "name": "Core"}}}})).unwrap();
+        let TicketLinkChange::Set { link, .. } = set else { panic!("a set") };
+        assert_eq!(link.github, GitHubLink::Off);
+        assert_eq!(serde_json::from_value::<GitHubLink>(serde_json::json!({"Repo": "me/shop"})).unwrap(), GitHubLink::Repo("me/shop".into()));
+        assert_eq!(serde_json::from_value::<TicketLinkChange>(serde_json::json!("Read")).unwrap(), TicketLinkChange::Read);
+        let found = TicketLinks {
+            project: Some(LinkedProject { machine: None, folder: "/shop".into(), link: TicketLink { plane: Some(TicketPick { id: "plane:p".into(), name: "P".into() }), ..TicketLink::default() } }),
+            ..TicketLinks::default()
+        };
+        let told = serde_json::to_value(TaggedAnswer { machine: 0, tag: 7, answer: Ok::<_, TicketError>(found) }).unwrap();
+        assert_eq!(told["answer"]["Ok"]["project"]["link"]["github"], serde_json::json!("Origin"));
+        assert_eq!(told["answer"]["Ok"]["me"], serde_json::json!({"plane": "", "linear": ""}));
     }
 
     fn state(machine: u16, name: &str, kind: &'static str) -> MachineState {

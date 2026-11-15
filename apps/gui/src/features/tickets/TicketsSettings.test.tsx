@@ -19,6 +19,17 @@ const api = vi.hoisted(() => ({
 vi.mock('@/api/tickets', () => api)
 const gh = vi.hoisted(() => ({ loadGitHubAccounts: vi.fn<(machine: number) => Promise<GitHubReport>>() }))
 vi.mock('@/api/githubAccounts', () => gh)
+const fake = vi.hoisted(() => ({ links: null as ReturnType<typeof import('@/test/fakeTicketLinks').fakeTicketLinks> | null }))
+vi.mock('@/api/ticketLinks', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/api/ticketLinks')>()
+  const { fakeTicketLinks } = await import('@/test/fakeTicketLinks')
+  fake.links = fakeTicketLinks()
+  return { ...real, ...fake.links.api }
+})
+function links() {
+  if (fake.links === null) throw new Error('the daemon fake is made when the module is mocked')
+  return fake.links
+}
 
 const NO_KEYS: TicketKeyState[] = [{ provider: 'Plane', set: false, address: '', workspace: '' }, { provider: 'Linear', set: false, address: '', workspace: '' }]
 const LINEAR_SET: TicketKeyState[] = [NO_KEYS[0] as TicketKeyState, { provider: 'Linear', set: true, address: '', workspace: '' }]
@@ -27,7 +38,7 @@ const SECRET = 'lin_api_0123456789'
 function show(signIn = vi.fn()) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <TicketsSection projects={[{ name: 'shop', linkKey: '0:/home/me/shop', folder: '/home/me/shop', machine: 0 }]} signIn={{ onSignIn: signIn, signInsEnded: 0 }} />
+      <TicketsSection projects={[{ name: 'shop', linkKey: ':/home/me/shop', folder: '/home/me/shop', machine: 0, machineName: null }]} signIn={{ onSignIn: signIn, signInsEnded: 0 }} />
     </QueryClientProvider>,
   )
   return signIn
@@ -37,6 +48,7 @@ afterEach(cleanup)
 beforeEach(() => {
   localStorage.clear()
   resetTicketLinksForTest()
+  links().set([])
   for (const mock of Object.values(api)) mock.mockReset()
   gh.loadGitHubAccounts.mockResolvedValue({ installed: true, accounts: [{ login: 'cydo', active: true }], problem: null })
   api.loadTicketKeys.mockResolvedValue({ ok: true, value: NO_KEYS })
@@ -45,10 +57,24 @@ beforeEach(() => {
 })
 
 describe('Settings › Tickets', () => {
-  it('shows the gh login, and the repo the folder pushes to', async () => {
+  it('shows the gh login under Accounts, and an open project to set up under Linked projects', async () => {
     show()
+    expect(screen.getByRole('heading', { name: 'Accounts' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Linked projects' })).toBeInTheDocument()
     expect(await screen.findByText('Signed in with gh as @cydo')).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('button', { name: 'Set up' }))
     expect(await screen.findByText("From the folder's origin: me/shop")).toBeInTheDocument()
+  })
+
+  it('lists each linked project with what it reads, and unlinks one', async () => {
+    links().set([{ machine: null, folder: '/home/me/shop', link: { github: '', plane: null, linear: { id: 'linear:team.1', name: 'Core' } } }, { machine: 'kingdom', folder: '/srv/blog', link: { github: 'me/blog', plane: null, linear: null } }])
+    show()
+    expect(await screen.findByText('/home/me/shop · GitHub off · Linear Core')).toBeInTheDocument()
+    expect(screen.getByText('kingdom · /srv/blog · GitHub me/blog')).toBeInTheDocument()
+    const unlinks = screen.getAllByRole('button', { name: 'Unlink' })
+    await userEvent.click(unlinks[0] as HTMLElement)
+    await waitFor(() => { expect(links().projects).toHaveLength(1) })
+    expect(links().projects[0]?.folder).toBe('/srv/blog')
   })
 
   it('offers a terminal to sign in to gh when nobody is', async () => {

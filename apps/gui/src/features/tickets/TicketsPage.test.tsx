@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TicketDetail, TicketGroup, TicketKeyState, TicketsResult, TicketSummary, TicketWrite, TicketWritten } from '@/api/tickets'
+import type { KeyedProvider, TicketDetail, TicketGroup, TicketKeyState, TicketsResult, TicketSummary, TicketWrite, TicketWritten } from '@/api/tickets'
 import { resetTicketLinksForTest } from './model/ticketLinks'
 import { TicketsPage, type TicketsHost } from './TicketsPage'
 
@@ -11,10 +11,22 @@ const api = vi.hoisted(() => ({
   loadTicketGroups: vi.fn<(source: string) => Promise<TicketsResult<TicketGroup[]>>>(),
   loadTicketPage: vi.fn<() => Promise<TicketsResult<{ tickets: TicketSummary[]; more: boolean }>>>(),
   loadTicket: vi.fn<(source: string, id: string) => Promise<TicketsResult<TicketDetail>>>(),
+  saveTicketKey: vi.fn<(provider: KeyedProvider, address: string, workspace: string, key: string) => Promise<TicketsResult<TicketKeyState[]>>>(),
   githubRepoOf: vi.fn<(folder: string) => Promise<string | null>>(),
   writeTicket: vi.fn<(source: string, id: string, write: TicketWrite, confirmed: true) => Promise<TicketsResult<TicketWritten>>>(),
 }))
 vi.mock('@/api/tickets', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/tickets')>(), ...api }))
+const fake = vi.hoisted(() => ({ links: null as ReturnType<typeof import('@/test/fakeTicketLinks').fakeTicketLinks> | null }))
+vi.mock('@/api/ticketLinks', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@/api/ticketLinks')>()
+  const { fakeTicketLinks } = await import('@/test/fakeTicketLinks')
+  fake.links = fakeTicketLinks()
+  return { ...real, ...fake.links.api }
+})
+function links() {
+  if (fake.links === null) throw new Error('the daemon fake is made when the module is mocked')
+  return fake.links
+}
 
 const CART: TicketSummary = { id: 'github:me/shop#142', title: 'Fix the cart', stateName: 'open', category: 'Open', labels: ['bug'], assignee: 'cydo', url: 'https://github.com/me/shop/issues/142', groups: ['github:me/shop'], updatedAt: '2026-11-14T10:00:00Z' }
 const TILL: TicketSummary = { ...CART, id: 'github:me/shop#143', title: 'Fix the till', assignee: null, url: 'https://github.com/me/shop/issues/143' }
@@ -31,7 +43,7 @@ function host(change: Partial<TicketsHost> = {}): TicketsHost {
 function show(page: TicketsHost = host()) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <TicketsPage project={{ name: 'shop', linkKey: '0:/home/me/shop', folder: '/home/me/shop', machine: 0 }} host={page} />
+      <TicketsPage project={{ name: 'shop', linkKey: ':/home/me/shop', folder: '/home/me/shop', machine: 0, machineName: null }} host={page} />
     </QueryClientProvider>,
   )
   return page
@@ -41,6 +53,7 @@ afterEach(cleanup)
 beforeEach(() => {
   localStorage.clear()
   resetTicketLinksForTest()
+  links().set([])
   for (const mock of Object.values(api)) mock.mockReset()
   api.loadTicketKeys.mockResolvedValue({ ok: true, value: [] })
   api.githubRepoOf.mockResolvedValue('me/shop')
@@ -74,11 +87,34 @@ describe('the Tickets view', () => {
     expect(page.onSignInGitHub).toHaveBeenCalledOnce()
   })
 
-  it('asks for a source when nothing is linked', async () => {
+  it('sets up GitHub in place when the folder names no repository, for the project and its worktrees', async () => {
     api.githubRepoOf.mockResolvedValue(null)
-    const page = show()
-    await userEvent.click(await screen.findByRole('button', { name: 'Connect a source' }))
-    expect(page.onSettings).toHaveBeenCalledOnce()
+    show()
+    expect(await screen.findByText("Which repository are shop's issues in?")).toBeInTheDocument()
+    expect(screen.getByText(/Saved for shop and every worktree of it/)).toBeInTheDocument()
+    await userEvent.type(screen.getByRole('textbox', { name: 'GitHub repo for shop' }), 'me/shop')
+    await userEvent.click(screen.getByRole('button', { name: 'Use this repo' }))
+    expect(links().projects).toEqual([{ machine: null, folder: '/home/me/shop', link: { github: 'me/shop', plane: null, linear: null } }])
+    expect(await screen.findByText('Fix the cart')).toBeInTheDocument()
+  })
+
+  it('connects Linear once, then picks the team this project reads', async () => {
+    const LINEAR_SET: TicketKeyState[] = [{ provider: 'Plane', set: false, address: '', workspace: '' }, { provider: 'Linear', set: true, address: '', workspace: '' }]
+    api.saveTicketKey.mockResolvedValue({ ok: true, value: LINEAR_SET })
+    api.loadTicketGroups.mockImplementation((source) => Promise.resolve({ ok: true, value: source === 'linear' ? [{ id: 'linear:team.1', kind: 'Project', name: 'Core', parent: null, count: 4 }] : [] }))
+    show()
+    await userEvent.click(await screen.findByRole('tab', { name: /Linear/ }))
+    expect(screen.getByRole('list', { name: 'Set up Linear' })).toBeInTheDocument()
+    expect(screen.getByText(/used for every project/)).toBeInTheDocument()
+    const key = screen.getByLabelText('Linear API key')
+    expect(key).toHaveAttribute('type', 'password')
+    await userEvent.type(key, 'lin_api_0123456789')
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Linear' }))
+    expect(api.saveTicketKey).toHaveBeenCalledWith('Linear', '', '', 'lin_api_0123456789')
+    expect(await screen.findByText('Linear is connected on this computer')).toBeInTheDocument()
+    expect(document.body.innerHTML).not.toContain('lin_api_0123456789')
+    await userEvent.click(await screen.findByRole('button', { name: /Core/ }))
+    await vi.waitFor(() => { expect(links().projects[0]?.link.linear).toEqual({ id: 'linear:team.1', name: 'Core' }) })
   })
 })
 

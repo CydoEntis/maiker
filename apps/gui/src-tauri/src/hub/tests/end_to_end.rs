@@ -91,6 +91,7 @@ impl Host {
                 | Reaction::Tickets { .. }
                 | Reaction::TicketKeys { .. }
                 | Reaction::TicketWrite { .. }
+                | Reaction::TicketLinks { .. }
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),
                 Reaction::Sessions { machine, snapshot } => {

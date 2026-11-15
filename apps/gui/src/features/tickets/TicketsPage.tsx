@@ -10,7 +10,8 @@ import { useReducedMotion } from '@/features/workspace/components/motion'
 import { usePresence } from '@/lib/usePresence'
 import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
-import { linkOf, useTicketLinks, type ProjectLink } from './model/ticketLinks'
+import { linkOf, placeOf, useTicketLinks, type ProjectLink } from './model/ticketLinks'
+import { TicketSetup } from './TicketSetup'
 import { GROUP_VIEWS, groupCounts, groupsUnder, isMine, kindWord, matchesSearch, openBlockers, PROVIDER_LOOK, PROVIDERS, ticketKey, type KitchenRun, type Provider } from './model/tickets'
 import { failureOf, ticketsOf, TICKETS_REFRESH_MS, useTicketDetail, useTicketGroups, useTicketList } from './useTicketData'
 import { TicketBoard, TicketRow, TicketSkeleton, type RowState } from './TicketRows'
@@ -74,14 +75,6 @@ function sourceFor(provider: Provider, link: ProjectLink, detectedRepo: string |
   return { linked: true, source: provider, top: picked.id, topName: picked.name }
 }
 
-const LINK_WHAT: Readonly<Record<Provider, string>> = { github: 'a GitHub repo', plane: 'a Plane project', linear: 'a Linear team' }
-
-function linkHow(provider: Provider, project: string, why: 'unlinked' | 'no-key'): string {
-  if (provider === 'github') return `Maitty uses your gh login, so there is no key to paste. Pick the repo for ${project}.`
-  if (why === 'no-key') return `Add your ${PROVIDER_LOOK[provider].name} ${provider === 'plane' ? 'address and an API key' : 'API key'} in Settings, then pick the ${provider === 'plane' ? 'project' : 'team'}.`
-  return `Pick the ${provider === 'plane' ? 'project' : 'team'} in Settings.`
-}
-
 /** Minutes since `at`, said as a person would. */
 function minutesAgo(at: number, now: number): string {
   const minutes = Math.max(1, Math.round((now - at) / MINUTE_MS))
@@ -140,8 +133,10 @@ const VIEW_ICON: Readonly<Record<GroupKind, IconName>> = { Milestone: 'milestone
  * hand tickets to Kitchen. Ticket text is other people's and is shown as plain text everywhere.
  */
 export function TicketsPage({ project, host, leaving = false }: { project: TicketsProject; host: TicketsHost; leaving?: boolean }) {
-  const links = useTicketLinks()
-  const link = linkOf(links, project.linkKey)
+  const links = useTicketLinks(project)
+  const link = linkOf(links.data)
+  // The project the daemon took the folder to (a worktree's main checkout), where a link is kept.
+  const setupProject = { name: project.name, place: links.data?.project ?? placeOf(project) }
   const reduced = useReducedMotion()
   const client = useQueryClient()
   // Details are read from the cache as the page draws, so a change to the cache draws it again.
@@ -208,7 +203,7 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
   const tickets = useMemo(() => ticketsOf(list.data?.pages), [list.data])
   const known = useMemo(() => new Map(tickets.map((ticket) => [ticket.id, ticket])), [tickets])
   const isGroupView = view !== 'list' && view !== 'mine' && view !== 'board'
-  const me = provider === 'github' ? host.githubLogin : provider === 'plane' ? links.me.plane : links.me.linear
+  const me = provider === 'github' ? host.githubLogin : provider === 'plane' ? links.data?.me.plane ?? '' : links.data?.me.linear ?? ''
   const meKnown = me !== null && me !== ''
 
   // A group view counts every ticket of the source, so it reads them all (up to the daemon's limit).
@@ -354,7 +349,8 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
     }
   }
 
-  const noneLinked = PROVIDERS.every((each) => !sources[each].linked)
+  // Until the links and the folder's origin are read, a source that is not set up yet is not said to be.
+  const settling = links.isPending || keys.isPending || (provider === 'github' && link.github === null && project.machine === LOCAL_MACHINE && detected.isPending)
   const look = PROVIDER_LOOK[provider]
   const views: Array<{ id: View; label: string; icon: IconName }> = [
     { id: 'list', label: 'All', icon: 'list' },
@@ -378,14 +374,7 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
         <span className="mx-spacer" />
         <button type="button" className="mx-tk-x" aria-label="Close" title="Back to the chat" onClick={host.onClose}>✕</button>
       </div>
-      {noneLinked && !current.linked && keys.isFetched && (detected.isFetched || project.machine !== LOCAL_MACHINE || link.github !== null) ? (
-        <div className="mx-tk-none">
-          <span className="mx-tk-none-title">See your tickets here</span>
-          <span className="mx-tk-none-sub">Connect GitHub, Plane or Linear to browse {project.name}'s tickets and start an agent on one. Maitty only reads them.</span>
-          <button type="button" className="mx-tk-button is-primary" onClick={host.onSettings}>Connect a source</button>
-        </div>
-      ) : (
-        <>
+      <>
           <div className="mx-tk-bar-wrap">
             <div role="tablist" aria-label="Source" className="mx-tk-tabs">
               {PROVIDERS.map((each) => {
@@ -437,13 +426,10 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
               </div>
             )}
           </div>
-          {!current.linked ? (
-            <div className="mx-tk-unlinked" data-label="Source not linked">
-              <span className="mx-tk-unlinked-mark">{look.mark}</span>
-              <span className="mx-tk-unlinked-title">{look.name} isn't linked to {project.name}</span>
-              <span className="mx-tk-unlinked-sub">Link {LINK_WHAT[provider]} to see its tickets here. {linkHow(provider, project.name, current.why)}</span>
-              <button type="button" className="mx-tk-button is-primary" onClick={host.onSettings}>Link {LINK_WHAT[provider]}</button>
-            </div>
+          {!current.linked && settling ? (
+            <TicketSkeleton />
+          ) : !current.linked ? (
+            <TicketSetup provider={provider} project={setupProject} link={link} keys={keys.data} />
           ) : (
             <>
               {banner !== null && (
@@ -502,8 +488,7 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
               )}
             </>
           )}
-        </>
-      )}
+      </>
       {drawer.shown && drawerTicket !== null && (
         <TicketDrawer
           provider={provider}

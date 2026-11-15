@@ -970,10 +970,20 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
 
 - **Where it is.** The tools bar's **Tickets** button opens it over the chat area (`TicketsOverlay` in `.mx-main`) and
   closes the side panel; ✕ or the button closes it (DESIGN › *Tools bar*).
-- **Project scope.** A project is a machine and a folder (the repository's root, else the folder;
-  `model/ticketProjects.ts`). Its links (a GitHub repo, a Plane project, a Linear team) and your names in Plane and
-  Linear are kept by the window (`model/ticketLinks.ts`, `localStorage`, nothing secret). GitHub follows the folder's
-  `origin` (`github_repo_of`) until a repo is typed. Every read goes through this computer's daemon.
+- **Accounts once, links per project.** A Plane or Linear key is set once on this computer and serves every project
+  (`TicketKeys`). Which sources a project reads (a GitHub repo, a Plane project, a Linear team) is its **link**, kept by
+  this computer's daemon (`Query::TicketLinks`, `api/ticketLinks.ts`, `model/ticketLinks.ts`; nothing secret), so the
+  desktop app and the TUI show a project the same tickets. A project is a repository's main checkout (the daemon takes a
+  worktree's folder there), else the folder, on its machine (`model/ticketProjects.ts`, kept under the machine's name):
+  every session and worktree of it shows the same tickets. GitHub follows the folder's `origin` (`github_repo_of`)
+  with no setup until a repo is typed or GitHub is turned off. Links the window kept in `localStorage` before protocol
+  108 are handed to the daemon once (this computer's only; the daemon keeps any it already has) and then dropped.
+  Every read goes through this computer's daemon.
+- **Setting up in place.** A source a project has not set up shows its setup where its tickets would be
+  (`TicketSetup.tsx`), as numbered steps that each say whether they are for every project or this one: GitHub with no
+  origin asks for `owner/name` (or, turned off, offers the origin again); Plane and Linear show 1 Connect (the key
+  form, "used for every project", never shown again) and 2 Pick the project or team for this project from the
+  provider's list ("Saved for <project> and every worktree of it"). A pick saves at once and the list shows.
 - **Ticket text is text.** Titles, bodies, comments and labels are drawn as React text, never as Markdown or HTML;
   links show as text with ↗ and open in the browser only on a click (`openLink`, http and https only).
 - **What is sent.** Start an agent and Send to this chat show **exactly what will be sent** before anything goes:
@@ -989,16 +999,18 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
   refusal stays in the dialog as "Not written." with why, and the ticket is as it was; a success closes it, toasts,
   and reads the ticket and lists again. Maitty never edits or deletes a ticket. `writeTicket` takes `confirmed: true`
   and is called from nowhere but this dialog's confirm.
-- **States.** Loading (skeleton rows), no matches (Clear filters), no sources (Connect a source), not linked (Link …,
-  opening Settings › Tickets), gh signed out (Open terminal), key refused (red, Replace key), offline (last good copy
+- **States.** Loading (skeleton rows, also while the links and the origin are read), no matches (Clear filters), not
+  set up (the setup above), gh signed out (Open terminal), key refused (red, Replace key), offline (last good copy
   with Retry), rate-limited (no button). Banners are never amber.
 - **Keys.** `/` search, ↑↓ move, Space or X ticks, Enter opens, S starts an agent, K sends to Kitchen, Esc closes the
   ticket page, then empties the search, then the selection.
-- **Settings › Tickets** (`TicketsSettings.tsx`, nav key K): the gh login with Check again (Open terminal when signed
-  out); Plane's address, workspace and key, Linear's key (`type=password`, `autocomplete=off`), Connect, then
-  "Connected · key saved" with Replace key and Remove, and "Key refused" when the provider refused it. A saved key is
-  never shown. Keys are kept by the Maitty service in its data folder, not the system keychain. Then each open
-  project's repo, Plane project and Linear team, and your names for Mine.
+- **Settings › Tickets** (`TicketsSettings.tsx`, nav key K) has two parts. **Accounts** ("set up once on this
+  computer, for every project"): the gh login with Check again (Open terminal when signed out); Plane's address,
+  workspace and key, Linear's key (`type=password`, `autocomplete=off`), Connect, then "Connected · key saved" with
+  Replace key and Remove, and "Key refused" when the provider refused it. A saved key is never shown. Keys are kept by
+  the Maitty service in its data folder, not the system keychain. **Linked projects**: every project the daemon keeps
+  a link for (its folder, its machine, what it reads in one line), with Change (its repo, Plane project and Linear
+  team) and Unlink, then each open project not set up yet with Set up; then your names for Mine.
 
 ## Project-specific: Tickets view (TUI)
 

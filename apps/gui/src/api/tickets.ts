@@ -144,7 +144,7 @@ function summaryOf(summary: z.infer<typeof SummarySchema>): TicketSummary {
   }
 }
 
-function failureOf(error: z.infer<typeof ErrorSchema>): TicketFailure {
+export function failureOf(error: z.infer<typeof ErrorSchema>): TicketFailure {
   if (error === 'NotInstalled') return { kind: 'no-key' }
   if (error === 'SignedOut') return { kind: 'signed-out' }
   if (error === 'NotFound') return { kind: 'not-found' }
