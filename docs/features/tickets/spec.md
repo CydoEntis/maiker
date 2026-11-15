@@ -82,6 +82,8 @@ words, never a delete.
 - **Through each provider's own door.** GitHub: the user's `gh issue comment` and `gh issue close`.
   Plane: the kept key, `POST` a comment, `PATCH` the work item to a state of its completed group.
   Linear: the kept key, `commentCreate` and `issueUpdate` to a state of type completed.
+- **Where in the window.** The ticket page's Comment… and Mark done… open a dialog that shows the provider,
+  the ticket and the exact text; only its confirm button writes (UI › *Tickets view*).
 - **Sent once.** A write is never retried. A failure is a typed error the window shows; the ticket
   is read again after a success.
 - Plane and Linear writes are not yet checked against a live server.

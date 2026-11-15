@@ -21,6 +21,10 @@ type Props = {
   onSendHere: (() => void) | null
   onKitchen: () => void
   onStart: () => void
+  /** Opens the comment dialog; nothing is posted until it is confirmed there. */
+  onComment: () => void
+  /** Opens the mark-done dialog; nothing is closed until it is confirmed there. */
+  onMarkDone: () => void
   onOpenWork: (sessionId: string) => void
   onOpenTicket: (id: string) => void
   onClose: () => void
@@ -45,9 +49,10 @@ function LinkLine({ url }: { url: string }) {
 /**
  * One ticket over the Tickets view, sliding in from the right: its mark, key and place with **Open in … ↗** and ✕; then
  * the title, the facts, what blocks it (red-edged), its description and comments as plain text in a mono box, its links;
- * and at the foot Send to this chat, Send to Kitchen and Start an agent…. Read-only: nothing here changes the ticket.
+ * and at the foot Comment…, Mark done…, Send to this chat, Send to Kitchen and Start an agent…. Comment and Mark done only open
+ * a dialog that shows exactly what will be written; the ticket changes only when that is confirmed.
  */
-export function TicketDrawer({ provider, summary, detail, failed, where, known, leaving, now, run, onSendHere, onKitchen, onStart, onOpenWork, onOpenTicket, onClose }: Props) {
+export function TicketDrawer({ provider, summary, detail, failed, where, known, leaving, now, run, onSendHere, onKitchen, onStart, onComment, onMarkDone, onOpenWork, onOpenTicket, onClose }: Props) {
   const key = ticketKey(summary)
   const look = PROVIDER_LOOK[provider]
   const state = CATEGORY_LOOK[summary.category]
@@ -112,7 +117,9 @@ export function TicketDrawer({ provider, summary, detail, failed, where, known, 
       </div>
       <div className="mx-tk-drawer-foot">
         {run !== null && <button type="button" className="mx-tk-button" onClick={() => { onOpenWork(run.sessionId) }}>In Kitchen · {run.step} · Open Work ›</button>}
-        <span className="mx-tk-foot-note">Read-only. Maitty never changes the ticket.</span>
+        <span className="mx-tk-foot-note">Maitty changes a ticket only to add a comment or mark it done, and only after you confirm what it writes.</span>
+        <button type="button" className="mx-tk-button" onClick={onComment}>Comment…</button>
+        <button type="button" className="mx-tk-button" disabled={summary.category === 'Closed'} title={summary.category === 'Closed' ? 'Already done' : undefined} onClick={onMarkDone}>Mark done…</button>
         <button type="button" className="mx-tk-button" disabled={onSendHere === null || detail === null} title={onSendHere === null ? 'Open a chat first' : undefined} onClick={() => { onSendHere?.() }}>Send to this chat</button>
         <button type="button" className="mx-tk-button" onClick={onKitchen}>Send to Kitchen</button>
         <button type="button" className="mx-tk-button is-primary" disabled={detail === null} onClick={onStart}>Start an agent…<kbd>S</kbd></button>
