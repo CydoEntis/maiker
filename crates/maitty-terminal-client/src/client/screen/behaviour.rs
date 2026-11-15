@@ -692,7 +692,7 @@ impl App {
                 self.sidebar = true;
                 self.start_side_filter();
             }
-            Action::Usage => self.mode = Mode::Usage,
+            Action::Usage => self.open_usage(),
             // There is no tab row: a tab key steps through the sidebar's sessions.
             Action::NextTab | Action::PrevTab => self.step_session(*a == Action::NextTab),
             Action::SelectTab(n) => self.jump_to_session(n.saturating_sub(1)),

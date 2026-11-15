@@ -439,6 +439,10 @@ impl App {
             ServerMsg::Reply(Reply::Text(text)) if self.check_asked_of(machine) => {
                 self.check_output_arrived(text)
             }
+            // Usage is kept by this computer's daemon only.
+            ServerMsg::Reply(Reply::UsageReport(report)) if machine == MachineId::LOCAL => {
+                self.usage_report_arrived(report)
+            }
             ServerMsg::Welcome { .. } | ServerMsg::Reply(_) => {}
         }
     }

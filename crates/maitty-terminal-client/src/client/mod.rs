@@ -505,6 +505,8 @@ pub struct App {
     codex_hooks_asked: bool,
     /// The saved-conversation lists asked of the daemon and not all answered yet.
     resume: resume::Resume,
+    /// Usage and cost's tab, chosen row and the reports this computer's daemon sent.
+    usage_view: screen::UsageView,
     /// The protocol this computer's daemon said it speaks when this window last connected.
     local_protocol: u32,
     /// The theme browser's tab: the Light themes when true, else the Dark ones.
@@ -832,6 +834,7 @@ impl App {
             codex_hooks: None,
             codex_hooks_asked: false,
             resume: Default::default(),
+            usage_view: Default::default(),
             local_protocol: crate::protocol::PROTOCOL_VERSION,
             theme_tab_light: false,
             update_notes: Vec::new(),
@@ -2269,6 +2272,8 @@ fn same_dir(a: &std::path::Path, b: &std::path::Path) -> bool {
 
 #[cfg(test)]
 mod reference_fixture;
+#[cfg(test)]
+mod settings_tests;
 #[cfg(test)]
 mod site_frames;
 #[cfg(test)]
