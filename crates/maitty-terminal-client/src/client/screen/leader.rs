@@ -33,6 +33,7 @@ pub(in crate::client) fn menu_groups() -> Vec<MenuGroup> {
                 ("Branches", Action::Branches),
                 ("History", Action::History),
                 ("References", Action::References),
+                ("Tickets", Action::Tickets),
             ],
         ),
         (

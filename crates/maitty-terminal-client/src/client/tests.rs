@@ -8033,7 +8033,7 @@ second line
             since: crate::clock::ago(std::time::Duration::from_secs(10)),
             acted: false,
         };
-        tap(&mut app, 'p');
+        tap(&mut app, 'v');
         assert!(
             matches!(app.mode, Mode::KeyMap(_)),
             "before any shortcut, a letter with the map up searches it"
@@ -8042,7 +8042,7 @@ second line
             since: crate::clock::ago(std::time::Duration::from_secs(10)),
             acted: true,
         };
-        tap(&mut app, 'p');
+        tap(&mut app, 'v');
         assert!(
             matches!(app.mode, Mode::Prefix { .. }),
             "after one, the mode just stays"
@@ -14848,16 +14848,16 @@ mod drawer_tab_tests {
     }
 
     #[test]
-    fn tab_and_shift_tab_cycle_files_changes_branch_and_references() {
+    fn tab_and_shift_tab_cycle_files_changes_branch_references_and_tickets() {
         let (mut app, dir) = in_repo("cycle");
         app.act(Action::Files);
-        use screen::SheetKind::{Branch, Changes, Files, References};
-        for want in [Changes, Branch, References, Files] {
+        use screen::SheetKind::{Branch, Changes, Files, References, Tickets};
+        for want in [Changes, Branch, References, Tickets, Files] {
             key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
             assert_eq!(open(&app), Some(want), "Tab");
             assert!(app.view_has_keys(), "the new view has the keys");
         }
-        for want in [References, Branch, Changes, Files] {
+        for want in [Tickets, References, Branch, Changes, Files] {
             key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT);
             assert_eq!(open(&app), Some(want), "Shift+Tab");
         }

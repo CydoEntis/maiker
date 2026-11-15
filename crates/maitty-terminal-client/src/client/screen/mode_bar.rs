@@ -572,6 +572,10 @@ fn view_holder(app: &App) -> Option<Holder> {
             ],
             ("Esc", "back"),
         ),
+        View::Tickets(v) => {
+            let (hints, out) = v.hints();
+            holder("TICKETS", hints, out)
+        }
         View::References(_) => holder(
             "REFERENCES",
             &[

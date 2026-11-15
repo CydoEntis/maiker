@@ -910,6 +910,49 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
   never shown. Keys are kept by the Maitty service in its data folder, not the system keychain. Then each open
   project's repo, Plane project and Linear team, and your names for Mine.
 
+## Project-specific: Tickets view (TUI)
+
+The TUI's Tickets is a side-panel tool like References (`client/screen/tickets_view.rs`, the words
+and rules in `client/tickets.rs`): leader `p` (`Action::Tickets`, `tickets`), the Menu's TOOLS row,
+the Project menu, Search commands, and a tab of the panel after References. It reads the same
+daemon requests as the desktop app (*Tickets view (desktop)* above) and follows its rules:
+
+- **Project scope.** The project of the session in front: its repository's main checkout, else its
+  folder, on its machine. Its links (a GitHub repo, a Plane project, a Linear team) and your names
+  for Mine are kept in the saved UI state (`Saved::ticket_links`, `Saved::ticket_me` in
+  `maitty-ui.json`; nothing secret). GitHub follows the folder's `origin` (read off the UI thread,
+  this computer's folders only) until a repo is typed; `x` on the repo row turns GitHub off. Every
+  read and write goes to this computer's daemon (`Query::Tickets`, `TicketKeys`, `TicketWrite`,
+  tagged); a daemon older than tickets is not asked and the panel says to restart it.
+- **Ticket text is text.** Every answer is cleaned again on arrival (`TicketsReply::cleaned`) and
+  every string drawn goes through `tickets::shown`, so no control or escape sequence from a ticket
+  reaches the terminal. Nothing is read as Markdown or HTML; a link opens only on `o` (web links
+  only, `open_link`).
+- **What is sent.** Start an agent (`s`) and Send to the session in front (`t`) show exactly what
+  will be sent (`tickets::ticket_message`: Maitty's lines, the title on one line, the ticket's words
+  quoted with `> `, cut to the daemon's 8,000-character first prompt with a note saying so) and send
+  only on `y` or the button. Start makes a new worktree on `agent/<key>-<title words>` through
+  `Command::NewWorktree` with `agent` and `prompt`, so the daemon checks and quotes the prompt; a
+  folder outside git, or a project on another machine, is refused (Worktrees is local-only). Send is a
+  `QueueFollowUp`, typed in when the agent's turn is over, and needs the session in front to run an
+  agent. A blocked ticket warns in red and can still be started. Kitchen and ticking several tickets
+  are desktop-only.
+- **Writes.** Comment (`c`) and Mark done (`d`, not for a closed ticket) are the only writes. A
+  comment is typed (Enter is a new line), Tab checks it with `clean_comment` and shows the review:
+  the provider, the ticket and exactly what will be written; `y` (or the confirm button) sends it
+  with `confirmed: true`, `e` goes back to editing, Esc cancels and writes nothing. A refusal stays
+  on the review as "Not written." and why; a success toasts, returns to the ticket and reads it and
+  the list again.
+- **States.** Reading (skeleton rows), no matches (Esc clears the search), no source for the
+  project, not linked or no key (`,` opens Sources), gh signed out (`t` opens a shell running
+  `gh auth login`), key refused (red; `,` to replace it), offline (the last list read stays with a
+  red line under it, `r` retries), rate-limited (no key offered). The panel's states are never amber.
+- **Sources** (`,`): per provider, the repo / key / project or team and your name. A key is typed
+  into a form (Plane: address, workspace, key; Linear: key), held as `SecretText`, drawn as a fixed
+  row of bullets (never its length), dropped from memory as soon as it is sent, never toasted (a
+  paste into the form is not repeated anywhere); the answer says only "connected". Removing a key
+  asks first. A Plane project or Linear team is picked from what the provider lists.
+
 ## Project-specific: desktop chat view
 
 The desktop app's chat view is a second view of a Claude Code or Codex session, never a second session

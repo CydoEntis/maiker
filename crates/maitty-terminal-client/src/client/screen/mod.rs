@@ -78,6 +78,10 @@ pub(super) struct Saved {
     pub recent: Vec<String>,
     /// The side sheet's width per kind of view (`SheetKind::key`), as you sized it.
     pub sheet_w: HashMap<String, u16>,
+    /// Which ticket sources each project reads, by `project_key`: a repo and group ids, no secret.
+    pub ticket_links: HashMap<String, crate::client::tickets::TicketLink>,
+    /// The names you are known by at each ticket provider, for Tickets' Mine.
+    pub ticket_me: crate::client::tickets::TicketMe,
     /// `session_order` and `placed` of every other machine, by its configured name. The top-level
     /// ones are this machine's, so a file from before machines reads as it always did. A machine
     /// that is no longer configured keeps its entry.
@@ -1654,6 +1658,7 @@ mod popover;
 mod popups;
 mod references_sheet;
 mod secret_ask;
+mod tickets_view;
 #[cfg(test)]
 mod flat_tests;
 #[cfg(test)]
@@ -1677,5 +1682,5 @@ pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
     popups::*, references_sheet::*, secret_ask::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
-    helper_view::*, workflow_runs::*, workspace::*,
+    helper_view::*, tickets_view::*, workflow_runs::*, workspace::*,
 };

@@ -139,6 +139,7 @@ pub(in crate::client) fn key_groups() -> Vec<(&'static str, Vec<KeyRow>)> {
                 r("Branches", vec![A::Branches], true),
                 r("History", vec![A::History], true),
                 r("References", vec![A::References], true),
+                r("Tickets", vec![A::Tickets], true),
                 r("Worktrees ›", vec![A::Worktrees], true),
                 r("New worktree", vec![A::NewWorktree(None)], false),
                 r("Find a file", vec![A::Find(0)], false),
@@ -200,7 +201,7 @@ fn category_of(act: Option<&Action>) -> &'static str {
             | A::UndoClose | A::NewTab | A::NextTab | A::PrevTab | A::CloseTab | A::SelectTab(_),
         ) => "Panes",
         Some(
-            A::Files | A::Changes | A::Branches | A::History | A::References | A::Worktrees
+            A::Files | A::Changes | A::Branches | A::History | A::References | A::Tickets | A::Worktrees
             | A::NewWorktree(_) | A::RemoveWorktree | A::TidyWorktrees | A::Machines,
         ) => "Tools",
         Some(A::Jump | A::Palette | A::Help | A::Find(_) | A::Search | A::Menu) => "Find",

@@ -107,7 +107,7 @@ impl App {
             self.paste_into_secret(&s);
             return;
         }
-        if self.paste_into_files(&s) || self.paste_into_references(&s) {
+        if self.paste_into_files(&s) || self.paste_into_references(&s) || self.paste_into_tickets(&s) {
             return;
         }
         // Another view with the keys has no text box: the pane behind is not what you were
@@ -1403,6 +1403,12 @@ impl App {
                     }
                     Some(View::References(v)) => {
                         v.sel = i;
+                        if double {
+                            self.on_view_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+                        }
+                    }
+                    Some(View::Tickets(v)) => {
+                        v.click_row(i);
                         if double {
                             self.on_view_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
                         }
