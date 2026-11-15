@@ -300,6 +300,8 @@ pub enum Action {
     /// The conversations Claude and Codex saved for the focused pane's folder; one picked starts
     /// its agent there, resumed.
     ResumeConversation,
+    /// Find a word in what every session on this computer printed recently.
+    FindSessions,
     /// The sessions put away (still running, out of the lists), each to bring back.
     PutAway,
     /// Clone a git repository onto a machine, picked from its GitHub account or pasted.
@@ -402,6 +404,7 @@ impl Action {
             Action::Menu => "Menu".into(),
             Action::Worktrees => "Worktrees…".into(),
             Action::ResumeConversation => "Resume a conversation here".into(),
+            Action::FindSessions => "Find in every session".into(),
             Action::PutAway => "Sessions put away".into(),
             Action::CloneRepo => "Clone a repository…".into(),
             Action::OpenFolderOn => "Open a folder on a machine…".into(),
@@ -502,6 +505,7 @@ impl Action {
             Action::Menu => "menu".into(),
             Action::Worktrees => "worktrees".into(),
             Action::ResumeConversation => "resume-conversation".into(),
+            Action::FindSessions => "find-sessions".into(),
             Action::PutAway => "put-away".into(),
             Action::CloneRepo => "clone-repo".into(),
             Action::OpenFolderOn => "open-folder-on".into(),
@@ -625,6 +629,7 @@ impl FromStr for Action {
             "menu" | "actions" => Action::Menu,
             "worktrees" => Action::Worktrees,
             "resume-conversation" => Action::ResumeConversation,
+            "find-sessions" => Action::FindSessions,
             "put-away" => Action::PutAway,
             "clone-repo" => Action::CloneRepo,
             "open-folder-on" => Action::OpenFolderOn,

@@ -55,6 +55,17 @@ impl App {
             self.require_session_term(key);
             return;
         }
+        // Another machine's Changes come from its own daemon.
+        if a == Action::Changes
+            && let Some(term) = self.selected_term()
+            && !self.is_local_pane(term)
+        {
+            self.leave_shortcut_mode();
+            self.screen.cursor = None;
+            self.mode = Mode::Normal;
+            self.open_remote_changes(term);
+            return;
+        }
         // These read or change the files of the pane they apply to, which on another machine
         // are not on this computer.
         if let Some(feature) = routing::Feature::of(&a)
@@ -75,6 +86,7 @@ impl App {
             Action::PasteImage => self.paste_image(),
             Action::SendFile => self.send_file_action(),
             Action::Find(tab) => self.open_find(tab),
+            Action::FindSessions => self.open_session_find(),
             Action::AgentStatusSetup => self.menu(
                 "Connect an agent · it then reports working, needs you and done itself".into(),
                 maitty_agent_integrations::STATUS_AGENTS
@@ -350,6 +362,7 @@ impl App {
             Action::Files,
             Action::Find(0),
             Action::Find(1),
+            Action::FindSessions,
             Action::Changes,
             Action::Branches,
             Action::References,
@@ -444,6 +457,7 @@ impl App {
             Some(task.ws).filter(|w| *w != 0),
         );
         self.show_view(View::Changes(Box::new(views::ChangesView {
+            extra: Default::default(),
             dir: top.clone(),
             review: None,
             error: None,

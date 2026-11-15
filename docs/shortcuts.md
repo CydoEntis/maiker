@@ -122,6 +122,8 @@ To send `Ctrl+Space` itself to the pane, search commands for "Send the leader ke
 - **Search commands** (`Ctrl+K`, `Space` after the prefix, `Tab` from the map, or typing a letter
   that is not a key): every command, including ones with no key, and your sessions. Matching is
   an in-order subsequence (`spld` finds Split down). With nothing typed it lists the commands you ran last.
+  From three characters it also lists, under IN SESSIONS, a line each session printed that holds
+  them; Enter goes to that line in copy mode.
 - **Keys help** (`?` after the prefix, or the sidebar's menu → Keys): three columns, sessions, panes
   and window, each key as it is bound now; under them "Keys only work in key mode (Ctrl+Space).
   Everything else goes to the pane." `esc close` on its top border closes it.
@@ -359,6 +361,17 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Enter, Ctrl+E, Ctrl+Y | Put path/line into prompt, open in editor, copy path |
 | Esc | Close search |
 
+## Find in every session
+
+Search commands → **Find in every session**.
+
+| Keys | Action |
+| --- | --- |
+| Type, Backspace, Ctrl+U | Edit the words (three or more search) |
+| Up, Down, PgUp, PgDn | Choose a line |
+| Enter | Go to the session, in copy mode at that line (`n` / `N` next and previous match) |
+| Esc | Close |
+
 ## Changes and shared-file diffs
 
 | Keys | Action |
@@ -366,13 +379,21 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Up / k, Down / j | Previous or next changed file |
 | PgUp, PgDn, Space | Read diff; Space pages down |
 | x, e, r | Mark reviewed, open editor, return to agent |
-| c, p | Ask to commit every changed file; ask to push and open a pull request (y or Enter says yes) |
+| t | Tick the file for the next commit (none ticked: the commit takes every change) |
+| c | Write the commit message (Enter commits the ticked files, or all; Esc cancels) |
+| p | Ask to push and open a pull request (y or Enter says yes) |
+| f, u, P | Fetch, pull (fast-forward only), push |
+| l or → | The diff takes the keys: ↑↓ / j k move the line cursor, Enter comments on the line, h, ← or Esc back to the files |
+| s | Hand the comments to the agent's message box (Enter there sends them) |
 | M | Ask to squash-merge the branch's pull request with `gh` (queued to merge when its checks pass; now if the repository doesn't allow that) |
 | m, d | Linked worktree: ask to merge, ask to discard |
 | Enter / y in confirmation | Confirm the requested action; other keys cancel |
 | Up, Down, PgUp, PgDn in shared-file diffs | Scroll both checkout diffs together |
 | m, M, k in shared-file diffs | Message first agent, message second agent, dismiss warning |
 | Esc | Close Changes or shared-file diffs |
+
+On a pane of another machine Changes reads and commits through that machine: c, t, p, f, u, P, x,
+l and s work as here; m, M, d and e are local-only.
 
 ## Check evidence sheet
 

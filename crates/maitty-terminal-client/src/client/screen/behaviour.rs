@@ -2235,6 +2235,7 @@ impl App {
                     }
                 }
             }
+            ScreenHit::SessionFindRow(i) => self.session_find_click(i, double),
             ScreenHit::SideEdge => self.screen.drag = Some(Drag::Side),
             ScreenHit::SheetEdge => self.screen.drag = Some(Drag::Sheet),
             ScreenHit::ToBottom(term) => self.back_to_bottom(term),

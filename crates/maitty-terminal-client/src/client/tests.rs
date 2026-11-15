@@ -6789,12 +6789,12 @@ second line
         (
             "changes",
             true,
-            "CHANGES  · ↑↓ file · c commit · x reviewed · e editor · shortcut mode waits · Esc close",
+            "CHANGES  · ↑↓ file · c commit · t tick · l diff · x reviewed · shortcut mode waits · Esc close",
         ),
         (
             "changes",
             false,
-            "CHANGES  · ↑↓ file · c commit · x reviewed · e editor · Esc close",
+            "CHANGES  · ↑↓ file · c commit · t tick · l diff · x reviewed · Esc close",
         ),
         (
             "branch",
@@ -6862,6 +6862,7 @@ second line
                     app.mode = Mode::Normal;
                 }
                 app.show_view(View::Changes(Box::new(views::ChangesView {
+                    extra: Default::default(),
                     dir: PathBuf::from("/repo"),
                     review: None,
                     error: None,
@@ -12537,6 +12538,7 @@ mod side_panel_width_tests {
 
     fn changes_view() -> View {
         View::Changes(Box::new(views::ChangesView {
+            extra: Default::default(),
             dir: PathBuf::from("/repo"),
             review: None,
             error: None,
@@ -15033,35 +15035,48 @@ mod drawer_tab_tests {
     }
 
     #[test]
-    fn c_in_changes_asks_before_committing_and_y_commits() {
+    fn c_in_changes_asks_for_the_message_and_enter_commits_with_it() {
         let (mut app, dir, mut rx) = changes_with_a_new_file("commit");
         key(&mut app, KeyCode::Char('c'), KeyModifiers::NONE);
+        let written = match &app.view {
+            Some(View::Changes(v)) => v.extra.message.clone().unwrap_or_default(),
+            _ => String::new(),
+        };
+        assert!(!written.is_empty(), "c opens the message, written for you");
+        let shown = text(&draw(&mut app));
         assert!(
-            matches!(&app.view, Some(View::Changes(v)) if v.confirm.as_ref().is_some_and(|(q, _)| q.starts_with("Commit 1 file on "))),
-            "c asks first"
-        );
-        assert!(
-            text(&draw(&mut app)).contains("Commit 1 file on "),
-            "the question is on screen"
+            shown.contains("Commit all 1 file on ") && shown.contains(&written),
+            "the message and what it commits are on screen: {shown}"
         );
         assert!(
             rx.try_recv().is_err() && commits(&dir) == 1,
             "nothing is committed yet"
         );
-        key(&mut app, KeyCode::Char('y'), KeyModifiers::NONE);
+        key(&mut app, KeyCode::Char('!'), KeyModifiers::NONE);
+        key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
         let b = next_bg(&mut rx);
         app.on_bg(b);
-        assert_eq!(commits(&dir), 2, "y commits");
+        assert_eq!(commits(&dir), 2, "Enter commits");
+        let subject = crate::proc::git(&dir, &["log", "-1", "--format=%s"]).unwrap();
+        assert_eq!(subject.trim(), format!("{written}!"), "with the message as written");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn tab_answers_no_to_a_changes_question_instead_of_switching() {
         let (mut app, dir, mut rx) = changes_with_a_new_file("ask-tab");
+        // Writing the message, Tab is not a drawer key; Esc drops the message.
         key(&mut app, KeyCode::Char('c'), KeyModifiers::NONE);
         key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
         assert!(
-            matches!(&app.view, Some(View::Changes(v)) if v.confirm.is_none()),
+            matches!(&app.view, Some(View::Changes(v)) if v.extra.message.is_some()),
+            "still writing in Changes"
+        );
+        key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+        key(&mut app, KeyCode::Char('M'), KeyModifiers::NONE);
+        key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+        assert!(
+            matches!(&app.view, Some(View::Changes(v)) if v.confirm.is_none() && v.extra.message.is_none()),
             "still Changes, the question answered no"
         );
         assert!(

@@ -380,6 +380,11 @@ fn keys_holder(app: &App) -> Option<Holder> {
             &[("↑↓", "move"), ("Enter", "run")],
             ("Esc", "close"),
         ),
+        Mode::FindSessions(_) => holder(
+            "FIND IN SESSIONS",
+            &[("", "type to search"), ("Enter", "go to the line")],
+            ("Esc", "close"),
+        ),
         Mode::Find(_) => holder(
             "FIND",
             &[
@@ -549,13 +554,25 @@ fn view_holder(app: &App) -> Option<Holder> {
             ("Esc", "close"),
         ),
         View::Changes(v) if v.confirm.is_some() => holder("CHANGES", &[("y", "yes")], ("n", "no")),
+        View::Changes(v) if v.extra.message.is_some() => {
+            holder("COMMIT MESSAGE", &[("Enter", "commit")], ("Esc", "cancel"))
+        }
+        View::Changes(v) if v.extra.commenting.is_some() => {
+            holder("COMMENT", &[("Enter", "keep it")], ("Esc", "cancel"))
+        }
+        View::Changes(v) if v.extra.line.is_some() => holder(
+            "CHANGES · DIFF",
+            &[("↑↓", "line"), ("Enter", "comment"), ("s", "send comments")],
+            ("Esc", "files"),
+        ),
         View::Changes(_) => holder(
             "CHANGES",
             &[
                 ("↑↓", "file"),
                 ("c", "commit"),
+                ("t", "tick"),
+                ("l", "diff"),
                 ("x", "reviewed"),
-                ("e", "editor"),
             ],
             ("Esc", "close"),
         ),

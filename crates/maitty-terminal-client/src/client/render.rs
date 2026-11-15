@@ -240,6 +240,10 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
             let v = (**v).clone();
             super::find::draw_find(app, f, area, &t, &v);
         }
+        Mode::FindSessions(v) => {
+            let v = (**v).clone();
+            super::screen::draw_session_find(app, f.buffer_mut(), area, &t, &v);
+        }
         Mode::ScreenMenu(m) => {
             let m = (**m).clone();
             super::menu::draw_menu(app, f, area, &t, &m);

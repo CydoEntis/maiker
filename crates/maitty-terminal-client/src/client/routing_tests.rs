@@ -290,7 +290,6 @@ fn focus_moving_between_a_local_and_a_remote_pane_toggles_the_gate() {
 fn every_gated_action_is_refused_on_a_remote_pane_and_none_opens_anything() {
     for action in [
         Action::Files,
-        Action::Changes,
         Action::Find(0),
         Action::Branches,
         Action::References,
@@ -399,7 +398,7 @@ fn a_remote_cwd_that_exists_here_is_never_read_as_a_local_folder() {
         "kept as the other machine's path, not checked here"
     );
 
-    for action in [Action::Changes, Action::Files, Action::Find(1)] {
+    for action in [Action::Files, Action::Find(1)] {
         app.notice = None;
         app.act(action);
         assert!(app.notice.is_some());

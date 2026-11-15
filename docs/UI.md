@@ -342,7 +342,7 @@ A new `maitty` that finds a server of another version replaces it on the way in.
 **One key overlay** replaces the command palette, the long shortcuts reference and the old leader overview (`client/screen/keyoverlay.rs`). It has three faces in one card with one typing row: Its card has no fill (its lifted rows are flattened to the ground), a red `×` close on the top border, and its key hints are chips on the bottom border.
 
 - **Key map** (the prefix, or the pause after it). A banner, "Every key goes after the leader: `Ctrl+Space` then `s` = split", then Sessions, Panes, Sidebar, Tools and Maitty, each key a keycap followed by its name, from `key_groups()` and the real bindings. A pressed key runs its command; `Tab`, or an unbound letter, switches to the search. Three columns when the card is 100 or more wide, else two; each group's key column is as wide as its widest key. A key marked `›` opens a second step (Worktrees). Action bar: `key` run it, `Tab` search, `?` show all, `Esc` close.
-- **Search commands** (`Ctrl+K`, `Space` after the prefix, or the Menu). A box with an amber border up to 110 by 26 (`draw_search`), an amber title chip and a pink `×`. `› type what you want to do`, then COMMANDS (RESULTS while typing) and SESSIONS. A command row is its label with the matched letters in the accent, a category (General, Panes, Tools, Find, Sidebar, Appearance) and its key as a keycap; a session row is its status dot, name and `project · machine`, and Enter goes to it. Matching is a case-blind in-order subsequence (`spld` finds Split down), names that begin with the text first. With nothing typed COMMANDS lists the last commands run and the first sessions. `↑ ↓ move`, `Enter run` and `Esc close` are chips on the bottom border. A set of keys (the arrows) is searched one key at a time. Every command the old palette offered stays reachable here.
+- **Search commands** (`Ctrl+K`, `Space` after the prefix, or the Menu). A box with an amber border up to 110 by 26 (`draw_search`), an amber title chip and a pink `×`. `› type what you want to do`, then COMMANDS (RESULTS while typing) and SESSIONS. A command row is its label with the matched letters in the accent, a category (General, Panes, Tools, Find, Sidebar, Appearance) and its key as a keycap; a session row is its status dot, name and `project · machine`, and Enter goes to it. Matching is a case-blind in-order subsequence (`spld` finds Split down), names that begin with the text first. With nothing typed COMMANDS lists the last commands run and the first sessions. `↑ ↓ move`, `Enter run` and `Esc close` are chips on the bottom border. A set of keys (the arrows) is searched one key at a time. Every command the old palette offered stays reachable here. From three typed characters, IN SESSIONS follows SESSIONS: the newest line each session printed that holds the words, at most ten, as `>_`, the line cut round the match and the session's name (see *Find in every session*); Enter goes to that line.
 - **Keys help** (`?`, the sidebar's menu → Keys; `keyoverlay.rs` `draw_keys_help`). An accent box on the panel ground, up to 92 columns: `keys` on its top border at the left and `esc close` at the right; three columns, `sessions` (new session, next / previous, jump to session, rename, filter, inbox), `panes` (split right, split down, focus next pane, zoom pane, close pane, move pane) and `window` (files, changes, usage and cost, settings, toggle sidebar, this help), each key as bound now in the accent (`help_key`: `j / k` for a pair, `1–9` for the jump keys); under them "Keys only work in key mode (Ctrl+Space). Everything else goes to the pane." A letter typed there starts a search; every other command is in Search commands.
 
 Rules for keys and their labels: one key per action (no alias keys; a user's own `[keys.prefix]` entries still load), no default needing Shift, keys other apps use, sentence case, no bracketed explanations (the group gives the context). Every action has a leader key or is search only; nothing in the sidebar acts on a bare letter. `docs/shortcuts.md` documents the other screens' keys and is not embedded in the app.
@@ -360,6 +360,25 @@ Rules for keys and their labels: one key per action (no alias keys; a user's own
 **Menu.** Sections a blank row apart, each under a `muted` title that says what its rows are for, labels capitalised, no letter lit: `NEW` (Shell here, Session..., Pane beside this, Clone a repository…); `TOOLS` (Files, Changes, Branches, History, References); `FIND` (Inbox, Search commands, All keys); `SIDEBAR` (Collapse sidebar); then Settings, untitled. The arrows move over rows and skip the headers; the selected row has an accent `▌`. In a short window the blank rows give way first, then the titles, so every row that does something stays (`leader.rs` `MenuRoom`). No row shows a key (a bare letter reads as one that works anywhere), but the leader key that does the same runs the row inside the Menu too; there is no footer. "Shell here" is leader `n` (a plain shell where you are) and "Session..." the New session dialog (Ctrl+T).
 
 **Resume a conversation here** (Search commands only, `Action::ResumeConversation`, `resume-conversation`; `client/resume.rs`). It asks this computer's daemon for the conversations Claude and Codex saved for the selected pane's folder (`Query::SavedConversations`, one per agent; the answers arrive as messages). A menu by the pane opens at once with one row, `looking for saved conversations…` (picking it only closes the menu); once both answers are in, it shows the nine newest across both agents: `Claude · 3h ago · <the first message>`, cut to 44 columns. Answers that arrive after that menu was closed open nothing, and an error from this computer's daemon while it waits closes it under the error's toast. A daemon older than the request (`ClientMsg::introduced_in`, against the protocol it named when this window connected) is not asked: one error toast says `restart the daemon to list saved conversations`. Enter or a click starts that agent in a new pane in the folder with the agent's resume command from its `[[agents]]` definition (`claude --resume <id>`, `codex resume <id>`); an id that does not start with a letter or digit, or holds anything but letters, digits, `-` and `_`, is refused with an error toast. With none saved the menu closes and one toast line says `no saved Claude or Codex chats`. A pane on another machine gets the local-only toast (see *features that need a pane's files*).
+
+**Changes: ticks, the message and comments** (`client/changes_more.rs`, both for a pane here and
+on another machine). `t` ticks the chosen file (`☑` before its name, `· ☑ N` on the summary line);
+`c` opens the commit message in the view's bottom rows: `Commit all N files on <branch>` or `Commit N
+ticked files on <branch>`, the message (the agent's summary, else `Update a.rs, b.rs` or `Update N
+files in <folder>`, as the desktop app writes it) to edit, and **Commit** (Enter) and **Cancel**
+(Esc). An empty message commits nothing. Ticked files are committed alone with `git add -A -- <paths>`
+and `git commit -- <paths>`, so what else is staged stays out (`tasks::commit_with`); none ticked
+commits every change. `f`, `u`, `P` fetch, pull and push here too (`tasks::sync`). `l` (or →) gives
+the diff the keys: a `▶` cursor on its lines (↑↓ / `j` `k`, PgUp/PgDn), Enter on an added, removed or
+unchanged line writes a comment there (`Comment for <agent> on <file>, line N`, Enter keeps it, Esc
+drops it), shown under its line as `✎ <comment>` and counted `· ✎ N`; `h`, ← or Esc gives the keys
+back to the files. `s` hands every comment to the agent's message box (the follow-up popover) as
+`About <file>, line N:` (`(removed)` for a removed line), the line quoted with `> `, a blank line and
+the comment, comments a blank line apart: what is sent is read there first, and Enter sends it, Esc
+keeps it as the session's draft. The comments leave the diff once handed over; a pane with no agent
+says so instead.
+
+**Find in every session** (Search commands only, `Action::FindSessions`, `find-sessions`; `client/screen/session_find.rs`). A box up to 110 by 30 titled `Find in every session` (`Find in this computer's sessions` while other machines are connected) with a typing row, then each line found: the session's status mark and name (24 columns), then the line cut to 60 columns round the match (16 before it, `…` where cut, control and invisible characters dropped) with every match in the accent. It asks this computer's daemon (`Query::PaneSearch` → `Reply::Search`, at most 100 lines, 20 a pane, newest first) once three characters are typed and typing has paused 300 ms; one search runs at a time (the answer carries no tag), the newest query goes when it returns, an answered query is not asked again, and one unanswered for 10 s is given up. Lines of panes the window does not show are left out. Under three characters it reads `Type at least 3 characters.`, then `searching…`, then the lines or `No session printed that recently.` (`No session on this computer printed that recently.` with other machines connected). Enter, or a click on a chosen row, focuses that session and opens copy mode on its history at the newest match of the words (`n` / `N` for the others; Esc leaves it). Esc closes the box.
 
 **Agent launchers.** Typing an agent (`claude`, `codex`, `gemini`, `opencode`, a quick agent) in a Maitty shell in a git repo's main checkout starts it in a new worktree (`worktree.per_agent`); anywhere else, or in a folder that is not a git repo, it starts where you are, silently. It works from any shell because `<data>/shell/bin/` is first on the pane's `PATH`; see ARCHITECTURE › Agent launchers. No toast or warning is shown for main folders.
 
@@ -808,7 +827,8 @@ Not applicable: the Hairline look was removed; Floating is the only look.
 ## Project-specific: features that need a pane's files
 
 Files, Changes, Find, Branches, References, connecting an agent, worktree
-actions (but Clean up worktrees, below) and the TUI's Resume a conversation here read or change the files of the pane they apply to. (Pasting an image is not on this list in
+actions (but Clean up worktrees, below) and the TUI's Resume a conversation here read or change the files of the pane they apply to
+(in the TUI, Changes is not refused: see *the TUI's Changes is the same exception* below). (Pasting an image is not on this list in
 the desktop app: it works for panes on other machines, see below. The terminal app's own list is
 unchanged.) For a pane on another machine they do
 nothing but show one error toast, always in this form: "<Feature> is local-only in v1: the files
@@ -828,6 +848,19 @@ identity and GitHub sign-in, and its answer or failure shows as it does locally.
 local-only sentence in the tab instead of asking anything; Checks and Timeline are as for a local
 pane. A chat on another machine that has no terminal of its own has no pane to ask, so the panel
 does not open for it and the toast says Inspect is local-only.
+
+**The TUI's Changes is the same exception** (`client/changes_more.rs`). Leader `c` on a pane of
+another machine (or a window on `--remote`) opens Changes with that pane's uncommitted changes,
+asked of its daemon (`Query::Repo` with `RepoRequest::Diff`, every file's diff in one answer; nothing
+is read with git here): the branch reads `<branch> on <machine>`, `reading the changes on <machine>…`
+until the answer, and a refusal shows in its place. Commit (`c`, ticked files or all), Open PR (`p`,
+asked first; the daemon pushes and opens it, and changes not committed stay out), Fetch (`f`), Pull
+(`u`) and Push (`P`) are `Query::Git` to that machine, one at a time ("still committing…"), each
+answer or refusal a toast, the changes read again after each. A mark (`x`) lasts while the view is
+open, since the file cannot be read here to tell whether it changed. Merge, discard (`m`, `M`, `d`)
+and the editor (`e`) stay with this computer's checkouts: their toast says what Changes does on that
+machine. A daemon that does not answer in 30 s (a git step: twice the daemon's limit and 30 s) is
+taken to be older than the request: `<machine> did not answer: update maitty there …`.
 
 **Dropping files on a pane** (`features/terminal/dropRoute.ts`, `useFileSends.tsx`, host `file_send.rs`,
 ADR 0007). On a pane of this computer the dropped paths are typed into it, quoted for its shell. On a

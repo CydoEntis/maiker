@@ -380,8 +380,10 @@ impl App {
             ServerMsg::Error(e) => {
                 // The output a failure waited for may be what failed; a later reply is not its.
                 self.screen.failure_ask = None;
+                self.remote_changes_failed(machine, &e);
                 if machine == MachineId::LOCAL {
                     self.resume_failed();
+                    self.pane_search_failed();
                 }
                 self.tidy_failed(machine);
                 // A listing another machine refused leaves the Finder waiting no more.
@@ -441,6 +443,19 @@ impl App {
                 if machine == MachineId::LOCAL =>
             {
                 self.saved_conversations_arrived(tag, found)
+            }
+            // Changes for a pane on another machine: that machine's answers.
+            ServerMsg::Reply(Reply::Repo { tag, reply }) if self.remote_diff_waits(machine, tag) => {
+                self.remote_diff_arrived(reply)
+            }
+            ServerMsg::Reply(Reply::GitDone { tag, outcome })
+                if self.remote_git_waits(machine, tag) =>
+            {
+                self.remote_git_done(outcome)
+            }
+            // Find in every session asks this computer's daemon only.
+            ServerMsg::Reply(Reply::Search(hits)) if machine == MachineId::LOCAL => {
+                self.pane_search_arrived(hits)
             }
             ServerMsg::Reply(Reply::HelperRead(record)) if machine == MachineId::LOCAL => {
                 self.helper_arrived(record)
@@ -681,6 +696,10 @@ impl App {
         let Some(View::Changes(v)) = &mut self.view else {
             return;
         };
+        // Another machine's diffs came with its review.
+        if Self::remote_diff_for_selection(v) {
+            return;
+        }
         let Some(r) = v.review.as_mut() else { return };
         if r.diff_sel == Some(r.sel) {
             return;

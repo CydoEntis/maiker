@@ -9,7 +9,9 @@ impl App {
         // Changes' y/n question (anything but y says no) rather than leave it unanswered.
         let typing = match &self.view {
             Some(View::Files(v)) => v.filtering || v.edit.is_some(),
-            Some(View::Changes(v)) => v.confirm.is_some(),
+            Some(View::Changes(v)) => {
+                v.confirm.is_some() || v.extra.message.is_some() || v.extra.commenting.is_some()
+            }
             _ => false,
         };
         if !typing && (self.sheet_size_key(k) || self.drawer_tab_key(k)) {
@@ -52,6 +54,9 @@ impl App {
 
     /// Returns false when the view closes.
     pub(super) fn on_changes_key(&mut self, v: &mut views::ChangesView, k: &KeyEvent) -> bool {
+        if let Some(stay) = self.changes_more_key(v, k) {
+            return stay;
+        }
         let c = match k.code {
             KeyCode::Enter => '\n',
             KeyCode::Char(c) => c,
@@ -68,7 +73,6 @@ impl App {
                         let dir = task.dir.clone();
                         self.spawn_bg(move || Bg::Merged(tasks::merge(&task), dir));
                     }
-                    'c' => self.spawn_bg(move || Bg::Done(tasks::commit(&task), true)),
                     'p' => self.spawn_bg(move || Bg::Done(tasks::pull_request(&task), true)),
                     'M' => self.spawn_bg(move || Bg::Done(tasks::merge_pull_request(&task), true)),
                     'd' => {
@@ -140,18 +144,6 @@ impl App {
             }
             KeyCode::PageDown | KeyCode::Char(' ') => r.scroll = r.scroll.saturating_add(15),
             KeyCode::PageUp => r.scroll = r.scroll.saturating_sub(15),
-            // Asked first: `c` is also Changes' leader key, shown in the tab strip.
-            KeyCode::Char('c') => {
-                let n = r.files.len();
-                v.confirm = Some((
-                    format!(
-                        "Commit {n} file{} on {}?",
-                        if n == 1 { "" } else { "s" },
-                        r.task.branch
-                    ),
-                    'c',
-                ));
-            }
             KeyCode::Char('e') => {
                 if let Some(f) = r.files.get(r.sel) {
                     let p = v.dir.join(&f.path);

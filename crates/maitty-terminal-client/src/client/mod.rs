@@ -4,6 +4,9 @@
 mod actions;
 mod background;
 mod branch;
+mod changes_more;
+#[cfg(test)]
+mod changes_more_tests;
 pub use maitty_machines::connections;
 mod copy;
 mod design;
@@ -222,6 +225,8 @@ enum Mode {
     Clone(Box<screen::CloneView>),
     /// A pane's specialist agent files, read-only (ADR 0010).
     Specialists(Box<screen::SpecialistsView>),
+    /// Find in every session: lines this computer's sessions printed.
+    FindSessions(Box<screen::SessionFind>),
 }
 
 /// A view that replaces the pane area.
@@ -513,6 +518,8 @@ pub struct App {
     codex_hooks_asked: bool,
     /// The saved-conversation lists asked of the daemon and not all answered yet.
     resume: resume::Resume,
+    /// Find in every session's one search at a time.
+    pane_search: screen::PaneSearch,
     /// The protocol this computer's daemon said it speaks when this window last connected.
     local_protocol: u32,
     /// The theme browser's tab: the Light themes when true, else the Dark ones.
@@ -840,6 +847,7 @@ impl App {
             codex_hooks: None,
             codex_hooks_asked: false,
             resume: Default::default(),
+            pane_search: Default::default(),
             local_protocol: crate::protocol::PROTOCOL_VERSION,
             theme_tab_light: false,
             update_notes: Vec::new(),
@@ -1071,6 +1079,8 @@ impl App {
             self.request_files_preview();
             self.request_folder_list();
             self.clone_search_tick();
+            self.pane_search_tick();
+            self.changes_tick();
             if self.dirty
                 && last_draw.elapsed() >= frame
                 && self.sync_hold_until().is_none_or(|h| Instant::now() >= h)
