@@ -4,6 +4,9 @@
 mod actions;
 mod background;
 mod branch;
+mod changes_more;
+#[cfg(test)]
+mod changes_more_tests;
 pub use maitty_machines::connections;
 mod copy;
 mod design;
@@ -1068,6 +1071,7 @@ impl App {
             self.request_files_preview();
             self.request_folder_list();
             self.pane_search_tick();
+            self.changes_tick();
             if self.dirty
                 && last_draw.elapsed() >= frame
                 && self.sync_hold_until().is_none_or(|h| Instant::now() >= h)

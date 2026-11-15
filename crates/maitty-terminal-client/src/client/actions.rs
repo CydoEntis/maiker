@@ -55,6 +55,17 @@ impl App {
             self.require_session_term(key);
             return;
         }
+        // Another machine's Changes come from its own daemon.
+        if a == Action::Changes
+            && let Some(term) = self.selected_term()
+            && !self.is_local_pane(term)
+        {
+            self.leave_shortcut_mode();
+            self.screen.cursor = None;
+            self.mode = Mode::Normal;
+            self.open_remote_changes(term);
+            return;
+        }
         // These read or change the files of the pane they apply to, which on another machine
         // are not on this computer.
         if let Some(feature) = routing::Feature::of(&a)
@@ -437,6 +448,7 @@ impl App {
             Some(task.ws).filter(|w| *w != 0),
         );
         self.show_view(View::Changes(Box::new(views::ChangesView {
+            extra: Default::default(),
             dir: top.clone(),
             review: None,
             error: None,

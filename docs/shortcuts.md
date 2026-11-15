@@ -349,13 +349,21 @@ Search commands → **Find in every session**.
 | Up / k, Down / j | Previous or next changed file |
 | PgUp, PgDn, Space | Read diff; Space pages down |
 | x, e, r | Mark reviewed, open editor, return to agent |
-| c, p | Ask to commit every changed file; ask to push and open a pull request (y or Enter says yes) |
+| t | Tick the file for the next commit (none ticked: the commit takes every change) |
+| c | Write the commit message (Enter commits the ticked files, or all; Esc cancels) |
+| p | Ask to push and open a pull request (y or Enter says yes) |
+| f, u, P | Fetch, pull (fast-forward only), push |
+| l or → | The diff takes the keys: ↑↓ / j k move the line cursor, Enter comments on the line, h, ← or Esc back to the files |
+| s | Hand the comments to the agent's message box (Enter there sends them) |
 | M | Ask to squash-merge the branch's pull request with `gh` (queued to merge when its checks pass; now if the repository doesn't allow that) |
 | m, d | Linked worktree: ask to merge, ask to discard |
 | Enter / y in confirmation | Confirm the requested action; other keys cancel |
 | Up, Down, PgUp, PgDn in shared-file diffs | Scroll both checkout diffs together |
 | m, M, k in shared-file diffs | Message first agent, message second agent, dismiss warning |
 | Esc | Close Changes or shared-file diffs |
+
+On a pane of another machine Changes reads and commits through that machine: c, t, p, f, u, P, x,
+l and s work as here; m, M, d and e are local-only.
 
 ## Check evidence sheet
 
