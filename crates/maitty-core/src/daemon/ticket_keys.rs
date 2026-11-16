@@ -228,16 +228,31 @@ impl KeyStore {
 }
 
 /// A short, stable name for the data folder that holds `dir`: the hash of its real path, so the
-/// same folder named two ways is one and two folders are two. `dir` may not exist yet; its parent,
-/// the data folder, does whenever the daemon runs.
+/// same folder named two ways is one and two folders are two. `dir` may not exist yet: its nearest
+/// existing folder is resolved and the rest joined on, so it is named the same before and after it
+/// is made (on Windows a short `RUNNER~1` part only resolves through a folder that exists).
 fn folder_id(dir: &Path) -> String {
-    let real = std::fs::canonicalize(dir).ok().or_else(|| {
-        let parent = std::fs::canonicalize(dir.parent()?).ok()?;
-        Some(parent.join(dir.file_name()?))
-    });
-    let path = real.unwrap_or_else(|| dir.to_path_buf());
+    let path = real_path(dir);
     let digest = Sha256::digest(path.to_string_lossy().as_bytes());
     digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>().chars().take(FOLDER_ID_CHARS).collect()
+}
+
+/// `path` with its nearest existing folder resolved and the parts below it, not made yet, joined on.
+fn real_path(path: &Path) -> PathBuf {
+    let mut missing = Vec::new();
+    let mut at = path;
+    loop {
+        if let Ok(real) = std::fs::canonicalize(at) {
+            return missing.iter().rev().fold(real, |whole, part| whole.join(part));
+        }
+        match (at.parent(), at.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name.to_owned());
+                at = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
+    }
 }
 
 fn unreadable() -> TicketError {
@@ -495,6 +510,22 @@ mod tests {
         // The same folder named before and after its key folder exists is one account.
         let again = KeyStore::with_vault(real.dir.clone(), vault);
         assert_eq!(again.account(TicketProvider::Plane), real.account(TicketProvider::Plane));
+    }
+
+    /// A folder reached through a link, two levels of it not made yet, as Windows' short temp names do.
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_under_a_link_is_named_the_same_before_and_after_it_is_made() {
+        let root = crate::daemon::persist::scratch_dir();
+        let real = root.path().join("real");
+        std::fs::create_dir_all(&real).unwrap();
+        let link = root.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let dir = link.join("data").join(FOLDER);
+        let before = folder_id(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(folder_id(&dir), before);
+        assert_eq!(folder_id(&real.join("data").join(FOLDER)), before, "the link and the real path are one folder");
     }
 
     #[test]
