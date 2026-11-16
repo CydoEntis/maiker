@@ -7,7 +7,7 @@ import type { TicketDetail, TicketSummary } from '@/api/tickets'
 import { DEFAULT_PICK } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { terminalSendOperation } from '@/features/chat/sendOperation'
-import { sendAgentMessage } from '@/features/workspace/model/agentMessage'
+import { sendAgentMessage, takesAgentMessages } from '@/features/workspace/model/agentMessage'
 import { displayName, type SessionView } from '@/features/workspace/model/session'
 import { useWorkspace } from '@/features/workspace/workspaceContext'
 import { toast } from '@/lib/toast'
@@ -56,7 +56,7 @@ export function TicketsOverlay({ leaving }: { leaving: boolean }) {
     githubLogin: github.data?.accounts.find((account) => account.active)?.login ?? github.data?.accounts[0]?.login ?? null,
     factoryChats,
     runOf: (key) => factoryRunOf(sessions, key),
-    canSendHere: session.process !== '' && !session.ended,
+    canSendHere: takesAgentMessages(session),
     onClose: () => { setTicketsOpen(false) },
     onSettings: () => { setSettingsSection('tickets') },
     onSignInGitHub: () => { signInGitHub(LOCAL_MACHINE, 'This computer') },
