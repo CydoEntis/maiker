@@ -119,7 +119,7 @@ describe('the Tickets view', () => {
 
   it('fills Plane from a pasted link, connects the key, then links the project the link names', async () => {
     const ID = '3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d'
-    const PLANE_SET: TicketKeyState[] = [{ provider: 'Plane', set: true, address: 'http://192.168.1.244', workspace: 'ideayard' }, { provider: 'Linear', set: false, address: '', workspace: '' }]
+    const PLANE_SET: TicketKeyState[] = [{ provider: 'Plane', set: true, address: 'http://192.168.1.244', workspace: 'ideayard', stored_in: 'Keychain' }, { provider: 'Linear', set: false, address: '', workspace: '', stored_in: 'Keychain' }]
     api.saveTicketKey.mockResolvedValue({ ok: true, value: PLANE_SET })
     api.loadTicketGroups.mockImplementation((source) => Promise.resolve({ ok: true, value: source === 'plane' ? [{ id: 'plane:00000000-0000-4000-8000-000000000000', kind: 'Project', name: 'Other', parent: null, count: 1 }, { id: `plane:${ID}`, kind: 'Project', name: 'MAITTY', parent: null, count: 9 }] : [] }))
     show()
@@ -179,7 +179,7 @@ describe('setup an agent opened', () => {
 
   it("reads the sources a repository's own file names, without a link made here", async () => {
     links().setRepoFile('/home/me/shop', { linear: { id: 'linear:team.9', name: 'Core' } })
-    api.loadTicketKeys.mockResolvedValue({ ok: true, value: [{ provider: 'Plane', set: false, address: '', workspace: '' }, { provider: 'Linear', set: true, address: '', workspace: '' }] })
+    api.loadTicketKeys.mockResolvedValue({ ok: true, value: [{ provider: 'Plane', set: false, address: '', workspace: '', stored_in: 'Keychain' }, { provider: 'Linear', set: true, address: '', workspace: '', stored_in: 'Keychain' }] })
     api.loadTicketGroups.mockImplementation((source) => Promise.resolve({ ok: true, value: source === 'linear' ? [{ id: 'linear:team.9', kind: 'Project', name: 'Core', parent: null, count: 4 }] : [] }))
     show()
     await userEvent.click(await screen.findByRole('tab', { name: /Linear/ }))
