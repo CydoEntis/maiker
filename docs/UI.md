@@ -1231,7 +1231,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   changed since, so a 1,000-entry conversation costs one small read per poll. A page that says `reset` (the history was
   rebuilt, or the conversation started over) replaces what the feed held. A failed read, or a daemon that predates
   `resume`, falls back to the old way: ask again for the last page read, or read from the start when that cursor is
-  stale. Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
+  stale. A failed read is tried again after 500 ms (`RETRY_READ_MS`); the chat says "Reconnecting to the daemon" with
+  the reason only when that one fails too, since one failure is usually a stale kept line, not a lost daemon. Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
   objects. A new generation shows a fresh projection. Pending approvals come with every page and go to `applyApprovals`. The last
   feed per conversation is kept (8 at most), so reopening a chat shows it at once.
 - **List.** `VirtualList` draws only the rows near the view (`transform` placement, measured heights, stable event
