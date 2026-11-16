@@ -10,7 +10,7 @@ import { HighlightedLine } from '@/components/HighlightedLine'
 import { fileTag } from '@/features/inspect/fileTag'
 import { extensionForLanguage } from '@/lib/highlight'
 import { followLink } from '../followLink'
-import { parseMarkdown, parseInline, type Block, type Inline, type TableAlign } from '../markdown'
+import { parseMarkdown, parseInline, safeHref, type Block, type Inline, type TableAlign } from '../markdown'
 import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBlock'
 import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
@@ -27,9 +27,21 @@ import { FileBadge } from './cardParts'
 // A path with a file name whose type is known, and a line number after it or not: `src/tax.js`, `src/tax.js:42`.
 const FILE_NAME = /^((?:[\w@.-]+[\\/])*[\w@.-]+\.[A-Za-z0-9]+)(?::(\d+))?$/
 
-/** Inline code. A file's name reads as a file badge that opens the file; anything else, or a name of no known type, stays code. */
+const LINK_CLASS = 'cursor-pointer border-0 bg-transparent p-0 text-left text-(--link) underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-2 hover:decoration-(--link)'
+
+/** A link the reader chooses to open in their own browser. */
+function LinkButton({ href, children }: { href: string; children: ReactNode }) {
+  return <button type="button" title={`${href} (click to open in your browser)`} className={LINK_CLASS} onClick={() => { followLink(href) }}>{children}</button>
+}
+
+/**
+ * Inline code. A web address opens like a link, still set as code: agents often quote the address to visit that way.
+ * A file's name reads as a file badge that opens the file; anything else, or a name of no known type, stays code.
+ */
 function InlineCode({ text }: { text: string }) {
   const open = useContext(OpenFileContext)
+  const href = /^https?:\/\//i.test(text.trim()) ? safeHref(text) : null
+  if (href !== null) return <LinkButton href={href}><CodeChip className="text-(--link)">{text}</CodeChip></LinkButton>
   const named = FILE_NAME.exec(text)
   const path = named?.[1]
   if (path === undefined || fileTag(path) === null) return <CodeChip>{text}</CodeChip>
@@ -49,11 +61,7 @@ function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {
       case 'em':
         return <em key={index}><Inlines nodes={node.children} /></em>
       case 'link':
-        return (
-          <button key={index} type="button" title={`${node.href} (click to open in your browser)`} className="cursor-pointer border-0 bg-transparent p-0 text-left text-(--link) underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-2 hover:decoration-(--link)" onClick={() => { followLink(node.href) }}>
-            <Inlines nodes={node.children} />
-          </button>
-        )
+        return <LinkButton key={index} href={node.href}><Inlines nodes={node.children} /></LinkButton>
     }
   })
 }
