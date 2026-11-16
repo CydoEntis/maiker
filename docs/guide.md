@@ -404,12 +404,41 @@ list sessions (`maitty_list`), read a screen (`maitty_read`), send a message
 (`maitty_send`), wait for a turn to end (`maitty_wait`), answer a prompt (`maitty_answer`),
 interrupt (`maitty_interrupt`), start helpers (`maitty_start`, see *Helpers* above) and list the
 project's references (`maitty_references`, see *References* above) and ask you for a secret
-(`maitty_request_secret`, see *Secrets and pull requests* below).
+(`maitty_request_secret`, see *Secrets and pull requests* below), and open the ticket setup
+(`maitty_tickets_setup`, see *Setting up tickets with an agent* below).
 `[mcp] approve` sets whether agents may answer "yes" to prompts and `[mcp] scope` whether
 they reach only their project or every session; `maitty grant <pane> read,write,…` changes
 one pane's rights.
 
 An agent can also reach another machine you have opened to agents; see *Agents on a machine* under *Machines*.
+
+### Setting up tickets with an agent
+
+Ask your agent to set up the project's tickets (for example "set up Plane tickets for this repo with
+https://plane.example/acme/projects/…"). It calls `maitty_tickets_setup`, which opens Tickets in your
+Maitty window on that project and source, with the link it suggests shown beside the steps. You finish it
+there: paste any key into Maitty's own box, never into the chat, and pick the project. The agent saves
+nothing and never sees a key; it hears back only what is linked and whether a key is saved.
+
+A repository can name its ticket sources in a committed `.maitty/tickets.toml`, so a clone or another
+computer needs only the keys:
+
+```toml
+github = "acme/shop"
+
+[plane]
+address = "https://plane.example"
+workspace = "acme"
+project = "3f1c…"          # the Plane project's id
+name = "Shop"              # optional
+
+[linear]
+team = "9b2e…"             # the Linear team's id, not its key such as ENG
+name = "Core"              # optional
+```
+
+Anything you link in Maitty wins over the file. A `[plane]` entry is used only when your saved Plane key is
+for the same address and workspace; otherwise Settings › Tickets says why it was not used.
 
 ## From any shell
 

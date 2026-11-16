@@ -1026,6 +1026,12 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
   the Maitty service in its data folder, not the system keychain. **Linked projects**: every project the daemon keeps
   a link for (its folder, its machine, what it reads in one line), with Change (its repo, Plane project and Linear
   team) and Unlink, then each open project not set up yet with Set up; then your names for Mine.
+- **A repository's file and an agent's ask.** A part of the link that came from the repository's
+  `.maitty/tickets.toml` shows "from the repo's .maitty/tickets.toml" under its project in Settings › Tickets,
+  with the file's notes (why a part was not used) as text. When an agent of this computer asks for its project's
+  setup (`ticket-setup` event, `useTicketSetupAsks.ts`), the window shows that session, opens Tickets on the
+  asked source and shows "Your agent suggests <link>" in the setup (`TicketSetup`'s `suggestedLink`, text only),
+  with a toast; nothing is saved until you finish it. Closing Tickets drops the suggestion.
 
 ## Project-specific: Tickets view (TUI)
 
@@ -1086,6 +1092,12 @@ daemon requests as the desktop app (*Tickets view (desktop)* above) and follows 
   row of bullets (never its length), dropped from memory as soon as it is sent, never toasted (a
   paste into the form is not repeated anywhere); the answer says only "connected". Removing a key
   asks first. A Plane project or Linear team is picked from what the provider lists.
+  Each part that came from the repository's `.maitty/tickets.toml` says `(from .maitty/tickets.toml)`,
+  and the file's notes show under the project's heading.
+- **An agent's ask** (`ServerMsg::TicketSetup`, this computer's only): Tickets opens on the asking
+  pane's project and source and the setup shows `Your agent suggests <link>` (`TicketsView::suggested_link`,
+  drawn through `tickets::shown`) with a toast. While another view is open, or Tickets shows another
+  project or is being typed in, it only toasts. Nothing is saved on an agent's word.
 
 ## Project-specific: desktop chat view
 

@@ -47,6 +47,8 @@ mod terminal_sends;
 mod ticket_http;
 mod ticket_keys;
 mod ticket_links;
+mod ticket_repo_file;
+mod ticket_setup;
 mod tickets;
 mod tickets_github;
 mod tickets_linear;
@@ -297,6 +299,14 @@ pub enum Ev {
         tag: u64,
         answer: crate::protocol::SideAnswer,
     },
+    /// An agent's ask for its project's ticket setup, with the project and what is set up read.
+    TicketSetupRead {
+        client: ClientId,
+        term: TermId,
+        source: Option<maitty_shared::ticket_links::TicketSetupSource>,
+        link: String,
+        found: Result<ticket_setup::Found, String>,
+    },
     RepoReady {
         client: ClientId,
         tag: u64,
@@ -449,6 +459,8 @@ struct Daemon {
     /// pane's status before it asked.
     questions: Vec<(HumanQuestion, ClientId, Status)>,
     secrets: secrets::Secrets,
+    /// When each project's ticket setup was last opened for an agent.
+    ticket_setups: ticket_setup::Shown,
     prs: pr::Prs,
     last_secret_files: Instant,
     git_busy: bool,
@@ -1222,6 +1234,12 @@ impl Daemon {
             {
                 anyhow::bail!("only a pane asks for its own secret")
             }
+            // The setup is shown to you on a pane's behalf; a window opens it itself.
+            Command::OpenTicketSetup { term, .. }
+                if self.clients.get(&client).and_then(|c| c.from) != Some(*term) =>
+            {
+                anyhow::bail!("only an agent pane asks for its own project's ticket setup")
+            }
             Command::AnswerSecret { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("a secret is yours to give, not a pane's")
             }
@@ -1309,6 +1327,7 @@ impl Daemon {
             pending_ops: 0,
             questions: Vec::new(),
             secrets: secrets::Secrets::default(),
+            ticket_setups: ticket_setup::Shown::default(),
             prs: pr::Prs::default(),
             last_secret_files: Instant::now(),
             git_busy: false,
@@ -2444,6 +2463,9 @@ impl Daemon {
             Ev::SideAnswerReady { client, tag, answer } => {
                 self.send(client, ServerMsg::Reply(Reply::SideAnswer { tag, answer }));
             }
+            Ev::TicketSetupRead { client, term, source, link, found } => {
+                self.ticket_setup_read(client, term, source, link, found);
+            }
             Ev::RepoReady {
                 client,
                 tag,
@@ -3160,7 +3182,7 @@ impl Daemon {
                     Query::TicketLinks { place, change, tag } => {
                         let tx = self.tx.clone();
                         tokio::task::spawn_blocking(move || {
-                            let answer = ticket_links::change(&ticket_links::LinkStore::real(), place, change, ticket_links::main_checkout);
+                            let answer = ticket_links::change(&ticket_links::LinkStore::real(), place, change, ticket_links::main_checkout, &ticket_links::RepoFiles::real());
                             let reply = Reply::TicketLinks { tag, answer };
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });

@@ -292,6 +292,9 @@
 .mx-tk-setup-title { font-size: 14px; font-weight: 600; line-height: 22px; }
 .mx-tk-setup-step.is-done .mx-tk-setup-title { color: var(--fg2); }
 .mx-tk-setup-hint { font-size: 12px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+/* A link an agent suggested: its words as text, broken anywhere so a long address never widens the page. */
+.mx-tk-suggested { margin: 0 0 10px; }
+.mx-tk-suggested-link { font-family: var(--mono); color: var(--fg2); overflow-wrap: anywhere; }
 .mx-tk-setup-error { font-size: 12px; line-height: 1.5; color: var(--danger); }
 .mx-tk-setup-form { display: flex; flex-direction: column; gap: 10px; }
 .mx-tk-setup-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }

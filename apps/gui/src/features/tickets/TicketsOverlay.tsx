@@ -30,9 +30,8 @@ async function queueAll(session: Pick<SessionView, 'id'>, commands: readonly str
 /** How long Tickets takes to slide out (`--panel-out`). */
 export const TICKETS_EXIT_MS = 220
 
-/** `suggestedLink`: a link the setup's paste box starts with (`TicketSetupProps.suggestedLink`); nothing is saved until the person presses Use link. */
-export function TicketsOverlay({ leaving, suggestedLink }: { leaving: boolean; suggestedLink?: string | undefined }) {
-  const { focusedSession, sessions, root, preferences, setTicketsOpen, setSettingsSection, signInGitHub, startNewChat, saveName, showSessionById, paneViews } = useWorkspace()
+export function TicketsOverlay({ leaving }: { leaving: boolean }) {
+  const { focusedSession, sessions, root, preferences, setTicketsOpen, setSettingsSection, signInGitHub, startNewChat, saveName, showSessionById, paneViews, ticketSetup } = useWorkspace()
   const github = useQuery({ queryKey: ['tickets', 'github-login'], queryFn: () => loadGitHubAccounts(LOCAL_MACHINE), retry: false, staleTime: Infinity })
   const session = focusedSession ?? null
   const project: TicketsProject | null = session === null ? null : ticketProjectOf(session)
@@ -118,5 +117,5 @@ export function TicketsOverlay({ leaving, suggestedLink }: { leaving: boolean; s
     },
     onOpenWork: openWork,
   }
-  return <TicketsPage key={project.linkKey} project={project} host={host} leaving={leaving} suggestedLink={suggestedLink} />
+  return <TicketsPage key={project.linkKey} project={project} host={host} leaving={leaving} setupAsk={ticketSetup} />
 }

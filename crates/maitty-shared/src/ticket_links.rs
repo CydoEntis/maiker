@@ -136,7 +136,9 @@ pub enum TicketLinkChange {
 }
 
 /// The daemon's answer: the asked place's project (its root and link, empty when it has none),
-/// every linked project, and your names.
+/// every linked project, and your names. The asked project's link is what it reads: what you
+/// linked here, with what its repository's `.maitty/tickets.toml` names filling any source you
+/// did not (`repo_file` says which).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TicketLinks {
     #[serde(default)]
@@ -145,6 +147,103 @@ pub struct TicketLinks {
     pub projects: Vec<LinkedProject>,
     #[serde(default)]
     pub me: TicketMe,
+    /// What the asked project's repository file gave it; `None` when there is no such file (or
+    /// no project was asked about). Absent from a daemon before `TICKET_SETUP_SINCE`.
+    #[serde(default)]
+    pub repo_file: Option<RepoTicketFile>,
+}
+
+/// The file a repository names its ticket sources in, relative to its root. It is committed with
+/// the repository, so a clone or a second computer needs only the keys.
+pub const REPO_TICKETS_FILE: &str = ".maitty/tickets.toml";
+/// The most notes the daemon gives about one repository file.
+pub const REPO_TICKETS_NOTES_MAX: usize = 4;
+/// The longest note about a repository file.
+pub const REPO_TICKETS_NOTE_MAX_CHARS: usize = 160;
+
+/// What a repository's `.maitty/tickets.toml` gave its project: which sources of the link came
+/// from it (each only where nothing was linked here), and why any part of it was not used, as
+/// plain lines.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct RepoTicketFile {
+    #[serde(default)]
+    pub github: bool,
+    #[serde(default)]
+    pub plane: bool,
+    #[serde(default)]
+    pub linear: bool,
+    #[serde(default)]
+    pub notes: Vec<String>,
+}
+
+impl RepoTicketFile {
+    /// This report with its notes clean and cut, as another machine's must be before it is shown.
+    pub fn cleaned(self) -> RepoTicketFile {
+        RepoTicketFile {
+            notes: self.notes.iter().take(REPO_TICKETS_NOTES_MAX).map(|note| clean_line(note, REPO_TICKETS_NOTE_MAX_CHARS)).collect(),
+            ..self
+        }
+    }
+}
+
+/// The longest link an agent may suggest to the ticket setup.
+pub const TICKET_SETUP_LINK_MAX_CHARS: usize = 512;
+
+/// A source the ticket setup opens on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TicketSetupSource {
+    GitHub,
+    Plane,
+    Linear,
+}
+
+impl TicketSetupSource {
+    pub fn name(self) -> &'static str {
+        match self {
+            TicketSetupSource::GitHub => "github",
+            TicketSetupSource::Plane => "plane",
+            TicketSetupSource::Linear => "linear",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<TicketSetupSource> {
+        [TicketSetupSource::GitHub, TicketSetupSource::Plane, TicketSetupSource::Linear].into_iter().find(|source| source.name() == name)
+    }
+}
+
+/// An agent asked for its project's ticket setup to be shown (`Command::OpenTicketSetup`): the
+/// windows open it on `folder`'s project, on `source`, with `link` suggested. Nothing in it is
+/// trusted: `link` is plain text an agent wrote, never a key, and nothing is saved until you
+/// press the button in the window.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TicketSetupAsk {
+    /// The pane whose agent asked.
+    pub term: u32,
+    /// The project's root on this computer.
+    pub folder: String,
+    #[serde(default)]
+    pub source: Option<TicketSetupSource>,
+    /// A Plane, Linear or GitHub address the agent suggests, one clean line; empty for none.
+    #[serde(default)]
+    pub link: String,
+}
+
+impl TicketSetupAsk {
+    /// This ask with its words clean and cut, so a window never shows more than a line of text.
+    pub fn cleaned(self) -> TicketSetupAsk {
+        TicketSetupAsk {
+            folder: clean_line(&self.folder, TICKET_LINK_FOLDER_MAX_CHARS),
+            link: clean_suggested_link(&self.link),
+            ..self
+        }
+    }
+}
+
+/// A suggested link as one line with no spaces or control characters, cut to its most; anything
+/// else becomes nothing.
+pub fn clean_suggested_link(link: &str) -> String {
+    let line = clean_line(link, TICKET_SETUP_LINK_MAX_CHARS);
+    if line.chars().any(char::is_whitespace) { String::new() } else { line }
 }
 
 /// Whether `machine` could be a `[[machines]]` name: printable, one line, not too long.
@@ -198,5 +297,17 @@ mod tests {
         assert_eq!(trimmed_folder("C:\\"), "C:\\");
         assert!(is_machine_name("kingdom"));
         assert!(!is_machine_name(""));
+    }
+
+    #[test]
+    fn a_suggested_link_is_one_clean_word_or_nothing() {
+        assert_eq!(clean_suggested_link(" https://linear.app/acme/team/ENG "), "https://linear.app/acme/team/ENG");
+        assert_eq!(clean_suggested_link("https://a.b/c d"), "", "a link with a space is not one");
+        assert_eq!(clean_suggested_link("https://a.b/\u{1b}[31mx"), "https://a.b/[31mx", "no escape survives");
+        assert_eq!(clean_suggested_link(&"x".repeat(2000)).chars().count(), TICKET_SETUP_LINK_MAX_CHARS);
+        let ask = TicketSetupAsk { term: 1, folder: "/r\n".into(), source: None, link: "a b".into() }.cleaned();
+        assert_eq!((ask.folder.as_str(), ask.link.as_str()), ("/r", ""));
+        assert_eq!(TicketSetupSource::from_name("plane"), Some(TicketSetupSource::Plane));
+        assert_eq!(TicketSetupSource::from_name("jira"), None);
     }
 }

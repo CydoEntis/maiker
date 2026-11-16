@@ -286,5 +286,6 @@ export function TicketSetup({ provider, project, link, keys, suggestedLink = '' 
         {connected ? <PickGroup source={provider} project={project} link={link} pasted={elsewhere ? null : pasted} /> : <span className="mx-tk-setup-hint">After connecting, the {word} your link names is linked here.</span>}
       </Step>
     </ol>
+    </>
   )
 }

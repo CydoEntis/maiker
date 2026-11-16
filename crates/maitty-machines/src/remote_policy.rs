@@ -103,6 +103,9 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::ConversationChanged { .. } => {
             Verdict::Ignore("the chats read here are this computer's, not another machine's")
         }
+        ServerMsg::TicketSetup(_) => {
+            Verdict::Ignore("the ticket setup opened here is for this computer's projects")
+        }
     }
 }
 
@@ -229,6 +232,13 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
             tag,
             answer: answer
                 .map(|states| states.into_iter().take(maitty_shared::tickets::TicketProvider::ALL.len()).map(|state| state.cleaned()).collect())
+                .map_err(|error| error.cleaned()),
+        }),
+        // A repository file's notes are that repository's words.
+        ServerMsg::Reply(Reply::TicketLinks { tag, answer }) => ServerMsg::Reply(Reply::TicketLinks {
+            tag,
+            answer: answer
+                .map(|links| maitty_shared::ticket_links::TicketLinks { repo_file: links.repo_file.map(|file| file.cleaned()), ..links })
                 .map_err(|error| error.cleaned()),
         }),
         other => other,
@@ -805,6 +815,12 @@ mod tests {
                 id: maitty_shared::conversation::ConversationId(1),
                 generation: 1,
             },
+            ServerMsg::TicketSetup(maitty_shared::ticket_links::TicketSetupAsk {
+                term: 1,
+                folder: "/srv/app".into(),
+                source: None,
+                link: String::new(),
+            }),
             ServerMsg::Bye,
         ]
     }
@@ -827,6 +843,7 @@ mod tests {
             ServerMsg::SettingsChanged(_) => "SettingsChanged",
             ServerMsg::Raise => "Raise",
             ServerMsg::ConversationChanged { .. } => "ConversationChanged",
+            ServerMsg::TicketSetup(_) => "TicketSetup",
             ServerMsg::Bye => "Bye",
         }
     }
@@ -873,7 +890,8 @@ mod tests {
                 "AutoWorkspace",
                 "SettingsChanged",
                 "Raise",
-                "ConversationChanged"
+                "ConversationChanged",
+                "TicketSetup"
             ]
         );
     }

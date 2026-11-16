@@ -19,7 +19,15 @@ export type ProjectLink = { github: string | null; plane: TicketPick | null; lin
 export type TicketPlace = { machine: string | null; folder: string }
 export type LinkedProject = TicketPlace & { link: ProjectLink }
 export type TicketMe = { plane: string; linear: string }
-export type TicketLinksAnswer = { project: LinkedProject | null; projects: LinkedProject[]; me: TicketMe }
+/**
+ * What the asked project's repository file (`.maitty/tickets.toml`) gave it: which sources of its link came from the file
+ * (only ones not linked here) and why any part was not used, in the daemon's plain words.
+ */
+export type RepoTicketFile = { github: boolean; plane: boolean; linear: boolean; notes: string[] }
+export type TicketLinksAnswer = { project: LinkedProject | null; projects: LinkedProject[]; me: TicketMe; repoFile: RepoTicketFile | null }
+
+/** Where a repository names its ticket sources, relative to its root. */
+export const REPO_TICKETS_FILE = '.maitty/tickets.toml'
 
 export const NO_LINK: ProjectLink = { github: null, plane: null, linear: null }
 
@@ -28,6 +36,9 @@ const GitHubSchema = z.union([z.literal('Origin'), z.literal('Off'), z.object({ 
 const LinkSchema = z.object({ github: GitHubSchema, plane: PickSchema.nullable(), linear: PickSchema.nullable() })
 const ProjectSchema = z.object({ machine: z.string().nullable(), folder: z.string(), link: LinkSchema })
 const MeSchema = z.object({ plane: z.string(), linear: z.string() })
+/** The most notes the daemon gives about a repository file (`REPO_TICKETS_NOTES_MAX`). */
+const REPO_FILE_NOTES_MAX = 4
+const RepoFileSchema = z.object({ github: z.boolean(), plane: z.boolean(), linear: z.boolean(), notes: z.array(z.string()).max(REPO_FILE_NOTES_MAX) })
 const ErrorSchema = z.union([
   z.enum(['NotInstalled', 'SignedOut', 'NotFound', 'RateLimited']),
   z.object({ Unreachable: z.string() }),
@@ -37,7 +48,7 @@ const AnswerSchema = z.object({
   machine: z.number().int(),
   tag: z.number().int(),
   answer: z.union([
-    z.object({ Ok: z.object({ project: ProjectSchema.nullable(), projects: z.array(ProjectSchema), me: MeSchema }) }),
+    z.object({ Ok: z.object({ project: ProjectSchema.nullable(), projects: z.array(ProjectSchema), me: MeSchema, repo_file: RepoFileSchema.nullish() }) }),
     z.object({ Err: ErrorSchema }),
   ]),
 })
@@ -76,7 +87,7 @@ async function changeLinks(place: TicketPlace | null, change: Change): Promise<T
   const told = await askLinks(send, LINKS_ANSWER_MS, NOT_ANSWERED)
   if ('Err' in told.answer) return { ok: false, failure: failureOf(told.answer.Err) }
   const ok = told.answer.Ok
-  return { ok: true, value: { project: ok.project === null ? null : projectOf(ok.project), projects: ok.projects.map(projectOf), me: ok.me } }
+  return { ok: true, value: { project: ok.project === null ? null : projectOf(ok.project), projects: ok.projects.map(projectOf), me: ok.me, repoFile: ok.repo_file ?? null } }
 }
 
 /** Every linked project and your names; with `place`, also the project that folder is and what it reads. */

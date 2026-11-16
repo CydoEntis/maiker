@@ -150,6 +150,8 @@ pub enum Out {
         tag: u64,
         answer: Result<maitty_shared::ticket_links::TicketLinks, TicketError>,
     },
+    /// An agent of this computer asked for its project's ticket setup, cleaned.
+    TicketSetup(maitty_shared::ticket_links::TicketSetupAsk),
 }
 
 #[derive(Default)]
@@ -284,6 +286,10 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::TicketLinks { tag, answer }) => {
                 out.push(Out::TicketLinks { machine, tag, answer });
+            }
+            // This computer's only: another machine's agent never opens a setup here.
+            ServerMsg::TicketSetup(ask) if machine == MachineId::LOCAL => {
+                out.push(Out::TicketSetup(ask.cleaned()));
             }
             ServerMsg::State(snapshot) => self.publish(machine, snapshot, &mut out),
             // What the host asked for after a missed update; nothing else asks on this line.

@@ -13,7 +13,7 @@ use crate::client::tickets::{self as tk, Picked, Provider, Source, TicketLink, U
 use crate::client::{Bg, Btn, View};
 use crate::protocol::{ClientMsg, Query, TicketKeyChange};
 use maitty_shared::protocol::TICKET_LINKS_SINCE;
-use maitty_shared::ticket_links::{LinkedProject, TicketLinkChange, TicketLinks, TicketPlace};
+use maitty_shared::ticket_links::{LinkedProject, REPO_TICKETS_FILE, RepoTicketFile, TicketLinkChange, TicketLinks, TicketPlace, TicketSetupAsk, TicketSetupSource};
 use maitty_shared::ticket_paste::{PastedLink, parse_ticket_link};
 use maitty_shared::tickets::{
     Group, StateCategory, TICKET_COMMENT_MAX_CHARS, TICKET_NAME_MAX_CHARS, TICKETS_PAGE_MAX, Ticket, TicketError,
@@ -251,8 +251,9 @@ pub(crate) struct TicketsView {
     old_daemon: bool,
     /// Esc on the list (or the Tickets key) asked to close the view.
     closing: bool,
-    /// A link the next setup starts its paste step with (`suggest_link`).
-    suggested_link: Option<String>,
+    /// A link the next setup starts its paste step with (`suggest_link`, or an agent's
+    /// `ServerMsg::TicketSetup`): plain text, never followed or saved on its own.
+    pub(crate) suggested_link: Option<String>,
 }
 
 impl TicketsView {
@@ -314,6 +315,11 @@ impl TicketsView {
             Some(Ok(links)) => Some(links),
             _ => None,
         }
+    }
+
+    /// What the project's repository file (`.maitty/tickets.toml`) gave it, when it has one.
+    fn repo_file(&self) -> Option<&RepoTicketFile> {
+        self.links_known().and_then(|l| l.repo_file.as_ref())
     }
 
     /// What the project in front reads, as the daemon keeps it; nothing linked while unknown.
@@ -451,7 +457,11 @@ fn agents(cfg: &crate::config::Config) -> Vec<String> {
 impl App {
     /// The project of the session in front, as Tickets reads for it.
     fn tickets_project(&self) -> Option<TicketsProject> {
-        let term = self.selected_term()?;
+        self.tickets_project_of(self.selected_term()?)
+    }
+
+    /// The project `term` works in, as Tickets reads for it.
+    fn tickets_project_of(&self, term: ClientTerm) -> Option<TicketsProject> {
         let info = self.term_info(term)?;
         let folder = info.root.clone().or_else(|| info.top.clone()).unwrap_or_else(|| info.cwd.clone());
         let machine = (term.machine != MachineId::LOCAL).then(|| self.machine_name(term.machine).to_string());
@@ -540,7 +550,50 @@ impl App {
             self.view = None;
             return;
         }
-        let project = self.tickets_project();
+        self.open_tickets_for(self.tickets_project());
+    }
+
+    /// An agent asked for its project's ticket setup: open Tickets on that project and source with
+    /// its link suggested, unless you are in another view, when it is only said. Nothing is saved.
+    pub(in crate::client) fn ticket_setup_asked(&mut self, ask: TicketSetupAsk) {
+        let ask = ask.cleaned();
+        let Some(project) = self.tickets_project_of(ClientTerm::local(ask.term)) else {
+            return;
+        };
+        let busy = match &self.view {
+            None => false,
+            Some(View::Tickets(v)) => v.typing() || v.project.as_ref().is_some_and(|p| p.place != project.place),
+            Some(_) => true,
+        };
+        if busy {
+            self.notify(format!("{} asks you to set up tickets for {}: open Tickets to finish it", project.session, project.name), false);
+            return;
+        }
+        if !matches!(self.view, Some(View::Tickets(_))) {
+            self.open_tickets_for(Some(project.clone()));
+        }
+        let provider = match ask.source {
+            Some(TicketSetupSource::GitHub) => Some(Provider::Github),
+            Some(TicketSetupSource::Plane) => Some(Provider::Plane),
+            Some(TicketSetupSource::Linear) => Some(Provider::Linear),
+            None => None,
+        };
+        self.with_tickets(|app, v| {
+            v.suggested_link = (!ask.link.is_empty()).then(|| ask.link.clone());
+            if let Some(provider) = provider.filter(|provider| *provider != v.provider) {
+                v.provider = provider;
+                v.scope = None;
+                v.mine = false;
+                v.list = Listing::default();
+                v.sel = 0;
+                app.tickets_reload(v);
+            }
+        });
+        self.notify(format!("{} opened the ticket setup for {}: finish it here; keys go only in Maitty", project.session, project.name), false);
+    }
+
+    /// Open Tickets on `project` (None: no session in front, nothing to read for).
+    fn open_tickets_for(&mut self, project: Option<TicketsProject>) {
         let mut v = TicketsView::new(project.clone());
         self.screen.cursor = None;
         self.mode = Mode::Normal;
@@ -1871,6 +1924,11 @@ fn setup_lines(v: &TicketsView, p: &TicketsProject, why: Unlinked, w: u16, c: St
         vec![mark, seg(" ", c), seg(title, c.fg(if done { t.text } else { t.strong }))]
     };
     let mut lines = vec![vec![seg(format!("Set up {name} for {}", p.name), c.fg(t.strong).add_modifier(Modifier::BOLD))], vec![]];
+    if let Some(link) = &v.suggested_link {
+        // The agent's words: one cleaned line, shown as text and never opened or saved from here.
+        lines.extend(wrapped(&format!("Your agent suggests {}", tk::shown(link, false)), w, c.fg(t.accent)));
+        lines.push(vec![]);
+    }
     let hint = |lines: &mut Vec<Vec<Seg>>, text: &str| {
         lines.extend(wrapped(text, w.saturating_sub(5), c.fg(t.muted)).into_iter().map(|l| [vec![seg("     ", c)], l].concat()));
     };
@@ -2110,6 +2168,10 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
             lines.push(head("LINKED PROJECTS"));
             lines.push(say("A project is its repository: every worktree and session in it shows the same tickets."));
             lines.push((None, vec![seg(format!("{} · the session in front", p.name), c.fg(t.text).add_modifier(Modifier::BOLD))]));
+            // The repository's own words about its file, cleaned by the daemon and shown as text.
+            for note in v.repo_file().map(|f| f.notes.as_slice()).unwrap_or_default() {
+                lines.push((None, vec![seg(tk::shown(note, false), c.fg(t.muted))]));
+            }
         }
         if matches!(row, SourceRow::Other(0)) {
             lines.push((None, vec![]));
@@ -2123,6 +2185,7 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
                 let (value, fg) = match (&link.github, &v.origin) {
                     _ if v.links.is_none() => ("reading…".into(), t.muted),
                     (Some(r), _) if r.is_empty() => ("off".into(), t.muted),
+                    (Some(r), _) if v.repo_file().is_some_and(|f| f.github) => (format!("{r} (from {REPO_TICKETS_FILE})"), t.text),
                     (Some(r), _) => (r.clone(), t.text),
                     (None, Some(Some(r))) => (format!("{r} (from origin)"), t.text),
                     (None, None) => ("reading the folder's origin…".into(), t.muted),
@@ -2153,8 +2216,10 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
             }
             SourceRow::PlaneProject | SourceRow::LinearTeam => {
                 let (provider, pick) = if *row == SourceRow::PlaneProject { (Provider::Plane, &link.plane) } else { (Provider::Linear, &link.linear) };
+                let from_file = v.repo_file().is_some_and(|f| if provider == Provider::Plane { f.plane } else { f.linear });
                 let (value, fg) = match pick {
                     _ if v.links.is_none() => ("reading…".into(), t.muted),
+                    Some(pick) if from_file => (format!("{} (from {REPO_TICKETS_FILE})", tk::shown(&pick.name, false)), t.text),
                     Some(pick) => (pick.name.clone(), t.text),
                     None => (format!("no {} picked", provider.top_word()), t.muted),
                 };

@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 108;
+pub const PROTOCOL_VERSION: u32 = 109;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -201,6 +201,11 @@ pub const TICKET_WRITE_SINCE: u32 = 107;
 /// The first version whose daemon keeps which ticket sources each project reads
 /// (`Query::TicketLinks`).
 pub const TICKET_LINKS_SINCE: u32 = 108;
+
+/// The first version whose daemon shows an agent's ask for its project's ticket setup to the
+/// windows (`Command::OpenTicketSetup`, `ServerMsg::TicketSetup`) and reads a repository's
+/// `.maitty/tickets.toml` (`TicketLinks::repo_file`).
+pub const TICKET_SETUP_SINCE: u32 = 109;
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
@@ -1107,6 +1112,20 @@ pub enum Command {
         label: String,
         reason: String,
     },
+    /// Pane `term`'s agent asks for its project's ticket setup to be shown in the windows, on
+    /// `source`, with `link` suggested (`ServerMsg::TicketSetup`). Only from that pane itself.
+    /// It saves nothing and carries no key: you finish the setup in the window. The answer is a
+    /// `Reply::Text` the agent reads: what was opened, and what is already linked and connected.
+    OpenTicketSetup {
+        term: TermId,
+        /// A folder inside the pane's project to set up, when not the pane's own.
+        #[serde(default)]
+        folder: Option<String>,
+        #[serde(default)]
+        source: Option<crate::ticket_links::TicketSetupSource>,
+        #[serde(default)]
+        link: String,
+    },
     AnswerSecret {
         id: u64,
         value: Option<SecretText>,
@@ -1503,6 +1522,9 @@ pub enum ServerMsg {
         id: crate::conversation::ConversationId,
         generation: u64,
     },
+    /// An agent asked for its project's ticket setup (`Command::OpenTicketSetup`): show it. Sent
+    /// to the windows (attached clients that are not panes).
+    TicketSetup(crate::ticket_links::TicketSetupAsk),
     Bye,
 }
 
@@ -2491,6 +2513,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ServerMsg::Reply(Reply::TicketWrite { .. }) => TICKET_WRITE_SINCE,
             ServerMsg::Reply(Reply::TicketLinks { .. }) => TICKET_LINKS_SINCE,
+            ServerMsg::TicketSetup(_) => TICKET_SETUP_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2515,6 +2538,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ClientMsg::Query(Query::TicketWrite { .. }) => TICKET_WRITE_SINCE,
             ClientMsg::Query(Query::TicketLinks { .. }) => TICKET_LINKS_SINCE,
+            ClientMsg::Command(Command::OpenTicketSetup { .. }) => TICKET_SETUP_SINCE,
             ClientMsg::Query(Query::GitIdentities { .. }) => GIT_IDENTITIES_SINCE,
             ClientMsg::Query(Query::GitIdentityRule { .. }) => GIT_RULES_SINCE,
             ClientMsg::Query(Query::Git { request: GitRequest::Commit { .. }, .. }) => GIT_COMMIT_SINCE,
@@ -2965,7 +2989,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 108);
+        assert_eq!(PROTOCOL_VERSION, 109);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3455,7 +3479,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 108);
+        assert_eq!(PROTOCOL_VERSION, 109);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4578,7 +4602,34 @@ mod tests {
             let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
             assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
         }
-        const { assert!(TICKET_LINKS_SINCE == PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_LINKS_SINCE) };
+        const { assert!(COMPATIBLE_SINCE < TICKET_LINKS_SINCE) };
+    }
+
+    /// An agent's ask for the ticket setup is a new command and a new message: a daemon built
+    /// before it is never sent the ask, a window built before it never gets the message, and a
+    /// links answer with the repository file in it still reads in a client that knows nothing of it.
+    #[test]
+    fn a_ticket_setup_ask_passes_only_between_peers_that_know_it() {
+        use crate::ticket_links::{RepoTicketFile, TicketLinks, TicketSetupAsk, TicketSetupSource};
+        let ask = Command::OpenTicketSetup { term: 3, folder: None, source: Some(TicketSetupSource::Plane), link: "https://plane.example/acme/projects/p1/issues/".into() };
+        let bytes = encode(&ask).unwrap();
+        assert!(matches!(decode::<Command>(&bytes), Ok(Command::OpenTicketSetup { term: 3, source: Some(TicketSetupSource::Plane), .. })));
+        assert_eq!(ClientMsg::Command(ask).introduced_in(), TICKET_SETUP_SINCE);
+        let shown = ServerMsg::TicketSetup(TicketSetupAsk { term: 3, folder: "/home/me/shop".into(), source: None, link: String::new() });
+        assert_eq!(shown.introduced_in(), TICKET_SETUP_SINCE);
+        let again: ServerMsg = decode(&encode(&shown).unwrap()).unwrap();
+        assert_eq!(encode(&again).unwrap(), encode(&shown).unwrap());
+        // A 108 client's answer type, without the repository file: the new field is passed over.
+        #[derive(Debug, Serialize, Deserialize)]
+        struct OldLinks {
+            #[serde(default)]
+            projects: Vec<crate::ticket_links::LinkedProject>,
+        }
+        let links = TicketLinks { repo_file: Some(RepoTicketFile { plane: true, ..RepoTicketFile::default() }), ..TicketLinks::default() };
+        assert!(decode::<OldLinks>(&encode(&links).unwrap()).is_ok());
+        let none: TicketLinks = decode(&encode(&OldLinks { projects: Vec::new() }).unwrap()).unwrap();
+        assert_eq!(none.repo_file, None, "a 108 daemon's answer reads as no repository file");
+        const { assert!(TICKET_SETUP_SINCE == PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_SETUP_SINCE) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never
