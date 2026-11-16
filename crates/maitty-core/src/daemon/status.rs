@@ -164,6 +164,14 @@ impl Daemon {
             if let Some(call) = call.as_deref().and_then(super::repeats::parse_call) {
                 t.call_run.push(call);
             }
+            // Only the agent's own reports say where its own turn is: a helper's are its own.
+            if subagent.is_none() {
+                match status {
+                    HookStatus::Done | HookStatus::Idle => t.own_turn_over = true,
+                    HookStatus::Working | HookStatus::Blocked | HookStatus::Gone => t.own_turn_over = false,
+                    HookStatus::Same => {}
+                }
+            }
             if let Some(sa) = subagent {
                 if agent == "codex" && matches!(event.as_str(), "SubagentStart" | "SubagentStop") {
                     t.subagent_hooks_seen = true;
@@ -972,8 +980,11 @@ impl Daemon {
         // A follow-up queued for an agent goes in when its turn is over: never into a question
         // it's asking, and one at a time (the next waits for the turn this one starts).
         for t in self.terms.values_mut() {
-            let turn_over =
-                matches!(t.status, Status::Idle | Status::Done) && t.agent.is_some() && !t.asleep;
+            // Helpers running in the background keep the agent working, but its own turn is over
+            // and it is at its prompt: a message waiting for it goes in, as one typed there would.
+            let at_prompt = matches!(t.status, Status::Idle | Status::Done)
+                || (t.status == Status::Working && t.own_turn_over && helpers_running(t));
+            let turn_over = at_prompt && t.agent.is_some() && !t.asleep;
             let last_taken = t
                 .queue_sent
                 .is_none_or(|at| at.elapsed() > QUEUED_TURN_STARTS_WITHIN);

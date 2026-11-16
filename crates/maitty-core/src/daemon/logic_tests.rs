@@ -3220,6 +3220,51 @@ fn a_turn_that_ends_while_its_helper_runs_stays_working(agent: &str, idle_title:
     close(&mut d, &[t]);
 }
 
+/// Claude's turn ends with a background helper still running: the session stays working, but
+/// Claude is back at its prompt, so a message queued for it goes in then, not after the helper.
+#[test]
+fn a_queued_message_goes_in_when_the_turn_ends_though_a_background_helper_runs() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let hook = |status: HookStatus, event: &str, start: Option<bool>| {
+        let mut m = report(t, "claude", 0, status, event);
+        if let ClientMsg::Hook { subagent, .. } = &mut m {
+            *subagent = start.map(|start| Subagent {
+                id: "a1".into(),
+                kind: "maiker:intake".into(),
+                start,
+                reported_at: 0,
+                task: None,
+                model: None,
+                effort: None,
+                activity: None,
+            });
+        }
+        m
+    };
+    let queued = |d: &Daemon| d.snapshot().terms[&t].queued.clone();
+    d.apply_hook(hook(HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(hook(HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    d.command(
+        0,
+        Command::QueueFollowUp { term: t, text: "I also set up the key".into(), first: false, operation: None },
+    )
+    .unwrap();
+    d.update_statuses();
+    assert_eq!(queued(&d).len(), 1, "not while Claude's own turn runs");
+
+    // The helper's own work is not Claude's turn ending.
+    d.apply_hook(hook(HookStatus::Working, "PreToolUse", Some(true)), Some(true), Vec::new());
+    d.update_statuses();
+    assert_eq!(queued(&d).len(), 1);
+
+    d.apply_hook(hook(HookStatus::Done, "Stop", None), Some(true), Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Working, "the helper still runs");
+    d.apply_hook(hook(HookStatus::Working, "PostToolUse", Some(true)), Some(true), Vec::new());
+    d.update_statuses();
+    assert!(queued(&d).is_empty(), "Claude is at its prompt, so the message goes in");
+}
+
 #[test]
 fn a_claude_turn_that_ends_while_its_background_agent_runs_stays_working() {
     a_turn_that_ends_while_its_helper_runs_stays_working("claude", "✳ project");
