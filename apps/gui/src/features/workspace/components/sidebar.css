@@ -167,7 +167,6 @@
 
 /* A chat that is still a draft: a session row's twin, named "New chat" in italics with a "draft" tag at its right. */
 .mx-draft { pointer-events: none; align-items: center; }
-.mx-draft-tile { opacity: .75; }
 .mx-draft .mx-row-text { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
 .mx-draft-name { font-style: italic; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-draft-tag { flex: none; font: 400 11px/15px var(--mono, ui-monospace, monospace); color: var(--dim); }

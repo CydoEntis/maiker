@@ -30,7 +30,7 @@ import { ShowSidebarButton } from './ShowSidebarButton'
 
 /** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow, terminalShown, setDockFocused, sessionMap, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow, terminalShown, setDockFocused, sessionMap, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   // The version whose Update ready banner Later put away; the sidebar's chip still offers the restart.
   const [updateLater, setUpdateLater] = useState<string | null>(null)
@@ -74,6 +74,7 @@ export function WorkspaceMain() {
                     clone={cloneRepo.open}
                     onStart={startNewChat}
                     onWarm={warmNewChat}
+                    onAgentChange={setNewChatAgent}
                     onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}
                     onCancel={noChats ? undefined : () => { setNewChatOpen(false); setNewChatSeed(null) }}
                   />

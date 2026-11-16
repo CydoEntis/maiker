@@ -431,22 +431,30 @@ describe('closing a session from its row', () => {
 
 describe('a draft chat', () => {
   it('is listed last on its machine while it waits for a first message, as a twin of a session row, and the empty note steps aside', () => {
-    show([], { draft: { machine: 0 } })
+    show([], { draft: { machine: 0, process: 'claude' } })
     const draft = screen.getByRole('status', { name: 'New chat, waiting for the first message' })
     expect((screen.getByRole('button', { name: /^This computer/ }).closest('.mx-machine') as HTMLElement).contains(draft)).toBe(true)
     expect(screen.queryByText('No agents running. New chat starts one.')).toBeNull()
     expect(draft.querySelector('.mx-row')).not.toBeNull()
   })
 
+  it('shows the agent picked for it, drawn as a session row draws its agent', () => {
+    show([], { draft: { machine: 0, process: 'codex' } })
+    const icon = screen.getByRole('status', { name: 'New chat, waiting for the first message' }).querySelector('.mx-app-icon')
+    expect(icon?.classList.contains('is-codex')).toBe(true)
+    expect(icon?.classList.contains('size-16')).toBe(true)
+    expect(icon?.classList.contains('is-flat')).toBe(true)
+  })
+
   it('stays after every session of its machine, wherever they sort', () => {
-    show([session(1, { agent: 'claude', named: true, title: 'First' }), session(2, { agent: 'claude', named: true, title: 'Second', status: 'needs-you' })], { draft: { machine: 0 }, order: 'priority' })
+    show([session(1, { agent: 'claude', named: true, title: 'First' }), session(2, { agent: 'claude', named: true, title: 'Second', status: 'needs-you' })], { draft: { machine: 0, process: 'claude' }, order: 'priority' })
     const draft = screen.getByRole('status', { name: 'New chat, waiting for the first message' })
     const rows = Array.from((screen.getByRole('button', { name: /^This computer/ }).closest('.mx-machine') as HTMLElement).querySelectorAll('.mx-row-wrap'))
     expect(rows.at(-1)).toBe(draft)
   })
 
   it('is not listed once there is no draft, nor on another machine', () => {
-    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], draft: { machine: 0 } })
+    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], draft: { machine: 0, process: 'claude' } })
     expect(screen.getAllByRole('status', { name: /New chat/ })).toHaveLength(1)
     expect(within(screen.getByRole('list', { name: 'Sessions on devbox' })).queryByRole('status')).toBeNull()
   })
@@ -516,7 +524,7 @@ describe('grouped by status', () => {
   })
 
   it('lists a draft chat first, above every section', () => {
-    show(mixed(), { grouping: 'status', draft: { machine: 0 } })
+    show(mixed(), { grouping: 'status', draft: { machine: 0, process: 'claude' } })
     const draft = screen.getByRole('status', { name: 'New chat, waiting for the first message' })
     expect(Array.from(document.querySelectorAll('.mx-row-wrap'))[0]).toBe(draft)
   })

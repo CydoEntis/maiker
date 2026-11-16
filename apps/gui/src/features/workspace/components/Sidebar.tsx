@@ -86,7 +86,8 @@ export type SidebarProps = {
   draft?: DraftChat | null | undefined
 }
 
-export type DraftChat = { machine: number }
+/** The new chat page's chat while it is unsent: where it will start, and the agent picked for it. */
+export type DraftChat = { machine: number; process: string }
 
 /** The gap between a button and the menu that opens under it. */
 const MENU_GAP_PX = 4
@@ -284,7 +285,7 @@ function Expanded(props: SidebarProps) {
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
         {props.grouping !== 'machine' && (
           <section aria-label="Agents" className="mx-sections">
-            {draft !== null && <DraftRow />}
+            {draft !== null && <DraftRow process={draft.process} />}
             {props.grouping === 'status' && statusSections(sessions).map((section) => (
               <ListSection key={section.key} id={`status:${section.key}`} tone={section.key} name={section.name} count={section.sessions.length} label={section.name} open={views.isOpen(`status:${section.key}`)} onToggle={() => { views.toggle(`status:${section.key}`) }}>
                 {section.sessions.map((session) => renderRow(session, true, true))}
@@ -306,7 +307,7 @@ function Expanded(props: SidebarProps) {
               key={group.head.key}
               group={group}
               open={views.isOpen(group.head.key) || draft?.machine === group.head.machine}
-              draft={draft?.machine === group.head.machine}
+              draft={draft?.machine === group.head.machine ? draft : null}
               progress={group.head.name === null ? undefined : props.updateProgress?.[group.head.name]}
               byProject={views.isByProject(group.head.key)}
               canStart={props.canStart}
@@ -405,8 +406,8 @@ function MachineNotes({ heads, progress, onUpdate }: { heads: readonly MachineHe
 }
 
 type SectionProps = {
-  /** A draft chat is listed first in this machine. */
-  draft: boolean
+  /** The draft chat, listed first in this machine; null when it is not on this machine. */
+  draft: DraftChat | null
   /** How far this machine's update has got, while one runs. */
   progress: number | undefined
   group: MachineGroup
@@ -457,21 +458,21 @@ function MachineSection({ draft, progress, group, open, byProject, canStart, onT
           <div className="mx-rows" role="list" aria-label={`Sessions on ${title}`}>{sessions.map((session) => renderRow(session, true))}</div>
         )}
         {/* Last, where the new chat will be (sessions keep creation order), so it fills in without anything moving. */}
-        {draft && <DraftRow />}
+        {draft !== null && <DraftRow process={draft.process} />}
       </Collapse>
     </div>
   )
 }
 
 /**
- * The chat that has not been sent yet (layout 2h): a row named "New chat" in italics with a "draft" tag and a faded agent
- * tile, first in the list. The real row takes this place when the chat starts.
+ * The chat that has not been sent yet (layout 2h): a row named "New chat" in italics with a "draft" tag and the picked
+ * agent's mark, drawn as a session row draws it, first in the list. The real row takes this place when the chat starts.
  */
-function DraftRow() {
+function DraftRow({ process }: { process: string }) {
   return (
     <div className="mx-row-wrap mx-draft-wrap" role="status" aria-label="New chat, waiting for the first message" data-flip="draft">
       <div className="mx-row mx-draft">
-        <span className="mx-row-icon mx-draft-tile"><AppIcon process="claude" size={24} /></span>
+        <span className="mx-row-icon"><AppIcon process={process} size={16} flat dimmed /></span>
         <span className="mx-row-text">
           <span className="mx-draft-name">New chat</span>
           <span className="mx-draft-tag">draft</span>
