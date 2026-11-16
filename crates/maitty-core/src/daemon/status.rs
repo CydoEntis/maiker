@@ -501,6 +501,11 @@ impl Daemon {
                     });
             }
         }
+        // Codex's notify runs as its own process and can arrive after the next turn has started.
+        // Where its own Stop hook already reported the end, the late notice would end that turn.
+        if agent == "codex" && event == "agent-turn-complete" && t.lifecycle_hooks {
+            return;
+        }
         let new = match status {
             HookStatus::Same => {
                 // A subagent finished: if the turn was waiting on it, it's done now.
@@ -538,7 +543,9 @@ impl Daemon {
                 return;
             }
             // After a restart, a session that was done and unseen comes back done.
-            HookStatus::Idle if std::mem::take(&mut t.restore_unseen) => Status::Done,
+            // Only the restored agent's own start says so: Codex reports none, and its first Idle
+            // is an Esc, which is no finish.
+            HookStatus::Idle if event == "SessionStart" && std::mem::take(&mut t.restore_unseen) => Status::Done,
             HookStatus::Gone => {
                 t.hooked = false;
                 t.lifecycle_hooks = false;
@@ -579,6 +586,8 @@ impl Daemon {
             HookStatus::Done => Status::Done,
         };
         t.hooked = true;
+        // The agent reports again: a restore's "done and unseen" is over.
+        t.restore_unseen = false;
         // An agent is reporting from the pane again: it did not end, it started over.
         t.agent_ended = None;
         // Any report after a typed message's Enter means the agent took it (or moved on).

@@ -4425,6 +4425,35 @@ fn codex_detects_work_with_background_terminals_and_wrapped_footers() {
     );
 }
 
+/// Codex's own Stop already ended the turn; its notify arrives after the next one started.
+#[test]
+fn a_late_codex_notify_does_not_end_the_next_turn() {
+    let (mut d, _rx) = daemon();
+    let id = pane(&mut d);
+    d.terms.get_mut(&id).unwrap().agent = Some("codex".into());
+    d.hook(id, "codex".into(), HookStatus::Working, "UserPromptSubmit", &[]);
+    assert!(d.terms[&id].lifecycle_hooks);
+    d.hook(id, "codex".into(), HookStatus::Done, "Stop", &[]);
+    d.hook(id, "codex".into(), HookStatus::Working, "UserPromptSubmit", &[]);
+    d.hook(id, "codex".into(), HookStatus::Done, "agent-turn-complete", &[]);
+    assert_eq!(d.terms[&id].status, Status::Working);
+    close(&mut d, &[id]);
+}
+
+/// A Codex pane restored done and unseen: Esc on its next turn is a quiet stop, not a finish.
+#[test]
+fn a_restored_codex_panes_esc_is_not_a_finish() {
+    let (mut d, _rx) = daemon();
+    let id = pane(&mut d);
+    d.terms.get_mut(&id).unwrap().agent = Some("codex".into());
+    d.terms.get_mut(&id).unwrap().restore_unseen = true;
+    d.hook(id, "codex".into(), HookStatus::Working, "UserPromptSubmit", &[]);
+    d.hook(id, "codex".into(), HookStatus::Idle, "Interrupt", &[]);
+    assert_eq!(d.terms[&id].status, Status::Idle);
+    assert!(!d.terms[&id].restore_unseen);
+    close(&mut d, &[id]);
+}
+
 #[test]
 fn codex_can_start_its_next_turn_without_waiting_for_the_wall_clock() {
     let (mut d, _rx) = daemon();
