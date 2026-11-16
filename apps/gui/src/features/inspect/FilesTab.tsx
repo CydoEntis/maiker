@@ -1,3 +1,4 @@
+import { LOCAL_MACHINE } from '@/api/machines'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { HighlightedLine } from '@/components/HighlightedLine'
@@ -89,7 +90,7 @@ export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: nu
   // The top folder is read by the tree too, under the same key, so this costs no second read.
   const top = useRepoQuery(term, ['tree', ''], () => repoTree(term, null))
   // The same query the Changes tab keeps, so the two never disagree and it is read once.
-  const diff = useRepoQuery(term, ['diff'], () => repoDiff(term), CHANGES_REFRESH_MS)
+  const diff = useRepoQuery(term, ['diff', ...(machine === LOCAL_MACHINE ? [] : [machine])], () => repoDiff(term, null, machine), CHANGES_REFRESH_MS)
   const changed = new Map<string, Changed>((diff.data?.files ?? []).map((entry) => [entry.path, { kind: changeKind(entry.patch), patch: entry.patch, binary: entry.binary }]))
   const marked = foldersHolding([...changed.keys()])
   const file = picked ?? [...changed.keys()][0] ?? startingFile(top.data)

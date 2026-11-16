@@ -382,12 +382,11 @@ export function useWorkspaceState() {
   }, [sessions, sessionMap, agentTerminals])
   const inspectTerm = focusedSession ? repoPaneOf(focusedSession) : null
   const inspectMachine = focusedSession?.machine ?? LOCAL_MACHINE
+  // Under the Changes tab's own key (`useChangesQuery`), so the full diff the count comes from is read once, not twice.
   const diffStat = useQuery({
-    queryKey: ['repo', inspectTerm, 'diff-stat', inspectMachine],
-    queryFn: async () => {
-      const diff = await repoDiff(inspectTerm ?? 0, null, inspectMachine)
-      return { additions: diff.additions, deletions: diff.deletions, files: diff.total_files }
-    },
+    queryKey: ['repo', inspectTerm, 'diff', ...(inspectMachine === LOCAL_MACHINE ? [] : [inspectMachine])],
+    queryFn: () => repoDiff(inspectTerm ?? 0, null, inspectMachine),
+    select: (diff) => ({ additions: diff.additions, deletions: diff.deletions, files: diff.total_files }),
     // The count shows only in the Inspect panel, and it comes from a full diff: nothing is read while the panel is
     // closed, and not again just because the window came to the front.
     enabled: inspectTerm !== null && inspectOpen,
