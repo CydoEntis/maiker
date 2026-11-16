@@ -185,7 +185,7 @@ Each of these is optional. Open the one you need.
   The desktop app's session menu lists a project's under **Specialist agents…**.
 - **Subagents** show under their session, live, with their own steps. Nothing to set up beyond
   [connecting your agents](#connect-your-agents).
-- **Workflows** (Kitchen, or a factory of your own) show their steps and ticket by sending their
+- **Workflows** (any factory, such as Maiker Factory, or a pipeline of your own) show their steps and ticket by sending their
   progress to one command, from anywhere inside the session:
 
 ```sh

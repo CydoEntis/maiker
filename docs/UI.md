@@ -1003,9 +1003,9 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
   links show as text with ↗ and open in the browser only on a click (`openLink`, http and https only).
 - **What is sent.** Start an agent and Send to this chat show **exactly what will be sent** before anything goes:
   Maitty's lines (the title kept to one line) and the ticket's words, every line quoted with `> ` (`ticketMessage`).
-  A blocked ticket warns in red and can still be started. Send to Kitchen types Kitchen's own `/kitchen run <key>
-  (<url>)`, one per ticket, into a chat already running Kitchen in the project or a new Claude chat; blocked ones are
-  skipped unless ticked, and a ticket Kitchen already runs is "Already in Kitchen".
+  A blocked ticket warns in red and can still be started. Send to Factory types the generic `/factory run <key>
+  (<url>)` (workflows.md), one per ticket, into a chat in the project that already reports a run of any workflow, or a
+  new Claude chat; blocked ones are skipped unless ticked, and a ticket some run already reports is "Already in Factory".
 - **Writes.** The ticket page's **Comment…** and **Mark done…** (disabled for a closed ticket) are the only things that
   change a ticket (`TicketWriteDialog.tsx`, `writeTicket` in `api/tickets.ts`). A comment is typed, then **Review**
   shows the provider, the ticket and **exactly what will be written** as text (at most 4,000 characters; no tabs or
@@ -1017,7 +1017,7 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
 - **States.** Loading (skeleton rows, also while the links and the origin are read), no matches (Clear filters), not
   set up (the setup above), gh signed out (Open terminal), key refused (red, Replace key), offline (last good copy
   with Retry), rate-limited (no button). Banners are never amber.
-- **Keys.** `/` search, ↑↓ move, Space or X ticks, Enter opens, S starts an agent, K sends to Kitchen, Esc closes the
+- **Keys.** `/` search, ↑↓ move, Space or X ticks, Enter opens, S starts an agent, K sends to Factory, Esc closes the
   ticket page, then empties the search, then the selection.
 - **Settings › Tickets** (`TicketsSettings.tsx`, nav key K) has two parts. **Accounts** ("set up once on this
   computer, for every project"): the gh login with Check again (Open terminal when signed out); Plane's address,
@@ -1071,8 +1071,8 @@ daemon requests as the desktop app (*Tickets view (desktop)* above) and follows 
   `Command::NewWorktree` with `agent` and `prompt`, so the daemon checks and quotes the prompt; a
   folder outside git, or a project on another machine, is refused (Worktrees is local-only). Send is a
   `QueueFollowUp`, typed in when the agent's turn is over, and needs the session in front to run an
-  agent. A blocked ticket warns in red and can still be started. Kitchen and ticking several tickets
-  are desktop-only.
+  agent. A blocked ticket warns in red and can still be started. Send to Factory and ticking several
+  tickets are desktop-only.
 - **Writes.** Comment (`c`) and Mark done (`d`, not for a closed ticket) are the only writes. A
   comment is typed (Enter is a new line), Tab checks it with `clean_comment` and shows the review:
   the provider, the ticket and exactly what will be written; `y` (or the confirm button) sends it
@@ -1293,7 +1293,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     changed-files bar wears the edit glyph. A table column of figures (`numericColumns`: every cell a number, maybe
     with a currency or a short unit) sits right, in mono, unless the table set its alignment.
   - *Tool step:* the verb and target are read from the tool's own input (`toolFacts.ts`): "Read `src/a.ts` lines
-    40–88", "Search `pattern` in src", "Fetch example.com/docs", "Skill kitchen:kitchen" and its arguments, an extension's server
+    40–88", "Search `pattern` in src", "Fetch example.com/docs", "Skill maiker:factory" and its arguments, an extension's server
     and tool. Nothing the input does not hold (hit counts, a status code) is shown. Click opens the input and the
     result, bounded.
   - *Edit step:* the file as a badge, Added / Modified / Deleted where the history says, `+N` `−N`; it opens to the
