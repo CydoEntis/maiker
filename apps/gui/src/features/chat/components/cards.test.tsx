@@ -14,6 +14,13 @@ afterEach(cleanup)
 /** The diff's lines as drawn, each its own row of syntax-coloured text. */
 const diffLines = () => screen.queryAllByText((_, element) => element?.classList.contains('mx-diff-text') === true && /^line \d+$/.test(element.textContent))
 
+/** Steps start folded; this opens the one on screen as the person would. */
+const openStep = async () => {
+  const [head] = screen.getAllByRole('button', { expanded: false })
+  if (head === undefined) throw new Error('no folded step on screen')
+  await userEvent.click(head)
+}
+
 describe('command step', () => {
   const finished = (over = {}) => commandEvent('c', { command: 'pnpm test', output: 'one\ntwo\nthree\nfour\nfive', ...over })
 
@@ -29,9 +36,12 @@ describe('command step', () => {
     expect(group).toHaveTextContent('three four five')
   })
 
-  it('starts open when the command failed', () => {
+  it('starts folded even when the command failed, and opens on its output', async () => {
     render(<CommandStep event={finished({ exitCode: 2, status: 'failed' })} />)
-    expect(screen.getByRole('group', { name: 'Command pnpm test' })).toHaveTextContent('three four five')
+    const group = screen.getByRole('group', { name: 'Command pnpm test' })
+    expect(group).not.toHaveTextContent('three four five')
+    await openStep()
+    expect(group).toHaveTextContent('three four five')
   })
 
   it.each([
@@ -86,6 +96,8 @@ describe('command step', () => {
     const group = screen.getByRole('group', { name: 'Command pnpm test' })
     expect(within(group).getByText('exit 2')).toBeInTheDocument()
     expect(within(group).getByRole('button', { name: 'Copy command' })).toBeInTheDocument()
+    expect(group).not.toHaveTextContent('three four five')
+    await userEvent.click(within(group).getByRole('button', { expanded: false }))
     expect(group).toHaveTextContent('three four five')
     await userEvent.click(within(group).getByRole('button', { expanded: true }))
     expect(group).not.toHaveTextContent('five')
@@ -117,8 +129,9 @@ describe('command step', () => {
 })
 
 describe('edit step', () => {
-  it('names a secret file and says its content is not kept, not that the diff failed or is empty', () => {
-    render(<EditStep event={editEvent('e', { file: 'app/.env', change: 'add', diff: { status: 'omitted' } })} root={null} onOpen={null} startOpen />)
+  it('names a secret file and says its content is not kept, not that the diff failed or is empty', async () => {
+    render(<EditStep event={editEvent('e', { file: 'app/.env', change: 'add', diff: { status: 'omitted' } })} root={null} onOpen={null} />)
+    await openStep()
 
     expect(screen.getByRole('group', { name: 'Edit app/.env' })).toBeInTheDocument()
     expect(screen.getByText(/Secret file: Maitty doesn.t show its contents/)).toBeInTheDocument()
@@ -145,7 +158,8 @@ describe('edit step', () => {
     [13, 'Show all 13 lines'],
     [35, 'Show all 35 lines'],
   ])('folds %i lines to 12 (%s)', async (count, footer) => {
-    render(<EditStep event={long(count)} root={null} onOpen={null} startOpen />)
+    render(<EditStep event={long(count)} root={null} onOpen={null} />)
+    await openStep()
 
     expect(diffLines()).toHaveLength(Math.min(count, 12))
     if (footer === null) {
@@ -157,15 +171,17 @@ describe('edit step', () => {
     expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true')
   })
 
-  it('says the history kept no diff instead of inventing one', () => {
-    render(<EditStep event={editEvent('e', { file: null, diff: { status: 'unavailable' } })} root={null} onOpen={null} startOpen />)
+  it('says the history kept no diff instead of inventing one', async () => {
+    render(<EditStep event={editEvent('e', { file: null, diff: { status: 'unavailable' } })} root={null} onOpen={null} />)
+    await openStep()
 
     expect(screen.getByText(/didn.t keep this diff/)).toBeInTheDocument()
   })
 
   it('opens the file in the side panel from its diff', async () => {
     const onOpen = vi.fn()
-    render(<EditStep event={editEvent('e', { file: '/repo/src/a.ts' })} root="/repo" onOpen={onOpen} startOpen />)
+    render(<EditStep event={editEvent('e', { file: '/repo/src/a.ts' })} root="/repo" onOpen={onOpen} />)
+    await openStep()
 
     await userEvent.click(screen.getByRole('button', { name: 'Open in side panel' }))
     expect(onOpen).toHaveBeenCalledWith('/repo/src/a.ts')
@@ -176,6 +192,7 @@ describe('edit step on its own', () => {
   it('is a card with the file in its head, its diff with line numbers, and the side panel a button', async () => {
     const onOpen = vi.fn()
     render(<EditStep event={editEvent('e', { file: '/repo/src/a.ts' })} root="/repo" onOpen={onOpen} alone />)
+    await openStep()
 
     const group = screen.getByRole('group', { name: 'Edit src/a.ts' })
     expect(group.querySelectorAll('.mx-diff-num')[1]?.textContent).toBe('1')
@@ -184,8 +201,9 @@ describe('edit step on its own', () => {
     expect(onOpen).toHaveBeenCalledWith('/repo/src/a.ts')
   })
 
-  it('says it is still writing instead of showing a diff while it runs', () => {
+  it('says it is still writing instead of showing a diff while it runs', async () => {
     render(<EditStep event={editEvent('e', { status: 'running' })} root={null} onOpen={null} alone />)
+    await openStep()
 
     expect(screen.getByText('Still writing…')).toBeInTheDocument()
   })

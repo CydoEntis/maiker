@@ -1234,8 +1234,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   Two or more steps that follow each other (edits, commands, tools; never the to-do list) fold into one **work row**
   (`workSummary.ts`, `WorkCard`): a line such as "Read 2 files, edited 3, ran 1 command" with the daemon's own time for
   the run, as a card head that opens every step. Under it are the run's latest 3 steps as rows, each openable on its
-  own, and a "+N more" line when it leaves steps out. A run with a failed step starts open, and so does one whose
-  pending request is about a step the fold hides. A command or an edit that stands alone is a card with its facts in
+  own, and a "+N more" line when it leaves steps out. Every run and every step starts folded, a failed one too (its
+  line says so), so a long turn stays short; only a run whose pending request is about a step the fold hides starts
+  open. A command or an edit that stands alone is a card with its facts in
   the head (`StepView` with `alone`); inside a run it stays a row.
   The agent's reasoning (the daemon's `Reasoning` history items, Claude's thinking and Codex's reasoning summary) is one
   folded **Thought** row (`ThoughtRow`, a `thought` row of `buildRows`): reasoning that follows each other in a turn merge
@@ -1311,7 +1312,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   - *Command step:* the command's first line, then the live clock or `exit N · time`; it opens to the whole command
     and the last 3 lines of output with "Show all N lines". The elapsed time is the provider's duration, else the
     daemon's start and completion times; the exit code exists for Codex only, so for Claude it reads "exit code not
-    reported". One that failed starts open.
+    reported". Every one starts folded, a failed one too.
   - *Approval card:* see Approvals. *Helper agents:* consecutive helper calls are one card, "3 agents, 2 working",
     a row each (title, type, what it was asked, its time); a row opens what it was asked and its report. *Plan:*
     the agent's own to-do items, "N of M done" and a progress bar. *Working line:* "claude is working · m:ss"; no token count,

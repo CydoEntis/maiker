@@ -23,15 +23,15 @@ type WorkCardProps = {
 
 /**
  * A run of steps as a card: one line saying what it did, over its latest three steps and how many more there are.
- * The head opens every step. One that failed, or that waits on the person for a step the fold hides, starts open,
- * so neither is ever folded away.
+ * The head opens every step. It starts folded, a failed run too (its line says a step failed); only a run waiting on
+ * the person for a step the fold hides starts open, so that step is never folded away.
  */
 export function WorkCard({ steps, root, openDiff, waitingStep }: WorkCardProps) {
   const status = workStatus(steps)
   const latest = steps.slice(-LATEST_STEPS)
   const hiddenWaiting = steps.slice(0, -LATEST_STEPS).some((step) => isWaitingStep(waitingStep, step.id))
   const [chosen, setChosen] = useState<boolean | null>(null)
-  const open = chosen ?? (status === 'failed' || hiddenWaiting)
+  const open = chosen ?? hiddenWaiting
   const toggle = () => { setChosen(!open) }
   const took = workDurationMs(steps)
   const first = steps[0]

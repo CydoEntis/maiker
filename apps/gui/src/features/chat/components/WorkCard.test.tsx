@@ -28,10 +28,11 @@ describe('a run of steps', () => {
     expect(screen.getByText('waiting for you ↓')).toBeInTheDocument()
   })
 
-  it('opens by itself when a step failed', () => {
+  it('stays folded when a step failed, and its head says so', () => {
     render(card([commandEvent('1', { command: 'pnpm test', exitCode: 1, status: 'failed', output: 'boom' })]))
 
-    expect(screen.getByRole('group', { name: 'Command pnpm test' })).toHaveTextContent('boom')
+    expect(screen.getByText(/a step failed/)).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Command pnpm test' })).not.toHaveTextContent('boom')
   })
 
   it('says how many steps the fold leaves out', () => {
