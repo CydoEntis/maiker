@@ -300,6 +300,14 @@ fn refresh_for_scan(sys: &mut System, roots: &[(TermId, u32)]) {
     );
 }
 
+/// Whether a process named `name`, `depth` levels below the pane's shell, makes the pane a
+/// session on another machine. Only a remote client the person started counts: one an agent runs
+/// for itself (a `git fetch` over ssh, a command on a server) is a step of its work, and reading it
+/// as the pane leaving dropped the agent's chat and brought it back under a new id.
+fn makes_pane_remote(name: &str, depth: usize, under_agent: bool) -> bool {
+    depth > 0 && !under_agent && REMOTE_CLIENTS.contains(&name)
+}
+
 fn stem(name: &std::ffi::OsStr) -> String {
     let s = name.to_string_lossy().to_ascii_lowercase();
     s.strip_suffix(".exe").map(str::to_string).unwrap_or(s)
@@ -315,8 +323,9 @@ fn scan(sys: &System, roots: &[(TermId, u32)], agents: &[CompiledAgent]) -> Vec<
         .iter()
         .map(|&(term, root)| {
             let root = Pid::from_u32(root);
-            // Breadth-first so the shallowest agent wins (an agent's own helpers are deeper).
-            let mut queue = vec![(root, 0usize)];
+            // Breadth-first so the shallowest agent wins (an agent's own helpers are deeper). Each
+            // entry also says whether it runs under the agent found.
+            let mut queue = vec![(root, 0usize, false)];
             let mut agent = None;
             let mut agent_cwd = None;
             let mut deepest: Option<(usize, u64, String)> = None;
@@ -325,15 +334,15 @@ fn scan(sys: &System, roots: &[(TermId, u32)], agents: &[CompiledAgent]) -> Vec<
             let mut remote = None;
             let mut i = 0;
             while i < queue.len() {
-                let (pid, depth) = queue[i];
+                let (pid, depth, under_agent) = queue[i];
                 i += 1;
+                let mut is_agent = false;
                 if let Some(p) = sys.process(pid) {
                     mem += p.memory();
                     cpu += p.cpu_usage();
                     let name = stem(p.name());
                     if !IGNORED.contains(&name.as_str()) {
-                        if remote.is_none() && depth > 0 && REMOTE_CLIENTS.contains(&name.as_str())
-                        {
+                        if remote.is_none() && makes_pane_remote(&name, depth, under_agent) {
                             let args: Vec<String> = p
                                 .cmd()
                                 .iter()
@@ -345,6 +354,7 @@ fn scan(sys: &System, roots: &[(TermId, u32)], agents: &[CompiledAgent]) -> Vec<
                             agent = match_agent(&name, p.cmd(), agents);
                             if agent.is_some() {
                                 agent_cwd = p.cwd().map(|c| c.to_path_buf());
+                                is_agent = true;
                             }
                         }
                         let key = (depth, p.start_time());
@@ -355,7 +365,7 @@ fn scan(sys: &System, roots: &[(TermId, u32)], agents: &[CompiledAgent]) -> Vec<
                 }
                 for c in children.get(&pid).into_iter().flatten() {
                     if queue.len() < MAX_PER_ROOT {
-                        queue.push((*c, depth + 1));
+                        queue.push((*c, depth + 1, under_agent || is_agent));
                     }
                 }
             }
@@ -511,7 +521,16 @@ mod walk_tests {
 
 #[cfg(test)]
 mod remote_tests {
-    use super::remote_host;
+    use super::{makes_pane_remote, remote_host};
+
+    #[test]
+    fn only_an_ssh_the_person_started_makes_the_pane_remote() {
+        assert!(makes_pane_remote("ssh", 1, false), "ssh typed at the shell");
+        assert!(!makes_pane_remote("ssh", 3, true), "ssh an agent ran for a step of its work");
+        assert!(!makes_pane_remote("ssh", 0, false), "the pane's own shell");
+        assert!(!makes_pane_remote("bash", 1, false));
+    }
+
 
     fn host(line: &str) -> Option<String> {
         remote_host(
