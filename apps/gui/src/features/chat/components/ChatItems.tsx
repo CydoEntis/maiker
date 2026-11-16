@@ -129,8 +129,9 @@ function AgentMessage({ rowKey, paragraphs, status }: { rowKey: string; paragrap
  * same as one the history holds, so the files never show as the paths that carry them.
  */
 function SaidText({ text: sent }: { text: string }) {
-  // The note a restore put in front is for the agent; the person sees what they wrote.
-  const text = stripRestoreNote(sent)
+  // The note a restore put in front is for the agent; the person sees what they wrote. Blank lines around it (Claude
+  // Code stores a pasted message with two in front) would only draw an empty band in the bubble.
+  const text = stripRestoreNote(sent).replace(/^\s*\n/, '').trimEnd()
   const attached = parseAttachmentMessage(text)
   if (attached === null) return <p className="mx-bubble">{text}</p>
   // Attachments sit above the bubble, as they were added before the text was sent.

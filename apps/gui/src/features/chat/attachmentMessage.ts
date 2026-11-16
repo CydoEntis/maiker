@@ -17,9 +17,11 @@ export type AttachedPath = { readonly path: string }
 
 export function buildAttachmentMessage(text: string, attachments: readonly AttachedPath[]): string {
   if (attachments.length === 0) return text
+  // Blank lines around the words (a paste can leave them) would only draw an empty band in the sent bubble.
+  const words = text.replace(/^\s*\n/, '').trimEnd()
   const lines = attachments.map((attachment) => `${LINE_PREFIX}${attachment.path}`)
   const block = [ATTACHMENT_HEADER, ...lines].join('\n')
-  return text === '' ? block : `${text}\n\n${block}`
+  return words === '' ? block : `${words}\n\n${block}`
 }
 
 export type SentAttachment = { readonly path: string; readonly name: string; readonly kind: AttachmentKind }
@@ -68,5 +70,6 @@ export function parseAttachmentMessage(raw: string): { text: string; files: Sent
     const name = nameOf(path)
     return { path, name, kind: kindOf(name) }
   })
-  return { text: message.slice(0, at).replace(/\n+$/, ''), files }
+  // Leading blank lines too: a message sent before they were trimmed would otherwise open with an empty band.
+  return { text: message.slice(0, at).replace(/^\s*\n/, '').replace(/\s+$/, ''), files }
 }
