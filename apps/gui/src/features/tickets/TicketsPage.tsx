@@ -481,7 +481,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
                   )}
                   {shownTickets.map((ticket) => <TicketRow key={ticket.id} ticket={ticket} state={rowState(ticket)} me={me} now={now} onToggle={toggle} onOpen={openTicket} onOpenWork={host.onOpenWork} />)}
                   <div ref={endRef} />
-                  {hasNextPage && <div className="mx-tk-more-row"><span className="mx-tk-spin" aria-hidden="true" />Loading more as you scroll</div>}
+                  {hasNextPage && <TicketSkeleton source={look.name} rows={2} />}
                   {!list.isPending && (hiddenClosed > 0 || showClosed) && (
                     <button type="button" className="mx-tk-closed-toggle" onClick={() => { setShowClosed((now) => !now) }}>{showClosed ? 'Hide closed' : `Show closed · ${String(hiddenClosed)}`}</button>
                   )}

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { chooseProjectFolder } from '@/api/folderPicker'
 import type { GitHubAccount } from '@/api/githubAccounts'
 import { changeGitRule, loadGitIdentities, type GitIdentity, type GitIdentityReport, type GitIdentityRule } from '@/api/gitIdentities'
@@ -62,7 +63,7 @@ function RuleRow({ rule, actions }: { rule: GitIdentityRule; actions: RuleAction
 }
 
 function Identities({ state, active, actions }: { state: Loaded; active: string | undefined; actions: RuleActions | undefined }) {
-  if (state.status === 'loading') return <p>Reading git’s settings…</p>
+  if (state.status === 'loading') return <SkeletonLines label="Reading git’s settings" />
   if (state.status === 'failed') return <p role="alert">Could not read git’s settings: {state.message}</p>
   const { report } = state
   if (!report.installed) return <p>git is not installed on this machine.</p>

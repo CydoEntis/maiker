@@ -97,10 +97,7 @@ export function TicketDrawer({ provider, summary, detail, failed, where, known, 
           {detail === null && failed !== null ? (
             <div className="mx-tk-text">{failed}</div>
           ) : detail === null ? (
-            <div role="status" className="mx-tk-text-loading">
-              <span className="mx-tk-more-row"><span className="mx-tk-spin" aria-hidden="true" />Reading the ticket from {look.name}…</span>
-              <TicketTextSkeleton />
-            </div>
+            <div role="status" aria-label={`Reading the ticket from ${look.name}`}><TicketTextSkeleton /></div>
           ) : (
             <div className="mx-tk-text">{detail.body.trim() === '' ? 'No description.' : detail.body}</div>
           )}

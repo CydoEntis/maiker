@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type KeyboardEvent } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import type { GitHubList, GitHubRepo, GitHubRepoList } from '@/api/githubRepos'
 import { errorMessage } from '@/lib/error-message'
@@ -127,7 +128,7 @@ export function GitHubRepoPicker({ where, source, disabled, onPick }: Props) {
         )}
       </div>
       <ResultsList aria-label={`Your repositories on GitHub, from ${where}`} className="mx-getfile-list">
-        {result === null && <p role="status">Loading your repositories…</p>}
+        {result === null && <SkeletonLines label="Reading your repositories" lines={5} />}
         {result?.state === 'failed' && <p role="alert">{result.why}. You can still paste an address.</p>}
         {rows.map((repo, at) => (
           <ResultsOption

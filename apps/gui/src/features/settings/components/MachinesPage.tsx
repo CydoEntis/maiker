@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState, type ReactNode } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
 import { exportDaemonLog, openDaemonLog } from '@/api/daemon'
@@ -151,7 +152,7 @@ export function MachinesPage({ daemon, machines, github, appVersion }: Props) {
           </label>
           <button type="button" className="mx-mach-add" disabled={!machines.known} onClick={() => { setAdding(true) }}><Glyph path={PLUS_PATH} size={13} width="2.2" />Add machine</button>
         </div>
-        {!machines.known && <p className="mx-mach-hint" role="status">Loading machines…</p>}
+        {!machines.known && <SkeletonLines label="Reading machines" className="mx-mach-hint" />}
         {machines.known && heads.length === 0 && <p className="mx-mach-hint">No other machines yet. Add one to see its sessions in your sidebar.</p>}
         {machines.known && heads.length > 0 && (
           <>
@@ -469,7 +470,7 @@ function DoneFoot({ added, onAgain, onOpen }: { added: Exclude<Added, { outcome:
 }
 
 function HostChoices({ hosts, picked, onPick }: { hosts: HostsState; picked: string | null; onPick: (alias: string) => void }) {
-  if (hosts.status === 'loading') return <p className="mx-mach-note" role="status">Loading hosts from ~/.ssh/config…</p>
+  if (hosts.status === 'loading') return <SkeletonLines label="Reading hosts from ~/.ssh/config" className="mx-mach-note" />
   if (hosts.status === 'failed') return <p className="mx-mach-note" role="alert">{hosts.message}</p>
   if (hosts.hosts.length === 0) return <p className="mx-mach-note">No new hosts in ~/.ssh/config. Choose By address to type one.</p>
   return (

@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { useQueryClient } from '@tanstack/react-query'
 import type { TicketPlace } from '@/api/ticketLinks'
 import { saveTicketKey, type KeyedProvider, type TicketKeyState } from '@/api/tickets'
@@ -181,7 +182,7 @@ function PickGroup({ source, project, link, pasted }: { source: 'plane' | 'linea
       setNote(told.ok ? null : told.failure.kind === 'invalid' || told.failure.kind === 'unreachable' ? told.failure.line : 'Could not save the link')
     }, (error: unknown) => { setNote(errorMessage(error, 'Could not save the link')) }).finally(() => { setBusy(false) })
   }
-  if (groups.isPending) return <span className="mx-tk-setup-hint">Reading your {PROVIDER_LOOK[source].name} {word}s…</span>
+  if (groups.isPending) return <SkeletonLines label={`Reading your ${PROVIDER_LOOK[source].name} ${word}s`} lines={4} />
   if (groups.isError) return <span className="mx-tk-setup-error" role="alert">Could not read your {word}s: {errorMessage(groups.error, 'the service did not answer')}</span>
   if (top.length === 0) return <span className="mx-tk-setup-hint">This key sees no {word}s.</span>
   return (

@@ -1,4 +1,5 @@
 import { useContext, useEffect, useState } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { loadGitHubAccounts } from '@/api/githubAccounts'
 import { LOCAL_MACHINE } from '@/api/machines'
@@ -310,7 +311,7 @@ export function TicketsSection({ projects, signIn }: { projects: readonly Ticket
       {KEYED.map((each) => <KeyCard key={each.provider} {...each} />)}
       <Part title="Linked projects" sub="Which tickets each project shows. A project is its repository, so every worktree and every session in it shows the same tickets." />
       <Card title="Projects" foot="Kept by the Maitty service, so the desktop app and the terminal app show a project the same tickets. A GitHub repository needs no setup: the folder's origin is used.">
-        {links.isPending ? <p className="mx-scard-note">Reading…</p>
+        {links.isPending ? <SkeletonLines label="Reading the linked projects" className="mx-scard-note" />
           : links.isError ? <p className="mx-scard-note" role="alert">{errorMessage(links.error, 'Could not read the linked projects')}</p>
             : (
               <>

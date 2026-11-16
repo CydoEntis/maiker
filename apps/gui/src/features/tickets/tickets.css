@@ -107,7 +107,6 @@
 .mx-tk-skel > span + span { height: 6px; }
 .mx-tk-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 24px; text-align: center; font-size: 12.5px; animation: mx-tk-fade .2s ease-out; }
 .mx-tk-empty-title { font-size: 14px; font-weight: 600; }
-.mx-tk-more-row { flex: none; display: flex; align-items: center; justify-content: center; gap: 8px; height: 44px; font-size: 12px; color: var(--dim); }
 .mx-tk-closed-toggle { flex: none; align-self: stretch; height: 34px; font-size: 12px; text-align: center; color: var(--muted) !important; background: transparent; border: 0; cursor: pointer; }
 .mx-tk-closed-toggle:hover { color: var(--fg) !important; }
 
@@ -163,8 +162,6 @@
 .mx-tk-section-head { display: flex; align-items: center; font-size: 11px; font-weight: 600; color: var(--dim); }
 .mx-tk-section-note { font-weight: 400; white-space: pre; }
 .mx-tk-text { padding: 10px 12px; background: var(--m-well); border: 1px solid var(--line); font: 400 12.5px/1.6 var(--mono); color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
-.mx-tk-text-loading { display: flex; flex-direction: column; gap: 4px; }
-.mx-tk-text-loading > .mx-tk-more-row { justify-content: flex-start; height: 28px; }
 .mx-tk-text-skel { display: flex; flex-direction: column; gap: 9px; padding: 12px; background: var(--m-well); border: 1px solid var(--line); }
 .mx-tk-text-skel > span { height: 8px; background: var(--line2); animation: mx-tk-pulse 1.2s ease-in-out infinite; }
 .mx-tk-link { display: flex; align-items: center; gap: 8px; padding: 0; font-size: 12.5px; text-align: left; background: transparent; border: 0; cursor: pointer; min-width: 0; }

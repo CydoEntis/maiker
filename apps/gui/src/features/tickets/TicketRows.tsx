@@ -99,16 +99,15 @@ export function TicketBoard({ tickets, stateOf, ...row }: ListProps) {
 }
 
 /**
- * While the first page is read: a line that says what is being read, then pulsing placeholder rows, under the header
- * and toolbar already in place, so a slow provider never looks like a frozen page.
+ * While the first page is read: pulsing placeholder rows under the header and toolbar already in place, so a slow
+ * provider never looks like a frozen page. What is read is said to screen readers only.
  */
-export function TicketSkeleton({ source }: { source: string }) {
+export function TicketSkeleton({ source, rows = 6 }: { source: string; rows?: number }) {
   const WIDTHS = ['70%', '52%', '64%', '44%', '58%', '66%']
   return (
-    <div className="mx-tk-skeleton">
-      <div role="status" className="mx-tk-more-row"><span className="mx-tk-spin" aria-hidden="true" />Reading tickets from {source}…</div>
+    <div className="mx-tk-skeleton" role="status" aria-label={`Reading tickets from ${source}`}>
       <div aria-hidden="true">
-        {WIDTHS.map((width) => (
+        {WIDTHS.slice(0, rows).map((width) => (
           <div key={width} className="mx-tk-skel"><span style={{ width }} /><span style={{ width: '40%' }} /></div>
         ))}
       </div>

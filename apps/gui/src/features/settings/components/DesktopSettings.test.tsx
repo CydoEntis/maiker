@@ -490,9 +490,9 @@ describe('the Machines page', () => {
     return { user, ...rendered }
   }
 
-  it('says it is loading until the host has answered', () => {
+  it('shows placeholders until the host has answered', () => {
     renderSettings('machines', { machines: info({ known: false }) })
-    expect(within(screen.getByRole('region', { name: 'Remote machines' })).getByRole('status')).toHaveTextContent('Loading machines')
+    expect(within(screen.getByRole('region', { name: 'Remote machines' })).getByRole('status', { name: 'Reading machines' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Add machine' })).toBeDisabled()
   })
 
@@ -684,7 +684,7 @@ describe('adding a machine', () => {
   it('says it is loading the hosts, then lists them', async () => {
     let answer: (list: typeof hosts) => void = () => undefined
     await startAdding({ loadHosts: () => new Promise((resolve) => { answer = resolve }) })
-    expect(screen.getByText(/Loading hosts/)).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: /Reading hosts/ })).toBeInTheDocument()
     answer(hosts)
     const list = await screen.findByRole('radiogroup', { name: 'Hosts in your ssh config' })
     expect(within(list).getByRole('radio', { name: /build/ })).toBeInTheDocument()

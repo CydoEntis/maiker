@@ -304,8 +304,9 @@ describe('Inspect panel', () => {
     async (view) => {
       vi.mocked(invoke).mockReset().mockRejectedValue('git rev-parse --show-toplevel: fatal: not a git repository (or any of the parent directories): .git')
       renderPanel(view)
-      const note = await screen.findByRole('status')
-      expect(note).toHaveTextContent('This folder isn’t a git project yet')
+      // The placeholder bars are a status too while the folder is read, so the note is found by its words.
+      const note = (await screen.findByText(/This folder isn’t a git project yet/)).closest('[role="status"]')
+      expect(note).not.toBeNull()
       expect(note).toHaveTextContent('git init')
       expect(screen.queryByRole('alert')).toBeNull()
     },

@@ -1,11 +1,12 @@
 import { repoReferences } from './api'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { ago, formatBytes, MS_PER_SECOND } from './format'
 import { RepoError } from './RepoError'
 import { useRepoQuery } from './useRepoQuery'
 
 export function ReferencesTab({ term }: { term: number }) {
   const query = useRepoQuery(term, ['references'], () => repoReferences(term))
-  if (query.isPending) return <p className="mx-inspect-note">Loading…</p>
+  if (query.isPending) return <SkeletonLines label="Reading references" className="mx-inspect-note" />
   if (query.isError) return <RepoError error={query.error} tab="references" onRetry={() => { void query.refetch() }} retrying={query.isFetching} />
   // When the list was read, so the ages stay the same until it is read again.
   const now = query.dataUpdatedAt / MS_PER_SECOND

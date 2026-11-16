@@ -237,7 +237,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Design tokens (`apps/gui/src/tokens.css`).** The handoff's role names over the theme's colours, so a component
   never reads a theme colour or a raw value: `--bubble` (a user message), `--needs`/`--on-needs` (the theme's `--warn`,
   meaning needs you and nothing else), `--err`, `--focus`/`--link` (the theme's blue), code colours (`--code-kw`,
-  `-str`, `-fn`, `-num`, `-com`), file-type tag tones (`--tag-ts`, `-tsx`, `-data`, `-sql`, `-env`, `-text`, never the
+  `-str`, `-fn`, `-num`, `-com`), file-type tag tones (`--tag-ts`, `-tsx`, `-data`, `-toml`, `-sql`, `-env`, `-md`, `-rs`, `-py`, `-go`, `-css`, `-html`, `-sh`,
+  `-img`, and `-text` for any other type: each common type its own, never the
   needs colour), spacing `--s1`..`--s9` (2, 4, 6, 8, 12, 16, 20, 24, 32px), the type scale (`--text-h1` 22px down to
   `--text-tag` 10.5px mono, `--text-reply` 14.5/1.65, `--text-code` 12.5/1.65), the corner radii (`--r-control`,
   `--r-panel`, `--r-badge`) and motion (`--t-fast` 120ms, `--t-base` 180ms, `--t-slow` 260ms, `--t-spin` 900ms, one
@@ -252,7 +253,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   `soft`, `ghost`, `danger`, `link`; sizes `sm` 24px, `md` 30px, `icon` 28px; `keyHint` draws the key that also
   presses it; hover brightens, press darkens toward `--bg`, focus is a 2px `--focus` ring outside a 2px `--bg` gap,
   disabled is 42% opacity), **IconButton** (an icon with its label as tooltip and name), **Tag** (`tag.tsx`: a
-  mono word in a hairline, `neutral`, `done`, `err` or `working`), **FileBadge** (the type tag in its `--tag-*` tone,
+  mono word in a hairline, `neutral`, `done`, `err` or `working`), **SkeletonLines** (`skeleton.tsx`: pulsing bars in `--line2` where something is on its way; nothing on screen says
+  Loading or Reading, the label is for screen readers only), **FileBadge** (the type tag in its `--tag-*` tone,
   then the path with its folder dimmed; a long path shortens from the front so the name stays), **CodeChip**,
   **TextLink**, **StatusMark** (`status-mark.tsx`: running a spinner (the Settings spinner where the caller passes
   it), done ✓, failed ×, stopped ■, waiting ·, needs you ! on the needs square; with `word`, the state's word beside

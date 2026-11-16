@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { repoDiff, repoDiffRange, repoSnapshots, repoStatus, type RepoDiff } from './api'
 import { changeKind } from './changeKind'
@@ -116,7 +117,7 @@ export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, comments, ac
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set())
   // Comments sent in this look at the changes, by file: a comment stays pinned on its line while other files are read.
   const [sent, setSent] = useState<ReadonlyMap<string, readonly SentComment[]>>(() => new Map())
-  if (waiting || query.isPending) return <p className="mx-inspect-note">Loading…</p>
+  if (waiting || query.isPending) return <SkeletonLines label="Reading changes" lines={5} className="mx-inspect-note" />
   if (query.isError) return <RepoError error={query.error} tab="changes" onRetry={() => { void query.refetch() }} retrying={query.isFetching} />
   const { files } = query.data
   const chosen = files.filter((file) => !skipped.has(file.path))

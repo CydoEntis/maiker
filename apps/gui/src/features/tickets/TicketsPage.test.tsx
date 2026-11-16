@@ -79,14 +79,15 @@ describe('the Tickets view', () => {
     expect(document.querySelector('.mx-tk-drawer b')).toBeNull()
   })
 
-  it('says it is reading while the first page is on its way, then lists them', async () => {
+  it('shows placeholder rows, with no words, while the first page is on its way, then lists them', async () => {
     let answer: (value: Awaited<ReturnType<typeof api.loadTicketPage>>) => void = () => undefined
     api.loadTicketPage.mockReturnValue(new Promise((resolve) => { answer = resolve }))
     show()
-    expect(await screen.findByText('Reading tickets from GitHub…')).toBeInTheDocument()
+    expect(await screen.findByRole('status', { name: 'Reading tickets from GitHub' })).toBeInTheDocument()
+    expect(screen.queryByText(/Loading|Reading/)).toBeNull()
     answer({ ok: true, value: { tickets: [CART], more: false } })
     expect(await screen.findByText('Fix the cart')).toBeInTheDocument()
-    expect(screen.queryByText('Reading tickets from GitHub…')).toBeNull()
+    expect(screen.queryByRole('status', { name: 'Reading tickets from GitHub' })).toBeNull()
   })
 
   it('shows everyone at first and filters by who a ticket is assigned to, with List and Board as the only views', async () => {
@@ -112,7 +113,7 @@ describe('the Tickets view', () => {
     api.loadTicket.mockReturnValue(new Promise(() => undefined))
     show()
     await userEvent.click(await screen.findByText('Fix the cart'))
-    expect(await screen.findByText('Reading the ticket from GitHub…')).toBeInTheDocument()
+    expect(await screen.findByRole('status', { name: 'Reading the ticket from GitHub' })).toBeInTheDocument()
     expect(document.querySelector('.mx-tk-drawer .mx-tk-text-skel')).not.toBeNull()
   })
 

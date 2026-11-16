@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { useQueryClient } from '@tanstack/react-query'
 import { repoDiffRange, repoLog, repoSnapshots, restoreSnapshot } from './api'
 import { ago, MS_PER_SECOND } from './format'
@@ -53,7 +54,7 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
       .finally(() => { setRestoring(false) })
   }
 
-  if (log.isPending || snapshots.isPending) return <p className="mx-inspect-note">Loading…</p>
+  if (log.isPending || snapshots.isPending) return <SkeletonLines label="Reading history" lines={5} className="mx-inspect-note" />
   if (log.isError) return <RepoError error={log.error} tab="history" onRetry={() => { void log.refetch() }} retrying={log.isFetching} />
 
   return (
@@ -65,7 +66,7 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
       {comparing && (
         <section aria-label="Comparison">
           <p className="mx-inspect-summary">{older.title} → {newer.title}</p>
-          {range.isPending && <p className="mx-inspect-note">Loading…</p>}
+          {range.isPending && <SkeletonLines label="Reading the changes" className="mx-inspect-note" />}
           {range.isError && <p className="mx-inspect-note is-error" role="alert">{messageOf(range.error)}</p>}
           {range.data && (range.data.files.length === 0
             ? <p className="mx-inspect-note">No differences between these two.</p>

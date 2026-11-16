@@ -1,4 +1,5 @@
 import { machineLabel } from '@/data/machineNicknames'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
@@ -206,9 +207,9 @@ export function GetFileDialog({ session, onGet, onCancel, browse }: { session: S
               onKeyDown={onSearchKey}
             />
             <ResultsList aria-label={searching ? 'Matches' : `Files in ${shownFolder}`} className="mx-getfile-list">
-              {searching && index.state === 'loading' && <p role="status">Reading the folder to search it…</p>}
+              {searching && index.state === 'loading' && <SkeletonLines label="Reading the folder to search it" lines={5} />}
               {searching && index.state === 'failed' && <p role="alert">{index.why}</p>}
-              {!searching && listing.state === 'loading' && <p role="status">Loading…</p>}
+              {!searching && listing.state === 'loading' && <SkeletonLines label="Reading the folder" lines={5} />}
               {!searching && listing.state === 'failed' && <p role="alert">{listing.why}. You can still type a path below.</p>}
               {rows.map((row, at) => (
                 <ResultsOption

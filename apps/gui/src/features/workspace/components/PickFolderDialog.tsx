@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import type { FolderListing } from '@/api/folders'
@@ -126,7 +127,7 @@ export function PickFolderDialog({ machine, list, onPick, onCancel }: Props) {
             onKeyDown={onSearchKey}
           />
           <ResultsList aria-label={`Folders in ${here ?? asked}`} className="mx-getfile-list">
-            {current === null && <p role="status">Loading…</p>}
+            {current === null && <SkeletonLines label="Reading the folder" lines={5} />}
             {current?.state === 'failed' && <p role="alert">{current.why}. You can still type a path below.</p>}
             {listing !== null && !listing.exists && <p role="alert">There is no folder {listing.path} on {machine}, or it cannot be read.</p>}
             {here !== null && rows.map((entry, at) => (
