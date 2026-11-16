@@ -295,7 +295,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   *Tickets view*), and at its foot **Terminal** (shows or hides the terminal dock with the focused session's
   terminals, adding the first when it has none; `toggleTerminal`). A view button opens the side panel on that view, or closes it when it is already showing it;
   with no session it says "Open a session first". Badges are 13px, mono 9px/700, at the button's top right: plain is
-  `--fg` on `--raise`, danger white on `--danger`, needs `--on-warn` on `--warn`.
+  `--fg` on `--raise`, danger `--on-danger` on `--danger`, needs `--on-warn` on `--warn`. `--on-danger` is chosen per
+  theme (white, or near-black on a dark theme's light coral, `onDanger`) so every filled danger label, badge and button
+  meets AA; the contrast audit checks it, `--on-accent` and `--on-warn` for every theme.
   There is no middle column and no tab bar: the window is the sidebar, the workspace, the side panel and the tools bar.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   60px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;

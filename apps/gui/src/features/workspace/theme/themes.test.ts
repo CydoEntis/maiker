@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { contrastRatio, mixOklab, parseColor } from './color'
 import themeManifest from '@tokens/themes.json'
 import type { ThemeEntry } from './themes'
-import { findTheme, generateTheme, MIN_TEXT_CONTRAST, paletteTheme, terminalMinimumContrast, themeStyle, THEMES, xtermTheme } from './themes'
+import { findTheme, generateTheme, MIN_TEXT_CONTRAST, onDanger, paletteTheme, terminalMinimumContrast, themeStyle, THEMES, xtermTheme } from './themes'
 
 const PALETTES = new Map(themeManifest.themes.flatMap((theme) => ('palette' in theme ? [[theme.name, theme.palette] as const] : [])))
 const MAITTY = ['Maitty Night', 'Maitty Day', 'Maitty Dark', 'Maitty Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Maitty Retro Dark', 'Maitty Retro Light']
@@ -129,6 +129,14 @@ const ANSI_TEXT_COLOURS = [
 ] as const
 
 describe('contrast audit', () => {
+  it.each(THEMES.map((theme) => [theme.name, theme] as const))('%s keeps a filled button readable: accent, warn and danger', (_name, theme) => {
+    const { tokens } = theme
+    expect(contrastRatio(tokens.onAccent, tokens.accent), 'label on accent').toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+    expect(contrastRatio(tokens.onWarn, tokens.warn), 'label on warn').toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+    expect(contrastRatio(onDanger(tokens), tokens.danger), 'label on danger').toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+    expect(themeStyle(theme)['--on-danger']).toBe(onDanger(tokens))
+  })
+
   it.each(THEMES.map((theme) => [theme.name, theme] as const))('%s keeps text, terminal text and dim text readable on --term and --bg', (_name, theme) => {
     for (const [ground, colour] of TEXT_GROUNDS(theme.tokens)) {
       for (const slot of TERMINAL_TEXT_SLOTS) {

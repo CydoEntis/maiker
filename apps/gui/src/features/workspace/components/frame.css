@@ -58,7 +58,7 @@
 .mx-app .mx-row-icon .mx-badge, .mx-app .mx-pane-icon .mx-badge { right: -3px; bottom: -3px; width: 9px; height: 9px; border: 0; border-radius: var(--r-badge); box-shadow: 0 0 0 2px var(--card); font: 800 7px/1 var(--mono); }
 .mx-app .mx-badge.is-needs { background: var(--needs); color: var(--on-needs); animation: mx-badge-pulse 1.6s ease-in-out infinite; }
 .mx-app .mx-badge.is-done { background: var(--done); color: var(--on-accent); }
-.mx-app .mx-badge.is-error { background: var(--err); color: #fff; }
+.mx-app .mx-badge.is-error { background: var(--err); color: var(--on-danger); }
 .mx-app .mx-badge.is-limited { background: var(--muted); color: var(--card); }
 .mx-app .mx-badge.is-working { background: var(--card); color: var(--working); }
 .mx-app .mx-badge.is-working .mx-spin { font-size: 8px; line-height: 1; }
@@ -89,5 +89,5 @@
 .mx-app[data-side="right"] .mx-tool.is-on { box-shadow: inset -2px 0 0 var(--accent); }
 .mx-tool-badge { position: absolute; top: 2px; right: 1px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; font: 700 9px/13px var(--mono); text-align: center; pointer-events: none; }
 .mx-tool-badge.is-plain { color: var(--fg); background: var(--m-raise); }
-.mx-tool-badge.is-danger { color: #fff; background: var(--danger); }
+.mx-tool-badge.is-danger { color: var(--on-danger); background: var(--danger); }
 .mx-tool-badge.is-needs { color: var(--on-warn, #1a1300); background: var(--warn); }
