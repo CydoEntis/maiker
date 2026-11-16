@@ -1,7 +1,8 @@
 /* The workspace card and its panes (README: Workspace and panes). One pane is no card of its own; two or
    more each get a faint card, and the focused one a teal ring drawn above its content. */
 
-.mx-main-wrap { flex: 1; min-width: 0; display: flex; padding: 12px; }
+/* The chat column keeps room to be used: the side panel beside it gives way first (inspect.css). */
+.mx-main-wrap { flex: 1; min-width: min(var(--chat-min, 400px), 100%); display: flex; padding: 12px; }
 .mx-main {
   flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; overflow: hidden;
   background: var(--main);

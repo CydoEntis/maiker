@@ -296,7 +296,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   60px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
-  widths are `COMPACT_WIDTH_PX` and `NARROW_WIDTH_PX` in `model/windowSize.ts`.
+  widths are `COMPACT_WIDTH_PX` and `NARROW_WIDTH_PX` in `model/windowSize.ts`. The chat column keeps at least
+  **400px** (`--chat-min`): the side panel beside it shrinks first, down to its 300px, and under **900px**
+  (`inspect.css`) the side panel lies over the chat instead of beside it, so the tools bar stays on the window.
 - **Settings dialog** (⌘,). A nav on `--m-well` at the left, in three groups under dim caps: **APP** (General,
   Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal) and **MACHINES** (Remote machines, M;
   Tickets, I). Each item is 32px with a plain 15px glyph stroked in its section's colour and its jump key at the right;
