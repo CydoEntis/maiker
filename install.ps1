@@ -8,6 +8,8 @@
 #   <APP>_INSTALL_DIR  where <app>.exe goes (default: %LOCALAPPDATA%\Programs\<app>)
 #   <APP>_NO_PATH      set to 1 to leave your PATH alone
 #   <APP>_NO_INTEGRATE set to 1 to leave your agents' config alone (no `<app> integrate`)
+#   <APP>_FROM         a folder holding a release's files, used in place of downloading them (the
+#                      release workflow tries a release this way before publishing it)
 $ErrorActionPreference = 'Stop'
 
 # The app's command and where it is released: the only place this script names it (ADR 0008).
@@ -17,6 +19,7 @@ $repo = 'CydoEntis/maitty'
 $envPrefix = $app.ToUpper().Replace('-', '_')
 function Setting($name) { [Environment]::GetEnvironmentVariable("$($envPrefix)_$name") }
 $version = Setting 'VERSION'
+$from = Setting 'FROM'
 $dir = if (Setting 'INSTALL_DIR') { Setting 'INSTALL_DIR' } else { Join-Path $env:LOCALAPPDATA "Programs\$app" }
 $exe = "$app.exe"
 # Windows on ARM runs the x64 build.
@@ -26,6 +29,12 @@ $tmp = Join-Path ([IO.Path]::GetTempPath()) ("$app-install-" + [guid]::NewGuid()
 New-Item -ItemType Directory -Force $tmp | Out-Null
 
 function Fetch($name) {
+    if ($from) {
+        $source = Join-Path $from $name
+        if (-not (Test-Path $source)) { throw "no $name in $from" }
+        Copy-Item $source (Join-Path $tmp $name)
+        return
+    }
     $gh = Get-Command gh -ErrorAction SilentlyContinue
     $signedIn = $false
     # Windows PowerShell 5.1 turns a native program's redirected error output into an error, which
