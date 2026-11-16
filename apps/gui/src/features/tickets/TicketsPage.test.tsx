@@ -99,7 +99,7 @@ describe('the Tickets view', () => {
   })
 
   it('connects Linear once, then picks the team this project reads', async () => {
-    const LINEAR_SET: TicketKeyState[] = [{ provider: 'Plane', set: false, address: '', workspace: '' }, { provider: 'Linear', set: true, address: '', workspace: '' }]
+    const LINEAR_SET: TicketKeyState[] = [{ provider: 'Plane', set: false, address: '', workspace: '', stored_in: 'File' }, { provider: 'Linear', set: true, address: '', workspace: '', stored_in: 'File' }]
     api.saveTicketKey.mockResolvedValue({ ok: true, value: LINEAR_SET })
     api.loadTicketGroups.mockImplementation((source) => Promise.resolve({ ok: true, value: source === 'linear' ? [{ id: 'linear:team.1', kind: 'Project', name: 'Core', parent: null, count: 4 }] : [] }))
     show()

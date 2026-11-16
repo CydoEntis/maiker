@@ -60,7 +60,8 @@ const TicketsAnswerSchema = z.object({
   answer: z.union([z.object({ Ok: ReplySchema }), z.object({ Err: ErrorSchema })]),
 })
 
-const KeyStateSchema = z.object({ provider: z.enum(['Plane', 'Linear']), set: z.boolean(), address: z.string(), workspace: z.string() })
+// `stored_in` is new; an older service sends none and keeps every key in a file.
+const KeyStateSchema = z.object({ provider: z.enum(['Plane', 'Linear']), set: z.boolean(), address: z.string(), workspace: z.string(), stored_in: z.enum(['File', 'Keychain']).default('File') })
 const KeysAnswerSchema = z.object({
   machine: z.number().int(),
   tag: z.number().int(),
@@ -113,7 +114,9 @@ export type TicketFilter = { group: string | null; state: StateCategory | null; 
 
 /** The providers whose key the daemon keeps. GitHub has none: it reads through the user's own `gh`. */
 export type KeyedProvider = 'Plane' | 'Linear'
-export type TicketKeyState = { provider: KeyedProvider; set: boolean; address: string; workspace: string }
+/** Where the service keeps a key: the system's keychain, or an owner-only file where the machine has none. */
+export type KeyStorage = 'File' | 'Keychain'
+export type TicketKeyState = { provider: KeyedProvider; set: boolean; address: string; workspace: string; stored_in: KeyStorage }
 
 /** The pages a list may be read to, as the daemon allows (`TICKETS_PAGE_MAX`), and the size of one. */
 export const TICKETS_PAGE_MAX = 9

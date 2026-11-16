@@ -72,7 +72,7 @@ describe('ticket keys', () => {
   it('asks which keys are set, and never gets a key back', async () => {
     const asked = loadTicketKeys()
     await answer('ticket-keys', { Ok: [{ provider: 'Plane', set: true, address: 'https://plane.example', workspace: 'acme' }] })
-    await expect(asked).resolves.toEqual({ ok: true, value: [{ provider: 'Plane', set: true, address: 'https://plane.example', workspace: 'acme' }] })
+    await expect(asked).resolves.toEqual({ ok: true, value: [{ provider: 'Plane', set: true, address: 'https://plane.example', workspace: 'acme', stored_in: 'File' }] })
     expect(shell.invoke).toHaveBeenCalledWith('ticket_keys', { change: 'Status', tag: expect.any(Number) as number })
   })
 

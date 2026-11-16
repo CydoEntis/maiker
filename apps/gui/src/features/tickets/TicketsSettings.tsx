@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { loadGitHubAccounts } from '@/api/githubAccounts'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { githubRepoOf, loadTicketKeys, removeTicketKey, saveTicketKey, type KeyedProvider, type TicketGroup, type TicketKeyState, type TicketsResult } from '@/api/tickets'
+import { githubRepoOf, loadTicketKeys, removeTicketKey, saveTicketKey, type KeyedProvider, type KeyStorage, type TicketGroup, type TicketKeyState, type TicketsResult } from '@/api/tickets'
 import { Card, Row } from '@/features/settings/components/DesktopSettings'
 import { SettingsSearch } from '@/features/settings/settingsSearch'
 import { PickerSelect, type PickerItem } from '@/features/settings/components/PickerSelect'
@@ -24,6 +24,9 @@ const KEYS_QUERY = ['tickets', 'keys'] as const
 
 type Keyed = { provider: KeyedProvider; source: 'plane' | 'linear' }
 const KEYED: readonly Keyed[] = [{ provider: 'Plane', source: 'plane' }, { provider: 'Linear', source: 'linear' }]
+
+/** Where the service keeps a key, said beside it. The key itself is never shown. */
+const KEPT_IN: Record<KeyStorage, string> = { Keychain: 'Key kept in your system keychain', File: 'Key kept in a file: no keychain on this machine' }
 
 function keyStateOf(keys: readonly TicketKeyState[] | undefined, provider: KeyedProvider): TicketKeyState | null {
   return keys?.find((key) => key.provider === provider) ?? null
@@ -106,7 +109,7 @@ function KeyCard({ provider, source }: Keyed) {
 
   const status = !set ? 'Not connected'
     : refused ? `✕ Key refused. ${provider} refused the saved key: paste a new one.`
-      : `Connected · key saved${plane && state !== null ? ` · ${state.address}/${state.workspace}` : ''}`
+      : `Connected${plane && state !== null ? ` · ${state.address}/${state.workspace}` : ''} · ${KEPT_IN[state?.stored_in ?? 'File']}`
   const where = plane ? 'Your Plane address (Plane Cloud is app.plane.so), its workspace slug, and an API key from Profile › API tokens.' : 'An API key from Linear › Settings › Security & access.'
   return (
     <Card title={provider} foot={`${where} ${KEY_ONCE}`}>

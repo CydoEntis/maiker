@@ -1006,9 +1006,10 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
   ticket page, then empties the search, then the selection.
 - **Settings › Tickets** (`TicketsSettings.tsx`, nav key K) has two parts. **Accounts** ("set up once on this
   computer, for every project"): the gh login with Check again (Open terminal when signed out); Plane's address,
-  workspace and key, Linear's key (`type=password`, `autocomplete=off`), Connect, then "Connected · key saved" with
-  Replace key and Remove, and "Key refused" when the provider refused it. A saved key is never shown. Keys are kept by
-  the Maitty service in its data folder, not the system keychain. **Linked projects**: every project the daemon keeps
+  workspace and key, Linear's key (`type=password`, `autocomplete=off`), Connect, then "Connected · <address>/<workspace>
+  · Key kept in your system keychain" (or "Key kept in a file: no keychain on this machine", from the service's
+  `stored_in`) with Replace key and Remove, and "Key refused" when the provider refused it. A saved key is never shown.
+  Keys are kept by the Maitty service, in the system keychain where the machine has one. **Linked projects**: every project the daemon keeps
   a link for (its folder, its machine, what it reads in one line), with Change (its repo, Plane project and Linear
   team) and Unlink, then each open project not set up yet with Set up; then your names for Mine.
 
@@ -1069,8 +1070,9 @@ daemon requests as the desktop app (*Tickets view (desktop)* above) and follows 
   changing it needs a session in it). A key is typed
   into a form (Plane: address, workspace, key; Linear: key), held as `SecretText`, drawn as a fixed
   row of bullets (never its length), dropped from memory as soon as it is sent, never toasted (a
-  paste into the form is not repeated anywhere); the answer says only "connected". Removing a key
-  asks first. A Plane project or Linear team is picked from what the provider lists.
+  paste into the form is not repeated anywhere); the answer says only "connected" and where the
+  service keeps it ("key kept in your system keychain", or "key kept in a file: no keychain on this
+  machine"), which the key's row shows too. Removing a key asks first. A Plane project or Linear team is picked from what the provider lists.
 
 ## Project-specific: desktop chat view
 
