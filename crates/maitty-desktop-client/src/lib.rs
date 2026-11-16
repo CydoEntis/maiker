@@ -2061,7 +2061,32 @@ pub async fn create_conversation(
 }
 
 pub fn claude_executable() -> Result<PathBuf> {
-    executable_on_path("claude")
+    #[cfg(windows)]
+    {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+        windows_claude_from(&path, home.as_deref())
+            .ok_or_else(|| anyhow::anyhow!("Claude Code is not installed: no claude.exe or claude.cmd on PATH"))
+    }
+    #[cfg(not(windows))]
+    {
+        executable_on_path("claude")
+    }
+}
+
+/// Where Claude Code is on Windows. Its native installer puts `claude.exe` in `~/.local/bin`, which
+/// a window started before PATH was updated does not see; an npm install leaves only `claude.cmd`.
+/// Either still runs it, so neither leaves the window without Claude Code's own model list.
+#[cfg(any(windows, test))]
+fn windows_claude_from(path: &std::ffi::OsStr, home: Option<&std::path::Path>) -> Option<PathBuf> {
+    let on_path = |name: &str| std::env::split_paths(path).map(|directory| directory.join(name)).find(|file| file.is_file());
+    let native = on_path("claude.exe")
+        .or_else(|| home.map(|home| home.join(".local").join("bin").join("claude.exe")).filter(|file| file.is_file()));
+    match native {
+        Some(file) => Some(file.canonicalize().unwrap_or(file)),
+        // A batch file runs through cmd, which cannot start one by a `\\?\` path, so it is not canonicalized.
+        None => on_path("claude.cmd"),
+    }
 }
 
 fn claude_config_dir() -> Result<PathBuf> {
@@ -2803,6 +2828,37 @@ mod executable_lookup_tests {
         assert!(output.status.success());
         assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod windows_claude_tests {
+    use super::windows_claude_from;
+
+    fn folder(name: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("{}-{name}-{}", env!("MAITTY_APP_COMMAND"), std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn claude_is_found_on_path_then_in_its_installers_folder_then_as_an_npm_batch_file() {
+        let root = folder("claude-lookup");
+        let (on_path, home) = (root.join("bin"), root.join("home"));
+        let installed = home.join(".local").join("bin");
+        std::fs::create_dir_all(&on_path).unwrap();
+        std::fs::create_dir_all(&installed).unwrap();
+        let path = std::env::join_paths([&on_path]).unwrap();
+
+        assert_eq!(windows_claude_from(&path, Some(&home)), None);
+        std::fs::write(on_path.join("claude.cmd"), b"").unwrap();
+        assert_eq!(windows_claude_from(&path, Some(&home)), Some(on_path.join("claude.cmd")));
+        std::fs::write(installed.join("claude.exe"), b"").unwrap();
+        assert_eq!(windows_claude_from(&path, Some(&home)), installed.join("claude.exe").canonicalize().ok());
+        std::fs::write(on_path.join("claude.exe"), b"").unwrap();
+        assert_eq!(windows_claude_from(&path, Some(&home)), on_path.join("claude.exe").canonicalize().ok());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
 
