@@ -330,12 +330,38 @@ pub fn agent_launch(cmd: &[String]) -> i32 {
     {
         run.current_dir(dir);
     }
-    match run.status() {
-        Ok(status) => status.code().unwrap_or(1),
+    let mut child = match run.spawn() {
+        Ok(child) => child,
         Err(e) => {
             eprintln!("{APP_COMMAND}: could not start {agent}: {e}");
+            return 1;
+        }
+    };
+    // Ctrl+C on the console reaches every process on it. The agent handles its own; this
+    // launcher must outlive it, or the shell gets its prompt back ("Terminate batch job?")
+    // while the agent still runs and both read the keys.
+    #[cfg(windows)]
+    ignore_console_interrupts();
+    match child.wait() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            eprintln!("{APP_COMMAND}: lost {agent}: {e}");
             1
         }
+    }
+}
+
+/// Take Ctrl+C and Ctrl+Break as handled in this process only. A handler of our own, unlike
+/// ignoring them outright, is not inherited, so the agent started before it keeps its own.
+#[cfg(windows)]
+fn ignore_console_interrupts() {
+    use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, CTRL_C_EVENT, SetConsoleCtrlHandler};
+    unsafe extern "system" fn handled(event: u32) -> windows_sys::core::BOOL {
+        i32::from(event == CTRL_C_EVENT || event == CTRL_BREAK_EVENT)
+    }
+    // SAFETY: registers a plain function that touches nothing; it lives for the whole process.
+    if unsafe { SetConsoleCtrlHandler(Some(handled), 1) } == 0 {
+        tracing::debug!("could not take Ctrl+C in the launcher: {}", std::io::Error::last_os_error());
     }
 }
 
