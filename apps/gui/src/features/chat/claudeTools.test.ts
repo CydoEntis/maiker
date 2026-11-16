@@ -5,7 +5,7 @@ const TARGET_LIMIT = 160
 
 describe('what a Skill call names', () => {
   it('names the skill it runs', () => {
-    expect(mapClaudeTool('Skill', { skill: 'maiker:factory' })).toMatchObject({ kind: 'tool', name: 'Skill', target: 'maiker:factory' })
+    expect(mapClaudeTool('Skill', { skill: 'review:pr' })).toMatchObject({ kind: 'tool', name: 'Skill', target: 'review:pr' })
   })
 
   it('puts the arguments after the name', () => {
@@ -32,6 +32,6 @@ describe('what a Skill call names', () => {
   })
 
   it('leaves another tool with the same fields alone', () => {
-    expect(mapClaudeTool('Mystery', { skill: 'maiker:factory' })).toMatchObject({ kind: 'tool', name: 'Mystery', target: null })
+    expect(mapClaudeTool('Mystery', { skill: 'review:pr' })).toMatchObject({ kind: 'tool', name: 'Mystery', target: null })
   })
 })

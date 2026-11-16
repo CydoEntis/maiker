@@ -289,8 +289,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Tools bar** (`ActivityBar.tsx`, `frame.css`; layout 2h). A 40px column at the window's edge opposite the sidebar,
   a card on `--main` with a `--line` hairline, 8px from the edges. Its 32px buttons are `--muted`; the open one is on a
   faint wash with a 2px `--accent` line on its inner edge. Top to bottom: **Work** (always; with no runs it opens the
-  setup view, `WorkSetup`: a factory running elsewhere in the project, Maiker Factory's install commands with Copy,
-  and Open Tickets; then a divider), **Changes** (a plain badge with the changed-file count), **Files**, **History**,
+  setup view, `WorkSetup`: a factory running elsewhere in the project, what a factory is (no factory named), and
+  Open Tickets; then a divider), **Changes** (a plain badge with the changed-file count), **Files**, **History**,
   **Checks** (a red badge with the checks that want you), **Tickets** (the Tickets view over the chat area, UI ›
   *Tickets view*), and at its foot **Terminal** (shows or hides the terminal dock with the focused session's
   terminals, adding the first when it has none; `toggleTerminal`). A view button opens the side panel on that view, or closes it when it is already showing it;

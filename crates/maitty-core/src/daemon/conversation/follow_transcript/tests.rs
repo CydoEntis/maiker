@@ -226,7 +226,7 @@ fn claude_lines_that_are_not_the_conversation_are_left_out() {
     assert_eq!(said, ["/clear", "real prompt"]);
 }
 
-const SLASH_COMMAND: &str = "<command-name>/plugin</command-name>\n            <command-message>plugin</command-message>\n            <command-args>marketplace add CydoEntis/maiker-factory</command-args>";
+const SLASH_COMMAND: &str = "<command-name>/plugin</command-name>\n            <command-message>plugin</command-message>\n            <command-args>marketplace add acme/factory</command-args>";
 const SLASH_OUTPUT: &str =
     "<local-command-stdout>Added the \u{1b}[1mfactory\u{1b}[0m marketplace</local-command-stdout>";
 
@@ -242,13 +242,13 @@ fn assert_slash_command_and_output(history: &History) {
     assert_eq!(items.len(), 2);
     assert_eq!(
         message(items[0]),
-        (&Role::User, "/plugin marketplace add CydoEntis/maiker-factory")
+        (&Role::User, "/plugin marketplace add acme/factory")
     );
     assert_eq!(
         items[1].content,
         Content::Tool {
             kind: "commandExecution".into(),
-            label: "/plugin marketplace add CydoEntis/maiker-factory".into(),
+            label: "/plugin marketplace add acme/factory".into(),
             output: "Added the factory marketplace".into(),
             input: None,
             exit_code: None,
