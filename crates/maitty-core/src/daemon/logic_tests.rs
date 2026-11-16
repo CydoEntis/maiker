@@ -485,6 +485,25 @@ fn a_new_session_drops_the_old_sessions_helpers() {
     close(&mut d, &[t]);
 }
 
+/// The turn ended while a helper ran, so its finish was held; the helper's stop then came only as
+/// its record (a transcript, a session file), not a report. The finish is said then, not an hour on.
+#[test]
+fn a_finish_held_for_a_helper_is_said_when_its_record_says_it_stopped() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Done, "Stop", None), Some(true), Vec::new());
+    assert!(d.terms[&t].done_held.is_some(), "held for the helper");
+    for record in &mut d.terms.get_mut(&t).unwrap().subagent_activity {
+        record.state = SubagentState::Completed;
+    }
+    d.update_statuses();
+    assert!(d.terms[&t].done_held.is_none());
+    assert_eq!(d.terms[&t].status, Status::Done);
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn an_agent_that_ends_takes_its_queue_with_it() {
     let (mut d, _rx) = daemon();

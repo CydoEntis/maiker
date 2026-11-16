@@ -1093,9 +1093,19 @@ impl Daemon {
         let mut changes = Vec::new();
         let mut still_working = Vec::new();
         let mut screen_blocks = Vec::new();
-        // However a helper came to be recorded as stopped, it is no longer counted as running below.
+        // However a helper came to be recorded as stopped, it is no longer counted as running below,
+        // and a finish held for the last of them is said now, as its own stop report would have.
+        let mut released = Vec::new();
         for t in self.terms.values_mut() {
-            self.dirty |= t.drop_settled_subagents();
+            if t.drop_settled_subagents() {
+                self.dirty = true;
+                if t.subagents.is_empty() && !helpers_running(t) && t.done_held.take().is_some() {
+                    released.push(t.id);
+                }
+            }
+        }
+        for id in released {
+            self.set_status(id, Status::Done, "its last helper was recorded as stopped");
         }
         for t in self.terms.values() {
             let Some(name) = &t.agent else { continue };
