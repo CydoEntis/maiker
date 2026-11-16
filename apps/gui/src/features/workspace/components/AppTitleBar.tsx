@@ -7,8 +7,8 @@ import { TitleBar } from '@/components/TitleBar'
 export function AppTitleBar() {
   const start = (
     <span className="mx-tbar-logo" data-tauri-drag-region>
-      <img src="/maitty-logo.png" alt="" />
-      <span className="mx-tbar-word">m<span className="mx-tbar-ai">AI</span>tty</span>
+      <img src="/maiker-logo.png" alt="" />
+      <span className="mx-tbar-word">M<span className="mx-tbar-ai">ai</span>ker</span>
     </span>
   )
   return <TitleBar start={start} />

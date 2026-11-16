@@ -278,8 +278,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   tiles) and `--c-head-bg` (sticky headers). A new control gets tokens first and is checked in both corners and both
   kinds of theme. **Icons** (Settings › Appearance › Icons, `iconColor`, `data-icons`): `color` keeps app icons in
   their own colours; `grayscale` makes them neutral `--raise` tiles.
+- **App icon.** The desktop app's icons (window, taskbar, dock, tray, installers) are generated from one 1024px-plus
+  source with `pnpm tauri icon <source.png>` into `src-tauri/icons/` (only the desktop sizes listed there are kept);
+  every bundle and the updater carry them, so an update changes the icon too.
 - **Title bar** (`AppTitleBar`, `frame.css`; layout 2h). 38px on the window ground (`--bg`), all of it a drag area
-  but the window buttons: at the left the 16px logo and "m**AI**tty" (13px 600, the AI in `--accent-text`), plain, with
+  but the window buttons: at the left the 16px Maiker logo (`public/maiker-logo.png`, the white M) and "M**ai**ker" (13px 600, the ai in
+  `--accent-text`), plain, with
   no menu; at the right the platform's window buttons (38px tall captions on Windows, drawn as Windows draws them;
   `TitleBarView.tsx`). What the old Maitty menu started is in the command palette and the sidebar.
 - **Tools bar** (`ActivityBar.tsx`, `frame.css`; layout 2h). A 40px column at the window's edge opposite the sidebar,

@@ -122,8 +122,8 @@ export function TitleBarView({ platform, actions, start, end }: { platform: Titl
         {mac && buttons}
         {start ?? (
           <>
-            <img className="title-bar-logo" src="/maitty-logo.png" alt="" />
-            <span className="title-bar-name">Maitty</span>
+            <img className="title-bar-logo" src="/maiker-logo.png" alt="" />
+            <span className="title-bar-name">Maiker</span>
           </>
         )}
         <span className="title-bar-fill" data-tauri-drag-region />
