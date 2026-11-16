@@ -1005,8 +1005,9 @@ Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in
   there: then it gets a worktree of its own, on a new branch with a short two-word name (like
   `quiet-otter`), so the two never edit the same files, and the menu says why. Choose **This folder**
   or **New worktree** to decide yourself.
-- **Open as.** Chat or Terminal, at the right. Each agent's default is in Settings › Chat. With
-  Terminal, the page shows the terminal the agent will start in; type the first task on its prompt line.
+- **Chat or Terminal**, at the right. Chat starts an agent; it opens as its chat or its terminal as Settings › Chat
+  says for that agent, and you can switch once it runs. Terminal opens a plain shell, with no agent in it, on this
+  computer or a remote machine: go to any folder and run claude, codex or any command yourself.
 
 Branch and Work in are left out when the folder is not a git repository, and on another machine.
 **Model and effort** are on the model button in the message box, and the **permission mode** is the

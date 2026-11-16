@@ -817,10 +817,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **New chat page (layout 2h).** The header is a pane's: the agent's 26px tile, the name field (14px semibold, a
   hover fill, the accent border while typing), then the same crumbs, project, branch and `·` work in (`new worktree` in
   `--ansi-blue`, `this folder` in `--muted`), each a menu with a small `--dim` heading; a branch another chat is on says
-  **in use** in `--warn`. Open as Chat | Terminal and the × at the right. "What are we building today?" is
-  `clamp(26px, 3.4vw, 36px)` at 650, centred and low, just over the message box. Open as Terminal draws the terminal
-  on `--term` in mono: a box ringed in the accent line naming the agent and its folder, two dim lines, and a prompt
-  line.
+  **in use** in `--warn`. Chat | Terminal and the × at the right. "What are we building today?" is
+  `clamp(26px, 3.4vw, 36px)` at 650, centred and low, just over the message box. Terminal swaps the header's agent
+  and crumbs for "New terminal" (14px 600) and the page for a 560px column: the This computer | Remote machine switch
+  and machine chips, one `--fg2` line saying it is a plain shell, and a primary **Open terminal** (`ShellStart`).
 - **Model menu (layout 2h).** 300px, square, on `--main` with a `--line2` edge, opening up from the right of the
   message box. The agent switch is a segmented control across the top (a column per agent, the picked one raised with a
   `--line2` ring), then 32px model rows (dim "default", an accent ✓), then a 44px foot in a grid: Effort in `--muted`,
