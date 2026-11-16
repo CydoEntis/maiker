@@ -52,13 +52,11 @@ fn clean(value: &mut Value, nodes: &mut usize) -> Result<(), String> {
                 clean(item, nodes)?;
             }
         }
+        // The names are another machine's text as much as the values (a tool's input is any JSON).
         Value::Object(map) => {
-            let extra: Vec<String> = map.keys().skip(ITEMS_MAX).cloned().collect();
-            for key in extra {
-                map.remove(&key);
-            }
-            for item in map.values_mut() {
-                clean(item, nodes)?;
+            for (key, mut item) in std::mem::take(map).into_iter().take(ITEMS_MAX) {
+                clean(&mut item, nodes)?;
+                map.insert(clean_text(&key), item);
             }
         }
         Value::Null | Value::Bool(_) | Value::Number(_) => {}
@@ -94,6 +92,13 @@ mod tests {
     fn a_string_past_the_limit_is_cut() {
         let long = "a".repeat(CHAT_TEXT_MAX + 10);
         assert_eq!(clean_text(&long).chars().count(), CHAT_TEXT_MAX);
+    }
+
+    #[test]
+    fn the_names_in_an_answer_are_cleaned_too() {
+        let mut value = serde_json::json!({ "input": { "pa\u{202e}th\x1b": "x" } });
+        clean(&mut value, &mut 0).unwrap();
+        assert_eq!(value, serde_json::json!({ "input": { "path": "x" } }));
     }
 
     #[test]
