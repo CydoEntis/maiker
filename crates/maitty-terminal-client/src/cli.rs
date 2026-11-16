@@ -4161,10 +4161,14 @@ mod tests {
             &kept,
         )
         .unwrap();
-        assert_eq!(
-            root["statusLine"]["command"],
+        // On Windows a path with nothing to quote is left bare, so it runs in Git Bash and in
+        // PowerShell alike; elsewhere it is quoted for sh.
+        let expected = if cfg!(windows) {
+            concat!("C:/x/", env!("APP_COMMAND"), ".exe statusline")
+        } else {
             concat!("\"C:/x/", env!("APP_COMMAND"), ".exe\" statusline")
-        );
+        };
+        assert_eq!(root["statusLine"]["command"], expected);
         assert_eq!(
             root["statusLine"]["padding"], 1,
             "your settings for it stay"
