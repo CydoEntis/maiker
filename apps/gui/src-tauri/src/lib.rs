@@ -14,6 +14,7 @@ mod linux_gpu;
 mod machine_update;
 mod machines;
 mod changes;
+mod clone;
 mod claude_models;
 mod codex_skills;
 mod new_chat;
@@ -135,6 +136,31 @@ async fn connect_agent(app: tauri::AppHandle, agent: String) -> Result<(), Strin
 #[tauri::command]
 async fn list_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     maitty_desktop_client::list_sessions(daemon_executable(&app)?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// What a helper of one of this computer's panes did. Another machine's helpers are not read in v1.
+#[tauri::command]
+async fn read_helper(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    term: u32,
+    helper: String,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::read_helper(term, helper, wire.daemon(None, || daemon_executable(&app))?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// The specialist agent files a pane of this computer can see. Another machine's are not read in v1.
+#[tauri::command]
+async fn read_specialists(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    term: u32,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::read_specialists(term, wire.daemon(None, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -586,6 +612,38 @@ async fn pane_terminal_resize(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// Which commit name and email git uses on a machine (this computer when `machine` is left out),
+/// and the folders where a rule gives another. Read by that machine's daemon; nothing is written.
+#[tauri::command]
+async fn git_identities(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+) -> Result<serde_json::Value, String> {
+    let daemon = wire.identities_daemon(machine, || daemon_executable(&app))?;
+    maitty_desktop_client::git_identities(daemon)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// Previews, writes or removes a folder's GitHub account and commit identity rule on a machine (this
+/// computer when `machine` is left out). `change` is a `GitRuleChange` as JSON; that machine's
+/// daemon checks it and does it. Answers the lines, by file.
+#[tauri::command]
+async fn git_identity_rule(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    change: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let change: maitty_shared::protocol::GitRuleChange =
+        serde_json::from_value(change).map_err(|error| format!("invalid rule change: {error}"))?;
+    let daemon = wire.rule_daemon(machine, || daemon_executable(&app))?;
+    maitty_desktop_client::git_identity_rule(change, daemon)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 #[tauri::command]
 async fn repo_query(
     app: tauri::AppHandle,
@@ -594,8 +652,10 @@ async fn repo_query(
     term: u32,
     question: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    wire.require_local(machine, "Inspect")?;
-    maitty_desktop_client::repo_query(term, question, daemon_executable(&app)?)
+    let question: maitty_shared::repo::RepoRequest =
+        serde_json::from_value(question).map_err(|error| format!("invalid repository request: {error}"))?;
+    let daemon = wire.repo_daemon(machine, &question, || daemon_executable(&app))?;
+    maitty_desktop_client::repo_query(term, question, daemon)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -606,6 +666,45 @@ async fn repo_query(
 #[tauri::command]
 async fn add_branch_worktree(folder: PathBuf, branch: String) -> Result<serde_json::Value, String> {
     maitty_desktop_client::branch_worktree(folder, branch)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// The conversations `agent` saved for `folder`, for the new chat page's Resume list; null when the service
+/// running is older. This computer's daemon only, which checks the agent and the folder.
+#[tauri::command]
+async fn saved_conversations(agent: String, folder: String) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::saved_conversations(agent, folder)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// Claude Code's answer beside a chat's conversation, for `/btw` and the commands that only report: the daemon
+/// resumes a copy of the session that is never saved. The webview names the conversation and the ask, one of a
+/// fixed set of commands or a question; the daemon checks both and finds the session, the folder and the program.
+#[tauri::command]
+async fn side_answer(id: u64, ask: maitty_shared::protocol::SideAsk) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::side_answer(id, ask)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// The agent sessions that closed on this computer, for the Recent sessions list, each saying whether its folder is
+/// still there; null when the service running is older. This computer's daemon only: a folder another machine names is
+/// not on this disk.
+#[tauri::command]
+async fn closed_sessions() -> Result<serde_json::Value, String> {
+    maitty_desktop_client::closed_sessions()
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// Reopens a closed session from the Recent sessions list whose folder is gone: the daemon makes its worktree again
+/// from the record it keeps and starts the agent there with its conversation. False when the service running is older.
+/// This computer's daemon only, like `closed_sessions`.
+#[tauri::command]
+async fn reopen_closed_session(agent: String, session: String) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::reopen_closed_session(agent, session)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -678,6 +777,20 @@ async fn restore_snapshot(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// How many files restoring the snapshot would change now, asked before the person confirms one.
+#[tauri::command]
+async fn snapshot_restore_count(
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    term: u32,
+    commit: String,
+) -> Result<u64, String> {
+    wire.require_local(machine, "Restoring a snapshot")?;
+    maitty_desktop_client::restore_count(term, commit)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 #[tauri::command]
 async fn start_shell_session(
     app: tauri::AppHandle,
@@ -697,6 +810,24 @@ async fn start_agent_session(
     flags: Vec<String>,
 ) -> Result<serde_json::Value, String> {
     maitty_desktop_client::start_agent_session(cwd, agent, flags, daemon_executable(&app)?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// Start GitHub's own sign-in (`gh auth login`, see `maitty_desktop_client::GITHUB_SIGN_IN_COMMAND`) in a new
+/// terminal session of a machine, this computer when `machine` is left out. The window chooses the machine and
+/// nothing else: no word of the command comes from it.
+#[tauri::command]
+async fn start_github_sign_in(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+) -> Result<serde_json::Value, String> {
+    if let Some(machine) = machine.filter(|machine| routing::is_remote(Some(*machine))) {
+        return wire.github_sign_in(machine).map(|()| serde_json::Value::Null);
+    }
+    let home = app.path().home_dir().map_err(|error| error.to_string())?;
+    maitty_desktop_client::start_github_sign_in(home, daemon_executable(&app)?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -735,7 +866,9 @@ async fn send_when_agent_ready(
     machine: Option<u16>,
     term: u32,
     text: String,
+    operation: Option<u64>,
 ) -> Result<serde_json::Value, String> {
+    // Another machine's line does not say which daemon version it reaches, so its sends stay unnamed.
     if routing::is_remote(machine) {
         let command =
             maitty_desktop_client::held_message(text).map_err(|error| format!("{error:#}"))?;
@@ -743,7 +876,7 @@ async fn send_when_agent_ready(
             .command(machine, term, command)
             .map(|()| serde_json::Value::Null);
     }
-    maitty_desktop_client::send_when_ready(term, text, daemon_executable(&app)?)
+    maitty_desktop_client::send_when_ready(term, text, operation, daemon_executable(&app)?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -758,7 +891,9 @@ async fn queue_follow_up(
     term: u32,
     text: String,
     first: bool,
+    operation: Option<u64>,
 ) -> Result<serde_json::Value, String> {
+    // Another machine's line does not say which daemon version it reaches, so its sends stay unnamed.
     if routing::is_remote(machine) {
         let command = maitty_desktop_client::queued_message(text, first)
             .map_err(|error| format!("{error:#}"))?;
@@ -766,7 +901,7 @@ async fn queue_follow_up(
             .command(machine, term, command)
             .map(|()| serde_json::Value::Null);
     }
-    maitty_desktop_client::queue_follow_up(term, text, first, daemon_executable(&app)?)
+    maitty_desktop_client::queue_follow_up(term, text, first, operation, daemon_executable(&app)?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -840,6 +975,25 @@ async fn archive_terminal_session(
             .map(|()| serde_json::Value::Null);
     }
     maitty_desktop_client::archive_terminal_session(term, archived, daemon_executable(&app)?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// Snooze a pane until `until` (unix seconds), or wake it (`None`).
+#[tauri::command]
+async fn snooze_terminal_session(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    term: u32,
+    until: Option<u64>,
+) -> Result<serde_json::Value, String> {
+    if routing::is_remote(machine) {
+        return wire
+            .command(machine, term, PaneCommand::Snooze(until))
+            .map(|()| serde_json::Value::Null);
+    }
+    maitty_desktop_client::snooze_terminal_session(term, until, daemon_executable(&app)?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -963,6 +1117,14 @@ async fn answer_secret(
     maitty_desktop_client::answer_secret(id, value, daemon_executable(&app)?)
         .await
         .map_err(|error| format!("{error:#}"))
+}
+
+/// The GitHub repository a folder's `origin` points at (`owner/name`), or none. This computer's folders only: the
+/// Tickets view links a project to its repository with it.
+#[tauri::command]
+async fn github_repo_of(wire: tauri::State<'_, terminal_stream::Wire>, machine: Option<u16>, folder: String) -> Result<Option<String>, String> {
+    wire.require_local(machine, "Reading a folder's GitHub repository")?;
+    maitty_desktop_client::github_repo_of(PathBuf::from(folder)).await.map_err(|error| format!("{error:#}"))
 }
 
 /// The files more than one of a project's checkouts changed (name, folder per checkout). This computer's only.
@@ -1290,6 +1452,20 @@ async fn dequeue_conversation(
 }
 
 #[tauri::command]
+async fn send_conversation_now(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    id: u64,
+    generation: u64,
+    operation: u64,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::send_conversation_now(id, generation, operation, wire.daemon(machine, || daemon_executable(&app))?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+#[tauri::command]
 async fn rename_conversation(
     app: tauri::AppHandle,
     id: u64,
@@ -1488,8 +1664,13 @@ pub fn run() {
             new_chat::git_branches,
             new_chat::git_switch_branch,
             add_branch_worktree,
+            saved_conversations,
+            side_answer,
+            closed_sessions,
+            reopen_closed_session,
             new_chat::git_sync_state,
             new_chat::git_pull,
+            clone::git_clone,
             new_chat::open_agent_docs,
             changes::git_commit_all,
             changes::git_create_pull_request,
@@ -1526,6 +1707,8 @@ pub fn run() {
             export::save_export,
             image_paste::send_pasted_image,
             read_conversation,
+            read_helper,
+            read_specialists,
             conversation_diff,
             conversation_files,
             conversation_file,
@@ -1534,6 +1717,16 @@ pub fn run() {
             terminal_stream::terminal_history,
             terminal_stream::watch_terminal_output,
             terminal_stream::list_folders,
+            terminal_stream::ask_machine_list,
+            terminal_stream::clone_repository,
+            terminal_stream::github_accounts,
+            terminal_stream::github_repos,
+            terminal_stream::github_owners,
+            terminal_stream::tickets,
+            github_repo_of,
+            terminal_stream::ticket_keys,
+            terminal_stream::ticket_write,
+            terminal_stream::ticket_links,
             terminal_stream::get_shared_settings,
             terminal_stream::set_shared_setting,
             output_socket::open_terminal_socket,
@@ -1546,11 +1739,15 @@ pub fn run() {
             terminal_stream::terminal_input,
             pane_terminal_resize,
             repo_query,
+            git_identities,
+            git_identity_rule,
             search_panes,
             usage_report,
             new_worktree_session,
             restore_snapshot,
+            snapshot_restore_count,
             start_agent_session,
+            start_github_sign_in,
             prewarm_agent_session,
             drop_prewarmed_agent,
             start_terminal_session,
@@ -1569,6 +1766,7 @@ pub fn run() {
             check_output,
             pin_terminal_session,
             archive_terminal_session,
+            snooze_terminal_session,
             reload_terminal_session,
             close_terminal_session,
             close_session_with_undo,
@@ -1588,6 +1786,7 @@ pub fn run() {
             answer_conversation_input,
             cancel_conversation,
             dequeue_conversation,
+            send_conversation_now,
             rename_conversation,
             archive_conversation,
             resume_codex_conversation,

@@ -1,12 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'panel', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', statusBar: true, chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', newSessionView: 'chat', chatFullAccessDefault: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, perfOverlay: false, terminalPlainDrawing: false, terminalSeeThrough: false, backgroundGlow: false, cursorBlink: false, style: 'glass', chatWidth: 'auto', chatTextSize: 100 }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -28,7 +28,7 @@ function renderSettings(section: DesktopSettingsSection, overrides: Partial<Para
   const onSection = vi.fn()
   const onPreviewTheme = vi.fn()
   const onShowWelcome = vi.fn()
-  render(<QueryClientProvider client={new QueryClient()}><DesktopSettings usage={{ budget: null, onBudget: vi.fn(), sessionForTerm: () => null, onOpenSession: vi.fn() }} section={section} onSection={onSection} preferences={PREFS} onChange={onChange} systemReducedMotion={false} systemDark onPreviewTheme={onPreviewTheme} onShowWelcome={onShowWelcome} platform="linux" daemon={{ online: true, sessionCount: 3 }} machines={info()} appVersion="0.64.0" validateFolder={() => Promise.resolve(true)} onClose={vi.fn()} {...overrides} /></QueryClientProvider>)
+  render(<QueryClientProvider client={new QueryClient()}><DesktopSettings usage={{ budget: null, onBudget: vi.fn(), sessionForTerm: () => null, onOpenSession: vi.fn() }} section={section} onSection={onSection} preferences={PREFS} onChange={onChange} systemReducedMotion={false} systemDark onPreviewTheme={onPreviewTheme} onShowWelcome={onShowWelcome} platform="linux" daemon={{ online: true, sessionCount: 3 }} machines={info()} appVersion="0.64.0" onClose={vi.fn()} {...overrides} /></QueryClientProvider>)
   return { onChange, onSection, onPreviewTheme, onShowWelcome }
 }
 
@@ -39,10 +39,10 @@ describe('the agents page', () => {
       ? { installed: true, signedIn: true, account: 'me@example.com', plan: 'max' }
       : { installed: true, signedIn: false, account: '', plan: '' }))
     accounts.signOutAgent.mockReset().mockResolvedValue(undefined)
-    renderSettings('agents')
+    renderSettings('permissions')
 
-    expect(await screen.findByText('Signed in: me@example.com · max')).toBeInTheDocument()
-    expect(screen.getByText('Not signed in.')).toBeInTheDocument()
+    expect(await screen.findByText('Signed in as me@example.com · max')).toBeInTheDocument()
+    expect(screen.getByText('Installed, not signed in')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sign in to Claude' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Sign out of Claude' }))
@@ -57,7 +57,7 @@ describe('the agents page', () => {
     accounts.loadAgentAuth.mockReset().mockImplementation((agent) => Promise.resolve(agent === 'claude'
       ? { installed: false, signedIn: null, account: '', plan: '' }
       : { installed: true, signedIn: false, account: '', plan: '' }))
-    renderSettings('agents', { onSignInAgent })
+    renderSettings('permissions', { onSignInAgent })
 
     expect(await screen.findByText('Not installed on this computer.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sign in to Claude' })).not.toBeInTheDocument()
@@ -68,7 +68,7 @@ describe('the agents page', () => {
 
   it('says when an agent could not be asked', async () => {
     accounts.loadAgentAuth.mockReset().mockRejectedValue(new Error('The agent did not answer in time'))
-    renderSettings('agents')
+    renderSettings('permissions')
 
     expect((await screen.findAllByText('Could not check: The agent did not answer in time')).length).toBe(2)
   })
@@ -78,7 +78,7 @@ describe('desktop settings', () => {
   it('groups the sections the way the design does', () => {
     renderSettings('general')
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(nav).toHaveTextContent('ESSENTIALSGeneralGChatCAgentsETERMINALTerminalTAppearanceASidebarSWORKSPACEUsage & costUNotificationsNMachinesMHotkeys?ADVANCEDDaemonDPerformanceP')
+    expect(nav).toHaveTextContent('APPGeneralGAppearanceANotificationsNHotkeys?AGENTSChatCPermissionsETerminalTMACHINESRemote machinesMTicketsI')
     expect(within(nav).getByRole('button', { name: /General/ })).toHaveAttribute('aria-current', 'page')
   })
 
@@ -111,21 +111,21 @@ describe('desktop settings', () => {
     const onChooseFolder = vi.fn().mockResolvedValue('/home/casey/dev')
     const { onChange } = renderSettings('general', { onChooseFolder })
 
-    await user.click(screen.getByRole('button', { name: 'Browse…' }))
+    // The folder is picked, never typed: there is no field to type a path into.
+    expect(screen.queryByRole('textbox', { name: 'Start folder' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Start folder' })).getByText('Your home folder')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Choose the start folder' }))
 
     expect(onChooseFolder).toHaveBeenCalledTimes(1)
-    expect(screen.getByRole('textbox', { name: 'Start folder' })).toHaveValue('/home/casey/dev')
     await waitFor(() => { expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ startFolder: '/home/casey/dev' })) })
   })
 
   it('leaves the start folder alone when the picker is cancelled', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('general', { onChooseFolder: vi.fn().mockResolvedValue(null) })
-    const before = screen.getByRole<HTMLInputElement>('textbox', { name: 'Start folder' }).value
+    await user.click(screen.getByRole('button', { name: 'Choose the start folder' }))
 
-    await user.click(screen.getByRole('button', { name: 'Browse…' }))
-
-    expect(screen.getByRole('textbox', { name: 'Start folder' })).toHaveValue(before)
+    expect(within(screen.getByRole('region', { name: 'Start folder' })).getByText('Your home folder')).toBeInTheDocument()
     expect(onChange).not.toHaveBeenCalled()
   })
 
@@ -147,11 +147,6 @@ describe('desktop settings', () => {
     expect(within(agent).getByRole('radio', { name: 'Claude' })).toBeChecked()
     await user.click(within(agent).getByRole('radio', { name: 'Codex' }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ defaultAgent: 'codex' }))
-
-    const view = screen.getByRole('radiogroup', { name: 'New sessions open as' })
-    expect(within(view).getByRole('radio', { name: 'Chat' })).toBeChecked()
-    await user.click(within(view).getByRole('radio', { name: 'Terminal' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ newSessionView: 'terminal' }))
   })
 
   it('has a yolo switch for each agent, all off, set from the settings screen', async () => {
@@ -163,12 +158,13 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ yoloCodex: true, yoloClaude: false, yoloGemini: false }))
   })
 
-  it('chooses whether new chats get full access', async () => {
+  it('turns on hiding successful tool calls, off by default', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('chat')
 
-    await user.click(screen.getByRole('switch', { name: 'Full access in new chats' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ chatFullAccessDefault: true }))
+    expect(screen.getByRole('switch', { name: 'Hide successful tool calls' })).not.toBeChecked()
+    await user.click(screen.getByRole('switch', { name: 'Hide successful tool calls' }))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ hideSuccessfulTools: true }))
   })
 
   it('picks where notifications appear and shows a test card', async () => {
@@ -183,13 +179,15 @@ describe('desktop settings', () => {
     expect(onTestNotice).toHaveBeenCalledTimes(1)
   })
 
-  it('shows the update state with one fitting button and two switches', async () => {
+  it('keeps the two update switches on General, and the update itself at the foot of the nav', async () => {
     const user = userEvent.setup()
-    const updates = { summary: 'Maitty 0.61.0 is available.', status: 'available' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    const updates = { summary: 'Maitty 0.61.0 is available.', status: 'available' as const, version: '0.61.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     const { onChange } = renderSettings('general', { updates })
 
-    expect(screen.getByText('Update available')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Download' }))
+    const box = within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('group', { name: 'Updates' })
+    expect(within(box).getByRole('status')).toHaveTextContent('v0.61.0 is available')
+    expect(box).toHaveTextContent('v0.64.0')
+    await user.click(within(box).getByRole('button', { name: 'Download' }))
     expect(updates.onDownload).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('switch', { name: 'Download updates automatically' })).toBeChecked()
     expect(screen.getByRole('switch', { name: 'Install updates when idle' })).not.toBeChecked()
@@ -197,36 +195,34 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ restartWhenIdle: true }))
   })
 
-  it('offers Restart now once the update is downloaded', async () => {
+  it('offers Restart to update once the update is downloaded', async () => {
     const user = userEvent.setup()
-    const updates = { summary: 'ready', status: 'ready' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    const updates = { summary: 'ready', status: 'ready' as const, version: '0.65.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     renderSettings('general', { updates })
 
-    expect(screen.queryByText('Ready to restart')).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Restart now' }))
+    expect(screen.getByRole('group', { name: 'Updates' })).toHaveTextContent('v0.65.0 is ready')
+    await user.click(screen.getByRole('button', { name: 'Restart to update' }))
 
     expect(updates.onRestart).toHaveBeenCalledTimes(1)
   })
 
-  it('says a download once, on a busy button that cannot be pressed', () => {
-    const updates = { summary: 'Downloading Maitty 0.72.0…', status: 'downloading' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+  it('offers nothing to press while a download runs', () => {
+    const updates = { summary: 'Downloading Maitty 0.72.0…', status: 'downloading' as const, version: '0.72.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     renderSettings('general', { updates })
 
-    expect(screen.getAllByText(/^Downloading/)).toHaveLength(2)
-    const button = screen.getByRole('button', { name: 'Downloading…' })
-    expect(button).toBeDisabled()
-    expect(button).toHaveAttribute('aria-busy', 'true')
+    expect(within(screen.getByRole('group', { name: 'Updates' })).getByRole('status')).toHaveTextContent('Downloading v0.72.0')
+    expect(within(screen.getByRole('group', { name: 'Updates' })).queryByRole('button')).toBeNull()
   })
 
   it('shows how far a download is: a bar, what has arrived, the percent and the time left', () => {
     const download = { progress: 0.42, transfer: { received: 42 * 1024 * 1024, total: 100 * 1024 * 1024, bytesPerSecond: 1024 * 1024 } }
-    const updates = { summary: 'Downloading Maitty 0.74.0…', status: 'downloading' as const, download, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    const updates = { summary: 'Downloading Maitty 0.74.0…', status: 'downloading' as const, version: '0.74.0', download, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     renderSettings('general', { updates })
 
     expect(screen.getByRole('progressbar', { name: 'Download' })).toHaveAttribute('aria-valuenow', '42')
     expect(screen.getByText('42.0 MB of 100 MB')).toBeInTheDocument()
     expect(screen.getByText('42% · about 1 min left')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Downloading 42%' })).toBeDisabled()
+    expect(screen.getByText('Downloading v0.74.0 · 42%')).toBeInTheDocument()
   })
 
   it('keeps the bar moving before the size of a download is known', () => {
@@ -238,9 +234,22 @@ describe('desktop settings', () => {
     expect(screen.getByText('Starting…')).toBeInTheDocument()
   })
 
-  it('shows no download bar when nothing is downloading', () => {
-    renderSettings('general', { updates: { summary: 'You are on the latest version.', status: 'current' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() } })
+  it('shows no download bar when nothing is downloading, and checks again on request', async () => {
+    const user = userEvent.setup()
+    const updates = { summary: 'You are on the latest version.', status: 'current' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    renderSettings('general', { updates })
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Updates' })).toHaveTextContent('Up to date')
+    await user.click(screen.getByRole('button', { name: 'Check now' }))
+    expect(updates.onCheck).toHaveBeenCalledTimes(1)
+  })
+
+  it('says a failed update in its own words, with a way to try again', () => {
+    renderSettings('general', { updates: { summary: 'The download broke off.', status: 'failed' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() } })
+    const box = screen.getByRole('group', { name: 'Updates' })
+    expect(box).toHaveTextContent('Update failed')
+    expect(box).toHaveTextContent('The download broke off.')
+    expect(within(box).getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
   it('has one switch each for needs you, done and error notifications', async () => {
@@ -260,13 +269,15 @@ describe('desktop settings', () => {
     const { onChange } = renderSettings('terminal')
 
     expect(screen.getByText('Geist Mono · 13px')).toBeInTheDocument()
-    expect(within(screen.getByRole('radiogroup', { name: 'Terminal text size' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['12', '13', '14', '15', '16'])
+    expect(within(screen.getByRole('radiogroup', { name: 'Terminal text size' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['11', '12', '13', '14', '15', '16'])
     await user.click(screen.getByRole('radio', { name: '15' }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, terminalFontSize: 15 })
     await user.click(screen.getByRole('radio', { name: 'Underline' }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, cursorStyle: 'underline' })
     await user.click(screen.getByRole('radio', { name: '50k' }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, scrollback: 50000 })
+    await user.click(screen.getByRole('radio', { name: '100k' }))
+    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, scrollback: 100000 })
   })
 
   it('picks a working spinner from a dropdown of TUI and web spinners', async () => {
@@ -279,8 +290,8 @@ describe('desktop settings', () => {
     await user.click(button)
     const list = await screen.findByRole('menu', { name: /^Working spinner/ })
     const choices = within(list).getAllByRole('menuitemradio')
-    // The preview glyph is Braille text inside the item; the name is what is left.
-    expect(choices.map((choice) => choice.textContent.replace(/[\u2800-\u28FF]/g, '').replace(/(From the Maitty TUI|Web icon)$/, ''))).toEqual(['Braille', 'Snake', 'Bars', 'Circle', 'Dots', 'Equalizer', 'Spokes', 'Ping'])
+    // The preview glyph is text inside the item (Braille, block elements or a line character); the name is what is left.
+    expect(choices.map((choice) => choice.textContent.replace(/[\u2800-\u28FF\u2580-\u259F|/\\-]/g, '').replace(/(From the Maitty TUI|Web icon)$/, ''))).toEqual(['Blocks', 'Braille', 'Snake', 'Bars', 'Line', 'Circle', 'Dots', 'Equalizer', 'Spokes', 'Ping'])
     expect(list).toHaveTextContent('Maitty TUI')
     expect(list).toHaveTextContent('Web')
     expect(within(list).getByRole('menuitemradio', { name: /Braille/ })).toHaveAttribute('aria-checked', 'true')
@@ -317,7 +328,7 @@ describe('desktop settings', () => {
   it('picks a dark and a light theme separately, from searchable dropdowns that list the one in use first', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, darkTheme: 'Gruvbox Dark' } })
-    expect(screen.getByText('50 themes installed')).toBeInTheDocument()
+    expect(screen.getByText('55 themes installed')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Dark theme: Gruvbox Dark' }))
     const dark = (await screen.findByRole('radiogroup', { name: 'Dark themes' }))
@@ -333,10 +344,10 @@ describe('desktop settings', () => {
     expect(within((await screen.findByRole('radiogroup', { name: 'Light themes' }))).getByRole('radio', { name: /GitHub Light/ })).toBeInTheDocument()
   })
 
-  it('switches between System, Dark and Light, and says which one the system picks', async () => {
+  it('switches between System, Dark and Light', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, themeMode: 'system' } })
-    expect(screen.getByText('Follows your OS. Right now: dark.')).toBeInTheDocument()
+    expect(within(screen.getByRole('radiogroup', { name: 'Appearance' })).getByRole('radio', { name: 'System' })).toBeChecked()
 
     await user.click(within(screen.getByRole('radiogroup', { name: 'Appearance' })).getByRole('radio', { name: 'Light' }))
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ themeMode: 'light' }))
@@ -380,12 +391,15 @@ describe('desktop settings', () => {
     expect(screen.queryByRole('switch', { name: 'Needs you' })).toBeNull()
   })
 
-  it('shows only what maittyd reports about itself', () => {
-    renderSettings('daemon', { daemon: { online: false, sessionCount: 3 } })
-    expect(screen.getByRole('status')).toHaveTextContent('Disconnected')
-    expect(screen.getByText('Sessions').parentElement?.parentElement).toHaveTextContent('3')
-    expect(screen.queryByText('Version')).not.toBeInTheDocument()
-    expect(screen.queryByText('Socket')).not.toBeInTheDocument()
+  it('shows only what maittyd reports about itself, as This computer on the Machines page', async () => {
+    const user = userEvent.setup()
+    renderSettings('machines', { daemon: { online: false, sessionCount: 3 } })
+    await user.click(screen.getByRole('button', { name: /This computer/ }))
+    const here = screen.getByRole('region', { name: 'This computer' })
+    expect(within(here).getByRole('status')).toHaveTextContent('Disconnected')
+    expect(within(here).getByText('Sessions').parentElement?.parentElement).toHaveTextContent('3')
+    expect(within(here).queryByText('Version')).not.toBeInTheDocument()
+    expect(within(here).queryByText('Socket')).not.toBeInTheDocument()
   })
 
   it('picks the terminal font from a list that starts with the bundled one, and keeps a saved family that is not installed', async () => {
@@ -411,32 +425,25 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ terminalFontWeightBold: 800 }))
   })
 
-  it('sets how big the sidebar icons are', async () => {
+  it('sets how big the sidebar icons are, from the Appearance page', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('sidebar')
+    const { onChange } = renderSettings('appearance')
 
     await user.click(within(screen.getByRole('radiogroup', { name: 'Sidebar icon size' })).getByRole('radio', { name: 'Small' }))
 
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ iconSize: 'small' }))
   })
 
-  it('offers the four window styles in one dropdown, with the current one checked', async () => {
+  it('offers square or rounded corners, with the current one checked', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, style: 'glass' } })
-    const button = screen.getByRole('button', { name: 'Window style: Glass' })
+    const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, corners: 'square' } })
+    const corners = screen.getByRole('radiogroup', { name: 'Corners' })
 
-    await user.click(button)
-    const list = await screen.findByRole('menu', { name: /^Window style/ })
-    expect(within(list).getAllByRole('menuitemradio').map((item) => item.textContent)).toEqual([
-      expect.stringContaining('Glass'),
-      expect.stringContaining('Squared'),
-      expect.stringContaining('Flat'),
-      expect.stringContaining('Retro Pixel'),
-    ])
-    expect(within(list).getByRole('menuitemradio', { name: /Glass/ })).toHaveAttribute('aria-checked', 'true')
+    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded'])
+    expect(within(corners).getByRole('radio', { name: 'Square' })).toHaveAttribute('aria-checked', 'true')
 
-    await user.click(within(list).getByRole('menuitemradio', { name: /Retro Pixel/ }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ style: 'pixel' }))
+    await user.click(within(corners).getByRole('radio', { name: 'Rounded' }))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ corners: 'rounded' }))
   })
 
   it('replays the welcome from General', async () => {
@@ -446,15 +453,6 @@ describe('desktop settings', () => {
     await user.click(screen.getByRole('button', { name: 'Show the welcome again' }))
 
     expect(onShowWelcome).toHaveBeenCalledTimes(1)
-  })
-
-  it('turns the status bar on and off from General', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('general')
-
-    await user.click(screen.getByRole('switch', { name: 'Status bar' }))
-
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ statusBar: false }))
   })
 })
 
@@ -477,34 +475,25 @@ describe('performance section', () => {
   })
 })
 
-describe('appearance section', () => {
-  it('turns the see-through terminal on', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('terminal')
-    await user.click(screen.getByRole('switch', { name: 'See-through terminal' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ terminalSeeThrough: true }))
-  })
-
-  it('turns the background glow on, starting from off', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance')
-    const glow = screen.getByRole('switch', { name: 'Background glow' })
-    expect(glow).toHaveAttribute('aria-checked', 'false')
-    await user.click(glow)
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ backgroundGlow: true }))
-  })
-})
 
 function box(kind: RemoteMachine['state']['state'], why: string | null = null): RemoteMachine {
-  return { state: { machine: 1, name: 'box', state: kind, why, attempt: null, since: Date.now() - 180_000 }, conversations: [], heard: true }
+  return { state: { machine: 1, name: 'box', state: kind, why, attempt: null, since: Date.now() - 180_000 }, conversations: [], heard: true, listedAt: 0 }
 }
 
 describe('the Machines page', () => {
   const others = (kind: RemoteMachine['state']['state'], why: string | null = null) => machineHeads(new Map([[1, box(kind, why)]])).filter((head) => head.name !== null)
+  /** Renders the page with the one machine and opens its settings from its tile. */
+  const openBox = async (machines: MachinesInfo, extra: Partial<Parameters<typeof DesktopSettings>[0]> = {}) => {
+    const user = userEvent.setup()
+    const rendered = renderSettings('machines', { machines, ...extra })
+    await user.click(screen.getByRole('button', { name: /^box/ }))
+    return { user, ...rendered }
+  }
 
-  it('says it is loading until the host has answered', () => {
+  it('shows placeholders until the host has answered', () => {
     renderSettings('machines', { machines: info({ known: false }) })
-    expect(screen.getByRole('status')).toHaveTextContent('Loading machines')
+    expect(within(screen.getByRole('region', { name: 'Remote machines' })).getByRole('status', { name: 'Reading machines' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add machine' })).toBeDisabled()
   })
 
   it('says where machines come from when there are none', () => {
@@ -512,116 +501,131 @@ describe('the Machines page', () => {
     expect(screen.getByText(/No other machines/)).toBeInTheDocument()
   })
 
-  it('shows a machine that is down with its word, how long, and its fix in full', () => {
-    renderSettings('machines', { machines: info({ list: others('needs-login', 'run ssh box once to log in') }) })
-    expect(screen.getByText(/needs login/)).toBeInTheDocument()
-    expect(screen.getByText('disconnected since 3m ago')).toBeInTheDocument()
+  it('counts machines by state, filters them, and finds one by name', async () => {
+    const user = userEvent.setup()
+    const list = machineHeads(new Map([[1, box('connected')], [2, { ...box('unreachable', 'no answer'), state: { ...box('unreachable').state, machine: 2, name: 'lab' } }]])).filter((head) => head.name !== null)
+    renderSettings('machines', { machines: info({ list, sessionsOn: (machine) => (machine === 1 ? 2 : 0) }) })
+
+    expect(screen.getByText('2 machines · 1 connected · 1 unreachable')).toBeInTheDocument()
+    const tiles = () => screen.getAllByRole('button', { name: /^(box|lab)/ }).map((tile) => tile.querySelector('.mx-mach-name')?.textContent)
+    expect(tiles()).toEqual(['lab', 'box'])
+    expect(screen.getByRole('button', { name: /^box/ })).toHaveTextContent('2 sessions')
+
+    await user.click(screen.getByRole('radio', { name: /Needs attention/ }))
+    expect(tiles()).toEqual(['lab'])
+    await user.click(screen.getByRole('radio', { name: /All/ }))
+    await user.type(screen.getByRole('textbox', { name: 'Find a machine' }), 'bo')
+    expect(tiles()).toEqual(['box'])
+  })
+
+  it('opens a machine from its tile, and closes it again', async () => {
+    const { user } = await openBox(info({ list: others('connected') }))
+    expect(screen.getByRole('region', { name: 'Connection' })).toHaveTextContent('connected')
+    await user.click(screen.getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('region', { name: 'Connection' })).toBeNull()
+  })
+
+  it('shows a machine that is down with its word, how long, and its fix in full', async () => {
+    await openBox(info({ list: others('needs-login', 'run ssh box once to log in') }))
+    expect(screen.getAllByText(/needs login/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('disconnected since 3m ago').length).toBeGreaterThan(0)
     expect(screen.getByText('run ssh box once to log in')).toBeInTheDocument()
   })
 
-  it('shows a refused machine with the reason, the fix, and Remove to act on it', () => {
+  it('shows a refused machine with the reason, the fix, and Remove to act on it', async () => {
     const why = 'a different machine answers at box (id bbbbbbbb instead of aaaaaaaa). If you replaced that machine, open Machines, remove it and add it again; otherwise check the host name and DNS.'
-    renderSettings('machines', { machines: info({ list: others('refused', why) }) })
-    expect(screen.getByText(/refused/)).toBeInTheDocument()
+    await openBox(info({ list: others('refused', why) }))
+    expect(screen.getAllByText(/refused/i).length).toBeGreaterThan(0)
     expect(screen.getByText(why)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Remove box' })).toBeEnabled()
   })
 
   it('offers to copy the update command, and never runs it', async () => {
-    const user = userEvent.setup()
     const onCopyCommand = vi.fn()
-    renderSettings('machines', { machines: info({ list: others('needs-update', 'run `maitty machine update box --install` (or set `remote_cmd` to its path), then retry'), onCopyCommand }) })
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box --install` (or set `remote_cmd` to its path), then retry'), onCopyCommand }))
     expect(screen.getByText('maitty machine update box --install')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Copy the update command for box' }))
     expect(onCopyCommand).toHaveBeenCalledWith('maitty machine update box --install')
   })
 
   it('asks before updating a machine, says what happens to its sessions, then updates it', async () => {
-    const user = userEvent.setup()
     const onUpdate = vi.fn(() => Promise.resolve())
-    renderSettings('machines', { machines: info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }) })
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }))
     expect(screen.getByText('box runs another version of Maitty.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
     expect(onUpdate).not.toHaveBeenCalled()
-    expect(await screen.findByRole('alert')).toHaveTextContent(/come back with their agents resumed/)
+    expect(await screen.findByText(/come back with their agents resumed/)).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Update box now' }))
     expect(onUpdate).toHaveBeenCalledWith('box', 'update', false)
   })
 
   it('installs on a machine with none in one confirmed click, without asking what is open there', async () => {
-    const user = userEvent.setup()
     const onUpdate = vi.fn(() => Promise.resolve())
     const onCheckActivity = vi.fn(() => Promise.resolve(null))
-    renderSettings('machines', { machines: info({ list: others('needs-update', 'run `maitty machine update box --install` (or set `remote_cmd` to its path), then retry'), onUpdate, onCheckActivity }) })
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box --install` (or set `remote_cmd` to its path), then retry'), onUpdate, onCheckActivity }))
     expect(screen.getByText('Maitty is not installed on box.')).toBeInTheDocument()
     expect(screen.queryByText(/set `remote_cmd`/)).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Install Maitty on box' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Puts this version of Maitty on box over ssh')
+    expect(screen.getByText(/Puts this version of Maitty on box over ssh/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Install on box now' }))
     expect(onUpdate).toHaveBeenCalledWith('box', 'install', false)
     expect(onCheckActivity).not.toHaveBeenCalled()
   })
 
   it('does not update when the question is cancelled', async () => {
-    const user = userEvent.setup()
     const onUpdate = vi.fn(() => Promise.resolve())
-    renderSettings('machines', { machines: info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }) })
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }))
     await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
     await user.click(await screen.findByRole('button', { name: 'Cancel' }))
     expect(onUpdate).not.toHaveBeenCalled()
   })
 
   it('can wait for the machine to be idle before it updates', async () => {
-    const user = userEvent.setup()
     const onUpdate = vi.fn(() => Promise.resolve())
-    renderSettings('machines', { machines: info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }) })
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }))
     await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
     await user.click(await screen.findByRole('button', { name: 'Update box when idle' }))
     expect(onUpdate).toHaveBeenCalledWith('box', 'update', true)
   })
 
   it('says how many sessions are open and how many are busy before it updates', async () => {
-    const user = userEvent.setup()
     const onCheckActivity = vi.fn(() => Promise.resolve({ sessions: 3, busy: 1, current: false }))
-    renderSettings('machines', { machines: info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onCheckActivity }) })
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onCheckActivity }))
     await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('box has 3 sessions open, 1 busy.')
+    expect(await screen.findByText(/box has 3 sessions open, 1 busy\./)).toBeInTheDocument()
     expect(onCheckActivity).toHaveBeenCalledWith('box')
   })
 
   it('still asks, and says it could not see what is open, when the machine cannot say', async () => {
-    const user = userEvent.setup()
-    renderSettings('machines', { machines: info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onCheckActivity: vi.fn(() => Promise.reject(new Error('no route'))) }) })
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onCheckActivity: vi.fn(() => Promise.reject(new Error('no route'))) }))
     await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('box could not say what is open on it.')
+    expect(await screen.findByText(/box could not say what is open on it\./)).toBeInTheDocument()
   })
 
-  it('has no command to copy for a machine that needs nothing installed', () => {
-    renderSettings('machines', { machines: info({ list: others('unreachable', 'no answer') }) })
+  it('has no command to copy for a machine that needs nothing installed', async () => {
+    await openBox(info({ list: others('unreachable', 'no answer') }))
     expect(screen.queryByRole('button', { name: /Copy the update command/ })).toBeNull()
   })
 
-  it('retries a machine that is down, and has nothing to retry on one that is up', async () => {
-    const user = userEvent.setup()
+  it('retries a machine that is down', async () => {
     const onRetry = vi.fn()
-    const down = renderSettings('machines', { machines: info({ list: others('unreachable', 'no answer'), onRetry }) })
+    const { user, onChange } = await openBox(info({ list: others('unreachable', 'no answer'), onRetry }))
     await user.click(screen.getByRole('button', { name: 'Retry box' }))
     expect(onRetry).toHaveBeenCalledWith('box')
-    expect(down.onChange).not.toHaveBeenCalled()
+    expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('does not offer a retry for a machine that is connected', () => {
-    renderSettings('machines', { machines: info({ list: others('connected') }) })
-    expect(screen.getByRole('button', { name: 'Retry box' })).toBeDisabled()
+  it('does not offer a retry for a machine that is connected', async () => {
+    await openBox(info({ list: others('connected') }))
+    expect(screen.queryByRole('button', { name: 'Retry box' })).toBeNull()
   })
 
   it('asks before removing, and says what stays', async () => {
-    const user = userEvent.setup()
     const onRemove = vi.fn()
-    renderSettings('machines', { machines: info({ list: others('connected'), onRemove }) })
+    const { user } = await openBox(info({ list: others('connected'), onRemove }))
     await user.click(screen.getByRole('button', { name: 'Remove box' }))
     expect(onRemove).not.toHaveBeenCalled()
-    expect(screen.getByRole('alert')).toHaveTextContent('Removes box from this list. Its sessions keep running on box.')
+    expect(screen.getByText('Removes box from this list. Its sessions keep running on box.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Keep' }))
     expect(onRemove).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Remove box' }))
@@ -636,6 +640,7 @@ describe('what a machine may do to this computer', () => {
     const onGrant = vi.fn()
     const list = machineHeads(new Map([[1, box('connected')]])).filter((head) => head.name !== null)
     renderSettings('machines', { machines: info({ list, onGrant }) })
+    await user.click(screen.getByRole('button', { name: /^box/ }))
     const clipboard = screen.getByRole('switch', { name: 'Allow box to copy to your clipboard' })
     const notices = screen.getByRole('switch', { name: 'Allow box to notify you' })
     expect(clipboard).toHaveAttribute('aria-checked', 'false')
@@ -652,6 +657,7 @@ describe('what a machine may do to this computer', () => {
     const on = box('connected')
     const list = machineHeads(new Map([[1, { ...on, state: { ...on.state, notices: true } }]])).filter((head) => head.name !== null)
     renderSettings('machines', { machines: info({ list, onGrant }) })
+    await user.click(screen.getByRole('button', { name: /^box/ }))
     const notices = screen.getByRole('switch', { name: 'Allow box to notify you' })
     expect(notices).toHaveAttribute('aria-checked', 'true')
     await user.click(notices)
@@ -662,77 +668,89 @@ describe('what a machine may do to this computer', () => {
 describe('adding a machine', () => {
   const hosts = [{ alias: 'build', detail: 'me@build.example' }, { alias: 'lab', detail: 'lab.example' }]
   const added = (name: string) => ({ outcome: 'added' as const, name, version: 'maitty 1.2.3' })
+  /** Opens the add flow from the Machines page. */
+  const startAdding = async (add: Partial<MachinesInfo['add']> = {}, extra: Partial<Parameters<typeof DesktopSettings>[0]> = {}) => {
+    const user = userEvent.setup()
+    renderSettings('machines', { machines: info({ add: { ...info().add, ...add } }), ...extra })
+    await user.click(screen.getByRole('button', { name: 'Add machine' }))
+    return user
+  }
+  /** Switches the flow to typing an address, and types it. */
+  const byAddress = async (user: ReturnType<typeof userEvent.setup>, text: string) => {
+    await user.click(screen.getByRole('radio', { name: 'By address' }))
+    await user.type(screen.getByRole('textbox', { name: 'Address' }), text)
+  }
 
   it('says it is loading the hosts, then lists them', async () => {
-    renderSettings('machines', { machines: info({ add: { ...info().add, loadHosts: () => Promise.resolve(hosts) } }) })
-    expect(screen.getByText(/Loading hosts/)).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: /build/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /lab/ })).toBeInTheDocument()
+    let answer: (list: typeof hosts) => void = () => undefined
+    await startAdding({ loadHosts: () => new Promise((resolve) => { answer = resolve }) })
+    expect(screen.getByRole('status', { name: /Reading hosts/ })).toBeInTheDocument()
+    answer(hosts)
+    const list = await screen.findByRole('radiogroup', { name: 'Hosts in your ssh config' })
+    expect(within(list).getByRole('radio', { name: /build/ })).toBeInTheDocument()
+    expect(within(list).getByRole('radio', { name: /lab/ })).toBeInTheDocument()
   })
 
-  it('says so when there are no hosts, and when they cannot be read', async () => {
-    renderSettings('machines')
-    expect(await screen.findByText(/No hosts in ~\/\.ssh\/config/)).toBeInTheDocument()
+  it('says so when there are no hosts', async () => {
+    await startAdding()
+    expect(await screen.findByText(/No new hosts in ~\/\.ssh\/config/)).toBeInTheDocument()
   })
 
   it('shows why the hosts could not be read', async () => {
-    renderSettings('machines', { machines: info({ add: { ...info().add, loadHosts: () => Promise.reject(new Error('config unreadable')) } }) })
+    await startAdding({ loadHosts: () => Promise.reject(new Error('config unreadable')) })
     expect(await screen.findByRole('alert')).toHaveTextContent('config unreadable')
   })
 
-  it('adds a picked host and says what answered', async () => {
-    const user = userEvent.setup()
+  it('connects nothing until a host is picked, then adds it and says what answered', async () => {
     const onAdd = vi.fn().mockResolvedValue(added('build'))
-    renderSettings('machines', { machines: info({ add: { ...info().add, loadHosts: () => Promise.resolve(hosts), onAdd } }) })
-    await user.click(await screen.findByRole('button', { name: /build/ }))
+    const user = await startAdding({ loadHosts: () => Promise.resolve(hosts), onAdd })
+    expect(screen.getByRole('button', { name: 'Connect machine' })).toBeDisabled()
+    await user.click(await screen.findByRole('radio', { name: /build/ }))
+    await user.click(screen.getByRole('button', { name: 'Connect build' }))
     expect(onAdd).toHaveBeenCalledWith('build', undefined)
-    expect(await screen.findByText('Added build. maitty 1.2.3 answered there. Connecting.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /me@build\.example/ })).toBeNull()
+    expect(await screen.findByText(/build is added and connecting\. maitty 1\.2\.3 answered there\./)).toBeInTheDocument()
   })
 
-  it('adds the text as typed when Enter is pressed', async () => {
-    const user = userEvent.setup()
+  it('adds the address as typed, under the name given', async () => {
     const onAdd = vi.fn().mockResolvedValue(added('box'))
-    renderSettings('machines', { machines: info({ add: { ...info().add, onAdd } }) })
-    await user.type(screen.getByRole('textbox', { name: 'Host or user@host' }), 'me@box.example{Enter}')
-    expect(onAdd).toHaveBeenCalledWith('me@box.example', undefined)
+    const user = await startAdding({ onAdd })
+    await byAddress(user, 'me@box.example')
+    await user.type(screen.getByRole('textbox', { name: 'Name in Maitty' }), 'box{Enter}')
+    expect(onAdd).toHaveBeenCalledWith('me@box.example', 'box')
   })
 
-  it('shows the words of a machine that cannot be added, and adds nothing', async () => {
-    const user = userEvent.setup()
+  it('shows the words of a machine that cannot be added, and goes back to the form to try again', async () => {
     const onAdd = vi.fn().mockRejectedValue(new Error('nope.example: could not resolve'))
-    renderSettings('machines', { machines: info({ add: { ...info().add, onAdd } }) })
-    await user.type(screen.getByRole('textbox', { name: 'Host or user@host' }), 'nope.example{Enter}')
+    const user = await startAdding({ onAdd })
+    await byAddress(user, 'nope.example{Enter}')
     expect(await screen.findByRole('alert')).toHaveTextContent('nope.example: could not resolve')
+    await user.click(screen.getByRole('button', { name: 'Edit and try again' }))
+    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveValue('nope.example')
   })
 
-  it('asks for a name when none can be made, then adds with it', async () => {
-    const user = userEvent.setup()
-    const onAdd = vi.fn().mockResolvedValueOnce({ outcome: 'needs-name' }).mockResolvedValueOnce(added('lab'))
-    renderSettings('machines', { machines: info({ add: { ...info().add, onAdd } }) })
-    await user.type(screen.getByRole('textbox', { name: 'Host or user@host' }), 'me@{Enter}')
-    await user.type(await screen.findByRole('textbox', { name: 'Machine name' }), 'lab{Enter}')
-    expect(onAdd).toHaveBeenLastCalledWith('me@', 'lab')
+  it('asks for a name when none can be made', async () => {
+    const onAdd = vi.fn().mockResolvedValueOnce({ outcome: 'needs-name' })
+    const user = await startAdding({ onAdd })
+    await byAddress(user, 'me@{Enter}')
+    expect(await screen.findByText('Give me@ a name in Maitty to add it.')).toBeInTheDocument()
   })
 
   it('shows checking with a way to cancel while ssh is looked at', async () => {
-    const user = userEvent.setup()
     const onCancel = vi.fn()
     const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
-    renderSettings('machines', { machines: info({ add: { ...info().add, onAdd, onCancel } }) })
-    await user.type(screen.getByRole('textbox', { name: 'Host or user@host' }), 'slow.example{Enter}')
-    expect(screen.getByRole('status')).toHaveTextContent('Checking slow.example')
+    const user = await startAdding({ onAdd, onCancel })
+    await byAddress(user, 'slow.example{Enter}')
+    expect(within(screen.getByRole('region', { name: 'Add a machine' })).getByText('Reaching slow.example over ssh…')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onCancel).toHaveBeenCalled()
   })
 
   it('ends the look with Esc, and keeps Settings open', async () => {
-    const user = userEvent.setup()
     const onCancel = vi.fn()
     const onClose = vi.fn()
     const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
-    renderSettings('machines', { machines: info({ add: { ...info().add, onAdd, onCancel } }), onClose })
-    await user.type(screen.getByRole('textbox', { name: 'Host or user@host' }), 'slow.example{Enter}')
+    const user = await startAdding({ onAdd, onCancel }, { onClose })
+    await byAddress(user, 'slow.example{Enter}')
     screen.getByRole('button', { name: 'Cancel' }).focus()
     await user.keyboard('{Escape}')
     expect(onCancel).toHaveBeenCalled()
@@ -740,15 +758,138 @@ describe('adding a machine', () => {
   })
 
   it('points at the session to log in with when ssh needs a person', async () => {
-    const user = userEvent.setup()
     const onAdd = vi.fn().mockResolvedValue({ outcome: 'login', name: 'box' })
-    renderSettings('machines', { machines: info({ add: { ...info().add, onAdd } }) })
-    await user.type(screen.getByRole('textbox', { name: 'Host or user@host' }), 'box{Enter}')
+    const user = await startAdding({ onAdd })
+    await byAddress(user, 'box{Enter}')
     expect(await screen.findByText(/ssh needs you to log in: use the session named “ssh box”/)).toBeInTheDocument()
   })
 
-  it('says that Windows wants keys or an agent, on Windows only', () => {
-    renderSettings('machines', { machines: info({ add: { ...info().add, windows: true } }) })
+  it('says that Windows wants keys or an agent, on Windows only', async () => {
+    await startAdding({ windows: true })
     expect(screen.getByText(/Windows: use ssh keys or an agent/)).toBeInTheDocument()
+  })
+
+  it('goes back to the machines from its breadcrumb', async () => {
+    const user = await startAdding()
+    await user.click(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByRole('button', { name: 'Remote machines' }))
+    expect(screen.getByRole('button', { name: 'Add machine' })).toBeInTheDocument()
+  })
+})
+
+describe('searching settings', () => {
+  // A search draws every page, Permissions with its accounts among them.
+  beforeEach(() => {
+    accounts.loadAgentAuth.mockReset().mockResolvedValue({ installed: false, signedIn: null, account: '', plan: '' })
+  })
+
+  const search = async (text: string) => {
+    const user = userEvent.setup()
+    await user.type(screen.getByRole('textbox', { name: 'Search settings' }), text)
+    return user
+  }
+
+  it('shows the matching rows of every page, titled with their page', async () => {
+    renderSettings('general')
+    await search('corners')
+    expect(screen.getByRole('heading', { name: 'Search' })).toBeInTheDocument()
+    expect(await screen.findByText(/setting(s)? match(es)? “corners”/)).toBeInTheDocument()
+    expect(screen.getByText('Corners')).toBeInTheDocument()
+    expect(screen.queryByText('Dark theme')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /^Appearance · / }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { current: 'page' })).not.toBeInTheDocument()
+  })
+
+  it('draws nothing but groups while searching, so no page shows what was not asked for', async () => {
+    renderSettings('general')
+    await search('zzzz')
+    expect(await screen.findByText('No settings match “zzzz”.')).toBeInTheDocument()
+    const strays = Array.from(document.querySelectorAll('.mx-settings-sections > *')).filter((child) => !child.matches('.mx-scard, .mx-settings-none'))
+    expect(strays.map((child) => child.className)).toEqual([])
+  })
+
+  it('shows every group of a page whose name matches', async () => {
+    renderSettings('general')
+    await search('machines')
+    expect(within(screen.getByRole('region', { name: 'This computer' })).getAllByText(/./).length).toBeGreaterThan(1)
+  })
+
+  it('opens the page of a result from its title and leaves the search', async () => {
+    const { onSection } = renderSettings('general')
+    const user = await search('corners')
+    const [result] = screen.getAllByRole('button', { name: /^Appearance · / })
+    if (result === undefined) throw new Error('no Appearance result')
+    await user.click(result)
+    expect(onSection).toHaveBeenCalledWith('appearance')
+    expect(screen.getByRole('textbox', { name: 'Search settings' })).toHaveValue('')
+  })
+
+  it('empties the search on Esc before it closes Settings', async () => {
+    const onClose = vi.fn()
+    renderSettings('general', { onClose })
+    const user = await search('corners')
+    await user.keyboard('{Escape}')
+    expect(screen.getByRole('textbox', { name: 'Search settings' })).toHaveValue('')
+    expect(onClose).not.toHaveBeenCalled()
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('does not jump pages on a letter typed into the search', async () => {
+    const { onSection } = renderSettings('general')
+    await search('m')
+    expect(onSection).not.toHaveBeenCalled()
+  })
+})
+
+
+describe('the hotkeys page', () => {
+  it('takes down a new key for an action and saves it in place of its own', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('keys')
+
+    await user.click(screen.getByRole('button', { name: 'Change the keys for Command palette' }))
+    const field = screen.getByRole('button', { name: /^Press the new keys for Command palette/ })
+    expect(field).toHaveFocus()
+    await user.keyboard('{Control>}{Alt>}p{/Alt}{/Control}')
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ keyOverrides: { palette: { mods: ['ctrl', 'alt'], key: 'P' } } }))
+  })
+
+  it('refuses a key the shell owns, or one another action has, saying why, and keeps listening', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('keys')
+
+    await user.click(screen.getByRole('button', { name: 'Change the keys for Command palette' }))
+    await user.keyboard('{Control>}c{/Control}')
+    expect(screen.getByRole('alert')).toHaveTextContent("Ctrl+C is the shell's own key. Add Shift or Alt.")
+    await user.keyboard('{Control>}{Shift>}f{/Shift}{/Control}')
+    expect(screen.getByRole('alert')).toHaveTextContent('Ctrl+Shift+F is already Find in the pane or every session.')
+
+    expect(screen.getByRole('button', { name: /^Press the new keys for Command palette/ })).toHaveFocus()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('cancels on Esc without closing Settings', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    const { onChange } = renderSettings('keys', { onClose })
+
+    await user.click(screen.getByRole('button', { name: 'Change the keys for Command palette' }))
+    await user.keyboard('{Escape}')
+
+    expect(screen.queryByRole('button', { name: /^Press the new keys/ })).not.toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+    expect(onChange).not.toHaveBeenCalled()
+  })
+
+  it('shows a chosen key with Reset, which goes back to the action\'s own, and lists the terminal\'s keys without Change', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('keys', { preferences: { ...PREFS, keyOverrides: { palette: { mods: ['ctrl', 'alt'], key: 'P' } } } })
+
+    expect(screen.getByRole('group', { name: 'Ctrl Alt P' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Change the keys for Interrupt' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reset Command palette' }))
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ keyOverrides: {} }))
   })
 })

@@ -10,13 +10,20 @@ mod check;
 pub use check::first_failing_line;
 mod check_source;
 mod check_stale;
+mod closed_sessions;
+mod clone;
+mod commit;
 mod commands;
 mod contain;
 mod conversation;
 mod folders;
 mod git;
+mod git_identity;
+mod git_rule;
+mod github;
 mod helpers;
 mod identity;
+mod keychain;
 mod last_lines;
 mod pane_terminal;
 mod permission_ask;
@@ -24,17 +31,34 @@ mod persist;
 mod pr;
 #[cfg(unix)]
 mod provider_groups;
+mod reopen;
+mod pull_request;
 mod repeats;
 mod repo;
 mod restore;
 mod scan;
 mod search;
 mod secrets;
+mod snooze;
+mod specialists;
 mod status;
+mod sync;
 mod term;
+mod terminal_sends;
+mod ticket_http;
+mod ticket_keys;
+mod ticket_links;
+mod ticket_repo_file;
+mod ticket_setup;
+mod tickets;
+mod tickets_github;
+mod tickets_linear;
+mod tickets_plane;
+mod tickets_write;
 mod usage;
 mod usage_store;
 mod warm;
+mod workflow;
 mod worktrees;
 
 use crate::brand::APP_COMMAND;
@@ -47,7 +71,7 @@ use crate::layout::Node;
 use crate::protocol::*;
 use anyhow::Result;
 use interprocess::local_socket::traits::tokio::Listener as _;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -150,7 +174,8 @@ pub enum Ev {
     },
     Output(TermId, Vec<u8>),
     Exited(TermId),
-    ProcessExited(TermId),
+    /// A pane's own process exited; true when it reported a failure.
+    ProcessExited(TermId, bool),
     Scan(Vec<scan::Found>),
     Git(Vec<(WsId, Option<GitInfo>)>),
     /// Lines added and removed per checkout, read beside the git poll.
@@ -222,14 +247,66 @@ pub enum Ev {
         client: ClientId,
         result: Result<Vec<WorktreeEntry>, String>,
     },
+    WorktreeStandingReady {
+        client: ClientId,
+        result: Result<Option<crate::tidy::Standing>, String>,
+    },
     SearchReady {
         client: ClientId,
         hits: Vec<crate::protocol::SearchHit>,
+    },
+    CloneReady {
+        client: ClientId,
+        tag: u64,
+        outcome: Result<String, String>,
+    },
+    GitHubAccountsReady {
+        client: ClientId,
+        tag: u64,
+        report: crate::protocol::GitHubReport,
+    },
+    /// A GitHub list `gh` was asked for off the loop, as the reply to send.
+    Answered {
+        client: ClientId,
+        reply: Reply,
     },
     FoldersReady {
         client: ClientId,
         tag: u64,
         listing: crate::protocol::FolderListing,
+    },
+    /// A closed session's folder is ready to start it in, its worktree made again if it was gone
+    /// (`Command::ReopenClosedSession`).
+    ClosedSessionReady {
+        client: ClientId,
+        cmd: String,
+        result: Result<reopen::Ready, String>,
+    },
+    HelperReadReady {
+        client: ClientId,
+        result: Result<crate::protocol::HelperRecord, String>,
+    },
+    SpecialistsReady {
+        client: ClientId,
+        list: crate::specialists::SpecialistList,
+    },
+    SavedConversationsReady {
+        client: ClientId,
+        tag: u64,
+        found: crate::protocol::SavedConversations,
+    },
+    SideAnswerReady {
+        client: ClientId,
+        tag: u64,
+        answer: crate::protocol::SideAnswer,
+    },
+    /// An agent's ask for its project's ticket setup, with the project and what is set up read.
+    TicketSetupRead {
+        client: ClientId,
+        term: TermId,
+        source: Option<maitty_shared::ticket_links::TicketSetupSource>,
+        link: String,
+        found: Result<ticket_setup::Found, String>,
     },
     RepoReady {
         client: ClientId,
@@ -319,6 +396,10 @@ impl SentState {
     fn encode(snap: &Snapshot) -> Option<Self> {
         let mut rest = snap.clone();
         rest.terms.clear();
+        // The revision numbers the message, so it is no part of what the message says changed.
+        rest.revision = 0;
+        // What left is told once, with the message; it is no part of the state compared.
+        rest.removed.clear();
         let rest = crate::protocol::encode(&rest).ok()?;
         let terms = snap
             .terms
@@ -379,6 +460,8 @@ struct Daemon {
     /// pane's status before it asked.
     questions: Vec<(HumanQuestion, ClientId, Status)>,
     secrets: secrets::Secrets,
+    /// When each project's ticket setup was last opened for an agent.
+    ticket_setups: ticket_setup::Shown,
     prs: pr::Prs,
     last_secret_files: Instant,
     git_busy: bool,
@@ -390,6 +473,16 @@ struct Daemon {
     last_saved: String,
     /// What each surface's attached clients last received (see `publish_state`).
     sent_state: HashMap<Surface, SentState>,
+    /// How many states and pane deltas each surface's attached clients have been sent
+    /// (`Snapshot::revision`).
+    sent_revision: HashMap<Surface, u64>,
+    /// The panes each surface's attached clients were last told of. Unlike `sent_state` it
+    /// outlives an attach, so the whole state that follows one still says which panes left.
+    listed: HashMap<Surface, BTreeSet<TermId>>,
+    /// Why each pane that ended did, kept while a surface still lists it.
+    ended: HashMap<TermId, RemovalReason>,
+    /// The daemon was told to stop: a pane that ends from here on ended for that.
+    stopping: bool,
     conversation_news: conversation::news::News,
     /// What was last noted for whoever replaces this server (see `restart`).
     last_activity: Option<crate::restart::Activity>,
@@ -414,6 +507,13 @@ struct Daemon {
     /// Chat conversations that were running when the previous daemon went away, with the
     /// generation they were fenced to: what an automatic resume may start, once.
     resumable_conversations: Vec<(crate::conversation::ConversationId, u64)>,
+    /// Those of `resumable_conversations` that were Running, not mid-transfer, with a turn in
+    /// flight.
+    cut_conversations: std::collections::BTreeSet<crate::conversation::ConversationId>,
+    /// Conversations the daemon is resuming that get the continue message once the resume
+    /// succeeds, with the generation that resume runs at.
+    turns_to_continue: BTreeMap<crate::conversation::ConversationId, u64>,
+    turn_continues: conversation::continue_turn::Continues,
     conversation_states: BTreeMap<crate::conversation::ConversationId, conversation::State>,
     /// Conversations whose agent was stopped on purpose, so its exit is not a failure.
     conversation_ending: std::collections::BTreeSet<crate::conversation::ConversationId>,
@@ -429,14 +529,24 @@ struct Daemon {
         BTreeMap<crate::conversation::ConversationId, conversation::history::History>,
     /// Agents running in desktop panes, followed read-only through their own transcripts.
     followed: Vec<conversation::follow::Followed>,
+    /// Follow-ups and held messages sent with an operation, so a retry is not typed twice.
+    terminal_sends: terminal_sends::TerminalSends,
     /// Messages sent while a turn ran, per conversation, delivered in order as turns end.
     conversation_queues:
         BTreeMap<crate::conversation::ConversationId, Vec<conversation::commands::QueuedSend>>,
+    /// The messages each conversation most recently acknowledged, newest last and bounded, so a
+    /// retry of a send or a send-now for one of them is answered and never sent twice. The
+    /// conversation's single receipt cannot do this once a message is sent out of turn.
+    conversation_recent:
+        BTreeMap<crate::conversation::ConversationId, std::collections::VecDeque<crate::conversation::Operation>>,
     /// The highest id given to a followed pane, so an id is not reused while the daemon lives.
     followed_high_water: u64,
     /// Tests read transcripts from a scratch "home" instead of the real one.
     #[cfg(test)]
     followed_home: Option<PathBuf>,
+    /// Tests note why each pane snapshot was asked for instead of taking it.
+    #[cfg(test)]
+    pane_snapshots: Vec<String>,
     conversation_cache: Option<conversation::history_storage::Cache>,
     conversation_cache_dirty: std::collections::BTreeSet<crate::conversation::ConversationId>,
     conversation_cache_writes: BTreeMap<crate::conversation::ConversationId, u64>,
@@ -455,6 +565,10 @@ struct Daemon {
     turns: Vec<(u64, String, String, u64)>,
     /// Provider-reported usage per session per day, kept on disk (ADR 0009).
     usage_store: usage_store::UsageStore,
+    /// Agent sessions that closed for good or crashed, kept on disk.
+    closed_sessions: closed_sessions::ClosedSessions,
+    /// What a pane whose output ended would record if its process turns out to have failed.
+    unreaped: HashMap<TermId, ClosedSession>,
     codex_busy: bool,
     last_codex: Instant,
     effort_busy: bool,
@@ -659,6 +773,7 @@ async fn serve(
             if !client_reads(&msg, theirs) {
                 continue;
             }
+            let msg = for_client(msg, theirs);
             let bye = matches!(msg, ServerMsg::Bye);
             if ipc::send(&mut w, &msg).await.is_err() || bye {
                 break;
@@ -694,6 +809,21 @@ async fn serve(
 /// never sent a message added after it: it could not decode it, and would drop the connection.
 fn client_reads(msg: &ServerMsg, theirs: u32) -> bool {
     theirs >= msg.introduced_in()
+}
+
+/// `msg` as a client at `theirs` can read it. A reasoning item is a kind of history entry added
+/// inside the compatibility window: an older client could not decode a page that held one, so
+/// its pages go without them.
+fn for_client(mut msg: ServerMsg, theirs: u32) -> ServerMsg {
+    use crate::conversation::history::Content;
+    if theirs < REASONING_ITEM_SINCE
+        && let ServerMsg::Reply(Reply::ConversationRead(read)) = &mut msg
+    {
+        read.history
+            .entries
+            .retain(|entry| !matches!(entry.content, Content::Reasoning { .. }));
+    }
+    msg
 }
 
 /// Whether a frame that would not decode is passed over instead of ending the connection: only
@@ -919,6 +1049,16 @@ impl Daemon {
                 anyhow::bail!("Only a human client can remove a queued message")
             }
             Command::ConversationDequeue { .. } => self.may(client, Grant::Write, None),
+            Command::ConversationSendNow { .. }
+                if structured
+                    || self
+                        .clients
+                        .get(&client)
+                        .is_some_and(|client| client.from.is_some()) =>
+            {
+                anyhow::bail!("Only a human client can send a queued message now")
+            }
+            Command::ConversationSendNow { .. } => self.may(client, Grant::Write, None),
             Command::SetSetting { .. }
                 if structured
                     || self
@@ -975,6 +1115,10 @@ impl Daemon {
                 anyhow::bail!("Only an app window can keep an agent warm")
             }
             Command::Prewarm { .. } | Command::DropPrewarm => Ok(()),
+            Command::ReopenClosedSession { .. } if self.client_is_agent(client) => {
+                anyhow::bail!("reopening a closed session is yours to do, not a pane's")
+            }
+            Command::ReopenClosedSession { .. } => self.may(client, Grant::Start, None),
             Command::NewWorkspace { .. }
             | Command::NewTab { .. }
             | Command::NewFleet { .. }
@@ -1091,6 +1235,12 @@ impl Daemon {
             {
                 anyhow::bail!("only a pane asks for its own secret")
             }
+            // The setup is shown to you on a pane's behalf; a window opens it itself.
+            Command::OpenTicketSetup { term, .. }
+                if self.clients.get(&client).and_then(|c| c.from) != Some(*term) =>
+            {
+                anyhow::bail!("only an agent pane asks for its own project's ticket setup")
+            }
             Command::AnswerSecret { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("a secret is yours to give, not a pane's")
             }
@@ -1105,6 +1255,9 @@ impl Daemon {
             }
             Command::SpendSecret { .. } if !self.client_is_agent(client) => {
                 anyhow::bail!("only an agent pane can spend a secret reference")
+            }
+            Command::SnoozePane { .. } if self.client_is_agent(client) => {
+                anyhow::bail!("snoozing a session is yours to do, not a pane's")
             }
             // A session may not let itself (or another) start helpers.
             Command::AnswerHelpers { .. } if self.client_is_agent(client) => {
@@ -1175,6 +1328,7 @@ impl Daemon {
             pending_ops: 0,
             questions: Vec::new(),
             secrets: secrets::Secrets::default(),
+            ticket_setups: ticket_setup::Shown::default(),
             prs: pr::Prs::default(),
             last_secret_files: Instant::now(),
             git_busy: false,
@@ -1184,6 +1338,10 @@ impl Daemon {
             last_output_save: Instant::now(),
             last_saved: String::new(),
             sent_state: HashMap::new(),
+            sent_revision: HashMap::new(),
+            listed: HashMap::new(),
+            ended: HashMap::new(),
+            stopping: false,
             conversation_news: conversation::news::News::default(),
             last_activity: None,
             check_dir: persist::check_output_dir(),
@@ -1202,6 +1360,9 @@ impl Daemon {
             pending_starts: Vec::new(),
             conversation_operations: Vec::new(),
             resumable_conversations: Vec::new(),
+            cut_conversations: std::collections::BTreeSet::new(),
+            turns_to_continue: BTreeMap::new(),
+            turn_continues: conversation::continue_turn::Continues::default(),
             conversation_states: BTreeMap::new(),
             conversation_ending: std::collections::BTreeSet::new(),
             conversation_closing: std::collections::BTreeMap::new(),
@@ -1212,10 +1373,14 @@ impl Daemon {
             conversation_barriers: BTreeMap::new(),
             conversation_histories: BTreeMap::new(),
             followed: Vec::new(),
+            terminal_sends: terminal_sends::TerminalSends::default(),
             conversation_queues: BTreeMap::new(),
+            conversation_recent: BTreeMap::new(),
             followed_high_water: 0,
             #[cfg(test)]
             followed_home: None,
+            #[cfg(test)]
+            pane_snapshots: Vec::new(),
             conversation_cache: None,
             conversation_cache_dirty: Default::default(),
             conversation_cache_writes: Default::default(),
@@ -1239,6 +1404,14 @@ impl Daemon {
                     term::unix_now(),
                 )
             },
+            closed_sessions: if cfg!(test) {
+                closed_sessions::ClosedSessions::in_memory()
+            } else {
+                closed_sessions::ClosedSessions::open(
+                    closed_sessions::ClosedSessions::default_path(),
+                )
+            },
+            unreaped: HashMap::new(),
             codex_busy: false,
             last_codex: Instant::now() - Duration::from_secs(3600),
             effort_busy: false,
@@ -1273,6 +1446,7 @@ impl Daemon {
                     self.finish_chat_closes();
                     self.close_ended_agents();
                     self.expire_warm();
+                    self.wake_snoozed(term::unix_now());
                     self.update_statuses();
                     self.settled_alerts();
                     self.phone_alerts();
@@ -1320,6 +1494,7 @@ impl Daemon {
                 // The user closed everything, so start fresh next time.
                 persist::forget();
                 self.usage_store.save_now(term::unix_now());
+                self.closed_sessions.save_now();
                 self.broadcast(|_| true, ServerMsg::Bye);
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 let _ = std::fs::remove_file(ipc::pid_file());
@@ -1392,10 +1567,17 @@ impl Daemon {
     /// Send the surface's clients what changed since the last state they got: only the panes
     /// that differ when the rest of the snapshot is the same, the whole snapshot otherwise, and
     /// nothing when nothing visible changed. Compared as encoded bytes, so no field is left out.
-    fn publish_state(&mut self, surface: Surface, snap: Snapshot) {
+    /// Each message sent carries the surface's next revision, and why each pane it drops left.
+    fn publish_state(&mut self, surface: Surface, mut snap: Snapshot) {
         let attached = |client: &Client| client.attach && client.surface == surface;
+        let revision = self.revision_of(surface) + 1;
+        snap.revision = revision;
+        snap.removed = self.left_since_last_message(surface, &snap);
+        let listed: BTreeSet<TermId> = snap.terms.keys().copied().collect();
         let Some(encoded) = SentState::encode(&snap) else {
             self.sent_state.remove(&surface);
+            self.sent_revision.insert(surface, revision);
+            self.note_listed(surface, listed);
             self.broadcast(attached, ServerMsg::State(snap));
             return;
         };
@@ -1414,14 +1596,82 @@ impl Daemon {
                     .copied()
                     .collect();
                 (!changed.is_empty() || !removed.is_empty())
-                    .then_some(ServerMsg::TermsChanged { changed, removed })
+                    .then_some(ServerMsg::TermsChanged {
+                        changed,
+                        removed,
+                        reasons: snap.removed.clone(),
+                        revision,
+                    })
             }
             _ => Some(ServerMsg::State(snap)),
         };
         self.sent_state.insert(surface, encoded);
         if let Some(message) = message {
+            self.sent_revision.insert(surface, revision);
+            self.note_listed(surface, listed);
             self.broadcast(attached, message);
         }
+    }
+
+    /// The panes `surface` was last told of that `snap` no longer lists, and why each left.
+    fn left_since_last_message(
+        &self,
+        surface: Surface,
+        snap: &Snapshot,
+    ) -> BTreeMap<TermId, RemovalReason> {
+        self.listed
+            .get(&surface)
+            .into_iter()
+            .flatten()
+            .filter(|id| !snap.terms.contains_key(id))
+            .map(|id| (*id, self.removal_reason(*id, surface)))
+            .collect()
+    }
+
+    /// Why a pane is not in `surface`'s list. `Unknown` for one that ended with no reason
+    /// recorded, or that is hidden by nothing named here: said, never guessed.
+    fn removal_reason(&self, term: TermId, surface: Surface) -> RemovalReason {
+        match self.terms.get(&term) {
+            None => self.ended.get(&term).copied().unwrap_or(RemovalReason::Unknown),
+            Some(t) if t.owner != surface => RemovalReason::Moved,
+            Some(t) if t.closing.is_some() => RemovalReason::Closed,
+            Some(t) if t.spare => RemovalReason::PutAway,
+            Some(_) => RemovalReason::Unknown,
+        }
+    }
+
+    /// A client attached and was sent `snap`: its panes are now ones the surface was told of.
+    /// With another client of the surface still attached they are added, so a removal that
+    /// client is owed still reaches it; with none, they replace a list nobody holds any more.
+    fn note_attached(&mut self, client: ClientId, surface: Surface, snap: &Snapshot) {
+        let mut listed: BTreeSet<TermId> = snap.terms.keys().copied().collect();
+        let others = self
+            .clients
+            .iter()
+            .any(|(id, c)| *id != client && c.attach && c.surface == surface);
+        if others {
+            listed.extend(self.listed.get(&surface).into_iter().flatten());
+        }
+        self.note_listed(surface, listed);
+    }
+
+    fn note_listed(&mut self, surface: Surface, listed: BTreeSet<TermId>) {
+        self.listed.insert(surface, listed);
+        let listed = &self.listed;
+        self.ended
+            .retain(|term, _| listed.values().any(|ids| ids.contains(term)));
+    }
+
+    /// Remember why a pane ended, for the surfaces that still list it.
+    fn note_ended(&mut self, term: TermId, reason: RemovalReason) {
+        if self.listed.values().any(|ids| ids.contains(&term)) {
+            let reason = if self.stopping { RemovalReason::DaemonStopping } else { reason };
+            self.ended.insert(term, reason);
+        }
+    }
+
+    fn revision_of(&self, surface: Surface) -> u64 {
+        self.sent_revision.get(&surface).copied().unwrap_or(0)
     }
 
     fn broadcast(&self, filter: impl Fn(&Client) -> bool, msg: ServerMsg) {
@@ -1576,7 +1826,9 @@ impl Daemon {
                     behind: std::cell::Cell::new(false),
                 };
                 if attach {
-                    c.push(ServerMsg::State(self.snapshot_for(surface)));
+                    let snap = self.snapshot_for(surface);
+                    self.note_attached(id, surface, &snap);
+                    c.push(ServerMsg::State(snap));
                     // The next change goes out in full: a delta against what the others saw
                     // could skip something this client's snapshot has not got.
                     self.sent_state.remove(&surface);
@@ -1643,7 +1895,9 @@ impl Daemon {
                         }
                         return;
                     }
-                    self.send(id, ServerMsg::State(self.snapshot_for(Surface::Terminal)));
+                    let snap = self.snapshot_for(Surface::Terminal);
+                    self.note_attached(id, Surface::Terminal, &snap);
+                    self.send(id, ServerMsg::State(snap));
                     self.sent_state.remove(&Surface::Terminal);
                     for term in self
                         .terms
@@ -1805,13 +2059,15 @@ impl Daemon {
                 }
                 if self.terms.contains_key(&tid) {
                     self.last_loss = Some(Instant::now());
-                    self.remove_term(tid);
+                    self.await_pane_exit(tid);
+                    self.remove_term(tid, RemovalReason::Exited);
                 }
             }
-            Ev::ProcessExited(tid) => {
+            Ev::ProcessExited(tid, failed) => {
+                self.pane_process_exited(tid, failed);
                 if self.terms.contains_key(&tid) {
                     self.last_loss = Some(Instant::now());
-                    self.remove_term(tid);
+                    self.remove_term(tid, RemovalReason::Exited);
                 }
             }
             Ev::Scan(found) => {
@@ -2087,6 +2343,9 @@ impl Daemon {
                 set_up,
                 result,
             } => self.branch_worktree_made(client, set_up, result),
+            Ev::ClosedSessionReady { client, cmd, result } => {
+                self.closed_session_ready(client, cmd, result)
+            }
             Ev::AgentWorktreeMade { client, result } => {
                 self.pending_ops -= 1;
                 match result {
@@ -2167,6 +2426,12 @@ impl Daemon {
                 Ok(list) => self.send(client, ServerMsg::Reply(Reply::Worktrees(list))),
                 Err(e) => self.send(client, ServerMsg::Error(e)),
             },
+            Ev::WorktreeStandingReady { client, result } => match result {
+                Ok(standing) => {
+                    self.send(client, ServerMsg::Reply(Reply::WorktreeStanding(standing)))
+                }
+                Err(e) => self.send(client, ServerMsg::Error(e)),
+            },
             Ev::SearchReady { client, hits } => {
                 self.send(client, ServerMsg::Reply(Reply::Search(hits)));
             }
@@ -2175,6 +2440,33 @@ impl Daemon {
                 tag,
                 listing,
             } => self.send(client, ServerMsg::Reply(Reply::Folders { tag, listing })),
+            Ev::HelperReadReady { client, result } => match result {
+                Ok(record) => self.send(client, ServerMsg::Reply(Reply::HelperRead(record))),
+                Err(e) => self.send(client, ServerMsg::Error(e)),
+            },
+            Ev::SpecialistsReady { client, list } => {
+                self.send(client, ServerMsg::Reply(Reply::Specialists(list)));
+            }
+            Ev::CloneReady {
+                client,
+                tag,
+                outcome,
+            } => self.send(client, ServerMsg::Reply(Reply::Cloned { tag, outcome })),
+            Ev::GitHubAccountsReady {
+                client,
+                tag,
+                report,
+            } => self.send(client, ServerMsg::Reply(Reply::GitHubAccounts { tag, report })),
+            Ev::Answered { client, reply } => self.send(client, ServerMsg::Reply(reply)),
+            Ev::SavedConversationsReady { client, tag, found } => {
+                self.send(client, ServerMsg::Reply(Reply::SavedConversations { tag, found }));
+            }
+            Ev::SideAnswerReady { client, tag, answer } => {
+                self.send(client, ServerMsg::Reply(Reply::SideAnswer { tag, answer }));
+            }
+            Ev::TicketSetupRead { client, term, source, link, found } => {
+                self.ticket_setup_read(client, term, source, link, found);
+            }
             Ev::RepoReady {
                 client,
                 tag,
@@ -2367,8 +2659,10 @@ impl Daemon {
             let allowed = match &msg {
                 ClientMsg::Query(_) => self.may(client, Grant::Read, None),
                 ClientMsg::Resize { .. } => self.may(client, Grant::Write, None),
-                ClientMsg::Hook { .. } | ClientMsg::Usage { .. } => Err(anyhow::anyhow!(
-                    "Structured callers cannot report pane status or usage"
+                ClientMsg::Hook { .. }
+                | ClientMsg::Usage { .. }
+                | ClientMsg::WorkflowReport { .. } => Err(anyhow::anyhow!(
+                    "Structured callers cannot report pane status, usage or workflows"
                 )),
                 _ => Ok(()),
             };
@@ -2484,6 +2778,22 @@ impl Daemon {
                     .is_some_and(|t| term::same_secret(&t.token, &token))
                 {
                     self.report_usage(term, usage, limits);
+                }
+            }
+            ClientMsg::WorkflowReport { term, token, run } => {
+                let Some(t) = self.terms.get_mut(&term) else {
+                    return;
+                };
+                if !term::same_secret(&t.token, &token) {
+                    tracing::info!("ignoring a workflow report for pane {term} without its secret");
+                    return;
+                }
+                match maitty_shared::workflow::checked(run) {
+                    Ok(run) => {
+                        workflow::record(&mut t.workflows, run, term::unix_now());
+                        self.dirty = true;
+                    }
+                    Err(reason) => tracing::info!("pane {term}: workflow report refused: {reason}"),
                 }
             }
             ClientMsg::Command(cmd) => {
@@ -2692,6 +3002,24 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can read usage".into())
                     }
+                    Query::WorktreeStanding { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can read where a worktree stands".into())
+                    }
+                    Query::WorktreeStanding { repo, folder } => {
+                        let inactive_after = self.cfg.worktree.inactive_days;
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let result = worktree_standing(&repo, &folder, inactive_after);
+                            let _ = tx.blocking_send(Ev::WorktreeStandingReady { client, result });
+                        });
+                        return;
+                    }
+                    Query::ClosedSessions if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can read the closed sessions".into())
+                    }
+                    Query::ClosedSessions => {
+                        ServerMsg::Reply(Reply::ClosedSessions(self.closed_sessions.list().to_vec()))
+                    }
                     Query::AllowedCommands if self.client_is_agent(client) => {
                         ServerMsg::Error("Only a human client can read the approved commands".into())
                     }
@@ -2750,6 +3078,265 @@ impl Daemon {
                         });
                         return;
                     }
+                    Query::HelperRead { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can read a helper's record".into())
+                    }
+                    Query::HelperRead { term, helper } => {
+                        match self.helper_file(client, term, &helper) {
+                            Ok(file) => {
+                                let tx = self.tx.clone();
+                                tokio::task::spawn_blocking(move || {
+                                    let result = conversation::follow::user_home()
+                                        .ok_or("The home folder is unknown")
+                                        .and_then(|home| {
+                                            conversation::helper_record::read(file, &home, usage::codex_helper_file)
+                                                .map_err(|failure| failure.words())
+                                        })
+                                        .map(|record| crate::protocol::HelperRecord {
+                                            term,
+                                            helper,
+                                            entries: record.entries,
+                                            start_missing: record.start_missing,
+                                        })
+                                        .map_err(str::to_string);
+                                    let _ = tx.blocking_send(Ev::HelperReadReady { client, result });
+                                });
+                            }
+                            Err(e) => self.send(client, ServerMsg::Error(e.into())),
+                        }
+                        return;
+                    }
+                    Query::Specialists { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can list specialist agents".into())
+                    }
+                    Query::Specialists { term } => {
+                        let cwd = self
+                            .may_use_terminal(client, term)
+                            .and_then(|()| self.may(client, Grant::Read, Some(term)))
+                            .and_then(|()| {
+                                self.terms
+                                    .get(&term)
+                                    .map(|t| t.cwd.clone())
+                                    .ok_or_else(|| anyhow::anyhow!("no pane {term}"))
+                            });
+                        match cwd {
+                            Ok(cwd) => {
+                                let tx = self.tx.clone();
+                                tokio::task::spawn_blocking(move || {
+                                    let home = conversation::follow::user_home();
+                                    let codex = usage::codex_home();
+                                    let list = specialists::list(
+                                        term,
+                                        &cwd,
+                                        home.as_deref(),
+                                        codex.as_deref(),
+                                    );
+                                    let _ = tx.blocking_send(Ev::SpecialistsReady { client, list });
+                                });
+                            }
+                            Err(error) => self.send(client, ServerMsg::Error(format!("{error:#}"))),
+                        }
+                        return;
+                    }
+                    Query::CloneRepo { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can clone a repository".into())
+                    }
+                    Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can ask about this machine's GitHub account".into())
+                    }
+                    Query::Tickets { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can read tickets from this machine".into())
+                    }
+                    Query::TicketKeys { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can keep a ticket provider's key".into())
+                    }
+                    Query::TicketWrite { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can write to a ticket".into())
+                    }
+                    Query::TicketLinks { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can change which tickets a project reads".into())
+                    }
+                    Query::TicketLinks { place, change, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = ticket_links::change(&ticket_links::LinkStore::real(), place, change, ticket_links::main_checkout, &ticket_links::RepoFiles::real());
+                            let reply = Reply::TicketLinks { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::TicketWrite { source, id, write, confirmed, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = tickets_write::perform(&source, &id, write, confirmed);
+                            let reply = Reply::TicketWrite { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::TicketKeys { change, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = ticket_keys::change(&ticket_keys::KeyStore::real(), change);
+                            let reply = Reply::TicketKeys { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::Tickets { source, request, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = tickets::answer(&source, request);
+                            let reply = Reply::Tickets { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::GitIdentities { .. } | Query::GitIdentityRule { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can ask or change who commits on this machine".into())
+                    }
+                    Query::GitIdentityRule { change, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let signed_in = |login: &str| github::accounts().accounts.iter().any(|account| account.login == login);
+                            let outcome = git_rule::change(&git_identity::Place::real(), &change, signed_in);
+                            let reply = Reply::GitIdentityRuleDone { tag, outcome };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::GitIdentities { tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let report = git_identity::report(&git_identity::Place::real());
+                            let reply = Reply::GitIdentities { tag, report };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::GitHubRepos { owner, search, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = github::repos(owner.as_deref(), search.as_deref());
+                            let reply = Reply::GitHubRepos { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::GitHubOwners { tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let reply = Reply::GitHubOwners { tag, answer: github::owners() };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::GitHubAccounts { tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let report = github::accounts();
+                            let _ = tx.blocking_send(Ev::GitHubAccountsReady { client, tag, report });
+                        });
+                        return;
+                    }
+                    Query::CloneRepo { address, parent, tag } => {
+                        // Checked here too, so an address or a path that is far too long never
+                        // reaches a thread.
+                        if address.len() > clone::ADDRESS_MAX_BYTES || parent.len() > folders::PATH_MAX_BYTES {
+                            self.send(
+                                client,
+                                ServerMsg::Reply(Reply::Cloned {
+                                    tag,
+                                    outcome: Err("That address or folder is too long".into()),
+                                }),
+                            );
+                            return;
+                        }
+                        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let outcome = clone::clone(&address, &parent, home.as_deref(), clone::CLONE_LIMIT);
+                            let _ = tx.blocking_send(Ev::CloneReady { client, tag, outcome });
+                        });
+                        return;
+                    }
+                    Query::SavedConversations { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can list saved conversations".into())
+                    }
+                    Query::SavedConversations { agent, folder, tag } => {
+                        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+                        let Some(folder) = (folder.len() <= folders::PATH_MAX_BYTES)
+                            .then(|| folders::resolve(&folder, home.as_deref()))
+                            .flatten()
+                        else {
+                            self.send(
+                                client,
+                                ServerMsg::Error("A folder is an absolute path or starts with ~".into()),
+                            );
+                            return;
+                        };
+                        let stores = conversation::saved::Stores::of_this_user(home.as_deref());
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let found = conversation::saved::list(&agent, &folder, &stores);
+                            let _ = tx.blocking_send(Ev::SavedConversationsReady { client, tag, found });
+                        });
+                        return;
+                    }
+                    Query::SideAnswer { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can ask beside a conversation".into())
+                    }
+                    Query::SideAnswer { id, ask, tag } => {
+                        if let Err(error) = self.may(client, Grant::Read, None) {
+                            self.send(client, ServerMsg::Error(format!("{error:#}")));
+                            return;
+                        }
+                        let target = match conversation::side::refusal(&ask) {
+                            Some(reason) => Err(crate::protocol::SideAnswer::Failed { reason }),
+                            None => self.side_target(client, id),
+                        };
+                        let target = match target {
+                            Ok(target) => target,
+                            Err(answer) => {
+                                self.send(client, ServerMsg::Reply(Reply::SideAnswer { tag, answer }));
+                                return;
+                            }
+                        };
+                        let tx = self.tx.clone();
+                        tokio::spawn(async move {
+                            let answer = conversation::side::answer(target, ask).await;
+                            let _ = tx.send(Ev::SideAnswerReady { client, tag, answer }).await;
+                        });
+                        return;
+                    }
                     Query::PaneSearch { query } => {
                         let query = query.trim().to_string();
                         if query.is_empty() || query.chars().count() > search::MAX_QUERY_CHARS {
@@ -2780,6 +3367,38 @@ impl Daemon {
                         tokio::task::spawn_blocking(move || {
                             let hits = search::search(&panes, &query);
                             let _ = tx.blocking_send(Ev::SearchReady { client, hits });
+                        });
+                        return;
+                    }
+                    Query::Git { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can change a checkout this way".into())
+                    }
+                    Query::Git { term, request, tag } => {
+                        let folder = self
+                            .may_use_terminal(client, term)
+                            .and_then(|()| self.may(client, Grant::Write, Some(term)))
+                            .and_then(|()| {
+                                self.terms
+                                    .get(&term)
+                                    .map(|t| t.cwd.clone())
+                                    .ok_or_else(|| anyhow::anyhow!("no pane {term}"))
+                            });
+                        let folder = match folder {
+                            Ok(folder) => folder,
+                            Err(error) => {
+                                self.send(client, ServerMsg::Error(format!("{error:#}")));
+                                return;
+                            }
+                        };
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let outcome = sync::answer(&folder, &request);
+                            let reply = Reply::GitDone { tag, outcome };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
                     }
@@ -2823,6 +3442,12 @@ impl Daemon {
                     }
                     Query::List => {
                         let surface = self.surface_of(client);
+                        // A client that follows the updates and asks for the list missed one. The
+                        // list can hold a change its surface was not sent yet, so the next change
+                        // goes out in full: a delta would be against what was sent, not the list.
+                        if self.clients.get(&client).is_some_and(|c| c.attach) {
+                            self.sent_state.remove(&surface);
+                        }
                         ServerMsg::Reply(Reply::List(self.snapshot_for(surface)))
                     }
                     Query::Read { term } if self.may(client, Grant::Read, Some(term)).is_err() => {
@@ -2885,6 +3510,37 @@ impl Daemon {
 
     /// Whether an app may see this pane. A pane that is gone is shown to nobody's list it can
     /// act on anyway, so only a pane we know to belong to the other app is hidden.
+    /// Where a pane's helper keeps its record, from the pane's own verified reports: the helper
+    /// must be one they named, in a pane this client is shown.
+    fn helper_file(
+        &self,
+        client: ClientId,
+        term: TermId,
+        helper: &str,
+    ) -> Result<conversation::helper_record::HelperFile, &'static str> {
+        let t = self
+            .terms
+            .get(&term)
+            .filter(|_| self.shown_to(term, self.surface_of(client)))
+            .ok_or("No such pane")?;
+        if !t.subagent_activity.iter().any(|a| a.id == helper) {
+            return Err("The pane's agent reported no such helper");
+        }
+        let session = t.session.clone().ok_or("The pane's agent has not said which session it is")?;
+        match t.agent.as_deref() {
+            Some("claude") => Ok(conversation::helper_record::HelperFile::Claude {
+                transcript: t.transcript.clone().ok_or("The pane's agent has not named its transcript")?,
+                session,
+                helper: helper.to_string(),
+            }),
+            Some("codex") => Ok(conversation::helper_record::HelperFile::Codex {
+                parent: session,
+                helper: helper.to_string(),
+            }),
+            _ => Err("Only Claude and Codex helpers keep a record Maitty can read"),
+        }
+    }
+
     fn shown_to(&self, term: TermId, surface: Surface) -> bool {
         self.terms.get(&term).is_none_or(|t| t.owner == surface)
     }
@@ -2910,6 +3566,7 @@ impl Daemon {
     /// its own native conversation terminals (ADR 0004).
     fn snapshot_for(&self, surface: Surface) -> Snapshot {
         let mut snap = self.snapshot();
+        snap.revision = self.revision_of(surface);
         snap.terms.retain(|id, _| self.shown_to(*id, surface));
         snap.workspaces.retain(|ws| {
             ws.tabs.iter().all(|tab| {
@@ -2976,6 +3633,7 @@ impl Daemon {
                         label: t.label.clone(),
                         pinned: t.pinned,
                         archived: t.archived,
+                        snoozed_until: t.snoozed_until,
                         mem: t.mem,
                         cpu: t.cpu,
                         bell: t.bell,
@@ -3026,6 +3684,7 @@ impl Daemon {
                         pr: self.pr_of(t),
                         queued: t.queue.iter().cloned().collect(),
                         subagent_activity: t.subagent_activity.clone(),
+                        workflows: t.workflows.clone(),
                         session: t.session.clone(),
                     },
                 )
@@ -3052,6 +3711,8 @@ impl Daemon {
                 .collect(),
             spent_today: self.spent_today(),
             today: usage::today(&self.turns, &self.spent, term::unix_now()),
+            revision: 0,
+            removed: BTreeMap::new(),
         }
     }
 
@@ -3367,7 +4028,7 @@ impl Daemon {
             }
             tracing::info!("pane {term}: closed, the agent it was started as has ended");
             let tops = self.worktrees_of(&[term]);
-            self.close_term(term);
+            self.end_term(term, RemovalReason::Exited);
             // No client asked for this close, so there is none to tell what became of a worktree.
             self.cleanup_worktrees(ClientId::MAX, tops);
         }
@@ -3391,15 +4052,22 @@ impl Daemon {
         }
     }
 
+    /// End a pane on purpose. To a list that showed it, a person closed it.
     fn close_term(&mut self, term: TermId) {
+        self.remember_closed_pane(term);
+        self.end_term(term, RemovalReason::Closed);
+    }
+
+    fn end_term(&mut self, term: TermId, reason: RemovalReason) {
         if let Some(t) = self.terms.get_mut(&term) {
             t.kill_tree();
         }
-        self.remove_term(term);
+        self.remove_term(term, reason);
     }
 
     /// Drop a terminal and prune the tree: empty tabs and workspaces disappear.
-    fn remove_term(&mut self, term: TermId) {
+    fn remove_term(&mut self, term: TermId, reason: RemovalReason) {
+        self.note_ended(term, reason);
         // Closing a terminal can block on Windows until its programs let go; never here.
         if let Some(t) = self.terms.remove(&term) {
             std::thread::spawn(move || drop(t));
@@ -3477,6 +4145,8 @@ fn home() -> PathBuf {
 mod branch_agent_tests;
 #[cfg(test)]
 mod logic_tests;
+#[cfg(test)]
+mod wire_size_tests;
 
 #[cfg(test)]
 mod tests {
@@ -3498,6 +4168,43 @@ mod tests {
             PROTOCOL_VERSION + 1,
             &anyhow::anyhow!("the pipe closed")
         ));
+    }
+
+    #[test]
+    fn a_client_from_before_reasoning_items_is_sent_its_history_without_them() {
+        use super::{REASONING_ITEM_SINCE, Reply, ServerMsg, for_client};
+        use crate::conversation::history::Content;
+        let page: crate::conversation::ReadResult = serde_json::from_value(serde_json::json!({
+            "conversation": 1, "generation": 1, "status": "Done", "receipt": null, "error": null,
+            "checks": [], "approvals": [],
+            "history": { "next": null, "completeness": "Complete", "entries": [
+                { "source": { "conversation": 1, "turn": "t", "item": "thought" }, "state": "Completed",
+                  "content": { "Reasoning": { "text": "Weighing two fixes" } } },
+                { "source": { "conversation": 1, "turn": "t", "item": "said" }, "state": "Completed",
+                  "content": { "Message": { "role": "Assistant", "text": "Done." } } },
+            ] },
+        }))
+        .unwrap();
+        let kinds = |theirs: u32| {
+            let sent = for_client(ServerMsg::Reply(Reply::ConversationRead(page.clone())), theirs);
+            let ServerMsg::Reply(Reply::ConversationRead(read)) = sent else {
+                panic!("a read stays a read");
+            };
+            read.history
+                .entries
+                .iter()
+                .map(|entry| matches!(entry.content, Content::Reasoning { .. }))
+                .collect::<Vec<_>>()
+        };
+
+        assert_eq!(kinds(REASONING_ITEM_SINCE), [true, false]);
+        assert_eq!(kinds(REASONING_ITEM_SINCE - 1), [false]);
+        const {
+            assert!(
+                REASONING_ITEM_SINCE > crate::protocol::COMPATIBLE_SINCE
+                    && REASONING_ITEM_SINCE <= crate::protocol::PROTOCOL_VERSION
+            )
+        };
     }
 
     #[test]
@@ -3534,6 +4241,51 @@ mod tests {
             "never trusts what you didn't"
         );
         assert_eq!(v["other"], 1, "the rest of the file is kept");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn two_worktrees_trusted_at_once_are_both_trusted() {
+        let dir = std::env::temp_dir().join(format!(
+            concat!(env!("APP_COMMAND"), "-trust-both-{}"),
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("claude.json");
+        for round in 0..30 {
+            std::fs::write(
+                &f,
+                r#"{"projects":{"c:/code/app":{"hasTrustDialogAccepted":true}}}"#,
+            )
+            .unwrap();
+            let start = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let trusts: Vec<_> = ["a", "b"]
+                .into_iter()
+                .map(|name| {
+                    let (f, start) = (f.clone(), start.clone());
+                    std::thread::spawn(move || {
+                        start.wait();
+                        super::trust_in(
+                            &f,
+                            std::path::Path::new("C:/code/app"),
+                            &std::path::Path::new("C:/code/app-worktrees").join(name),
+                        );
+                    })
+                })
+                .collect();
+            for trust in trusts {
+                trust.join().unwrap();
+            }
+            let v: serde_json::Value =
+                serde_json::from_str(&std::fs::read_to_string(&f).unwrap()).unwrap();
+            for name in ["a", "b"] {
+                assert_eq!(
+                    v["projects"][format!("C:/code/app-worktrees/{name}")]["hasTrustDialogAccepted"],
+                    true,
+                    "round {round}: worktree {name} lost its trust"
+                );
+            }
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

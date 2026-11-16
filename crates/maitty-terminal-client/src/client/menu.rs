@@ -49,6 +49,10 @@ pub enum Act {
     ArchiveConversation(crate::conversation::ConversationId),
     /// Drop the follow-ups waiting for this agent's turn to end.
     ClearQueue(ClientTerm),
+    /// Put a finished or idle session away: it keeps running, out of the lists.
+    PutAway(ClientTerm),
+    /// List a put-away session again.
+    BringBack(ClientTerm),
     /// List a checkout's snapshots (its folder, and whose row asked).
     Snapshots(PathBuf, ClientTerm),
     /// Put a checkout's files back as a snapshot has them: (folder, commit, when, whose row).
@@ -65,7 +69,7 @@ pub enum Act {
     /// The clean-up list for a project's worktrees.
     TidyOpen(usize),
     /// Remove these worktrees (each: its folder, and whether to lose uncommitted changes).
-    Tidy(Vec<(PathBuf, bool)>),
+    Tidy(MachineId, Vec<(PathBuf, bool)>),
     /// Remove the folder of a worktree you just closed, which holds commits found nowhere
     /// else; its branch stays.
     RemoveKept(PathBuf),
@@ -88,11 +92,28 @@ pub enum Act {
     RemoveReference(PathBuf, PathBuf, String),
     /// A shell on this machine at once.
     MachineShell(MachineId),
+    /// Browse this machine's folders and open one.
+    MachineFolder(MachineId),
+    /// Clone a repository onto this machine.
+    MachineClone(MachineId),
     /// `machine update` for this machine in a popup: install or update the app there.
     MachineUpdate(MachineId),
     MachineReconnect(MachineId),
     /// The Machines dialog with this machine chosen.
     MachineOpen(MachineId),
+    /// A machine's details: its service, GitHub and git identity.
+    MachineInfo(MachineId),
+    /// Start an agent in a folder of this computer with a conversation it saved: (folder,
+    /// agent, the agent's id for the conversation).
+    Resume(PathBuf, String, String),
+    /// Start a closed session again with its conversation: (agent, the agent's id for it).
+    Reopen(String, String),
+    /// The Work board of this session's workflow runs.
+    Board(ClientTerm),
+    /// Why this session's status changed.
+    StatusLog(ClientTerm),
+    /// A row saying the list is on its way; picking it only closes the menu.
+    Waiting,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -351,6 +372,7 @@ impl App {
             ("Filter sessions".to_string(), Act::Tool(Action::FilterSessions)),
             ("Add machine…".to_string(), Act::Tool(Action::Machines)),
             ("Inbox".to_string(), Act::Tool(Action::Jump)),
+            ("Put away…".to_string(), Act::Tool(Action::PutAway)),
             ("Usage and cost".to_string(), Act::Tool(Action::Usage)),
             ("Settings".to_string(), Act::Tool(Action::Settings)),
             ("Keys".to_string(), Act::Tool(Action::Help)),
@@ -390,6 +412,9 @@ impl App {
             items.push((fix.label(), Act::MachineUpdate(machine)));
         }
         items.push(("New shell here".to_string(), Act::MachineShell(machine)));
+        items.push(("Open a folder…".to_string(), Act::MachineFolder(machine)));
+        items.push(("Clone a repository…".to_string(), Act::MachineClone(machine)));
+        items.push(("Details…".to_string(), Act::MachineInfo(machine)));
         let title = match self.remotes.get(&machine) {
             Some(remote) => {
                 items.push(("Reconnect".to_string(), Act::MachineReconnect(machine)));
@@ -530,6 +555,17 @@ impl App {
         if let Some(check) = info.and_then(|t| t.check()) {
             items.extend(super::screen::check_menu_items(term, check));
         }
+        if info.is_some_and(|t| !t.workflows.is_empty()) {
+            items.push(("Work board".to_string(), Act::Board(term)));
+        }
+        if info.is_some_and(|t| !t.timeline.is_empty()) {
+            items.push(("Status log".to_string(), Act::StatusLog(term)));
+        }
+        if self.can_put_away(term) {
+            items.push(("Put away".to_string(), Act::PutAway(term)));
+        } else if self.can_bring_back(term) {
+            items.push(("Bring back".to_string(), Act::BringBack(term)));
+        }
         let close = if s.is_agent { "Stop session" } else { "Close shell" };
         items.push((close.to_string(), Act::End(vec![term])));
         // Titled by what it is (an agent, or the program's name), never its window title.
@@ -601,6 +637,7 @@ impl App {
             ("Branches", Action::Branches),
             ("History", Action::History),
             ("References", Action::References),
+            ("Tickets", Action::Tickets),
         ]
         .into_iter()
         .map(|(label, action)| (label.to_string(), Act::Tool(action)))
@@ -637,6 +674,7 @@ impl App {
         }) {
             items.push(("Snapshots…".to_string(), Act::Snapshots(d, term)));
         }
+        items.push(("Specialist agents…".to_string(), Act::Tool(Action::Specialists)));
         if let Some(check) = self.term_info(term).and_then(|t| t.check()) {
             items.extend(super::screen::check_menu_items(term, check));
         }
@@ -833,12 +871,19 @@ impl App {
             },
             Act::CloseProject(pi) => model.get(*pi).map(|p| {
                 let n = p.sessions().count();
+                let away = self.put_away_in(&p.key);
+                let mut detail = format!("{n} pane{}", if n == 1 { "" } else { "s" });
+                let mut note = "Everything running in it stops; the folder stays where it is.".to_string();
+                if away > 0 {
+                    detail.push_str(&format!(", {away} put away"));
+                    note = "Listed sessions stop; what is put away keeps running; the folder stays.".into();
+                }
                 Confirm {
                     title: "Close project".into(),
                     sub: String::new(),
                     what: p.name.clone(),
-                    detail: format!("{n} pane{}", if n == 1 { "" } else { "s" }),
-                    note: "Everything running in it stops; the folder stays where it is.".into(),
+                    detail,
+                    note,
                     list: Vec::new(),
                     yes: "Close".into(),
                     key: '\n',
@@ -869,7 +914,8 @@ impl App {
     }
 
     pub(super) fn menu_do(&mut self, a: Act) {
-        if let Act::NewWorktree(pi) | Act::OpenWorktree(pi) | Act::TidyOpen(pi) = a {
+        // Tidy works on another machine too: its daemon says where each worktree stands.
+        if let Act::NewWorktree(pi) | Act::OpenWorktree(pi) = a {
             let machine = self
                 .screen_model()
                 .get(pi)
@@ -880,6 +926,8 @@ impl App {
         }
         match a {
             Act::MachineShell(machine) => self.new_ship_on(machine),
+            Act::MachineFolder(machine) => self.open_finder_on(machine),
+            Act::MachineClone(machine) => self.open_clone_repo_on(machine),
             Act::MachineUpdate(machine) => self.machine_update_from_side(machine),
             Act::MachineReconnect(machine) => {
                 if let Some(name) = self.remotes.get(&machine).map(|r| r.name.clone()) {
@@ -888,6 +936,12 @@ impl App {
                 }
             }
             Act::MachineOpen(machine) => self.open_machines_on(machine),
+            Act::MachineInfo(machine) => self.open_machine_info(machine),
+            Act::Resume(dir, agent, id) => self.resume_saved(dir, &agent, &id),
+            Act::Reopen(agent, session) => self.reopen_closed(agent, session),
+            Act::Board(term) => self.open_board_of(term),
+            Act::StatusLog(term) => self.mode = Mode::StatusLog { term, top: 0 },
+            Act::Waiting => {}
             // A terminal that belongs to a chat is named through the chat, so every client
             // shows the same name.
             Act::RenamePane(t)
@@ -917,6 +971,8 @@ impl App {
                 };
             }
             Act::ArchiveConversation(id) => self.archive_conversation(id),
+            Act::PutAway(t) => self.put_away(t),
+            Act::BringBack(t) => self.bring_back(t),
             Act::Split(t, dir) => {
                 let cwd = self
                     .term_info(t)
@@ -1036,9 +1092,9 @@ impl App {
                 });
             }
             Act::RemoveReference(root, path, name) => self.remove_reference(root, path, name),
-            Act::Tidy(items) => {
+            Act::Tidy(machine, items) => {
                 self.notify("Cleaning up worktrees…".into(), false);
-                self.cmd(Command::TidyWorktrees { items });
+                self.cmd_on(machine, Command::TidyWorktrees { items });
             }
             Act::RemoveKept(path) => {
                 self.notify("Removing the worktree's folder…".into(), false);
@@ -1113,6 +1169,7 @@ impl App {
                         })
                     })
                 });
+                let dir = p.path.clone();
                 match ws.map(|w| w.id) {
                     Some(ws) => {
                         self.send(
@@ -1125,9 +1182,11 @@ impl App {
                             ws,
                             cmd: None,
                             items: None,
+                            branches: None,
                             query: String::new(),
                             sel: 0,
                         };
+                        self.load_worktree_branches(ws, dir);
                     }
                     None => self.notify("start something in this project first".into(), true),
                 }

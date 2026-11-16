@@ -265,6 +265,8 @@ pub enum Action {
     Branches,
     /// The project's reference images and design files, in the side panel.
     References,
+    /// The project's tickets (GitHub, Plane, Linear), in the side panel.
+    Tickets,
     /// A shell in the folder of the session you're on, straight away.
     ShellHere,
     /// Scroll to the command before (or after) the one at the top of the view.
@@ -297,6 +299,30 @@ pub enum Action {
     Menu,
     /// The worktrees step of the key map: new, switch, merge, delete.
     Worktrees,
+    /// The conversations Claude and Codex saved for the focused pane's folder; one picked starts
+    /// its agent there, resumed.
+    ResumeConversation,
+    /// Find a word in what every session on this computer printed recently.
+    FindSessions,
+    /// The sessions put away (still running, out of the lists), each to bring back.
+    PutAway,
+    /// Clone a git repository onto a machine, picked from its GitHub account or pasted.
+    CloneRepo,
+    /// Browse the folders of a machine (this computer or another) and open one.
+    OpenFolderOn,
+    /// The Claude Code and Codex agent files of the pane's project and home, read-only.
+    Specialists,
+    /// The workflow runs of the session you're on as a board: a column per reported step, then
+    /// those that need you and those done (ADR 0010).
+    WorkBoard,
+    /// Why the status of the session you're on changed, newest first.
+    StatusLog,
+    /// Agent sessions that closed lately, each to reopen with its conversation.
+    RecentSessions,
+    /// Type into every pane of this tab at once, or stop.
+    Broadcast,
+    /// Give the panes of this tab equal room again.
+    ResetWidths,
     /// Explicitly unbind a default.
     None,
 }
@@ -368,6 +394,7 @@ impl Action {
             Action::ReloadAgents => "Reload agents that missed their hooks".into(),
             Action::Branches => "Branch".into(),
             Action::References => "References".into(),
+            Action::Tickets => "Tickets".into(),
             Action::ShellHere => "New shell here".into(),
             Action::PrevPrompt => "Previous command in history".into(),
             Action::NextPrompt => "Next command in history".into(),
@@ -390,6 +417,17 @@ impl Action {
             Action::TidyWorktrees => "Clean up worktrees".into(),
             Action::Menu => "Menu".into(),
             Action::Worktrees => "Worktrees…".into(),
+            Action::ResumeConversation => "Resume a conversation here".into(),
+            Action::FindSessions => "Find in every session".into(),
+            Action::PutAway => "Sessions put away".into(),
+            Action::CloneRepo => "Clone a repository…".into(),
+            Action::OpenFolderOn => "Open a folder on a machine…".into(),
+            Action::Specialists => "Specialist agents…".into(),
+            Action::WorkBoard => "Work board".into(),
+            Action::StatusLog => "Status log".into(),
+            Action::RecentSessions => "Recent sessions…".into(),
+            Action::Broadcast => "Broadcast typing to this tab".into(),
+            Action::ResetWidths => "Reset pane widths".into(),
             Action::None => "Unbound".into(),
         }
     }
@@ -460,6 +498,7 @@ impl Action {
             Action::ReloadAgents => "reload-agents".into(),
             Action::Branches => "branch".into(),
             Action::References => "references".into(),
+            Action::Tickets => "tickets".into(),
             Action::ShellHere => "shell-here".into(),
             Action::PrevPrompt => "prev-prompt".into(),
             Action::NextPrompt => "next-prompt".into(),
@@ -485,6 +524,17 @@ impl Action {
             Action::TidyWorktrees => "tidy-worktrees".into(),
             Action::Menu => "menu".into(),
             Action::Worktrees => "worktrees".into(),
+            Action::ResumeConversation => "resume-conversation".into(),
+            Action::FindSessions => "find-sessions".into(),
+            Action::PutAway => "put-away".into(),
+            Action::CloneRepo => "clone-repo".into(),
+            Action::OpenFolderOn => "open-folder-on".into(),
+            Action::Specialists => "specialists".into(),
+            Action::WorkBoard => "work-board".into(),
+            Action::StatusLog => "status-log".into(),
+            Action::RecentSessions => "recent-sessions".into(),
+            Action::Broadcast => "broadcast".into(),
+            Action::ResetWidths => "reset-widths".into(),
             Action::None => return None,
         })
     }
@@ -578,6 +628,7 @@ impl FromStr for Action {
             "reload-agents" => Action::ReloadAgents,
             "branch" | "switch-branch" => Action::Branches,
             "references" => Action::References,
+            "tickets" => Action::Tickets,
             "shell-here" => Action::ShellHere,
             "prev-prompt" => Action::PrevPrompt,
             "next-prompt" => Action::NextPrompt,
@@ -603,6 +654,17 @@ impl FromStr for Action {
             "tidy-worktrees" => Action::TidyWorktrees,
             "menu" | "actions" => Action::Menu,
             "worktrees" => Action::Worktrees,
+            "resume-conversation" => Action::ResumeConversation,
+            "find-sessions" => Action::FindSessions,
+            "put-away" => Action::PutAway,
+            "clone-repo" => Action::CloneRepo,
+            "open-folder-on" => Action::OpenFolderOn,
+            "specialists" => Action::Specialists,
+            "work-board" => Action::WorkBoard,
+            "status-log" => Action::StatusLog,
+            "recent-sessions" => Action::RecentSessions,
+            "broadcast" => Action::Broadcast,
+            "reset-widths" => Action::ResetWidths,
             // The fleet and the why popover are gone; a binding written for one stays
             // harmless, not a config error.
             "none" | "unbind" | "start-fleet" | "why" => Action::None,
@@ -647,6 +709,7 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
     ("_", "split-up"),
     ("\\", "split-left"),
     ("z", "zoom-pane"),
+    ("a", "broadcast"),
     ("x", "close-pane"),
     ("m", "swap-next"),
     ("ctrl+left", "resize-left"),
@@ -669,6 +732,7 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
     ("g", "branch"),
     ("h", "history"),
     ("e", "references"),
+    ("p", "tickets"),
     ("o", "find-file"),
     ("l", "worktrees"),
     ("y", "copy-mode"),
@@ -724,6 +788,12 @@ pub const ALT_LETTER_KEYS: &[(&str, &str)] = &[
 /// Moving between panes without the leader (`ui.alt_arrows`). Alt+Up and Alt+Down change
 /// session instead (`DEFAULT_GLOBAL_KEYS`).
 pub const ALT_ARROW_KEYS: &[(&str, &str)] = &[("alt+left", "focus-left"), ("alt+right", "focus-right")];
+
+/// The keys agents paste an image with: Ctrl+V, and Alt+V for Claude Code on Windows.
+pub fn is_image_paste_key(ev: &KeyEvent) -> bool {
+    matches!(ev.code, KeyCode::Char('v'))
+        && (ev.modifiers == KeyModifiers::CONTROL || ev.modifiers == KeyModifiers::ALT)
+}
 
 /// Keys plain VT can't express exactly (Ctrl+Shift+letter, Ctrl+Enter, Ctrl+Tab, Ctrl with
 /// symbols) — sent as Windows key records when ConPTY asked for them. Everything else keeps

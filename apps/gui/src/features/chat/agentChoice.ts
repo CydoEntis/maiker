@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { loadAgentModels } from '@/api/daemon'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
+import { abilitiesOf, hasAbility } from '@/features/workspace/model/agentAbilities'
 import { modelLabel } from './chatMeta'
 
 /** How much the model thinks before it answers. */
@@ -46,6 +47,14 @@ export const KNOWN_MODELS: Readonly<Record<ChatAgent, readonly ModelOption[]>> =
   ],
 }
 
+/**
+ * The model to start an agent with on another machine: one every install takes by name, else the account's default
+ * there. A model read from this computer's agent may not exist on that one.
+ */
+export function everywhereModel(agent: ChatAgent, model: string): string {
+  return KNOWN_MODELS[agent].some((known) => known.id === model) ? model : DEFAULT_PICK
+}
+
 const modelListeners = new Set<() => void>()
 let discovered: Partial<Record<ChatAgent, readonly ModelOption[]>> = {}
 
@@ -70,7 +79,7 @@ export function setDiscoveredModels(agent: ChatAgent, models: readonly ModelOpti
   // A Default the agent described (the model it will run) says what it is, instead of the generic line.
   const described = models.find((model) => model.id === DEFAULT_PICK)
   const first = described === undefined ? KNOWN_MODELS[agent][0] as ModelOption : { ...(KNOWN_MODELS[agent][0] as ModelOption), blurb: described.blurb }
-  const fixed = agent === 'claude' ? KNOWN_MODELS.claude.slice(1).filter((model) => !read.some((r) => r.id === model.id)) : []
+  const fixed = abilitiesOf(agent).readModelsAreExtras ? KNOWN_MODELS[agent].slice(1).filter((model) => !read.some((r) => r.id === model.id)) : []
   discovered = { ...discovered, [agent]: [first, ...read, ...fixed] }
   for (const listener of modelListeners) listener()
 }
@@ -94,6 +103,17 @@ export function pickedModel(models: readonly ModelOption[], choice: string): Mod
   return rows.find((model) => model.id === choice) ?? rows.find((model) => model.isDefault === true) ?? rows[0]
 }
 
+/**
+ * The row for the model the agent's own files say it runs: by its id, else by its name, since Claude
+ * names "claude-opus-5-5" where the menu has "Opus 5.5".
+ */
+export function modelInUse(models: readonly ModelOption[], current: string | null): ModelOption | undefined {
+  if (current === null) return undefined
+  const rows = menuModels(models)
+  const name = modelLabel(current)?.toLowerCase()
+  return rows.find((row) => row.id === current) ?? rows.find((row) => row.label.toLowerCase() === name)
+}
+
 /** What picking a row stores: the default's row stores "nothing picked", so no model is sent for it. */
 export function choiceFor(model: ModelOption): string {
   return model.isDefault === true ? DEFAULT_PICK : model.id
@@ -105,7 +125,7 @@ export function choiceFor(model: ModelOption): string {
  */
 export function effortAllowed(agent: ChatAgent, model: ModelOption | undefined, level: Reasoning): boolean {
   if (model?.efforts != null) return model.efforts.includes(level)
-  return !(agent === 'codex' && level === 'max')
+  return !(abilitiesOf(agent).maxEffortNeedsListing && level === 'max')
 }
 
 /** The models the menu shows before "More models" is opened: the newest, and the picked one wherever it is. */
@@ -131,7 +151,7 @@ const asked = new Set<ChatAgent>()
 export function useDiscoveredModels(agent: ChatAgent) {
   useEffect(() => {
     // Gemini has no model list to read; its chat follows the terminal.
-    if (agent === 'gemini' || asked.has(agent)) return
+    if (!hasAbility(agent, 'discoversModels') || asked.has(agent)) return
     asked.add(agent)
     loadAgentModels(agent).then((models) => { setDiscoveredModels(agent, models) }).catch((error: unknown) => { asked.delete(agent); console.warn(`Could not list ${agent}'s models`, error) })
   }, [agent])
@@ -165,7 +185,9 @@ export function defaultChoice(): AgentChoice {
 
 const STORAGE_KEY = 'maitty.gui.agentChoice.v1'
 const listeners = new Set<() => void>()
-type Stored = Record<string, { model?: string; reasoning?: ReasoningPick }>
+/** A chat's pick, and what its agent last said it runs (see `noteAgentSaid`). */
+type StoredChoice = { model?: string; reasoning?: ReasoningPick; saidModel?: string; saidEffort?: string }
+type Stored = Record<string, StoredChoice>
 let cache: Stored | null = null
 
 function table(): Stored {
@@ -203,6 +225,10 @@ export function wireChoice(conversation: number, agent: ChatAgent): WireChoice |
 }
 
 export function writeChoice(conversation: number, change: Partial<AgentChoice>): void {
+  store(conversation, change)
+}
+
+function store(conversation: number, change: StoredChoice): void {
   const all = table()
   all[String(conversation)] = { ...all[String(conversation)], ...change }
   cache = all
@@ -212,6 +238,21 @@ export function writeChoice(conversation: number, change: Partial<AgentChoice>):
     // The choice still holds for this run; only its memory across restarts is lost.
   }
   for (const listener of listeners) listener()
+}
+
+/**
+ * What the agent's own files now say it runs. When that changes (a `/model` or `/effort` typed in the terminal, or a
+ * pick the agent has taken up), the agent's word replaces the chat's pick: the message box then names what is true,
+ * and the next message does not send the old pick back. Remembered with the choice, so a change made while the chat
+ * was not open still counts. A model or effort the files do not say (null) changes nothing.
+ */
+export function noteAgentSaid(conversation: number, said: { readonly model: string | null; readonly effort: string | null }): void {
+  const saved = table()[String(conversation)]
+  const change: StoredChoice = {
+    ...(said.model !== null && said.model !== saved?.saidModel ? { model: DEFAULT_PICK, saidModel: said.model } : {}),
+    ...(said.effort !== null && said.effort !== saved?.saidEffort ? { reasoning: DEFAULT_PICK, saidEffort: said.effort } : {}),
+  }
+  if (Object.keys(change).length > 0) store(conversation, change)
 }
 
 /** Drops the in-memory copy so the next read goes to storage again. For tests. */

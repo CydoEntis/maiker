@@ -60,6 +60,15 @@ export type MessageEvent = ItemFields & {
   readonly text: string
 }
 
+/**
+ * The agent's reasoning summary, as the daemon kept it. It is model output: shown to the person as plain text and
+ * never logged, searched for secrets or sent anywhere.
+ */
+export type ReasoningEvent = ItemFields & {
+  readonly kind: 'reasoning'
+  readonly text: string
+}
+
 /** One card per file; a Codex patch that touches three files is three events. */
 export type EditEvent = ItemFields & {
   readonly kind: 'edit'
@@ -108,6 +117,15 @@ export type ToolEvent = ItemFields & {
   /** The tool's input as indented JSON, bounded; `null` when the history kept none. */
   readonly input: string | null
   readonly detail: string
+}
+
+/**
+ * The agent's own summary of the conversation so far, written when it ran out of room and carried on
+ * from the summary. Nobody typed it.
+ */
+export type SummaryEvent = ItemFields & {
+  readonly kind: 'summary'
+  readonly text: string
 }
 
 export type UserInputQuestion = {
@@ -172,12 +190,24 @@ export type TurnEvent = {
   readonly timed: boolean
 }
 
+/**
+ * What a slash command the person ran in the agent's terminal printed ("Set model to Haiku 5.5"): the agent's own
+ * reply to the command, shown as a quiet line under it, not as a shell command it ran.
+ */
+export type CommandNoteEvent = ItemFields & {
+  readonly kind: 'note'
+  readonly text: string
+}
+
 export type ChatEvent =
   | MessageEvent
+  | CommandNoteEvent
+  | ReasoningEvent
   | EditEvent
   | CommandEvent
   | TodoEvent
   | SubagentEvent
   | ToolEvent
+  | SummaryEvent
   | ApprovalEvent
   | TurnEvent

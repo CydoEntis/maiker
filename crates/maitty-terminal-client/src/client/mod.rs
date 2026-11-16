@@ -4,6 +4,9 @@
 mod actions;
 mod background;
 mod branch;
+mod changes_more;
+#[cfg(test)]
+mod changes_more_tests;
 pub use maitty_machines::connections;
 mod copy;
 mod design;
@@ -35,6 +38,8 @@ mod remote_image_tests;
 mod remote_snapshot_tests;
 mod render;
 pub mod restart_prompt;
+mod recent;
+mod resume;
 mod routing;
 mod screen;
 mod send_file;
@@ -42,6 +47,7 @@ mod spinners;
 pub mod ssh_hosts;
 mod tasks;
 mod themes;
+mod tickets;
 mod view_keys;
 mod views;
 
@@ -142,6 +148,8 @@ enum Mode {
         ws: WsId,
         cmd: Option<String>,
         items: Option<Vec<WorktreeEntry>>,
+        /// The repo's branches no worktree has, each offered as a worktree to add.
+        branches: Option<Vec<String>>,
         query: String,
         sel: usize,
     },
@@ -168,6 +176,29 @@ enum Mode {
     /// Notification history (the selected row, newest first).
     /// Usage and cost: what each agent reported using, and the plan limits.
     Usage,
+    /// The commands chats may run "always in this project", and forgetting one.
+    Approved(Box<screen::approved::ApprovedView>),
+    /// A machine's details: its service, GitHub sign-in and git identity rules.
+    MachineInfo(Box<screen::machine_info::MachineInfoView>),
+    /// A subagent's own steps, from its record (ADR 0010).
+    Helper(Box<screen::HelperView>),
+    /// One workflow run's steps (ADR 0010).
+    Run {
+        term: ClientTerm,
+        key: String,
+        /// Opened from the Work board on this card: Esc goes back there.
+        board: Option<usize>,
+    },
+    /// The Work board of a session's workflow runs, on the chosen card (ADR 0010).
+    Work {
+        term: ClientTerm,
+        sel: usize,
+    },
+    /// Why a session's status changed, newest first, scrolled `top` lines down.
+    StatusLog {
+        term: ClientTerm,
+        top: usize,
+    },
     History {
         sel: usize,
     },
@@ -208,6 +239,12 @@ enum Mode {
     RenameTab(Box<screen::TabName>),
     /// The computers reached over ssh: how each stands, and adding or removing one.
     Machines(Box<screen::machines::MachinesView>),
+    /// Clone a repository onto a machine.
+    Clone(Box<screen::CloneView>),
+    /// A pane's specialist agent files, read-only (ADR 0010).
+    Specialists(Box<screen::SpecialistsView>),
+    /// Find in every session: lines this computer's sessions printed.
+    FindSessions(Box<screen::SessionFind>),
 }
 
 /// A view that replaces the pane area.
@@ -222,6 +259,8 @@ pub(super) enum View {
     Branch(Box<screen::BranchSheet>),
     /// The project's reference images and design files (in the sheet).
     References(Box<screen::ReferencesSheet>),
+    /// The project's tickets from GitHub, Plane and Linear (in the sheet).
+    Tickets(Box<screen::TicketsView>),
 }
 
 /// Clickable chips and buttons.
@@ -433,6 +472,8 @@ fn remove_worktree_dir(dir: &std::path::Path) -> Result<String, String> {
 #[derive(Debug, Clone)]
 enum WtRow {
     Existing(WorktreeEntry),
+    /// A branch that has no worktree yet: picking it makes one on it.
+    Branch(String),
     Create(String),
 }
 
@@ -495,6 +536,14 @@ pub struct App {
     /// The same for Codex's lifecycle hooks: installed, and whether Codex has been told to trust them.
     codex_hooks: Option<maitty_provider_codex::HooksState>,
     codex_hooks_asked: bool,
+    /// The saved-conversation lists asked of the daemon and not all answered yet.
+    resume: resume::Resume,
+    /// Find in every session's one search at a time.
+    pane_search: screen::PaneSearch,
+    /// Usage and cost's tab, chosen row and the reports this computer's daemon sent.
+    usage_view: screen::UsageView,
+    /// The protocol this computer's daemon said it speaks when this window last connected.
+    local_protocol: u32,
     /// The theme browser's tab: the Light themes when true, else the Dark ones.
     theme_tab_light: bool,
     /// What changed in it (and any releases between), for the update dialog.
@@ -616,6 +665,9 @@ pub struct App {
     paged_up: std::collections::HashMap<ClientTerm, u32>,
     /// When a remote machine's refused copy was last told, so it is told once a minute.
     copy_refusal_told: Option<Instant>,
+    /// When each machine was last asked for its whole list and has not answered yet, so a run
+    /// of deltas after one missed update asks once.
+    list_asked: std::collections::HashMap<MachineId, Instant>,
     /// The panes drawn at the last `sync_sizes`, to see which have just come into view.
     shown_panes: std::collections::HashSet<ClientTerm>,
     out: mpsc::UnboundedSender<Outgoing>,
@@ -685,12 +737,14 @@ pub fn run(opts: Options) -> Result<()> {
 
 async fn run_async(opts: Options) -> Result<()> {
     let mut connections = Connections::default();
-    connections.add(MachineId::LOCAL, ipc::open_or_spawn(true).await?);
+    let (local, local_protocol) = ipc::open_or_spawn_knowing_version(true).await?;
+    connections.add(MachineId::LOCAL, local);
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<Outgoing>();
 
     let (cfg, err) = Config::load_or_default();
     let (bg_tx, mut bg_rx) = mpsc::unbounded_channel::<Bg>();
     let mut app = App::new(cfg, out_tx, opts.open, bg_tx);
+    app.note_local_protocol(local_protocol);
     if crate::sync::enabled() {
         app.spawn_bg(|| Bg::Synced(crate::sync::pull().unwrap_or(false)));
     }
@@ -814,6 +868,10 @@ impl App {
             claude_hooks_asked: false,
             codex_hooks: None,
             codex_hooks_asked: false,
+            resume: Default::default(),
+            pane_search: Default::default(),
+            usage_view: Default::default(),
+            local_protocol: crate::protocol::PROTOCOL_VERSION,
             theme_tab_light: false,
             update_notes: Vec::new(),
             update_checked: None,
@@ -878,6 +936,7 @@ impl App {
             wheel_page: None,
             paged_up: std::collections::HashMap::new(),
             copy_refusal_told: None,
+            list_asked: std::collections::HashMap::new(),
             shown_panes: std::collections::HashSet::new(),
             out,
             quit: None,
@@ -998,11 +1057,13 @@ impl App {
                     if last_fresh.elapsed() >= Duration::from_secs(1) {
                         last_fresh = Instant::now();
                         self.screen_fresh();
+                        self.refresh_helper();
                         self.show_send_progress();
                         self.dirty = true;
                     }
                     let frame = self.spinner_frame();
                     self.settle_alerts();
+                    self.ask_lists_again();
                     if frame != last_frame && ((self.motion_on() && (self.any_working() || self.any_checking() || self.any_calling())) || matches!(self.mode, Mode::Spinners(_))) {
                         last_frame = frame;
                         self.dirty = true;
@@ -1040,6 +1101,9 @@ impl App {
             self.request_diff();
             self.request_files_preview();
             self.request_folder_list();
+            self.clone_search_tick();
+            self.pane_search_tick();
+            self.changes_tick();
             if self.dirty
                 && last_draw.elapsed() >= frame
                 && self.sync_hold_until().is_none_or(|h| Instant::now() >= h)
@@ -1122,15 +1186,16 @@ impl App {
         let restarting = self.daemon_restart_reconnect;
         let connection = if restarting {
             tokio::time::sleep(SERVER_SHUTDOWN_GRACE).await;
-            ipc::open_or_spawn_installed(true).await
+            ipc::open_or_spawn_installed_knowing_version(true).await
         } else {
             // Connect only: an unexpectedly stopped server must not be started again by this.
-            ipc::open(true).await
+            ipc::open_knowing_version(true).await
         };
-        let Ok(connection) = connection else {
+        let Ok((connection, version)) = connection else {
             return false;
         };
         connections.add(MachineId::LOCAL, connection);
+        self.note_local_protocol(version);
         self.reattached = Some(Instant::now());
         if !restarting {
             self.notify(
@@ -1139,6 +1204,14 @@ impl App {
             );
         }
         true
+    }
+
+    /// Remember what this computer's daemon speaks, after a connection to it: a request newer
+    /// than that is never answered, so it is not sent.
+    pub(super) fn note_local_protocol(&mut self, version: Option<u32>) {
+        if let Some(version) = version {
+            self.local_protocol = version;
+        }
     }
 
     /// Installing must not interrupt agents, including across protocol changes.
@@ -2074,20 +2147,52 @@ impl App {
         self.notify(format!("sending the clipboard image to {name}…"), false);
         self.spawn_bg(move || {
             let sent = remote_image::send(&machine, &name);
-            Bg::Then(Box::new(move |app: &mut App| match sent {
-                Ok(sent) => {
-                    app.type_path_into(term, &sent.path);
-                    app.notify(
-                        format!(
-                            "pasted the clipboard image ({}×{}) to {name}",
-                            sent.width, sent.height
-                        ),
-                        false,
-                    );
-                }
-                Err(e) => app.notify(e, true),
+            Bg::Then(Box::new(move |app: &mut App| app.image_sent(term, &name, sent)))
+        });
+    }
+
+    /// An agent's own image-paste key (Ctrl+V; Alt+V for Claude Code on Windows) typed into an
+    /// agent on another machine. The agent would read its own machine's clipboard, which never
+    /// holds this computer's image, so an image here is sent over as a paste-image sends it.
+    /// `key` is the key as encoded for the pane; it is typed as usual when there is no image.
+    pub(super) fn image_key_to_machine(&mut self, term: ClientTerm, key: Vec<u8>) {
+        self.spawn_bg(move || {
+            let saved = clipboard_image_to_file();
+            Bg::Then(Box::new(move |app: &mut App| match saved {
+                Ok(saved) => app.send_saved_image(term, saved),
+                // No image here, or no clipboard to read: the key was meant for the agent.
+                Err(_) => app.send_input(term, key),
             }))
         });
+    }
+
+    fn send_saved_image(&mut self, term: ClientTerm, saved: (PathBuf, usize, usize)) {
+        let Some((machine, name)) = self.machine_for(term) else {
+            // The copy was only for sending; machine_for has said why it can't go.
+            let _ = std::fs::remove_file(&saved.0);
+            return;
+        };
+        self.notify(format!("sending the clipboard image to {name}…"), false);
+        self.spawn_bg(move || {
+            let sent = remote_image::send_saved(&machine, &name, saved);
+            Bg::Then(Box::new(move |app: &mut App| app.image_sent(term, &name, sent)))
+        });
+    }
+
+    fn image_sent(&mut self, term: ClientTerm, name: &str, sent: Result<remote_image::Sent, String>) {
+        match sent {
+            Ok(sent) => {
+                self.type_path_into(term, &sent.path);
+                self.notify(
+                    format!(
+                        "pasted the clipboard image ({}×{}) to {name}",
+                        sent.width, sent.height
+                    ),
+                    false,
+                );
+            }
+            Err(e) => self.notify(e, true),
+        }
     }
 
     /// When to draw a pane that's mid synchronized update: its start + 100 ms, if that's
@@ -2207,6 +2312,8 @@ fn same_dir(a: &std::path::Path, b: &std::path::Path) -> bool {
 #[cfg(test)]
 mod reference_fixture;
 #[cfg(test)]
+mod settings_tests;
+#[cfg(test)]
 mod site_frames;
 #[cfg(test)]
 mod tests;
@@ -2226,3 +2333,5 @@ mod mcp_machine_tests;
 mod remote_status_tests;
 #[cfg(test)]
 mod routing_tests;
+#[cfg(test)]
+mod resume_tests;

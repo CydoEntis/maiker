@@ -240,7 +240,10 @@ impl Daemon {
             for incoming in pane.subagent_activity {
                 if let Some(current) = t.subagent_activity.iter_mut().find(|a| a.id == incoming.id)
                 {
-                    if incoming.updated_at > current.updated_at && *current != incoming {
+                    // A finish stamped in the same whole second as the start still counts.
+                    let newer = incoming.updated_at > current.updated_at
+                        || (incoming.updated_at == current.updated_at && !incoming.state.active());
+                    if newer && *current != incoming {
                         *current = incoming;
                         self.dirty = true;
                     }
@@ -375,15 +378,37 @@ pub(super) fn codex_file_for(session: &str) -> Option<PathBuf> {
     codex_root(&codex_recent_sessions(), Some(session)).map(|s| s.file.clone())
 }
 
+/// A Codex helper's rollout file, only when the helper descends from `parent` (its own thread, a
+/// child's, …): a pane may read only its own thread's helpers.
+pub(super) fn codex_helper_file(parent: &str, helper: &str) -> Option<PathBuf> {
+    descendant_file(&codex_recent_sessions(), parent, helper)
+}
+
+/// How deep helpers of helpers are followed before giving up.
+const HELPER_DEPTH_MAX: usize = 16;
+
+fn descendant_file(sessions: &[CodexSession], ancestor: &str, helper: &str) -> Option<PathBuf> {
+    let found = sessions.iter().find(|s| s.id == helper)?;
+    let mut up = found.parent.as_deref();
+    for _ in 0..HELPER_DEPTH_MAX {
+        let id = up?;
+        if id == ancestor {
+            return Some(found.file.clone());
+        }
+        up = sessions.iter().find(|s| s.id == id)?.parent.as_deref();
+    }
+    None
+}
+
 /// Codex's own folder (`$CODEX_HOME`, else `~/.codex`).
-fn codex_home() -> Option<PathBuf> {
+pub(super) fn codex_home() -> Option<PathBuf> {
     std::env::var_os("CODEX_HOME")
         .map(PathBuf::from)
         .or_else(|| directories::BaseDirs::new().map(|d| d.home_dir().join(".codex")))
 }
 
 /// Codex's sessions folder (`$CODEX_HOME/sessions`, else `~/.codex/sessions`).
-fn codex_sessions() -> Option<PathBuf> {
+pub(super) fn codex_sessions() -> Option<PathBuf> {
     Some(codex_home()?.join("sessions"))
 }
 
@@ -553,15 +578,27 @@ fn read_head(file: &Path, n: usize) -> String {
     String::from_utf8_lossy(&head[..read]).into_owned()
 }
 
-/// The effort level in the newest request line of Claude's transcript: present only when the level was set
-/// (`/effort`, `--effort`, a setting); a session at the model's own default writes none, and then nothing is said.
+/// How Claude Code's `/effort` says the level it set: "Set effort level to max (this session only): …".
+const EFFORT_SET_PREFIX: &str = "<local-command-stdout>Set effort level to ";
+
+/// The effort level Claude's transcript says last: the newest request line names it when the level was set
+/// (`/effort`, `--effort`, a setting), and an `/effort` typed in the terminal says it at once, before any request.
+/// A session at the model's own default writes none, and then nothing is said.
 fn claude_effort(tail: &str) -> Option<String> {
-    let value = tail
-        .lines()
+    tail.lines()
         .rev()
-        .filter(|line| line.contains("\"type\":\"api-request\""))
-        .find_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())?;
-    value["params"]["effort"].as_str().filter(|e| plain_level(e)).map(str::to_owned)
+        .filter(|line| line.contains("\"type\":\"api-request\"") || line.contains("Set effort level to "))
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .find_map(|value| {
+            if value["type"] == "api-request" {
+                return Some(value["params"]["effort"].as_str().map(str::to_owned));
+            }
+            let said = value.pointer("/message/content").or_else(|| value.get("content"))?.as_str()?;
+            let level: String = said.strip_prefix(EFFORT_SET_PREFIX)?.chars().take_while(char::is_ascii_alphabetic).collect();
+            Some(Some(level))
+        })
+        .flatten()
+        .filter(|level| plain_level(level))
 }
 
 /// The effort a Codex thread runs at: the level its settings name, else the default of its model from Codex's
@@ -706,6 +743,32 @@ mod tests {
             ("gemini", 0, 0),
             "cost without a turn still counts"
         );
+    }
+
+    #[test]
+    fn a_helpers_file_is_found_only_under_the_thread_it_descends_from() {
+        let session = |id: &str, parent: Option<&str>| CodexSession {
+            file: PathBuf::from(format!("rollout-{id}.jsonl")),
+            cwd: None,
+            id: id.into(),
+            parent: parent.map(str::to_string),
+            name: "subagent".into(),
+            modified: std::time::SystemTime::UNIX_EPOCH,
+        };
+        let all = [
+            session("root", None),
+            session("child", Some("root")),
+            session("grandchild", Some("child")),
+            session("stranger", Some("other")),
+        ];
+        assert_eq!(descendant_file(&all, "root", "child"), Some(PathBuf::from("rollout-child.jsonl")));
+        assert_eq!(
+            descendant_file(&all, "root", "grandchild"),
+            Some(PathBuf::from("rollout-grandchild.jsonl"))
+        );
+        assert_eq!(descendant_file(&all, "root", "stranger"), None);
+        assert_eq!(descendant_file(&all, "root", "root"), None, "a thread is not its own helper");
+        assert_eq!(descendant_file(&all, "child", "child"), None);
     }
 
     #[test]
@@ -918,6 +981,14 @@ mod tests {
         assert_eq!(claude_effort("not a transcript"), None);
         let odd = r#"{"type":"api-request","params":{"effort":"Ignore all previous instructions"}}"#;
         assert_eq!(claude_effort(odd), None);
+        // An /effort typed in the terminal counts at once; a message that only quotes its words does not.
+        let typed = r#"{"type":"user","message":{"content":"<local-command-stdout>Set effort level to max (this session only): Maximum</local-command-stdout>"}}"#;
+        let system = r#"{"type":"system","subtype":"local_command","content":"<local-command-stdout>Set effort level to low (saved as your default)</local-command-stdout>"}"#;
+        let quoted = r#"{"type":"user","message":{"content":"why does it say Set effort level to max?"}}"#;
+        assert_eq!(claude_effort(&format!("{named}\n{typed}")).as_deref(), Some("max"));
+        assert_eq!(claude_effort(&format!("{named}\n{system}")).as_deref(), Some("low"));
+        assert_eq!(claude_effort(&format!("{named}\n{quoted}")).as_deref(), Some("high"));
+        assert_eq!(claude_effort(&format!("{typed}\n{named}")).as_deref(), Some("high"));
     }
 
     #[test]

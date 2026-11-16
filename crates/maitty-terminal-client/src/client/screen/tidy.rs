@@ -1,10 +1,14 @@
 //! Clean up worktrees: every worktree of a repo, why each is still there, and which to
-//! remove. The ones that hold nothing of their own come ticked; the rest are yours to tick.
+//! remove. The ones that hold nothing of their own come ticked, and so do inactive ones without
+//! uncommitted changes; the rest are yours to tick. Nothing goes before you confirm.
+//! This computer's worktrees are read with git here; another machine's daemon says where each
+//! of its own stands (`Query::WorktreeStanding`), one at a time since its answer names none.
 
 use super::*;
 use crate::client::Bg;
 use crate::client::design::{BtnKind, path_key};
 use crate::client::menu::{Act, Confirm};
+use crate::protocol::{ClientMsg, Query};
 use crate::tidy::Standing;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +45,12 @@ pub struct TidyView {
     /// None while git is still being asked about each one.
     pub rows: Option<Vec<TidyRow>>,
     pub sel: usize,
+    /// The machine the worktrees are on.
+    pub machine: MachineId,
+    /// Another machine's worktrees still to be asked about, the first being asked now, and the
+    /// ones it has answered for.
+    pub asking: Vec<TidyRow>,
+    pub answered: Vec<TidyRow>,
 }
 
 impl TidyView {
@@ -66,10 +76,12 @@ impl App {
         };
         // Counted from the server's own list: a pane folded into a split has no row, and
         // must still keep its worktree.
+        let machine = p.machine;
+        let terms = self.snap_of(machine).map(|s| &s.terms);
         let sessions = |dir: &Path| {
-            self.snap
-                .terms
-                .values()
+            terms
+                .into_iter()
+                .flat_map(|terms| terms.values())
                 .filter(|t| {
                     t.top
                         .as_deref()
@@ -91,18 +103,35 @@ impl App {
             })
             .collect();
         let repo = p.path.clone();
-        self.mode = Mode::Tidy(Box::new(TidyView {
+        let inactive_after = self.cfg.worktree.inactive_days;
+        let mut view = TidyView {
             repo: repo.clone(),
             name: p.name.clone(),
             rows: None,
             sel: 0,
-        }));
+            machine,
+            asking: Vec::new(),
+            answered: Vec::new(),
+        };
+        if machine != MachineId::LOCAL {
+            view.asking = found
+                .into_iter()
+                .map(|(path, name, branch, sessions)| TidyRow { path, name, branch, sessions, standing: Standing::default(), ticked: false })
+                .collect();
+            if view.asking.is_empty() {
+                view.rows = Some(Vec::new());
+            }
+            self.tidy_ask_next(&view);
+            self.mode = Mode::Tidy(Box::new(view));
+            return;
+        }
+        self.mode = Mode::Tidy(Box::new(view));
         self.spawn_bg(move || {
             let mut rows: Vec<TidyRow> = found
                 .into_iter()
                 .map(|(path, name, branch, sessions)| {
-                    let standing = crate::tidy::standing(&path);
-                    let ticked = sessions == 0 && standing.safe();
+                    let standing = crate::tidy::standing(&path, inactive_after);
+                    let ticked = comes_ticked(sessions, &standing);
                     TidyRow {
                         path,
                         name,
@@ -142,6 +171,52 @@ impl App {
         }
     }
 
+    /// Asks another machine where the first worktree still to go stands.
+    fn tidy_ask_next(&self, v: &TidyView) {
+        if let Some(next) = v.asking.first() {
+            self.send(v.machine, ClientMsg::Query(Query::WorktreeStanding { repo: v.repo.clone(), folder: next.path.clone() }));
+        }
+    }
+
+    /// Another machine's answer for the worktree asked about. None: git lists it but its folder
+    /// is gone, so there is nothing to remove and it is left out.
+    pub(in crate::client) fn tidy_standing_arrived(&mut self, machine: MachineId, standing: Option<Standing>) {
+        let Mode::Tidy(v) = &mut self.mode else {
+            return;
+        };
+        if v.machine != machine || v.asking.is_empty() {
+            return;
+        }
+        let mut row = v.asking.remove(0);
+        if let Some(standing) = standing {
+            row.ticked = comes_ticked(row.sessions, &standing);
+            row.standing = standing;
+            v.answered.push(row);
+        }
+        if v.asking.is_empty() {
+            let mut rows = std::mem::take(&mut v.answered);
+            rows.sort_by_key(|r| (!r.ticked, !r.free(), r.name.to_lowercase()));
+            v.rows = Some(rows);
+            v.sel = 0;
+        } else {
+            let v = (**v).clone();
+            self.tidy_ask_next(&v);
+        }
+    }
+
+    /// Another machine refused to say where a worktree stands: the list shows what it did say.
+    pub(in crate::client) fn tidy_failed(&mut self, machine: MachineId) {
+        if let Mode::Tidy(v) = &mut self.mode
+            && v.machine == machine
+            && !v.asking.is_empty()
+        {
+            v.asking.clear();
+            let mut rows = std::mem::take(&mut v.answered);
+            rows.sort_by_key(|r| (!r.ticked, !r.free(), r.name.to_lowercase()));
+            v.rows = Some(rows);
+        }
+    }
+
     pub(in crate::client) fn tidy_loaded(&mut self, repo: PathBuf, rows: Vec<TidyRow>) {
         if let Mode::Tidy(v) = &mut self.mode
             && v.repo == repo
@@ -168,7 +243,7 @@ impl App {
                 .rows
                 .iter_mut()
                 .flatten()
-                .for_each(|r| r.ticked = r.free() && r.standing.safe()),
+                .for_each(|r| r.ticked = comes_ticked(r.sessions, &r.standing)),
             KeyCode::Char('n') => v.rows.iter_mut().flatten().for_each(|r| r.ticked = false),
             KeyCode::Enter => return self.tidy_ask(v),
             _ => {}
@@ -192,22 +267,7 @@ impl App {
             self.mode = Mode::Tidy(Box::new(v));
             return;
         }
-        let losing = picked.iter().filter(|r| r.standing.dirty > 0).count();
-        let unmerged = picked
-            .iter()
-            .filter(|r| r.standing.dirty == 0 && !r.standing.merged)
-            .count();
-        let note = match (losing, unmerged) {
-            (0, 0) => "Their folders go. Nothing in them exists only there.".to_string(),
-            (0, n) => format!(
-                "Their folders go. {n} {} work that isn't merged: its branch is kept.",
-                if n == 1 { "has" } else { "have" }
-            ),
-            (n, _) => format!(
-                "{n} {} uncommitted changes, which will be lost. Branches are kept unless already merged.",
-                if n == 1 { "has" } else { "have" }
-            ),
-        };
+        let note = tidy_note(&picked);
         let items: Vec<(PathBuf, bool)> = picked
             .iter()
             .map(|r| (r.path.clone(), r.standing.dirty > 0))
@@ -224,19 +284,58 @@ impl App {
             note,
             list: picked
                 .iter()
-                .map(|r| {
-                    if r.standing.dirty > 0 {
-                        format!("{} ({} uncommitted)", r.name, r.standing.dirty)
-                    } else {
-                        r.name.clone()
+                .map(|r| match (r.standing.dirty, r.standing.merged) {
+                    (0, true) => r.name.clone(),
+                    (0, false) if r.standing.branch.is_none() => {
+                        format!("{} (commits on no branch)", r.name)
                     }
+                    (0, false) => format!("{} (not merged)", r.name),
+                    (n, _) => format!("{} ({n} uncommitted)", r.name),
                 })
                 .collect(),
             yes: "Remove".into(),
             key: '\n',
             danger: true,
-            act: Act::Tidy(items),
+            act: Act::Tidy(v.machine, items),
         }));
+    }
+}
+
+/// An inactive worktree is offered for removal only when nothing would be lost: no uncommitted
+/// changes, and a branch to keep its unmerged commits (a detached one's go with its folder).
+fn comes_ticked(sessions: usize, standing: &Standing) -> bool {
+    sessions == 0
+        && (standing.safe()
+            || (standing.inactive_days.is_some()
+                && standing.dirty == 0
+                && standing.branch.is_some()))
+}
+
+/// What removing the picked worktrees loses, in a sentence each.
+fn tidy_note(picked: &[&TidyRow]) -> String {
+    let count = |kind: fn(&Standing) -> bool| picked.iter().filter(|r| kind(&r.standing)).count();
+    let lines: Vec<String> = [
+        (
+            count(|s| s.dirty > 0),
+            "uncommitted changes, which will be lost",
+        ),
+        (
+            count(|s| s.dirty == 0 && !s.merged && s.branch.is_none()),
+            "commits on no branch, which will be lost",
+        ),
+        (
+            count(|s| s.dirty == 0 && !s.merged && s.branch.is_some()),
+            "work that isn't merged: its branch is kept",
+        ),
+    ]
+    .into_iter()
+    .filter(|(n, _)| *n > 0)
+    .map(|(n, what)| format!("{n} {} {what}.", if n == 1 { "has" } else { "have" }))
+    .collect();
+    if lines.is_empty() {
+        "Their folders go. Nothing in them exists only there.".into()
+    } else {
+        format!("Their folders go. {}", lines.join(" "))
     }
 }
 
@@ -362,7 +461,9 @@ pub(in crate::client) fn draw_tidy(
         }
     }
     let picked = v.picked();
-    let losing = picked.iter().any(|r| r.standing.dirty > 0);
+    let losing = picked.iter().any(|r| {
+        r.standing.dirty > 0 || (!r.standing.merged && r.standing.branch.is_none())
+    });
     let by = r.bottom().saturating_sub(3);
     let label = format!("Remove {}", picked.len());
     btn(
@@ -392,3 +493,7 @@ pub(in crate::client) fn draw_tidy(
         ],
     );
 }
+
+#[cfg(test)]
+#[path = "tidy_tests.rs"]
+mod tests;

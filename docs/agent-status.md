@@ -2,6 +2,8 @@
 
 Maitty works out whether an agent is working, needs you or is done by watching its process and screen. **Connect agents** installs a small hook or adapter into Claude Code, Codex, Gemini CLI, Qwen Code, OpenCode, Pi, OMP, Kilo, Kimi or Mastra Code so the agent reports that itself. These are exactly the agents `maitty integrate` sets up. The installer (and every update) runs `maitty integrate` for you unless `MAITTY_NO_INTEGRATE=1` is set.
 
+What each status means to you, and where its reason shows, is in the [guide](guide.md#what-a-sessions-status-means).
+
 Search commands (leader, then `Space`) for **Connect agents**, or open **Settings › Agents ›
 Connect agents…**, then click the agent.
 Setup installs
@@ -139,6 +141,13 @@ The screen fallback (`daemon/last_lines.rs`) was not run against a live Claude o
 that needs a pane inside a running daemon, and Claude and Codex already send the message, so
 the fallback is not used for them. Its readability on a real screen stays unmeasured.
 
+Plan menu (MAITTY-384), read 2026-11-14 off interactive Claude Code 2.1.325 in plan mode, after a one-step plan:
+"Claude has written up a plan and is ready to execute. Would you like to proceed?" over `1. Yes, and use auto
+mode`, `2. Yes, manually approve edits`, `3. Tell Claude what to change` (with "shift+tab to approve with this
+feedback" under it). Esc leaves the plan unanswered and Claude in plan mode. The binary also holds "Yes, clear
+context…", "Yes, auto-accept edits" and "No, keep planning", shown in other sessions, so the chat reads the menu
+off the screen and never assumes it.
+
 Permission-prompt lifetime (ticket 31, `NEEDS_SETTLES`), measured 2026-11-06 on Linux with
 interactive Claude Code 2.1.319 in a PTY (`scripts/measure-permission-prompt.py MODE TURNS`;
 one "create x.txt" turn each, 24 real turns). The time is from the `PermissionRequest` hook to
@@ -192,7 +201,11 @@ active child rows as unconfirmed while retaining their lifecycle records; it doe
 not infer completion from silence alone. For a hooked agent the screen must also have
 been still for 5 seconds: Claude's input box is on screen all turn, and its title reads
 idle while its own Stop hooks still run, so an animating screen waits for the hook. Hosts without an explicit idle screen
-signal rely on their lifecycle completion events.
+signal rely on their lifecycle completion events. The idle prompt reconciles nothing while a
+turn end is held on a helper the agent reported that was heard from within the hour: an agent
+whose turn ended with a background helper running shows that same prompt. A turn end counts as
+held when it was reported with a helper listed, or when a helper starts after it. With no turn
+end reported (a turn cancelled while its helper ran), the idle prompt still ends the turn.
 
 Every status change goes to `daemon.log` in the data folder at info level, with the pane,
 agent, old and new status and the reason (`hook: Stop`, `screen: claude rule …`), so the
@@ -251,11 +264,30 @@ and the turn-end notifier to identify the thread; Maitty omits helpers rather
 than borrowing another session's. If two panes report the same thread ID, disk
 fallback is ambiguous and is omitted.
 
-A parent stays working for as long as any helper is listed. Three things must not end
+A parent stays working for as long as any helper is listed. Four things must not end
 that early: a progress bar that goes off while helpers run (the agent is waiting on them,
-not cancelled); a session start in the middle of a turn (compaction); and a stop for a
-helper maitty never saw start, which removes nobody else. A stop with no id removes only
-the last helper started.
+not cancelled); the agent's idle prompt, which it shows once its own turn has ended and a
+background helper carries on; a session start in the middle of a turn (compaction); and a
+stop for a helper maitty never saw start, which removes nobody else. A stop with no id
+removes only the last helper started. A helper that says nothing for an hour is taken to
+have died: it stops holding its parent, which finishes and says so once, and it is kept as
+unconfirmed. An interrupt or a new session ends any hold. A Codex helper whose stop was lost
+stops holding as soon as its own session file shows it completed or aborted, even in the
+same second it started. When a
+Claude stop listed the helpers as running, the last one stopping shows done unannounced, and
+the stop of the wake-up turn that follows is the finish that is announced.
+
+A Claude helper can pause too: it puts a shell in the background (its `PostToolUse` carries
+`tool_response.backgroundTaskId`, or `isAsync` with the `agentId` of a helper it launched) and
+ends its own turn. Its `SubagentStop` then lists that task still running in `background_tasks`,
+and the parent's later `Stop` lists only the task, no longer the helper. When the task ends,
+Claude starts the helper again (`SubagentStart`, same id) and it carries on (seen with Claude
+Code 2.1.325). So the daemon pairs each task with the helper that started it (`Term::helper_work`):
+a helper whose stop lists one of its own tasks still running stays listed and working, a parent
+`Stop` that lists one of them does not forget it, and the parent stays working until the helper
+stops with none of its own work left. Its starting again keeps the parent's pause, so the finish
+said is still the parent's wake-up stop. A helper's task the parent's stop no longer lists holds
+nothing, and the hour-long quiet limit still applies.
 
 When a trusted integration reports active helpers, Maitty keeps the parent
 session working until they finish or go quiet. Codex uses native lifecycle hooks
@@ -273,9 +305,47 @@ ending or a child going quiet without an end event counts as unconfirmed, never
 completed.
 
 Codex rollout files currently report child identity, parent thread and lifecycle
-events, but not the assigned prompt, child model/effort or result. Native hook
+events, but not the assigned prompt or child model/effort. Native hook
 payloads may report task/model/effort fields; Maitty uses them only when supplied.
 It does not expose hidden reasoning or claim transcript access that a runtime does
 not provide.
+
+### Each helper's own record
+
+What a helper leaves behind, for showing its work ([ADR 0010](adr/0010-workflows-and-specialist-agents-stay-outside-maitty.md)).
+Measured 2026-11-13 on Linux with Claude Code 2.1.323 and Codex 0.166.
+
+- **Claude.** `SubagentStart` carries `agent_id`, `agent_type`, `session_id`, `prompt_id` and the
+  parent's `transcript_path`, but no task. Hooks fired inside the helper carry the same `agent_id` and
+  the parent's `transcript_path`. `SubagentStop` adds `agent_transcript_path` and
+  `last_assistant_message` (the helper's answer). The helper's record is
+  `<parent transcript without .jsonl>/subagents/agent-<agent_id>.jsonl`, in the parent's line format
+  (`isSidechain: true`, `agentId`), with `agent-<agent_id>.meta.json` beside it holding `description`
+  (the parent's Agent call), `agentType`, `toolUseId` and `requestShape` (`background` for one started
+  in the background). A background helper is also listed in the parent's `Stop` as
+  `background_tasks[]` (`id` = `agent_id`, `description`, `status`).
+- **Codex.** A helper is its own rollout file whose `session_meta` has `thread_source: "subagent"`,
+  `parent_thread_id`, `agent_path` (`/root/<task name>`, the name the parent gave `spawn_agent`) and
+  a generated `agent_nickname`. It starts with a copy of the parent's history, then its own turn: its
+  tool calls, their output and its final message are plain text, but the task it was given is
+  encrypted, as is the parent's `spawn_agent` message. `codex exec --json` shows only the parent's
+  `wait` calls as collab items, with no receivers, so it is no source for helpers.
+- **Codex app-server (daemon-owned chats).** A helper is a `subAgentActivity` item on the parent's
+  thread: `kind: "started"` with `agentThreadId`, `agentPath` (`/root/<task name>`), `model` and
+  `reasoningEffort` when it starts, `kind: "completed"` when it ends. No `spawnAgent` collab item is
+  sent; `wait` is a `collabAgentToolCall` with no receivers. The helper's own `turn/started`, items
+  and `turn/completed` arrive on the same connection under the helper's `threadId`, and its
+  `turn/completed` lists its final message. The daemon keeps these helpers per conversation and
+  generation (`conversation/codex_helpers.rs`, `ConversationSummary.helpers`) and takes the
+  helper's own events off the conversation, so they never reach its history, error or status. Before
+  this, those events marked the chat's history incomplete with an error, and the next turn's end
+  turned the chat to Blocked.
+- **Codex hook trust.** In a new pane Codex asked to review Maitty's nine hooks ("new or changed")
+  and, until they are trusted, sent none. Without `SessionStart` Maitty learns the thread only from
+  `notify` at the turn's end, so the rollout fallback cannot list helpers while the turn runs.
+- **Linking a workflow's step to its helper.** Both providers carry a name the parent chose: Claude's
+  Agent `description` and Codex's task name. A workflow names its helper with that label and gives
+  the same label in its report; a helper of the same pane whose label is equal, ignoring case and
+  punctuation, is linked. Codex task names are snake_case, so `MAITTY-42 builder` names `maitty_42_builder`.
 
 Installing a new executable does not replace an already-running window. **Settings › General › UPDATES** shows the version, and Settings warns at the top when the installed, window and daemon versions differ. Local open sessions keep running; once no panes remain, Maitty restarts the daemon and reconnects the window automatically. Closing a window alone leaves the daemon running. A remote daemon must be updated on its host.

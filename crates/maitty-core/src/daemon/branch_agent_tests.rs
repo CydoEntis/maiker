@@ -18,7 +18,7 @@ fn own_data_folder() {
     });
 }
 
-fn daemon_with(cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
+pub(super) fn daemon_with(cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
     own_data_folder();
     let (tx, rx) = mpsc::channel(4096);
     let mut d = Daemon::new(cfg, tx, || {});
@@ -26,7 +26,7 @@ fn daemon_with(cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
     (d, rx)
 }
 
-fn scratch(name: &str) -> PathBuf {
+pub(super) fn scratch(name: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!(
         concat!(env!("APP_COMMAND"), "-{}-{}"),
         name,
@@ -37,7 +37,7 @@ fn scratch(name: &str) -> PathBuf {
     root
 }
 
-fn repo_in(root: &Path) -> PathBuf {
+pub(super) fn repo_in(root: &Path) -> PathBuf {
     let repo = root.join("repo");
     std::fs::create_dir_all(&repo).unwrap();
     let git = |args: &[&str]| crate::proc::git(&repo, args).unwrap();
@@ -82,7 +82,7 @@ fn request(
     }
 }
 
-fn close_all(d: &mut Daemon) {
+pub(super) fn close_all(d: &mut Daemon) {
     for t in d.terms.keys().copied().collect::<Vec<_>>() {
         d.close_term(t);
     }
@@ -294,6 +294,59 @@ fn a_worktree_asked_by_folder_is_made_tracked_and_answered_with_its_folder() {
         "listed with the checkouts the app made, so tidy-up offers it"
     );
     assert_eq!(d.pending_ops, before, "the operation is over");
+    close_all(&mut d);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_person_may_name_a_repository_the_app_has_not_seen_and_an_agent_may_not() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let _in_rt = rt.enter();
+    let (mut d, mut rx) = daemon_with(Config::default());
+    let root = scratch("branch-worktree-picked");
+    // No workspace or pane is in it: the person picked it on the new chat page.
+    let repo = repo_in(&root);
+    let (tx, mut client_rx) = mpsc::channel(64);
+    d.handle(Ev::Connected(
+        1,
+        tx,
+        false,
+        crate::protocol::Surface::Terminal,
+        true,
+    ));
+    let ask = || Command::BranchWorktree {
+        project: repo.clone(),
+        branch: "feat/picked".into(),
+    };
+
+    // An agent acting from a pane cannot point a checkout (and its setup hook) at it.
+    let pane = TermId::MAX;
+    d.clients.get_mut(&1).expect("the client").from = Some(pane);
+    let error = d.command(1, ask()).expect_err("refused").to_string();
+    assert!(error.contains("not a project"), "{error:?}");
+    assert!(d.made_worktrees.is_empty());
+
+    // The person's own window can.
+    d.clients.get_mut(&1).expect("the client").from = None;
+    d.handle(Ev::Msg(1, ClientMsg::Command(ask())));
+    let until = Instant::now() + Duration::from_secs(60);
+    let answer = loop {
+        if let Ok(msg) = client_rx.try_recv() {
+            break msg;
+        }
+        assert!(Instant::now() < until, "the daemon never answered");
+        match rx.try_recv() {
+            Ok(ev) => d.handle(ev),
+            Err(_) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    let ServerMsg::Reply(Reply::Text(folder)) = answer else {
+        panic!("expected the new folder, got {answer:?}")
+    };
+    assert_eq!(
+        crate::gitfs::head(Path::new(&folder)).map(|h| h.branch).as_deref(),
+        Some("feat/picked")
+    );
     close_all(&mut d);
     let _ = std::fs::remove_dir_all(&root);
 }

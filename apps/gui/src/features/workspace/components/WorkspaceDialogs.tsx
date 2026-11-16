@@ -1,11 +1,8 @@
+import { ticketProjects } from '@/features/tickets/model/ticketProjects'
 import { listSshHosts, machineActivity } from '@/api/machines'
 import { DesktopSettings } from '@/features/settings/components/DesktopSettings'
 import { PerfOverlay } from './PerfOverlay'
 import { CommandPalette } from './CommandPalette'
-import { InspectPanel } from '@/features/inspect/InspectPanel'
-import { repoTree } from '@/features/inspect/api'
-import { usePreloadFiles } from '@/features/inspect/useRepoQuery'
-import { AgentTerminals } from './AgentTerminals'
 import { HoverTips } from './HoverTips'
 import { ShortcutOverlay } from '@/features/shortcuts/ShortcutOverlay'
 import { WelcomeDialog } from '@/features/welcome/WelcomeDialog'
@@ -16,58 +13,29 @@ import { updaterSummary } from '@/features/updates/useUpdater'
 import { ServiceBehindNotice } from '@/features/updates/ServiceBehindNotice'
 import { NewWorktreeDialog } from '@/features/worktrees/NewWorktreeDialog'
 import { GetFileDialog } from './GetFileDialog'
+import { SpecialistsDialog } from './SpecialistsDialog'
 import { MachineUpdateDialog } from './MachineUpdateDialog'
 import { ConfirmCloseDialog } from './ConfirmCloseDialog'
 import { RenameDialog, RenameMachineDialog } from './RenameDialog'
+import { RecentSessionsDialog } from './RecentSessionsDialog'
+import { ResumeSavedDialog } from './ResumeSavedDialog'
+import { machineProjects } from '../model/newSession'
+import { resolveStartFolder } from '../model/startFolder'
+import { LOCAL_MACHINE } from '@/api/machines'
 import { withNickname, writeMachineNicknames } from '@/data/machineNicknames'
 import { Toast } from './states'
 import type { SessionView } from '../model/session'
-import { isShell } from '../model/sidebar'
-import { agentName, sendAgentMessage, suggestedCommitMessage } from '../model/agentMessage'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { folderExists } from '../model/startFolder'
 import { useWorkspace } from '../workspaceContext'
 
-const loadTopFolder = (term: number) => repoTree(term, null)
-
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInAgent, sessionsQuery, mismatch, inspectOpen, focusMode, inspectTerm, ownsTerminals, focusedSession, projectOf, diffStat, inspectView, lookAt, setInspectView, setInspectOpen, flash, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting } = useWorkspace()
-  // An agent always has a Terminal tab. Pinned under the chat, its terminals are in the pane, and the tab offers to bring them back.
-  const hasTerminals = focusedSession !== undefined && ownsTerminals(focusedSession)
-  usePreloadFiles(inspectTerm, loadTopFolder)
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId } = useWorkspace()
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
       {mismatch === null && <ServiceBehindNotice sessionsQuery={sessionsQuery} restartWhenIdle={preferences.restartWhenIdle} />}
-      {inspectOpen && !focusMode && focusedSession && (inspectTerm !== null || hasTerminals) && (
-              <InspectPanel
-                key={focusedSession.id}
-                term={inspectTerm}
-                terminals={!hasTerminals ? null : preferences.terminalDock === 'panel' || isShell(focusedSession)
-                  ? <AgentTerminals agent={focusedSession} dock="panel" focused={inspectView === 'terminal'} canPin={!isShell(focusedSession)} />
-                  : (
-                    <div className="mx-terms-empty">
-                      <strong>Terminals are pinned under the chat</strong>
-                      <span>They show at the bottom of this agent's pane.</span>
-                      <button type="button" className="mx-terms-start" onClick={() => { setPreferences((current) => ({ ...current, terminalDock: 'panel' })) }}>Show them here</button>
-                    </div>
-                  )}
-                changedFiles={diffStat.data?.files ?? 0}
-                {...(focusedSession.branch ? { branch: focusedSession.branch } : {})}
-                view={inspectView}
-                agentWorking={focusedSession.status === 'working'}
-                timeline={focusedSession.timeline}
-                checks={focusedSession.checks}
-                machine={focusedSession.machine}
-                lookAt={lookAt}
-                {...(isShell(focusedSession) ? {} : { comments: { agent: agentName(focusedSession.process), onSend: (message: string) => sendAgentMessage(focusedSession, message) } })}
-                {...(focusedSession.machineName === null && focusedSession.repoRoot !== null ? { changeActions: { folder: focusedSession.repoRoot, machine: focusedSession.machine, suggested: suggestedCommitMessage(focusedSession) } } : {})}
-                onView={setInspectView}
-                onClose={() => { setInspectOpen(false) }}
-                onNotice={flash}
-              />
-            )}
             <HoverTips />
             {shortcutsOpen && <ShortcutOverlay platform={platform} portalContainer={root} onClose={() => { setShortcutsOpen(false) }} />}
             {welcomeOpen && (
@@ -81,7 +49,7 @@ export function WorkspaceDialogs() {
                 onStartSession={() => { newSession(focusedMachineNumber) }}
               />
             )}
-            {paletteOpen && <CommandPalette items={paletteItems} onClose={() => { setPaletteOpen(false) }} />}
+            {paletteOpen && <CommandPalette items={paletteItems} outputItem={paletteOutputItem} onClose={() => { setPaletteOpen(false) }} />}
             {focusMode && (
               <div className="mx-focus-pill" role="status">
                 <span className="mx-focus-tag">Focus</span>
@@ -114,6 +82,13 @@ export function WorkspaceDialogs() {
                 onCancel={() => { setGetFileId(null) }}
               />
             )}
+            {specialistsId !== null && sessionMap.get(specialistsId) !== undefined && (
+              <SpecialistsDialog
+                title={(sessionMap.get(specialistsId) as SessionView).cwdLabel}
+                term={(sessionMap.get(specialistsId) as SessionView).pane}
+                onClose={() => { setSpecialistsId(null) }}
+              />
+            )}
             {updateAsk !== null && (
               <MachineUpdateDialog
                 name={updateAsk.name}
@@ -139,6 +114,11 @@ export function WorkspaceDialogs() {
                 onCancel={() => { setRenamingMachine(null) }}
               />
             )}
+            {savedOpen && (
+              <ResumeSavedDialog projects={machineProjects(sessions, LOCAL_MACHINE, focusedSession, resolveStartFolder(preferences.startFolder, home))} defaultAgent={preferences.defaultAgent === 'codex' ? 'codex' : 'claude'}
+                locked={!canStart} onPick={resumeSaved} onCancel={() => { setSavedOpen(false) }} />
+            )}
+            {recentOpen && <RecentSessionsDialog home={home} onPick={reopenSession} onReopened={() => { setRecentOpen(false) }} onCancel={() => { setRecentOpen(false) }} />}
             {renameId !== null && !renameInline && sessionMap.get(renameId) && (
               <RenameDialog session={sessionMap.get(renameId) as SessionView} onSave={(name) => { saveName(renameId, name) }} onCancel={() => { setRenameId(null) }} />
             )}
@@ -152,15 +132,16 @@ export function WorkspaceDialogs() {
                 systemDark={systemDark}
                 onPreviewTheme={previewThemeSoon}
                 onTestNotice={showTestNotice}
-                updates={{ summary: updaterSummary(updater.state), status: updater.state.status, download: updater.state.status === 'downloading' ? { progress: updater.state.progress, transfer: updater.state.transfer } : undefined, onCheck: updater.check, onDownload: updater.download, onRestart: restartNow }}
+                updates={{ summary: updaterSummary(updater.state), status: updater.state.status, version: 'version' in updater.state ? updater.state.version : undefined, download: updater.state.status === 'downloading' ? { progress: updater.state.progress, transfer: updater.state.transfer } : undefined, onCheck: updater.check, onDownload: updater.download, onRestart: restartNow }}
                 onShowWelcome={() => { setPreviewTheme(null); setSettingsSection(null); setWelcomeOpen(true) }}
                 platform={platform}
                 daemon={{ online, sessionCount: sessions.length }}
                 appVersion={runningVersion}
-                machines={{ known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, add: { windows: navigator.userAgent.includes('Windows'), loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding } }}
+                machines={{ known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { windows: navigator.userAgent.includes('Windows'), loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding } }}
                 usage={usageInfo}
                 onSignInAgent={signInAgent}
-                validateFolder={folderExists}
+                github={{ onSignIn: signInGitHub, signInsEnded: gitHubSignInsEnded }}
+                ticketProjects={ticketProjects(sessions)}
                 onChooseFolder={chooseStartFolder}
                 onClose={() => { setPreviewTheme(null); setSettingsSection(null) }}
               />

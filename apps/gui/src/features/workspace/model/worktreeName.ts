@@ -3,6 +3,14 @@ const ANIMALS = ['badger', 'crane', 'elk', 'finch', 'hare', 'heron', 'kite', 'ly
 /** After this many names already in use, a number is added instead of trying again. */
 const TRIES = 8
 
+/** `name`, or the first of `name-2`, `name-3`, … that is free. */
+function freeName(name: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(name)) return name
+  let suffix = 2
+  while (taken.has(`${name}-${String(suffix)}`)) suffix += 1
+  return `${name}-${String(suffix)}`
+}
+
 /**
  * A name for a branch nobody named: two short words, like the terminal app's worktrees. "New
  * worktree" on the new-chat page needs a branch at once, because one branch cannot be checked out
@@ -15,7 +23,5 @@ export function suggestBranchName(taken: ReadonlySet<string>, random: () => numb
     name = `${pick(ADJECTIVES)}-${pick(ANIMALS)}`
     if (!taken.has(name)) return name
   }
-  let suffix = 2
-  while (taken.has(`${name}-${String(suffix)}`)) suffix += 1
-  return `${name}-${String(suffix)}`
+  return freeName(name, taken)
 }

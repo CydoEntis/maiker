@@ -1,34 +1,38 @@
 import { ApprovedCommands } from './ApprovedCommands'
 import { toast } from '@/lib/toast'
 import type { UpdaterState } from '@/features/updates/useUpdater'
-import { percentOf, type Transfer } from '@/features/updates/downloadEta'
-import { DownloadProgress } from '@/features/updates/DownloadProgress'
-import { Fragment, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import type { Transfer } from '@/features/updates/downloadEta'
+import { Fragment, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { GroupShowsAll, matchesQuery, SettingsSearch } from '../settingsSearch'
 import { THEMES } from '@/features/workspace/theme/themes'
 import { ThemePicker } from './ThemePicker'
-import { WINDOW_STYLES, isWindowStyle, type WindowStyleEntry } from '@/features/workspace/theme/windowStyles'
+import { CORNERS, CORNER_NAMES } from '@/features/workspace/theme/corners'
 import { Panel } from '@/components/ui/panel'
 import { PickerSelect, type PickerGroup, type PickerItem } from './PickerSelect'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { SpinnerPicker } from './SpinnerPicker'
 import { PerformanceSection } from './PerformanceSection'
-import { hotkeyRows, type Platform } from '@/features/workspace/model/shortcuts'
+import type { GitHubSignIn } from './GitHubSection'
+import { MachinesPage } from './MachinesPage'
+import { UpdateBox } from './UpdateBox'
+import { TicketsSection } from '@/features/tickets/TicketsSettings'
+import type { TicketsProject } from '@/features/tickets/model/ticketProjects'
+import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
 import { CHAT_AGENTS } from '@/features/workspace/model/chatView'
+import { AGENT_LABEL } from '@/features/chat/modelName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { errorMessage } from '@/lib/error-message'
-import { exportDaemonLog, loadAgentAuth, openDaemonLog, signOutAgent, type AgentAuth } from '@/api/daemon'
+import { loadAgentAuth, signOutAgent, type AgentAuth } from '@/api/daemon'
 import { BUNDLED_FONT_NAME, fontStackFor, installedMonospaceFamilies, WEIGHT_BOLD, WEIGHT_EXTRA_BOLD, WEIGHT_LIGHT, WEIGHT_MEDIUM, WEIGHT_REGULAR, WEIGHT_SEMIBOLD, type TerminalFontWeight } from '@/lib/terminalFont'
 import type { Added, Grant, HostChoice, MachineActivity } from '@/api/machines'
-import { DisconnectedSince } from '@/features/workspace/components/times'
-import { installNote, UPDATE_WORDS, updateVerb, updateWarning, type MachineHead, type UpdateAction } from '@/features/workspace/model/machines'
+import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
-import { FOLDER_PATH } from '@/features/workspace/components/paths'
 import { CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
 
-export type DesktopSettingsSection = 'general' | 'chat' | 'agents' | 'terminal' | 'appearance' | 'sidebar' | 'usage' | 'notifications' | 'machines' | 'keys' | 'daemon' | 'performance'
+export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'machines' | 'tickets' | 'usage' | 'performance'
 
 /** The other machines, for the Machines page: what the window knows of each, and what it can ask of the host. */
 export type MachinesInfo = {
@@ -51,6 +55,8 @@ export type MachinesInfo = {
   onCheckActivity: (name: string) => Promise<MachineActivity | null>
   /** Puts the same command on the clipboard, to run in a terminal instead. */
   onCopyCommand: (command: string) => void
+  /** How many sessions the sidebar shows for a machine (by its number); without it a tile says it does not know. */
+  sessionsOn?: (machine: number) => number
   add: {
     /** Windows has no ssh agent by default: the page says to use keys. */
     windows: boolean
@@ -71,14 +77,27 @@ export type DaemonInfo = {
   socket?: string
 }
 
+/** Where the app's own update is, for the box at the foot of the nav. */
+export type SettingsUpdates = {
+  summary: string
+  status: UpdaterState['status']
+  /** The version found, downloading or ready; undefined while there is none. */
+  version?: string | undefined
+  /** How far the download is, while one runs. */
+  download?: { progress: number | null; transfer: Transfer | null } | undefined
+  onCheck: () => void
+  onDownload: () => void
+  onRestart: () => void
+}
+
 export type UsageInfo = { budget: number | null; onBudget: (budget: number | null) => void; sessionForTerm: (term: number) => OpenSession | null; onOpenSession: (id: string) => void }
 
 type DesktopSettingsProps = {
   section: DesktopSettingsSection
-  /** The app's update check, when there is one to ask. */
   /** Shows a sample notification where notifications appear. */
   onTestNotice?: () => void
-  updates?: { summary: string; status: UpdaterState['status']; /** How far the download is, while one runs. */ download?: { progress: number | null; transfer: Transfer | null } | undefined; onCheck: () => void; onDownload: () => void; onRestart: () => void }
+  /** The app's update check, when there is one to ask; shown at the foot of the nav. */
+  updates?: SettingsUpdates
   onSection: (section: DesktopSettingsSection) => void
   preferences: SettingsPreferences
   onChange: (preferences: SettingsPreferences) => void
@@ -95,70 +114,68 @@ type DesktopSettingsProps = {
   /** The running app's version, for the performance report; null until known. */
   appVersion: string | null
   machines: MachinesInfo
-  /** Resolves whether a typed folder exists. */
-  validateFolder: (path: string) => Promise<boolean>
   /** Opens the system's folder picker at the folder given; the path picked, or null when it is cancelled. */
   onChooseFolder?: (current: string) => Promise<string | null>
   /** What the Usage & cost page needs from the window. */
   usage: UsageInfo
   /** Opens the agent's own sign-in in a terminal of its own; without it the Agents page offers no sign-in. */
   onSignInAgent?: (agent: 'claude' | 'codex') => void
+  /** Starts GitHub's own sign-in in a terminal on a machine, and how many of those have ended; without it the GitHub page offers no sign-in. */
+  github?: GitHubSignIn
+  /** The projects the open sessions work in, for Settings › Tickets to link. */
+  ticketProjects?: readonly TicketsProject[]
   onClose: () => void
 }
 
+/** The ticket of the title bar's Tickets toggle. */
+const TICKET_PATH = 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6zM10 5v14'
+
 type NavItem = { id: DesktopSettingsSection; label: string; key: string; tint: string; path: string }
 
+/** The nav (the whole-app mock): what the window does, how agents run, and which computers. Usage & cost and Performance
+    have no item: they open from their own keys, the palette and the usage meters, and leave the nav with none current. */
 const NAV: Array<{ label: string; items: NavItem[] }> = [
   {
-    label: 'ESSENTIALS',
+    label: 'APP',
     items: [
       { id: 'general', label: 'General', key: 'G', tint: 'var(--accent)', path: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4' },
-      { id: 'chat', label: 'Chat', key: 'C', tint: 'var(--ansi-green)', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
-      { id: 'agents', label: 'Agents', key: 'E', tint: 'var(--ansi-mag)', path: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0' },
-    ],
-  },
-  {
-    label: 'TERMINAL',
-    items: [
-      { id: 'terminal', label: 'Terminal', key: 'T', tint: 'var(--ansi-blue)', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
       { id: 'appearance', label: 'Appearance', key: 'A', tint: 'var(--ansi-mag)', path: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-.9-.8-1.3-.8-2.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.4-4-7.6-9-7.6zM7.5 11.5h.01M10.5 7.5h.01M15.5 8.5h.01' },
-      { id: 'sidebar', label: 'Sidebar', key: 'S', tint: 'var(--accent)', path: 'M3 4h18v16H3zM9 4v16' },
-    ],
-  },
-  {
-    label: 'WORKSPACE',
-    items: [
-      { id: 'usage', label: 'Usage & cost', key: 'U', tint: 'var(--ansi-mag)', path: 'M4 20V10M10 20V4M16 20v-7M22 20H2' },
       { id: 'notifications', label: 'Notifications', key: 'N', tint: 'var(--warn)', path: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' },
-      { id: 'machines', label: 'Machines', key: 'M', tint: 'var(--ansi-green)', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01M17 7h.01M17 17h.01' },
       { id: 'keys', label: 'Hotkeys', key: '?', tint: 'var(--ansi-blue)', path: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8' },
     ],
   },
   {
-    label: 'ADVANCED',
+    label: 'AGENTS',
     items: [
-      { id: 'daemon', label: 'Daemon', key: 'D', tint: 'var(--accent)', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01' },
-      { id: 'performance', label: 'Performance', key: 'P', tint: 'var(--ansi-green)', path: 'M3 17l5-6 4 4 5-8 4 5' },
+      { id: 'chat', label: 'Chat', key: 'C', tint: 'var(--ok)', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
+      { id: 'permissions', label: 'Permissions', key: 'E', tint: 'var(--ansi-mag)', path: 'M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z' },
+      { id: 'terminal', label: 'Terminal', key: 'T', tint: 'var(--ansi-blue)', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
+    ],
+  },
+  {
+    label: 'MACHINES',
+    items: [
+      { id: 'machines', label: 'Remote machines', key: 'M', tint: 'var(--ok)', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01M17 7h.01M17 17h.01' },
+      { id: 'tickets', label: 'Tickets', key: 'I', tint: 'var(--ansi-mag)', path: TICKET_PATH },
     ],
   },
 ]
 
 const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   general: ['General', 'Where sessions start and what happens to them.'],
-  chat: ['Chat', 'How a chat starts, and how wide and large it is drawn.'],
-  agents: ['Agents', 'The accounts your agents are signed in to.'],
-  terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
-  appearance: ['Appearance', 'Colours, spinner and motion for the whole window.'],
-  sidebar: ['Sidebar', 'What the sidebar lists, in what order, where and how large.'],
-  usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
+  appearance: ['Appearance', 'Colours, layout, spinner and motion for the whole window.'],
   notifications: ['Notifications', 'When the system should tell you a session needs you.'],
-  machines: ['Machines', 'Other computers whose sessions show up beside this one.'],
   keys: ['Hotkeys', 'Everything the window handles before the shell does.'],
-  daemon: ['Daemon', 'The local maittyd that owns every session.'],
+  chat: ['Chat', 'How a chat starts, and how wide and large it is drawn.'],
+  permissions: ['Permissions', 'Who your agents are signed in as, and what they may run without asking.'],
+  terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
+  machines: ['Remote machines', 'Other computers whose sessions show up in your sidebar.'],
+  tickets: ['Tickets', 'Where Maitty reads tickets from. It only reads them.'],
+  usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
   performance: ['Performance', 'What the window is spending its time on, measured live.'],
 }
 
-const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', c: 'chat', e: 'agents', t: 'terminal', a: 'appearance', s: 'sidebar', u: 'usage', n: 'notifications', m: 'machines', '?': 'keys', d: 'daemon', p: 'performance' }
+const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', m: 'machines', i: 'tickets' }
 
 /** Esc ends an open theme list, or a running add-machine, first; Settings stays. A part that handles Esc itself is marked `data-owns-escape`. */
 const keepForOpenList = (event: globalThis.KeyboardEvent) => {
@@ -166,8 +183,14 @@ const keepForOpenList = (event: globalThis.KeyboardEvent) => {
   if (inside || document.querySelector('.mx-picker-list') !== null) event.preventDefault()
 }
 
-function tint(color: string): CSSProperties {
-  return { '--tint': color } as CSSProperties
+/** The report pages, which hide the nav and fill the dialog. */
+const NAVLESS: readonly DesktopSettingsSection[] = ['usage', 'performance']
+
+/** The pages a search looks through, in nav order, then Performance. Usage is figures, not settings. */
+const SEARCHED: readonly DesktopSettingsSection[] = [...NAV.flatMap((group) => group.items.map((item) => item.id)), 'performance']
+
+function foundLine(rows: number, query: string): string {
+  return `${String(rows)} ${rows === 1 ? 'setting matches' : 'settings match'} “${query}”`
 }
 
 /** Settings (⌘,): a dialog in the window that holds focus until it closes, then gives it back. */
@@ -178,7 +201,8 @@ export function DesktopSettings(props: DesktopSettingsProps) {
   // Focus lands on the current section, not the first control; Radix traps it and gives it back on close.
   const focusSection = (event: Event) => {
     event.preventDefault()
-    if (event.currentTarget instanceof HTMLElement) event.currentTarget.querySelector<HTMLElement>('.mx-settings-nav-item.is-current')?.focus()
+    // A report page has no nav: focus goes to its close button instead.
+    if (event.currentTarget instanceof HTMLElement) (event.currentTarget.querySelector<HTMLElement>('.mx-settings-nav-item.is-current') ?? event.currentTarget.querySelector<HTMLElement>('.mx-settings-close'))?.focus()
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -191,49 +215,115 @@ export function DesktopSettings(props: DesktopSettingsProps) {
     }
   }
 
-  const [title, subtitle] = PAGE[section]
+  const [query, setQuery] = useState('')
+  const searching = query.trim() !== ''
+  const scroller = useRef<HTMLDivElement>(null)
+  const [found, setFound] = useState({ rows: 0, groups: 0 })
+  // A group to put focus in once its page has drawn, after a search result's page was opened.
+  const focusGroup = useRef<string | null>(null)
+
+  // The results are the pages themselves, filtered as they draw, and some fill in later (signed-in agents, machines),
+  // so they are counted from what is on screen whenever it changes.
+  useEffect(() => {
+    const root = scroller.current
+    if (!searching || root === null) return
+    const count = () => {
+      const rows = root.querySelectorAll('[data-search-hit]').length
+      const groups = root.querySelectorAll('.mx-scard:not(.is-filtered), .mx-scard.is-filtered:has([data-search-hit])').length
+      setFound((was) => (was.rows === rows && was.groups === groups ? was : { rows, groups }))
+    }
+    const frame = requestAnimationFrame(count)
+    const observer = new MutationObserver(count)
+    observer.observe(root, { childList: true, subtree: true })
+    return () => { cancelAnimationFrame(frame); observer.disconnect() }
+  }, [searching, query])
+
+  useEffect(() => {
+    const wanted = focusGroup.current
+    if (searching || wanted === null) return
+    focusGroup.current = null
+    const group = scroller.current?.querySelector<HTMLElement>(`.mx-scard[aria-label="${CSS.escape(wanted)}"]`)
+    group?.scrollIntoView({ block: 'start' })
+    group?.querySelector<HTMLElement>('button, input, select, textarea, [role="switch"], [role="radio"], [tabindex="0"]')?.focus()
+  }, [searching, section])
+
+  const openPage = (id: DesktopSettingsSection) => {
+    setQuery('')
+    props.onSection(id)
+  }
+
+  // Esc empties the search before it closes Settings.
+  const onEscape = (event: globalThis.KeyboardEvent) => {
+    keepForOpenList(event)
+    if (event.defaultPrevented || !searching) return
+    event.preventDefault()
+    setQuery('')
+  }
+
+  const page = (id: DesktopSettingsSection): ReactNode => {
+    switch (id) {
+      case 'general': return <GeneralSection preferences={preferences} update={update} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} />
+      case 'chat': return <ChatSection preferences={preferences} update={update} />
+      case 'permissions': return <><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
+      case 'terminal': return <TerminalSection preferences={preferences} update={update} />
+      case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemReducedMotion={props.systemReducedMotion} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
+      case 'usage': return <UsageSection usage={props.usage} />
+      case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
+      case 'machines': return <MachinesPage daemon={props.daemon} machines={props.machines} github={props.github} appVersion={props.appVersion} />
+      case 'tickets': return <TicketsSection projects={props.ticketProjects ?? []} signIn={props.github} />
+      case 'keys': return <HotkeysSection platform={props.platform} overrides={preferences.keyOverrides} onOverrides={(next) => { update('keyOverrides', next) }} />
+      case 'performance': return <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />
+    }
+  }
+
+  const [title, subtitle] = searching ? ['Search', foundLine(found.rows, query.trim())] : PAGE[section]
+  // Usage & cost and Performance are reports opened from their own keys: they take the whole dialog, without the nav.
+  const report = !searching && NAVLESS.includes(section)
   return (
-    <Panel label="Settings" onClose={props.onClose} scrimClassName="mx-settings-scrim" className="mx-settings" onKeyDown={onKeyDown} onOpenAutoFocus={focusSection} onEscapeKeyDown={keepForOpenList}>
+    <Panel label="Settings" onClose={props.onClose} scrimClassName="mx-settings-scrim" className="mx-settings" onKeyDown={onKeyDown} onOpenAutoFocus={focusSection} onEscapeKeyDown={onEscape}>
       <>
-        <nav aria-label="Settings sections" className="mx-settings-nav">
+        {!report && <nav aria-label="Settings sections" className="mx-settings-nav">
           <span className="mx-settings-nav-title">Settings</span>
+          <label className="mx-settings-search">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+            <input type="text" value={query} placeholder="Search settings" aria-label="Search settings" spellCheck={false} onChange={(event) => { setQuery(event.target.value) }} />
+          </label>
           {NAV.map((group) => (
             <div key={group.label} className="mx-settings-nav-group">
               <span className="mx-settings-nav-label">{group.label}</span>
               {group.items.map((item) => (
-                <button key={item.id} type="button" className={`mx-settings-nav-item${section === item.id ? ' is-current' : ''}`} aria-current={section === item.id ? 'page' : undefined} onClick={() => { props.onSection(item.id) }}>
-                  <span className="mx-tint-tile" style={tint(item.tint)}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={item.path} /></svg>
-                  </span>
+                <button key={item.id} type="button" className={`mx-settings-nav-item${!searching && section === item.id ? ' is-current' : ''}`} aria-current={!searching && section === item.id ? 'page' : undefined} onClick={() => { openPage(item.id) }}>
+                  <svg className="mx-settings-nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={item.tint} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={item.path} /></svg>
                   <span className="mx-settings-nav-text">{item.label}</span>
                   <span className="mx-settings-nav-key" aria-hidden="true">{item.key}</span>
                 </button>
               ))}
             </div>
           ))}
-        </nav>
+          {props.updates && (
+            <>
+              <span className="mx-settings-nav-spacer" />
+              <UpdateBox updates={props.updates} appVersion={props.appVersion} />
+            </>
+          )}
+        </nav>}
         <div className="mx-settings-body">
           <header className="mx-settings-header">
-            <div className="mx-settings-heading" key={section}>
+            <div className="mx-settings-heading" key={searching ? 'search' : section}>
               <h2>{title}</h2>
               <p>{subtitle}</p>
             </div>
             <button type="button" className="mx-icon-button mx-settings-close" aria-label="Close settings" title="Close (Esc)" onClick={props.onClose}><Icon name="close" size={14} /></button>
           </header>
-          <div className="mx-settings-scroll">
-            <div className="mx-settings-sections" key={section}>
-              {section === 'general' && <GeneralSection preferences={preferences} update={update} validateFolder={props.validateFolder} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} updates={props.updates} />}
-              {section === 'chat' && <ChatSection preferences={preferences} update={update} />}
-              {section === 'agents' && <><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>}
-              {section === 'sidebar' && <SidebarSection preferences={preferences} update={update} />}
-              {section === 'terminal' && <TerminalSection preferences={preferences} update={update} />}
-              {section === 'appearance' && <AppearanceSection preferences={preferences} update={update} systemReducedMotion={props.systemReducedMotion} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} />}
-              {section === 'usage' && <UsageSection usage={props.usage} />}
-              {section === 'notifications' && <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />}
-              {section === 'machines' && <MachinesSection machines={props.machines} />}
-              {section === 'keys' && <HotkeysSection platform={props.platform} />}
-              {section === 'daemon' && <DaemonSection daemon={props.daemon} />}
-              {section === 'performance' && <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />}
+          <div className="mx-settings-scroll" ref={scroller}>
+            <div className={`mx-settings-sections${!searching && section === 'usage' ? ' is-wide' : ''}`} key={searching ? 'search' : section}>
+              {!searching && page(section)}
+              {searching && SEARCHED.map((id) => (
+                <SettingsSearch.Provider key={id} value={{ query, page: PAGE[id][0], pageMatched: matchesQuery(PAGE[id][0], query), onOpen: (group) => { focusGroup.current = group; openPage(id) } }}>
+                  {page(id)}
+                </SettingsSearch.Provider>
+              ))}
+              {searching && found.groups === 0 && <p className="mx-settings-none">No settings match “{query.trim()}”.</p>}
             </div>
           </div>
         </div>
@@ -244,13 +334,25 @@ export function DesktopSettings(props: DesktopSettingsProps) {
 
 type Update = <K extends keyof SettingsPreferences>(key: K, value: SettingsPreferences[K]) => void
 
-export function Card({ title, color, iconPath, meta, children, foot, footRow = false }: { title: string; color: string; iconPath: ReactNode; meta?: ReactNode; children?: ReactNode; foot?: ReactNode; footRow?: boolean }) {
+/** A titled group of rows: an uppercase heading with an optional note at its right, then rows divided by hairlines. */
+export function Card({ title, meta, children, foot, footRow = false }: { title: string; meta?: ReactNode; children?: ReactNode; foot?: ReactNode; footRow?: boolean }) {
+  const search = useContext(SettingsSearch)
+  if (search !== null) {
+    // In the results: titled with its page, opened by its title, and only its matching rows unless the title matched.
+    const whole = search.pageMatched || matchesQuery(title, search.query)
+    const heading = search.page === title ? title : `${search.page} · ${title}`
+    return (
+      <section className={`mx-scard${whole ? '' : ' is-filtered'}`} aria-label={title}>
+        <div className="mx-scard-head">
+          <button type="button" className="mx-scard-title mx-scard-open" title={`Open ${search.page}`} onClick={() => { search.onOpen(title) }}>{heading}</button>
+        </div>
+        <GroupShowsAll.Provider value={whole}>{children}</GroupShowsAll.Provider>
+      </section>
+    )
+  }
   return (
     <section className="mx-scard" aria-label={title}>
       <div className="mx-scard-head">
-        <span className="mx-scard-icon" style={tint(color)}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{iconPath}</svg>
-        </span>
         <span className="mx-scard-title">{title}</span>
         {meta}
       </div>
@@ -261,8 +363,12 @@ export function Card({ title, color, iconPath, meta, children, foot, footRow = f
 }
 
 export function Row({ label, detail, children }: { label: string; detail?: string; children: ReactNode }) {
+  const search = useContext(SettingsSearch)
+  const whole = useContext(GroupShowsAll)
+  const hit = search !== null && (whole || matchesQuery(`${label} ${detail ?? ''}`, search.query))
+  if (search !== null && !hit) return null
   return (
-    <div className="mx-scard-row">
+    <div className="mx-scard-row" data-search-hit={hit || undefined}>
       <div className="mx-scard-text"><span>{label}</span>{detail && <span>{detail}</span>}</div>
       {children}
     </div>
@@ -285,74 +391,61 @@ function SegmentedChoice<T extends string | number>({ label, value, options, onC
   )
 }
 
-const VALIDATE_DELAY_MS = 250
-type FolderCheck = 'saved' | 'missing' | 'checking'
-
 const YOLO_AGENTS = [
   { key: 'yoloClaude', label: 'Claude', detail: 'Lets you pick Bypass permissions in a chat, where Claude asks about nothing. New chats still start in the mode you had.' },
   { key: 'yoloCodex', label: 'Codex', detail: 'Starts new Codex sessions with approvals and the sandbox off, so it runs commands and edits files without asking.' },
   { key: 'yoloGemini', label: 'Gemini', detail: 'Starts new Gemini sessions in its yolo mode, which approves every tool call without asking.' },
 ] as const
 
-function GeneralSection({ preferences, update, validateFolder, onChooseFolder, onShowWelcome, updates }: { preferences: SettingsPreferences; update: Update; validateFolder: (path: string) => Promise<boolean>; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void; updates: DesktopSettingsProps['updates'] }) {
-  const [draft, setDraft] = useState(preferences.startFolder)
-  const [check, setCheck] = useState<FolderCheck>('saved')
-  const latest = useRef({ preferences, update })
-  useEffect(() => { latest.current = { preferences, update } })
-  useEffect(() => {
-    const typed = draft.trim()
-    if (typed === latest.current.preferences.startFolder) {
-      setCheck('saved')
-      return
-    }
-    setCheck('checking')
-    let current = true
-    const timer = window.setTimeout(() => {
-      void validateFolder(typed)
-        .catch(() => false)
-        .then((exists) => {
-          if (!current) return
-          setCheck(exists ? 'saved' : 'missing')
-          if (exists) latest.current.update('startFolder', typed)
-        })
-    }, VALIDATE_DELAY_MS)
-    return () => {
-      current = false
-      window.clearTimeout(timer)
-    }
-  }, [draft, validateFolder])
-  const missing = check === 'missing'
+/** How long a card says Saved after one of its values changed. */
+const SAVED_FLASH_MS = 2000
+
+/** A card's Saved note: shown for a moment each time `flash` is called after a change was kept. */
+function useSavedFlash(): [boolean, () => void] {
+  const [shown, setShown] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => { window.clearTimeout(timer.current) }, [])
+  const flash = () => {
+    window.clearTimeout(timer.current)
+    setShown(true)
+    timer.current = window.setTimeout(() => { setShown(false) }, SAVED_FLASH_MS)
+  }
+  return [shown, flash]
+}
+
+function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: { preferences: SettingsPreferences; update: Update; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void }) {
+  // The folder comes from the system's folder picker, which only offers one that exists, so nothing is typed or checked.
+  const home = preferences.startFolder === ''
+  const [saved, flashSaved] = useSavedFlash()
+  const setStart = (folder: string) => { update('startFolder', folder); flashSaved() }
   return (
     <>
       <Card
         title="Start folder"
-        color="var(--accent)"
-        iconPath={<path d={FOLDER_PATH} />}
-        meta={<span className="mx-scard-meta" style={{ fontSize: 11.5, color: missing ? 'var(--danger)' : 'var(--dim)' }} role="status">{missing ? 'Folder not found' : check === 'checking' ? 'Checking…' : 'Saved'}</span>}
+        meta={saved ? <span className="mx-scard-meta" role="status">Saved</span> : undefined}
         foot="Every new session opens a shell here. Leave it empty for your home folder. Projects appear in the sidebar when a session cds into a git repo."
       >
-        <div style={{ padding: '0 16px 14px' }}>
+        <div className="mx-scard-body">
           <div className="mx-folder-row">
-            <div className={`mx-folder-field${missing ? ' is-invalid' : ''}`}>
-              <span className="mono" style={{ fontSize: 12, color: 'var(--dim)' }}>cd</span>
-              <input value={draft} placeholder="~" aria-label="Start folder" aria-invalid={missing} spellCheck={false} onChange={(event) => { setDraft(event.target.value) }} />
+            <div className="mx-folder-field" title={home ? undefined : preferences.startFolder}>
+              <span className="mono mx-folder-cd" aria-hidden="true">cd</span>
+              <span className="mono mx-folder-path" style={{ color: home ? 'var(--dim)' : 'var(--fg)' }}>{home ? 'Your home folder' : preferences.startFolder}</span>
             </div>
             {onChooseFolder && (
-              <button type="button" className="mx-text-button" onClick={() => { void onChooseFolder(draft.trim()).then((picked) => { if (picked) setDraft(picked) }) }}>Browse…</button>
+              <button type="button" className="mx-text-button" aria-label="Choose the start folder" onClick={() => { void onChooseFolder(preferences.startFolder).then((picked) => { if (picked) setStart(picked) }) }}>Browse…</button>
             )}
+            {!home && <button type="button" className="mx-text-button" onClick={() => { setStart('') }}>Use home folder</button>}
           </div>
         </div>
       </Card>
       <Card
         title="Export folder"
-        color="var(--ansi-green)"
-        iconPath={<path d={FOLDER_PATH} />}
         foot="Code blocks and tables you save from a chat go here. An existing file is never replaced; the new one gets a number."
       >
-        <div style={{ padding: '0 16px 14px' }}>
+        <div className="mx-scard-body">
           <div className="mx-folder-row">
-            <div className="mx-folder-field">
-              <span className="mono" style={{ fontSize: 12, color: preferences.exportFolder === '' ? 'var(--dim)' : 'var(--fg)' }}>{preferences.exportFolder === '' ? 'Your Downloads folder' : preferences.exportFolder}</span>
+            <div className="mx-folder-field" title={preferences.exportFolder === '' ? undefined : preferences.exportFolder}>
+              <span className="mono mx-folder-path" style={{ color: preferences.exportFolder === '' ? 'var(--dim)' : 'var(--fg)' }}>{preferences.exportFolder === '' ? 'Your Downloads folder' : preferences.exportFolder}</span>
             </div>
             {onChooseFolder && (
               <button type="button" className="mx-text-button" aria-label="Choose the export folder" onClick={() => { void onChooseFolder(preferences.exportFolder).then((picked) => { if (picked) update('exportFolder', picked) }) }}>Browse…</button>
@@ -361,35 +454,20 @@ function GeneralSection({ preferences, update, validateFolder, onChooseFolder, o
           </div>
         </div>
       </Card>
-      <Card title="Window" color="var(--ansi-blue)" iconPath={<><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 16h18" /></>}>
-        <Row label="Status bar" detail="A line at the bottom with quick controls for theme, layout, text size and shortcuts.">
-          <Switch aria-label="Status bar" checked={preferences.statusBar} onCheckedChange={(value) => { update('statusBar', value) }} />
+      <Card title="Updates">
+        <Row label="Download updates automatically" detail="A new release is fetched in the background. Installing waits until you restart.">
+          <Switch aria-label="Download updates automatically" checked={preferences.autoDownloadUpdates} onCheckedChange={(value) => { update('autoDownloadUpdates', value) }} />
+        </Row>
+        <Row label="Install updates when idle" detail="Never while an agent is working.">
+          <Switch aria-label="Install updates when idle" checked={preferences.restartWhenIdle} onCheckedChange={(value) => { update('restartWhenIdle', value) }} />
         </Row>
       </Card>
-      {updates && (
-        <Card title="Updates" color="var(--ansi-green)" iconPath={<path d="M12 4v10m0 0l-4-4m4 4l4-4M5 19h14" />}>
-          <Row label="Maitty updates" detail={updates.summary}>
-            <UpdateControl updates={updates} />
-          </Row>
-          {updates.status === 'downloading' && (
-            <div className="mx-scard-progress">
-              <DownloadProgress progress={updates.download?.progress ?? null} transfer={updates.download?.transfer ?? null} />
-            </div>
-          )}
-          <Row label="Download updates automatically" detail="A new release is fetched in the background. Installing waits until you restart.">
-            <Switch aria-label="Download updates automatically" checked={preferences.autoDownloadUpdates} onCheckedChange={(value) => { update('autoDownloadUpdates', value) }} />
-          </Row>
-          <Row label="Install updates when idle" detail="Never while an agent is working.">
-            <Switch aria-label="Install updates when idle" checked={preferences.restartWhenIdle} onCheckedChange={(value) => { update('restartWhenIdle', value) }} />
-          </Row>
-        </Card>
-      )}
-      <Card title="Sessions" color="var(--ansi-mag)" iconPath={<><rect x="4" y="4" width="16" height="7" rx="2" /><rect x="4" y="13" width="16" height="7" rx="2" /><path d="M8 7.5h.01M8 16.5h.01" /></>}>
+      <Card title="Sessions">
         <Row label="Reopen layout on launch" detail="Restore the panes and splits you had last time.">
           <Switch aria-label="Reopen layout on launch" checked={preferences.restoreLayout} onCheckedChange={(value) => { update('restoreLayout', value) }} />
         </Row>
         <Row label="Closing the window" detail="Sessions are owned by maittyd and keep running.">
-          <span style={{ fontSize: 12, color: 'var(--dim)' }}>Always keeps running</span>
+          <span style={{ fontSize: 12, color: 'var(--dim)' }}>Keeps running</span>
         </Row>
         <Row label="Welcome" detail="Replay the short intro: where sessions start and the keys to know.">
           <button type="button" className="mx-scard-button" onClick={onShowWelcome}>Show the welcome again</button>
@@ -401,44 +479,10 @@ function GeneralSection({ preferences, update, validateFolder, onChooseFolder, o
 
 const CHAT_VIEW_OPTIONS = [['terminal', 'Terminal'], ['chat', 'Chat']] as const
 const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as const
-/** The chip beside the update button, only where it says something the button does not. */
-const UPDATE_CHIP: Partial<Record<UpdaterState['status'], string>> = { idle: 'Not checked', current: 'Up to date', available: 'Update available', failed: 'Failed' }
-
-/** Where the update is: one button that says it, turning while it works and asking for the restart once it is ready. */
-function UpdateControl({ updates }: { updates: NonNullable<DesktopSettingsProps['updates']> }) {
-  const chip = UPDATE_CHIP[updates.status]
-  const busy = updates.status === 'checking' || updates.status === 'downloading'
-  const action = updateAction(updates)
-  return (
-    <>
-      {chip !== undefined && <span className={`mx-upd-chip is-${updates.status}`}>{chip}</span>}
-      <button type="button" className={`mx-text-button mx-upd-button${updates.status === 'ready' ? ' is-primary is-ready' : ''}`} disabled={busy} aria-busy={busy} onClick={action.run}>
-        {busy && <span className="mx-upd-spin" aria-hidden="true" />}
-        {action.label}
-      </button>
-    </>
-  )
-}
-
-/** The one button that fits where the update is. */
-function updateAction(updates: NonNullable<DesktopSettingsProps['updates']>): { label: string; run: () => void } {
-  switch (updates.status) {
-    case 'available': return { label: 'Download', run: updates.onDownload }
-    case 'ready': return { label: 'Restart now', run: updates.onRestart }
-    case 'failed': return { label: 'Retry', run: updates.onCheck }
-    case 'checking': return { label: 'Checking…', run: updates.onCheck }
-    case 'downloading': {
-      const percent = percentOf(updates.download?.progress ?? null)
-      return { label: percent === null ? 'Downloading…' : `Downloading ${String(percent)}%`, run: updates.onCheck }
-    }
-    case 'idle':
-    case 'current': return { label: 'Check now', run: updates.onCheck }
-  }
-}
 const TOAST_POSITIONS = [['top-left', 'Top left'], ['top-center', 'Top center'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-center', 'Bottom center'], ['bottom-right', 'Bottom right']] as const
 const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creation', 'Creation'], ['priority', 'Priority']]
 const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
-const DOCK_OPTIONS = [['panel', 'Side panel'], ['under', 'Under the chat']] as const
+const DOCK_OPTIONS = [['bottom', 'Bottom'], ['right', 'Right'], ['full', 'Full']] as const
 const SIDE_OPTIONS = [['left', 'Left'], ['right', 'Right']] as const
 const ICON_OPTIONS = [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']] as const
 const DENSITY_OPTIONS = [['compact', 'Compact'], ['comfortable', 'Comfortable'], ['spacious', 'Spacious']] as const
@@ -452,18 +496,10 @@ const WEIGHT_NAMES: Readonly<Record<TerminalFontWeight, string>> = { [WEIGHT_LIG
 const weightOptions = (weights: readonly TerminalFontWeight[]) => weights.map((weight) => [weight, WEIGHT_NAMES[weight]] as const)
 const NORMAL_WEIGHTS = weightOptions([WEIGHT_LIGHT, WEIGHT_REGULAR, WEIGHT_MEDIUM, WEIGHT_SEMIBOLD])
 const BOLD_WEIGHTS = weightOptions([WEIGHT_SEMIBOLD, WEIGHT_BOLD, WEIGHT_EXTRA_BOLD])
-const CURSORS: ReadonlyArray<readonly [CursorStyle, ReactNode]> = (['block', 'bar', 'underline'] as const).map((shape) => [shape, <><span className={`mx-cursor-glyph is-${shape}`} aria-hidden="true" />{shape === 'bar' ? 'Bar' : shape === 'block' ? 'Block' : 'Underline'}</>] as const)
+const CURSORS: ReadonlyArray<readonly [CursorStyle, string]> = [['block', 'Block'], ['bar', 'Bar'], ['underline', 'Underline']]
 const THOUSAND = 1000
 const SCROLLBACKS: ReadonlyArray<readonly [ScrollbackLines, string]> = SCROLLBACK_CHOICES.map((lines) => [lines, `${String(lines / THOUSAND)}k`] as const)
 const SCROLL_SPEEDS: ReadonlyArray<readonly [ScrollSpeed, string]> = SCROLL_SPEED_CHOICES.map((speed) => [speed, speed === 1 ? 'Normal' : `${String(speed)}×`] as const)
-
-function caretStyle(cursor: CursorStyle): CSSProperties {
-  return { width: cursor === 'bar' ? '2px' : '.6em', height: cursor === 'underline' ? '2px' : '1.25em', alignSelf: cursor === 'underline' ? 'flex-end' : 'center' }
-}
-
-function PromptPrefix() {
-  return <><span style={{ color: 'var(--accent-text)', fontWeight: 600 }}>maitty</span><span style={{ color: 'var(--ansi-mag)' }}> (main)</span><span style={{ color: 'var(--dim)' }}> ❯ </span></>
-}
 
 /** The font picker: Geist Mono (saved as empty) and the monospace families installed here, each set in its own face. */
 function FontFamilyField({ value, onCommit }: { value: string; onCommit: (family: string) => void }) {
@@ -484,7 +520,7 @@ function FontFamilyField({ value, onCommit }: { value: string; onCommit: (family
   // A family saved earlier that this computer no longer reports still shows as the current choice.
   const saved = value !== '' && value !== BUNDLED_FONT_NAME && !names.includes(value) ? [item(value, 'Saved choice')] : []
   const groups: PickerGroup[] = [
-    { items: [item(BUNDLED_FONT_NAME, 'Default, bundled with Maitty')] },
+    { items: [item(BUNDLED_FONT_NAME, 'Bundled with Maitty')] },
     ...(saved.length + names.length > 0 ? [{ label: 'Installed here', items: [...saved, ...names.map((name) => item(name, 'Monospace'))] }] : []),
   ]
   return <PickerSelect label="Terminal font family" value={value === '' ? BUNDLED_FONT_NAME : value} groups={groups} onPick={(next) => { onCommit(next === BUNDLED_FONT_NAME ? '' : next) }} width={240} />
@@ -494,41 +530,27 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
   const family = preferences.terminalFontFamily === '' ? BUNDLED_FONT_NAME : preferences.terminalFontFamily
   return (
     <>
-      <Card title="Text" color="var(--ansi-blue)" iconPath={<path d="M5 6h14M12 6v12" />} meta={<span className="mono" style={{ fontSize: 12, color: 'var(--fg2)' }}>{family} · {preferences.terminalFontSize}px</span>}
-        foot="Leave the font empty for Geist Mono, or name any monospace font installed on this computer; if it is missing, Geist Mono is used. Regular at 400 can look thin on Linux: try Medium.">
-        <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span className="mx-field-label">Size</span>
-            <SegmentedChoice label="Terminal text size" value={preferences.terminalFontSize} options={FONT_SIZES} onChange={(value) => { update('terminalFontSize', value) }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span className="mx-field-label">Font</span>
-            <FontFamilyField value={preferences.terminalFontFamily} onCommit={(next) => { update('terminalFontFamily', next) }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span className="mx-field-label">Weight</span>
-            <SegmentedChoice label="Terminal text weight" value={preferences.terminalFontWeight} options={NORMAL_WEIGHTS} onChange={(value) => { update('terminalFontWeight', value) }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span className="mx-field-label">Bold</span>
-            <SegmentedChoice label="Terminal bold weight" value={preferences.terminalFontWeightBold} options={BOLD_WEIGHTS} onChange={(value) => { update('terminalFontWeightBold', value) }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span className="mx-field-label">Cursor</span>
-            <SegmentedChoice label="Cursor" value={preferences.cursorStyle} options={CURSORS} onChange={(value) => { update('cursorStyle', value) }} />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <span className="mx-field-label">Blink</span>
-            <Switch aria-label="Blinking cursor" checked={preferences.cursorBlink} onCheckedChange={(value) => { update('cursorBlink', value) }} />
-          </div>
-          <div className="mx-preview" style={{ fontSize: preferences.terminalFontSize, fontFamily: fontStackFor(preferences.terminalFontFamily), fontWeight: preferences.terminalFontWeight }} aria-label="Terminal preview" role="img">
-            <div><PromptPrefix /><span style={{ fontWeight: preferences.terminalFontWeightBold }}>cargo</span> test <span style={{ color: 'var(--ansi-blue)' }}>-p</span> maitty-core</div>
-            <div style={{ color: 'var(--fg2)' }}>test pane_terminal::replay_then_stream ... <span style={{ color: 'var(--ok)' }}>ok</span></div>
-            <div style={{ display: 'flex', alignItems: 'center' }}><PromptPrefix /><span className={`mx-caret${preferences.cursorBlink ? ' is-blinking' : ''}`} style={caretStyle(preferences.cursorStyle)} /></div>
-          </div>
-        </div>
+      <Card title="Text" meta={<span className="mx-scard-meta">{family} · {preferences.terminalFontSize}px</span>}>
+        <Row label="Font family" detail="The font every terminal pane uses.">
+          <FontFamilyField value={preferences.terminalFontFamily} onCommit={(next) => { update('terminalFontFamily', next) }} />
+        </Row>
+        <Row label="Text size">
+          <SegmentedChoice label="Terminal text size" value={preferences.terminalFontSize} options={FONT_SIZES} onChange={(value) => { update('terminalFontSize', value) }} />
+        </Row>
+        <Row label="Text weight">
+          <SegmentedChoice label="Terminal text weight" value={preferences.terminalFontWeight} options={NORMAL_WEIGHTS} onChange={(value) => { update('terminalFontWeight', value) }} />
+        </Row>
+        <Row label="Bold weight">
+          <SegmentedChoice label="Terminal bold weight" value={preferences.terminalFontWeightBold} options={BOLD_WEIGHTS} onChange={(value) => { update('terminalFontWeightBold', value) }} />
+        </Row>
+        <Row label="Cursor">
+          <SegmentedChoice label="Cursor" value={preferences.cursorStyle} options={CURSORS} onChange={(value) => { update('cursorStyle', value) }} />
+        </Row>
+        <Row label="Blinking cursor">
+          <Switch aria-label="Blinking cursor" checked={preferences.cursorBlink} onCheckedChange={(value) => { update('cursorBlink', value) }} />
+        </Row>
       </Card>
-      <Card title="Scrollback" color="var(--ansi-green)" iconPath={<path d="m5 8 4 4-4 4M12 17h7" />}>
+      <Card title="Scrollback">
         <Row label="Lines kept per pane" detail="Older output is dropped from the GUI. maittyd keeps the full history.">
           <SegmentedChoice label="Lines kept per pane" value={preferences.scrollback} options={SCROLLBACKS} onChange={(value) => { update('scrollback', value) }} />
         </Row>
@@ -539,12 +561,9 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
           <Switch aria-label="Screen reader support" checked={preferences.terminalScreenReader} onCheckedChange={(value) => { update('terminalScreenReader', value) }} />
         </Row>
       </Card>
-      <Card title="Panes" color="var(--ansi-mag)" iconPath={<><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M3 14h18M9 4v10" /></>}>
-        <Row label="Terminals open in" detail="An agent's own terminals: a tab of the side panel, or a drawer pinned under its chat.">
+      <Card title="Panes">
+        <Row label="Terminals open in" detail="Where the terminal opens beside the chat: under it, on its right, or in its place. The terminal's own bar changes it too.">
           <SegmentedChoice label="Terminals open in" value={preferences.terminalDock} options={DOCK_OPTIONS} onChange={(value) => { update('terminalDock', value) }} />
-        </Row>
-        <Row label="See-through terminal" detail="Lets the card show behind a pane's text when WebGL draws it. Programs that paint their own backgrounds, like Claude Code under its prompt, then show as boxes.">
-          <Switch aria-label="See-through terminal" checked={preferences.terminalSeeThrough} onCheckedChange={(value) => { update('terminalSeeThrough', value) }} />
         </Row>
       </Card>
     </>
@@ -554,30 +573,15 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
 
 const MODE_OPTIONS = [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']] as const
 
-/** A window style as the picker shows it: a small window in the style's own shape and the theme in use, then its name and line. */
-function windowStyleItem(style: WindowStyleEntry): PickerItem {
-  return {
-    value: style.id,
-    label: style.name,
-    sub: style.blurb,
-    tile: <span className="mx-style-tile" data-shape={style.id} aria-hidden="true"><i /></span>,
-    labelStyle: { fontFamily: style.font },
-  }
-}
+const CORNER_OPTIONS = CORNERS.map((id) => [id, CORNER_NAMES[id]] as const)
 
 function AppearanceSection({ preferences, update, systemReducedMotion, systemDark, onPreviewTheme }: { preferences: SettingsPreferences; update: Update; systemReducedMotion: boolean; systemDark: boolean; onPreviewTheme: (name: string | null) => void }) {
   const reduced = preferences.reduceMotion || systemReducedMotion
   const darkInUse = preferences.themeMode === 'dark' || (preferences.themeMode === 'system' && systemDark)
-  const modeNote = preferences.themeMode === 'system' ? `Follows your OS. Right now: ${systemDark ? 'dark' : 'light'}.` : `Always uses your ${preferences.themeMode} theme.`
   return (
     <>
-      <Card title="Look" color="var(--accent)" iconPath={<><rect x="4" y="5" width="16" height="14" rx="3" /><path d="M4 10h16" /></>} meta={<span className="mx-scard-meta">{THEMES.length} themes installed</span>}
-        foot="Amber and red keep their meaning in every theme."
-      >
-        <Row label="Window style" detail="Same features, different finish.">
-          <PickerSelect label="Window style" value={preferences.style} groups={[{ items: WINDOW_STYLES.map((style) => windowStyleItem(style)) }]} onPick={(style) => { if (isWindowStyle(style)) update('style', style) }} />
-        </Row>
-        <Row label="Appearance" detail={modeNote}>
+      <Card title="Look" meta={<span className="mx-scard-meta">{THEMES.length} themes installed</span>}>
+        <Row label="Appearance" detail="Follows your system when set to System.">
           <SegmentedChoice label="Appearance" value={preferences.themeMode} options={MODE_OPTIONS} onChange={(value) => { update('themeMode', value) }} />
         </Row>
         <Row label="Dark theme" detail="Used when the window is dark.">
@@ -586,19 +590,19 @@ function AppearanceSection({ preferences, update, systemReducedMotion, systemDar
         <Row label="Light theme" detail="Used when the window is light.">
           <ThemePicker kind="light" value={preferences.lightTheme} inUse={!darkInUse} dimmed={darkInUse && preferences.themeMode !== 'system'} onPick={(name) => { update('lightTheme', name) }} onPreview={onPreviewTheme} />
         </Row>
-        <Row label="Working spinner" detail="Shown on tabs, pane headers and sidebar rows while something runs. The TUI ones use its exact frames.">
+        <Row label="Corners" detail="Square keeps every panel, button and field sharp. Rounded softens them.">
+          <SegmentedChoice label="Corners" value={preferences.corners} options={CORNER_OPTIONS} onChange={(value) => { update('corners', value) }} />
+        </Row>
+        <Row label="Working spinner" detail="Shown on tabs, pane headers and sidebar rows while something runs.">
           <SpinnerPicker value={preferences.spinner} reduced={reduced} onPick={(spinner) => { update('spinner', spinner) }} />
         </Row>
       </Card>
-      <Card title="Surfaces" color="var(--ansi-mag)" iconPath={<><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 0 0 16" /></>}>
+      <Card title="Surfaces">
         <Row label="Icons" detail="Agent and folder icons in their own colours, or neutral gray tiles.">
           <SegmentedChoice label="Icons" value={preferences.iconColor} options={ICON_COLOR_OPTIONS} onChange={(value) => { update('iconColor', value) }} />
         </Row>
-        <Row label="Background glow" detail="Two faint tints of the theme behind the cards. Off is a flat ground; a web view without WebGL always uses the flat one.">
-          <Switch aria-label="Background glow" checked={preferences.backgroundGlow} onCheckedChange={(value) => { update('backgroundGlow', value) }} />
-        </Row>
       </Card>
-      <Card title="Interface size" color="var(--ansi-green)" iconPath={<path d="M4 7h16M4 12h10M4 17h13" />}>
+      <Card title="Interface size">
         <Row label="Density" detail="How much room the sidebar rows, pane headers and gaps get.">
           <SegmentedChoice label="Density" value={preferences.density} options={DENSITY_OPTIONS} onChange={(value) => { update('density', value) }} />
         </Row>
@@ -606,7 +610,7 @@ function AppearanceSection({ preferences, update, systemReducedMotion, systemDar
           <SegmentedChoice label="Pane title text size" value={preferences.tabTextSize} options={UI_TEXT_OPTIONS} onChange={(value) => { update('tabTextSize', value) }} />
         </Row>
       </Card>
-      <Card title="Motion" color="var(--ansi-blue)" iconPath={<><circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 0 0 16" /></>}>
+      <Card title="Motion">
         <Row label="Reduce motion" detail="Turns off pulses, slide-ins and size animations, and holds spinners still. Your system setting is always respected.">
           <Switch aria-label="Reduce motion" checked={preferences.reduceMotion} onCheckedChange={(value) => { update('reduceMotion', value) }} />
         </Row>
@@ -619,32 +623,30 @@ function AppearanceSection({ preferences, update, systemReducedMotion, systemDar
 function ChatSection({ preferences, update }: { preferences: SettingsPreferences; update: Update }) {
   return (
     <>
-      <Card title="Chat view" color="var(--accent)" iconPath={<path d="M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" />}>
+      <Card title="Chat view">
         <Row label="Default agent" detail="The agent a new session starts. A plain terminal is always one click away.">
           <SegmentedChoice label="Default agent" value={preferences.defaultAgent} options={AGENT_OPTIONS} onChange={(value) => { update('defaultAgent', value) }} />
         </Row>
-        <Row label="New sessions open as" detail="Which view a new session opens in. The agent runs in a terminal either way, so you can switch between its chat and its terminal at any time.">
-          <SegmentedChoice label="New sessions open as" value={preferences.newSessionView} options={VIEW_OPTIONS} onChange={(value) => { update('newSessionView', value) }} />
-        </Row>
-        <Row label="Chat width" detail="How wide the messages and the message box run. Auto grows with the pane, so a large screen is used; Narrow keeps the original column.">
+        <Row label="Chat width" detail="How wide the messages and the message box run. Auto grows with the pane.">
           <SegmentedChoice label="Chat width" value={preferences.chatWidth} options={CHAT_WIDTH_OPTIONS} onChange={(value) => { update('chatWidth', value) }} />
         </Row>
         <Row label="Chat text size" detail="Draws everything in the chat larger or smaller: its messages, its cards and its message box.">
           <SegmentedChoice label="Chat text size" value={preferences.chatTextSize} options={CHAT_TEXT_SIZE_OPTIONS} onChange={(value) => { update('chatTextSize', value) }} />
         </Row>
-        <Row label="Full access in new chats" detail="Start new chats with the agent's skip-permissions mode: no sandbox and no approval prompts, so the agent can change files and run commands without asking. Each chat can still turn it off or on when it starts.">
-          <Switch aria-label="Full access in new chats" checked={preferences.chatFullAccessDefault} onCheckedChange={(value) => { update('chatFullAccessDefault', value) }} />
+        <Row label="Full access in new chats" detail="Start new chats with the agent's skip-permissions mode: no sandbox and no approval prompts. Each chat can still turn it off or on when it starts.">
+          <Switch aria-label="Full access in new chats" checked={preferences.fullAccessNewChats} onCheckedChange={(value) => { update('fullAccessNewChats', value) }} />
+        </Row>
+        <Row label="Hide successful tool calls" detail="Leaves out the file reads and searches that worked. Commands, edits, other tools and anything that failed still show.">
+          <Switch aria-label="Hide successful tool calls" checked={preferences.hideSuccessfulTools} onCheckedChange={(value) => { update('hideSuccessfulTools', value) }} />
         </Row>
         {CHAT_AGENTS.map((agent) => (
-          <Row key={agent} label={`${agent === 'claude' ? 'Claude' : 'Codex'} sessions open in`} detail="Only a session with a chat opens in it; the switch on each pane changes one session.">
-            <SegmentedChoice label={`${agent === 'claude' ? 'Claude' : 'Codex'} sessions open in`} value={preferences.chatViewDefault[agent]} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('chatViewDefault', { ...preferences.chatViewDefault, [agent]: value }) }} />
+          <Row key={agent} label={`${AGENT_LABEL[agent]} sessions open in`} detail="Only a session with a chat opens in it; the switch on each pane changes one session.">
+            <SegmentedChoice label={`${AGENT_LABEL[agent]} sessions open in`} value={preferences.chatViewDefault[agent]} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('chatViewDefault', { ...preferences.chatViewDefault, [agent]: value }) }} />
           </Row>
         ))}
       </Card>
       <Card
         title="Yolo mode"
-        color="var(--danger)"
-        iconPath={<path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z" />}
         foot="Off for every agent by default. Only sessions started after you turn one on get it. Every session already running has to be closed and started again."
       >
         {YOLO_AGENTS.map(({ key, label, detail }) => (
@@ -671,8 +673,8 @@ function accountWords(state: AccountState): string {
   const { installed, signedIn, account, plan } = state.auth
   if (!installed) return 'Not installed on this computer.'
   if (signedIn === null) return 'Installed. It did not say whether it is signed in.'
-  if (!signedIn) return 'Not signed in.'
-  return [account === '' ? 'Signed in' : `Signed in: ${account}`, plan].filter((part) => part !== '').join(' · ')
+  if (!signedIn) return 'Installed, not signed in'
+  return [account === '' ? 'Signed in' : `Signed in as ${account}`, plan].filter((part) => part !== '').join(' · ')
 }
 
 /**
@@ -701,8 +703,8 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
     )
   }
   return (
-    <Card title="Accounts" color="var(--ansi-mag)" iconPath={<path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0" />}
-      meta={<button type="button" className="mx-text-button" onClick={again}>Check again</button>}
+    <Card title="Accounts"
+      meta={<button type="button" className="mx-scard-meta-button" onClick={again}>Check again</button>}
       foot="Sign in opens the agent's own sign-in in a terminal: finish it there, then check again. Maitty keeps no passwords or keys."
     >
       {ACCOUNT_AGENTS.map(([agent, label]) => {
@@ -711,7 +713,7 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
         return (
           <Row key={agent} label={label} detail={accountWords(state)}>
             <span style={{ display: 'flex', gap: 8 }}>
-              {auth?.installed === true && auth.signedIn !== true && onSignIn !== undefined && <button type="button" className="mx-scard-button" aria-label={`Sign in to ${label}`} onClick={() => { onSignIn(agent) }}>Sign in</button>}
+              {auth?.installed === true && auth.signedIn !== true && onSignIn !== undefined && <button type="button" className="mx-scard-button is-primary" aria-label={`Sign in to ${label}`} onClick={() => { onSignIn(agent) }}>Sign in</button>}
               {auth?.signedIn === true && <button type="button" className="mx-scard-button" aria-label={`Sign out of ${label}`} onClick={() => { signOut(agent, label) }}>Sign out</button>}
             </span>
           </Row>
@@ -725,20 +727,18 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
 function SidebarSection({ preferences, update }: { preferences: SettingsPreferences; update: Update }) {
   return (
     <>
-      <Card title="Sessions" color="var(--accent)" iconPath={<><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M9 4v16" /></>}
-        foot="Session order applies when the sidebar is grouped by machine."
-      >
+      <Card title="Sidebar">
         <Row label="Group sessions by" detail="Status lists what needs you first, then what is working, finished and idle. Project and Machine put each under its own heading.">
           <SegmentedChoice label="Group sessions by" value={preferences.sidebarGroup} options={GROUP_OPTIONS} onChange={(value) => { update('sidebarGroup', value) }} />
         </Row>
-        <Row label="Session order" detail="Creation keeps every row where it was put. Priority moves a session that needs you to the top.">
+        <Row label="Session order" detail="Creation keeps every row where it was put. Priority moves a session that needs you to the top. Used when the sidebar is grouped by machine.">
           <SegmentedChoice label="Session order" value={preferences.sidebarOrder} options={ORDER_OPTIONS} onChange={(value) => { update('sidebarOrder', value) }} />
         </Row>
         <Row label="Sidebar position" detail="Which side of the window the sidebar sits on. Inspect opens from the other side.">
           <SegmentedChoice label="Sidebar position" value={preferences.sidebarSide} options={SIDE_OPTIONS} onChange={(value) => { update('sidebarSide', value) }} />
         </Row>
       </Card>
-      <Card title="Size" color="var(--ansi-green)" iconPath={<path d="M4 7h16M4 12h10M4 17h13" />}>
+      <Card title="Sidebar size">
         <Row label="Sidebar icons" detail="The project tiles, session icons and the collapsed rail.">
           <SegmentedChoice label="Sidebar icon size" value={preferences.iconSize} options={ICON_OPTIONS} onChange={(value) => { update('iconSize', value) }} />
         </Row>
@@ -746,7 +746,6 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
           <SegmentedChoice label="Sidebar text size" value={preferences.sidebarTextSize} options={UI_TEXT_OPTIONS} onChange={(value) => { update('sidebarTextSize', value) }} />
         </Row>
         <Row label="Sidebar width" detail="Drag the sidebar's edge to change it, or focus the edge and use the arrow keys.">
-          <span className="mono" style={{ fontSize: 12, color: 'var(--fg2)' }}>{preferences.sidebarWidth}px</span>
           <button type="button" className="mx-text-button" disabled={preferences.sidebarWidth === SIDEBAR_WIDTH_DEFAULT} onClick={() => { update('sidebarWidth', SIDEBAR_WIDTH_DEFAULT) }}>Reset</button>
         </Row>
       </Card>
@@ -754,23 +753,82 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
   )
 }
 
-function HotkeysSection({ platform }: { platform: Platform }) {
+/** Without the one action's chosen keys, so it goes back to its own. */
+function withoutOverride(overrides: KeyOverrides, action: ShortcutAction): KeyOverrides {
+  return Object.fromEntries(Object.entries(overrides).filter(([chosen]) => chosen !== action))
+}
+
+/** Each window key, with Change to press a new one for it and Reset to go back to its own. The terminal's keys are listed, not changed. */
+function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platform; overrides: KeyOverrides; onOverrides: (next: KeyOverrides) => void }) {
+  const [capturing, setCapturing] = useState<ShortcutAction | null>(null)
+  const [refusal, setRefusal] = useState<{ action: ShortcutAction; reason: string } | null>(null)
+  const rows = hotkeyRows(platform, overrides)
+  const anyChanged = rows.some((row) => row.changed)
+
+  const startCapture = (action: ShortcutAction) => { setRefusal(null); setCapturing(action) }
+  const onCaptureKey = (action: ShortcutAction, event: KeyboardEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    if (event.key === 'Escape') { setCapturing(null); return }
+    const captured = captureCombo(event, platform)
+    if (captured.kind === 'waiting') return
+    if (captured.kind === 'refused') { setRefusal({ action, reason: captured.reason }); return }
+    const keys = writeChord(comboChord(captured.combo, platform), platform)
+    const other = takenBy(captured.combo, action, platform, overrides)
+    if (other) { setRefusal({ action, reason: `${keys} is already ${other.label}. Change that one first.` }); return }
+    setRefusal(null)
+    setCapturing(null)
+    onOverrides(isOwnKey(captured.combo, action, platform) ? withoutOverride(overrides, action) : { ...overrides, [action]: captured.combo })
+  }
+
   return (
-    <Card title="Hotkeys" color="var(--ansi-blue)" iconPath={<><rect x="3" y="7" width="18" height="10" rx="2" /><path d="M7 11h.01M11 11h.01M15 11h.01M8 14h8" /></>} meta={<span className="mx-scard-meta">{platform === 'mac' ? '⌘ here, Ctrl+Shift on Windows and Linux' : 'Ctrl+Shift here, ⌘ on macOS'}</span>} foot="In a focused pane, every other key goes straight to the shell.">
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {hotkeyRows(platform).map((row) => (
-          <div key={row.action} className="mx-hotkey-row">
-            <span>{row.action}</span>
-            <span className="mx-keys">
-              {row.chords.map((chord, index) => (
-                <Fragment key={chord.join('+')}>
-                  {index > 0 && <span className="mx-or">or</span>}
-                  <Keycaps chord={chord} className="mx-chord" labelled />
-                </Fragment>
-              ))}
-            </span>
-          </div>
-        ))}
+    <Card
+      title="Hotkeys"
+      meta={<span className="mx-scard-meta">{platform === 'mac' ? '⌘ here, Ctrl+Shift on Windows and Linux' : 'Ctrl+Shift here, ⌘ on macOS'}</span>}
+      foot={<>
+        <span>In a focused pane, every other key goes straight to the shell.</span>
+        {anyChanged && <button type="button" className="mx-text-button" onClick={() => { setRefusal(null); onOverrides({}) }}>Reset all</button>}
+      </>}
+      footRow
+    >
+      <div>
+        {rows.map((row) => {
+          const action = row.id
+          const listening = action !== null && capturing === action
+          return (
+            <div key={row.action} className="mx-scard-row mx-hotkey-row">
+              <span>{row.action}</span>
+              {listening ? (
+                // Focused as it opens; every key pressed here, Esc too, is taken down rather than acted on.
+                <button
+                  type="button"
+                  className="mx-key-capture"
+                  {...{ [KEY_CAPTURE_ATTRIBUTE]: '', 'data-owns-escape': '' }}
+                  aria-label={`Press the new keys for ${row.action}, or Esc to cancel`}
+                  autoFocus
+                  onKeyDown={(event) => { onCaptureKey(action, event) }}
+                  onBlur={() => { setCapturing(null) }}
+                >Press the new keys…</button>
+              ) : (
+                <span className="mx-keys">
+                  {row.chords.map((chord, index) => (
+                    <Fragment key={chord.join('+')}>
+                      {index > 0 && <span className="mx-or">or</span>}
+                      <Keycaps chord={chord} className="mx-chord" labelled />
+                    </Fragment>
+                  ))}
+                </span>
+              )}
+              {action === null ? <span className="mx-hotkey-actions"><span className="mx-hotkey-fixed">Terminal</span></span> : (
+                <span className="mx-hotkey-actions">
+                  {!listening && <button type="button" className="mx-text-button" aria-label={`Change the keys for ${row.action}`} onClick={() => { startCapture(action) }}>Change</button>}
+                  {row.changed && !listening && <button type="button" className="mx-text-button" aria-label={`Reset ${row.action}`} onClick={() => { setRefusal(null); onOverrides(withoutOverride(overrides, action)) }}>Reset</button>}
+                </span>
+              )}
+              {refusal?.action === action && <p className="mx-hotkey-refusal" role="alert">{refusal.reason}</p>}
+            </div>
+          )
+        })}
       </div>
     </Card>
   )
@@ -782,7 +840,6 @@ function UsageSection({ usage }: { usage: UsageInfo }) {
 }
 
 const AGENT_OPTIONS = [['claude', 'Claude'], ['codex', 'Codex']] as const
-const VIEW_OPTIONS = [['chat', 'Chat'], ['terminal', 'Terminal']] as const
 const CHAT_WIDTH_OPTIONS = [['auto', 'Auto'], ['narrow', 'Narrow'], ['wide', 'Wide'], ['full', 'Full']] as const
 const CHAT_TEXT_SIZE_OPTIONS: ReadonlyArray<readonly [number, string]> = CHAT_TEXT_SIZES.map((size) => [size, `${String(size)}%`] as const)
 
@@ -790,9 +847,7 @@ function NotificationsSection({ preferences, update, onTestNotice }: { preferenc
   return (
     <Card
       title="System notifications"
-      color="var(--warn)"
-      iconPath={<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0" />}
-      foot="Clicking a notification brings the window forward and shows that session. A notification names the session and where it is; it never shows what the agent asked, so nothing private appears on a locked screen. The system asks once whether Maitty may send them."
+      foot="Clicking a notification brings the window forward and shows that session. It never shows what the agent asked, so nothing private appears on a locked screen."
     >
       <Row label="Needs you" detail="An agent stopped for an answer or an approval.">
         <Switch aria-label="Notify when a session needs you" checked={preferences.notifyNeedsYou} onCheckedChange={(value) => { update('notifyNeedsYou', value) }} />
@@ -809,256 +864,8 @@ function NotificationsSection({ preferences, update, onTestNotice }: { preferenc
             <button key={id} type="button" className={`mx-pos-cell${preferences.toastPosition === id ? ' is-on' : ''}`} aria-label={label} aria-pressed={preferences.toastPosition === id} title={label} onClick={() => { update('toastPosition', id) }} />
           ))}
         </div>
-        {onTestNotice && <button type="button" className="mx-text-button" onClick={onTestNotice}>Show a test</button>}
+        {onTestNotice && <button type="button" className="mx-text-button mx-pos-test" onClick={onTestNotice}>Show a test</button>}
       </Row>
-    </Card>
-  )
-}
-
-function DaemonSection({ daemon }: { daemon: DaemonInfo }) {
-  const color = daemon.online ? 'var(--ok)' : 'var(--danger)'
-  const saveLog = () => {
-    exportDaemonLog().then(
-      (path) => { toast.success('Log saved', { description: path }) },
-      (error: unknown) => { toast.error(errorMessage(error, 'Could not save the log')) },
-    )
-  }
-  const showLog = () => { openDaemonLog().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the log')) }) }
-  return (
-    <Card title="maittyd" color="var(--ansi-green)" iconPath={<><rect x="4" y="4" width="16" height="7" rx="2" /><rect x="4" y="13" width="16" height="7" rx="2" /><path d="M8 7.5h.01M8 16.5h.01" /></>}
-      meta={<span role="status" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: color }} />{daemon.online ? 'Connected' : 'Disconnected'}</span>}
-    >
-      {daemon.version && <Row label="Version" detail="Shared by the GUI and the Maitty TUI."><span className="mx-scard-value">{daemon.version}</span></Row>}
-      {daemon.socket && <Row label="Socket" detail="Where clients connect."><span className="mx-scard-value">{daemon.socket}</span></Row>}
-      <Row label="Sessions" detail="Owned by the daemon. The GUI only attaches."><span className="mx-scard-value">{daemon.sessionCount}</span></Row>
-      <Row label="Service log" detail="What the service did lately, for working out a problem. Save a copy puts it in your Downloads folder as maitty-log.txt, ready to send. It names your folders and repositories, so look before you share it.">
-        <span style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="mx-scard-button" onClick={saveLog}>Save a copy</button>
-          <button type="button" className="mx-scard-button" onClick={showLog}>Show in folder</button>
-        </span>
-      </Row>
-    </Card>
-  )
-}
-
-
-function MachinesSection({ machines }: { machines: MachinesInfo }) {
-  return (
-    <>
-      <MachineList machines={machines} />
-      {machines.known && <AddMachineCard add={machines.add} />}
-    </>
-  )
-}
-
-type HostsState = { status: 'loading' } | { status: 'ready'; hosts: readonly HostChoice[] } | { status: 'failed'; message: string }
-
-function AddMachineCard({ add }: { add: MachinesInfo['add'] }) {
-  const [hosts, setHosts] = useState<HostsState>({ status: 'loading' })
-  const [text, setText] = useState('')
-  const [checking, setChecking] = useState<string | null>(null)
-  const [naming, setNaming] = useState<string | null>(null)
-  const [name, setName] = useState('')
-  const [note, setNote] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
-  const { loadHosts } = add
-  useEffect(() => {
-    let gone = false
-    loadHosts().then(
-      (list) => { if (!gone) setHosts({ status: 'ready', hosts: list }) },
-      (error: unknown) => { if (!gone) setHosts({ status: 'failed', message: errorMessage(error, 'Could not read ~/.ssh/config') }) },
-    )
-    return () => { gone = true }
-  }, [loadHosts])
-
-  const submit = (target: string, chosenName?: string) => {
-    setChecking(target)
-    setNote(null)
-    add.onAdd(target, chosenName).then(
-      (result) => {
-        setChecking(null)
-        switch (result.outcome) {
-          case 'needs-name':
-            setNaming(target)
-            setName('')
-            return
-          case 'cancelled':
-            setNote({ kind: 'ok', text: 'Cancelled. Nothing was added.' })
-            return
-          case 'added':
-            setNote({ kind: 'ok', text: `Added ${result.name}.${result.version ? ` ${result.version} answered there.` : ''} Connecting.` })
-            break
-          case 'login':
-            setNote({ kind: 'ok', text: `Added ${result.name}. ssh needs you to log in: use the session named “ssh ${result.name}”.` })
-            break
-          case 'login-manual':
-            setNote({ kind: 'error', text: `Added ${result.name}. Run “ssh ${result.target}” once in a terminal to log in, then retry (${result.why}).` })
-            break
-        }
-        setText('')
-        setNaming(null)
-        setHosts((current) => current.status === 'ready' ? { status: 'ready', hosts: current.hosts.filter((host) => host.alias !== target) } : current)
-      },
-      (error: unknown) => {
-        setChecking(null)
-        setNote({ kind: 'error', text: errorMessage(error, 'Could not add the machine') })
-      },
-    )
-  }
-
-  const typed = text.trim()
-  const shown = hosts.status === 'ready' ? hosts.hosts.filter((host) => `${host.alias} ${host.detail}`.toLowerCase().includes(typed.toLowerCase())) : []
-  const icon = <><circle cx="12" cy="12" r="9" /><path d="M12 8v8M8 12h8" /></>
-  return (
-    <Card title="Add a machine" color="var(--accent)" iconPath={icon}>
-      {add.windows && <p className="mx-scard-note">Windows: use ssh keys or an agent. Password prompts work in the session but are not remembered.</p>}
-      {checking !== null
-        ? (
-          <div className="mx-scard-row" data-owns-escape onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); add.onCancel() } }}>
-            <div className="mx-scard-text"><span role="status">Checking {checking}…</span><span>Esc ends ssh and adds nothing.</span></div>
-            <button type="button" className="mx-scard-button" onClick={add.onCancel}>Cancel</button>
-          </div>
-        )
-        : naming !== null
-          ? (
-            <form className="mx-scard-row" onSubmit={(event) => { event.preventDefault(); if (name.trim() !== '') submit(naming, name.trim()) }}>
-              <div className="mx-scard-text"><span>Name for {naming}</span><span>A short name for the sidebar, such as build.</span></div>
-              <input className="mx-scard-input" aria-label="Machine name" value={name} autoFocus onChange={(event) => { setName(event.target.value) }} />
-              <button type="submit" className="mx-scard-button" disabled={name.trim() === ''}>Add</button>
-              <button type="button" className="mx-scard-button" onClick={() => { setNaming(null) }}>Back</button>
-            </form>
-          )
-          : (
-            <form className="mx-scard-row" onSubmit={(event) => { event.preventDefault(); if (typed !== '') submit(typed) }}>
-              <div className="mx-scard-text"><span>Host</span><span>Pick one below, or type user@host.</span></div>
-              <input className="mx-scard-input" aria-label="Host or user@host" value={text} placeholder="user@host" onChange={(event) => { setText(event.target.value) }} />
-              <button type="submit" className="mx-scard-button" disabled={typed === ''}>Add</button>
-            </form>
-          )}
-      {note && <p className="mx-scard-note" role={note.kind === 'error' ? 'alert' : 'status'}>{note.text}</p>}
-      {checking === null && naming === null && (
-        hosts.status === 'loading'
-          ? <p className="mx-scard-note" role="status">Loading hosts from ~/.ssh/config…</p>
-          : hosts.status === 'failed'
-            ? <p className="mx-scard-note" role="alert">{hosts.message}</p>
-            : hosts.hosts.length === 0
-              ? <p className="mx-scard-note">No hosts in ~/.ssh/config. Type user@host above.</p>
-              : (
-                <ul className="mx-host-list" aria-label="Hosts in ~/.ssh/config">
-                  {shown.map((host) => (
-                    <li key={host.alias}>
-                      <button type="button" className="mx-host-row" onClick={() => { submit(host.alias) }}>
-                        <span>{host.alias}</span><span className="mx-host-detail">{host.detail}</span>
-                      </button>
-                    </li>
-                  ))}
-                  {shown.length === 0 && <li className="mx-scard-note">No host matches “{typed}”. Add presses Enter for it as typed.</li>}
-                </ul>
-              )
-      )}
-    </Card>
-  )
-}
-
-function MachineList({ machines }: { machines: MachinesInfo }) {
-  const [confirming, setConfirming] = useState<string | null>(null)
-  const [confirmingUpdate, setConfirmingUpdate] = useState<string | null>(null)
-  const [activity, setActivity] = useState<MachineActivity | null>(null)
-  const [checking, setChecking] = useState<string | null>(null)
-  const askUpdate = (name: string, action: UpdateAction) => {
-    setActivity(null)
-    if (action === 'install') {
-      setConfirmingUpdate(name)
-      return
-    }
-    setChecking(name)
-    void machines.onCheckActivity(name)
-      .catch(() => null)
-      .then((found) => { setActivity(found); setConfirmingUpdate(name) })
-      .finally(() => { setChecking(null) })
-  }
-  const [updating, setUpdating] = useState<string | null>(null)
-  const runUpdate = (name: string, action: UpdateAction, whenIdle: boolean) => {
-    setConfirmingUpdate(null)
-    setUpdating(name)
-    void machines.onUpdate(name, action, whenIdle).finally(() => { setUpdating(null) })
-  }
-  const icon = <><rect x="4" y="4" width="16" height="7" rx="2" /><rect x="4" y="13" width="16" height="7" rx="2" /><path d="M8 7.5h.01M8 16.5h.01" /></>
-  if (!machines.known) {
-    return <Card title="Machines" color="var(--ansi-green)" iconPath={icon}><p className="mx-scard-note" role="status">Loading machines…</p></Card>
-  }
-  if (machines.list.length === 0) {
-    return (
-      <Card title="Machines" color="var(--ansi-green)" iconPath={icon}>
-        <p className="mx-scard-note">No other machines. List them as [[machines]] in config.local.toml and restart the app.</p>
-      </Card>
-    )
-  }
-  return (
-    <Card title="Machines" color="var(--ansi-green)" iconPath={icon} meta={<span className="mx-scard-meta">{machines.list.length}</span>}>
-      {machines.list.map((head) => {
-        const name = head.label
-        const chip = head.chip
-        const asking = confirming === name
-        const askingUpdate = confirmingUpdate === name
-        const busyUpdating = updating === name
-        const action = head.updateAction
-        const words = action === null ? null : UPDATE_WORDS[action]
-        return (
-          <Fragment key={head.key}>
-          <div className="mx-scard-row mx-machine-row">
-            <div className="mx-scard-text">
-              <span>
-                {name}
-                {chip && <span className={`mx-machine-chip is-${chip.tone}`}> <span aria-hidden="true">{chip.glyph}</span> {chip.word}</span>}
-              </span>
-              {head.down && <span><DisconnectedSince at={head.downSince} /></span>}
-              {words !== null && <span className="mx-machine-need">{words.need(name)}</span>}
-              {words === null && head.why !== null && head.chip?.tone === 'bad' && <span className="mx-machine-fix">{head.why}</span>}
-              {head.updateCommand !== null && <span className="mx-machine-fix">Or in a terminal: <span className="mono">{head.updateCommand}</span></span>}
-              {asking && <span role="alert">Removes {name} from this list. Its sessions keep running on {name}.</span>}
-              {askingUpdate && <span role="alert">{action === 'install' ? installNote(name) : updateWarning(name, activity)}</span>}
-              {busyUpdating && words !== null && <span role="status">{words.running(name)}</span>}
-            </div>
-            {askingUpdate && action === 'install'
-              ? (
-                <>
-                  <button type="button" className="mx-scard-button is-primary" onClick={() => { runUpdate(name, action, false) }}>Install on {name} now</button>
-                  <button type="button" className="mx-scard-button" onClick={() => { setConfirmingUpdate(null) }}>Cancel</button>
-                </>
-              )
-              : askingUpdate && action !== null
-              ? (
-                <>
-                  <button type="button" className="mx-scard-button is-danger" onClick={() => { runUpdate(name, action, false) }}>{updateVerb(action, activity)} {name} now</button>
-                  <button type="button" className="mx-scard-button" onClick={() => { runUpdate(name, action, true) }}>{updateVerb(action, activity)} {name} when idle</button>
-                  <button type="button" className="mx-scard-button" onClick={() => { setConfirmingUpdate(null) }}>Cancel</button>
-                </>
-              )
-              : asking
-              ? (
-                <>
-                  <button type="button" className="mx-scard-button is-danger" onClick={() => { setConfirming(null); machines.onRemove(name) }}>Remove {name}</button>
-                  <button type="button" className="mx-scard-button" onClick={() => { setConfirming(null) }}>Keep</button>
-                </>
-              )
-              : (
-                <>
-                  {action !== null && words !== null && <button type="button" className="mx-scard-button is-primary" disabled={updating !== null || checking !== null} aria-label={`${words.verb} Maitty on ${name}`} onClick={() => { askUpdate(name, action) }}>{checking === name ? 'Checking…' : words.verb}</button>}
-                  {head.updateCommand !== null && <button type="button" className="mx-scard-button" aria-label={`Copy the update command for ${name}`} onClick={() => { if (head.updateCommand !== null) machines.onCopyCommand(head.updateCommand) }}>Copy command</button>}
-                  <button type="button" className="mx-scard-button" disabled={chip?.word === 'connected'} aria-label={`Retry ${name}`} onClick={() => { machines.onRetry(name) }}>Retry</button>
-                  <button type="button" className="mx-scard-button" aria-label={`Remove ${name}`} onClick={() => { setConfirming(name) }}>Remove</button>
-                </>
-              )}
-          </div>
-          <Row label={`Copy to your clipboard`} detail={`Let ${name} put text on your clipboard.`}>
-            <Switch aria-label={`Allow ${name} to copy to your clipboard`} checked={head.grants.clipboard} onCheckedChange={(on) => { machines.onGrant(name, 'clipboard', on) }} />
-          </Row>
-          <Row label="Notifications" detail={`Let ${name} raise notices, and tell you when its sessions need you or finish.`}>
-            <Switch aria-label={`Allow ${name} to notify you`} checked={head.grants.notices} onCheckedChange={(on) => { machines.onGrant(name, 'notices', on) }} />
-          </Row>
-          </Fragment>
-        )
-      })}
     </Card>
   )
 }

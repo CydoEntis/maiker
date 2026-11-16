@@ -396,7 +396,7 @@ fn a_machine_heading_s_right_click_menu_offers_the_fix_first() {
     right_click(&mut app, 4, y as u16);
     assert_eq!(
         menu_labels(&app),
-        [AppFix::Install.label().as_str(), "New shell here", "Reconnect", "Machines…"]
+        [AppFix::Install.label().as_str(), "New shell here", "Open a folder…", "Clone a repository…", "Details…", "Reconnect", "Machines…"]
     );
     let rows = text(&mut app, 140, 36);
     show(&rows, "kingdom's menu");
@@ -406,7 +406,7 @@ fn a_machine_heading_s_right_click_menu_offers_the_fix_first() {
     app.mode = Mode::Normal;
     text(&mut app, 140, 36);
     right_click(&mut app, 4, 2);
-    assert_eq!(menu_labels(&app), ["New shell here"]);
+    assert_eq!(menu_labels(&app), ["New shell here", "Open a folder…", "Clone a repository…", "Details…"]);
 }
 
 #[test]
@@ -489,7 +489,7 @@ fn a_session_shows_its_subagents_as_marks_or_when_open_one_row_each() {
 }
 
 #[test]
-fn clicking_a_subagent_opens_its_parents_pane() {
+fn enter_on_a_subagents_steps_opens_its_parents_pane() {
     let mut app = with_subagents();
     let (tx, mut rx) = mpsc::unbounded_channel();
     app.out = tx;
@@ -499,6 +499,8 @@ fn clicking_a_subagent_opens_its_parents_pane() {
     // Another pane is focused first, so the click has something to change.
     reference_fixture::focus(&mut app, 1);
     click(&mut app, 12, y);
+    // The click shows the subagent's own steps; Enter goes to the pane where its agent shows it.
+    key(&mut app, KeyCode::Enter);
     let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
     assert!(
         sent.iter().any(|o| matches!(&o.msg, ClientMsg::Command(Command::FocusPane { term: 2 }))),
@@ -570,6 +572,88 @@ fn a_failed_command_is_the_problem_state_and_its_row_says_so_in_red() {
     let y = app.screen.row_y[&ClientTerm::local(5)];
     assert_eq!(buf[(2, y)].symbol(), "●");
     assert_eq!(buf[(2, y)].fg, t.err);
+}
+
+/// Where `word` starts in the sidebar's columns of row `y`.
+fn side_x(rows: &[String], y: usize, word: &str) -> Option<u16> {
+    let row: Vec<char> = side(rows, y).chars().collect();
+    let word: Vec<char> = word.chars().collect();
+    row.windows(word.len()).position(|w| w == word).map(|x| x as u16)
+}
+
+#[test]
+fn a_session_that_hit_its_plan_limit_says_limited_and_when_it_resets_in_the_needs_you_colour() {
+    let mut app = reference_fixture::world(Stage::None);
+    let resets = reference_fixture::at(16, 30, 0);
+    app.snap.terms.get_mut(&5).unwrap().resume_at = Some(resets);
+    let buf = cells(&mut app, 140, 50);
+    let rows = text(&mut app, 140, 50);
+    show(&rows, "limited, two lines");
+    let y = row_of(&app, 5);
+    let x = side_x(&rows, y + 1, "limited 16:30").unwrap_or_else(|| panic!("{}", side(&rows, y + 1)));
+    assert_eq!(buf[(x, y as u16 + 1)].fg, app.theme.blocked);
+    assert!(side(&rows, y).contains("old-moth"), "the name stays: {}", side(&rows, y));
+
+    app.screen.saved.group_folders = true;
+    let buf = cells(&mut app, 140, 50);
+    let rows = text(&mut app, 140, 50);
+    show(&rows, "limited, grouped by folder");
+    let y = row_of(&app, 5);
+    let x = side_x(&rows, y, "limited 16:30").unwrap_or_else(|| panic!("{}", side(&rows, y)));
+    assert_eq!(buf[(x, y as u16)].fg, app.theme.blocked);
+}
+
+#[test]
+fn a_limit_that_resets_on_another_day_says_which_day() {
+    let mut app = reference_fixture::world(Stage::None);
+    let resets = reference_fixture::at(16, 30, 0) + 3 * 24 * 3600;
+    app.snap.terms.get_mut(&5).unwrap().resume_at = Some(resets);
+    let rows = text(&mut app, 140, 50);
+    show(&rows, "limited, three days away");
+    let y = row_of(&app, 5);
+    let (day, time) = (crate::clock::local_weekday(resets), crate::clock::local_hm(resets));
+    assert_ne!(day, crate::clock::local_weekday(reference_fixture::now()));
+    assert!(side(&rows, y + 1).contains(&format!("limited {day} {time}")), "{}", side(&rows, y + 1));
+}
+
+#[test]
+fn a_limited_row_puts_the_limit_before_its_pull_request_and_alone_on_a_one_line_row() {
+    let mut app = reference_fixture::world(Stage::None);
+    let info = app.snap.terms.get_mut(&5).unwrap();
+    info.resume_at = Some(reference_fixture::at(16, 30, 0));
+    info.pr = Some(crate::protocol::PrInfo { number: 45, ..Default::default() });
+    let rows = text(&mut app, 140, 50);
+    show(&rows, "limited with a pull request");
+    let y = row_of(&app, 5);
+    let limited = side_x(&rows, y + 1, "limited 16:30").unwrap_or_else(|| panic!("{}", side(&rows, y + 1)));
+    let pr = side_x(&rows, y + 1, "#45").unwrap_or_else(|| panic!("{}", side(&rows, y + 1)));
+    assert!(limited < pr, "{}", side(&rows, y + 1));
+
+    app.screen.saved.group_folders = true;
+    let rows = text(&mut app, 140, 50);
+    let y = row_of(&app, 5);
+    assert!(side(&rows, y).contains("limited 16:30") && !side(&rows, y).contains("#45"), "{}", side(&rows, y));
+}
+
+#[test]
+fn a_limited_session_that_needs_you_keeps_its_needs_you_mark() {
+    let mut app = reference_fixture::world(Stage::None);
+    let info = app.snap.terms.get_mut(&5).unwrap();
+    info.resume_at = Some(reference_fixture::at(16, 30, 0));
+    info.status = Status::Blocked;
+    let buf = cells(&mut app, 140, 50);
+    let rows = text(&mut app, 140, 50);
+    let y = row_of(&app, 5);
+    assert_eq!((buf[(2, y as u16)].symbol(), buf[(2, y as u16)].fg), ("●", app.theme.blocked));
+    assert!(side(&rows, y + 1).contains("limited 16:30"), "{}", side(&rows, y + 1));
+}
+
+#[test]
+fn a_reset_time_that_has_passed_shows_nothing() {
+    let mut app = reference_fixture::world(Stage::None);
+    app.snap.terms.get_mut(&5).unwrap().resume_at = Some(reference_fixture::now());
+    let rows = text(&mut app, 140, 50);
+    assert!(!rows.iter().any(|r| side_of(r).contains("limited")), "{rows:#?}");
 }
 
 #[test]
@@ -1063,4 +1147,112 @@ fn every_way_to_close_a_session_opens_the_same_question() {
     app.menu_act(crate::client::menu::Act::End(vec![shell]));
     assert!(asks(&app, shell), "the row menu's Close shell asks");
     assert_eq!(closes_sent(&mut rx), 0);
+}
+
+#[test]
+fn finished_subagents_fold_into_a_count_that_lists_them_when_clicked() {
+    let mut app = with_subagents();
+    for activity in &mut app.snap.terms.get_mut(&2).unwrap().subagent_activity {
+        if activity.state == crate::protocol::SubagentState::Completed {
+            // Finished long ago: past the time a finished subagent stays listed.
+            activity.updated_at = 1;
+        }
+    }
+    reference_fixture::focus(&mut app, 2);
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "a finished subagent folded");
+    let y = row_of(&app, 2);
+    assert!(!rows.iter().any(|r| side_of(r).contains("Check migration order")));
+    let done = (y..y + 6).find(|&n| side(&rows, n).contains("1 done · show")).expect("an \"N done\" line");
+    let x = side(&rows, done).chars().position(|c| c == '1').unwrap() as u16;
+    click(&mut app, x, done as u16);
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "the finished subagent listed");
+    assert!(rows.iter().any(|r| side_of(r).contains("Check migration order")));
+    assert!(rows.iter().any(|r| side_of(r).contains("1 done · hide")));
+}
+
+#[test]
+fn a_sessions_workflow_runs_show_under_it_and_open_their_steps() {
+    use crate::workflow::{StepState::*, WorkflowRun, WorkflowStep, WorkflowTicket};
+    let mut app = reference_fixture::world(Stage::None);
+    let run = |id: &str, key: Option<&str>, states: [crate::workflow::StepState; 3]| WorkflowRun {
+        workflow: "factory".into(),
+        run: id.into(),
+        ticket: key.map(|key| WorkflowTicket { key: key.into(), title: Some("Add export".into()), link: None }),
+        steps: ["intake", "build", "review"]
+            .into_iter()
+            .zip(states)
+            .map(|(name, state)| WorkflowStep {
+                name: name.into(),
+                state,
+                note: (state == SentBack).then(|| "2 tests failed".into()),
+                helper: (name == "build").then(|| "MAITTY-42 builder".into()),
+            })
+            .collect(),
+        reported_at: 1,
+    };
+    app.snap.terms.get_mut(&2).unwrap().workflows = vec![
+        run("001", Some("MAITTY-42"), [Passed, SentBack, Waiting]),
+        run("002", Some("MAITTY-43"), [NeedsYou, Waiting, Waiting]),
+        run("003", None, [Passed, Passed, Passed]),
+    ];
+    app.screen_fresh();
+    reference_fixture::focus(&mut app, 2);
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "workflow runs under the open session");
+    let y = row_of(&app, 2);
+    let under: Vec<String> = (y + 2..y + 6).map(|n| side(&rows, n)).collect();
+    assert!(under.iter().any(|l| l.contains("├ ↺ MAITTY-42 build")), "{under:?}");
+    assert!(under.iter().any(|l| l.contains("├ ● MAITTY-43 intake")), "{under:?}");
+    let done = (y + 2..y + 6).find(|&n| side(&rows, n).contains("└ 1 run done")).expect("finished runs fold");
+    let line = done - 2;
+    let x = side(&rows, line).chars().position(|c| c == 'M').unwrap() as u16;
+    click(&mut app, x, line as u16);
+    assert!(matches!(app.mode, Mode::Run { .. }));
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "a run's steps");
+    let all = rows.join("\n");
+    assert!(all.contains("run MAITTY-42"), "the modal names the run");
+    assert!(all.contains("↺ build  2 tests failed  · MAITTY-42 builder"));
+    assert!(all.contains("· review"));
+}
+
+#[test]
+fn clicking_a_subagent_shows_its_own_steps_from_its_record() {
+    use crate::conversation::history::{Content, Entry, ItemState, Role, SourceId};
+    use crate::protocol::{HelperRecord, PROTOCOL_VERSION, Query, Reply, ServerMsg};
+    let mut app = with_subagents();
+    app.local_protocol = PROTOCOL_VERSION;
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    app.out = tx;
+    reference_fixture::focus(&mut app, 2);
+    text(&mut app, 140, 36);
+    let y = app.screen.row_y[&ClientTerm::local(2)] + 3;
+    click(&mut app, 12, y);
+    let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
+    assert!(
+        sent.iter().any(|o| matches!(&o.msg, ClientMsg::Query(Query::HelperRead { term: 2, helper }) if helper == "Write drafts tests")),
+        "{sent:?}"
+    );
+    assert!(matches!(app.mode, Mode::Helper(_)));
+    let said = |item: &str, role, text: &str| Entry {
+        source: SourceId { conversation: crate::conversation::ConversationId(0), turn: "t".into(), item: item.into() },
+        content: Content::Message { role, text: text.into() },
+        state: ItemState::Completed,
+        started_at_ms: None,
+        completed_at_ms: None,
+    };
+    app.on_server(ServerMsg::Reply(Reply::HelperRead(HelperRecord {
+        term: 2,
+        helper: "Write drafts tests".into(),
+        entries: vec![said("u", Role::User, "write the drafts tests"), said("a", Role::Assistant, "Added 4 tests for drafts.")],
+        start_missing: false,
+    })));
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "a subagent's own steps");
+    let all = rows.join("\n");
+    assert!(all.contains("subagent Write drafts tests"));
+    assert!(all.contains("asked write the drafts tests"));
+    assert!(all.contains("Added 4 tests for drafts."));
 }

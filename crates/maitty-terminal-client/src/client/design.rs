@@ -455,6 +455,9 @@ pub(super) fn draw_changes(
             r.task.branch.clone(),
             Style::default().fg(t.violet()).add_modifier(Modifier::BOLD),
         ));
+        if let Some(remote) = &v.extra.remote {
+            left.push(seg(format!(" on {}", remote.machine), Style::default().fg(t.strong)));
+        }
         left.push(seg(
             format!("   {agent}{} files · ", r.files.len()),
             Style::default().fg(t.muted),
@@ -468,6 +471,18 @@ pub(super) fn draw_changes(
                 Style::default().fg(if all { t.done } else { t.muted }),
             ));
         }
+        if !v.extra.ticked.is_empty() {
+            left.push(seg(
+                format!(" · ☑ {}", v.extra.ticked.len()),
+                Style::default().fg(t.accent),
+            ));
+        }
+        if !v.extra.comments.is_empty() {
+            left.push(seg(
+                format!(" · ✎ {}", v.extra.comments.len()),
+                Style::default().fg(t.accent),
+            ));
+        }
     }
     title_bar(buf, area, t, &left, &right, true);
 
@@ -477,7 +492,10 @@ pub(super) fn draw_changes(
         ..area
     };
     let Some(r) = &v.review else {
-        let msg = v.error.clone().unwrap_or_else(|| "reading changes…".into());
+        let msg = v.error.clone().unwrap_or_else(|| match &v.extra.remote {
+            Some(remote) => format!("reading the changes on {}…", remote.machine),
+            None => "reading changes…".into(),
+        });
         put(
             buf,
             body.x + 2,
@@ -553,6 +571,11 @@ pub(super) fn draw_changes(
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_default();
                 let name = if done { format!("✓ {name}") } else { name };
+                let name = if v.extra.ticked.contains(&f.path) {
+                    format!("☑ {name}")
+                } else {
+                    name
+                };
                 let mut ns = s.fg(if sel {
                     t.strong
                 } else if done {
@@ -662,17 +685,49 @@ pub(super) fn draw_changes(
         put(buf, dx, body.y + 1, &header, body.right());
     }
     let (mut old, mut new) = (1u32, 1u32);
-    let lines: Vec<Vec<Seg>> = r
-        .diff
+    // Each diff line, then the comments written on it: (its index, or None for a comment).
+    let path = r.files.get(r.sel).map(|f| f.path.as_str()).unwrap_or("");
+    let mut lines: Vec<(Option<usize>, Vec<Seg>)> = Vec::new();
+    for (k, l) in r.diff.iter().enumerate() {
+        lines.push((Some(k), diff_line(t, l, &mut old, &mut new)));
+        for c in v.extra.comments.iter().filter(|c| c.path == path && c.index == k) {
+            lines.push((
+                None,
+                vec![
+                    seg("        ✎ ", Style::default().fg(t.accent)),
+                    seg(c.comment.clone(), Style::default().fg(t.strong)),
+                ],
+            ));
+        }
+    }
+    let rows = usize::from(body.bottom().saturating_sub(body.y + 3 + 2));
+    let mut start = lines
         .iter()
-        .map(|l| diff_line(t, l, &mut old, &mut new))
-        .collect();
-    for (k, l) in lines.iter().skip(r.scroll as usize).enumerate() {
+        .position(|(k, _)| k.is_some_and(|k| k >= usize::from(r.scroll)))
+        .unwrap_or(0);
+    // The cursor stays in view.
+    if let Some(at) = v.extra.line.and_then(|line| lines.iter().position(|(k, _)| *k == Some(line))) {
+        if at < start {
+            start = at;
+        } else if rows > 0 && at >= start + rows {
+            start = at + 1 - rows;
+        }
+    }
+    for (k, (index, l)) in lines.iter().skip(start).enumerate() {
         let yy = body.y + 3 + k as u16;
         if yy >= body.bottom() {
             break;
         }
-        put(buf, dx, yy, l, body.right().saturating_sub(1));
+        let on = index.is_some() && *index == v.extra.line;
+        if on {
+            let row = Rect { x: dx, y: yy, width: body.right().saturating_sub(dx + 1), height: 1 };
+            fill(buf, row, t.sel_on(t.bg));
+            put(buf, dx.saturating_sub(2), yy, &[seg("▶", Style::default().fg(t.accent).add_modifier(Modifier::BOLD))], dx);
+            let lit: Vec<Seg> = l.iter().map(|(s, st)| (s.clone(), st.bg(t.sel_on(t.bg)))).collect();
+            put(buf, dx, yy, &lit, body.right().saturating_sub(1));
+        } else {
+            put(buf, dx, yy, l, body.right().saturating_sub(1));
+        }
     }
     // Actions
     let who = if v.agent.is_empty() {
@@ -683,6 +738,72 @@ pub(super) fn draw_changes(
     let reply = format!("Reply to {who}");
     let base = r.task.base.clone();
     let merge = format!("Merge into {base}");
+    // Writing a commit message or a comment: the box above the row, its two buttons on it.
+    let typing = match (&v.extra.message, &v.extra.commenting) {
+        (Some(m), _) => {
+            let n = if v.extra.ticked.is_empty() { r.files.len() } else { v.extra.ticked.len() };
+            let what = if v.extra.ticked.is_empty() {
+                format!("Commit all {n} file{} on {}", if n == 1 { "" } else { "s" }, r.task.branch)
+            } else {
+                format!("Commit {n} ticked file{} on {}", if n == 1 { "" } else { "s" }, r.task.branch)
+            };
+            Some((what, m.clone(), "Commit"))
+        }
+        (None, Some(c)) => {
+            let at = v
+                .extra
+                .line
+                .and_then(|i| super::changes_more::line_numbers(&r.diff).get(i).copied().flatten())
+                .map_or(String::new(), |(n, _)| format!(", line {n}"));
+            Some((format!("Comment for {who} on {path}{at}"), c.clone(), "Keep"))
+        }
+        _ => None,
+    };
+    if let Some((what, text, yes)) = typing {
+        let y = area.bottom().saturating_sub(3);
+        put(buf, area.x + 2, y, &[seg(what, Style::default().fg(t.muted).add_modifier(Modifier::BOLD))], area.right());
+        let field = Rect { x: area.x + 1, y: y + 1, width: area.width.saturating_sub(2), height: 1 };
+        fill(buf, field, t.card2);
+        let fs = Style::default().bg(t.card2);
+        put(
+            buf,
+            field.x + 1,
+            field.y,
+            &[seg("› ", fs.fg(t.accent).add_modifier(Modifier::BOLD)), seg(text, fs.fg(t.strong)), seg("█", fs.fg(t.accent))],
+            field.right(),
+        );
+        action_row(
+            app,
+            buf,
+            area,
+            t,
+            &[
+                (yes, "Enter", BtnKind::Primary, Hit::Button(super::Btn::ViewKey('\n'))),
+                ("Cancel", "Esc", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('\x1b'))),
+            ],
+            &[],
+        );
+        return;
+    }
+    if v.confirm.is_none() && v.extra.remote.is_some() {
+        action_row(
+            app,
+            buf,
+            area,
+            t,
+            &[
+                ("Commit", "c", BtnKind::Primary, Hit::Button(super::Btn::ViewKey('c'))),
+                ("Tick", "t", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('t'))),
+                ("Open PR", "p", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('p'))),
+                ("Fetch", "f", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('f'))),
+                ("Pull", "u", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('u'))),
+                ("Push", "P", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('P'))),
+                (&reply, "r", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('r'))),
+            ],
+            &[seg("Esc close", Style::default().fg(t.muted))],
+        );
+        return;
+    }
     if let Some((q, _)) = &v.confirm {
         action_row(
             app,
@@ -1505,9 +1626,12 @@ pub(super) enum AgentRow {
     Codex,
     /// Opens the Connect agents popup.
     SetUp,
+    /// Opens the commands chats may run "always in this project".
+    Approved,
 }
 
 pub(super) const AGENT_STATUS_GROUP: &str = "AGENT STATUS";
+pub(super) const PERMISSIONS_GROUP: &str = "PERMISSIONS";
 
 impl AgentRow {
     pub(super) fn label(self) -> &'static str {
@@ -1515,6 +1639,7 @@ impl AgentRow {
             AgentRow::Claude => "Claude Code",
             AgentRow::Codex => "Codex",
             AgentRow::SetUp => "Connect agents…",
+            AgentRow::Approved => "Approved commands…",
         }
     }
 
@@ -1533,12 +1658,15 @@ impl AgentRow {
             AgentRow::SetUp => {
                 "Connect an agent so it reports working, needs you and done itself. Enter opens the list."
             }
+            AgentRow::Approved => {
+                "The commands you let a chat run “always in this project”. Enter lists them; forget one and the chat asks again."
+            }
         }
     }
 }
 
 /// The settings' headings in the order they come, each tab's in turn.
-const GROUP_ORDER: [&str; 19] = [
+const GROUP_ORDER: [&str; 20] = [
     "UPDATES",
     "STARTUP",
     "INPUT",
@@ -1555,6 +1683,7 @@ const GROUP_ORDER: [&str; 19] = [
     "SOUND",
     "PHONE",
     AGENT_STATUS_GROUP,
+    PERMISSIONS_GROUP,
     "HELPERS",
     "LIMITS",
     "AGENTS TALKING TO AGENTS",
@@ -1569,6 +1698,7 @@ pub(super) fn settings_group(row: &SRow) -> &'static str {
             .find(|(_, items)| items.iter().any(|(l, _)| l == label))
             .map(|(g, _)| g)
             .unwrap_or("KEYS"),
+        SRow::Agent(AgentRow::Approved) => PERMISSIONS_GROUP,
         SRow::Agent(_) => AGENT_STATUS_GROUP,
         SRow::Version => "UPDATES",
         SRow::Setting(s) => match s.path {
@@ -1616,7 +1746,7 @@ pub(super) fn theme_label(name: &str) -> String {
 pub(super) fn settings_rows(cat: super::modal::Cat) -> Vec<SRow> {
     let mut rows: Vec<SRow> = Vec::new();
     if cat == super::modal::Cat::Agents {
-        rows.extend([AgentRow::Claude, AgentRow::Codex, AgentRow::SetUp].map(SRow::Agent));
+        rows.extend([AgentRow::Claude, AgentRow::Codex, AgentRow::SetUp, AgentRow::Approved].map(SRow::Agent));
     }
     // Updates first, so a waiting one is in your face: the version row heads General.
     if cat == super::modal::Cat::General {
@@ -1866,7 +1996,7 @@ fn agent_control(app: &App, t: &Theme, row: AgentRow) -> Vec<Seg> {
                 vec![seg("✓ hooks installed and trusted", ok)]
             }
         },
-        AgentRow::SetUp => vec![seg("Enter", Style::default().fg(t.accent))],
+        AgentRow::SetUp | AgentRow::Approved => vec![seg("Enter", Style::default().fg(t.accent))],
     }
 }
 

@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { forgetChoices, forgetDiscoveredModels, setDiscoveredModels, readChoice, useAgentChoice, wireChoice, writeChoice } from '../agentChoice'
+import { everywhereModel, forgetChoices, forgetDiscoveredModels, noteAgentSaid, setDiscoveredModels, readChoice, useAgentChoice, wireChoice, writeChoice } from '../agentChoice'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { AgentPicker } from './AgentPicker'
 
@@ -64,7 +64,8 @@ describe('the model button and its menu', () => {
     const onAgent = vi.fn()
     render(<AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} onAgent={onAgent} />)
     await user.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
-    await user.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Codex' }))
+    expect(screen.getByRole('radio', { name: 'Claude' })).toBeChecked()
+    await user.click(screen.getByRole('radio', { name: 'Codex' }))
     expect(onAgent).toHaveBeenCalledWith('codex')
   })
 
@@ -184,6 +185,18 @@ describe('the model button and its menu', () => {
     await user.click(within(screen.getByRole('radiogroup', { name: 'Model' })).getByRole('radio', { name: /Fable 5\.2/ }))
     expect(wireChoice(7, 'claude')).toBeNull()
   })
+
+  it('ticks the model the agent says it runs while nothing is picked, as its button names it', async () => {
+    const user = userEvent.setup()
+    setDiscoveredModels('claude', [{ id: 'claude-sonnet-5-5', label: 'claude-sonnet-5-5', blurb: '', isDefault: true }, { id: 'claude-opus-5-5', label: 'claude-opus-5-5', blurb: '' }])
+    render(<AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} currentModel="claude-opus-5-5" />)
+    const button = screen.getByRole('button', { name: /Agent, model and reasoning/ })
+    expect(button).toHaveTextContent('Claude Opus 5.5')
+    await user.click(button)
+    const models = within(screen.getByRole('radiogroup', { name: 'Model' }))
+    expect(models.getByRole('radio', { name: /Opus 5\.5/ })).toBeChecked()
+    expect(models.getByRole('radio', { name: /Sonnet 5\.5/ })).not.toBeChecked()
+  })
 })
 
 describe('what the picker sends with a message', () => {
@@ -197,8 +210,41 @@ describe('what the picker sends with a message', () => {
     expect(wireChoice(7, 'claude')).toBeNull()
   })
 
+  it('gives way to a model or effort the agent says it changed to, even one changed while the chat was closed', () => {
+    writeChoiceFor(7, { model: 'opus', reasoning: 'low' })
+    noteAgentSaid(7, { model: null, effort: null })
+    expect(wireChoice(7, 'claude')).toEqual({ model: 'opus', effort: 'low' })
+    // The first word from the agent, then a /model typed in its terminal: each time the agent's word stands.
+    noteAgentSaid(7, { model: 'claude-opus-5-5', effort: null })
+    expect(wireChoice(7, 'claude')).toEqual({ effort: 'low' })
+    writeChoiceFor(7, { model: 'sonnet' })
+    noteAgentSaid(7, { model: 'claude-opus-5-5', effort: null })
+    expect(wireChoice(7, 'claude')).toEqual({ model: 'sonnet', effort: 'low' })
+    forgetChoices()
+    noteAgentSaid(7, { model: 'Haiku 5.5', effort: 'max' })
+    expect(wireChoice(7, 'claude')).toBeNull()
+  })
+
   it('ignores a stored model the agent does not offer', () => {
     writeChoiceFor(9, { model: 'opus' })
     expect(wireChoice(9, 'codex')).toBeNull()
+  })
+})
+
+describe('the picker for a chat on another machine', () => {
+  it('offers the models every install takes by name, not the extras read from this computer, and the effort', async () => {
+    setDiscoveredModels('claude', [{ id: 'claude-fable-5-1[1m]', label: 'Fable 5.1', blurb: 'Most capable' }])
+    render(<AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} fixedModels />)
+    await userEvent.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
+    const models = within(screen.getByRole('radiogroup', { name: 'Model' })).getAllByRole('radio').map((row) => row.textContent)
+    expect(models.join(' ')).not.toContain('Fable')
+    expect(models.join(' ')).toContain('Opus')
+    expect(screen.getByRole('radiogroup', { name: 'Effort' })).toBeInTheDocument()
+  })
+
+  it('starts there with a fixed alias as picked, and with the default for a model only this computer knows', () => {
+    expect(everywhereModel('claude', 'opus')).toBe('opus')
+    expect(everywhereModel('claude', 'claude-fable-5-1[1m]')).toBe('default')
+    expect(everywhereModel('codex', 'gpt-x')).toBe('default')
   })
 })

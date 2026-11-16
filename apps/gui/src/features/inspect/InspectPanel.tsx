@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { BranchesTab } from './BranchesTab'
-import { ChangesTab } from './ChangesTab'
+import { useCallback, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
+import { ChangesTab, type TurnScope } from './ChangesTab'
 import { ChecksTab } from './ChecksTab'
 import { checksNeedingYou, type Check } from './checks'
 import type { ChangeActions } from './CommitBar'
@@ -9,51 +9,39 @@ import { FilesTab, type LookAt } from './FilesTab'
 import { HistoryTab } from './HistoryTab'
 import { ReferencesTab } from './ReferencesTab'
 import { TimelineTab } from './TimelineTab'
+import { LOCAL_MACHINE } from '@/api/machines'
 import type { TerminalDetails } from '@/data/preview'
+import { localOnlyMessage } from '@/lib/localOnly'
 import { Icon, type IconName } from '@/features/workspace/components/glyphs'
 import './inspect.css'
 
-export type InspectView = 'changes' | 'files' | 'terminal' | 'checks' | 'branches' | 'history' | 'timeline' | 'references'
+/** The side panel's views (layout 2h): the tools bar picks one. Terminals live in the terminal dock, not here. */
+export type InspectView = 'changes' | 'files' | 'history' | 'checks'
 
-const VIEWS: readonly { id: InspectView; label: string; icon?: IconName }[] = [
-  { id: 'changes', label: 'Changes', icon: 'changes' },
-  { id: 'files', label: 'Files', icon: 'files' },
-  { id: 'terminal', label: 'Terminal', icon: 'terminal' },
-  { id: 'checks', label: 'Checks' },
-  { id: 'branches', label: 'Branches' },
-  { id: 'history', label: 'History' },
-  { id: 'timeline', label: 'Timeline' },
-  { id: 'references', label: 'References' },
-]
-
-/** The panel opens at this share of the window; the edge can be dragged and the width is remembered. */
-const DEFAULT_SHARE = 0.5
-const MIN_WIDTH_PX = 420
-/** The strip of the chat that stays in sight beside the panel, to click it away. */
-const STRIP_PX = 56
-/** The gap between the window's edge and the panel. */
-const EDGE_PX = 24
-const KEY_STEP_PX = 24
-// A new key when the opening width changes, so a width kept from the wider panel does not undo it.
-const WIDTH_KEY = 'maitty.inspect.width.v3'
-/** The exit animation's length: the panel is unmounted when it ends, not at once. */
-const EXIT_MS = 190
-
-/** The widest the panel may be: it never covers the sidebar, and leaves a strip of the chat. */
-function roomPx(): number {
-  const sidebar = document.querySelector('.mx-sidebar-expanded')?.getBoundingClientRect().width ?? 0
-  return Math.max(MIN_WIDTH_PX, window.innerWidth - sidebar - STRIP_PX - EDGE_PX)
+const VIEWS: Record<InspectView, { label: string; icon: IconName }> = {
+  changes: { label: 'Changes', icon: 'changes' },
+  files: { label: 'Files', icon: 'files' },
+  history: { label: 'History', icon: 'history' },
+  checks: { label: 'Checks', icon: 'list' },
 }
+
+/** The panel opens this wide; its edge drags between the two bounds, and the width is remembered. */
+const DEFAULT_WIDTH_PX = 680
+const MIN_WIDTH_PX = 360
+const MAX_WIDTH_PX = 1100
+const KEY_STEP_PX = 24
+// A new key since the panel docks beside the chat instead of over it, so a width kept from the overlay does not carry.
+const WIDTH_KEY = 'maitty.inspect.width.v4'
 
 function clampWidth(width: number): number {
-  return Math.round(Math.min(Math.max(width, MIN_WIDTH_PX), roomPx()))
+  return Math.round(Math.min(Math.max(width, MIN_WIDTH_PX), MAX_WIDTH_PX))
 }
 
-/** The width someone dragged it to, or null while it follows the window. */
+/** The width someone dragged it to, or null for the default. */
 function readWidth(): number | null {
   try {
     const stored = Number(window.localStorage.getItem(WIDTH_KEY))
-    return Number.isFinite(stored) && stored >= MIN_WIDTH_PX ? stored : null
+    return Number.isFinite(stored) && stored >= MIN_WIDTH_PX ? clampWidth(stored) : null
   } catch {
     return null
   }
@@ -71,69 +59,89 @@ function writeWidth(width: number | null): void {
 type Props = {
   /** The daemon's pane number every repository question is about; null when there is none to ask, and Changes and Files are left out. */
   term: number | null
-  /** The session's own terminals, for the Terminal tab; null when it has none here. */
-  terminals: ReactNode | null
   /** How many files the repository says changed, shown beside Changes. */
   changedFiles: number
-  /** The branch the session's checkout is on, shown above the changed files. */
+  /** The branch the session's checkout is on. */
   branch?: string
   view: InspectView
   agentWorking: boolean
   /** The session's checks, for the Checks view. */
   checks?: readonly Check[]
-  /** The machine the session is on (0: this computer), for what the Checks view asks of its daemon. */
+  /** The machine the session is on (0: this computer): its daemon answers Changes and Checks, and the views that read files say they cannot. */
   machine?: number
-  /** What the pane's agent and shell reported lately, for the Timeline view. */
+  /** That machine's name, for those words; null on this computer. */
+  machineName?: string | null
+  /** What the pane's agent and shell reported lately, for History's status log. */
   timeline: TerminalDetails['timeline']
   lookAt: LookAt | null
   /** The agent a comment on a diff line goes to; absent for a shell, which has nobody to tell. */
   comments?: Omit<PatchComments, 'path' | 'sent' | 'onSent'>
-  /** Commit and Create PR on the Changes tab, for a checkout on this computer. */
+  /** The Changes view's commit area: Commit, the remote button and Create PR, run where the checkout is. */
   changeActions?: ChangeActions
-  onView: (view: InspectView) => void
+  /** The turn a chat's changes row asked about, for the Changes view. */
+  turnScope?: TurnScope
+  /** It is sliding out: drawn, but not clicked. */
+  leaving?: boolean
   onClose: () => void
   onNotice: (text: string) => void
 }
 
-/** The asked view when the panel can show it, or else the first one it can. */
-function shownView(view: InspectView, hasRepo: boolean, hasTerminals: boolean): InspectView {
-  const can = (id: InspectView) => (id === 'terminal' ? hasTerminals : hasRepo)
-  return can(view) ? view : (VIEWS.map((item) => item.id).find(can) ?? view)
+function HistoryView({ term, agentWorking, elsewhere, machineName, timeline, onNotice }: { term: number; agentWorking: boolean; elsewhere: boolean; machineName: string | null; timeline: TerminalDetails['timeline']; onNotice: (text: string) => void }) {
+  const [part, setPart] = useState<'snapshots' | 'status'>(elsewhere ? 'status' : 'snapshots')
+  return (
+    <div className="mx-history">
+      <div className="mx-history-bar">
+        <Segmented aria-label="History" value={part} onValueChange={(value) => { setPart(value === 'status' ? 'status' : 'snapshots') }}>
+          <SegmentedItem value="snapshots">Snapshots</SegmentedItem>
+          <SegmentedItem value="status">Status log</SegmentedItem>
+        </Segmented>
+        <span className="mx-history-sub">{part === 'snapshots' ? 'Taken before every agent turn' : 'Why the status changed'}</span>
+      </div>
+      {part === 'status' && <TimelineTab events={timeline} />}
+      {part === 'snapshots' && (elsewhere ? <p className="mx-inspect-note">{localOnlyMessage('history', machineName)}</p> : <HistoryTab term={term} agentWorking={agentWorking} onNotice={onNotice} />)}
+    </div>
+  )
+}
+
+function FilesView({ term, machine, machineName, lookAt }: { term: number; machine: number; machineName: string | null; lookAt: LookAt | null }) {
+  const [references, setReferences] = useState(false)
+  if (machine !== LOCAL_MACHINE) return <p className="mx-inspect-note">{localOnlyMessage('files', machineName)}</p>
+  if (!references) return <FilesTab term={term} machine={machine} lookAt={lookAt} onReferences={() => { setReferences(true) }} />
+  return (
+    <div className="mx-inspect-body">
+      <nav className="mx-inspect-crumbs" aria-label="Where you are">
+        <button type="button" onClick={() => { setReferences(false) }}>Files</button>
+        <span aria-hidden="true">›</span>
+        <span>References</span>
+      </nav>
+      <ReferencesTab term={term} />
+    </div>
+  )
 }
 
 /**
- * The side panel (layout 2e). It slides over the panes from the window's edge, over a scrim, and
- * never pushes them or covers the sidebar: the focused session's changes, its files and its own
- * terminals.
+ * The side panel (layout 2h): docked beside the chat, which narrows to make room, with no scrim. It slides in from the
+ * window's edge; its header names the view the tools bar picked, with that view's count, and a close button.
  */
-export function InspectPanel({ term, terminals, changedFiles, branch, view: asked, agentWorking, timeline, checks = [], machine = 0, lookAt, comments, changeActions, onView, onClose, onNotice }: Props) {
-  const view = shownView(asked, term !== null, terminals !== null)
+export function InspectPanel({ term, changedFiles, branch, view, agentWorking, timeline, checks = [], machine = 0, machineName = null, lookAt, comments, changeActions, turnScope, leaving = false, onClose, onNotice }: Props) {
   const [dragged, setDragged] = useState(readWidth)
-  const width = clampWidth(dragged ?? window.innerWidth * DEFAULT_SHARE)
-  const [leaving, setLeaving] = useState(false)
-  const previous = useRef(view)
-  const [towards, setTowards] = useState<'forward' | 'back'>('forward')
-  useEffect(() => {
-    const from = VIEWS.findIndex((item) => item.id === previous.current)
-    const to = VIEWS.findIndex((item) => item.id === view)
-    setTowards(to >= from ? 'forward' : 'back')
-    previous.current = view
-  }, [view])
-  const close = useCallback(() => {
-    setLeaving(true)
-    window.setTimeout(onClose, EXIT_MS)
-  }, [onClose])
+  const width = dragged ?? DEFAULT_WIDTH_PX
   const save = useCallback((next: number | null) => {
     setDragged(next)
     writeWidth(next)
   }, [])
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault()
-    const move = (at: PointerEvent) => { setDragged(clampWidth(widthAtPointer(at.clientX))) }
-    const stop = (at: PointerEvent) => {
+    const from = event.clientX
+    const start = width
+    // The panel's inner edge faces the chat: on the window's right it grows leftwards.
+    const onRight = document.querySelector('.mx-app')?.getAttribute('data-side') !== 'right'
+    const at = (pointer: PointerEvent) => clampWidth(onRight ? start + from - pointer.clientX : start + pointer.clientX - from)
+    const move = (pointer: PointerEvent) => { setDragged(at(pointer)) }
+    const stop = (pointer: PointerEvent) => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', stop)
-      save(clampWidth(widthAtPointer(at.clientX)))
+      save(at(pointer))
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', stop)
@@ -142,53 +150,37 @@ export function InspectPanel({ term, terminals, changedFiles, branch, view: aske
     if (event.key === 'ArrowLeft') save(clampWidth(width + KEY_STEP_PX))
     else if (event.key === 'ArrowRight') save(clampWidth(width - KEY_STEP_PX))
   }
+  const failing = checksNeedingYou(checks)
+  const count = view === 'changes' && changedFiles > 0 ? String(changedFiles) : view === 'checks' && failing > 0 ? `✕${String(failing)}` : null
   return (
-    <>
-      <div className={`mx-inspect-scrim${leaving ? ' is-leaving' : ''}`} aria-hidden="true" onMouseDown={close} />
-      <aside
-        className={`mx-inspect${leaving ? ' is-leaving' : ''}`}
-        style={{ width }}
-        aria-label="Side panel"
-        onKeyDown={(event) => {
-          // Esc closes the panel, except in a terminal, where it belongs to the program running there.
-          if (event.key !== 'Escape' || (event.target instanceof Element && event.target.closest('.mx-terms-screen'))) return
-          event.stopPropagation()
-          close()
-        }}
-      >
-        <div className="mx-inspect-grip" role="separator" aria-orientation="vertical" aria-label="Resize the side panel" tabIndex={0} onPointerDown={startDrag} onKeyDown={nudge} onDoubleClick={() => { save(null) }} />
-        <header className="mx-inspect-head">
-          <div role="tablist" aria-label="Side panel views" className={`mx-inspect-tabs is-${towards}`}>
-            {VIEWS.filter((item) => shownView(item.id, term !== null, terminals !== null) === item.id).map((item) => (
-              <button key={item.id} type="button" role="tab" aria-selected={view === item.id} className={view === item.id ? 'is-current' : undefined} onClick={() => { onView(item.id) }}>
-                {item.icon !== undefined && <Icon name={item.icon} size={13} />}
-                {item.label}
-                {item.id === 'changes' && changedFiles > 0 && <span className="mx-inspect-count">{changedFiles}</span>}
-                {item.id === 'checks' && checksNeedingYou(checks) > 0 && <span className="mx-inspect-count">{checksNeedingYou(checks)}</span>}
-              </button>
-            ))}
-          </div>
-          <button type="button" className="mx-icon-button" aria-label="Close" title="Close (esc)" onClick={close}>×</button>
-        </header>
-        {view === 'terminal' && <div className="mx-inspect-terminals" role="tabpanel">{terminals}</div>}
-        {view !== 'terminal' && term !== null && (
-          <div className="mx-inspect-scroll" role="tabpanel">
-            {view === 'files' && <FilesTab term={term} machine={machine} lookAt={lookAt} />}
-            {view === 'changes' && <ChangesTab term={term} {...(branch !== undefined ? { branch } : {})} {...(comments ? { comments } : {})} {...(changeActions ? { actions: changeActions } : {})} onNotice={onNotice} />}
-            {view === 'checks' && <ChecksTab term={term} machine={machine} checks={checks} onNotice={onNotice} />}
-            {view === 'branches' && <BranchesTab term={term} />}
-            {view === 'history' && <HistoryTab term={term} agentWorking={agentWorking} onNotice={onNotice} />}
-            {view === 'timeline' && <TimelineTab events={timeline} />}
-            {view === 'references' && <ReferencesTab term={term} />}
-          </div>
-        )}
-      </aside>
-    </>
+    <aside
+      className={`mx-inspect${leaving ? ' is-leaving' : ''}`}
+      style={{ width: `min(${String(width)}px, var(--inspect-max))` }}
+      aria-label="Side panel"
+      inert={leaving}
+      onKeyDown={(event) => {
+        // Esc closes the panel, except in a terminal, where it belongs to the program running there.
+        if (event.key !== 'Escape' || (event.target instanceof Element && event.target.closest('.mx-tdock'))) return
+        event.stopPropagation()
+        onClose()
+      }}
+    >
+      <div className="mx-inspect-grip" role="separator" aria-orientation="vertical" aria-label="Resize the side panel" title="Drag to resize" tabIndex={0} onPointerDown={startDrag} onKeyDown={nudge} onDoubleClick={() => { save(null) }} />
+      <header className="mx-inspect-head">
+        <Icon name={VIEWS[view].icon} size={13} />
+        <h2 className="mx-inspect-title">{VIEWS[view].label}</h2>
+        {count !== null && <span className={`mx-inspect-count${view === 'checks' ? ' is-bad' : ''}`}>{count}</span>}
+        <span className="mx-spacer" />
+        <button type="button" className="mx-inspect-close" aria-label="Close" title="Close (Esc)" onClick={onClose}><Icon name="close" size={12} /></button>
+      </header>
+      {term !== null && (
+        <div className="mx-inspect-scroll">
+          {view === 'files' && <FilesView term={term} machine={machine} machineName={machineName} lookAt={lookAt} />}
+          {view === 'changes' && <ChangesTab term={term} machine={machine} {...(branch !== undefined ? { branch } : {})} {...(comments ? { comments } : {})} {...(changeActions ? { actions: changeActions } : {})} {...(turnScope ? { scope: turnScope } : {})} onNotice={onNotice} />}
+          {view === 'checks' && <ChecksTab term={term} machine={machine} checks={checks} onNotice={onNotice} />}
+          {view === 'history' && <HistoryView term={term} agentWorking={agentWorking} elsewhere={machine !== LOCAL_MACHINE} machineName={machineName} timeline={timeline} onNotice={onNotice} />}
+        </div>
+      )}
+    </aside>
   )
-}
-
-/** The panel's width if its inner edge were at this x: it is anchored a gap in from the window's edge. */
-function widthAtPointer(x: number): number {
-  const onLeft = document.querySelector('.mx-app')?.getAttribute('data-side') === 'right'
-  return onLeft ? x - EDGE_PX : window.innerWidth - x - EDGE_PX
 }

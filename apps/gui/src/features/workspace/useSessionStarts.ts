@@ -1,11 +1,13 @@
 import { movePanes } from './components/paneTransition'
-import { type Dispatch, type RefObject, type SetStateAction, useCallback, useMemo, useState } from 'react'
+import { type Dispatch, type RefObject, type SetStateAction, useCallback, useMemo, useRef, useState } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
-import { DEFAULT_PICK } from '@/features/chat/agentChoice'
+import { everywhereModel } from '@/features/chat/agentChoice'
 import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
 import { LOCAL_MACHINE, startSessionOnMachine } from '@/api/machines'
+import { startGitHubSignIn } from '@/api/githubAccounts'
+import { useSessionsEnded } from './useSessionsEnded'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { errorMessage } from '@/lib/error-message'
@@ -19,7 +21,7 @@ import { nameFromMessage } from './model/newSession'
 import { usePaneViews } from './usePaneViews'
 import type { ChatAgent, PaneView, StructuredAgent } from './model/chatView'
 import { rememberShellStart } from './model/shellStarts'
-import type { NewChatRequest } from './components/NewChatPage'
+import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import type { WireChoice } from '@/features/chat/agentChoice'
 import { rememberYoloSession } from '@/features/chat/yoloSessions'
 import { launchFlags, yoloFlags } from './model/newChatHost'
@@ -27,7 +29,15 @@ import { CODEX_FULL_MODE } from '@/features/chat/chatMeta'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
 import { resolveStartFolder } from './model/startFolder'
+import { resumeWords } from './model/moveToWorktree'
+import { hasAbility } from './model/agentAbilities'
 import { makeId } from './makeId'
+
+/** How a start runs beside others: `alone` (refused while anything starts, and holds off the rest), `alongside` (a new chat
+ * page start that opens its pane), `background` (one that opens nothing and rejects with the reason it failed). */
+type StartMode = 'alone' | 'alongside' | 'background'
+const ANOTHER_START_RUNNING = 'Another start is running. Try again in a moment.'
+const NOT_LISTED = 'The daemon did not list the new session'
 
 /** How long a new session on another machine is waited for, and how often its list is looked at. */
 const REMOTE_START_WAIT_MS = 8000
@@ -75,10 +85,21 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     return created?.id ?? null
   }, [queryClient])
 
-  const startShell = useCallback(async (folder: string, launch?: (folder: string) => Promise<void>): Promise<string | null> => {
-    const known = new Set(sessions.map((session) => session.id))
-    await (launch ?? startShellSession)(folder)
-    return newSessionSince(known)
+  // A start knows its session only as the one new in the daemon's list, so launches take turns: each waits for the one
+  // before it, and never takes a session an earlier start already claimed.
+  const launches = useRef<Promise<unknown>>(Promise.resolve())
+  const claimed = useRef(new Set<string>())
+  const startShell = useCallback((folder: string, launch?: (folder: string) => Promise<void>): Promise<string | null> => {
+    const turn = launches.current.then(async () => {
+      const known = new Set([...sessions.map((session) => session.id), ...claimed.current])
+      await (launch ?? startShellSession)(folder)
+      const id = await newSessionSince(known)
+      if (id) claimed.current.add(id)
+      return id
+    })
+    // The next launch waits for this one to end, failed or not; this one's failure is its own caller's to report.
+    launches.current = turn.then(() => undefined, () => undefined)
+    return turn
   }, [sessions, newSessionSince])
 
   const createWorktree = useCallback(async (from: SessionView, branch: string, base: string | null) => {
@@ -120,24 +141,49 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     setNewChatOpen(false)
   }
 
-  // Resolves once the session is placed (true) or the start did not happen or failed (false).
-  const runStart = useCallback((folder: () => Promise<string>, place: (sessionId: string) => void, launch?: (folder: string) => Promise<void>): Promise<boolean> => {
-    if (!online || starting) return Promise.resolve(false)
+  // The starts in flight. Starts from the new chat page (`alongside`, `background`) may run together; any other start runs
+  // alone, as it always has: refused while something is starting, and nothing else starts until it ends. Only a start
+  // that opens a pane (`opening`) keeps the sessions it did not know about off the sidebar until its pane is there.
+  const inFlight = useRef({ count: 0, alone: false, opening: 0 })
+  const beginStart = useCallback((mode: StartMode): boolean => {
+    const now = inFlight.current
+    if (now.alone || (now.count > 0 && mode === 'alone')) return false
+    const opens = mode !== 'background'
+    inFlight.current = { count: now.count + 1, alone: mode === 'alone', opening: now.opening + (opens ? 1 : 0) }
     setStarting(true)
-    setStartedFrom(new Set(sessionMap.keys()))
+    if (opens) setStartedFrom((current) => current ?? new Set(sessionMap.keys()))
+    return true
+  }, [setStarting, setStartedFrom, sessionMap])
+  const endStart = useCallback((mode: StartMode) => {
+    const now = inFlight.current
+    inFlight.current = { count: now.count - 1, alone: false, opening: now.opening - (mode === 'background' ? 0 : 1) }
+    if (inFlight.current.count === 0) setStarting(false)
+    if (inFlight.current.opening === 0) setStartedFrom(null)
+  }, [setStarting, setStartedFrom])
+
+  // Resolves once the session is placed (true) or the start did not happen or failed (false, said in a toast). A start in
+  // the `background` rejects instead, with the reason, for the page that asked to say.
+  const runStart = useCallback((folder: () => Promise<string>, place: (sessionId: string) => void, launch?: (folder: string) => Promise<void>, mode: StartMode = 'alone'): Promise<boolean> => {
+    const background = mode === 'background'
+    if (!online) return background ? Promise.reject(new Error('The daemon is not reachable')) : Promise.resolve(false)
+    if (!beginStart(mode)) return background ? Promise.reject(new Error(ANOTHER_START_RUNNING)) : Promise.resolve(false)
     return folder()
       .then((path) => startShell(path, launch))
       .then((id) => {
-        if (!id) return false
+        if (!id) {
+          if (background) throw new Error(NOT_LISTED)
+          return false
+        }
         place(id)
         return true
       })
       .catch((error: unknown) => {
+        if (background) throw error
         toast.error(errorMessage(error, 'Could not start a shell'))
         return false
       })
-      .finally(() => { setStarting(false); setStartedFrom(null) })
-  }, [online, starting, setStarting, setStartedFrom, sessionMap, startShell])
+      .finally(() => { endStart(mode) })
+  }, [online, beginStart, endStart, startShell])
 
   // A new session is the default agent, running in a terminal the daemon owns, shown as its chat or
   // as its terminal as Settings says. It is one session either way: the view can be switched at any
@@ -167,25 +213,29 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       .catch((error: unknown) => { console.warn(`Could not start ${spec.agent} ahead of the first message`, error) })
   }, [online, startWords])
 
-  const startAgentSession = useCallback((folder: () => Promise<string>, agent: ChatAgent, view: PaneView, firstMessage = '', flags = '', afterPlace?: (id: string) => void): Promise<boolean> => {
+  // `background` leaves the new session unopened, listed in the sidebar, and the window as it was.
+  const startAgentSession = useCallback((folder: () => Promise<string>, agent: ChatAgent, view: PaneView, firstMessage = '', flags = '', placed: { afterPlace?: (id: string) => void; alongside?: boolean; background?: boolean; /** A name typed for it, in place of the first message's words. */ name?: string } = {}): Promise<boolean> => {
     return runStart(folder, (id) => {
       // A first message waits under the session and goes out once the agent takes input; its words name the session.
       if (firstMessage !== '') {
         holdFirstMessage(id, firstMessage)
         entrustFirstMessage(id, firstMessage, sendWhenAgentReady)
-        void renameConversationOnDaemon({ id }, nameFromMessage(firstMessage)).catch((error: unknown) => { console.warn('Could not name the new session', error) })
       }
+      const named = placed.name ?? (firstMessage === '' ? '' : nameFromMessage(firstMessage))
+      if (named !== '') void renameConversationOnDaemon({ id }, named).catch((error: unknown) => { console.warn('Could not name the new session', error) })
       // The daemon learns which agent runs from the agent's own hook, a moment after it starts; until then the
       // session is known to be this agent, so it never shows as a shell.
       setExpectedAgents((current) => ({ ...current, [id]: agent }))
       if (yoloFlags(agent, yolo) !== '') rememberYoloSession(id)
       window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
-      movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
-      if (view === 'chat') paneViews.choose(id, 'chat')
+      if (placed.background) setStartedFrom((current) => (current === null ? null : new Set([...current, id])))
+      else movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
+      // The view asked for wins over the agent's default (the new chat page's Open as).
+      paneViews.choose(id, view)
       // In the same update as the new session opens, so the window never shows the page between the two.
-      afterPlace?.(id)
-    }, launchAgent(agent, flags))
-  }, [runStart, launchAgent, setExpectedAgents, yolo, setLayout, paneViews])
+      placed.afterPlace?.(id)
+    }, launchAgent(agent, flags), placed.background ? 'background' : placed.alongside ? 'alongside' : 'alone')
+  }, [runStart, launchAgent, setExpectedAgents, yolo, setLayout, setStartedFrom, paneViews])
 
   // Signing an agent's account in is the agent's own interactive command, so it runs in a terminal of its own, in
   // the home folder: a browser opens from it, or it asks for a code. The session is a terminal, never a chat.
@@ -207,15 +257,15 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!online || starting) return
     // Gemini has no structured chat: it starts as a terminal session shown as its chat.
-    if (agent === 'gemini') {
+    if (!hasAbility(agent, 'structuredChat')) {
       void startAgentSession(() => Promise.resolve(from.cwd), agent, 'chat')
       return
     }
-    setStarting(true)
+    if (!beginStart('alone')) return
     startChat(from.cwd, agent, fullAccess)
       .catch((error: unknown) => { toast.error(errorMessage(error, `Could not start a ${agent} chat`)) })
-      .finally(() => { setStarting(false) })
-  }, [online, starting, setStarting, startChat, startAgentSession])
+      .finally(() => { endStart('alone') })
+  }, [online, starting, beginStart, endStart, startChat, startAgentSession])
 
   // "Hand off to …": a new session of another agent in the same folder, starting with a text brief of this one's work.
   const handoffSession = useCallback(async (from: SessionView, to: ChatAgent) => {
@@ -226,16 +276,16 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!online || starting) return
     try {
-      await startAgentSession(() => Promise.resolve(from.cwd), to, preferences.newSessionView, await handoffBrief(from))
+      await startAgentSession(() => Promise.resolve(from.cwd), to, preferences.chatViewDefault[to], await handoffBrief(from))
     } catch (error: unknown) {
       toast.error(errorMessage(error, `Could not hand off to ${to}`))
     }
-  }, [online, starting, startAgentSession, preferences.newSessionView])
+  }, [online, starting, startAgentSession, preferences.chatViewDefault])
 
   // Starts a shell on another machine and opens it once the machine lists it; resolves to its id.
-  const startOnMachine = useCallback(async (target: { machine: number; name: string }, folder: string): Promise<string | null> => {
+  const startOnMachine = useCallback(async (target: { machine: number; name: string }, folder: string, launch?: () => Promise<void>): Promise<string | null> => {
     const known = new Set((machinesRef.current.get(target.machine)?.conversations ?? []).map((item) => item.id))
-    await startSessionOnMachine(target.machine, folder)
+    await (launch ?? (() => startSessionOnMachine(target.machine, folder)))()
     // The machine tells its new session in its next list; its layout opens when it does.
     const deadline = Date.now() + REMOTE_START_WAIT_MS
     while (Date.now() < deadline) {
@@ -252,8 +302,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
 
   // A chat on another machine is its daemon's terminal session with the agent typed into the shell, shown as its chat once the
   // agent reports a conversation. The line is built from the closed set `launchFlags` allows (the agent, a permission mode from
-  // the fixed list), so no free text reaches the remote shell; the first message waits until the agent takes input.
-  // The model and effort are the agent's own there, and a worktree is that daemon's own setting.
+  // the fixed list, a model the agent takes by name everywhere, an effort level), so no free text reaches the remote shell;
+  // the first message waits until the agent takes input. A worktree is that daemon's own setting.
   const startRemoteChat = useCallback(async (request: NewChatRequest): Promise<void> => {
     const id = await startOnMachine({ machine: request.machine, name: request.machineName }, request.folder)
     if (id === null) throw new Error(`${request.machineName} did not report the new session`)
@@ -263,28 +313,34 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     setExpectedAgents((current) => ({ ...current, [id]: request.agent }))
     window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
-    paneViews.choose(id, 'chat')
-    await sendTerminalInput({ id, generation: 0 }, `${request.agent}${launchFlags(request.agent, DEFAULT_PICK, DEFAULT_PICK, request.mode)}\r`)
+    paneViews.choose(id, request.view ?? 'chat')
+    if (request.name !== undefined) void renameConversationOnDaemon({ id }, request.name).catch((error: unknown) => { console.warn('Could not name the new session', error) })
+    await sendTerminalInput({ id, generation: 0 }, `${request.agent}${launchFlags(request.agent, everywhereModel(request.agent, request.model), request.reasoning, request.mode)}\r`)
     setNewChatOpen(false)
   }, [startOnMachine, setExpectedAgents, paneViews, setNewChatOpen])
 
   // The new chat is the agent in a terminal the daemon owns, shown as its chat: one session whose view
-  // switches to the terminal at any time (ADR 0003), the same for every agent.
-  const startNewChat = useCallback(async (request: NewChatRequest): Promise<void> => {
+  // switches to the terminal at any time (ADR 0003), the same for every agent. Starts from the page run alongside each
+  // other; one in the `background` is not opened and leaves the page open for the next.
+  const startNewChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (!online) throw new Error('The daemon is not reachable')
     if (request.machine !== LOCAL_MACHINE) return startRemoteChat(request)
+    const resume = request.resume === null ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
+    if (resume === null) throw new Error('This saved conversation cannot be resumed from here')
     // The branch is settled before the agent starts, and a failure stays on the page with its words.
     let folder = request.folder
     if (request.branch?.worktree) folder = await addWorktree(folder, request.branch.name)
     else if (request.branch) await switchBranch(folder, request.branch.name, request.branch.create)
+    const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the
     // empty window (or the last chat) for a moment between the two.
-    await startAgentSession(() => Promise.resolve(folder), request.agent, 'chat', request.message, launchFlags(request.agent, request.model, request.reasoning, request.mode), (id) => {
+    await startAgentSession(() => Promise.resolve(folder), request.agent, request.view ?? 'chat', request.message, flags, { alongside: true, background, ...(request.name === undefined ? {} : { name: request.name }), afterPlace: (id) => {
       // Codex has no file that says its mode, so what it was started in is what its chat shows: Full access under its Yolo setting.
       const codexMode = yolo.codex ? CODEX_FULL_MODE : request.mode === 'default' ? null : request.mode
       holdStartChoice(id, { model: request.model, reasoning: request.reasoning, mode: request.agent === 'claude' ? request.mode : request.agent === 'codex' ? codexMode : null })
-      setNewChatOpen(false)
-    })
+      if (!background) setNewChatOpen(false)
+      onPlaced?.(id)
+    } })
   }, [online, setNewChatOpen, startAgentSession, startRemoteChat, yolo.codex])
 
   // New session (the shortcut, the palette, the sidebar's chat button): the new chat page, on the machine asked for or the
@@ -317,5 +373,26 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     void runStart(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { rememberShellStart(id); movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
   }, [setSettingsSection, focusedSession, runStart, startOnMachine, preferences.startFolder, home, setLayout])
 
-  return { signInAgent, runStart, newSession, newTerminal, startAgentSession, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree }
+  // Signing in to GitHub is `gh`'s own interactive command, in a terminal of its own in the machine's home folder: it
+  // shows a code and opens a browser. The host holds the command; only the machine is chosen here. The session is
+  // watched so that whoever shows the sign-in can ask again once it has ended.
+  const { watch: watchSignIn, ended: gitHubSignInsEnded } = useSessionsEnded(sessionMap)
+  const signInGitHub = useCallback((machine: number, name: string) => {
+    setSettingsSection(null)
+    const started = (id: string) => { rememberShellStart(id); watchSignIn(id) }
+    if (machine !== LOCAL_MACHINE) {
+      void startOnMachine({ machine, name }, REMOTE_HOME, () => startGitHubSignIn(machine)).then(
+        (id) => { if (id !== null) started(id) },
+        (error: unknown) => { toast.error(errorMessage(error, `Could not start the sign-in on ${name}`)) },
+      )
+      return
+    }
+    void runStart(
+      async () => home || (await defaultSessionFolder()),
+      (id) => { started(id); movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) },
+      () => startGitHubSignIn(LOCAL_MACHINE),
+    )
+  }, [setSettingsSection, watchSignIn, startOnMachine, runStart, home, setLayout])
+
+  return { signInAgent, signInGitHub, gitHubSignInsEnded, runStart, newSession, newTerminal, startAgentSession, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree }
 }

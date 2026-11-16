@@ -7,6 +7,7 @@ import { forgetComposers } from '../composerStore'
 import { forgetFirstMessages, holdStartChoice, startChoiceOf } from '../firstMessage'
 import { forgetChoices } from '../agentChoice'
 import { forgetChatFeeds, IDLE_POLL_MS } from '../useChatFeed'
+import { COMMAND_SUBMIT_GAP_MS } from '../useChatComposer'
 import { ChatSession } from './ChatSession'
 
 const fake = vi.hoisted(() => ({ current: null as null | { read: (cursor: never) => Promise<unknown> } }))
@@ -82,11 +83,14 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
 
     await user.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
     await user.click(await screen.findByRole('radio', { name: /Opus 5.5/ }))
-    expect(typeInto).toHaveBeenLastCalledWith('/model claude-opus-5-5\r')
+    await settle(COMMAND_SUBMIT_GAP_MS)
+    // The command first and its Enter after a pause: sent together, Claude Code takes the Enter for its completion.
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r'])
     // The chip shows the picked model at once.
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning/ })).toHaveTextContent('Opus')
     await user.click(screen.getByRole('radio', { name: 'High' }))
-    expect(typeInto).toHaveBeenLastCalledWith('/effort high\r')
+    await settle(COMMAND_SUBMIT_GAP_MS)
+    expect(typeInto.mock.calls.map(([text]) => text).slice(2)).toEqual(['/effort high', '\r'])
   })
 
   it('moves a running Codex to the picked mode with its own /permissions command', async () => {
@@ -138,8 +142,9 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     await user.click(await screen.findByRole('radio', { name: /^Opus 5\.5/ }))
     await user.click(screen.getByRole('radio', { name: 'High' }))
 
-    // Nothing waits for the turn to end, and nothing is left in the queue.
-    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5\r', '/effort high\r'])
+    // Nothing waits for the turn to end, nothing is left in the queue, and the two commands do not interleave.
+    await settle(COMMAND_SUBMIT_GAP_MS * 2)
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r', '/effort high', '\r'])
     expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 

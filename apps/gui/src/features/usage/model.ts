@@ -22,7 +22,7 @@ const RING_WARN_AT = 0.7
 const RING_DANGER_AT = 0.9
 
 export const PERIOD_CHOICES: readonly { period: UsagePeriod; label: string; window: string }[] = [
-  { period: 'day', label: 'Day', window: 'Today (UTC)' },
+  { period: 'day', label: 'Today', window: 'Today (UTC)' },
   { period: 'week', label: 'Week', window: 'Last 7 days' },
   { period: 'month', label: 'Month', window: 'Last 30 days' },
 ]

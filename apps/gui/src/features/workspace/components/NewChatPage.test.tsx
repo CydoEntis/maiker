@@ -2,23 +2,27 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-const sync = vi.hoisted(() => ({ dirty: false, behind: 2, pulled: [] as string[] }))
-function syncOf(folder: string) {
-  return { branch: folder === '/dev/api' ? 'main' : 'dev', upstream: 'origin/dev', behind: sync.behind, ahead: 0, dirty: sync.dirty, fetched: true }
-}
-vi.mock('@/api/daemon', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/daemon')>()), loadAgentModels: () => Promise.resolve([]), folderSyncState: (folder: string) => Promise.resolve(syncOf(folder)), pullFolder: (folder: string) => { sync.pulled.push(folder); return Promise.resolve() }, folderBranches: () => Promise.resolve({ current: 'dev', branches: [{ name: 'dev', when: 10 }], worktrees: [{ path: '/dev/growth', branch: 'dev', main: true, when: 10 }] }) }))
+vi.mock('@/api/daemon', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/daemon')>()), agentsInstalled: () => Promise.resolve(['claude', 'codex', 'gemini']), loadAgentModels: () => Promise.resolve([]), loadAgentCommands: () => Promise.resolve([]), folderBranches: () => Promise.resolve({ current: 'dev', branches: [{ name: 'dev', current: true, when: 10 }], worktrees: [{ path: '/dev/growth', branch: 'dev', main: true, when: 10 }] }) }))
 
 const attach = vi.hoisted(() => ({ attachLocalFile: vi.fn(), chooseFilesToAttach: vi.fn() }))
 vi.mock('@/api/attachments', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/attachments')>()), ...attach }))
 
-import { NewChatPage } from './NewChatPage'
+import { NewChatPage, type NewChatRequest } from './NewChatPage'
+import type { BusyBranches } from '../model/newSession'
+import type { ChatViewDefaults } from '../model/chatView'
 
 const PROJECTS = [{ folder: '/dev/growth', name: 'growth', color: 'teal', sessions: 6 }, { folder: '/dev/api', name: 'api', color: 'blue', sessions: 2 }]
+const HERE = [{ machine: 0, label: 'This computer', local: true }]
+/** Another chat, "Fix login", already works on dev in growth. */
+const DEV_BUSY: BusyBranches = new Map([['/dev/growth', new Map([['dev', 'Fix login']])]])
+const TWO_WORDS = /^[a-z]+-[a-z]+(-[0-9]+)?$/
 
-function page(onStart: (request: { message: string }) => Promise<void> = () => Promise.resolve()) {
+type Extra = { busy?: BusyBranches; onCancel?: () => void; viewDefaults?: ChatViewDefaults; clone?: () => Promise<string | null>; onWarm?: (spec: unknown) => void }
+
+function page(onStart: (request: NewChatRequest) => Promise<void> = () => Promise.resolve(), extra: Extra = {}) {
   return render(
     <div className="mx-app">
-      <NewChatPage machine={0} machines={[{ machine: 0, label: 'This computer', local: true }]} projects={PROJECTS} defaultAgent="claude" browse={() => Promise.resolve(null)} onStart={onStart} onOtherMachine={() => undefined} onCancel={() => undefined} />
+      <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" browse={() => Promise.resolve(null)} onStart={onStart} onOtherMachine={() => undefined} onCancel={() => undefined} {...extra} />
     </div>,
   )
 }
@@ -26,133 +30,186 @@ function page(onStart: (request: { message: string }) => Promise<void> = () => P
 function codexPage(onStart: () => Promise<void>, codexYolo = false) {
   return render(
     <div className="mx-app">
-      <NewChatPage machine={0} machines={[{ machine: 0, label: 'This computer', local: true }]} projects={PROJECTS} defaultAgent="codex" codexYolo={codexYolo} browse={() => Promise.resolve(null)} onStart={onStart} onOtherMachine={() => undefined} onCancel={() => undefined} />
+      <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="codex" codexYolo={codexYolo} browse={() => Promise.resolve(null)} onStart={onStart} onOtherMachine={() => undefined} onCancel={() => undefined} />
     </div>,
   )
 }
 
-/** The page opens on the most recent project: it is the first of the list. */
+/** Waits until the page has picked this project: the project crumb in its header names it. */
 async function pickProject(name: string) {
-  expect(await screen.findByRole('button', { name: `Project: ${name}` })).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: `Project folder and machine: ${name}` })).toBeInTheDocument()
 }
 
+/** Waits until git has answered for the folder: the branch crumb shows. */
+async function ready() {
+  await screen.findByRole('button', { name: /^Branch: / })
+}
+
+/** The menu opened last. */
+async function lastPopup() {
+  const open = await screen.findAllByRole('dialog')
+  const last = open.at(-1)
+  if (last === undefined) throw new Error('no menu is open')
+  return last
+}
+
+async function workIn(choice: 'This folder' | 'New worktree') {
+  await userEvent.click(await screen.findByRole('button', { name: /^Work in: / }))
+  await userEvent.click(within(await lastPopup()).getByRole('radio', { name: new RegExp(`^${choice}`) }))
+}
+
+const box = () => screen.getByRole('textbox', { name: 'First message' })
+
 describe('the new chat page', () => {
-  it('opens ready to type on the most recent project, with no folder step', async () => {
+  it('opens ready to type on the most recent project, with the question over the box', async () => {
     page()
-    expect(screen.getByRole('heading', { name: 'What should we work on?' })).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Project: growth' })).toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: 'Search projects or paste a path' })).not.toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'First message' })).toHaveFocus()
+    expect(screen.getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
+    await pickProject('growth')
+    expect(box()).toHaveFocus()
   })
 
-  it('asks for a folder first only when there is no project: a search, and a pasted path that opens as a folder', async () => {
+  it('says in its header where the chat works: its name, the project, the branch and the folder or a worktree', async () => {
+    page()
+    expect(screen.getByRole('textbox', { name: 'Chat name' })).toHaveValue('')
+    await pickProject('growth')
+    expect(await screen.findByRole('button', { name: 'Branch: dev' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Work in: This folder' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Chat' })).toBeChecked()
+  })
+
+  it('swaps the project from the menu under its crumb', async () => {
+    page()
+    await userEvent.click(await screen.findByRole('button', { name: 'Project folder and machine: growth' }))
+    await userEvent.click(within(await lastPopup()).getByRole('radio', { name: /^api/ }))
+    await pickProject('api')
+  })
+
+  it('opens a pasted path as the folder when there is no project yet', async () => {
     render(
       <div className="mx-app">
-        <NewChatPage machine={0} machines={[{ machine: 0, label: 'This computer', local: true }]} projects={[]} defaultAgent="claude" browse={() => Promise.resolve(null)} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} onCancel={() => undefined} />
+        <NewChatPage machine={0} machines={HERE} projects={[]} defaultAgent="claude" browse={() => Promise.resolve(null)} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} onCancel={() => undefined} />
       </div>,
     )
     expect(screen.getByRole('button', { name: 'Start chat' })).toBeDisabled()
-    expect(screen.getByText('No projects match. Paste a full path, or use Browse…')).toBeInTheDocument()
-    await userEvent.type(screen.getByRole('textbox', { name: 'Search projects or paste a path' }), '/srv/new-app')
-    await userEvent.click(within(screen.getByRole('list', { name: 'Open folder' })).getByRole('button', { name: /^Open new-app/ }))
-    expect(await screen.findByRole('button', { name: 'Project: new-app' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Project folder and machine: Choose a folder' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Search folders or paste a path' }), '/srv/new-app')
+    await userEvent.click(screen.getByRole('radio', { name: 'Use /srv/new-app' }))
+    await pickProject('new-app')
   })
 
-  it('starts the agent ahead only when it works in the checkout, and says none is wanted when the page goes', async () => {
-    const onWarm = vi.fn()
-    const { unmount } = render(
-      <div className="mx-app">
-        <NewChatPage machine={0} machines={[{ machine: 0, label: 'This computer', local: true }]} projects={PROJECTS} defaultAgent="claude" browse={() => Promise.resolve(null)} onStart={() => Promise.resolve()} onWarm={onWarm} onOtherMachine={() => undefined} onCancel={() => undefined} />
-      </div>,
-    )
-    // Own copy is on: a worktree is made when the chat starts, so there is no checkout to start the agent in ahead.
-    await screen.findByRole('switch', { name: 'Own copy' })
-    await userEvent.click(screen.getByRole('switch', { name: 'Own copy' }))
-    await waitFor(() => { expect(onWarm).toHaveBeenLastCalledWith({ folder: '/dev/growth', agent: 'claude', model: 'default', reasoning: 'medium', mode: 'default' }) })
+  it('clones a repository from the project menu and opens on the folder it was cloned into', async () => {
+    const clone = vi.fn<() => Promise<string | null>>().mockResolvedValue('/dev/widgets')
+    page(undefined, { clone })
+    await userEvent.click(await screen.findByRole('button', { name: 'Project folder and machine: growth' }))
+    await userEvent.click(within(await lastPopup()).getByRole('button', { name: 'Clone from GitHub…' }))
+    await pickProject('widgets')
+  })
 
+  it('has no clone button when the window gives it no way to clone', async () => {
+    page()
+    await userEvent.click(await screen.findByRole('button', { name: 'Project folder and machine: growth' }))
+    expect(within(await lastPopup()).queryByRole('button', { name: 'Clone from GitHub…' })).not.toBeInTheDocument()
+  })
+
+  it('works in the checkout by default, so it starts the agent ahead; a worktree stops that, and so does leaving', async () => {
+    const onWarm = vi.fn()
+    const { unmount } = page(undefined, { onWarm })
+    await ready()
+    await waitFor(() => { expect(onWarm).toHaveBeenLastCalledWith({ folder: '/dev/growth', agent: 'claude', model: 'default', reasoning: 'medium', mode: 'default' }) })
+    await workIn('New worktree')
+    await waitFor(() => { expect(onWarm).toHaveBeenLastCalledWith(null) })
     unmount()
     expect(onWarm).toHaveBeenLastCalledWith(null)
   })
 
-  it('shows the project, its branch and Own copy as three controls, with the tasks under them', async () => {
-    page()
-    expect(await screen.findByRole('button', { name: 'Project: growth' })).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })).toBeInTheDocument()
-    expect(screen.getByRole('switch', { name: 'Own copy' })).toBeChecked()
-    expect(within(screen.getByRole('list', { name: 'Suggested tasks' })).getAllByRole('button')).toHaveLength(3)
-  })
-
-  it('swaps the project from the dropdown under its button', async () => {
-    page()
-    await userEvent.click(await screen.findByRole('button', { name: 'Project: growth' }))
-    const menu = await screen.findByRole('dialog')
-    expect(within(menu).getByRole('radio', { name: /growth/ })).toHaveTextContent('6')
-    await userEvent.click(within(menu).getByRole('radio', { name: /api/ }))
-    expect(await screen.findByRole('button', { name: 'Project: api' })).toBeInTheDocument()
-  })
-
-  it('starts in a worktree of its own on a new branch by default, from where the checkout is', async () => {
-    const onStart = vi.fn<(request: { message: string; branch?: unknown }) => Promise<void>>().mockResolvedValue(undefined)
+  it('starts in the folder on its branch, with no new branch, when no other chat is on it', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     page(onStart)
-    await screen.findByText(/Starts from dev · ↓2 behind origin\/dev/)
-    await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'hello')
-    await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
-    await waitFor(() => { expect(onStart).toHaveBeenCalled() })
-    expect(onStart.mock.calls[0]?.[0].branch).toEqual({ name: expect.stringMatching(/^[a-z]+-[a-z]+$/) as unknown, create: true, worktree: true })
-  })
-
-  it('edits the checkout on its own branch when Own copy is turned off', async () => {
-    const onStart = vi.fn<(request: { message: string; branch?: unknown }) => Promise<void>>().mockResolvedValue(undefined)
-    page(onStart)
-    await userEvent.click(await screen.findByRole('switch', { name: 'Own copy' }))
-    expect(await screen.findByRole('button', { name: 'Branch: dev' })).toBeInTheDocument()
-    await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'hello')
+    await ready()
+    await userEvent.type(box(), 'hello')
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => { expect(onStart).toHaveBeenCalled() })
     expect(onStart.mock.calls[0]?.[0].branch).toBeNull()
   })
 
-  it('says how far behind the checkout is, and pulls it when it is clean', async () => {
-    sync.dirty = false
-    sync.behind = 2
-    sync.pulled = []
-    page()
-    await userEvent.click(await screen.findByRole('switch', { name: 'Own copy' }))
-    expect(await screen.findByText('↓2 behind origin/dev')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: '↓ Pull' }))
-    await waitFor(() => { expect(sync.pulled).toEqual(['/dev/growth']) })
-  })
-
-  it('will not pull over uncommitted changes, and says why', async () => {
-    sync.dirty = true
-    sync.behind = 1
-    page()
-    await userEvent.click(await screen.findByRole('switch', { name: 'Own copy' }))
-    const pull = await screen.findByRole('button', { name: '↓ Pull' })
-    expect(pull).toBeDisabled()
-    expect(pull).toHaveAttribute('title', 'You have uncommitted changes. Commit or stash first.')
-    sync.dirty = false
-  })
-
-  it('offers the other recent projects as chips with their branch and how far behind they are', async () => {
-    sync.behind = 3
-    page()
-    const chips = await screen.findByRole('group', { name: 'Switch to' })
-    const api = await within(chips).findByRole('button', { name: /api/ })
-    await waitFor(() => { expect(api).toHaveTextContent('main') })
-    expect(api).toHaveTextContent('↓3')
-    expect(api).toHaveAttribute('title', '/dev/api')
-    await userEvent.click(api)
-    expect(await screen.findByRole('button', { name: 'Project: api' })).toBeInTheDocument()
-  })
-
-  it('starts the chat with a suggested task when one is clicked', async () => {
-    const onStart = vi.fn<(request: { message: string }) => Promise<void>>().mockResolvedValue(undefined)
-    page(onStart)
-    await pickProject('growth')
-    await userEvent.click(await screen.findByRole('button', { name: /Review my uncommitted changes/ }))
+  it('gives the chat a worktree of its own when another chat works on that branch here, and says why', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    page(onStart, { busy: DEV_BUSY })
+    await userEvent.click(await screen.findByRole('button', { name: 'Work in: New worktree' }))
+    expect(await lastPopup()).toHaveTextContent('Fix login is already working on dev here, so this chat gets its own worktree. Your checkout stays untouched.')
+    await userEvent.keyboard('{Escape}')
+    await userEvent.type(box(), 'hello')
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
     await waitFor(() => { expect(onStart).toHaveBeenCalled() })
-    expect(onStart.mock.calls[0]?.[0].message).toBe('Review my uncommitted changes')
+    expect(onStart.mock.calls[0]?.[0].branch).toMatchObject({ create: true, worktree: true, name: expect.stringMatching(TWO_WORDS) as unknown })
+  })
+
+  it('marks a branch another chat is on as in use', async () => {
+    page(undefined, { busy: DEV_BUSY })
+    await userEvent.click(await screen.findByRole('button', { name: /^Branch: / }))
+    expect(within(await lastPopup()).getByRole('radio', { name: /^dev/ })).toHaveTextContent('in use')
+  })
+
+  it('names a new worktree\'s branch with two words and never copies the message into it', async () => {
+    page()
+    await ready()
+    await workIn('New worktree')
+    const named = (await screen.findByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })).getAttribute('aria-label')
+    await userEvent.type(box(), 'Fix the login bug')
+    expect(screen.getByRole('button', { name: /^Branch: / })).toHaveAttribute('aria-label', named)
+  })
+
+  it('starts on a branch typed into the branch menu, made from where the checkout is', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    page(onStart)
+    await userEvent.click(await screen.findByRole('button', { name: 'Branch: dev' }))
+    await userEvent.type(screen.getByRole('textbox', { name: 'Find or create a branch' }), 'my-own')
+    await userEvent.click(screen.getByRole('radio', { name: '+ Create my-own from dev' }))
+    expect(screen.getByRole('button', { name: 'Branch: my-own' })).toBeInTheDocument()
+    await userEvent.type(box(), 'Fix the login bug')
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    await waitFor(() => { expect(onStart.mock.calls[0]?.[0].branch).toEqual({ name: 'my-own', create: true, worktree: false }) })
+  })
+
+  it('names the chat with what was typed in the header', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    page(onStart)
+    await ready()
+    await userEvent.type(screen.getByRole('textbox', { name: 'Chat name' }), 'Login fix')
+    await userEvent.type(box(), 'hello{Enter}')
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ name: 'Login fix', view: 'chat' })) })
+  })
+
+  it('opens as its terminal when Terminal is picked, and takes the first task on the prompt line', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    page(onStart)
+    await ready()
+    await userEvent.click(screen.getByRole('radio', { name: 'Terminal' }))
+    expect(screen.queryByRole('textbox', { name: 'First message' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Draft terminal')).toHaveTextContent('cwd: /dev/growth')
+    await userEvent.type(screen.getByRole('textbox', { name: 'First task' }), 'go{Enter}')
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ message: 'go', view: 'terminal' })) })
+  })
+
+  it('opens as the agent\'s default view from Settings', () => {
+    page(undefined, { viewDefaults: { claude: 'terminal', codex: 'chat', gemini: 'chat' } })
+    expect(screen.getByRole('radio', { name: 'Terminal' })).toBeChecked()
+  })
+
+  it('goes back on Close or Escape, and has no Close when there is nothing to go back to', async () => {
+    const onCancel = vi.fn()
+    const first = page(undefined, { onCancel })
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await userEvent.type(box(), '{Escape}')
+    expect(onCancel).toHaveBeenCalledTimes(2)
+    first.unmount()
+
+    render(
+      <div className="mx-app">
+        <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" browse={null} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} />
+      </div>,
+    )
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
   })
 
   it('attaches a picked file to the first message, shows it, and names it in the message', async () => {
@@ -161,7 +218,7 @@ describe('the new chat page', () => {
     const onStart = vi.fn<(request: { message: string }) => Promise<void>>().mockResolvedValue(undefined)
     page(onStart)
     await pickProject('growth')
-    await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'why does this fail?')
+    await userEvent.type(box(), 'why does this fail?')
     await userEvent.click(screen.getByRole('button', { name: 'Attach files' }))
     expect(await screen.findByText('errors.log')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
@@ -178,10 +235,10 @@ describe('the new chat page', () => {
     expect(screen.getByRole('radio', { name: 'Medium' })).toBeChecked()
   })
 
-  it('has the agent, model and effort on one button under the message box, and the permission mode beside it', async () => {
+  it('has the agent, model and effort on one button in the box, and the permission mode beside it', async () => {
     page()
     await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude/ }))
-    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' })).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Claude' })).toBeChecked()
     expect(screen.getByRole('radiogroup', { name: 'Model' })).toBeInTheDocument()
     expect(screen.getByRole('radiogroup', { name: 'Effort' })).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
@@ -200,10 +257,32 @@ describe('the new chat page', () => {
     await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', mode: 'codexReadOnly' })) })
   })
 
+  it('starts on the agent\'s full-access mode while Full access in new chats is on', async () => {
+    const onStart = vi.fn(() => Promise.resolve())
+    render(
+      <div className="mx-app">
+        <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="codex" fullAccess browse={null} onStart={onStart} onOtherMachine={() => undefined} />
+      </div>,
+    )
+    expect(screen.getByRole('button', { name: /^Starting permission mode: Full access/ })).toBeInTheDocument()
+    await pickProject('growth')
+    await userEvent.click(screen.getByRole('button', { name: 'Start chat' }))
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', mode: 'codexFullAccess' })) })
+  })
+
+  it('keeps Claude on its usual mode with full access on when Yolo mode does not allow Bypass permissions', () => {
+    render(
+      <div className="mx-app">
+        <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" fullAccess browse={null} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} />
+      </div>,
+    )
+    expect(screen.getByRole('button', { name: /^Starting permission mode: Ask before edits/ })).toBeInTheDocument()
+  })
+
   it('says a Codex chat starts with full access while its Yolo setting is on, and sends no mode of its own', async () => {
     const onStart = vi.fn(() => Promise.resolve())
     codexPage(onStart, true)
-    expect(screen.getByText('Full access')).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'Permission mode: Full access' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Starting permission mode/ })).toBeNull()
     await pickProject('growth')
     await userEvent.click(screen.getByRole('button', { name: 'Start chat' }))
@@ -215,11 +294,77 @@ describe('the new chat page opened from a full chat', () => {
   it('opens on that chat\'s folder with the summary as the first message, ready to edit', async () => {
     render(
       <div className="mx-app">
-        <NewChatPage machine={0} machines={[{ machine: 0, label: 'This computer', local: true }]} projects={PROJECTS} defaultAgent="claude" browse={() => Promise.resolve(null)} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} onCancel={() => undefined} seed={{ folder: '/dev/api', message: 'This continues an earlier chat' }} />
+        <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" browse={() => Promise.resolve(null)} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} onCancel={() => undefined} seed={{ folder: '/dev/api', message: 'This continues an earlier chat' }} />
       </div>,
     )
-    expect(await screen.findByRole('button', { name: 'Project: api' })).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'First message' })).toHaveValue('This continues an earlier chat')
+    await pickProject('api')
+    expect(box()).toHaveValue('This continues an earlier chat')
+  })
+})
+
+describe('starting a chat and going on writing', () => {
+  type Start = (request: NewChatRequest, options?: { background?: boolean }) => Promise<void>
+
+  it('starts the chat in the background on Ctrl+Enter, and empties the box with every other choice kept', async () => {
+    const onStart = vi.fn<Start>().mockResolvedValue(undefined)
+    page(onStart)
+    await ready()
+    await userEvent.click(screen.getByRole('button', { name: /^Starting permission mode/ }))
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /^Plan mode/ }))
+    await userEvent.type(box(), 'first task')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+
+    expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ folder: '/dev/growth', message: 'first task', mode: 'plan' }), { background: true })
+    expect(box()).toHaveValue('')
+    await pickProject('growth')
+    expect(screen.getByRole('button', { name: 'Work in: This folder' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Starting permission mode: Plan mode/ })).toBeInTheDocument()
+  })
+
+  it('starts a second while the first is still starting, each in a worktree of its own', async () => {
+    const onStart = vi.fn<Start>(() => new Promise(() => undefined))
+    page(onStart)
+    await ready()
+    await workIn('New worktree')
+    await userEvent.type(box(), 'first task')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+    await userEvent.type(box(), 'second task')
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}')
+
+    expect(onStart.mock.calls.map(([request]) => request.message)).toEqual(['first task', 'second task'])
+    const [first, second] = onStart.mock.calls.map(([request]) => request.branch)
+    expect(first).toMatchObject({ create: true, worktree: true })
+    expect(second).toMatchObject({ create: true, worktree: true })
+    expect(second?.name).not.toBe(first?.name)
+  })
+
+  it('names a start that failed and puts its message back after what was typed since', async () => {
+    let fail: (reason: Error) => void = () => undefined
+    const onStart = vi.fn<Start>(() => new Promise((_, reject) => { fail = reject }))
+    page(onStart)
+    await ready()
+    await userEvent.type(box(), 'fix the login')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+    await userEvent.type(box(), 'a new draft')
+    fail(new Error('The worktree could not be made'))
+
+    expect(await screen.findByText(/Could not start “fix the login”: The worktree could not be made/)).toBeInTheDocument()
+    expect(box()).toHaveValue('a new draft')
+    await userEvent.click(screen.getByRole('button', { name: 'Put back “fix the login”' }))
+    expect(box()).toHaveValue('a new draft\n\nfix the login')
+    expect(screen.queryByText(/Could not start/)).not.toBeInTheDocument()
+  })
+
+  it('starts and opens the chat on plain Enter, as before', async () => {
+    const onStart = vi.fn<Start>(() => new Promise(() => undefined))
+    page(onStart)
+    await ready()
+    await userEvent.type(box(), 'open it{Enter}')
+
+    expect(onStart).toHaveBeenCalledTimes(1)
+    expect(onStart.mock.calls[0]).toHaveLength(1)
+    expect(box()).toHaveValue('open it')
+    expect(screen.getByRole('button', { name: 'Send message' })).toBeDisabled()
   })
 })
 
@@ -237,7 +382,7 @@ describe('the new chat page on another machine', () => {
   it('lists that machine\'s projects, has no folder picker, and starts there with no branch', async () => {
     const onStart = vi.fn(() => Promise.resolve())
     remotePage(onStart)
-    await pickProject('app')
+    await pickProject('app on Shipyard')
     expect(screen.queryByRole('button', { name: /^Branch/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Attach files' })).not.toBeInTheDocument()
     await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'hello')
@@ -245,21 +390,29 @@ describe('the new chat page on another machine', () => {
     expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, machineName: 'Shipyard', folder: '/srv/app', message: 'hello', branch: null }))
   })
 
-  it('offers the agent only on the model button: no model list or effort that this computer would have to guess', async () => {
-    remotePage(() => Promise.resolve())
-    await pickProject('app')
+  it('offers the model and effort on the model button, and starts with what was picked', async () => {
+    const onStart = vi.fn(() => Promise.resolve())
+    remotePage(onStart)
+    await pickProject('app on Shipyard')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, / }))
     expect(screen.getByRole('radiogroup', { name: 'Agent' })).toBeInTheDocument()
-    expect(screen.queryByRole('radiogroup', { name: 'Model' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('radiogroup', { name: 'Effort' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: /Opus/ }))
+    await userEvent.click(screen.getByRole('radio', { name: 'High' }))
+    await userEvent.keyboard('{Escape}')
+    await userEvent.type(screen.getByRole('textbox', { name: 'First message' }), 'hello')
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, model: 'opus', reasoning: 'high' }))
   })
 
-  it('offers this computer as another place to start', async () => {
+  it('offers this computer as another place to start, and no folder picker or clone there', async () => {
     const onOtherMachine = vi.fn()
     remotePage(() => Promise.resolve(), onOtherMachine)
-    await userEvent.click(await screen.findByRole('button', { name: 'Project: app' }))
-    expect(screen.queryByRole('button', { name: /Browse for a folder/ })).not.toBeInTheDocument()
-    await userEvent.click(await screen.findByRole('button', { name: /Start on This computer/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Project folder and machine: / }))
+    const menu = await lastPopup()
+    expect(within(menu).queryByRole('button', { name: 'Browse…' })).not.toBeInTheDocument()
+    expect(within(menu).queryByRole('button', { name: 'Clone from GitHub…' })).not.toBeInTheDocument()
+    expect(within(menu).getByRole('radio', { name: 'Remote machine' })).toBeChecked()
+    await userEvent.click(within(menu).getByRole('radio', { name: 'This computer' }))
     expect(onOtherMachine).toHaveBeenCalledWith(0)
   })
 })

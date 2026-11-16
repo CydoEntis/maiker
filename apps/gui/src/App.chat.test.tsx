@@ -17,6 +17,9 @@ const daemon = vi.hoisted(() => ({
   loadDaemonUpdateStatus: () => Promise.resolve({ daemonVersion: null, behind: false, canRestart: false, sessionCount: 0, activeTurnCount: 0 }),
   restartStaleDaemon: () => Promise.resolve(),
   loadConversations: vi.fn<() => Promise<Conversation[]>>(),
+  // The daemon numbers no list here and says no session left: a row a list misses is held.
+  localListRevision: () => 0,
+  daemonSaidRemoved: () => false,
   loadPerformanceSample: vi.fn<() => Promise<never>>(() => new Promise(() => {})),
   listenSessionsChanged: vi.fn(() => Promise.resolve(() => {})),
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
@@ -246,7 +249,7 @@ describe('the Terminal | Chat view of a pane', () => {
     await waitFor(() => { expect(box).toBeDisabled() })
     expect(box).toHaveAttribute('placeholder', 'Answer the request above first')
 
-    await user.click(within(pane).getByRole('button', { name: /^Yes, once/ }))
+    await user.click(within(pane).getByRole('button', { name: /^Yes once/ }))
     expect(daemon.approveRequest).toHaveBeenCalledWith({ id: '42', generation: 1 }, 'req-1', 'Accept')
     await waitFor(() => { expect(box).not.toBeDisabled() })
     history.approvals = []

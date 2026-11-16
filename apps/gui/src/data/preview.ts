@@ -5,7 +5,9 @@ export type SessionStatus = 'working' | 'needs-you' | 'done' | 'idle' | 'recover
 export type TurnKind = 'Working' | 'NeedsYou' | 'Done' | 'Idle' | 'Prompt' | 'CommandStarted' | 'CommandFinished'
 
 /** The question a permission prompt asks, from the agent's own hook. */
-export type PermissionAsk = { tool: string; detail: string; answerable: boolean; choices?: readonly string[]; /** A prompt that asks several questions at once, each with one answer, in the order the agent shows them. */ questions?: readonly { question: string; choices: readonly string[] }[] }
+export type PermissionAsk = { tool: string; detail: string; answerable: boolean; choices?: readonly string[]; /** A prompt that asks several questions at once, each with one answer, in the order the agent shows them. */ questions?: readonly AskedQuestion[]; /** A prompt with a question that takes several answers: every question it asks, in order. */ form?: readonly AskedQuestion[] }
+/** One question of a prompt; `multi` when it takes any number of its choices. */
+export type AskedQuestion = { question: string; choices: readonly string[]; multi?: boolean }
 
 /** What the daemon reports about a terminal session beyond its status. */
 export type TerminalDetails = {
@@ -21,6 +23,12 @@ export type TerminalDetails = {
   agentEffort?: string | null
   /** When the status last changed, in unix seconds (the daemon's `TermInfo.since`); absent or 0 when it did not say. */
   since?: number
+  /** What set the status, in the daemon's own words (`TermInfo.status_why`: `hook: Stop`); absent or empty when it gave no reason. */
+  statusWhy?: string
+  /** It hit its plan limit, and the daemon tells it to continue at this time, in unix seconds (`TermInfo.resume_at`); null or absent when it is not held. */
+  resumeAt?: number | null
+  /** Snoozed until this time, in unix seconds (`TermInfo.snoozed_until`); null or absent when it is awake. */
+  snoozedUntil?: number | null
   /** The latest turn events, oldest first; `at` is unix seconds. */
   timeline: Array<{ at: number; kind: TurnKind; detail: string }>
   /** The last command ended in failure, as the shell reported it (a non-zero exit code); null when nothing failed. Only the daemon sets it. */
@@ -41,6 +49,21 @@ export type TerminalDetails = {
   helperAsk?: string[]
   /** The agent's subagents as its runtime reports them; absent from an older daemon. */
   subagents?: SubagentActivity[]
+  /** The workflow runs the session reported, newest first (ADR 0010); absent from an older daemon. */
+  workflows?: WorkflowRun[]
+}
+
+/** A workflow step's state as the workflow reported it; `unknown` is one added in a later version. */
+export type WorkflowStepState = 'waiting' | 'working' | 'passed' | 'failed' | 'sent_back' | 'needs_you' | 'skipped' | 'unknown'
+
+/** One run of a workflow, as the session reported it. Display only: it never sets the session's status. */
+export type WorkflowRun = {
+  workflow: string
+  run: string
+  ticket: { key: string; title: string | null; link: string | null } | null
+  steps: { name: string; state: WorkflowStepState; note: string | null; helper: string | null }[]
+  /** When the daemon took the report, unix seconds. */
+  reportedAt: number
 }
 
 /** The runtime's states for a subagent (`SubagentState` in the protocol). */
@@ -89,6 +112,8 @@ export type Conversation = {
   /** Lines added and removed in the session's checkout against HEAD, from the daemon; absent when unknown. */
   /** The terminal runs in a linked worktree. */
   linked?: boolean
+  /** The top folder of the checkout (main or a linked worktree) it works in; absent or null when the daemon did not say. */
+  checkout?: string | null
   diffAdded?: number
   diffRemoved?: number
   isGitRepository?: boolean

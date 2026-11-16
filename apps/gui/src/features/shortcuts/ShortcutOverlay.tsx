@@ -1,5 +1,6 @@
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { HOTKEY_GROUPS, hotkeyRows, type Chord, type Platform } from '@/features/workspace/model/shortcuts'
+import { useKeyOverrides } from './platform'
 import { Icon } from '@/features/workspace/components/glyphs'
 
 /** Keys the chat answers itself, so they are not in the window's table (README: In chat). */
@@ -29,7 +30,7 @@ function Row({ action, chord }: { action: string; chord: Chord }) {
 
 /** Every shortcut the window handles, grouped, from the same table Settings > Hotkeys reads, and the chat's own keys. */
 export function ShortcutOverlay({ platform, portalContainer, onClose }: { platform: Platform; portalContainer: HTMLElement | null; onClose: () => void }) {
-  const rows = hotkeyRows(platform)
+  const rows = hotkeyRows(platform, useKeyOverrides())
   return (
     <DialogPrimitive.Root open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogPrimitive.Portal container={portalContainer}>

@@ -1,8 +1,9 @@
 import { isSpinnerStyle, type SpinnerStyle } from '@/lib/spinner-clock'
-import { DEFAULT_WINDOW_STYLE, isWindowStyle, type WindowStyle } from '@/features/workspace/theme/windowStyles'
+import { cornersOfWindowStyle, DEFAULT_CORNERS, isCorners, type Corners } from '@/features/workspace/theme/corners'
 import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, isFontFamily, isFontWeight, type TerminalFontWeight } from '@/lib/terminalFont'
 import { readThemePreference, type ThemePreference } from '@/data/themePreference'
 import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/features/workspace/theme/themes'
+import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
 import { DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '@/features/workspace/model/chatView'
 
 export type ToastPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
@@ -28,17 +29,18 @@ export type SidebarSide = 'left' | 'right'
 export type SidebarOrder = 'creation' | 'priority'
 /** What the sidebar's headings are: what each session is doing, its project, or its machine. */
 export type SidebarGroup = 'status' | 'project' | 'machine'
-/** Where an agent's own terminals show: a tab of the side panel, or a drawer under its chat. */
-export type TerminalDock = 'panel' | 'under'
-/** The window style: one of four looks that share one layout (`theme/windowStyles.ts`). Kept by this window alone. */
-export type StyleChoice = WindowStyle
+/** Where the terminal dock sits beside the chat: under it, on its right, or in its place. */
+export type TerminalDock = 'bottom' | 'right' | 'full'
+/** Square or rounded corners, the one shape choice of the desktop's look (`theme/corners.ts`). Kept by this window alone. */
+export type CornersChoice = Corners
 /** App and folder icons keep their colours, or drop to neutral gray tiles. Independent of the style. */
 export type IconColor = 'color' | 'grayscale'
 
 const SCROLLBACK_SHORT = 5000
 const SCROLLBACK_DEFAULT = 10000
 const SCROLLBACK_LONG = 50000
-export const SCROLLBACK_CHOICES = [SCROLLBACK_SHORT, SCROLLBACK_DEFAULT, SCROLLBACK_LONG] as const
+const SCROLLBACK_LONGEST = 100000
+export const SCROLLBACK_CHOICES = [SCROLLBACK_SHORT, SCROLLBACK_DEFAULT, SCROLLBACK_LONG, SCROLLBACK_LONGEST] as const
 export type ScrollbackLines = (typeof SCROLLBACK_CHOICES)[number]
 /** Lines scrolled per wheel notch, as a multiple of xterm's default (`scrollSensitivity`). */
 const SCROLL_NORMAL = 1
@@ -96,8 +98,10 @@ export type SettingsPreferences = {
   sidebarGroup: SidebarGroup
   terminalDock: TerminalDock
   iconSize: IconSize
-  style: StyleChoice
+  corners: CornersChoice
   iconColor: IconColor
+  /** The keys chosen in Settings › Hotkeys, in place of the actions' own. */
+  keyOverrides: KeyOverrides
   /** How wide the chat's messages run; `auto` grows with the pane, so a large screen is used. */
   chatWidth: ChatWidth
   /** The size of everything in the chat, as a percentage (`CHAT_TEXT_SIZES`). */
@@ -106,24 +110,18 @@ export type SettingsPreferences = {
   chatViewDefault: ChatViewDefaults
   /** The agent a new session starts. */
   defaultAgent: ChatAgent
-  /** What a new session opens as: a chat with the default agent, or that agent typed into a new shell. */
-  newSessionView: PaneView
-  /** A new chat starts with the agent's full-access mode (no sandbox, no permission prompts). Off until you turn it on. */
-  chatFullAccessDefault: boolean
+  /** The chat leaves out runs of reads and searches that succeeded (`isQuietRun`). Off until you turn it on. */
+  hideSuccessfulTools: boolean
   /** Yolo mode per agent, off by default: Claude may pick Bypass permissions; Codex and Gemini start with approvals and sandbox off. */
   yoloClaude: boolean
   yoloCodex: boolean
   yoloGemini: boolean
-  /** The bottom line of the window: daemon, branch, counts and the focused session. */
-  statusBar: boolean
+  /** New chats start with the agent's skip-permissions mode ticked: no sandbox and no approval prompts. Off by default. */
+  fullAccessNewChats: boolean
   /** A small readout of frames and process load over the window, for finding what lags. */
   perfOverlay: boolean
   /** Draw terminals with xterm's DOM renderer instead of WebGL; for a web view that shows typed text late. */
   terminalPlainDrawing: boolean
-  /** The card shows behind a pane's text (Glass with WebGL); programs' own backgrounds show as boxes. */
-  terminalSeeThrough: boolean
-  /** Glass paints two faint tints of the theme over the window ground. Off is a flat ground; the software path is always flat. */
-  backgroundGlow: boolean
   /** The terminal cursor blinks while its pane is focused. xterm drives it, so it is off by default. */
   cursorBlink: boolean
   /** Fetch a new release in the background. Installing still waits for a restart. */
@@ -144,7 +142,7 @@ export function validBudget(value: unknown): number | null {
   return value > 0 && value <= MONTHLY_BUDGET_MAX ? value : null
 }
 
-export const TERMINAL_FONT_SIZE_MIN = 12
+export const TERMINAL_FONT_SIZE_MIN = 11
 export const TERMINAL_FONT_SIZE_MAX = 16
 export const SIDEBAR_WIDTH_MIN = 208
 export const SIDEBAR_WIDTH_MAX = 440
@@ -189,7 +187,7 @@ function defaults(): SettingsPreferences {
     scrollback: SCROLLBACK_DEFAULT,
     scrollSpeed: SCROLL_NORMAL,
     terminalScreenReader: false,
-    style: DEFAULT_WINDOW_STYLE,
+    corners: DEFAULT_CORNERS,
     density: 'comfortable',
     sidebarTextSize: UI_TEXT_SIZE_DEFAULT,
     tabTextSize: UI_TEXT_SIZE_DEFAULT,
@@ -197,24 +195,22 @@ function defaults(): SettingsPreferences {
     sidebarSide: 'left',
     sidebarOrder: 'creation',
     sidebarGroup: 'status',
-    terminalDock: 'panel',
+    terminalDock: 'bottom',
     iconSize: 'medium',
     iconColor: 'color',
+    keyOverrides: NO_OVERRIDES,
     chatWidth: 'auto',
     chatTextSize: CHAT_TEXT_SIZE_DEFAULT,
     chatViewDefault: DEFAULT_CHAT_VIEWS,
     defaultAgent: 'claude',
-    newSessionView: 'chat',
-    chatFullAccessDefault: false,
+    hideSuccessfulTools: false,
     yoloClaude: false,
     yoloCodex: false,
     yoloGemini: false,
-    statusBar: false,
+    fullAccessNewChats: false,
     perfOverlay: false,
     // WebGL everywhere. The late letters it once showed on Linux came from a page drawn on the CPU, which the host now prevents (docs/PERFORMANCE.md).
     terminalPlainDrawing: false,
-    terminalSeeThrough: false,
-    backgroundGlow: false,
     cursorBlink: false,
     autoDownloadUpdates: true,
     restartWhenIdle: true,
@@ -278,28 +274,27 @@ export function readSettingsPreferences(): SettingsPreferences {
       sidebarSide: preferences.sidebarSide === 'left' || preferences.sidebarSide === 'right' ? preferences.sidebarSide : fallback.sidebarSide,
       sidebarOrder: preferences.sidebarOrder === 'creation' || preferences.sidebarOrder === 'priority' ? preferences.sidebarOrder : fallback.sidebarOrder,
       sidebarGroup: preferences.sidebarGroup === 'status' || preferences.sidebarGroup === 'project' || preferences.sidebarGroup === 'machine' ? preferences.sidebarGroup : fallback.sidebarGroup,
-      terminalDock: preferences.terminalDock === 'panel' || preferences.terminalDock === 'under' ? preferences.terminalDock : fallback.terminalDock,
+      terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       iconSize: preferences.iconSize === 'small' || preferences.iconSize === 'medium' || preferences.iconSize === 'large' ? preferences.iconSize : fallback.iconSize,
-      style: styleOf(preferences.style) ?? fallback.style,
+      // Before the corner switch a window style was saved under `style`; its corners carry over.
+      corners: (isCorners(preferences.corners) ? preferences.corners : null) ?? cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,
       chatViewDefault: chatViewDefault(preferences.chatViewDefault, fallback.chatViewDefault),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
-      newSessionView: paneView(preferences.newSessionView, fallback.newSessionView),
-      chatFullAccessDefault: bool(preferences.chatFullAccessDefault, fallback.chatFullAccessDefault),
+      hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
       yoloClaude: bool(preferences.yoloClaude, fallback.yoloClaude),
       yoloCodex: bool(preferences.yoloCodex, fallback.yoloCodex),
       yoloGemini: bool(preferences.yoloGemini, fallback.yoloGemini),
-      statusBar: bool(preferences.statusBar, fallback.statusBar),
+      fullAccessNewChats: bool(preferences.fullAccessNewChats, fallback.fullAccessNewChats),
       perfOverlay: bool(preferences.perfOverlay, fallback.perfOverlay),
       terminalPlainDrawing: bool(preferences.terminalPlainDrawing, fallback.terminalPlainDrawing),
-      terminalSeeThrough: bool(preferences.terminalSeeThrough, fallback.terminalSeeThrough),
-      backgroundGlow: bool(preferences.backgroundGlow, fallback.backgroundGlow),
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
       autoDownloadUpdates: bool(preferences.autoDownloadUpdates, fallback.autoDownloadUpdates),
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),
       monthlyBudget: validBudget(preferences.monthlyBudget),
       iconColor: preferences.iconColor === 'color' || preferences.iconColor === 'grayscale' ? preferences.iconColor : fallback.iconColor,
+      keyOverrides: readKeyOverrides(preferences.keyOverrides),
     }
   } catch {
     console.warn('Ignoring invalid Maitty settings')
@@ -315,7 +310,7 @@ function isToastPosition(value: unknown): value is ToastPosition {
   return value === 'top-left' || value === 'top-center' || value === 'top-right' || value === 'bottom-left' || value === 'bottom-center' || value === 'bottom-right'
 }
 
-// Sizes saved before the 12–16 range are kept as the nearest size in it.
+// Sizes saved outside the 11–16 range are kept as the nearest size in it.
 function terminalFontSize(value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isInteger(value)) return fallback
   return Math.min(TERMINAL_FONT_SIZE_MAX, Math.max(TERMINAL_FONT_SIZE_MIN, value))
@@ -334,15 +329,6 @@ function isAccent(value: unknown): value is SettingsPreferences['accent'] {
   return value === 'teal' || value === 'blue' || value === 'violet'
 }
 
-/**
- * "minimal" and "expressive" were the names before the window styles; they read as Flat and Glass, and
- * Flat (like the retired Tiled) reads as the Flat style, id `console`: the solid-panel look.
- */
-function styleOf(value: unknown): StyleChoice | null {
-  if (value === 'flat' || value === 'tiled' || value === 'minimal') return 'console'
-  if (value === 'expressive' || value === 'frosted') return 'glass'
-  return isWindowStyle(value) ? value : null
-}
 
 const isThemeMode = (value: unknown): value is ThemeMode => value === 'system' || value === 'dark' || value === 'light'
 
@@ -379,4 +365,15 @@ function isScrollSpeed(value: unknown): value is ScrollSpeed {
 
 function isScrollback(value: unknown): value is ScrollbackLines {
   return SCROLLBACK_CHOICES.some((choice) => choice === value)
+}
+
+/**
+ * A stored dock. Before the window-wide dock (layout 2h) terminals were a side panel tab or a drawer under the chat:
+ * those carry over to the right and to the bottom.
+ */
+function terminalDockOf(value: unknown): TerminalDock | null {
+  if (value === 'bottom' || value === 'right' || value === 'full') return value
+  if (value === 'panel') return 'right'
+  if (value === 'under') return 'bottom'
+  return null
 }

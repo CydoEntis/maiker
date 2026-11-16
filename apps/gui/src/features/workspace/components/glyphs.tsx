@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
-import { SquareCheck, SquareExclamationPoint, TreePine } from 'lucide-react'
+import { TreePine } from 'lucide-react'
 import { attachSpinner, currentGlyph, isWebSpinner, isWideSpinner, spinnerFrames, useSpinnerStyle } from '@/lib/spinner-clock'
 import { WebSpinner } from '@/components/WebSpinner'
 import { SHELL_PROCESS, type SessionStatus } from '../model/session'
@@ -56,8 +56,20 @@ const ICON_DRAWINGS = {
     <Svg size={13} strokeWidth={1.75}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.1z" /></Svg>
   ),
   chart: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></Svg>,
+  ticket: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z" /><path d="M10 5v14" strokeDasharray="2 2" /></Svg>,
+  list: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 6h16M4 12h16M4 18h16" /></Svg>,
+  person: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0" /></Svg>,
+  board: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M3 4h5v16H3zM9.5 4h5v11h-5zM16 4h5v7h-5z" /></Svg>,
+  modules: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" /></Svg>,
+  cycle: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5" /></Svg>,
+  milestone: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 21V4l13 4-13 5" /></Svg>,
+  refresh: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" /></Svg>,
   splitRight: () => <Svg size={16} strokeWidth={1.6}><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="M12 4.5v15" /></Svg>,
   splitDown: () => <Svg size={16} strokeWidth={1.6}><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="M3 12h18" /></Svg>,
+  panelLeft: () => <Svg size={15} strokeWidth={1.7}><rect x="3" y="4.5" width="18" height="15" rx="1" /><path d="M9 4.5v15" /></Svg>,
+  panelBottom: () => <Svg size={15} strokeWidth={1.7}><rect x="3" y="4.5" width="18" height="15" rx="1" /><path d="M3 14.5h18" /></Svg>,
+  panelRight: () => <Svg size={15} strokeWidth={1.7}><rect x="3" y="4.5" width="18" height="15" rx="1" /><path d="M15 4.5v15" /></Svg>,
+  filter: () => <Svg size={15} strokeWidth={1.9}><path d="M4 6h16M7 12h10M10 18h4" /></Svg>,
   sidePanel: () => <Svg size={16} strokeWidth={1.6}><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="M14.5 4.5v15" /></Svg>,
   drawer: () => <Svg size={16} strokeWidth={1.6}><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="M3 14.5h18" /></Svg>,
   maximize: () => <Svg size={15} strokeWidth={1.8}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></Svg>,
@@ -91,6 +103,14 @@ const ICON_DRAWINGS = {
   fleets: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 3v13M12 5l6 9H12M12 8l-5 6h5M4 18c2 2.5 5 3 8 1 3 2 6 1.5 8-1" /></Svg>,
   priority: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 7h16M4 12h11M4 17h6" /></Svg>,
   caret: () => <Svg className="mx-caret-icon" size={12} strokeWidth={2.5} stroke="currentColor"><path d="m9 6 6 6-6 6" /></Svg>,
+  lock: ({ size = 10 }: IconProps) => <Svg size={size} strokeWidth={2}><rect x="5" y="11" width="14" height="9" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></Svg>,
+  /** A tool step's own mark: a page read, a pencil for an edit, a prompt for a command run (layout 2h). */
+  toolRead: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M4 4h12l4 4v12H4zM8 12h8M8 16h5" /></Svg>,
+  toolEdit: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" /></Svg>,
+  toolRun: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M5 8l4 4-4 4M11 16h8" /></Svg>,
+  /** The side panel beside a card it opens in. */
+  openSide: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M4 4h16v16H4zM14 4v16" /></Svg>,
+  shield: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z" /></Svg>,
   bang: () => <Svg size={9} strokeWidth={3.5} stroke="var(--danger)"><path d="M12 6v7" /><path d="M12 18h.01" /></Svg>,
 } satisfies Record<string, (props: IconProps) => ReactNode>
 
@@ -122,39 +142,41 @@ const ICONS: Record<string, IconKind> = {
 }
 const SHELL_ICON: IconKind = { kind: 'shell', glyph: '>_' }
 
-type IconSize = 14 | 18 | 20 | 22 | 24 | 26 | 28 | 32
+type IconSize = 14 | 16 | 18 | 20 | 22 | 24 | 26 | 28 | 32
 
-export function AppIcon({ process, size, dimmed = false }: { process: string; size: IconSize; dimmed?: boolean }) {
+/**
+ * An agent's or program's tile. `flat` is the frame's tile (sidebar rows, the pane header): the mark in its own colour
+ * on the raised surface with a hairline, instead of the mark on its brand gradient.
+ */
+export function AppIcon({ process, size, dimmed = false, flat = false }: { process: string; size: IconSize; dimmed?: boolean; flat?: boolean }) {
   const program = process.split(/\s+/)[0] ?? ''
   const icon = ICONS[program] ?? (program === SHELL_PROCESS || program === '' ? SHELL_ICON : null)
-  const className = `mx-app-icon size-${String(size)}${dimmed ? ' is-dimmed' : ''}`
+  const className = `mx-app-icon size-${String(size)}${dimmed ? ' is-dimmed' : ''}${flat ? ' is-flat' : ''}`
   if (icon) return <span className={`${className} is-${icon.kind}`} aria-hidden="true">{icon.glyph}</span>
   // Any other agent or program: its first letter on a colour taken from its name, so each stays recognisable.
   return <span className={`${className} is-tinted`} style={programStyle(program)} aria-hidden="true">{program.charAt(0).toUpperCase()}</span>
 }
 
-/** Heavier than Lucide's default, so the mark inside the square still reads at a badge's 12px. */
-const BADGE_STROKE = 2.4
-
-/** The badge on a sidebar row's icon: a shape per status, so colour is never the only signal. */
+/**
+ * The 9px badge on an agent's tile: a square per status with its own glyph, so colour is never the only signal (needs
+ * you `!` on the needs colour, done `✓`, failed `×`, held by the plan limit `‖`, working the spinner Settings picked).
+ * An idle session has none; its tile dims instead.
+ */
 export function StatusBadge({ status }: { status: SessionStatus }) {
   switch (status) {
     case 'working':
-      // The spinner Settings picked, in the working colour on the tile's own background.
-      return <span className="mx-badge is-working"><Spinner className="" /></span>
+      return <span className="mx-badge is-working" aria-hidden="true"><Spinner className="" /></span>
     case 'needs':
-      return <span className="mx-badge is-needs" aria-hidden="true"><SquareExclamationPoint strokeWidth={BADGE_STROKE} /></span>
+      return <span className="mx-badge is-needs" aria-hidden="true">!</span>
+    case 'limited':
+      return <span className="mx-badge is-limited" aria-hidden="true">‖</span>
     case 'done':
-      return <span className="mx-badge is-done" aria-hidden="true"><SquareCheck strokeWidth={BADGE_STROKE} /></span>
+      return <span className="mx-badge is-done" aria-hidden="true">✓</span>
     case 'error':
-      return <span className="mx-badge is-error" aria-hidden="true"><SquareExclamationPoint strokeWidth={BADGE_STROKE} /></span>
+      return <span className="mx-badge is-error" aria-hidden="true">×</span>
     case 'unknown':
-      return <span className="mx-badge is-unknown" />
+      return <span className="mx-badge is-unknown" aria-hidden="true" />
     case 'idle':
-      return (
-        <span className="mx-badge is-idle" aria-hidden="true">
-          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M1.6 5.2h4.4l-4.4 5.2h4.4" /><path d="M7.4 1.4h3l-3 3.6h3" /></svg>
-        </span>
-      )
+      return null
   }
 }

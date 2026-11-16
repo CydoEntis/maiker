@@ -4,8 +4,8 @@ import { errorMessage } from '@/lib/error-message'
 import { typablePath } from '@/features/terminal/dropRoute'
 import { PLAIN_TOAST, showSendProgress } from '@/features/terminal/sendToast'
 
-/** A file the other machine kept; `remotePath` was checked here as well as in the host. */
-export type Landed = { readonly remotePath: string; readonly file: string; readonly bytes: number }
+/** A file the other machine kept; `remotePath` was checked here as well as in the host. `index` is its place among the files sent. */
+export type Landed = { readonly remotePath: string; readonly file: string; readonly bytes: number; readonly index: number }
 
 type Options = {
   machine: string
@@ -54,7 +54,7 @@ export async function sendAttachments({ machine, label, image, count, start, onL
         if (path === null) refused.push(event.file)
         else {
           landed += 1
-          onLanded({ remotePath: path, file: event.file, bytes: event.bytes })
+          onLanded({ remotePath: path, file: event.file, bytes: event.bytes, index: event.index })
         }
         if (event.index + 1 < event.count) showSendProgress(transfer, shown, event.index + 1, null)
         return

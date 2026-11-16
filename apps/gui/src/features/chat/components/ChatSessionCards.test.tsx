@@ -140,6 +140,41 @@ describe('approvals in the chat', () => {
     expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-1', 'Accept')
   })
 
+  it('asks one request at a time, the oldest first, and the next once that one is answered', async () => {
+    const daemon = withStep()
+    daemon.approvals = [request('req-old', { command: 'rm -rf build' }), request('req-new', { command: 'rm -rf dist' })]
+    daemon.status = 'Blocked'
+    render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+
+    expect(screen.getAllByRole('region', { name: /Approval/ })).toHaveLength(1)
+    expect(screen.getByRole('region', { name: /Approval/ })).toHaveTextContent('rm -rf build')
+
+    daemon.approvals = [request('req-new', { command: 'rm -rf dist' })]
+    daemon.answeredApprovals = [{ request: request('req-old', { command: 'rm -rf build' }), decision: 'Accept' }]
+    daemon.upsert(daemon.message('t1', 'u2', 'User', 'ping'))
+    await settle(IDLE_POLL_MS)
+
+    expect(screen.getByRole('region', { name: /Approval/ })).toHaveTextContent('rm -rf dist')
+  })
+
+  it('gives the main answer with Enter on the card, and names its keys on its buttons', async () => {
+    const daemon = withStep()
+    daemon.approvals = [request('req-5')]
+    daemon.status = 'Blocked'
+    render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+
+    const card = screen.getByRole('region', { name: /Approval/ })
+    expect(within(card).getByRole('button', { name: 'Yes once' })).toHaveAttribute('aria-keyshortcuts', 'y')
+    expect(within(card).getByRole('button', { name: 'This session' })).toHaveAttribute('aria-keyshortcuts', 'a')
+    expect(within(card).getByRole('button', { name: 'No' })).toHaveAttribute('aria-keyshortcuts', 'n')
+    fireEvent.keyDown(card, { key: 'Enter' })
+    await settle()
+
+    expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-5', 'Accept')
+  })
+
   it('shows an approval answered in the terminal as answered, with the choice the daemon kept', async () => {
     const daemon = withStep()
     daemon.answeredApprovals = [{ request: request('req-2'), decision: 'AcceptForSession', answered_at_ms: Date.UTC(2026, 10, 4, 10, 11) }]
@@ -187,5 +222,23 @@ describe('approvals in the chat', () => {
     } finally {
       shortWindow.mockRestore()
     }
+  })
+})
+
+describe('the summary for a new chat', () => {
+  it('ends with the last reply as it was said, though successful tool calls are hidden', async () => {
+    const daemon = new FakeDaemonHistory()
+    daemon.upsert(daemon.message('t1', 'u', 'User', 'look around'))
+    daemon.upsert(daemon.message('t1', 'a1', 'Assistant', `Looking. ${'x'.repeat(1000)}`))
+    daemon.upsert(toolEntry('t1', 'r1', 'Read ', 'text', { file_path: '/repo/README.md' }))
+    daemon.upsert(daemon.message('t1', 'a2', 'Assistant', 'Final words.'))
+    fake.current = daemon
+    const onNewWithSummary = vi.fn()
+    render(<ChatSession link={link()} agent="claude" online root="/repo" hideSuccessfulTools problem={{ kind: 'context', agent: 'Claude', percent: 96, onCompact: vi.fn(), onNewWithSummary }} />)
+    await settle()
+
+    fireEvent.click(screen.getByRole('button', { name: 'New chat with summary' }))
+
+    expect(onNewWithSummary).toHaveBeenCalledWith(expect.stringContaining('Final words.'))
   })
 })

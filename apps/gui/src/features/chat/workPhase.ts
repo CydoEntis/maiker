@@ -45,7 +45,12 @@ export function describeWork(events: readonly ChatEvent[], root: string | null):
         if (event.role === 'user') continue
         return 'writing a reply'
       case 'todo':
-        // A checklist is not something the agent is doing.
+      case 'summary':
+      case 'note':
+        // A checklist, a summary, or what a command printed is not something the agent is doing.
+        continue
+      case 'reasoning':
+        // With no step running the line already says "thinking"; a thought has no phrase of its own.
         continue
     }
   }

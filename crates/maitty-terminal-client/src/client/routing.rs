@@ -90,6 +90,7 @@ pub(super) enum Feature {
     References,
     AgentStatus,
     Worktrees,
+    ResumeConversation,
 }
 
 impl Feature {
@@ -101,9 +102,10 @@ impl Feature {
             Action::Branches => Feature::Branches,
             Action::References => Feature::References,
             Action::AgentStatusSetup => Feature::AgentStatus,
-            Action::NewWorktree(_) | Action::RemoveWorktree | Action::TidyWorktrees => {
+            Action::NewWorktree(_) | Action::RemoveWorktree => {
                 Feature::Worktrees
             }
+            Action::ResumeConversation => Feature::ResumeConversation,
             _ => return None,
         })
     }
@@ -117,6 +119,7 @@ impl Feature {
             Feature::References => "References",
             Feature::AgentStatus => "Connecting an agent",
             Feature::Worktrees => "Worktrees",
+            Feature::ResumeConversation => "Resuming a conversation",
         }
     }
 }

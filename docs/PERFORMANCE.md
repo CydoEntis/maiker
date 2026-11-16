@@ -134,7 +134,7 @@ Tier 3 (waste; not felt as lag with one session):
 Follow-ups done on the same day, after a second look:
 
 8. [x] The one-second clock is a shared store only the text showing a time subscribes to (`lib/clock.ts`; `components/times.tsx`: `Ago`, `ElapsedSince`), and a move highlight ends through `useRecent`, so a working session ticks a few small spans, not the window; the Settings spinner preview steps outside React; terminal output goes over one raw `tauri::ipc::Channel` instead of base64 events.
-9. [x] Glass on a web view without WebGL 2 (`data-gpu="software"`, set by `lib/gpu.ts`) drops its resting shadows, card gradient and popup blur, the three things the audit measured at 18, 10 and more points on software WebKitGTK; colours, radii and layout stay.
+9. [x] Resting shadows, card gradients and popup blur, the three things the audit measured at 18, 10 and more points on software WebKitGTK, are gone: the desktop has one flat finish. A web view without WebGL 2 (`data-gpu="software"`, set by `lib/gpu.ts`) also draws a popup's shadow as a hairline (`--sh-pop`); colours, radii and layout stay.
 10. [x] State deltas: when only panes changed, the daemon sends `ServerMsg::TermsChanged` (compared as encoded bytes against what that surface's clients last got) and nothing at all when nothing visible changed; `PROTOCOL_VERSION` 69. The TUI and the desktop host merge deltas into the snapshot they hold.
 11. [x] Replays only for viewed panes: the desktop stream attaches with `Hello.replays: false` and asks `WantReplay` per pane when a view opens; a desktop replay is the last 1 MiB of the ring plus the screen; the host keeps no history for a pane until its replay arrived.
 12. [x] The process scan runs every 5 s instead of every second while no client is attached.
@@ -217,8 +217,7 @@ Two things seen on the user's Linux machine that look like app bugs and are not:
   cells in the colour it was told. `TerminalView.tsx` now answers OSC 10 and 11 queries with the
   theme's own foreground and background and leaves everything else to xterm. The boxes that
   remained were ANSI black backgrounds (SGR 40), which Claude Code paints under its prompt and
-  status line: the palette's black is now the terminal ground and the pane is opaque unless
-  Settings › Appearance › See-through terminal is on, where any painted background is a box.
+  status line: the palette's black is now the terminal ground and the pane is always opaque.
 
 ## What the measurement did not cover
 
@@ -616,3 +615,20 @@ shows them as added files (`daemon/git.rs`, `UNTRACKED_BATCH_FROM`). The Files t
 slow: a folder listing is one `git rev-parse` plus a directory read, about 35 ms. Still open: each
 query also runs its own `git rev-parse --show-toplevel`, and `conversation_diff` runs it a second
 time.
+
+## What the daemon sends: size budgets (2026-11-13)
+
+The two largest messages the daemon sends routinely have a size budget, held by tests in
+`crates/maitty-core/src/daemon/wire_size_tests.rs`. Each test builds the message with fixed values,
+encodes it as the daemon sends it (`protocol::encode`, named MessagePack, the whole `ServerMsg`) and
+fails above its budget: the size measured on 2026-11-13 plus 20%.
+
+| Message | Measured | Budget |
+| --- | --- | --- |
+| A full chat history page in `Reply::ConversationRead`: 128 entries (`MAX_READ_ENTRIES`), 16 finished turns of a prompt, replies, a file read, a test run, an edit with its diff and a plan; no checks or approvals beside it | 106,173 bytes | 127,408 bytes |
+| The session list in `ServerMsg::State`, at its worst case: 50 agent sessions across five projects, every one also a desktop chat, every pane with a full 60-event timeline, two checks, usage and a helper | 352,302 bytes | 422,763 bytes |
+
+The page caps (`MAX_READ_ENTRIES`, and `MAX_READ_BYTES` = 256 KiB of JSON) are unchanged by the
+budgets. When a budget fails, find what grew; if the growth is meant, re-measure with
+`cargo test -p maitty-core wire_size -- --nocapture`, set the budget to the new size plus 20% and
+update this table.

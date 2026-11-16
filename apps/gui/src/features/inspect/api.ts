@@ -1,5 +1,6 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { z } from 'zod'
+import { LOCAL_MACHINE } from '@/api/machines'
 
 const Count = z.number().int().nonnegative()
 
@@ -23,6 +24,7 @@ const CommitSchema = z.object({ hash: z.string(), subject: z.string(), author: z
 const WorktreeSchema = z.object({ path: z.string(), branch: z.string(), main: z.boolean(), repo: z.string() })
 const SnapshotSchema = z.object({ commit: z.string(), at: Count, why: z.string() })
 const ReferenceSchema = z.object({ name: z.string(), kind: z.string(), bytes: Count, modified: Count })
+const FoundFilesSchema = z.object({ paths: z.array(z.string()), truncated: z.boolean() })
 
 export type RepoStatus = z.infer<typeof StatusSchema>
 export type RepoChangeKind = z.infer<typeof ChangeKindSchema>
@@ -44,19 +46,23 @@ export async function highlightFile(path: string, text: string): Promise<Highlig
 
 const LOG_LIMIT = 60
 
-/** Ask the daemon about the repository `term` is in. It answers `{ <Kind>: payload }`; a different kind is a bug. */
-async function ask<T>(term: number, question: unknown, kind: string, payload: z.ZodType<T>): Promise<T> {
+/**
+ * Ask the daemon that owns pane `term` about the repository it is in: this computer's, or machine
+ * `machine`'s. It answers `{ <Kind>: payload }`; a different kind is a bug.
+ */
+async function ask<T>(term: number, question: unknown, kind: string, payload: z.ZodType<T>, machine: number = LOCAL_MACHINE): Promise<T> {
   if (!isTauri()) throw new Error('Repository details are only available in the desktop app')
-  const reply = z.record(z.string(), z.unknown()).parse(await invoke<unknown>('repo_query', { term, question }))
+  const reply = z.record(z.string(), z.unknown()).parse(await invoke<unknown>('repo_query', { ...(machine === LOCAL_MACHINE ? {} : { machine }), term, question }))
   if (!(kind in reply)) throw new Error('The daemon answered a different question')
   return payload.parse(reply[kind])
 }
 
-export const repoStatus = (term: number) => ask(term, 'Status', 'Status', StatusSchema)
+// What changed and its diff are the two questions another machine's daemon is asked; the rest are this computer's.
+export const repoStatus = (term: number, machine: number = LOCAL_MACHINE) => ask(term, 'Status', 'Status', StatusSchema, machine)
 export const repoTree = (term: number, path: string | null) => ask(term, { Tree: { path } }, 'Tree', z.array(EntrySchema))
 export const repoLocate = (term: number, path: string) => ask(term, { Locate: { path } }, 'Located', z.string())
 export const repoFile = (term: number, path: string) => ask(term, { File: { path } }, 'File', z.string())
-export const repoDiff = (term: number, path: string | null = null) => ask(term, { Diff: { path } }, 'Diff', DiffSchema)
+export const repoDiff = (term: number, path: string | null = null, machine: number = LOCAL_MACHINE) => ask(term, { Diff: { path } }, 'Diff', DiffSchema, machine)
 export const repoDiffRange = (term: number, from: string, to: string, path: string | null = null) =>
   ask(term, { DiffRange: { from, to, path } }, 'Diff', DiffSchema)
 export const repoBranches = (term: number) => ask(term, 'Branches', 'Branches', z.array(BranchSchema))
@@ -64,6 +70,9 @@ export const repoWorktrees = (term: number) => ask(term, 'Worktrees', 'Worktrees
 export const repoLog = (term: number) => ask(term, { Log: { limit: LOG_LIMIT } }, 'Log', z.array(CommitSchema))
 export const repoSnapshots = (term: number) => ask(term, 'Snapshots', 'Snapshots', z.array(SnapshotSchema))
 export const repoReferences = (term: number) => ask(term, 'References', 'References', z.array(ReferenceSchema))
+/** Files whose path holds `query`, best first, relative to the checkout's top; `truncated` when the daemon stopped looking early. */
+export const repoFindFiles = (term: number, query: string, limit: number) =>
+  ask(term, { FindFiles: { query, limit } }, 'Files', FoundFilesSchema)
 
 /** Put the pane's checkout back as it was in one of the daemon's snapshots; resolves to how many files changed. */
 export async function restoreSnapshot(term: number, commit: string): Promise<number> {
@@ -71,10 +80,22 @@ export async function restoreSnapshot(term: number, commit: string): Promise<num
   return Count.parse(await invoke<unknown>('restore_snapshot', { term, commit }))
 }
 
-/** Stages and commits every change in the checkout at `folder` on this computer; resolves to the commit's short hash. */
-export async function commitAll(folder: string, message: string, machine: number, paths?: readonly string[]): Promise<string> {
+/** How many files restoring one of the daemon's snapshots would change now; nothing is changed. */
+export async function restoreCount(term: number, commit: string): Promise<number> {
+  if (!isTauri()) throw new Error('Restoring is only available in the desktop app')
+  return Count.parse(await invoke<unknown>('snapshot_restore_count', { term, commit }))
+}
+
+/** What names a checkout on another machine: the pane there that is in it. Nothing on this computer, whose checkout is named by its folder. */
+const paneArg = (term: number | undefined): { term?: number } => (term === undefined ? {} : { term })
+
+/**
+ * Stages and commits changes, all of them or only `paths`; resolves to the commit's short hash.
+ * On this computer the checkout is the one at `folder`; on another machine, the one pane `term` there is in.
+ */
+export async function commitAll(folder: string, message: string, machine: number, paths?: readonly string[], term?: number): Promise<string> {
   if (!isTauri()) throw new Error('Committing is only available in the desktop app')
-  return z.string().parse(await invoke<unknown>('git_commit_all', { machine, folder, message, paths: paths ?? null }))
+  return z.string().parse(await invoke<unknown>('git_commit_all', { machine, folder, message, paths: paths ?? null, ...paneArg(term) }))
 }
 
 /** Saves the text of an existing file of the checkout `term` is in; the daemon refuses anything but a plain file inside it. */
@@ -86,14 +107,17 @@ export async function writeProjectFile(term: number, machine: number, path: stri
 /** What the remote button can do for a checkout. */
 export type SyncAction = 'fetch' | 'pull' | 'push'
 
-/** Fetches, pulls (fast-forward only) or pushes the checkout at `folder` on this computer; resolves to a line to show. */
-export async function syncRemote(folder: string, action: SyncAction, machine: number): Promise<string> {
+/**
+ * Fetches, pulls (fast-forward only) or pushes a checkout; resolves to a line to show. On this
+ * computer it is the one at `folder`; on another machine, the one pane `term` there is in.
+ */
+export async function syncRemote(folder: string, action: SyncAction, machine: number, term?: number): Promise<string> {
   if (!isTauri()) throw new Error('Syncing is only available in the desktop app')
-  return z.string().parse(await invoke<unknown>('git_sync', { machine, folder, action }))
+  return z.string().parse(await invoke<unknown>('git_sync', { machine, folder, action, ...paneArg(term) }))
 }
 
-/** Pushes the checkout's branch and opens a pull request for it; resolves to the pull request's address. */
-export async function createPullRequest(folder: string, machine: number): Promise<string> {
+/** Pushes the checkout's branch and opens a pull request for it, with the GitHub sign-in of the machine the checkout is on; resolves to the pull request's address. */
+export async function createPullRequest(folder: string, machine: number, term?: number): Promise<string> {
   if (!isTauri()) throw new Error('Pull requests are only available in the desktop app')
-  return z.string().parse(await invoke<unknown>('git_create_pull_request', { machine, folder }))
+  return z.string().parse(await invoke<unknown>('git_create_pull_request', { machine, folder, ...paneArg(term) }))
 }

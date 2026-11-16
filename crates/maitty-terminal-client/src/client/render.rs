@@ -204,6 +204,38 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
         // Popovers beside a sidebar row (drawn with the screen).
         Mode::Compose(_) | Mode::Helpers { .. } | Mode::Secret { .. } => {}
         Mode::Usage => super::screen::draw_usage(app, f, area, &t),
+        Mode::MachineInfo(v) => {
+            let v = (**v).clone();
+            super::screen::machine_info::draw_machine_info(app, f, area, &t, &v);
+        }
+        Mode::Approved(v) => {
+            let v = (**v).clone();
+            super::screen::approved::draw_approved(app, f, area, &t, &v);
+        }
+        Mode::Helper(v) => {
+            let v = (**v).clone();
+            super::screen::draw_helper(app, f, area, &t, &v);
+        }
+        Mode::Clone(v) => {
+            let v = (**v).clone();
+            super::screen::draw_clone(app, f, area, &t, &v);
+        }
+        Mode::Specialists(v) => {
+            let v = (**v).clone();
+            super::screen::draw_specialists(app, f, area, &t, &v);
+        }
+        Mode::Run { term, key, .. } => {
+            let (term, key) = (*term, key.clone());
+            super::screen::draw_run(app, f, area, &t, term, &key);
+        }
+        Mode::Work { term, sel } => {
+            let (term, sel) = (*term, *sel);
+            super::screen::draw_board(app, f, area, &t, term, sel);
+        }
+        Mode::StatusLog { term, top } => {
+            let (term, top) = (*term, *top);
+            super::screen::draw_status_log(app, f, area, &t, term, top);
+        }
         Mode::History { sel } => {
             let sel = *sel;
             super::screen::draw_history(app, f, area, &t, sel);
@@ -223,6 +255,10 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
         Mode::Find(v) => {
             let v = (**v).clone();
             super::find::draw_find(app, f, area, &t, &v);
+        }
+        Mode::FindSessions(v) => {
+            let v = (**v).clone();
+            super::screen::draw_session_find(app, f.buffer_mut(), area, &t, &v);
         }
         Mode::ScreenMenu(m) => {
             let m = (**m).clone();
@@ -279,9 +315,9 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
             );
         }
         Mode::Worktrees {
-            items, query, sel, ..
+            items, branches, query, sel, ..
         } => {
-            let rows = app.worktree_rows(items.as_deref(), query);
+            let rows = app.worktree_rows(items.as_deref(), branches.as_deref(), query);
             let (loading, query, sel) = (items.is_none(), query.clone(), *sel);
             draw_worktrees(app, f, area, &t, &rows, &query, sel, loading);
         }
@@ -365,7 +401,8 @@ pub(super) fn truncate(s: &str, max: usize) -> String {
     }
     let mut out = String::new();
     for c in s.chars() {
-        if out.width() + 1 >= max {
+        // Room for this character and the ellipsis after it: a wide one can overrun by a column.
+        if out.width() + c.width().unwrap_or(0) + 1 > max {
             break;
         }
         out.push(c);
@@ -696,6 +733,11 @@ fn draw_worktrees(
                 ));
                 l
             }
+            super::WtRow::Branch(name) => vec![
+                seg("+ ", st.fg(t.accent)),
+                seg("add a worktree on ", st.fg(t.text)),
+                seg(truncate(name, 40), st.fg(if on { t.strong } else { t.text }).add_modifier(Modifier::BOLD)),
+            ],
             super::WtRow::Create(text) => vec![
                 seg("+ ", st.fg(t.done)),
                 seg("new worktree ", st.fg(t.text)),

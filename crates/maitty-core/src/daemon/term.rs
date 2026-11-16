@@ -18,7 +18,7 @@ use tokio::sync::mpsc;
 const MAX_PENDING_MARKS: usize = 64;
 /// How much of the ring a desktop pane is replayed: it keeps about ten thousand lines of scrollback.
 const DESKTOP_REPLAY_BYTES: usize = 1 << 20;
-const TIMELINE_KEPT: usize = 60;
+pub(super) const TIMELINE_KEPT: usize = 60;
 
 #[derive(Default)]
 pub struct Callbacks {
@@ -115,6 +115,8 @@ pub struct Term {
     killer: Box<dyn ChildKiller + Send + Sync>,
     pub pid: Option<u32>,
     pub process_exited: bool,
+    /// The daemon stopped its process on purpose (`kill_tree`), so a failed exit is no crash.
+    pub killed: bool,
     /// The daemon's own view of the screen, for status patterns and `<app> read`.
     pub parser: vt100::Parser<Callbacks>,
     ring: VecDeque<u8>,
@@ -145,6 +147,9 @@ pub struct Term {
     /// The permission prompt the agent's own hook said it is stopped on, cleaned; kept only
     /// while the pane needs you (`Term::ask_now`). In memory only.
     pub ask: Option<PermissionAsk>,
+    /// The agent whose hook reported `ask`: the screen check for it follows this, not `agent`,
+    /// which a later report can change or clear while the prompt is still up.
+    pub ask_agent: Option<String>,
     /// The last hook it reported (its event) and the last thing the screen showed that
     /// changed its status, each with when (unix seconds): the evidence "why" lays out.
     pub last_hook: Option<(String, u64)>,
@@ -186,6 +191,8 @@ pub struct Term {
     pub subagent_hooks_seen: bool,
     /// Runtime-reported child lifecycle, retained after completion for inspection.
     pub subagent_activity: Vec<SubagentActivity>,
+    /// Workflow runs reported from this pane, newest first (ADR 0010). Never read for status.
+    pub workflows: Vec<maitty_shared::workflow::WorkflowRun>,
     /// The shell reports its directory itself (OSC 7 / 9;9); trust that over process scans.
     pub cwd_reported: bool,
     /// Stopped by an older the app version; resumes when focused.
@@ -202,6 +209,9 @@ pub struct Term {
     /// The background tasks still running at its last stop: one of those (a dev server) is no
     /// reason to hold a later turn's finish.
     pub background_known: Vec<String>,
+    /// Background work a helper started itself: (helper id, task id). A helper whose turn ends
+    /// while one of these runs is waiting on it, not finished: it wakes when the work ends.
+    pub helper_work: Vec<(String, String)>,
     /// When a subagent last showed signs of life (started, used a tool, asked something).
     pub subagent_seen: Option<Instant>,
     /// The agent's progress indicator (OSC 9;4) went away: an Esc-cancel ends no turn by hook.
@@ -213,6 +223,9 @@ pub struct Term {
     /// This turn's end has been acted on (its check started or declined); the screen and the
     /// hook can both report one turn ending. A new working turn clears it.
     pub turn_end_handled: bool,
+    /// This turn's folder is still to be kept as it ends. Cleared once kept, and for a
+    /// finish guessed from a title blink; a new turn sets it, as `turn_end_handled` clears.
+    pub after_snapshot_due: bool,
     /// Activity present at turn end must not reopen that turn unless its live footer changes.
     pub ended_activity: Option<String>,
     pub screen_blocked_from: Option<Status>,
@@ -297,6 +310,11 @@ pub struct Term {
     pub pinned: bool,
     /// Put away from the project lists; it keeps running (Archive pane).
     pub archived: bool,
+    /// The merged pull request it was put away for (`sessions.put_away_merged`): once brought
+    /// back, the same merge never puts it away again.
+    pub put_away_for: Option<String>,
+    /// Snoozed until this time (unix seconds); cleared then, or when it needs you.
+    pub snoozed_until: Option<u64>,
     pub model: String,
 }
 
@@ -712,13 +730,31 @@ impl Term {
         paused
     }
 
-    /// Drops every helper still counted as running, with `why` as each one's last word. True
-    /// when there was one.
-    pub fn forget_unreported_subagents(&mut self, why: &str) -> bool {
-        let mut forgot = !self.subagents.is_empty();
-        self.subagents.clear();
+    /// The helpers that started work of their own that is among `running`: each wakes when its
+    /// work ends, so it has not finished.
+    pub fn helpers_waiting_on(&self, running: &[String]) -> Vec<String> {
+        let mut waiting: Vec<String> = Vec::new();
+        for (helper, task) in &self.helper_work {
+            if running.contains(task) && !waiting.contains(helper) {
+                waiting.push(helper.clone());
+            }
+        }
+        waiting
+    }
+
+    /// Drops every helper still counted as running but those in `keep`, with `why` as each one's
+    /// last word. True when there was one.
+    pub fn forget_unreported_subagents(&mut self, why: &str, keep: &[String]) -> bool {
+        let before = self.subagents.len();
+        self.subagents.retain(|(id, _)| keep.contains(id));
+        self.helper_work.retain(|(helper, _)| keep.contains(helper));
+        let mut forgot = self.subagents.len() != before;
         let now = unix_now();
-        for activity in self.subagent_activity.iter_mut().filter(|a| a.state.active()) {
+        for activity in self
+            .subagent_activity
+            .iter_mut()
+            .filter(|a| a.state.active() && !keep.contains(&a.id))
+        {
             activity.state = SubagentState::ConnectionLost;
             activity.updated_at = now;
             activity.latest_activity = Some(why.to_string());
@@ -896,8 +932,8 @@ impl Term {
         std::thread::Builder::new()
             .name(format!("pty-wait-{id}"))
             .spawn(move || {
-                let _ = child.wait();
-                let _ = tx.blocking_send(Ev::ProcessExited(id));
+                let failed = child.wait().is_ok_and(|status| !status.success());
+                let _ = tx.blocking_send(Ev::ProcessExited(id, failed));
             })?;
 
         let process_executable = spec
@@ -917,6 +953,7 @@ impl Term {
             killer,
             pid,
             process_exited: false,
+            killed: false,
             parser: vt100::Parser::new_with_callbacks(
                 size.rows,
                 size.cols,
@@ -940,6 +977,7 @@ impl Term {
             interrupted: None,
             exit: None,
             ask: None,
+            ask_agent: None,
             last_hook: None,
             last_hook_at: None,
             hooked_process_seen: false,
@@ -967,12 +1005,14 @@ impl Term {
             subagents: Vec::new(),
             subagent_hooks_seen: false,
             subagent_activity: Vec::new(),
+            workflows: Vec::new(),
             cwd_reported: false,
             asleep: false,
             win32_input: false,
             done_held: None,
             awaiting_background: false,
             background_known: Vec::new(),
+            helper_work: Vec::new(),
             subagent_seen: None,
             grants: None,
             started_by: None,
@@ -982,6 +1022,7 @@ impl Term {
             last_working_hook: None,
             last_turn_end: now,
             turn_end_handled: false,
+            after_snapshot_due: true,
             ended_activity: None,
             screen_blocked_from: None,
             quiet_since: None,
@@ -1018,6 +1059,8 @@ impl Term {
             label: String::new(),
             pinned: false,
             archived: false,
+            put_away_for: None,
+            snoozed_until: None,
             model: String::new(),
             colors: crate::theme::Theme::named(&cfg.theme).terminal_foreground_background_rgb(),
         })
@@ -1177,6 +1220,9 @@ impl Term {
                 code: Some(code),
                 at: unix_now(),
             });
+        if self.exit.is_some() {
+            self.snoozed_until = None;
+        }
     }
 
     /// Move the shell's prompt marks (OSC 133) onto the timeline.
@@ -1289,6 +1335,7 @@ impl Term {
     /// child of the shell, and on Windows it would otherwise keep the terminal open). Runs
     /// on its own thread so nothing waits on it.
     pub fn kill_tree(&mut self) {
+        self.killed = true;
         let mut killer = self.killer.clone_killer();
         let pid = self.pid;
         std::thread::spawn(move || {

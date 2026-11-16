@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { forgetMachines, registerMachine } from './machines'
 import { conversationKey } from './conversationKey'
-import { startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, createConversation, loadClaudeExecutablePath, loadCodexExecutablePath, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, conversationsFromSnapshot, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, resumeConversation } from './daemon'
+import { startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, createConversation, loadClaudeExecutablePath, loadCodexExecutablePath, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, resumeConversation } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -333,6 +333,19 @@ describe('conversation activity history', () => {
     ])
   })
 
+  it('shows nothing for a reasoning item instead of calling it unsupported', async () => {
+    vi.mocked(invoke).mockReset().mockResolvedValue(readResult({
+      entries: [
+        { ...toolEntry('item-1', 'reasoning', '', 'Completed'), content: { Reasoning: { text: 'Weighing two fixes' } } },
+        toolEntry('item-2', 'cargo test', 'ok', 'Completed'),
+      ],
+    }))
+
+    const history = await loadMessages('42', 'Codex')
+
+    expect(history.messages.map(({ content }) => content)).toEqual(['cargo test'])
+  })
+
   it('uses the conversation provider in approval labels', async () => {
     vi.mocked(invoke).mockReset().mockResolvedValue(readResult({
       approvals: [{
@@ -494,6 +507,34 @@ describe('terminal sessions shown beside chats', () => {
     ...overrides,
   })
 
+  it('remembers the revision and the sessions the daemon said left, until it lists one again', () => {
+    conversationsFromSnapshot({ conversations: [], workspaces: [], terms: { '8': term({ id: 8 }) }, revision: 7, removed: { '3': 'Closed', '4': 'SomethingNewer' } })
+    expect(localListRevision()).toBe(7)
+    expect([daemonSaidRemoved('t3'), daemonSaidRemoved('t4'), daemonSaidRemoved('t8')]).toEqual([true, true, false])
+
+    conversationsFromSnapshot({ conversations: [], workspaces: [], terms: { '3': term({ id: 3 }) } })
+    expect(localListRevision()).toBe(0)
+    expect([daemonSaidRemoved('t3'), daemonSaidRemoved('t4')]).toEqual([false, true])
+  })
+
+  it('keeps what another machine says left under that machine, never as this computer\'s', () => {
+    conversationsFromSnapshot({ conversations: [], workspaces: [], terms: {}, revision: 7 })
+    conversationsFromSnapshot({ conversations: [], workspaces: [], terms: {}, revision: 9, removed: { '11': 'Exited' } }, { id: 2, name: 'box' })
+    expect([daemonSaidRemoved('box/t11'), daemonSaidRemoved('t11')]).toEqual([true, false])
+    expect(localListRevision()).toBe(7)
+
+    conversationsFromSnapshot({ conversations: [], workspaces: [], terms: { '11': term({ id: 11 }) } }, { id: 2, name: 'box' })
+    expect(daemonSaidRemoved('box/t11')).toBe(false)
+  })
+
+  it('reads this computer\'s list for a check without taking it as the list the window last heard', async () => {
+    conversationsFromSnapshot({ conversations: [], workspaces: [], terms: { '8': term({ id: 8 }) }, revision: 7 })
+    vi.mocked(invoke).mockResolvedValueOnce({ conversations: [], workspaces: [], terms: { '12': term({ id: 12 }) }, revision: 30, removed: { '8': 'Closed' } })
+    expect((await checkConversations()).map((item) => item.id)).toEqual(['t12'])
+    expect(localListRevision()).toBe(7)
+    expect(daemonSaidRemoved('t8')).toBe(false)
+  })
+
   it('keeps a session in the list with its last good state when one refresh cannot read it', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const snapshot = (terms: Record<string, unknown>) => ({ conversations: [], workspaces: [], terms })
@@ -527,6 +568,30 @@ describe('terminal sessions shown beside chats', () => {
     ])
   })
 
+  it('reads what set the status of a session, and nothing from a daemon that does not say', async () => {
+    vi.mocked(invoke).mockResolvedValue({ conversations: [], workspaces: [], terms: { '5': term({ id: 5, status_why: 'hook: Stop' }), '6': term({ id: 6 }) } })
+
+    const listed = await loadConversations()
+
+    expect(listed.map((item) => item.details?.statusWhy)).toEqual(['hook: Stop', ''])
+  })
+
+  it('reads when a session stopped by its plan limit continues, and nothing from a daemon that does not say', async () => {
+    vi.mocked(invoke).mockResolvedValue({ conversations: [], workspaces: [], terms: { '5': term({ id: 5, resume_at: 1_800_000_000 }), '6': term({ id: 6, resume_at: null }), '7': term({ id: 7 }) } })
+
+    const listed = await loadConversations()
+
+    expect(listed.map((item) => item.details?.resumeAt)).toEqual([1_800_000_000, null, null])
+  })
+
+  it('reads when a snooze ends, and nothing from a daemon that does not say', async () => {
+    vi.mocked(invoke).mockResolvedValue({ conversations: [], workspaces: [], terms: { '5': term({ id: 5, snoozed_until: 1_800_000_000 }), '6': term({ id: 6, snoozed_until: null }), '7': term({ id: 7 }) } })
+
+    const listed = await loadConversations()
+
+    expect(listed.map((item) => item.details?.snoozedUntil)).toEqual([1_800_000_000, null, null])
+  })
+
   it('still lists the sessions, without limits, when the limits cannot be read', async () => {
     vi.mocked(invoke).mockResolvedValue({ conversations: [], workspaces: [], limits: 'soon', terms: { '5': term({ id: 5, agent: 'claude' }) } })
 
@@ -547,7 +612,45 @@ describe('terminal sessions shown beside chats', () => {
     expect(listed.map((item) => item.title)).toEqual(['Fix login'])
   })
 
-  it('lists shells and agents in terminals of their own, and leaves out popups, other machines and a chat terminal', async () => {
+  it('keeps a session of this computer listed while ssh runs in it', async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      conversations: [],
+      workspaces: [],
+      terms: { '8': term({ id: 8, agent: null, status: 'Idle', process: 'ssh', remote: 'build-box' }) },
+    })
+
+    const sessions = await loadConversations()
+
+    expect(sessions.map((session) => session.id)).toEqual(['t8'])
+    expect(sessions[0]).toMatchObject({ kind: 'terminal', nativePane: 8, title: 'Shell 8' })
+  })
+
+  it('lists an agent in a pane that also has ssh open like any other agent terminal', async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      conversations: [],
+      workspaces: [],
+      terms: { '8': term({ id: 8, agent: 'claude', remote: 'build-box' }) },
+    })
+
+    const sessions = await loadConversations()
+
+    expect(sessions).toMatchObject([{ id: 't8', kind: 'terminal', agent: 'claude', provider: 'Claude' }])
+  })
+
+  it('still leaves out a popup and a chat terminal while ssh runs in them', async () => {
+    vi.mocked(invoke).mockResolvedValue({
+      conversations: [],
+      workspaces: [],
+      terms: {
+        '7': term({ id: 7, popup: true, remote: 'build-box' }),
+        '9': term({ id: 9, conversation_id: 3, remote: 'build-box' }),
+      },
+    })
+
+    expect(await loadConversations()).toEqual([])
+  })
+
+  it('lists shells and agents in terminals of their own, and leaves out popups and a chat terminal', async () => {
     vi.mocked(invoke).mockResolvedValue({
       conversations: [],
       workspaces: [],
@@ -555,7 +658,6 @@ describe('terminal sessions shown beside chats', () => {
         '5': term({ label: 'Fix login' }),
         '6': term({ id: 6, agent: null, status: 'Idle' }),
         '7': term({ id: 7, popup: true }),
-        '8': term({ id: 8, remote: 'build-box' }),
         '9': term({ id: 9, conversation_id: 3 }),
         '10': term({ id: 10, agent: 'gemini' }),
         '11': { nonsense: true },
@@ -705,6 +807,15 @@ describe('commands for a pane, on whichever machine it is', () => {
     ])
   })
 
+  it('snoozes a pane until a time and wakes it, on this computer or another', async () => {
+    await snoozeSessionOnDaemon(pane, 1_800_000_000)
+    await snoozeSessionOnDaemon(there, null)
+    expect(vi.mocked(invoke).mock.calls).toEqual([
+      ['snooze_terminal_session', { term: 7, until: 1_800_000_000 }],
+      ['snooze_terminal_session', { term: 7, until: null, machine: 3 }],
+    ])
+  })
+
   it('sends nothing for a machine the host has not told it of', async () => {
     forgetMachines()
     await expect(sendTerminalInput(there, 'ls')).rejects.toThrow('build is not one of this computer\'s machines')
@@ -727,5 +838,26 @@ describe('commands for a pane, on whichever machine it is', () => {
     const listed = conversationsFromSnapshot(snapshot, { id: 3, name: 'build' })
     expect(listed.map((item) => item.id)).toEqual(['build/t7'])
     expect(conversationsFromSnapshot(snapshot).map((item) => item.id)).toEqual(['5', 't7'])
+  })
+
+  it('lists a session on another machine once, beside a session of this computer that has ssh open to it', () => {
+    const shell = (id: number, remote: string | null) => ({ id, agent: null, process: remote === null ? 'bash' : 'ssh', status: 'Idle', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote })
+    const here = conversationsFromSnapshot({ terms: { '8': shell(8, 'build') }, workspaces: [], conversations: [] })
+    const onBuild = conversationsFromSnapshot({ terms: { '7': shell(7, null) }, workspaces: [], conversations: [] }, { id: 3, name: 'build' })
+
+    expect(here.map((item) => item.id)).toEqual(['t8'])
+    expect(onBuild.map((item) => item.id)).toEqual(['build/t7'])
+    const ids = [...here, ...onBuild].map((item) => item.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('lists a session of another machine while ssh runs in it there', () => {
+    const snapshot = {
+      terms: { '9': { id: 9, agent: null, process: 'ssh', status: 'Idle', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: 'far-box' } },
+      workspaces: [],
+      conversations: [],
+    }
+
+    expect(conversationsFromSnapshot(snapshot, { id: 3, name: 'build' }).map((item) => item.id)).toEqual(['build/t9'])
   })
 })

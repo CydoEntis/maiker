@@ -34,6 +34,7 @@ struct Host {
     frames: Vec<Frame>,
     sessions: BTreeMap<u16, Option<Snapshot>>,
     folders: Vec<(u16, u64, FolderListing)>,
+    cloned: Vec<(u16, u64, Result<String, String>)>,
     errors: Vec<(u16, String)>,
     changed: Vec<(u64, u64)>,
 }
@@ -56,6 +57,7 @@ impl Host {
             frames: Vec::new(),
             sessions: BTreeMap::new(),
             folders: Vec::new(),
+            cloned: Vec::new(),
             errors: Vec::new(),
             changed: Vec::new(),
         }
@@ -83,12 +85,21 @@ impl Host {
                 | Reaction::Notice { .. }
                 | Reaction::Attention { .. }
                 | Reaction::Clipboard { .. }
+                | Reaction::GitHubAccounts { .. }
+                | Reaction::GitHubRepos { .. }
+                | Reaction::GitHubOwners { .. }
+                | Reaction::Tickets { .. }
+                | Reaction::TicketKeys { .. }
+                | Reaction::TicketWrite { .. }
+                | Reaction::TicketLinks { .. }
+                | Reaction::TicketSetup(_)
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),
                 Reaction::Sessions { machine, snapshot } => {
                     self.sessions.insert(machine.0, snapshot.map(|s| *s));
                 }
                 Reaction::Folders { machine, tag, listing } => self.folders.push((machine.0, tag, listing)),
+                Reaction::Cloned { machine, tag, outcome } => self.cloned.push((machine.0, tag, outcome)),
             }
         }
     }
@@ -380,6 +391,39 @@ async fn each_machine_lists_the_folders_inside_a_folder_and_the_answer_names_the
 }
 
 #[tokio::test]
+async fn each_machine_answers_a_clone_by_its_tag_and_the_host_sends_nothing_that_is_no_request() {
+    let (mut here, mut alpha, mut beta) = (Sandbox::new(), Sandbox::new(), Sandbox::new());
+    for sandbox in [&mut here, &mut alpha, &mut beta] {
+        sandbox.start_daemon();
+    }
+    let mut host = Host::new(&here, &alpha, &beta);
+    host.until("every machine connected", |h| {
+        [HERE, ALPHA, BETA].iter().all(|m| h.kinds(*m).last() == Some(&"connected"))
+    })
+    .await;
+
+    // The host is not the judge of an address: each daemon refuses a folder of its own disk, and
+    // says so to the question that asked.
+    let parent = here.dir.to_string_lossy().into_owned();
+    host.wire.clone_repository(None, "/srv/code/widgets", &parent, 11).expect("this computer takes the question");
+    host.wire.clone_repository(Some(ALPHA.0), "/srv/code/widgets", "~", 12).expect("alpha takes the question");
+    host.until("both answered", |h| h.cloned.len() >= 2).await;
+    for (machine, tag) in [(HERE, 11), (ALPHA, 12)] {
+        let (_, _, outcome) = host
+            .cloned
+            .iter()
+            .find(|(m, t, _)| *m == machine.0 && *t == tag)
+            .unwrap_or_else(|| panic!("no answer from machine {}", machine.0));
+        assert!(outcome.as_ref().is_err_and(|why| why.contains("https://")), "{outcome:?}");
+    }
+
+    for (address, parent) in [("", "~"), ("https://example.com/o/r.git", ""), ("https://example.com/o\u{7}/r", "~")] {
+        assert!(host.wire.clone_repository(None, address, parent, 13).is_err(), "{address:?} into {parent:?} was sent");
+    }
+    assert!(!host.cloned.iter().any(|(_, tag, _)| *tag == 13));
+}
+
+#[tokio::test]
 async fn a_daemon_takes_a_message_to_hold_for_a_pane_from_the_window_and_refuses_one_for_no_pane() {
     let (mut here, mut alpha, mut beta) = (Sandbox::new(), Sandbox::new(), Sandbox::new());
     for sandbox in [&mut here, &mut alpha, &mut beta] {
@@ -567,4 +611,42 @@ async fn the_window_is_told_when_a_chat_of_this_computers_daemon_changes() {
     })
     .await;
     assert!(host.errors.is_empty(), "{:?}", host.errors);
+}
+
+#[tokio::test]
+async fn a_delta_with_no_list_to_fit_has_each_machines_daemon_asked_for_its_whole_list() {
+    let (mut here, mut alpha, mut beta) = (Sandbox::new(), Sandbox::new(), Sandbox::new());
+    for sandbox in [&mut here, &mut alpha, &mut beta] {
+        sandbox.start_daemon();
+    }
+    let mut host = Host::new(&here, &alpha, &beta);
+    host.until("this computer and alpha connected, each with a snapshot", |h| {
+        [HERE, ALPHA].iter().all(|m| {
+            h.kinds(*m).last() == Some(&"connected")
+                && h.sessions.get(&m.0).is_some_and(Option::is_some)
+        })
+    })
+    .await;
+
+    let handle = host.hub.handle();
+    for machine in [HERE, ALPHA] {
+        // The list held is dropped, so only a whole one from the daemon can give it again.
+        host.streams.line_up(machine);
+        host.sessions.remove(&machine.0);
+        let delta = ServerMsg::TermsChanged {
+            changed: Vec::new(),
+            removed: Vec::new(),
+            reasons: Default::default(),
+            revision: 999,
+        };
+        let update = Update::Messages {
+            machine,
+            msgs: vec![delta],
+        };
+        react(&mut host.streams, &handle, update, Instant::now());
+    }
+    host.until("each daemon's whole list", |h| {
+        [HERE, ALPHA].iter().all(|m| h.sessions.get(&m.0).is_some_and(Option::is_some))
+    })
+    .await;
 }

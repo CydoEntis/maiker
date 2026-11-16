@@ -51,12 +51,14 @@ export type ShortcutAction =
   | 'usage'
   | 'performance'
   | 'chat-toggle'
+  | 'terminal'
 
 /** The sections of the shortcut overlay, in the order it shows them. */
 export const HOTKEY_GROUPS = ['Sessions', 'Panes', 'Find & jump', 'Window'] as const
 export type HotkeyGroup = (typeof HOTKEY_GROUPS)[number]
 
-type Modifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
+export type Modifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
+const MODIFIERS: readonly Modifier[] = ['cmd', 'ctrl', 'alt', 'shift']
 
 /** One key with the modifiers held for it. `cmd` exists on macOS only. */
 export type Combo = {
@@ -109,6 +111,8 @@ export const BINDINGS: readonly Binding[] = [
   { action: 'find', label: 'Find in the pane or every session', group: 'Find & jump', mac: [cmd('F')], other: [ctrlShift('F')], available: true },
   { action: 'toggle-sidebar', label: 'Collapse sidebar', group: 'Window', mac: [cmd('B')], other: [ctrlShift('B')], available: true },
   { action: 'chat-toggle', label: 'Terminal or chat', group: 'Window', mac: [cmd('E', 'shift')], other: [ctrlShift('E')], available: true },
+  // The terminal dock. ⌃` is the usual terminal key on macOS, where Ctrl is not the shell's; elsewhere Shift joins it (the contract above).
+  { action: 'terminal', label: 'Show or hide the terminal', group: 'Window', mac: [{ mods: ['ctrl'], key: '`' }], other: [ctrlShift('`')], available: true },
   { action: 'usage', label: 'Usage and cost', group: 'Window', mac: [cmd('U', 'shift')], other: [ctrlShift('U')], available: true },
   { action: 'performance', label: 'Performance', group: 'Window', mac: [cmd('P', 'shift')], other: [ctrlShift('P')], available: true },
   { action: 'focus-mode', label: 'Focus mode', group: 'Window', mac: [cmd('.')], other: [{ mods: ['ctrl'], key: '.' }], available: true },
@@ -124,8 +128,22 @@ const TERMINAL_KEYS: readonly { label: string; group: HotkeyGroup; letter: strin
   { label: 'Clear screen', group: 'Sessions', letter: 'L' },
 ]
 
-/** What `KeyboardEvent.key` reports for the keycaps whose character differs, or has a second spelling (Shift+= is `+`). */
-const EVENT_KEYS: Readonly<Record<string, readonly string[]>> = { '−': ['-'], '=': ['=', '+'] }
+/** What `KeyboardEvent.key` reports for the keycaps whose character differs, or has a second spelling (Shift+= is `+`, Shift+` is `~`). */
+const EVENT_KEYS: Readonly<Record<string, readonly string[]>> = { '−': ['-'], '=': ['=', '+'], Space: [' '], '`': ['`', '~'] }
+
+/**
+ * The keys chosen in Settings › Hotkeys: one combination per action, in place of the action's own keys. Saved with the
+ * window's settings on this computer, so a combination is always for the platform it was pressed on.
+ */
+export type KeyOverrides = Partial<Record<ShortcutAction, Combo>>
+export const NO_OVERRIDES: KeyOverrides = {}
+
+/** The combinations that do the action here: the chosen one, else the action's own for the platform. */
+function combosOf(binding: Binding, platform: Platform, overrides: KeyOverrides): readonly Combo[] {
+  const chosen = overrides[binding.action]
+  if (chosen) return [chosen]
+  return platform === 'mac' ? binding.mac : binding.other
+}
 
 export function bindingFor(action: ShortcutAction): Binding {
   const found = BINDINGS.find((binding) => binding.action === action)
@@ -147,8 +165,8 @@ export function comboChord(combo: Combo, platform: Platform): Chord {
 }
 
 /** Every key combination that does the action on this platform; empty when it has none or is not built. */
-export function shortcutChords(binding: Binding, platform: Platform): Chord[] {
-  return (platform === 'mac' ? binding.mac : binding.other).map((combo) => comboChord(combo, platform))
+export function shortcutChords(binding: Binding, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): Chord[] {
+  return combosOf(binding, platform, overrides).map((combo) => comboChord(combo, platform))
 }
 
 /** A chord written as one string: `⌘⇧D` on macOS, `Ctrl+Shift+D` elsewhere. */
@@ -157,14 +175,14 @@ export function writeChord(chord: Chord, platform: Platform): string {
 }
 
 /** The binding's first key combination as text, or '' when the platform has none. */
-export function formatShortcut(binding: Binding, platform: Platform): string {
-  const [first] = shortcutChords(binding, platform)
+export function formatShortcut(binding: Binding, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): string {
+  const [first] = shortcutChords(binding, platform, overrides)
   return first ? writeChord(first, platform) : ''
 }
 
 /** What a tooltip or menu hint shows for an action on this platform. */
-export function shortcutText(action: ShortcutAction, platform: Platform): string {
-  return formatShortcut(bindingFor(action), platform)
+export function shortcutText(action: ShortcutAction, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): string {
+  return formatShortcut(bindingFor(action), platform, overrides)
 }
 
 type KeyInput = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>
@@ -186,10 +204,10 @@ function matches(combo: Combo, event: KeyInput, platform: Platform): boolean {
  * exactly, so Ctrl+T on Windows or Linux (a shell's own key) is never taken. Features not built yet
  * return null too, so their keys still reach the terminal.
  */
-export function matchShortcut(event: KeyInput, platform: Platform): ShortcutMatch | null {
+export function matchShortcut(event: KeyInput, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): ShortcutMatch | null {
   for (const binding of BINDINGS) {
     if (!binding.available) continue
-    for (const combo of platform === 'mac' ? binding.mac : binding.other) {
+    for (const combo of combosOf(binding, platform, overrides)) {
       if (!matches(combo, event, platform)) continue
       return { action: binding.action }
     }
@@ -197,18 +215,103 @@ export function matchShortcut(event: KeyInput, platform: Platform): ShortcutMatc
   return null
 }
 
-export type HotkeyRow = { action: string; group: HotkeyGroup; /** Alternatives: any one of these does it. */ chords: Chord[] }
+export type HotkeyRow = {
+  action: string
+  group: HotkeyGroup
+  /** Alternatives: any one of these does it. */
+  chords: Chord[]
+  /** The action, for a row Settings can change; null for a key that is the terminal's. */
+  id: ShortcutAction | null
+  /** Its keys were chosen in Settings, not the action's own. */
+  changed: boolean
+}
 
 /** The modifier keys drawn as symbols, which the keycaps set in the interface font. */
 const MODIFIER_SYMBOLS: ReadonlySet<string> = new Set(['⌘', '⇧', '⌃', '⌥'])
 export const isModifierSymbol = (key: string): boolean => MODIFIER_SYMBOLS.has(key)
 
 /** The Hotkeys list, in the words the window uses. Actions without a key here, or not built yet, are left out. */
-export function hotkeyRows(platform: Platform): HotkeyRow[] {
+export function hotkeyRows(platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): HotkeyRow[] {
   const rows: HotkeyRow[] = BINDINGS.filter((binding) => binding.available)
-    .map((binding) => ({ action: binding.label, group: binding.group, chords: shortcutChords(binding, platform) }))
+    .map((binding) => ({ action: binding.label, group: binding.group, chords: shortcutChords(binding, platform, overrides), id: binding.action, changed: overrides[binding.action] !== undefined }))
     .filter((row) => row.chords.length > 0)
   const ctrl = platform === 'mac' ? MAC_GLYPH.ctrl : WORD.ctrl
-  for (const key of TERMINAL_KEYS) rows.push({ action: key.label, group: key.group, chords: [[ctrl, key.letter]] })
+  for (const key of TERMINAL_KEYS) rows.push({ action: key.label, group: key.group, chords: [[ctrl, key.letter]], id: null, changed: false })
   return rows
+}
+
+/** Marks the field in Settings › Hotkeys that takes down a new key, so the window and the dialog leave its keys alone. */
+export const KEY_CAPTURE_ATTRIBUTE = 'data-key-capture'
+
+/** Keys that are only held for another: a capture waits for the key pressed with them. */
+const HELD_ONLY: ReadonlySet<string> = new Set(['Shift', 'Control', 'Alt', 'AltGraph', 'Meta', 'OS', 'CapsLock', 'Fn'])
+const SINGLE_LETTER = /^[a-z]$/i
+/** Longer than any key name `KeyboardEvent.key` reports, so a saved value that is not one is dropped. */
+const MAX_KEY_LENGTH = 16
+
+/** A key press in the capture field of Settings › Hotkeys: still waiting, the combination it makes, or why it cannot be one. */
+export type Captured = { kind: 'waiting' } | { kind: 'combo'; combo: Combo } | { kind: 'refused'; reason: string }
+
+/**
+ * What a key pressed in the capture field makes. The terminal keeps its own keys (the contract at the top of this file):
+ * on macOS a window key needs ⌘, and on Windows and Linux it needs Ctrl, with Shift or Alt beside a letter.
+ */
+export function captureCombo(event: KeyInput, platform: Platform): Captured {
+  if (HELD_ONLY.has(event.key)) return { kind: 'waiting' }
+  const mods = MODIFIERS.filter((modifier) => (modifier === 'cmd' ? platform === 'mac' && event.metaKey : modifier === 'ctrl' ? event.ctrlKey : modifier === 'alt' ? event.altKey : event.shiftKey))
+  const key = keycapOf(event.key)
+  if (platform === 'mac') {
+    if (!mods.includes('cmd')) return { kind: 'refused', reason: 'A window key needs ⌘ on macOS; Ctrl and ⌥ keys belong to the terminal.' }
+  } else {
+    if (event.metaKey) return { kind: 'refused', reason: 'The Windows key belongs to the system.' }
+    if (!mods.includes('ctrl')) return { kind: 'refused', reason: 'A window key needs Ctrl; other keys belong to the terminal.' }
+    if (SINGLE_LETTER.test(key) && mods.length === 1) return { kind: 'refused', reason: `Ctrl+${key} is the shell's own key. Add Shift or Alt.` }
+  }
+  return { kind: 'combo', combo: { mods, key } }
+}
+
+/** How a pressed key is drawn: letters in capitals, the minus sign and the space bar by name or glyph. */
+function keycapOf(key: string): string {
+  if (key === ' ') return 'Space'
+  if (key === '-') return '−'
+  return key.length === 1 ? key.toUpperCase() : key
+}
+
+/** The key press a combination is, to compare it with the others through the same test the window uses. */
+function pressOf(combo: Combo, platform: Platform): KeyInput {
+  const held = (modifier: Modifier) => combo.mods.includes(modifier)
+  return { key: (EVENT_KEYS[combo.key] ?? [combo.key])[0] ?? combo.key, metaKey: platform === 'mac' && held('cmd'), ctrlKey: held('ctrl'), altKey: held('alt'), shiftKey: held('shift') }
+}
+
+/** The other action this combination already does, if any, with the chosen keys in place. */
+export function takenBy(combo: Combo, action: ShortcutAction, platform: Platform, overrides: KeyOverrides): Binding | null {
+  const match = matchShortcut(pressOf(combo, platform), platform, overrides)
+  return match === null || match.action === action ? null : bindingFor(match.action)
+}
+
+/** Whether the combination is one of the action's own keys here, so choosing it is the same as resetting. */
+export function isOwnKey(combo: Combo, action: ShortcutAction, platform: Platform): boolean {
+  const binding = bindingFor(action)
+  return (platform === 'mac' ? binding.mac : binding.other).some((own) => matches(own, pressOf(combo, platform), platform))
+}
+
+function isModifier(value: unknown): value is Modifier {
+  return MODIFIERS.some((modifier) => modifier === value)
+}
+
+function isCombo(value: unknown): value is Combo {
+  if (typeof value !== 'object' || value === null) return false
+  const { mods, key } = value as { mods?: unknown; key?: unknown }
+  return Array.isArray(mods) && mods.every(isModifier) && typeof key === 'string' && key.length > 0 && key.length <= MAX_KEY_LENGTH
+}
+
+/** The chosen keys from saved settings, keeping only known actions with a well-formed combination. */
+export function readKeyOverrides(value: unknown): KeyOverrides {
+  if (typeof value !== 'object' || value === null) return NO_OVERRIDES
+  const read: KeyOverrides = {}
+  for (const binding of BINDINGS) {
+    const combo: unknown = (value as Record<string, unknown>)[binding.action]
+    if (isCombo(combo)) read[binding.action] = { mods: [...combo.mods], key: combo.key }
+  }
+  return read
 }

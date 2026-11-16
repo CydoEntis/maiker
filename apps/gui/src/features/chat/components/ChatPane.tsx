@@ -3,24 +3,26 @@ import { MessageSquare } from 'lucide-react'
 import { CHAT_AGENTS, noChatReason, type ChatAgent, type ChatAvailability } from '@/features/workspace/model/chatView'
 import { Button } from '@/components/ui/button'
 import type { OpenFile } from '../openFile'
+import type { ChatItemContext } from './ChatItems'
 import type { PermissionAsk } from '@/data/preview'
 import type { SessionStatus } from '@/features/workspace/model/session'
 import type { PaneQueue } from '../useChatComposer'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { FULL_ACCESS_LABEL, FULL_ACCESS_WARNING } from '../fullAccess'
 import { AGENT_LABEL } from '../modelName'
-import { ChatSession } from './ChatSession'
+import { ChatSession, type WindowActions } from './ChatSession'
 import type { SessionUsage } from '../usageStrip'
-import type { BranchMenuSpec } from './BranchMenu'
 import type { ChatProblem } from '../problem'
 import { StartingChat } from './StartingChat'
+import type { RewindPlace } from '../editFromHere'
+import type { FileSearchPlace } from '../fileMention'
 
 export type ChatPaneProps = {
   availability: ChatAvailability
   /** The session's folder, so file names read relative to it. */
   root?: string | null
-  /** Shows a file's diff in the Changes panel. */
-  onOpenDiff?: ((file: string) => void) | null
+  /** Shows a file's diff, or a turn's, in the Changes panel. */
+  onOpenDiff?: ChatItemContext['openDiff']
   /** Opens a file a reply names, at its line when it gave one. */
   onOpenFile?: OpenFile | null
   /** Types into the terminal the agent runs in, so a chat that follows it can talk to it (ADR 0003). */
@@ -44,28 +46,27 @@ export type ChatPaneProps = {
   hasTerminal?: boolean
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage | undefined
-  /** The pane runs in a linked worktree, as the daemon says; absent for a chat session, which has no pane to ask about. */
-  worktree?: boolean | undefined
   /** Types the agent's command into the shell (a shell tab only). */
   onStartAgent: (agent: ChatAgent) => void
   /** Starts a chat session (a structured conversation the daemon owns) in the shell's folder (a shell tab only). */
   onStartChat?: (agent: ChatAgent, fullAccess: boolean) => void
-  /** Whether the full-access switch next to the start buttons starts on (the desktop setting). */
-  defaultFullAccess?: boolean
-  /** The project folder's name and the branch, for the tray under the message box. */
-  folder?: string
-  branch?: string | null
+  /** Whether the full-access box starts ticked (Settings › Chat › Full access in new chats). */
+  fullAccessDefault?: boolean
   /** A subagent whose own chat shows instead of the session's, and the way back. */
   subagent?: SubagentView | null
   onBackToMain?: () => void
-  /** Shows the session's files beside the pane. */
-  onOpenFiles?: () => void
   /** What is wrong with the chat, for the banner over its message box. */
   problem?: ChatProblem | null
-  /** Where the tray's branch button can move the chat. */
-  branchMenu?: BranchMenuSpec | undefined
   /** The effort the agent's own files say it runs at. */
   effort?: string | null | undefined
+  /** Where a sent message's Edit from here restores the files from. */
+  rewind?: RewindPlace | undefined
+  /** Where an `@` in the message box looks for files. */
+  fileSearch?: FileSearchPlace | undefined
+  /** Leaves out runs of reads and searches that succeeded (the desktop setting). */
+  hideSuccessfulTools?: boolean
+  /** The window's screens a command opens instead of Claude Code's menu. */
+  windowActions?: WindowActions | undefined
 }
 
 /**
@@ -90,23 +91,23 @@ export function ChatPane(props: ChatPaneProps) {
             typeInto={props.typeInto}
             paneQueue={props.paneQueue}
             ask={props.ask ?? null}
-            folder={props.folder ?? ''}
-            branch={props.branch ?? null}
+            asking={props.asking ?? ''}
             subagent={props.subagent ?? null}
-            onOpenFolder={props.onOpenFiles ?? null}
-            {...(props.worktree === undefined ? {} : { worktree: props.worktree })}
             {...(props.usage === undefined ? {} : { usage: props.usage })}
             {...(props.hasTerminal === false ? {} : { onShowTerminal: props.onBackToTerminal })}
             {...(props.onBackToMain === undefined ? {} : { onBackToMain: props.onBackToMain })}
             problem={props.problem ?? null}
-            {...(props.branchMenu === undefined ? {} : { branchMenu: props.branchMenu })}
             effort={props.effort ?? null}
+            hideSuccessfulTools={props.hideSuccessfulTools ?? false}
+            {...(props.rewind === undefined ? {} : { rewind: props.rewind })}
+            {...(props.fileSearch === undefined ? {} : { fileSearch: props.fileSearch })}
             {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
             {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })}
+            {...(props.windowActions === undefined ? {} : { windowActions: props.windowActions })}
           />
         )
         : availability.kind === 'no-events' && props.sessionId !== undefined
-          ? <StartingChat {...(props.worktree === undefined ? {} : { worktree: props.worktree })} agent={availability.agent} sessionId={props.sessionId} onBackToTerminal={props.onBackToTerminal} folder={props.folder ?? ''} branch={props.branch ?? null} root={props.root ?? null} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
+          ? <StartingChat agent={availability.agent} sessionId={props.sessionId} onBackToTerminal={props.onBackToTerminal} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
           : <NoChat {...props} availability={availability} />}
     </section>
   )
@@ -115,8 +116,8 @@ export function ChatPane(props: ChatPaneProps) {
 type NoChatProps = ChatPaneProps & { availability: Exclude<ChatAvailability, { kind: 'ready' }> }
 
 /** A session that has no chat: why, what runs here, and the way back (v18 B.3, shell tabs). */
-function NoChat({ availability, process, online, onBackToTerminal, onStartAgent, onStartChat, defaultFullAccess = false }: NoChatProps) {
-  const [fullAccess, setFullAccess] = useState(defaultFullAccess)
+function NoChat({ availability, process, online, onBackToTerminal, onStartAgent, onStartChat, fullAccessDefault = false }: NoChatProps) {
+  const [fullAccess, setFullAccess] = useState(fullAccessDefault)
   return (
     <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
       <div className="flex w-full max-w-[420px] flex-col items-center gap-3 text-center">
@@ -128,12 +129,12 @@ function NoChat({ availability, process, online, onBackToTerminal, onStartAgent,
         <p className="m-0 font-mono text-[12px] text-dim">Running here: {process}</p>
         <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
           {availability.kind === 'shell' && CHAT_AGENTS.map((agent) => (
-            <Button key={agent} type="button" variant="outline" size="sm" disabled={!online} onClick={() => { onStartAgent(agent) }}>
+            <Button key={agent} type="button" variant="soft" size="sm" disabled={!online} onClick={() => { onStartAgent(agent) }}>
               Start {agent} here
             </Button>
           ))}
           {availability.kind === 'shell' && onStartChat !== undefined && CHAT_AGENTS.map((agent) => (
-            <Button key={`chat-${agent}`} type="button" variant="outline" size="sm" disabled={!online} onClick={() => { onStartChat(agent, fullAccess) }}>
+            <Button key={`chat-${agent}`} type="button" variant="soft" size="sm" disabled={!online} onClick={() => { onStartChat(agent, fullAccess) }}>
               Start a {AGENT_LABEL[agent]} chat
             </Button>
           ))}

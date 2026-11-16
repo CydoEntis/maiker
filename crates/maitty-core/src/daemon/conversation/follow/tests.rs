@@ -517,6 +517,51 @@ async fn the_conversation_of_a_followed_claude_pane_reports_its_mode_and_model()
     assert_eq!(meta.model.as_deref(), Some("claude-opus-5-1"));
 }
 
+fn custom_title(title: &str) -> String {
+    format!("{}\n", json!({ "type": "custom-title", "customTitle": title, "sessionId": SESSION }))
+}
+
+fn append(path: &std::path::Path, text: &str) {
+    use std::io::Write;
+    std::fs::OpenOptions::new().append(true).open(path).unwrap().write_all(text.as_bytes()).unwrap();
+}
+
+#[tokio::test]
+async fn a_name_given_in_claude_code_while_followed_renames_the_pane() {
+    let mut world = World::new();
+    // A name already in the file is history: a name given in the window since must not be put back.
+    append(&world.path, &custom_title("old name"));
+    world.follow().await;
+    assert_eq!(world.daemon.terms[&world.pane].label, "");
+
+    append(&world.path, &custom_title("  tax\u{7}  fix  "));
+    world.follow().await;
+    assert_eq!(world.daemon.terms[&world.pane].label, "tax  fix");
+
+    // Read again with nothing new, it is not renamed again over a name given in the window.
+    world.daemon.terms.get_mut(&world.pane).unwrap().label = "mine".into();
+    append(&world.path, &claude_prompt("more"));
+    world.follow().await;
+    assert_eq!(world.daemon.terms[&world.pane].label, "mine");
+
+    let long = "x".repeat(200);
+    append(&world.path, &custom_title(&long));
+    world.follow().await;
+    assert_eq!(world.daemon.terms[&world.pane].label.chars().count(), 60);
+}
+
+#[tokio::test]
+async fn a_new_session_renamed_before_its_first_message_takes_that_name() {
+    let mut world = World::new();
+    std::fs::remove_file(&world.path).unwrap();
+    world.follow().await;
+
+    std::fs::write(&world.path, custom_title("first thing")).unwrap();
+    world.follow().await;
+
+    assert_eq!(world.daemon.terms[&world.pane].label, "first thing");
+}
+
 #[tokio::test]
 async fn a_followed_pane_whose_file_says_nothing_of_its_setup_reports_none() {
     let mut world = World::new();
@@ -672,6 +717,33 @@ async fn the_conversation_goes_when_the_agent_does_and_its_id_is_not_reused() {
 }
 
 #[tokio::test]
+async fn a_lapse_of_the_hook_or_session_keeps_the_chat_and_its_id() {
+    type Change = fn(&mut crate::daemon::term::Term);
+    let lapses: [(&str, Change); 3] = [
+        ("the hook went unverified", |t| t.hooked = false),
+        ("the session was not known for a moment", |t| t.session = None),
+        ("the transcript was not named for a moment", |t| t.transcript = None),
+    ];
+    for (name, lapse) in lapses {
+        let mut world = World::new();
+        world.follow().await;
+        let first = world.id();
+
+        lapse(world.daemon.terms.get_mut(&world.pane).unwrap());
+        world.daemon.follow_tick();
+        assert!(world.summary().is_some(), "{name}: the chat stays");
+
+        let path = world.path.clone();
+        let term = world.daemon.terms.get_mut(&world.pane).unwrap();
+        term.hooked = true;
+        term.session = Some(SESSION.into());
+        term.transcript = Some(path);
+        world.daemon.follow_tick();
+        assert_eq!(world.id(), first, "{name}: the same chat, not a new one");
+    }
+}
+
+#[tokio::test]
 async fn the_terminal_app_cannot_read_what_the_desktop_apps_pane_did() {
     let mut world = World::new();
     world.follow().await;
@@ -702,4 +774,96 @@ async fn a_file_that_cannot_be_read_is_said_not_shown_empty_as_if_complete() {
         read.history.completeness,
         Completeness::Incomplete(_)
     ));
+}
+
+fn claude_thought(n: usize, text: &str) -> String {
+    format!(
+        "{}\n",
+        json!({
+            "type": "assistant", "uuid": format!("t-{n}"), "isSidechain": false,
+            "timestamp": "2026-11-04T09:30:05.000Z",
+            "message": { "role": "assistant", "content": [
+                { "type": "thinking", "thinking": text, "signature": "x" }
+            ] },
+        })
+    )
+}
+
+#[test]
+fn a_long_session_of_thinking_keeps_its_newest_messages_and_a_bounded_reasoning() {
+    let mut follower = Followed::new(ConversationId(9), 1, 1, None, SESSION, Provider::Claude);
+    let mut transcript = fresh();
+    let thought = "t".repeat(1024);
+    // Past MAX_ENTRIES in all, but well under it in messages; the thinking alone is past its budget.
+    let pairs = MAX_ENTRIES * 6 / 10;
+    let mut notes = Vec::new();
+    let mut offset = 0u64;
+    for n in 0..pairs {
+        for line in [claude_thought(n, &thought), claude_reply(&format!("m{n}"))] {
+            notes.extend(transcript.feed(offset, line.trim_end()));
+            offset += line.len() as u64;
+        }
+    }
+
+    apply_notes(&mut follower, notes, false);
+
+    let entries = &follower.history.entries;
+    let last = format!("m{}", pairs - 1);
+    assert!(
+        entries
+            .iter()
+            .any(|e| matches!(&e.content, Content::Message { text, .. } if *text == last)),
+        "the newest message is kept"
+    );
+    assert!(matches!(follower.history.completeness, Completeness::Complete));
+    let (count, bytes) = entries
+        .iter()
+        .filter_map(|e| match &e.content {
+            Content::Reasoning { text } => Some(text.len() + REASONING_ENTRY_OVERHEAD),
+            _ => None,
+        })
+        .fold((0, 0), |(c, b), n| (c + 1, b + n));
+    assert!(bytes <= MAX_REASONING_BYTES, "{bytes} bytes of reasoning");
+    assert_eq!(count, MAX_REASONING_BYTES / (1024 + REASONING_ENTRY_OVERHEAD));
+    let first = entries
+        .iter()
+        .find_map(|e| matches!(e.content, Content::Reasoning { .. }).then_some(&e.source.item));
+    assert_eq!(first.map(String::as_str), Some("t-0:0"));
+}
+
+#[test]
+fn a_reasoning_note_that_replaces_or_fails_never_breaks_the_counts() {
+    let mut follower = Followed::new(ConversationId(9), 1, 1, None, SESSION, Provider::Claude);
+    let mut transcript = fresh();
+    let mut notes = Vec::new();
+    for (offset, line) in [claude_thought(0, "first"), claude_thought(0, "second")]
+        .iter()
+        .enumerate()
+    {
+        notes.extend(transcript.feed(offset as u64, line.trim_end()));
+    }
+    // Reads as a reasoning note but has no item id, so the projection refuses it.
+    notes.push(Note {
+        method: "item/completed",
+        params: json!({ "turnId": "t", "item": { "type": "reasoning", "summary": ["x"] } }),
+    });
+    notes.extend(transcript.feed(9, claude_reply("after").trim_end()));
+
+    apply_notes(&mut follower, notes, false);
+
+    let entries = &follower.history.entries;
+    let thoughts: Vec<_> = entries
+        .iter()
+        .filter_map(|e| match &e.content {
+            Content::Reasoning { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(thoughts, ["second"]);
+    assert!(
+        entries
+            .iter()
+            .any(|e| matches!(&e.content, Content::Message { text, .. } if text == "after"))
+    );
+    assert_eq!(reasoning_totals(&follower.history), (1, "second".len() + REASONING_ENTRY_OVERHEAD));
 }

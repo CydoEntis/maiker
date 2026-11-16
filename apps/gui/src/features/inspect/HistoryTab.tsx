@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { useQueryClient } from '@tanstack/react-query'
 import { repoDiffRange, repoLog, repoSnapshots, restoreSnapshot } from './api'
 import { ago, MS_PER_SECOND } from './format'
@@ -53,7 +54,7 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
       .finally(() => { setRestoring(false) })
   }
 
-  if (log.isPending || snapshots.isPending) return <p className="mx-inspect-note">Loading…</p>
+  if (log.isPending || snapshots.isPending) return <SkeletonLines label="Reading history" lines={5} className="mx-inspect-note" />
   if (log.isError) return <RepoError error={log.error} tab="history" onRetry={() => { void log.refetch() }} retrying={log.isFetching} />
 
   return (
@@ -65,7 +66,7 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
       {comparing && (
         <section aria-label="Comparison">
           <p className="mx-inspect-summary">{older.title} → {newer.title}</p>
-          {range.isPending && <p className="mx-inspect-note">Loading…</p>}
+          {range.isPending && <SkeletonLines label="Reading the changes" className="mx-inspect-note" />}
           {range.isError && <p className="mx-inspect-note is-error" role="alert">{messageOf(range.error)}</p>}
           {range.data && (range.data.files.length === 0
             ? <p className="mx-inspect-note">No differences between these two.</p>
@@ -76,6 +77,13 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
               </div>
             )))}
         </section>
+      )}
+      {snapshots.isError && (
+        // The commits still show; the agent's snapshots, which Restore needs, are said to be missing rather than left out.
+        <p className="mx-inspect-note is-error" role="alert">
+          Could not load the agent's snapshots: {messageOf(snapshots.error)}{' '}
+          <button type="button" className="mx-text-button" disabled={snapshots.isFetching} onClick={() => { void snapshots.refetch() }}>{snapshots.isFetching ? 'Trying again…' : 'Try again'}</button>
+        </p>
       )}
       <ul className="mx-inspect-list" aria-label="History">
         {entries.map((entry) => {
@@ -106,7 +114,7 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
             </li>
           )
         })}
-        {entries.length === 0 && <li className="mx-inspect-note">No commits or snapshots yet.</li>}
+        {entries.length === 0 && <li className="mx-inspect-note">{snapshots.isError ? 'No commits yet.' : 'No commits or snapshots yet.'}</li>}
       </ul>
     </div>
   )

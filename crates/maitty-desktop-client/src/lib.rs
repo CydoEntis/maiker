@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 pub use host_env::host_command;
 pub use ipc::data_dir;
 pub use shared_daemon::{ensure_shared_daemon, shared_daemon_path};
-use maitty_shared::protocol::{ClientMsg, Command, Query, Reply, ServerMsg};
+use maitty_shared::protocol::{COMPATIBLE_SINCE, ClientMsg, Command, Query, Reply, ServerMsg};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::future::Future;
@@ -40,6 +40,8 @@ pub enum PaneCommand {
     DropQueued { index: u32, text: String },
     Pin(bool),
     Archive(bool),
+    /// Out of the way until a time (unix seconds), or awake again (`None`).
+    Snooze(Option<u64>),
     Seen,
     /// Restart an agent in place so it loads hooks it missed.
     Reload,
@@ -75,10 +77,10 @@ impl PaneCommand {
             }
             PaneCommand::Rename(name) => ClientMsg::Command(Command::RenamePane { term, name }),
             PaneCommand::SendWhenReady(text) => {
-                ClientMsg::Command(Command::SendWhenReady { term, text })
+                ClientMsg::Command(Command::SendWhenReady { term, text, operation: None })
             }
             PaneCommand::Queue { text, first } => {
-                ClientMsg::Command(Command::QueueFollowUp { term, text, first })
+                ClientMsg::Command(Command::QueueFollowUp { term, text, first, operation: None })
             }
             PaneCommand::DropQueued { index, text } => {
                 ClientMsg::Command(Command::DropQueued { term, index, text })
@@ -87,6 +89,7 @@ impl PaneCommand {
             PaneCommand::Archive(archived) => {
                 ClientMsg::Command(Command::ArchivePane { term, archived })
             }
+            PaneCommand::Snooze(until) => ClientMsg::Command(Command::SnoozePane { term, until }),
             PaneCommand::Seen => ClientMsg::Command(Command::MarkSeen { term }),
             PaneCommand::Reload => ClientMsg::Command(Command::ReloadAgent { term }),
             PaneCommand::Close => ClientMsg::Command(Command::ClosePane { term }),
@@ -258,10 +261,16 @@ fn saved_agent_count() -> usize {
         .count()
 }
 
-fn stop_mismatched_daemon() -> Result<()> {
-    let pid = std::fs::read_to_string(ipc::pid_file())
+/// The process the pid file names as this socket's daemon.
+fn daemon_pid() -> Option<u32> {
+    std::fs::read_to_string(ipc::pid_file())
         .ok()
         .and_then(|value| value.trim().parse::<u32>().ok())
+}
+
+/// Stops the daemon the pid file names, and says which process that was.
+fn stop_mismatched_daemon() -> Result<u32> {
+    let pid = daemon_pid()
         .filter(|pid| is_app_daemon(*pid))
         .ok_or_else(|| {
             anyhow::anyhow!("couldn't identify the local {APP_NAME} ({APP_COMMAND}) daemon process")
@@ -287,7 +296,7 @@ fn stop_mismatched_daemon() -> Result<()> {
         status.success(),
         "couldn't stop the old daemon process {pid}"
     );
-    Ok(())
+    Ok(pid)
 }
 
 fn is_app_daemon(pid: u32) -> bool {
@@ -363,17 +372,31 @@ pub async fn restart_stale_daemon(app_version: &str, expected_version: &str) -> 
 /// wait until it lets go of the socket.
 async fn stop_local_daemon() -> Result<()> {
     validate_restart_activity(read_activity().as_ref(), session_file().is_file())?;
-    tokio::task::spawn_blocking(stop_mismatched_daemon)
+    let stopped = tokio::task::spawn_blocking(stop_mismatched_daemon)
         .await
         .context(format!("waiting for the local {APP_NAME} service to stop"))??;
     for _ in 0..50 {
-        if !ipc::is_running().await {
-            ipc::remove_pid_file();
+        let listening = ipc::is_running().await;
+        let named = daemon_pid();
+        if stopped_daemon_is_gone(stopped, listening, named) {
+            // A daemon that already took over wrote its own pid file: only the stopped one's goes.
+            if named == Some(stopped) {
+                ipc::remove_pid_file();
+            }
             return Ok(());
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    bail!("the old daemon still holds the local service socket")
+    bail!(
+        "the old {APP_NAME} service (process {stopped}) did not stop within 5 seconds, so it still holds the local service socket"
+    )
+}
+
+/// Whether the stopped daemon let go of the socket. Something listening is not proof that it
+/// has not: this app's own connections start the next daemon the moment the old one drops, and
+/// only one daemon holds a socket, so a pid file naming another process means the old one is gone.
+fn stopped_daemon_is_gone(stopped: u32, listening: bool, named: Option<u32>) -> bool {
+    !listening || named.is_some_and(|pid| pid != stopped)
 }
 
 fn validate_restart_confirmation(daemon_protocol: u32, expected_protocol: u32) -> Result<()> {
@@ -410,6 +433,32 @@ pub async fn read_conversation(
     match reply {
         Reply::ConversationRead(history) => Ok(serde_json::to_value(history)?),
         _ => bail!("daemon returned an unexpected conversation history reply"),
+    }
+}
+
+/// The longest helper id the window may ask about; the daemon checks it again.
+const HELPER_ID_MAX: usize = 128;
+
+/// What one of a pane's helpers did, from its own record (ADR 0010), as JSON for the window.
+pub async fn read_helper(term: u32, helper: String, daemon: impl Into<Daemon>) -> Result<Value> {
+    if helper.is_empty()
+        || helper.len() > HELPER_ID_MAX
+        || !helper.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        bail!("invalid helper id");
+    }
+    match request(ClientMsg::Query(Query::HelperRead { term, helper }), daemon).await? {
+        Reply::HelperRead(record) => Ok(serde_json::to_value(record)?),
+        _ => bail!("daemon returned an unexpected helper reply"),
+    }
+}
+
+/// The Claude Code and Codex agent files of a pane's project and its user's home, read-only (ADR
+/// 0010), as JSON for the window.
+pub async fn read_specialists(term: u32, daemon: impl Into<Daemon>) -> Result<Value> {
+    match request(ClientMsg::Query(Query::Specialists { term }), daemon).await? {
+        Reply::Specialists(list) => Ok(serde_json::to_value(list)?),
+        _ => bail!("daemon returned an unexpected specialists reply"),
     }
 }
 
@@ -604,6 +653,16 @@ fn run_git(dir: &std::path::Path, args: &[&str]) -> std::result::Result<String, 
     }
 }
 
+/// The GitHub repository (`owner/name`) a folder's `origin` remote points at, or `None` when it has no such remote.
+/// Git runs off the caller's thread with fixed arguments; a folder git cannot read has none.
+pub async fn github_repo_of(folder: PathBuf) -> Result<Option<String>> {
+    tokio::task::spawn_blocking(move || {
+        run_git(&folder, &["remote", "get-url", "origin"]).ok().and_then(|address| maitty_shared::github::repo_of_remote(&address))
+    })
+    .await
+    .context("reading the folder's remote")
+}
+
 /// The files that more than one of these checkouts (name, folder) changed since their branches parted. Git runs
 /// off the caller's thread; a checkout git cannot read is left out.
 pub async fn checkout_overlaps(checkouts: Vec<(String, PathBuf)>) -> Result<Vec<maitty_shared::overlap::Overlap>> {
@@ -781,11 +840,7 @@ pub async fn start_terminal_session(
     if !cwd.is_dir() {
         bail!("the selected project folder is not a directory");
     }
-    let program = match provider {
-        Provider::Codex => "codex",
-        Provider::Claude => "claude",
-        Provider::Gemini => "gemini",
-    };
+    let program = provider.agent_name();
     let reply = request(
         ClientMsg::Command(Command::NewWorkspace {
             cwd: Some(cwd),
@@ -850,6 +905,26 @@ pub async fn start_agent_session(
     }
 }
 
+pub use maitty_shared::protocol::GITHUB_SIGN_IN_COMMAND;
+
+/// The request that starts a terminal session in `cwd` running GitHub's sign-in, for this computer's daemon or
+/// another machine's.
+pub fn github_sign_in_message(cwd: PathBuf) -> ClientMsg {
+    ClientMsg::Command(Command::NewWorkspace {
+        cwd: Some(cwd),
+        name: None,
+        cmd: Some(GITHUB_SIGN_IN_COMMAND.to_owned()),
+    })
+}
+
+/// Start GitHub's sign-in as the first command of a new terminal session on this computer, in `home`.
+pub async fn start_github_sign_in(home: PathBuf, daemon_executable: PathBuf) -> Result<Value> {
+    match request(github_sign_in_message(home), daemon_executable).await? {
+        Reply::Ok => Ok(Value::Null),
+        _ => bail!("daemon returned an unexpected terminal session reply"),
+    }
+}
+
 /// The command that keeps an agent warm in a folder: the same line `start_agent_session` sends, so the session started
 /// next with the same agent, flags and folder is the one already running.
 pub fn prewarm_message(cwd: PathBuf, agent: &str, flags: &[String]) -> Result<ClientMsg> {
@@ -896,6 +971,35 @@ async fn ask_if_known(message: ClientMsg) -> Result<bool> {
     .await
 }
 
+/// Ask the running daemon a question newer than the oldest daemon this app talks to. An older one would
+/// never answer it, so it is refused in words instead of left to time out.
+async fn ask_running_daemon_if_it_reads(message: &ClientMsg) -> Result<Reply> {
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("connecting to the local daemon")?;
+        refuse_unless_daemon_reads(message, version)?;
+        ask(&mut connection, message).await
+    })
+    .await
+}
+
+/// Whether a repository question is newer than the oldest daemon this app talks to, so the running daemon's
+/// version is checked before it is asked.
+fn repo_question_needs_version(message: &ClientMsg) -> bool {
+    message.introduced_in() > COMPATIBLE_SINCE
+}
+
+/// Refuses `message` in words when a daemon at `daemon_version` would never answer it.
+fn refuse_unless_daemon_reads(message: &ClientMsg, daemon_version: u32) -> Result<()> {
+    if !daemon_reads(message, daemon_version) {
+        bail!(
+            "the Maitty service running is older than this app and cannot answer this yet: restart it (Settings › Daemon)"
+        );
+    }
+    Ok(())
+}
+
 /// What may be held for a starting agent: some words, and not more than the daemon is asked to keep.
 pub fn held_message(text: String) -> Result<PaneCommand> {
     if text.trim().is_empty() {
@@ -907,8 +1011,13 @@ pub fn held_message(text: String) -> Result<PaneCommand> {
     Ok(PaneCommand::SendWhenReady(text))
 }
 
-pub async fn send_when_ready(term: u32, text: String, daemon_executable: PathBuf) -> Result<Value> {
-    let reply = request(held_message(text)?.message(term), daemon_executable).await?;
+pub async fn send_when_ready(
+    term: u32,
+    text: String,
+    operation: Option<u64>,
+    daemon_executable: PathBuf,
+) -> Result<Value> {
+    let reply = send_named(held_message(text)?.message(term), operation, daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
         _ => bail!("daemon returned an unexpected reply to a held message"),
@@ -930,12 +1039,57 @@ pub async fn queue_follow_up(
     term: u32,
     text: String,
     first: bool,
+    operation: Option<u64>,
     daemon_executable: PathBuf,
 ) -> Result<Value> {
-    let reply = request(queued_message(text, first)?.message(term), daemon_executable).await?;
+    let reply =
+        send_named(queued_message(text, first)?.message(term), operation, daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
         _ => bail!("daemon returned an unexpected reply to a queued message"),
+    }
+}
+
+/// Sends a held or queued message to this computer's daemon, named by `operation` when that daemon
+/// honours it, so a retry is acknowledged instead of typed twice.
+async fn send_named(
+    message: ClientMsg,
+    operation: Option<u64>,
+    daemon_executable: PathBuf,
+) -> Result<Reply> {
+    let Some(operation) = operation else {
+        return request(message, daemon_executable).await;
+    };
+    answered_within(REQUEST_TIMEOUT, async {
+        match ipc::open_for_user_knowing_version().await {
+            Ok((mut connection, version)) => {
+                ask(&mut connection, &named_send(message, operation, version)).await
+            }
+            // No daemon is running: the one `request` starts has no earlier send to match a retry against.
+            Err(error) if ipc::other_version(&error).is_none() => {
+                request(message, daemon_executable).await
+            }
+            Err(error) => Err(error),
+        }
+    })
+    .await
+}
+
+/// `message` carrying `operation` when a daemon at `daemon_version` honours it. An older daemon reads
+/// the field and ignores it, so a retry there would be typed twice: it is sent the message unnamed.
+fn named_send(message: ClientMsg, operation: u64, daemon_version: u32) -> ClientMsg {
+    let mut named = message.clone();
+    if let ClientMsg::Command(
+        Command::SendWhenReady { operation: slot, .. }
+        | Command::QueueFollowUp { operation: slot, .. },
+    ) = &mut named
+    {
+        *slot = Some(operation);
+    }
+    if daemon_reads(&named, daemon_version) {
+        named
+    } else {
+        message
     }
 }
 
@@ -961,23 +1115,64 @@ pub async fn rename_terminal_session(
     }
 }
 
-/// A read-only question about the repository a pane is in. `question` is a `RepoRequest` as
-/// JSON; the daemon scopes it to the pane's own checkout.
-pub async fn repo_query(term: u32, question: Value, daemon_executable: PathBuf) -> Result<Value> {
-    let question: maitty_shared::repo::RepoRequest =
-        serde_json::from_value(question).context("invalid repository request")?;
-    let reply = request(
-        ClientMsg::Query(Query::Repo {
-            term,
-            tag: 0,
-            request: question,
-        }),
-        daemon_executable,
-    )
-    .await?;
+/// A read-only question about the repository a pane is in, asked of the daemon that owns the
+/// pane; that daemon scopes it to the pane's own checkout. A question newer than the oldest local
+/// daemon this app talks to is refused in words when the running one is older.
+pub async fn repo_query(term: u32, question: maitty_shared::repo::RepoRequest, daemon: impl Into<Daemon>) -> Result<Value> {
+    let message = ClientMsg::Query(Query::Repo {
+        term,
+        tag: 0,
+        request: question,
+    });
+    let reply = match daemon.into() {
+        Daemon::Local(_) if repo_question_needs_version(&message) => ask_running_daemon_if_it_reads(&message).await?,
+        daemon => request(message, daemon).await?,
+    };
     match reply {
         Reply::Repo { reply, .. } => Ok(serde_json::to_value(reply)?),
         _ => bail!("daemon returned an unexpected repository reply"),
+    }
+}
+
+/// Which commit name and email git uses on a daemon's machine, and its folder rules, as a
+/// `GitIdentityReport` in JSON. The daemon reads them and writes nothing.
+pub async fn git_identities(daemon: impl Into<Daemon>) -> Result<Value> {
+    match request(ClientMsg::Query(Query::GitIdentities { tag: 0 }), daemon).await? {
+        Reply::GitIdentities { report, .. } => Ok(serde_json::to_value(report)?),
+        _ => bail!("daemon returned an unexpected answer about who commits"),
+    }
+}
+
+/// Preview, write or remove a folder's rule on a daemon's machine. The lines it would write, wrote
+/// or took away, by file, as JSON; or an error whose text is the daemon's one line saying why not.
+pub async fn git_identity_rule(change: maitty_shared::protocol::GitRuleChange, daemon: impl Into<Daemon>) -> Result<Value> {
+    match request(ClientMsg::Query(Query::GitIdentityRule { change, tag: 0 }), daemon).await? {
+        Reply::GitIdentityRuleDone { outcome: Ok(files), .. } => Ok(serde_json::to_value(files)?),
+        Reply::GitIdentityRuleDone { outcome: Err(why), .. } => bail!("{why}"),
+        _ => bail!("daemon returned an unexpected answer about a folder's rule"),
+    }
+}
+
+/// How long an answer to `request` is waited for: a little longer than the daemon gives it, so
+/// the daemon's own "stopped after" line is what arrives.
+fn git_request_timeout(request: &maitty_shared::protocol::GitRequest) -> Duration {
+    use maitty_shared::protocol::{GIT_COMMIT_LIMIT_SECS, GIT_SYNC_LIMIT_SECS, GitRequest};
+    const SLACK_SECS: u64 = 15;
+    Duration::from_secs(SLACK_SECS + match request {
+        GitRequest::Commit { .. } => GIT_COMMIT_LIMIT_SECS,
+        GitRequest::Fetch | GitRequest::Pull | GitRequest::Push | GitRequest::PullRequest => GIT_SYNC_LIMIT_SECS,
+    })
+}
+
+/// Have the daemon that owns pane `term` do `request` to the checkout the pane is in. The line
+/// saying what happened, or an error whose text is the daemon's one line saying why not.
+pub async fn git_request(term: u32, request: maitty_shared::protocol::GitRequest, daemon: impl Into<Daemon>) -> Result<String> {
+    let limit = git_request_timeout(&request);
+    let asked = ClientMsg::Query(Query::Git { term, request, tag: 0 });
+    match request_within(asked, daemon, limit).await? {
+        Reply::GitDone { outcome: Ok(line), .. } => Ok(line),
+        Reply::GitDone { outcome: Err(why), .. } => bail!("{why}"),
+        _ => bail!("daemon returned an unexpected git reply"),
     }
 }
 
@@ -1033,6 +1228,35 @@ pub async fn tidy_worktrees(items: Vec<(PathBuf, bool)>, daemon_executable: Path
         Reply::Ok => Ok(Value::Null),
         _ => bail!("daemon returned an unexpected worktree reply"),
     }
+}
+
+/// Where the worktree at `folder` of the repository at `repo` stands, as this computer's daemon
+/// reads it (`gh` and `worktree.inactive_days` included), with `missing` set when git still lists
+/// it but its folder is gone. A daemon built before the question is told so in words, since it would never answer.
+pub async fn worktree_standing(repo: PathBuf, folder: PathBuf) -> Result<Value> {
+    let message = ClientMsg::Query(Query::WorktreeStanding { repo, folder });
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("connecting to the local daemon")?;
+        if !daemon_reads(&message, version) {
+            bail!(
+                "the Maitty service running is older than this app and cannot say where a worktree stands: restart it (Settings › Daemon)"
+            );
+        }
+        match ask(&mut connection, &message).await? {
+            Reply::WorktreeStanding(standing) => standing_shown(standing),
+            _ => bail!("daemon returned an unexpected worktree standing reply"),
+        }
+    })
+    .await
+}
+
+fn standing_shown(standing: Option<maitty_shared::protocol::WorktreeStanding>) -> Result<Value> {
+    let missing = standing.is_none();
+    let mut shown = serde_json::to_value(standing.unwrap_or_default())?;
+    shown["missing"] = Value::Bool(missing);
+    Ok(shown)
 }
 
 /// How long a worktree for a branch may take, connecting included. The repo's setup hook runs
@@ -1114,6 +1338,34 @@ pub async fn restore_snapshot(
         } => Ok(changed as u64),
         _ => bail!("daemon returned an unexpected restore reply"),
     }
+}
+
+/// How many files restoring one of the checkout's snapshots would change now. A daemon from before the question
+/// would never answer it, so it is not asked.
+pub async fn restore_count(term: u32, commit: String) -> Result<u64> {
+    let message = ClientMsg::Query(Query::Repo {
+        term,
+        tag: 0,
+        request: maitty_shared::repo::RepoRequest::RestoreCount { commit },
+    });
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("connecting to the local daemon")?;
+        if !daemon_reads(&message, version) {
+            bail!(
+                "the Maitty service running is older than this app and cannot count a restore yet: restart it (Settings › Daemon), then try again"
+            );
+        }
+        match ask(&mut connection, &message).await? {
+            Reply::Repo {
+                reply: maitty_shared::repo::RepoReply::RestoreCount(changed),
+                ..
+            } => Ok(changed as u64),
+            _ => bail!("daemon returned an unexpected restore count reply"),
+        }
+    })
+    .await
 }
 
 /// Replace the text of one existing file of the checkout `term` is in (the daemon checks the path and refuses
@@ -1204,6 +1456,19 @@ pub async fn archive_terminal_session(
     match reply {
         Reply::Ok => Ok(Value::Null),
         _ => bail!("daemon returned an unexpected archive reply"),
+    }
+}
+
+/// Snooze a pane until a time (unix seconds), or wake it with `None`. The daemon refuses a pane that needs you.
+pub async fn snooze_terminal_session(
+    term: u32,
+    until: Option<u64>,
+    daemon_executable: PathBuf,
+) -> Result<Value> {
+    let reply = request(PaneCommand::Snooze(until).message(term), daemon_executable).await?;
+    match reply {
+        Reply::Ok => Ok(Value::Null),
+        _ => bail!("daemon returned an unexpected snooze reply"),
     }
 }
 
@@ -1333,6 +1598,31 @@ pub async fn dequeue_conversation(
     match reply {
         Reply::Ok => Ok(Value::Null),
         _ => bail!("daemon returned an unexpected queued message removal reply"),
+    }
+}
+
+/// Sends a message waiting in a chat's queue now, instead of when the turn ends. The daemon answers `Ok` only once the
+/// message was taken (steered into the turn, or the turn stopped for it) and an error with the reason when it was
+/// refused, so the message is still queued then. A local daemon built before the command is told so in words, since
+/// it would never answer; another machine's is asked as it is and answers or times out.
+pub async fn send_conversation_now(
+    id: u64,
+    generation: u64,
+    operation: u64,
+    daemon: impl Into<Daemon>,
+) -> Result<Value> {
+    let message = ClientMsg::Command(Command::ConversationSendNow {
+        id: maitty_shared::conversation::ConversationId(id),
+        generation,
+        operation,
+    });
+    let reply = match daemon.into() {
+        Daemon::Local(_) => ask_running_daemon_if_it_reads(&message).await?,
+        Daemon::Remote(remote) => remote.request(message, REQUEST_TIMEOUT).await?,
+    };
+    match reply {
+        Reply::Ok => Ok(Value::Null),
+        _ => bail!("daemon returned an unexpected send now reply"),
     }
 }
 
@@ -1523,6 +1813,110 @@ pub async fn allowed_commands(daemon_executable: PathBuf) -> Result<Value> {
         Reply::AllowedCommands(commands) => Ok(serde_json::to_value(commands)?),
         _ => bail!("daemon returned an unexpected approved commands reply"),
     }
+}
+
+/// The conversations `agent` saved for `folder` on this computer, newest first, as the daemon's
+/// `SavedConversations`. Null when the daemon running is older than the question: it would never answer.
+pub async fn saved_conversations(agent: String, folder: String) -> Result<Value> {
+    let message = ClientMsg::Query(Query::SavedConversations { agent, folder, tag: 0 });
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("connecting to the local daemon")?;
+        if !daemon_reads(&message, version) {
+            return Ok(Value::Null);
+        }
+        match ask(&mut connection, &message).await? {
+            Reply::SavedConversations { found, .. } => Ok(serde_json::to_value(found)?),
+            _ => bail!("daemon returned an unexpected saved conversations reply"),
+        }
+    })
+    .await
+}
+
+/// How long a side answer may take: the daemon's own limit, with a margin for the connection.
+const SIDE_ANSWER_TIMEOUT: Duration = Duration::from_secs(100);
+
+/// Claude Code's answer beside conversation `id` on this computer, as the daemon's `SideAnswer`, without adding to
+/// the conversation. Refused in words when the daemon running is older than the question.
+pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk) -> Result<Value> {
+    let message = ClientMsg::Query(Query::SideAnswer {
+        id: maitty_shared::conversation::ConversationId(id),
+        ask: side,
+        tag: 0,
+    });
+    answered_within(SIDE_ANSWER_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("connecting to the local daemon")?;
+        refuse_unless_daemon_reads(&message, version)?;
+        match ask(&mut connection, &message).await? {
+            Reply::SideAnswer { answer, .. } => Ok(serde_json::to_value(answer)?),
+            _ => bail!("daemon returned an unexpected side answer reply"),
+        }
+    })
+    .await
+}
+
+/// The agent sessions this computer's daemon recorded as closed, newest first, each with `folder_present`: whether its
+/// folder is still there, looked at off the async workers. Null when the daemon running is older than the question.
+pub async fn closed_sessions() -> Result<Value> {
+    let message = ClientMsg::Query(Query::ClosedSessions);
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("connecting to the local daemon")?;
+        if !daemon_reads(&message, version) {
+            return Ok(Value::Null);
+        }
+        match ask(&mut connection, &message).await? {
+            Reply::ClosedSessions(list) => with_folder_presence(list, FOLDER_LOOK_LIMIT, |path| path.is_dir()).await,
+            _ => bail!("daemon returned an unexpected closed sessions reply"),
+        }
+    })
+    .await
+}
+
+/// Have this computer's daemon reopen a closed session it keeps, making its worktree again when the folder is gone.
+/// The daemon starts the agent itself. False when the daemon running is from before this and was not asked.
+pub async fn reopen_closed_session(agent: String, session: String) -> Result<Value> {
+    let asked = ask_if_known(reopen_closed_message(agent, session)).await?;
+    Ok(Value::Bool(asked))
+}
+
+fn reopen_closed_message(agent: String, session: String) -> ClientMsg {
+    ClientMsg::Command(Command::ReopenClosedSession { agent, session })
+}
+
+/// How long the closed sessions' folders are looked for, all of them together.
+const FOLDER_LOOK_LIMIT: Duration = Duration::from_secs(2);
+
+/// Each closed session as JSON with `folder_present`. The folders are looked at side by side on blocking threads, and
+/// one that has not answered by `limit` (a network share that is gone can hang for a long time) reads as missing.
+async fn with_folder_presence(
+    list: Vec<maitty_shared::protocol::ClosedSession>,
+    limit: Duration,
+    look: impl Fn(&std::path::Path) -> bool + Send + Sync + Clone + 'static,
+) -> Result<Value> {
+    let deadline = tokio::time::Instant::now() + limit;
+    let looks: Vec<_> = list
+        .iter()
+        .map(|closed| {
+            let (cwd, look) = (closed.cwd.clone(), look.clone());
+            tokio::task::spawn_blocking(move || look(&cwd))
+        })
+        .collect();
+    let mut rows = Vec::with_capacity(list.len());
+    for (closed, folder_look) in list.into_iter().zip(looks) {
+        let folder_present = match tokio::time::timeout_at(deadline, folder_look).await {
+            Ok(answer) => answer.context("looking for a closed session's folder")?,
+            Err(_) => false,
+        };
+        let mut row = serde_json::to_value(closed)?;
+        row["folder_present"] = Value::Bool(folder_present);
+        rows.push(row);
+    }
+    Ok(Value::Array(rows))
 }
 
 /// Take back a command approved "always in this project".
@@ -1965,17 +2359,17 @@ impl RemoteDaemon {
         }
     }
 
-    async fn request(&self, message: ClientMsg) -> Result<Reply> {
+    async fn request(&self, message: ClientMsg, limit: Duration) -> Result<Reply> {
         let idle = remote_idle(self.key);
         let asked = ask_reusing(&idle, MAX_IDLE_REMOTE_CONNECTIONS, &message, || {
             (self.open)()
         });
-        let reply = match tokio::time::timeout(REQUEST_TIMEOUT, asked).await {
+        let reply = match tokio::time::timeout(limit, asked).await {
             Ok(answer) => answer.with_context(|| format!("asking {}", self.name))?,
             Err(_) => bail!(
                 "{} did not answer within {} seconds",
                 self.name,
-                REQUEST_TIMEOUT.as_secs()
+                limit.as_secs()
             ),
         };
         (self.vet)(reply).map_err(|why| anyhow::anyhow!("{} sent an answer that was refused: {why}", self.name))
@@ -2045,10 +2439,15 @@ where
 }
 
 async fn request(message: ClientMsg, daemon: impl Into<Daemon>) -> Result<Reply> {
+    request_within(message, daemon, REQUEST_TIMEOUT).await
+}
+
+/// `request`, for a question the daemon may take up to `limit` to answer.
+async fn request_within(message: ClientMsg, daemon: impl Into<Daemon>, limit: Duration) -> Result<Reply> {
     match daemon.into() {
         Daemon::Local(daemon_executable) => {
             answered_within(
-                REQUEST_TIMEOUT,
+                limit,
                 ask_reusing(&IDLE_CONNECTIONS, MAX_IDLE_CONNECTIONS, &message, || async {
                     ipc::open_or_spawn_for_user(&daemon_executable)
                         .await
@@ -2057,7 +2456,7 @@ async fn request(message: ClientMsg, daemon: impl Into<Daemon>) -> Result<Reply>
             )
             .await
         }
-        Daemon::Remote(remote) => remote.request(message).await,
+        Daemon::Remote(remote) => remote.request(message, limit).await,
     }
 }
 
@@ -2234,9 +2633,18 @@ async fn receive_reply(reader: &mut ipc::Reader) -> Result<Reply> {
 #[cfg(test)]
 mod restart_confirmation_tests {
     use super::{
-        Activity, can_restart_mismatched_daemon, is_daemon_command_line, update_status,
-        validate_restart_activity, validate_restart_confirmation,
+        Activity, can_restart_mismatched_daemon, is_daemon_command_line, stopped_daemon_is_gone,
+        update_status, validate_restart_activity, validate_restart_confirmation,
     };
+
+    #[test]
+    fn a_daemon_that_took_over_the_socket_means_the_stopped_one_is_gone() {
+        assert!(stopped_daemon_is_gone(7, false, Some(7)));
+        assert!(stopped_daemon_is_gone(7, false, None));
+        assert!(stopped_daemon_is_gone(7, true, Some(8)));
+        assert!(!stopped_daemon_is_gone(7, true, Some(7)));
+        assert!(!stopped_daemon_is_gone(7, true, None));
+    }
 
     #[test]
     fn the_daemon_to_restart_may_be_the_terminal_apps_or_the_one_the_desktop_app_bundles() {
@@ -2402,6 +2810,18 @@ mod executable_lookup_tests {
 mod agent_command_tests {
     use super::agent_command;
 
+    #[test]
+    fn the_github_sign_in_is_one_fixed_line_whatever_folder_it_starts_in() {
+        use super::{ClientMsg, Command, github_sign_in_message};
+        for folder in ["~", "/home/dev", "; rm -rf ~"] {
+            let ClientMsg::Command(Command::NewWorkspace { cwd, name, cmd }) = github_sign_in_message(folder.into()) else {
+                panic!("a sign-in is a new terminal session");
+            };
+            assert_eq!(cmd.as_deref(), Some("gh auth login --web --git-protocol https"));
+            assert_eq!((cwd, name), (Some(folder.into()), None));
+        }
+    }
+
     fn words(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| (*item).to_string()).collect()
     }
@@ -2452,7 +2872,7 @@ mod agent_command_tests {
         assert!(queued_message("x".repeat(super::MAX_HELD_MESSAGE_BYTES + 1), false).is_err());
         assert!(matches!(
             queued_message("/model opus".into(), true).unwrap().message(4),
-            ClientMsg::Command(Command::QueueFollowUp { term: 4, text, first: true }) if text == "/model opus"
+            ClientMsg::Command(Command::QueueFollowUp { term: 4, text, first: true, operation: None }) if text == "/model opus"
         ));
         let drop = PaneCommand::DropQueued {
             index: 1,
@@ -2465,6 +2885,164 @@ mod agent_command_tests {
         ));
         assert!(daemon_reads(&drop, PROTOCOL_VERSION));
         assert!(!daemon_reads(&drop, DROP_QUEUED_SINCE - 1));
+    }
+
+    #[test]
+    fn sending_a_queued_chat_message_now_is_asked_only_of_a_daemon_that_reads_it() {
+        use super::{ClientMsg, Command, daemon_reads, refuse_unless_daemon_reads};
+        use maitty_shared::conversation::ConversationId;
+        use maitty_shared::protocol::{PROTOCOL_VERSION, SEND_NOW_SINCE};
+        let now = ClientMsg::Command(Command::ConversationSendNow {
+            id: ConversationId(3),
+            generation: 2,
+            operation: 5,
+        });
+        assert!(daemon_reads(&now, PROTOCOL_VERSION));
+        assert!(!daemon_reads(&now, SEND_NOW_SINCE - 1));
+        assert!(refuse_unless_daemon_reads(&now, SEND_NOW_SINCE - 1).is_err());
+    }
+
+    #[test]
+    fn a_terminal_send_carries_its_operation_only_to_a_daemon_that_honours_it() {
+        use super::{ClientMsg, Command, held_message, named_send, queued_message};
+        use maitty_shared::protocol::TERMINAL_SEND_OPERATIONS_SINCE;
+        // The window draws operations within a JavaScript number's exact integers; the largest arrives whole.
+        const LARGEST: u64 = (1 << 53) - 1;
+        assert_eq!(serde_json::from_str::<u64>("9007199254740991").unwrap(), LARGEST);
+        let held = held_message("fix it".into()).unwrap().message(3);
+        let queued = queued_message("next".into(), false).unwrap().message(3);
+        assert!(matches!(
+            named_send(held.clone(), LARGEST, TERMINAL_SEND_OPERATIONS_SINCE),
+            ClientMsg::Command(Command::SendWhenReady { term: 3, operation: Some(LARGEST), .. })
+        ));
+        assert!(matches!(
+            named_send(queued.clone(), 9, TERMINAL_SEND_OPERATIONS_SINCE),
+            ClientMsg::Command(Command::QueueFollowUp { term: 3, operation: Some(9), .. })
+        ));
+        assert!(matches!(
+            named_send(held, 9, TERMINAL_SEND_OPERATIONS_SINCE - 1),
+            ClientMsg::Command(Command::SendWhenReady { operation: None, .. })
+        ));
+        assert!(matches!(
+            named_send(queued, 9, TERMINAL_SEND_OPERATIONS_SINCE - 1),
+            ClientMsg::Command(Command::QueueFollowUp { operation: None, .. })
+        ));
+    }
+
+    #[test]
+    fn a_repository_question_newer_than_every_daemon_is_refused_in_words_by_an_older_one() {
+        use super::{ClientMsg, Query, refuse_unless_daemon_reads, repo_question_needs_version};
+        use maitty_shared::protocol::{FIND_FILES_SINCE, PROTOCOL_VERSION};
+        use maitty_shared::repo::RepoRequest;
+        let repo = |request| ClientMsg::Query(Query::Repo { term: 3, tag: 0, request });
+        let find = repo(RepoRequest::FindFiles { query: "main".into(), limit: 50 });
+
+        assert!(repo_question_needs_version(&find));
+        let refused = refuse_unless_daemon_reads(&find, FIND_FILES_SINCE - 1).unwrap_err();
+        assert!(refused.to_string().contains("older than this app"), "{refused}");
+        assert!(refuse_unless_daemon_reads(&find, PROTOCOL_VERSION).is_ok());
+        assert!(!repo_question_needs_version(&repo(RepoRequest::Status)));
+    }
+
+    #[test]
+    fn a_daemon_from_before_saved_conversations_is_not_asked_for_them() {
+        use super::{ClientMsg, Query, daemon_reads};
+        use maitty_shared::protocol::{PROTOCOL_VERSION, SAVED_CONVERSATIONS_SINCE};
+        let ask = ClientMsg::Query(Query::SavedConversations {
+            agent: "claude".into(),
+            folder: "~/app".into(),
+            tag: 0,
+        });
+        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
+        assert!(!daemon_reads(&ask, SAVED_CONVERSATIONS_SINCE - 1));
+    }
+
+    #[test]
+    fn a_worktree_standing_reaches_the_app_with_missing_said_and_an_old_daemon_is_not_asked() {
+        use super::{ClientMsg, Query, daemon_reads, standing_shown};
+        use maitty_shared::protocol::{PROTOCOL_VERSION, WORKTREE_STANDING_SINCE, WorktreeStanding};
+        let ask = ClientMsg::Query(Query::WorktreeStanding { repo: "/code/app".into(), folder: "/code/task".into() });
+        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
+        assert!(!daemon_reads(&ask, WORKTREE_STANDING_SINCE - 1));
+        let stale = WorktreeStanding {
+            dirty: 0,
+            branch: Some("task".into()),
+            merged: false,
+            last_commit: "5 weeks ago".into(),
+            inactive_days: Some(30),
+        };
+        assert_eq!(
+            standing_shown(Some(stale)).unwrap(),
+            serde_json::json!({ "dirty": 0, "branch": "task", "merged": false, "last_commit": "5 weeks ago", "inactive_days": 30, "missing": false })
+        );
+        let gone = standing_shown(None).unwrap();
+        assert_eq!((gone["missing"].as_bool(), gone["inactive_days"].is_null()), (Some(true), true));
+    }
+
+    #[test]
+    fn a_daemon_from_before_closed_sessions_is_not_asked_for_them() {
+        use super::{ClientMsg, Query, daemon_reads};
+        use maitty_shared::protocol::{CLOSED_SESSIONS_SINCE, PROTOCOL_VERSION};
+        let ask = ClientMsg::Query(Query::ClosedSessions);
+        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
+        assert!(!daemon_reads(&ask, CLOSED_SESSIONS_SINCE - 1));
+    }
+
+    #[test]
+    fn a_daemon_from_before_reopening_closed_sessions_is_not_asked_to() {
+        use super::{daemon_reads, reopen_closed_message};
+        use maitty_shared::protocol::{PROTOCOL_VERSION, REOPEN_CLOSED_SINCE};
+        let reopen = reopen_closed_message("claude".into(), "abc-123".into());
+        assert!(daemon_reads(&reopen, PROTOCOL_VERSION));
+        assert!(!daemon_reads(&reopen, REOPEN_CLOSED_SINCE - 1));
+    }
+
+    fn closed_in(cwd: std::path::PathBuf) -> maitty_shared::protocol::ClosedSession {
+        maitty_shared::protocol::ClosedSession {
+            agent: "claude".into(),
+            session: "abc-123".into(),
+            cwd,
+            branch: Some("dev".into()),
+            title: Some("Fix the parser".into()),
+            at: 1_700_000_000,
+            worktree: None,
+            repo: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn a_closed_session_says_whether_its_folder_is_still_there() {
+        let here = std::env::temp_dir();
+        let gone = here.join("maitty-closed-session-folder-that-was-removed");
+        let list = vec![closed_in(here), closed_in(gone)];
+        let rows = super::with_folder_presence(list, super::FOLDER_LOOK_LIMIT, |path| path.is_dir())
+            .await
+            .unwrap();
+        assert_eq!(rows[0]["folder_present"], true);
+        assert_eq!(rows[1]["folder_present"], false);
+        assert_eq!(rows[0]["session"], "abc-123");
+        assert_eq!(rows[0]["branch"], "dev");
+    }
+
+    #[tokio::test]
+    async fn a_folder_that_does_not_answer_in_time_reads_as_missing_and_holds_up_nothing() {
+        use std::time::Duration;
+        let hung = std::path::PathBuf::from("//dead-share/app");
+        let list = vec![closed_in(hung.clone()), closed_in(hung.clone()), closed_in(std::env::temp_dir())];
+        let limit = Duration::from_millis(100);
+        let started = std::time::Instant::now();
+        let rows = super::with_folder_presence(list, limit, move |path| {
+            if path == hung {
+                std::thread::sleep(Duration::from_secs(2));
+            }
+            true
+        })
+        .await
+        .unwrap();
+        assert!(started.elapsed() < Duration::from_secs(1), "the looks run side by side under one deadline");
+        assert_eq!(rows[0]["folder_present"], false);
+        assert_eq!(rows[1]["folder_present"], false);
+        assert_eq!(rows[2]["folder_present"], true);
     }
 
     #[test]
@@ -2516,6 +3094,7 @@ mod pane_command_tests {
                 ClientMsg::Command(Command::SendWhenReady {
                     term: 4,
                     text: "fix the parser".into(),
+                    operation: None,
                 }),
             ),
             (
@@ -2530,6 +3109,20 @@ mod pane_command_tests {
                 ClientMsg::Command(Command::ArchivePane {
                     term: 4,
                     archived: false,
+                }),
+            ),
+            (
+                PaneCommand::Snooze(Some(1_000)),
+                ClientMsg::Command(Command::SnoozePane {
+                    term: 4,
+                    until: Some(1_000),
+                }),
+            ),
+            (
+                PaneCommand::Snooze(None),
+                ClientMsg::Command(Command::SnoozePane {
+                    term: 4,
+                    until: None,
                 }),
             ),
             (

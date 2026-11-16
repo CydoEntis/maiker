@@ -20,6 +20,7 @@ pub(crate) mod secret_run;
 pub(crate) mod target;
 pub(crate) mod uninstall;
 pub(crate) mod update;
+pub(crate) mod workflow;
 use crate::layout::Dir;
 use crate::protocol::*;
 use anyhow::{Context, Result, anyhow, bail};
@@ -2259,15 +2260,21 @@ fn hook_message(origin: HookOrigin, payload_json: &Value, status: HookStatus) ->
     {
         event = format!("Notification:{kind}");
     }
-    let (background, background_agents) = if event == "Stop" {
+    // A helper's own stop lists what still runs too: a helper that ends its turn while a shell it
+    // started runs is waiting on that shell, and wakes when it ends.
+    let stopped = matches!(event.as_str(), "Stop" | "SubagentStop");
+    let (background, background_agents) = if stopped {
         (
             running_background_tasks(payload_json, false),
             running_background_tasks(payload_json, true),
         )
+    } else if inner && event == "PostToolUse" {
+        // What a helper just put in the background is its own work: the daemon pairs the two.
+        (background_work_started(payload_json).into_iter().collect(), Vec::new())
     } else {
         (Vec::new(), Vec::new())
     };
-    let background_reported = event == "Stop"
+    let background_reported = stopped
         && payload_json
             .get("background_tasks")
             .is_some_and(Value::is_array);
@@ -2356,13 +2363,10 @@ const MAX_QUESTION_CHOICES: usize = 4;
 /// The most questions one prompt asks at once: Claude's own limit.
 const MAX_QUESTIONS: usize = 4;
 
-/// One question with one answer and its choices: the labels, in the order the menu numbers them.
-/// None for a question that takes several answers, has no text, or has more choices than a key
-/// can name, and for one with a label that is empty (the numbers would no longer match the menu).
-fn question_choices(entry: &Value) -> Option<(String, Vec<String>)> {
-    if entry.get("multiSelect").and_then(Value::as_bool) == Some(true) {
-        return None;
-    }
+/// One question and its choices: the labels, in the order the menu numbers them, and whether it
+/// takes several of them (`multiSelect`). None for a question with no text or more choices than a
+/// key can name, and for one with a label that is empty (the numbers would no longer match the menu).
+fn asked_question(entry: &Value) -> Option<AskQuestion> {
     let question = one_line(entry.get("question")?.as_str()?, 2000);
     let labels: Vec<String> = entry
         .get("options")?
@@ -2370,35 +2374,42 @@ fn question_choices(entry: &Value) -> Option<(String, Vec<String>)> {
         .iter()
         .map(|option| option.get("label").and_then(Value::as_str).map(|label| one_line(label, 200)))
         .collect::<Option<_>>()?;
+    let multi = entry.get("multiSelect").and_then(Value::as_bool) == Some(true);
     (!question.is_empty()
         && (2..=MAX_QUESTION_CHOICES).contains(&labels.len())
         && labels.iter().all(|label| !label.is_empty()))
-    .then_some((question, labels))
+    .then_some(AskQuestion { question, choices: labels, multi })
 }
 
-/// The choices of a prompt that is one question with one answer. A prompt with several answers
-/// is answered in the terminal, since one key cannot answer it.
-fn single_question_choices(input: Option<&Value>) -> Option<(String, Vec<String>)> {
-    let questions = input?.get("questions")?.as_array()?;
-    let [only] = questions.as_slice() else { return None };
-    question_choices(only)
-}
-
-/// A prompt that asks several questions, each with one answer: every question with its choices, in
-/// the order the prompt shows them. All of them or none: one that cannot be answered with a key
-/// leaves the whole prompt to the terminal.
-fn several_questions(input: Option<&Value>) -> Vec<AskQuestion> {
+/// Every question a prompt asks, in the order it shows them. All of them or none: one that cannot
+/// be answered with keys leaves the whole prompt to the terminal.
+fn asked_questions(input: Option<&Value>) -> Vec<AskQuestion> {
     let Some(questions) = input.and_then(|input| input.get("questions")).and_then(Value::as_array) else {
         return Vec::new();
     };
-    if !(2..=MAX_QUESTIONS).contains(&questions.len()) {
+    if !(1..=MAX_QUESTIONS).contains(&questions.len()) {
         return Vec::new();
     }
-    questions
-        .iter()
-        .map(|entry| question_choices(entry).map(|(question, choices)| AskQuestion { question, choices }))
-        .collect::<Option<Vec<_>>>()
-        .unwrap_or_default()
+    questions.iter().map(asked_question).collect::<Option<Vec<_>>>().unwrap_or_default()
+}
+
+/// How a question prompt is put to the chat: one question with one answer as its choices, several
+/// with one answer each as `questions`, and any with a question that takes several answers as
+/// `form` (which a peer from before it does not read, and so leaves to the terminal).
+struct AskedQuestions {
+    single: Option<AskQuestion>,
+    questions: Vec<AskQuestion>,
+    form: Vec<AskQuestion>,
+}
+
+fn sort_questions(asked: Vec<AskQuestion>) -> AskedQuestions {
+    if asked.iter().any(|question| question.multi) {
+        return AskedQuestions { single: None, questions: Vec::new(), form: asked };
+    }
+    match <[AskQuestion; 1]>::try_from(asked) {
+        Ok([only]) => AskedQuestions { single: Some(only), questions: Vec::new(), form: Vec::new() },
+        Err(several) => AskedQuestions { single: None, questions: several, form: Vec::new() },
+    }
 }
 
 /// A question Claude asks with its choices, on one line: `Which? 1 Fast · 2 Safe`. A tool input
@@ -2431,10 +2442,10 @@ fn permission_ask(payload: &Value) -> Option<PermissionAsk> {
         return None;
     }
     let input = payload.get("tool_input");
-    let single = if tool == QUESTION_TOOL { single_question_choices(input) } else { None };
-    let choices = single.as_ref().map(|(_, labels)| labels.clone()).unwrap_or_default();
-    let detail = if let Some((question, _)) = single {
-        question
+    let asked = sort_questions(if tool == QUESTION_TOOL { asked_questions(input) } else { Vec::new() });
+    let choices = asked.single.as_ref().map(|only| only.choices.clone()).unwrap_or_default();
+    let detail = if let Some(only) = asked.single {
+        only.question
     } else if tool == QUESTION_TOOL {
         question_subject(input)
     } else {
@@ -2449,7 +2460,8 @@ fn permission_ask(payload: &Value) -> Option<PermissionAsk> {
         detail,
         answerable: false,
         choices,
-        questions: if tool == QUESTION_TOOL { several_questions(input) } else { Vec::new() },
+        questions: asked.questions,
+        form: asked.form,
     })
 }
 
@@ -2467,6 +2479,24 @@ const BACKGROUND_TASK_OVER: &[&str] = &[
     "cancelled",
     "canceled",
 ];
+
+/// The background task a tool call just started: a shell run in the background
+/// (`backgroundTaskId`) or a helper agent launched without waiting (`isAsync` with its
+/// `agentId`). Its id is the one the agent's later `background_tasks` lists.
+fn background_work_started(payload: &Value) -> Option<String> {
+    let response = payload.get("tool_response")?;
+    let id = response
+        .get("backgroundTaskId")
+        .or_else(|| {
+            response
+                .get("isAsync")
+                .and_then(Value::as_bool)
+                .filter(|launched_async| *launched_async)
+                .and_then(|_| response.get("agentId"))
+        })?
+        .as_str()?;
+    (!id.is_empty()).then(|| id.to_string())
+}
 
 /// The ids of the background tasks Claude's Stop says are still in flight; it wakes itself when
 /// one ends. With `agents_only`, just the helper agents among them (`"type": "subagent"`).
@@ -4367,6 +4397,54 @@ mod tests {
         assert!(reported(json!({"hook_event_name":"Stop","background_tasks":[]})), "an empty list is nothing running");
         assert!(!reported(json!({"hook_event_name":"Stop"})), "no list is nothing said");
         assert!(!reported(json!({"hook_event_name":"PostToolUse","background_tasks":[]})), "only a stop is asked");
+        assert!(
+            reported(json!({"hook_event_name":"SubagentStop","agent_id":"a1","background_tasks":[]})),
+            "a helper's stop lists them too"
+        );
+    }
+
+    /// Claude Code 2.1.325's shapes, as captured from its hooks.
+    #[test]
+    fn a_helper_says_what_it_put_in_the_background_and_what_still_runs_when_it_stops() {
+        let message = |payload: Value| {
+            let origin = super::HookOrigin {
+                term: 1,
+                agent: "claude".into(),
+                pid: 0,
+                token: String::new(),
+            };
+            let status = super::status_from_hook(&payload).unwrap_or(HookStatus::Same);
+            let ClientMsg::Hook {
+                background,
+                background_agents,
+                background_reported,
+                subagent,
+                ..
+            } = super::hook_message(origin, &payload, status)
+            else {
+                panic!("expected hook report")
+            };
+            (background, background_agents, background_reported, subagent.map(|s| s.start))
+        };
+        let shell = json!({"hook_event_name":"PostToolUse","agent_id":"a1","agent_type":"fork","tool_name":"Bash",
+            "tool_input":{"command":"sleep 20","run_in_background":true},
+            "tool_response":{"stdout":"","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false,"backgroundTaskId":"b1"}});
+        assert_eq!(message(shell), (vec!["b1".to_string()], vec![], false, Some(true)), "the shell is the helper's own work");
+        let helper = json!({"hook_event_name":"PostToolUse","agent_id":"a1","tool_name":"Agent",
+            "tool_response":{"isAsync":true,"status":"async_launched","agentId":"a2"}});
+        assert_eq!(message(helper).0, ["a2"], "so is a helper it launched without waiting");
+        let foreground = json!({"hook_event_name":"PostToolUse","agent_id":"a1","tool_name":"Bash","tool_response":{"stdout":"ok"}});
+        assert!(message(foreground).0.is_empty(), "a call that finished started nothing");
+        let parents_own = json!({"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"backgroundTaskId":"b9"}});
+        assert!(message(parents_own).0.is_empty(), "the session's own shells are listed at its stop");
+        let stop = json!({"hook_event_name":"SubagentStop","agent_id":"a1","agent_type":"fork","stop_hook_active":false,
+            "background_tasks":[{"id":"a1","type":"subagent","status":"running","agent_type":"fork"},
+                                {"id":"b1","type":"shell","status":"running","command":"sleep 20"}]});
+        assert_eq!(
+            message(stop),
+            (vec!["a1".to_string(), "b1".to_string()], vec!["a1".to_string()], true, Some(false)),
+            "its stop lists what still runs"
+        );
     }
 
     #[test]
@@ -4773,7 +4851,8 @@ mod tests {
         .expect("a question");
         assert_eq!(question.detail, "Which database?");
         assert_eq!(question.choices, ["SQLite", "Postgres"]);
-        // Several questions, or several answers, cannot be answered with one key: numbered in the line.
+        // A question with several answers is carried as a form, still numbered in the line for a
+        // peer that reads only that.
         let many = report(json!({
             "hook_event_name": "PermissionRequest",
             "tool_name": "AskUserQuestion",
@@ -4784,6 +4863,7 @@ mod tests {
         .expect("a multi-select question");
         assert_eq!((many.detail.as_str(), many.choices.len()), ("Which? 1 A · 2 B", 0));
         assert!(many.questions.is_empty());
+        assert_eq!(many.form.iter().map(|q| (q.question.as_str(), q.multi)).collect::<Vec<_>>(), [("Which?", true)]);
         // Several questions with one answer each are carried whole, in order, for the chat to answer.
         let several = report(json!({
             "hook_event_name": "PermissionRequest",
@@ -4799,7 +4879,8 @@ mod tests {
             several.questions.iter().map(|q| (q.question.as_str(), q.choices.len())).collect::<Vec<_>>(),
             [("Which database?", 3), ("Which language?", 2)]
         );
-        // One of them takes several answers: the whole prompt stays the terminal's.
+        // One of them takes several answers: the whole prompt is a form, and no peer from before
+        // forms reads it as questions with one answer each.
         let mixed = report(json!({
             "hook_event_name": "PermissionRequest",
             "tool_name": "AskUserQuestion",
@@ -4809,7 +4890,12 @@ mod tests {
             ]},
         }))
         .expect("a mixed prompt");
-        assert!(mixed.questions.is_empty());
+        assert!(mixed.questions.is_empty() && mixed.choices.is_empty());
+        assert_eq!(
+            mixed.form.iter().map(|q| (q.question.as_str(), q.choices.len(), q.multi)).collect::<Vec<_>>(),
+            [("Which?", 2, false), ("Which ones?", 2, true)]
+        );
+        assert!(several.form.is_empty() && question.form.is_empty());
 
         // A tool with no subject field is still a question; one with no tool is not reported.
         let bare = report(json!({"hook_event_name": "PermissionRequest", "tool_name": "ExitPlanMode"}))

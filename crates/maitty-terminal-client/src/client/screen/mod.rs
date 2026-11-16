@@ -78,11 +78,21 @@ pub(super) struct Saved {
     pub recent: Vec<String>,
     /// The side sheet's width per kind of view (`SheetKind::key`), as you sized it.
     pub sheet_w: HashMap<String, u16>,
+    /// Which ticket sources each project read, by `project_key`, from before this computer's
+    /// daemon kept them: read only to move them there once (`Query::TicketLinks` `Import`), then
+    /// emptied. A repo and group ids, no secret.
+    pub ticket_links: HashMap<String, crate::client::tickets::TicketLink>,
+    /// The name you are known by on GitHub, for Tickets' Mine. Plane's and Linear's are the
+    /// daemon's; the ones kept here before are moved there with `ticket_links`.
+    pub ticket_me: crate::client::tickets::TicketMe,
     /// `session_order` and `placed` of every other machine, by its configured name. The top-level
     /// ones are this machine's, so a file from before machines reads as it always did. A machine
     /// that is no longer configured keeps its entry.
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub machines: std::collections::BTreeMap<String, MachineSaved>,
+    /// The folder a clone last went in, by machine name ("" for this computer).
+    #[serde(skip_serializing_if = "HashMap::is_empty")]
+    pub clone_into: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -204,6 +214,14 @@ pub(super) struct Screen {
     /// The parent pane of each subagent row drawn this frame, for their clicks
     /// (`ScreenHit::Subagent`).
     pub sub_rows: Vec<ClientTerm>,
+    /// The id and name of each subagent row drawn this frame, beside `sub_rows`.
+    pub sub_ids: Vec<(String, String)>,
+    /// The sessions whose finished subagents are listed instead of folded into a count.
+    pub subs_opened: HashSet<ClientSession>,
+    /// The session of each "N done" line drawn this frame (`ScreenHit::SubagentsDone`).
+    pub done_rows: Vec<ClientSession>,
+    /// The pane and run of each workflow run line drawn this frame (`ScreenHit::Run`).
+    pub run_rows: Vec<(ClientTerm, String)>,
     /// The session you were last on in each fleet: what picking the fleet opens.
     pub fleet_active: HashMap<fleets::FleetId, ClientTerm>,
     /// What the sidebar cursor walks over, top to bottom.
@@ -318,6 +336,8 @@ pub(super) struct ScreenTab {
     pub used: u64,
     /// What you called it; empty: named after what runs in it.
     pub name: String,
+    /// What is typed into its focused pane goes to every pane of it.
+    pub broadcast: bool,
 }
 
 impl ScreenTab {
@@ -329,6 +349,7 @@ impl ScreenTab {
             owner,
             used: 0,
             name: String::new(),
+            broadcast: false,
         }
     }
     /// Its panes are the daemon's, so they are on `owner`'s machine.
@@ -454,6 +475,16 @@ pub(super) struct Finder {
     pub wanted: Option<PathBuf>,
     /// Picking a folder for this setting (Settings → Start folder) instead of opening one.
     pub for_setting: Option<&'static str>,
+    /// The machine whose folders these are. Another machine's are listed by its daemon
+    /// (`Query::ListFolders`) and spelled with `/` whatever this computer uses.
+    pub machine: MachineId,
+    /// The listing asked of another machine, and whether its answer is still to come.
+    pub tag: u64,
+    pub waiting: bool,
+    /// Another machine's `dir` as its daemon spelled it (absolute, `~` taken out).
+    pub abs: Option<String>,
+    /// That machine has no such folder, or could not read it.
+    pub missing: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -761,12 +792,14 @@ impl App {
         if let Some(m) = self.screen.model_cache.borrow().as_ref() {
             return m.clone();
         }
-        let m = self.screen_model_build();
+        let m = self.screen_model_build(false);
         *self.screen.model_cache.borrow_mut() = Some(m.clone());
         m
     }
 
-    fn screen_model_build(&self) -> Vec<Proj> {
+    /// The listed sessions, or (`put_away`) only those put away and not needing you, which
+    /// the lists leave out. A put-away session that needs you is listed while it does.
+    fn screen_model_build(&self, put_away: bool) -> Vec<Proj> {
         let machines = self.machines();
         let mut projs: Vec<Proj> = Vec::new();
         let order = &self.screen.saved.order;
@@ -839,6 +872,9 @@ impl App {
                 };
                 let term = ClientTerm::on(m.id, *id);
                 if self.screen.pending_split.is_some() && !self.screen.split_known.contains(&term) {
+                    continue;
+                }
+                if put_away::hidden(t) != put_away {
                     continue;
                 }
                 let key = t
@@ -956,7 +992,8 @@ impl App {
                 }
             }
         }
-        for (m, c) in machines.iter().flat_map(|m| {
+        // A chat is never put away: archiving one closes it.
+        for (m, c) in machines.iter().filter(|_| !put_away).flat_map(|m| {
             m.snap
                 .conversations
                 .iter()
@@ -1108,6 +1145,7 @@ impl App {
                             }
                         },
                     ),
+                    broadcast: prior.is_some_and(|tab| tab.broadcast),
                 }
             })
             .collect();
@@ -1434,6 +1472,15 @@ pub(super) enum ScreenHit {
     /// A subagent row of the sidebar (its place in `Screen::sub_rows`): it opens its parent's
     /// pane, where the agent shows its subagents itself.
     Subagent(usize),
+    /// A session's "N done" line under its subagents (its place in `Screen::done_rows`): lists or
+    /// folds its finished subagents.
+    SubagentsDone(usize),
+    /// A workflow run's line under the open session (its place in `Screen::run_rows`): its steps.
+    Run(usize),
+    /// A session's "N runs done" line: its Work board.
+    Board(ClientTerm),
+    /// A card of the Work board (its place in the board's walk).
+    BoardCard(usize),
     /// The release chip on the sidebar's foot: its menu, opening upward.
     ReleaseMenu,
     /// The `n new session` chip in a workspace with no pane open.
@@ -1536,6 +1583,8 @@ pub(super) enum ScreenHit {
     ToBottom(ClientTerm),
     FindTab(u8),
     FindRow(usize),
+    /// A line found by Find in every session.
+    SessionFindRow(usize),
     BranchRow(usize),
     GoPick(usize),
     HistRow(usize),
@@ -1548,6 +1597,11 @@ pub(super) enum ScreenHit {
     SecretDecline(ClientTerm),
     /// A button or row of Settings › Check.
     CheckDraft(check_settings::DraftHit),
+    /// A repository in the clone dialog's list, and its Clone button.
+    ClonePick(usize),
+    CloneGo,
+    /// A file in the specialist agents list.
+    SpecialistRow(usize),
 }
 
 pub(super) fn hit(app: &mut App, r: Rect, h: ScreenHit) {
@@ -1625,6 +1679,9 @@ mod updates;
 pub(in crate::client) use updates::draw_updates;
 mod closing;
 pub(in crate::client) use closing::{Closing, draw_banner};
+mod put_away;
+#[cfg(test)]
+mod put_away_tests;
 #[cfg(test)]
 mod keys_tests;
 mod fuzzy;
@@ -1632,8 +1689,12 @@ mod popover;
 mod popups;
 mod references_sheet;
 mod secret_ask;
+mod session_find;
+mod tickets_view;
 #[cfg(test)]
 mod flat_tests;
+#[cfg(test)]
+mod board_tests;
 #[cfg(test)]
 mod frame_tests;
 mod inbox;
@@ -1648,10 +1709,23 @@ mod splash;
 mod workspace;
 mod splash_wide;
 mod usage;
+pub(in crate::client) mod approved;
+pub(in crate::client) mod machine_info;
 mod tidy;
+mod workflow_runs;
+mod work_board;
+mod broadcast;
+mod even_widths;
+mod status_log;
+mod helper_view;
+mod clone_repo;
+mod specialists;
+#[cfg(test)]
+mod repos_tests;
+pub(in crate::client) use self::{clone_repo::*, specialists::*};
 pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
-    popups::*, references_sheet::*, secret_ask::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
-    workspace::*,
+    popups::*, references_sheet::*, secret_ask::*, session_find::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
+    helper_view::*, tickets_view::*, workflow_runs::*, work_board::*, status_log::*, workspace::*,
 };
