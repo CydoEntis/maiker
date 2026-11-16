@@ -456,6 +456,16 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   // An approval's link to its tool step scrolls the list there; the nonce makes a second click on the same link scroll again.
   const [scrollTarget, setScrollTarget] = useState<{ key: string; nonce: number } | null>(null)
+  // A message sent, or queued behind the running turn, takes the chat back to its newest row.
+  const [sentCount, setSentCount] = useState(0)
+  // A message is its words and how often they were said before it, so the same words sent again count, and the echo
+  // going quiet does not.
+  const sentKey = echo === null ? null : `${echo.text}\u0000${String(echo.baseline)}`
+  const [seenSend, setSeenSend] = useState({ sentKey, queued: composer.queue.length })
+  if (seenSend.sentKey !== sentKey || seenSend.queued !== composer.queue.length) {
+    if ((sentKey !== null && sentKey !== seenSend.sentKey) || composer.queue.length > seenSend.queued) setSentCount(sentCount + 1)
+    setSeenSend({ sentKey, queued: composer.queue.length })
+  }
   const goToStep = useCallback((key: string) => { setScrollTarget((current) => ({ key, nonce: (current?.nonce ?? 0) + 1 })) }, [])
 
   // Find (the window's search bar) looks through this chat while it shows: the row that holds the text is scrolled to and marked.
@@ -564,7 +574,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
         <KnownRowsContext.Provider value={known}>
           <OpenFileContext.Provider value={openFile}>
-          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} />
+          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={sentCount} />
           </OpenFileContext.Provider>
         </KnownRowsContext.Provider>
       ) : (

@@ -1231,7 +1231,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
 - **List.** `VirtualList` draws only the rows near the view (`transform` placement, measured heights, stable event
   ids as keys), follows the newest row until the reader moves up (any move up, however small, and a wheel move up at once),
   then offers "Jump to the latest message"; it follows again when the reader scrolls back down to within 48 px of the
-  bottom (`followAfterScroll`). Rows
+  bottom (`followAfterScroll`), and when the person sends or queues a message, which takes the view back to the newest
+  row from wherever it was (`VirtualList`'s `toLatest`). Rows
   are `buildRows(events)`: one agent message per turn (adjacent agent messages of a turn are joined; a step between
   two messages keeps their order), user bubbles, step cards, approvals, turn dividers, and the working line last.
   Two or more steps that follow each other (edits, commands, tools; never the to-do list) fold into one **work row**
