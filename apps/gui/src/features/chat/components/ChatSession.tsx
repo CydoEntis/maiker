@@ -72,20 +72,6 @@ const MODE_CYCLE_MAX = 5
 /** A row not yet measured is drawn as if it were this tall, which a message or a card usually is. */
 const ESTIMATED_ROW_PX = 72
 
-const INCOMPLETE_WORD: Record<string, string> = {
-  Disconnected: 'the connection to the provider was lost while it ran',
-  UnsupportedItem: 'it holds an item this app cannot show',
-  InvalidEvent: 'the provider sent an event this app could not read',
-  // Mostly a very long conversation: the daemon reads only the last 16 MB of its file (and keeps 20,000 entries).
-  MissingPages: 'older messages are not shown, because the conversation is too long to load whole or part of it could not be read',
-  RevisionExhausted: 'it changed more often than the daemon can follow',
-}
-
-function incompleteReason(completeness: ChatFeed['completeness']): string | null {
-  if (completeness === null || typeof completeness === 'string') return null
-  return INCOMPLETE_WORD[completeness.Incomplete] ?? 'part of it could not be read'
-}
-
 /** What a screen reader hears when the conversation changes state: one short line per change, never the text. */
 function announcement(feed: ChatFeed, agent: ChatAgent, working: boolean): string {
   if (hasPendingApproval(feed) || feed.status === 'Blocked') return `${agent} is waiting for your answer`
@@ -175,7 +161,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const paneWorking = paneStatus === 'working' && !agentFree
   const working = !agentFree && (feed.status === 'Working' || paneWorking)
   const workingSince = working ? runningTurnStartedAt(feed) : null
-  const incomplete = incompleteReason(feed.completeness)
   const wasWorking = useRef(false)
   // The turn has ended but its reply is not in the history yet: the working line holds until it is, or SETTLE_MS.
   const [settling, setSettling] = useState(false)
@@ -555,7 +540,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
-    !offline && incomplete !== null ? `History is incomplete: ${incomplete}.` : null,
     feed.error,
   ].filter((notice): notice is string => notice !== null)
 
