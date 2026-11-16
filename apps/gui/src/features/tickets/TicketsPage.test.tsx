@@ -79,6 +79,24 @@ describe('the Tickets view', () => {
     expect(document.querySelector('.mx-tk-drawer b')).toBeNull()
   })
 
+  it('says it is reading while the first page is on its way, then lists them', async () => {
+    let answer: (value: Awaited<ReturnType<typeof api.loadTicketPage>>) => void = () => undefined
+    api.loadTicketPage.mockReturnValue(new Promise((resolve) => { answer = resolve }))
+    show()
+    expect(await screen.findByText('Reading tickets from GitHub…')).toBeInTheDocument()
+    answer({ ok: true, value: { tickets: [CART], more: false } })
+    expect(await screen.findByText('Fix the cart')).toBeInTheDocument()
+    expect(screen.queryByText('Reading tickets from GitHub…')).toBeNull()
+  })
+
+  it('shows placeholders, not a blank box, while an opened ticket is read', async () => {
+    api.loadTicket.mockReturnValue(new Promise(() => undefined))
+    show()
+    await userEvent.click(await screen.findByText('Fix the cart'))
+    expect(await screen.findByText('Reading the ticket from GitHub…')).toBeInTheDocument()
+    expect(document.querySelector('.mx-tk-drawer .mx-tk-text-skel')).not.toBeNull()
+  })
+
   it('says so when gh is signed out, and offers a terminal', async () => {
     api.loadTicketGroups.mockResolvedValue({ ok: false, failure: { kind: 'signed-out' } })
     api.loadTicketPage.mockResolvedValue({ ok: false, failure: { kind: 'signed-out' } })

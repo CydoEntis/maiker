@@ -2,6 +2,7 @@ import { openLink } from '@/api/daemon'
 import type { TicketDetail, TicketSummary } from '@/api/tickets'
 import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
+import { TicketTextSkeleton } from './TicketRows'
 import { CATEGORY_LOOK, initials, labelColor, PROVIDER_LOOK, shortAge, ticketKey, type FactoryRun, type Provider } from './model/tickets'
 
 type Props = {
@@ -93,8 +94,13 @@ export function TicketDrawer({ provider, summary, detail, failed, where, known, 
         )}
         <div className="mx-tk-section">
           <span className="mx-tk-section-head">Description<span className="mx-tk-section-note"> · written on {look.name}, shown as plain text</span></span>
-          {detail === null ? (
-            <div className={`mx-tk-text${failed === null ? ' is-loading' : ''}`}>{failed ?? 'Reading the ticket…'}</div>
+          {detail === null && failed !== null ? (
+            <div className="mx-tk-text">{failed}</div>
+          ) : detail === null ? (
+            <div role="status" className="mx-tk-text-loading">
+              <span className="mx-tk-more-row"><span className="mx-tk-spin" aria-hidden="true" />Reading the ticket from {look.name}…</span>
+              <TicketTextSkeleton />
+            </div>
           ) : (
             <div className="mx-tk-text">{detail.body.trim() === '' ? 'No description.' : detail.body}</div>
           )}

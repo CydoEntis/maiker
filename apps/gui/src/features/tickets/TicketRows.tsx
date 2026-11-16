@@ -98,14 +98,30 @@ export function TicketBoard({ tickets, stateOf, ...row }: ListProps) {
   )
 }
 
-/** Pulsing placeholder rows while the first page is read, with the header and toolbar already in place. */
-export function TicketSkeleton() {
+/**
+ * While the first page is read: a line that says what is being read, then pulsing placeholder rows, under the header
+ * and toolbar already in place, so a slow provider never looks like a frozen page.
+ */
+export function TicketSkeleton({ source }: { source: string }) {
   const WIDTHS = ['70%', '52%', '64%', '44%', '58%', '66%']
   return (
-    <div aria-hidden="true">
-      {WIDTHS.map((width) => (
-        <div key={width} className="mx-tk-skel"><span style={{ width }} /><span style={{ width: '40%' }} /></div>
-      ))}
+    <div className="mx-tk-skeleton">
+      <div role="status" className="mx-tk-more-row"><span className="mx-tk-spin" aria-hidden="true" />Reading tickets from {source}…</div>
+      <div aria-hidden="true">
+        {WIDTHS.map((width) => (
+          <div key={width} className="mx-tk-skel"><span style={{ width }} /><span style={{ width: '40%' }} /></div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Pulsing placeholder lines where a ticket's description and comments go while the whole ticket is read. */
+export function TicketTextSkeleton() {
+  const WIDTHS = ['92%', '78%', '85%', '40%']
+  return (
+    <div className="mx-tk-text-skel" aria-hidden="true">
+      {WIDTHS.map((width) => <span key={width} style={{ width }} />)}
     </div>
   )
 }

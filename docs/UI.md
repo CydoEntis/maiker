@@ -1014,7 +1014,8 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
   refusal stays in the dialog as "Not written." with why, and the ticket is as it was; a success closes it, toasts,
   and reads the ticket and lists again. Maitty never edits or deletes a ticket. `writeTicket` takes `confirmed: true`
   and is called from nowhere but this dialog's confirm.
-- **States.** Loading (skeleton rows, also while the links and the origin are read), no matches (Clear filters), not
+- **States.** Loading ("Reading tickets from <source>…" with a spinner over skeleton rows, also while the links and
+  the origin are read; an opened ticket shows "Reading the ticket from <source>…" over placeholder lines), no matches (Clear filters), not
   set up (the setup above), gh signed out (Open terminal), key refused (red, Replace key), offline (last good copy
   with Retry), rate-limited (no button). Banners are never amber.
 - **Keys.** `/` search, ↑↓ move, Space or X ticks, Enter opens, S starts an agent, K sends to Factory, Esc closes the

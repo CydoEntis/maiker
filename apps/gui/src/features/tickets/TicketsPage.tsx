@@ -451,7 +451,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
             )}
           </div>
           {!current.linked && settling ? (
-            <TicketSkeleton />
+            <TicketSkeleton source={look.name} />
           ) : !current.linked ? (
             <TicketSetup key={setupAsk?.link ?? ''} provider={provider} project={setupProject} link={link} keys={keys.data} suggestedLink={setupAsk?.link || suggestedLink} />
           ) : (
@@ -479,12 +479,12 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
                   onOpenGroup={(group) => { setScope(group.id); setView('list') }}
                 />
               ) : view === 'board' ? (
-                list.isPending ? <TicketSkeleton /> : (
+                list.isPending ? <TicketSkeleton source={look.name} /> : (
                   <TicketBoard tickets={shownTickets} stateOf={rowState} me={me} now={now} onToggle={toggle} onOpen={openTicket} onOpenWork={host.onOpenWork} />
                 )
               ) : (
                 <div className="mx-tk-list" role="list" aria-label="Tickets">
-                  {list.isPending && <TicketSkeleton />}
+                  {list.isPending && <TicketSkeleton source={look.name} />}
                   {!list.isPending && shownTickets.length === 0 && !keyRefused && (failure === null || tickets.length > 0) && (
                     <div className="mx-tk-empty">
                       <span className="mx-tk-empty-title">No tickets match</span>
