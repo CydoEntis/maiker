@@ -375,7 +375,7 @@ fn a_pasted_plane_link_fills_the_key_form_and_lands_on_its_project() {
     assert!(shown.contains("192.168.1.244") && shown.contains("ideayard") && !shown.contains("SECRET123"), "{shown}");
     key(&mut app, KeyCode::Enter);
     let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::TicketKeys { change: TicketKeyChange::Set { address, workspace, .. }, .. } if address == "http://192.168.1.244" && workspace == "ideayard"));
-    let state = TicketKeyState { provider: TicketProvider::Plane, set: true, address: "http://192.168.1.244".into(), workspace: "ideayard".into() };
+    let state = TicketKeyState { provider: TicketProvider::Plane, set: true, address: "http://192.168.1.244".into(), workspace: "ideayard".into(), stored_in: maitty_shared::tickets::KeyStorage::Keychain };
     keys_reply(&mut app, tag, vec![state]);
     let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::Tickets { request: TicketsRequest::Groups, .. }));
     let group = |id: &str, name: &str| Group { id: id.into(), name: name.into(), kind: GroupKind::Project, parent: None, ticket_count: None };

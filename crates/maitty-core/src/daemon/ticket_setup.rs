@@ -164,8 +164,8 @@ mod tests {
     #[test]
     fn the_agent_hears_what_is_set_up_and_never_a_key() {
         let keys = vec![
-            TicketKeyState { provider: TicketProvider::Plane, set: true, address: "http://192.168.1.244".into(), workspace: "acme".into() },
-            TicketKeyState { provider: TicketProvider::Linear, set: false, address: String::new(), workspace: String::new() },
+            TicketKeyState { provider: TicketProvider::Plane, set: true, address: "http://192.168.1.244".into(), workspace: "acme".into(), stored_in: maitty_shared::tickets::KeyStorage::Keychain },
+            TicketKeyState { provider: TicketProvider::Linear, set: false, address: String::new(), workspace: String::new(), stored_in: maitty_shared::tickets::KeyStorage::File },
         ];
         let link = TicketLink { plane: Some(TicketPick { id: "plane:p1".into(), name: "Shop".into() }), ..TicketLink::default() };
         let said = status_words("/repo", &link, &keys, true);

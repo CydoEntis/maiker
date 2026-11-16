@@ -171,7 +171,7 @@ mod tests {
     use super::*;
 
     fn plane_key(address: &str, workspace: &str) -> Vec<TicketKeyState> {
-        vec![TicketKeyState { provider: TicketProvider::Plane, set: true, address: address.into(), workspace: workspace.into() }]
+        vec![TicketKeyState { provider: TicketProvider::Plane, set: true, address: address.into(), workspace: workspace.into(), stored_in: maitty_shared::tickets::KeyStorage::Keychain }]
     }
 
     const FILE: &str = r#"
