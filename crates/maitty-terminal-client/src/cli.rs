@@ -2114,15 +2114,10 @@ pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<
     let status = match status {
         Some(s) => parse_status(s).ok_or_else(|| anyhow!("unknown status {s}"))?,
         None => {
-            let raw = match payload {
-                Some(p) => p.to_string(),
-                None => {
-                    let mut s = String::new();
-                    std::io::stdin().take(1 << 20).read_to_string(&mut s)?;
-                    s
-                }
+            payload_json = match payload {
+                Some(p) => serde_json::from_str(p).unwrap_or(Value::Null),
+                None => read_hook_payload(std::io::stdin().lock(), HOOK_PAYLOAD_MAX)?,
             };
-            payload_json = serde_json::from_str(&raw).unwrap_or(Value::Null);
             match status_from_hook(&payload_json) {
                 Some(s) => s,
                 None => return Ok(()),
@@ -2751,6 +2746,39 @@ fn back_up_once(path: &std::path::Path, ext: &str) -> std::io::Result<()> {
         std::fs::copy(path, backup)?;
     }
     Ok(())
+}
+
+/// The most of a hook's input kept. A tool's whole output comes with it, and can be far larger.
+const HOOK_PAYLOAD_MAX: usize = 4 << 20;
+
+/// The top-level text fields a hook's report is made of, read off the start of an input too large
+/// to keep whole: the agent writes them before the tool's input and output.
+const HOOK_HEAD_FIELDS: [&str; 8] = [
+    "session_id", "transcript_path", "cwd", "hook_event_name", "tool_name", "notification_type", "agent_id", "agent_type",
+];
+
+/// A hook's JSON input, all of it read so the agent never blocks writing it. Past `max` bytes the
+/// rest is dropped and the report is made of the fields at its start (`HOOK_HEAD_FIELDS`); cut JSON
+/// does not parse, and a hook that reports nothing left the pane's status stuck.
+fn read_hook_payload(mut input: impl std::io::Read, max: usize) -> Result<Value> {
+    let mut kept = Vec::new();
+    (&mut input).take(max as u64).read_to_end(&mut kept)?;
+    let dropped = std::io::copy(&mut input, &mut std::io::sink())?;
+    if dropped == 0 {
+        return Ok(serde_json::from_slice(&kept).unwrap_or(Value::Null));
+    }
+    let head = String::from_utf8_lossy(&kept);
+    let mut fields = serde_json::Map::new();
+    for name in HOOK_HEAD_FIELDS {
+        let field = regex::Regex::new(&format!(r#""{name}"\s*:\s*("(?:[^"\\]|\\.)*")"#))?;
+        if let Some(text) = field
+            .captures(&head)
+            .and_then(|found| serde_json::from_str::<String>(&found[1]).ok())
+        {
+            fields.insert(name.to_string(), Value::String(text));
+        }
+    }
+    Ok(if fields.is_empty() { Value::Null } else { Value::Object(fields) })
 }
 
 /// The daemon the desktop app bundles: the same program under another name.
@@ -3628,6 +3656,40 @@ pub fn allow(dir: Option<std::path::PathBuf>) -> Result<()> {
     }
     println!("(if the commands change, they won't run until you allow them again)");
     Ok(())
+}
+
+#[cfg(test)]
+mod hook_payload_tests {
+    use super::read_hook_payload;
+    use serde_json::json;
+
+    #[test]
+    fn a_hook_input_is_read_whole_when_it_fits() {
+        let input = json!({ "hook_event_name": "Stop", "session_id": "s1" }).to_string();
+        let read = read_hook_payload(input.as_bytes(), 1 << 10).unwrap();
+        assert_eq!(read, json!({ "hook_event_name": "Stop", "session_id": "s1" }));
+    }
+
+    /// A tool printed more than is kept: the report still says which event it was, so the
+    /// pane's status moves on.
+    #[test]
+    fn a_hook_input_too_large_to_keep_still_reports_its_event() {
+        let input = json!({
+            "session_id": "s1",
+            "cwd": "C:\\work\\\"quoted\"",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": { "cwd": "elsewhere" },
+            "tool_response": "x".repeat(4096),
+        })
+        .to_string();
+        let read = read_hook_payload(input.as_bytes(), 1024).unwrap();
+        assert_eq!(read["hook_event_name"], "PostToolUse");
+        assert_eq!(read["tool_name"], "Bash");
+        assert_eq!(read["session_id"], "s1");
+        assert_eq!(read["cwd"], "C:\\work\\\"quoted\"");
+        assert!(read.get("tool_response").is_none());
+    }
 }
 
 #[cfg(test)]
