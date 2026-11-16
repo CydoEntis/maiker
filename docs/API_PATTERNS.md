@@ -221,7 +221,8 @@ line of its transcript, present only when a level was set; for Codex the level i
 from Codex's `models_cache.json`. Nothing is guessed: a pane whose files say none has none, and the window then says "agent's own".
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
-into a question, and keeps the rest across a restart. `Command::QueueFollowUp { term, text, first }` adds one (`first`,
+into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
+(`Term::own_turn_over`), even while background helpers keep the session working: the agent is back at its prompt. `Command::QueueFollowUp { term, text, first }` adds one (`first`,
 a defaulted field, puts it ahead of the ones waiting, for an agent's own command picked while it works),
 `Command::ClearQueue` drops them all, and `Command::DropQueued { term, index, text }` drops one: the one at `index`, and
 only while it still reads `text`, since the queue moves when a turn ends. `DropQueued` came in protocol 80

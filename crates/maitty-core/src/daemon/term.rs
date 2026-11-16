@@ -203,6 +203,9 @@ pub struct Term {
     pub win32_input: bool,
     /// "Done" arrived while subagents were still running: hold it until they finish.
     pub done_held: Option<Instant>,
+    /// The agent's own turn is over (its own stop, not a helper's), though helpers it started
+    /// may still keep it working: it is back at its prompt and takes a message.
+    pub own_turn_over: bool,
     /// Its turn stopped with background work still in flight: done for now, but it carries on
     /// by itself when that work ends, so the finish isn't announced.
     pub awaiting_background: bool,
@@ -1010,6 +1013,7 @@ impl Term {
             asleep: false,
             win32_input: false,
             done_held: None,
+            own_turn_over: false,
             awaiting_background: false,
             background_known: Vec::new(),
             helper_work: Vec::new(),
