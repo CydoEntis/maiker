@@ -307,9 +307,31 @@ fn is_app_daemon(pid: u32) -> bool {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = pid;
-        true
+        // Another program that took the number when the daemon died must never be stopped.
+        let (program, first) = process_command(pid);
+        is_daemon_invocation(&program, first.as_deref())
     }
+}
+
+/// A process's program and first argument, as bytes; empty when it cannot be read.
+#[cfg(not(target_os = "linux"))]
+fn process_command(pid: u32) -> (Vec<u8>, Option<Vec<u8>>) {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let pid = Pid::from_u32(pid);
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
+    );
+    let Some(process) = system.process(pid) else {
+        return (Vec::new(), None);
+    };
+    let command = process.cmd();
+    (
+        command.first().map(|program| program.as_encoded_bytes().to_vec()).unwrap_or_default(),
+        command.get(1).map(|argument| argument.as_encoded_bytes().to_vec()),
+    )
 }
 
 /// Whether a process's NUL-separated command line is this product's daemon: the terminal app's

@@ -1297,8 +1297,7 @@ fn stop_server_process() -> Result<u32> {
 }
 
 /// Whether `pid` is a `<app> daemon` process, so a stale pid file can't point a stop at
-/// something else that took the number. Where the process list can't be read, the pid
-/// file's word stands.
+/// something else that took the number.
 fn is_app_daemon(pid: u32) -> bool {
     #[cfg(target_os = "linux")]
     {
@@ -1312,8 +1311,20 @@ fn is_app_daemon(pid: u32) -> bool {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = pid;
-        true
+        use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+        let pid = Pid::from_u32(pid);
+        let mut system = System::new();
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
+        );
+        system.process(pid).is_some_and(|process| {
+            let command = process.cmd();
+            let program = command.first().map(std::path::Path::new).and_then(|p| p.file_stem());
+            program.is_some_and(|stem| stem.eq_ignore_ascii_case(crate::brand::APP_COMMAND))
+                && command.get(1).is_some_and(|argument| argument == "daemon")
+        })
     }
 }
 
