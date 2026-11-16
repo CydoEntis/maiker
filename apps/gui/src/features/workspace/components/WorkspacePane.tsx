@@ -6,6 +6,7 @@ import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
 import { chatAvailability, type PaneView } from '../model/chatView'
 import { toast } from '@/lib/toast'
+import { sendAgentMessage } from '../model/agentMessage'
 import { answerHelpers, dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
 import { errorMessage } from '@/lib/error-message'
 import { isChatSession } from '../model/chatSession'
@@ -72,7 +73,7 @@ export function WorkspacePane({ shown, pane, kept }: {
     open: workOpen,
     onOpen: () => { paneViews.showWork(session.id) },
     board: session.workflows.length > 0
-      ? <WorkBoard runs={session.workflows} helpers={helpers} onOpenHelper={(id) => { showSubagent(session.id, id) }} where={runWhere} />
+      ? <WorkBoard runs={session.workflows} helpers={helpers} onOpenHelper={(id) => { showSubagent(session.id, id) }} onAnswer={(text) => sendAgentMessage(session, text)} where={runWhere} />
       : (
         <WorkSetup
           others={workOpen ? factoryChatsOf(session, sessions).filter((other) => other.id !== session.id) : []}

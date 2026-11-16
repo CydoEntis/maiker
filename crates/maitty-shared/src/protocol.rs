@@ -3942,6 +3942,7 @@ mod tests {
                 state: StepState::SentBack,
                 note: Some("two findings".into()),
                 helper: None,
+                choices: Vec::new(),
             }],
             reported_at: 5,
         });

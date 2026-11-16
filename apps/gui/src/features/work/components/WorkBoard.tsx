@@ -66,6 +66,8 @@ type Props = {
   /** The session's subagents, which a step's helper label may name. */
   helpers: readonly SubagentView[]
   onOpenHelper: (id: string) => void
+  /** Sends a step's chosen answer, as the person's message, to the chat that reported the run. */
+  onAnswer?: (text: string) => Promise<void>
   /** Where the session runs, for a run's drawer: the runs report their steps, not their place. */
   where?: RunWhere
   /** The run whose drawer starts open, as the gallery draws it. */
@@ -76,7 +78,7 @@ type Props = {
  * A session's workflow runs as a board (ADR 0010): one column per step name the workflows reported, in order, each run
  * going in the step it sits in, then "Needs human" and "Done". A run opens in a drawer.
  */
-export function WorkBoard({ runs, helpers, onOpenHelper, where, startOpen }: Props) {
+export function WorkBoard({ runs, helpers, onOpenHelper, onAnswer, where, startOpen }: Props) {
   const [openKey, setOpenKey] = useState<string | null>(startOpen ?? null)
   const [root, setRoot] = useState<HTMLDivElement | null>(null)
   const board = workBoard(runs)
@@ -94,7 +96,7 @@ export function WorkBoard({ runs, helpers, onOpenHelper, where, startOpen }: Pro
           {board.columns.map((column) => <Column key={`${column.kind}:${column.name}`} column={column} openKey={openKey} onOpen={setOpenKey} />)}
         </div>
       )}
-      <RunDrawer run={opened ?? null} helpers={helpers} onOpenHelper={onOpenHelper} onClose={() => { setOpenKey(null) }} container={root} {...(where === undefined ? {} : { where })} />
+      <RunDrawer run={opened ?? null} helpers={helpers} onOpenHelper={onOpenHelper} onAnswer={onAnswer} onClose={() => { setOpenKey(null) }} container={root} {...(where === undefined ? {} : { where })} />
     </div>
   )
 }

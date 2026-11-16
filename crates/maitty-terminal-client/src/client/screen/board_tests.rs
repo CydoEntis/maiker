@@ -52,6 +52,7 @@ fn run(id: &str, key: &str, title: &str, steps: &[(&str, StepState)]) -> Workflo
                 state: *state,
                 note: (*state == SentBack).then(|| "2 tests failed".into()),
                 helper: (*name == "build").then(|| format!("{key} builder")),
+                choices: Vec::new(),
             })
             .collect(),
         reported_at: 1,

@@ -10576,6 +10576,7 @@ fn a_workflow_report_is_shown_on_its_pane_and_never_changes_its_status() {
             state,
             note: None,
             helper: None,
+            choices: Vec::new(),
         }],
         reported_at: 0,
     };

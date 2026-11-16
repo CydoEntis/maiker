@@ -63,7 +63,8 @@ export type WorkflowRun = {
   workflow: string
   run: string
   ticket: { key: string; title: string | null; link: string | null } | null
-  steps: { name: string; state: WorkflowStepState; note: string | null; helper: string | null }[]
+  /** `choices`: what the person may answer a step that needs them, each sent as their own message to the reporting chat. */
+  steps: { name: string; state: WorkflowStepState; note: string | null; helper: string | null; choices: string[] }[]
   /** When the daemon took the report, unix seconds. */
   reportedAt: number
 }

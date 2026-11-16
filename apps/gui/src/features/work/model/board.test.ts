@@ -7,7 +7,7 @@ const run = (id: string, steps: Array<[string, WorkflowStepState]>, key: string 
   workflow: 'factory',
   run: id,
   ticket: key === null ? null : { key, title: null, link: null },
-  steps: steps.map(([name, state]) => ({ name, state, note: null, helper: null })),
+  steps: steps.map(([name, state]) => ({ name, state, note: null, helper: null, choices: [] })),
   reportedAt: 1,
 } satisfies WorkflowRun)
 

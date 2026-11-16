@@ -224,7 +224,7 @@ mod tests {
             steps: ["intake", "build", "review"]
                 .iter()
                 .zip(states)
-                .map(|(name, state)| WorkflowStep { name: (*name).into(), state: *state, note: None, helper: None })
+                .map(|(name, state)| WorkflowStep { name: (*name).into(), state: *state, note: None, helper: None, choices: Vec::new() })
                 .collect(),
             reported_at: 1,
         }

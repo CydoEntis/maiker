@@ -137,6 +137,8 @@ const TerminalSessionSchema = z.object({
       state: z.enum(['waiting', 'working', 'passed', 'failed', 'sent_back', 'needs_you', 'skipped', 'unknown']).catch('unknown'),
       note: z.string().nullable().default(null),
       helper: z.string().nullable().default(null),
+      // The answers a step that needs the person offers (`WorkflowStep.choices`); none from an older daemon.
+      choices: z.array(z.string()).default([]),
     })),
     reported_at: z.number().int().nonnegative().default(0),
   })).catch([]).default([]),

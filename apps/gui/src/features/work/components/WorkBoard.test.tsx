@@ -9,7 +9,7 @@ import { WorkBoard } from './WorkBoard'
 const report = (run: string, key: string | null, steps: WorkflowRun['steps']): WorkflowRun => ({
   workflow: 'factory', run, ticket: key === null ? null : { key, title: `Title of ${key}`, link: `https://plane.example/${key}` }, steps, reportedAt: 1,
 })
-const step = (name: string, state: WorkflowRun['steps'][number]['state'], helper: string | null = null, note: string | null = null) => ({ name, state, note, helper })
+const step = (name: string, state: WorkflowRun['steps'][number]['state'], helper: string | null = null, note: string | null = null, choices: string[] = []) => ({ name, state, note, helper, choices })
 
 const runs = [
   report('001', 'MAITTY-42', [step('intake', 'passed'), step('build', 'working', 'MAITTY-42 builder', '3 of 5 files'), step('review', 'waiting')]),
@@ -55,6 +55,22 @@ describe('WorkBoard', () => {
     expect(screen.getByText(/Read-only\. To change anything, ask in the main chat\./)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Open its chat' }))
     expect(onOpenHelper).toHaveBeenCalledWith('agent-1')
+  })
+
+  it('answers a step that needs you with a click, sending the words to the chat that reported the run', async () => {
+    const user = userEvent.setup()
+    const onAnswer = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const asking = [report('002', 'MAITTY-43', [step('spec', 'needs_you', null, 'approve the spec', ['Approve the spec', 'Send it back']), step('build', 'passed', null, null, ['Merge it'])])].map(toWorkflowView)
+    render(<WorkBoard runs={asking} helpers={[]} onOpenHelper={vi.fn()} onAnswer={onAnswer} />)
+    await user.click(screen.getByRole('button', { name: /^MAITTY-43/ }))
+    const drawer = within(screen.getByRole('dialog', { name: 'Run MAITTY-43' }))
+    expect(drawer.queryByRole('button', { name: 'Merge it' })).not.toBeInTheDocument()
+
+    await user.click(within(drawer.getByRole('group', { name: 'Answer spec' })).getByRole('button', { name: 'Send it back' }))
+
+    expect(onAnswer).toHaveBeenCalledWith('MAITTY-43 · spec: Send it back')
+    expect(drawer.getByText('Sent “Send it back”')).toBeInTheDocument()
+    expect(drawer.queryByRole('group', { name: 'Answer spec' })).not.toBeInTheDocument()
   })
 
   it('closes the drawer with Escape, the Work crumb and its close button', async () => {

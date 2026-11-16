@@ -1188,6 +1188,7 @@ fn a_sessions_workflow_runs_show_under_it_and_open_their_steps() {
                 state,
                 note: (state == SentBack).then(|| "2 tests failed".into()),
                 helper: (name == "build").then(|| "MAITTY-42 builder".into()),
+                choices: Vec::new(),
             })
             .collect(),
         reported_at: 1,
