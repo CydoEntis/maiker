@@ -28,6 +28,9 @@ describe('WorkBoard', () => {
     const column = (name: string) => within(screen.getByRole('region', { name }))
     expect(column('Needs human').getByRole('button', { name: /^MAITTY-43, Title of MAITTY-43: intake, Needs you/ })).toBeInTheDocument()
     expect(column('Build').getByRole('button', { name: /^MAITTY-42/ })).toBeInTheDocument()
+    // Each card shows every step, lit where the run is.
+    const lit = column('Build').getByRole('button', { name: /^MAITTY-42/ }).querySelectorAll('.mx-board-cardtrack-step')
+    expect(Array.from(lit, (segment) => segment.getAttribute('title'))).toEqual(['intake: passed', 'build: working', 'review: waiting'])
     expect(column('Done').getByRole('button', { name: /^MAITTY-40/ })).toHaveTextContent('done')
     expect(column('Intake').getByText('No ticket')).toBeInTheDocument()
     expect(column('Review').getByText('Nothing here')).toBeInTheDocument()

@@ -33,6 +33,14 @@
 .mx-board-card-note { font-size: 12px; line-height: 1.45; color: var(--muted); text-wrap: pretty; overflow-wrap: anywhere; }
 
 /* A run's reviews: one chip per review step, coloured by its state, with a glyph where colour alone would not tell. */
+.mx-board-cardtrack { display: flex; gap: 3px; }
+.mx-board-cardtrack-step { height: 4px; flex: 1; min-width: 6px; border-radius: 1px; background: var(--line2); transition: background-color .3s ease; }
+.mx-board-cardtrack-step.is-passed { background: var(--done); }
+.mx-board-cardtrack-step.is-skipped { background: color-mix(in oklab, var(--done) 35%, var(--line2)); }
+.mx-board-cardtrack-step.is-working { background: var(--working); animation: mx-board-work 1.6s ease-in-out infinite; }
+.mx-board-cardtrack-step.is-needs_you { background: var(--needs); animation: mx-board-need 1.6s ease-in-out infinite; }
+.mx-board-cardtrack-step.is-failed { background: var(--err); }
+.mx-board-cardtrack-step.is-sent_back { background: var(--muted); }
 .mx-board-track { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .mx-board-chip { display: inline-flex; height: 20px; flex: none; align-items: center; gap: 4px; padding: 0 7px; border: 1px dashed var(--line2); font-family: var(--mono); font-size: 10.5px; font-weight: 500; line-height: 1; color: var(--dim); transition: background-color .3s ease, border-color .3s ease, color .3s ease; }
 .mx-board-chip.is-passed { border: 1px solid transparent; background: color-mix(in oklab, var(--done) 14%, transparent); color: var(--done); }
@@ -141,8 +149,8 @@
 .mx-board-helper-foot { padding-top: 8px; border-top: 1px solid var(--line); font-size: 11.5px; line-height: 1.45; color: var(--dim); }
 
 @media (prefers-reduced-motion: reduce) {
-  .mx-board-drawer, .mx-board-dim, .mx-board-card, .mx-board-chip, .mx-board-node { animation: none; }
-  .mx-board-card, .mx-board-chip, .mx-board-node, .mx-board-strip-line::after { transition: none; }
+  .mx-board-drawer, .mx-board-dim, .mx-board-card, .mx-board-chip, .mx-board-node, .mx-board-cardtrack-step { animation: none; }
+  .mx-board-card, .mx-board-chip, .mx-board-node, .mx-board-strip-line::after, .mx-board-cardtrack-step { transition: none; }
 }
 
 /* The Work view of a chat that runs no factory (`WorkSetup`): where one runs, and how to set one up. */
