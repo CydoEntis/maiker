@@ -415,7 +415,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   is named by the name you gave it, else a shell's folder, else its agent. **Rename**: double-click, F2 or the menu
   turns the name into a field; Enter or leaving saves, Esc cancels, empty clears. Project colours are five tokens
   (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name, never amber or red.
-  The sidebar lists no subagents: an agent's running subagents float over its pane (`RunningSubagents`, below).
+  **Helpers under a session** (`SubagentRows`): every session with helpers listed (working, needing you, or recently
+  stopped while it still works; one that finished has reported back and goes), selected or not, has a 26px row each on a
+  `--line2` guide line with a bend: its mark (a spinner in `--working`, an amber square for needs you, a `--dim` cross for
+  stopped) and its task's first line (12px, `--fg2`). At most four are named, then "+N more" (`--dim`), which shows the
+  session. A click opens the helper's own chat, read-only (it is marked while open): a helper cannot be written to,
+  only its session can. The rows ease shut as the last one goes.
   With nothing running the list says "Chats and shells you start appear here, sorted by what needs you."
   The foot holds the update slot (the version, or an accent chip **↑ vX** for an available update and **↻ Restart**
   for a downloaded one; or "Reconnecting to maittyd…") and the Settings gear; Recent sessions is in the command palette.
@@ -430,8 +435,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   it clears from the running-subagents bar. One that still needs you stays.
 - **Running subagents** (`RunningSubagents`, the daemon's `subagent_activity`, `model/subagents.ts`). A 34px bar floats
   under the pane's header, as wide as the chat's column, on the menu surface (`--card`, a `--line2` edge, `--sh-pop`),
-  over the terminal only (a chat lists its helpers in its own agents card, whose running rows unfold to **Open its
-  chat**), only while one or more subagents run: the spinner, "N subagents running", the
+  over the chat and the terminal alike, only while one or more subagents run and the agent is not asking anything (a
+  question or an approval sits where the bar would cover it, so the bar steps aside until it is answered,
+  `runningBarShown`): the spinner, "N subagents running", the
   first one's task and what it is doing (plain text, `--dim`), "+N more" and a chevron. The whole bar is the toggle
   (named Show / Hide the subagents), and the chevron turns over while it is open. Opening extends it downward over the
   feed (at most `min(440px, 60vh)`, scrolling past that) without moving it; the feed fades behind it into `--main`
@@ -796,7 +802,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   follows another agent (Codex, Gemini) draws its model label from the start, with just the agent's name until it says its
   model. The "agent has not reported" hint of a starting chat floats over the conversation and moves nothing. Placeholders: "Message the agent, or type / for commands" ("Reply to the plan…" in Plan mode), "Queue a
   message for when claude finishes" while it works, "Answer the request above first" (and off) while a question
-  waits. **3. The bottom row** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar does. Queued messages are dashed bubbles above (`QueuedMessages`): each has an **×** in its top right corner (remove) and **Edit**, which takes it out of the queue and puts its words back in the box, ahead of anything typed there, with its files back as attachments. A queued message shows its files as the chips a sent message has, never as the lines that name them to the agent. Two or more sit as a **stack**: the first one sent in front, showing its first two lines and "first of N", with the edges of up to two more under it. A click on a message spreads them all out, oldest first, each with its own × and Edit; a click again stacks them, and a queue down to one message starts stacked the next time it grows.
+  waits. **3. The bottom row** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar and the running bar do. Queued messages are dashed bubbles above (`QueuedMessages`): each has an **×** in its top right corner (remove) and **Edit**, which takes it out of the queue and puts its words back in the box, ahead of anything typed there, with its files back as attachments. A queued message shows its files as the chips a sent message has, never as the lines that name them to the agent. Two or more sit as a **stack**: the first one sent in front, showing its first two lines and "first of N", with the edges of up to two more under it. A click on a message spreads them all out, oldest first, each with its own × and Edit; a click again stacks them, and a queue down to one message starts stacked the next time it grows.
 - **Esc ladder.** Esc closes the topmost open layer and reaches the terminal only when none is
   open (`model/escLadder.ts`): What's new, palette, Settings, the sidebar drawer,
   Focus mode. A new dialog adds its id there.

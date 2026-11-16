@@ -74,6 +74,15 @@ export function listedSubagents(subagents: readonly SubagentView[], sessionWorki
   })
 }
 
+/**
+ * Whether the running-helpers bar floats over a pane, chat or terminal alike, so what runs is always in view. Not over a
+ * kept pane or the Work board (which shows its helpers itself), and not while the agent asks something: the question and
+ * its answers sit where the bar would cover them, and it comes back once they are answered.
+ */
+export function runningBarShown(pane: { kept: boolean; hasWorkflows: boolean; asking: boolean }): boolean {
+  return !pane.kept && !pane.hasWorkflows && !pane.asking
+}
+
 /** The subagents still running, in the order the runtime reported them. One that finished has cleared itself. */
 export function runningSubagents(subagents: readonly SubagentView[]): SubagentView[] {
   return subagents.filter((subagent) => subagent.status === 'working' || subagent.status === 'needs')
