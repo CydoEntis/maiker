@@ -166,7 +166,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     case 'report': {
       const compaction = compactionOf(row.text)
       if (compaction !== null) return <Frame><CompactedLine compaction={compaction} text={row.text} /></Frame>
-      return <Frame><p className="mx-report" title={row.text}><span className="mx-report-arrow" aria-hidden="true">↳</span><span className="mx-report-text">{row.text}</span></p></Frame>
+      return <Frame><p className="mx-report" title={row.text}><span className="mx-report-arrow" aria-hidden="true">↳</span><span className="mx-report-text"><InlineMarkdown text={row.text} /></span></p></Frame>
     }
     case 'echo':
       return (

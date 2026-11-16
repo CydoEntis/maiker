@@ -111,3 +111,13 @@ describe('a thought', () => {
     expect(screen.getByText('Second paragraph')).toBeInTheDocument()
   })
 })
+
+describe('what a command reported', () => {
+  it('draws its inline code as code, not as backticks', () => {
+    const row: ChatRow = { kind: 'report', key: 'r1', text: 'Set model to `Opus 5.5` and saved as your default for new sessions' }
+    render(<ChatItem row={row} {...context} />)
+
+    expect(screen.getByText('Opus 5.5').tagName).toBe('CODE')
+    expect(screen.queryByText(/`/)).not.toBeInTheDocument()
+  })
+})
