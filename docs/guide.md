@@ -1042,7 +1042,8 @@ message box. The message box is off, and says why, until you have answered.
   with 2 to 4 choices) shows them one at a time, with a tab for each: use **Next** and **Back**, or a
   tab, to move between them. **Send answers**, on the last one, stays off until every question has an answer. A question that takes several answers has boxes to tick
   ("Pick any"); tick at least one. Nothing is typed to the agent before then, so you can still
-  change an answer. A question beyond those limits, or "Type something", is answered in the terminal.
+  change an answer. Every question also has **Your own answer** under its choices, the box Claude's menu calls "Type
+  something": write in it to answer in your own words. A question beyond those limits is answered in the terminal.
 - **Codex, and any menu the chat has no buttons for.** Maitty does not press a button for these,
   because it has not checked that those keys are right. The card shows the question as the terminal
   draws it, with a row of **↑ ↓ ← → Enter Esc** buttons. They press those keys in the agent's terminal,

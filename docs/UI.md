@@ -1160,8 +1160,14 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   that takes several answers (`multiSelect`, even a lone one) comes as `PermissionAsk.form`, which a peer from before
   it does not read, so it leaves that prompt to the terminal instead of answering a key per question. The form gives
   such a question checkboxes ("Pick any", at least one) and types each ticked number, then → to move on (checked
-  against Claude Code 2.1.325); a question with one answer still takes its number. The prompt's own "Type something"
-  is still answered in the terminal. The box stays off while
+  against Claude Code 2.1.325); a question with one answer still takes its number. After the choices, every question
+  (a lone one too) has a **Your own answer** row, the prompt's own "Type something": a one-line box that counts as the
+  answer once it holds words (for a question with one answer it replaces the pick). Its keys, checked against Claude
+  Code 2.1.325: for one answer, the row's number, the words and Enter; for several, ↓ once per choice to reach the
+  row (typing ticks it), the words, Tab to its Submit row and Enter (→ there would move the text cursor). A lone
+  question's row has its own **Send**. The daemon writes each key a beat (80 ms) after the last while the pane asks
+  something (`KEYS_APART`), because keys that reach an agent in one read are taken as typed text and the menu ignores
+  them. The box stays off while
   the tray shows, because typed text would answer that prompt. A message the daemon types for an agent (the
   first message of a new chat, or a queued one) is its text and then Enter a tick later; when the agent was still
   starting or the machine was busy the two can arrive together, and the agent reads the Enter as a new line and leaves

@@ -19,7 +19,7 @@ import { startedWithYolo } from '../yoloSessions'
 import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
-import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, type AskChoice } from '../permissionAsk'
+import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
 import { draftWithQuote, pickedText, type PickedText } from '../selectionActions'
 import { peekComposer } from '../composerStore'
 import { COPY_TOAST_ID, COPY_TOAST_MS } from '@/features/terminal/copyToast'
@@ -207,13 +207,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const readScreen = useMemo(() => (sessionId === undefined ? undefined : () => loadTerminalScreen({ id: sessionId, generation: 0 })), [sessionId])
   const pickChoice = typeInto === undefined ? undefined : (index: number) => typeInto(choiceKey(index)).then(refresh)
   // A form is answered a key at a time, as a person would: the prompt redraws after each.
-  const pickChoices = typeInto === undefined ? undefined : async (picked: readonly (readonly number[])[]) => {
-    for (const [at, key] of answerKeys(formQuestions(ask), picked).entries()) {
+  const typeKeys = typeInto === undefined ? undefined : async (keys: readonly string[]) => {
+    for (const [at, key] of keys.entries()) {
       if (at > 0) await new Promise<void>((resolve) => { window.setTimeout(resolve, ANSWER_STEP_MS) })
       await typeInto(key)
     }
     refresh()
   }
+  const pickChoices = typeKeys === undefined ? undefined : (answers: readonly FormAnswer[]) => typeKeys(answerKeys(formQuestions(ask), answers))
+  const answerOwn = typeKeys === undefined ? undefined : (text: string) => typeKeys(ownAnswerKeys(ask?.choices?.length ?? 0, text))
   // A chat that follows the agent's own terminal changes its mode, model and reasoning the way its user would: by typing the agent's commands
   // (Shift+Tab, /model, /effort). Offered for Claude, and not while it works, when the keys would land in its turn.
   // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model), until the agent's own file says it.
@@ -549,7 +551,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   const question = pending !== null
     ? <ApprovalTray event={pending} actions={approval} agent={agent} />
-    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
+    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
     !offline && incomplete !== null ? `History is incomplete: ${incomplete}.` : null,

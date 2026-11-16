@@ -181,6 +181,37 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(typeInto.mock.calls.map(([key]) => key)).toEqual(['2', '1', '3', '\x1b[C', '1'])
   })
 
+  it('takes an answer of your own on any question, typed where Claude\'s menu says "Type something"', async () => {
+    const form = [
+      { question: 'Which size?', choices: ['Small', 'Large'], multi: false },
+      { question: 'Which toppings?', choices: ['Nuts', 'Cream', 'Fruit'], multi: true },
+    ]
+    const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which size? … / Which toppings? …', answerable: false, choices: [], questions: [], form })
+
+    await user.type(screen.getByRole('textbox', { name: 'Your own answer' }), 'Medium, please')
+    expect(screen.getByText('1 more to answer')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Cream' }))
+    await user.type(screen.getByRole('textbox', { name: 'Your own answer' }), 'sprinkles')
+    await user.click(screen.getByRole('button', { name: 'Send answers' }))
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+
+    expect(typeInto.mock.calls.map(([key]) => key)).toEqual([
+      '3', 'Medium, please', '\r',
+      '2', '\x1b[B', '\x1b[B', '\x1b[B', 'sprinkles', '\t', '\r',
+      '1',
+    ])
+  })
+
+  it('sends a lone question an answer of your own', async () => {
+    const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which database?', answerable: false, choices: ['SQLite', 'Postgres'] })
+
+    await user.type(screen.getByRole('textbox', { name: 'Your own answer' }), 'DuckDB{Enter}')
+    await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+
+    expect(typeInto.mock.calls.map(([key]) => key)).toEqual(['3', 'DuckDB', '\r'])
+  })
+
   it('answers a lone question that takes several answers as a form, which needs at least one pick', async () => {
     const form = [{ question: 'Which toppings?', choices: ['Nuts', 'Cream'], multi: true }]
     const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which toppings? 1 Nuts · 2 Cream', answerable: false, choices: [], questions: [], form })

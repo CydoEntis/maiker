@@ -41,21 +41,53 @@ export function formQuestions(ask: PermissionAsk | null | undefined): readonly A
   return questions.length > 1 ? questions : []
 }
 
+/** What the person answered one question with: the choices picked, and words of their own ('' for none). */
+export type FormAnswer = { readonly picked: readonly number[]; readonly own: string }
+
+/** The first printable code point, and the range DEL and the C1 controls take. */
+const FIRST_PRINTABLE = 0x20
+const DELETE = 0x7f
+const LAST_C1_CONTROL = 0x9f
+const isControl = (code: number) => code < FIRST_PRINTABLE || (code >= DELETE && code <= LAST_C1_CONTROL)
+
+/** The person's own words as Claude's "Type something" field takes them: one line, no control characters. */
+export function ownAnswerText(text: string): string {
+  const visible = Array.from(text, (char) => (isControl(char.codePointAt(0) ?? 0) ? ' ' : char)).join('')
+  return visible.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * The keys that answer a lone question with words of the person's own: the number of the "Type something" row after
+ * its choices, the words, and Enter.
+ */
+export function ownAnswerKeys(choices: number, text: string): string[] {
+  return [choiceKey(choices), ownAnswerText(text), ENTER]
+}
+
 /**
  * The keys that answer a form, checked against Claude Code 2.1.325, in the order the prompt shows the questions. A
- * question with one answer takes its choice's number, which moves the prompt on; one with several answers takes the
- * number of each choice, which ticks it and stays, then →, which moves on. Last comes `1`, "Submit answers" on the
- * page that reviews them.
+ * question with one answer takes its choice's number, which moves the prompt on, or, for words of the person's own,
+ * the number of "Type something", the words and Enter. One with several answers takes the number of each choice,
+ * which ticks it and leaves the cursor on the first row, then →, which moves on; words of the person's own are typed
+ * on "Type something", reached with ↓ once per choice (typing ticks it), then Tab to its Submit row and Enter, since →
+ * there moves the text cursor. Last comes `1`, "Submit answers" on the page that reviews them.
  */
-export function answerKeys(questions: readonly AskedQuestion[], picked: readonly (readonly number[])[]): string[] {
+export function answerKeys(questions: readonly AskedQuestion[], answers: readonly FormAnswer[]): string[] {
   const keys = questions.flatMap((question, at) => {
-    const chosen = (picked[at] ?? []).map(choiceKey)
-    return question.multi === true ? [...chosen, NEXT_QUESTION_KEY] : chosen.slice(0, 1)
+    const answer = answers[at] ?? { picked: [], own: '' }
+    const own = ownAnswerText(answer.own)
+    const chosen = answer.picked.map(choiceKey)
+    if (question.multi !== true) return own === '' ? chosen.slice(0, 1) : ownAnswerKeys(question.choices.length, own)
+    if (own === '') return [...chosen, NEXT_QUESTION_KEY]
+    return [...chosen, ...question.choices.map(() => DOWN_KEY), own, TAB_KEY, ENTER]
   })
   return [...keys, SUBMIT_ANSWERS_KEY]
 }
 /** → in a terminal: moves a question prompt on from a question that takes several answers. */
 const NEXT_QUESTION_KEY = '\x1b[C'
+const DOWN_KEY = '\x1b[B'
+const TAB_KEY = '\t'
+const ENTER = '\r'
 const SUBMIT_ANSWERS_KEY = '1'
 /** The prompt redraws after each key; the next one waits this long, so it lands on the question that follows. */
 export const ANSWER_STEP_MS = 250
