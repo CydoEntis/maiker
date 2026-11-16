@@ -1085,7 +1085,7 @@ impl Daemon {
                     .ok_or_else(|| anyhow::anyhow!("no pane {term}"))?;
                 let index = index as usize;
                 // It went to the agent, or the queue moved, since the asker last saw it.
-                if t.queue.get(index).map(String::as_str) != Some(text.as_str()) {
+                if !t.queue.get(index).is_some_and(|held| names_follow_up(held, &text)) {
                     anyhow::bail!("that follow-up is no longer queued there");
                 }
                 t.queue.remove(index);
@@ -1430,4 +1430,12 @@ impl Daemon {
         self.poll_git_soon();
         Ok(())
     }
+}
+
+/// Whether `asked` names the queued follow-up `held`. Another machine's window sees the text made
+/// safe to draw and cut to a length (`maitty-machines`' snapshot cleaning), so the words it names
+/// back may be that cleaned text, or the start of it, rather than the text itself.
+fn names_follow_up(held: &str, asked: &str) -> bool {
+    held == asked
+        || (!asked.is_empty() && maitty_shared::hidden::sanitize(held, true).starts_with(asked))
 }

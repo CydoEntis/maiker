@@ -1,14 +1,26 @@
 import { useState } from 'react'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { STEP_WORDS, type WorkflowView } from '@/features/workspace/model/workflows'
-import { boardSummary, cardNote, reviewShort, reviewTrack, runState, workBoard, type BoardColumn, type BoardTicket, type RunState } from '../model/board'
+import { boardSummary, cardNote, reviewShort, reviewTrack, runState, stepWord, workBoard, type BoardColumn, type BoardTicket, type RunState } from '../model/board'
 import { RunDrawer, type RunWhere } from './RunDrawer'
 import { RunMark, StepChip } from './WorkStepMark'
 
 /** A finished run's word at its card's right; a run going has none, its mark and column say it. */
 const DONE_TAG: Partial<Record<RunState, string>> = { done: 'done', failed: 'failed' }
 
-/** A run's card in its column: the run's mark, key and end word, the title, its reviews as chips, and its note. */
+/**
+ * Every step of a run as a segment of one bar, in its state's colour, so a card shows where the run is at a glance:
+ * passed ones filled, the one in hand lit (pulsing while it works or needs you), the rest dim.
+ */
+function CardTrack({ steps }: { steps: WorkflowView['steps'] }) {
+  return (
+    <span className="mx-board-cardtrack" role="img" aria-label={`Steps: ${steps.map((step) => `${step.name} ${stepWord(step.state)}`).join(', ')}`}>
+      {steps.map((step) => <span key={step.name} className={`mx-board-cardtrack-step is-${step.state}`} title={`${step.name}: ${stepWord(step.state)}`} />)}
+    </span>
+  )
+}
+
+/** A run's card in its column: the run's mark, key and end word, the title, its steps as a bar, its reviews as chips, and its note. */
 function TicketCard({ ticket, open, onOpen }: { ticket: BoardTicket; open: boolean; onOpen: () => void }) {
   const { run, step } = ticket
   const state = runState(run)
@@ -32,6 +44,7 @@ function TicketCard({ ticket, open, onOpen }: { ticket: BoardTicket; open: boole
           {tag !== undefined && <span className={`mx-board-card-tag is-${state}`}>{tag}</span>}
         </span>
         <span className={`mx-board-card-title${run.title === null ? ' is-none' : ''}`}>{run.title ?? 'No ticket'}</span>
+        {run.steps.length > 1 && <CardTrack steps={run.steps} />}
         {reviews.length > 0 && (
           <span className="mx-board-track" role="list" aria-label="Reviews">
             {reviews.map((one) => <StepChip key={one.name} name={reviewShort(one.name)} full={one.name} state={one.state} note={one.note} />)}
@@ -66,6 +79,8 @@ type Props = {
   /** The session's subagents, which a step's helper label may name. */
   helpers: readonly SubagentView[]
   onOpenHelper: (id: string) => void
+  /** Sends a step's chosen answer, as the person's message, to the chat that reported the run. */
+  onAnswer?: (text: string) => Promise<void>
   /** Where the session runs, for a run's drawer: the runs report their steps, not their place. */
   where?: RunWhere
   /** The run whose drawer starts open, as the gallery draws it. */
@@ -76,7 +91,7 @@ type Props = {
  * A session's workflow runs as a board (ADR 0010): one column per step name the workflows reported, in order, each run
  * going in the step it sits in, then "Needs human" and "Done". A run opens in a drawer.
  */
-export function WorkBoard({ runs, helpers, onOpenHelper, where, startOpen }: Props) {
+export function WorkBoard({ runs, helpers, onOpenHelper, onAnswer, where, startOpen }: Props) {
   const [openKey, setOpenKey] = useState<string | null>(startOpen ?? null)
   const [root, setRoot] = useState<HTMLDivElement | null>(null)
   const board = workBoard(runs)
@@ -94,7 +109,7 @@ export function WorkBoard({ runs, helpers, onOpenHelper, where, startOpen }: Pro
           {board.columns.map((column) => <Column key={`${column.kind}:${column.name}`} column={column} openKey={openKey} onOpen={setOpenKey} />)}
         </div>
       )}
-      <RunDrawer run={opened ?? null} helpers={helpers} onOpenHelper={onOpenHelper} onClose={() => { setOpenKey(null) }} container={root} {...(where === undefined ? {} : { where })} />
+      <RunDrawer run={opened ?? null} helpers={helpers} onOpenHelper={onOpenHelper} onAnswer={onAnswer} onClose={() => { setOpenKey(null) }} container={root} {...(where === undefined ? {} : { where })} />
     </div>
   )
 }

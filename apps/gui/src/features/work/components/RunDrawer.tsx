@@ -10,6 +10,8 @@ import { namesHelper, type WorkflowView } from '@/features/workspace/model/workf
 import { followLink } from '@/features/chat/followLink'
 import { RUN_WORDS, runState, stepWord } from '../model/board'
 import { StripNode, WorkStepMark } from './WorkStepMark'
+import { toast } from '@/lib/toast'
+import { errorMessage } from '@/lib/error-message'
 
 const SECOND_MS = 1000
 
@@ -89,11 +91,42 @@ function StepStrip({ steps }: { steps: readonly Step[] }) {
   )
 }
 
+/** What a choice sends to the chat that reported the run: which run and step it answers, then the words chosen. */
+function answerText(run: WorkflowView, step: string, choice: string): string {
+  return `${run.label} · ${step}: ${choice}`
+}
+
+/**
+ * The answers a step that needs the person offers, as buttons. A click sends the words to the chat that reported the
+ * run, as the person's own message; the workflow reads it there. Until the run reports again the step says what was
+ * sent instead of offering the buttons twice.
+ */
+function StepAnswers({ run, step, onAnswer }: { run: WorkflowView; step: WorkflowView['steps'][number]; onAnswer: (text: string) => Promise<void> }) {
+  const asked = `${run.key}:${step.name}:${String(run.reportedAt)}`
+  const [sent, setSent] = useState<{ asked: string; choice: string } | null>(null)
+  const [sending, setSending] = useState(false)
+  if (sent?.asked === asked) return <span className="mx-board-step-sent">Sent “{sent.choice}”</span>
+  const answer = (choice: string) => {
+    setSending(true)
+    onAnswer(answerText(run, step.name, choice))
+      .then(() => { setSent({ asked, choice }) })
+      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not send your answer')) })
+      .finally(() => { setSending(false) })
+  }
+  return (
+    <span className="mx-board-step-answers" role="group" aria-label={`Answer ${step.name}`}>
+      {step.choices.map((choice) => <Button key={choice} variant="soft" size="sm" disabled={sending} onClick={() => { answer(choice) }}>{choice}</Button>)}
+    </span>
+  )
+}
+
 type Props = {
   /** The run shown, or null while the drawer is closed. */
   run: WorkflowView | null
   helpers: readonly SubagentView[]
   onOpenHelper: (id: string) => void
+  /** Sends a step's chosen answer to the chat that reported the run; absent where nothing can be sent. */
+  onAnswer?: ((text: string) => Promise<void>) | undefined
   onClose: () => void
   /** Where the session lives, for the meta line. */
   where?: RunWhere
@@ -106,7 +139,7 @@ type Props = {
  * runs, its steps as a strip, then every step with its mark, name, word, note and helper, as the workflow reported
  * them. Escape, the Work crumb, the close button or a click outside closes it.
  */
-export function RunDrawer({ run, helpers, onOpenHelper, onClose, where, container }: Props) {
+export function RunDrawer({ run, helpers, onOpenHelper, onAnswer, onClose, where, container }: Props) {
   // Read once a drawer opens: the meta line is a still picture of when the run last reported, not a clock.
   const [now] = useState(() => Math.floor(Date.now() / SECOND_MS))
   const link = run?.link !== null && run?.link !== undefined && WEB_ADDRESS.test(run.link) ? run.link : null
@@ -155,6 +188,7 @@ export function RunDrawer({ run, helpers, onOpenHelper, onClose, where, containe
                           <span className="mx-board-step-word">{stepWord(step.state)}</span>
                         </span>
                         {step.note !== null && <span className="mx-board-step-note">{step.note}</span>}
+                        {step.state === 'needs_you' && step.choices.length > 0 && onAnswer !== undefined && <StepAnswers run={run} step={step} onAnswer={onAnswer} />}
                         {label !== null && <HelperCard label={label} step={step} helper={helper} remote={where?.remote === true} machine={where?.machine ?? ''} onOpenHelper={onOpenHelper} />}
                       </span>
                     </li>

@@ -75,6 +75,14 @@ Codex's published hook schemas. A hook run through PowerShell costs about 150 ms
 call that fires `PreToolUse` and `PostToolUse` takes about 0.3 s longer, inside Codex's 3 s
 hook limit.
 
+Claude Code runs its hooks and its status line (`maitty statusline`, which carries context and
+plan limits) through `sh`, and on Windows through Git Bash, or PowerShell when Git Bash isn't
+installed. PowerShell reads a quoted program path followed by a word as a parse error, so on
+Windows the command line names Maitty's path bare when the path has no space or shell character
+(it runs in both shells). Otherwise it is quoted for Git Bash, or `& "…"` with `"shell":
+"powershell"` without it (`HookShell`, `command_line`). The daemon rewrites a line written for the
+other shell when it starts.
+
 Pi loads `~/.pi/agent/extensions/maitty.js` (or
 `$PI_CODING_AGENT_DIR/extensions/maitty.js`). Use a current Pi with
 `agent_settled`, `ui_prompt_start` and `ui_prompt_end` events. The adapter reports
@@ -167,6 +175,11 @@ the slowest sample). Not measured: Codex (the turn budget was spent on Claude), 
 asks nothing, so there is nothing to time). The prompt text itself was never seen on the PTY
 for the auto-approved cases, and is drawn in pieces for the person case, so the hooks are the
 only timing source here.
+
+A helper's permission ask makes its session need you, like the agent's own. The helper's next report
+(a tool it ran) means it was answered: the session is working again (`Term::blocked_by_helper`). A
+question that leaves the screen with no report settles into the work still going on (the agent's
+own turn not over, or helpers running), and into a finish only when nothing is.
 
 **Sounds.** A window rings at most once per `ANY_AGAIN_AFTER` (4 s), whichever kind it was: a
 needs-you (two notes) followed by a finish inside that spell is held back, so a burst never

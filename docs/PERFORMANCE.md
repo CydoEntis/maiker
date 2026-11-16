@@ -383,7 +383,10 @@ keys nobody pressed. Ticket 40.
    `eval`. T3 Code carries its terminal the same way. This needs an ADR (a new local listener,
    the token, `connect-src` in the CSP) and the security checklist.
 3. **Stop answering queries in replayed output** (ticket 40): while a view writes history or a
-   replay, what xterm sends through `onData` is dropped; only live output may be answered.
+   replay, what xterm sends through `onData` is dropped; only live output may be answered. Live
+   output's colour, cursor, status and device-attribute queries are not xterm's to answer either: the
+   daemon answers them at once (`process_answering_queries`), and the window's late second answer
+   landed on the shell prompt as `11;rgb:…` (`lib/daemonAnswers.ts`).
 4. **Then the probe and the budgets below**, so the next release is measured.
 
 **Keys no longer wait for replies (2026-11-06).** With step 2 built, a release build on the owner's
@@ -581,7 +584,11 @@ connected once per run of the window and ahead of time (when the new chat page o
 chat that is working asks the daemon for news every 300 ms (`ACTIVE_POLL_MS`), not every second.
 The daemon also says when a conversation changed (`ServerMsg::ConversationChanged`), so the chat
 reads then and, once told, polls only every second (`TOLD_ACTIVE_POLL_MS`); its reads go out on a
-connection kept open between them (`IDLE_CONNECTIONS` in `maitty-desktop-client`).
+connection kept open between them (`IDLE_CONNECTIONS` in `maitty-desktop-client`). A kept line unused for 30 s
+is closed rather than tried (`KEPT_FOR`), and one that has not answered within 8 s is given up and the question asked
+on a new line (`KEPT_ANSWER_WITHIN`) (only a question that changes nothing goes out on a kept line, `safe_to_ask_twice`: a
+commit, push or pull request asked again could act twice): a line to another machine that died quietly (sleep, a network change) otherwise
+held a chat's reads until ssh's own check ended it, 45 s later.
 What is left is the shell's own startup and the agent's own startup, which Maitty does not control.
 Measure it on Windows with a screen recording at 30 fps: count frames from Enter to the first
 "thinking" line.

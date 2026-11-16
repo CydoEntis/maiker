@@ -544,6 +544,20 @@ fn a_queued_follow_up_goes_in_when_the_turn_is_over() {
     assert_eq!(queued(&d).len(), 3, "naming the wrong one drops nothing");
     drop(&mut d, 1, "one").unwrap();
     assert_eq!(queued(&d), ["/model opus", "two"]);
+    // Another machine's window names it as it was shown there: tabs as spaces, hidden characters gone.
+    d.command(
+        0,
+        Command::QueueFollowUp {
+            term: t,
+            text: "look\tat this\u{200b}\n\nAttached: a.png".into(),
+            first: false,
+            operation: None,
+        },
+    )
+    .unwrap();
+    assert!(drop(&mut d, 2, "").is_err(), "nothing names nothing");
+    drop(&mut d, 2, "look at this\n\nAttached: a.png").unwrap();
+    assert_eq!(queued(&d), ["/model opus", "two"]);
     d.command(0, Command::ClearQueue { term: t }).unwrap();
     d.terms.get_mut(&t).unwrap().agent = None;
     assert!(
@@ -1642,14 +1656,17 @@ fn a_permission_ask_settled_without_you_stops_needing_you() {
     d.terms.get_mut(&t).unwrap().blocked_at = Some(long_ago);
     d.update_statuses();
     assert_eq!(d.terms[&t].status, Status::Blocked, "asking on screen");
-    // Auto mode allowed it and the screen moved on, with no hook to say so: over.
+    // Auto mode allowed it and the screen moved on, with no hook to say so: it no longer needs
+    // you. It was asked mid-turn, so the turn carries on; no finish is said before the agent's own.
     d.terms
         .get_mut(&t)
         .unwrap()
         .parser
         .process(b"\x1b[2J\x1b[H* Waiting for 1 dynamic workflow to finish\r\n");
     d.update_statuses();
-    assert_eq!(d.terms[&t].status, Status::Done, "nothing asked on screen");
+    assert_eq!(d.terms[&t].status, Status::Working, "nothing asked on screen, the turn goes on");
+    d.apply_hook(report(t, &secret, 0, HookStatus::Done, "Stop"), None, Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Done, "the agent's own finish");
     close(&mut d, &[t]);
 }
 
@@ -3203,6 +3220,198 @@ fn a_turn_that_ends_while_its_helper_runs_stays_working(agent: &str, idle_title:
     rests_at_its_idle_prompt(&mut d, t, idle_title);
     assert_eq!(d.terms[&t].status, Status::Done, "{agent}: and it stays done");
     assert_eq!(times_told_done(&mut seen), 1, "{agent}: one finish, said once");
+    close(&mut d, &[t]);
+}
+
+/// Claude's turn ends with a background helper still running: the session stays working, but
+/// Claude is back at its prompt, so a message queued for it goes in then, not after the helper.
+#[test]
+fn a_queued_message_goes_in_when_the_turn_ends_though_a_background_helper_runs() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let hook = |status: HookStatus, event: &str, start: Option<bool>| {
+        let mut m = report(t, "claude", 0, status, event);
+        if let ClientMsg::Hook { subagent, .. } = &mut m {
+            *subagent = start.map(|start| Subagent {
+                id: "a1".into(),
+                kind: "maiker:intake".into(),
+                start,
+                reported_at: 0,
+                task: None,
+                model: None,
+                effort: None,
+                activity: None,
+            });
+        }
+        m
+    };
+    let queued = |d: &Daemon| d.snapshot().terms[&t].queued.clone();
+    d.apply_hook(hook(HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(hook(HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    d.command(
+        0,
+        Command::QueueFollowUp { term: t, text: "I also set up the key".into(), first: false, operation: None },
+    )
+    .unwrap();
+    d.update_statuses();
+    assert_eq!(queued(&d).len(), 1, "not while Claude's own turn runs");
+
+    // The helper's own work is not Claude's turn ending.
+    d.apply_hook(hook(HookStatus::Working, "PreToolUse", Some(true)), Some(true), Vec::new());
+    d.update_statuses();
+    assert_eq!(queued(&d).len(), 1);
+
+    d.apply_hook(hook(HookStatus::Done, "Stop", None), Some(true), Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Working, "the helper still runs");
+    d.apply_hook(hook(HookStatus::Working, "PostToolUse", Some(true)), Some(true), Vec::new());
+    d.update_statuses();
+    assert!(queued(&d).is_empty(), "Claude is at its prompt, so the message goes in");
+}
+
+/// A Claude report from the session itself (`None`) or from helper `a1`.
+fn from(t: TermId, status: HookStatus, event: &str, helper: Option<bool>) -> ClientMsg {
+    let mut m = report(t, "claude", 0, status, event);
+    if let ClientMsg::Hook { subagent, .. } = &mut m {
+        *subagent = helper.map(|start| Subagent {
+            id: "a1".into(),
+            kind: "maiker:builder".into(),
+            start,
+            reported_at: 0,
+            task: None,
+            model: None,
+            effort: None,
+            activity: None,
+        });
+    }
+    m
+}
+
+/// A helper asks for permission and is answered: its next news is the work going on, not a
+/// question that "settled itself" into a finish that rings while it still works.
+#[test]
+fn a_queued_messages_enter_waits_while_a_helper_asks_permission() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    d.command(0, Command::QueueFollowUp { term: t, text: "also this".into(), first: false, operation: None }).unwrap();
+    d.apply_hook(from(t, HookStatus::Done, "Stop", None), Some(true), Vec::new());
+    d.update_statuses();
+    assert_eq!(d.terms[&t].pending_input.as_ref().map(|(data, _)| data.clone()), Some(b"\r".to_vec()), "text typed, Enter next");
+
+    // A helper asks before the Enter goes: the Enter would answer its menu.
+    d.apply_hook(from(t, HookStatus::Blocked, "PermissionRequest", Some(true)), Some(true), Vec::new());
+    d.update_statuses();
+    assert_eq!(d.terms[&t].pending_input.as_ref().map(|(data, _)| data.clone()), Some(b"\r".to_vec()), "held");
+
+    d.apply_hook(from(t, HookStatus::Same, "PostToolUse", Some(true)), Some(true), Vec::new());
+    d.update_statuses();
+    assert!(d.terms[&t].pending_input.is_none(), "answered, so the Enter goes");
+    close(&mut d, &[t]);
+}
+
+#[test]
+fn a_helper_answered_after_asking_permission_is_working_again() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Blocked, "PermissionRequest", Some(true)), Some(true), Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Blocked, "the helper needs you");
+    d.apply_hook(from(t, HookStatus::Same, "PostToolUse", Some(true)), Some(true), Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Working, "answered: the helper works on");
+
+    // Asked again, and settled with no news from the helper: still the turn going on.
+    d.apply_hook(from(t, HookStatus::Blocked, "PermissionRequest", Some(true)), Some(true), Vec::new());
+    d.terms.get_mut(&t).unwrap().blocked_at =
+        Some(Instant::now() - super::status::UNASKED_QUESTION_GONE_AFTER - Duration::from_secs(1));
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Working, "no finish while the helper runs");
+    close(&mut d, &[t]);
+}
+
+/// Claude stops to wait on its background helper, then says "still waiting for you" a minute
+/// later: still a pause, so the helper's end is not announced as the finish.
+#[test]
+fn claudes_idle_notice_keeps_a_turn_paused_on_its_helpers() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    d.apply_hook(with_background(from(t, HookStatus::Done, "Stop", None), &["a1"], &["a1"], true), Some(true), Vec::new());
+    assert!(d.terms[&t].awaiting_background, "paused on its helper");
+    d.apply_hook(from(t, HookStatus::Done, "Notification:idle_prompt", None), Some(true), Vec::new());
+    assert!(d.terms[&t].awaiting_background, "the notice is no stop");
+    close(&mut d, &[t]);
+}
+
+/// Follow-ups queued for an agent that exits are not typed into the next one.
+#[test]
+fn follow_ups_queued_for_an_agent_go_with_it() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.hooked, p.status) = (Some("claude".into()), true, Status::Working);
+        p.born = Instant::now() - super::AGENT_SHOWS_WITHIN - Duration::from_secs(1);
+    }
+    d.command(0, Command::QueueFollowUp { term: t, text: "and push it".into(), first: false, operation: None }).unwrap();
+    d.handle(Ev::Scan(vec![scan::Found {
+        term: t,
+        process: "codex".into(),
+        agent: Some("codex".into()),
+        cwd: None,
+        agent_cwd: None,
+        mem: 0,
+        cpu: 0.0,
+        remote: None,
+    }]));
+    assert_eq!(d.terms[&t].agent.as_deref(), Some("codex"));
+    assert!(d.snapshot().terms[&t].queued.is_empty(), "nothing of Claude's for Codex");
+    close(&mut d, &[t]);
+}
+
+/// A queued command such as `/resume` opens a menu and reports no prompt: Enter is not pressed
+/// again, which would pick from the menu. A message's Enter is still checked.
+#[test]
+fn a_queued_commands_enter_is_not_pressed_again() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.hooked, p.status) = (Some("claude".into()), true, Status::Idle);
+    }
+    for (text, checked) in [("/resume", false), ("run the tests", true)] {
+        d.terms.get_mut(&t).unwrap().pending_input = Some((format!("{text}\r").into_bytes(), Instant::now()));
+        d.update_statuses();
+        d.update_statuses();
+        assert_eq!(d.terms[&t].enter_sent.is_some(), checked, "{text}");
+        d.terms.get_mut(&t).unwrap().enter_sent = None;
+    }
+    close(&mut d, &[t]);
+}
+
+/// The second queued follow-up goes when the first one's turn ends, though helpers kept the pane
+/// working the whole time.
+#[test]
+fn queued_follow_ups_follow_each_other_while_helpers_run() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    for text in ["first", "second"] {
+        d.command(0, Command::QueueFollowUp { term: t, text: text.into(), first: false, operation: None }).unwrap();
+    }
+    let queued = |d: &Daemon| d.snapshot().terms[&t].queued.clone();
+    d.apply_hook(from(t, HookStatus::Done, "Stop", None), Some(true), Vec::new());
+    d.update_statuses();
+    assert_eq!(queued(&d), ["second"]);
+    d.update_statuses(); // its Enter
+    // "first" is taken and answered, all while the helper runs.
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Done, "Stop", None), Some(true), Vec::new());
+    d.update_statuses();
+    assert!(queued(&d).is_empty(), "not a minute later");
     close(&mut d, &[t]);
 }
 
@@ -10389,6 +10598,7 @@ fn a_workflow_report_is_shown_on_its_pane_and_never_changes_its_status() {
             state,
             note: None,
             helper: None,
+            choices: Vec::new(),
         }],
         reported_at: 0,
     };

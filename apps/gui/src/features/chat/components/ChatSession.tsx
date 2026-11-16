@@ -19,7 +19,7 @@ import { startedWithYolo } from '../yoloSessions'
 import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
-import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, type AskChoice } from '../permissionAsk'
+import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
 import { draftWithQuote, pickedText, type PickedText } from '../selectionActions'
 import { peekComposer } from '../composerStore'
 import { COPY_TOAST_ID, COPY_TOAST_MS } from '@/features/terminal/copyToast'
@@ -34,6 +34,7 @@ import { Composer } from './Composer'
 import { ChatItem, type ChatItemContext } from './ChatItems'
 import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
+import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
 import { ProblemBanner } from './ProblemBanner'
@@ -70,19 +71,6 @@ const MODE_CYCLE_MAX = 5
 
 /** A row not yet measured is drawn as if it were this tall, which a message or a card usually is. */
 const ESTIMATED_ROW_PX = 72
-
-const INCOMPLETE_WORD: Record<string, string> = {
-  Disconnected: 'the connection to the provider was lost while it ran',
-  UnsupportedItem: 'it holds an item this app cannot show',
-  InvalidEvent: 'the provider sent an event this app could not read',
-  MissingPages: 'some pages could not be read',
-  RevisionExhausted: 'it changed more often than the daemon can follow',
-}
-
-function incompleteReason(completeness: ChatFeed['completeness']): string | null {
-  if (completeness === null || typeof completeness === 'string') return null
-  return INCOMPLETE_WORD[completeness.Incomplete] ?? 'part of it could not be read'
-}
 
 /** What a screen reader hears when the conversation changes state: one short line per change, never the text. */
 function announcement(feed: ChatFeed, agent: ChatAgent, working: boolean): string {
@@ -129,6 +117,11 @@ type Props = {
   asking?: string
   /** The pane's own status, live in the sidebar: the chat shows working at once and reads then, instead of at its next poll. */
   paneStatus?: SessionStatus
+  /**
+   * Helpers keeping the session working after the agent's own turn ended: the agent is at its prompt, so the chat
+   * takes a message at once and says so, instead of "thinking" and queueing.
+   */
+  helpersOnly?: number
   /** The session's id: a message typed while its agent was starting is held under it, and goes out from here. */
   sessionId?: string
   /** A subagent whose own chat shows instead of the session's, and the way back. */
@@ -162,12 +155,12 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
+export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
-  const paneWorking = paneStatus === 'working'
-  const working = feed.status === 'Working' || paneWorking
+  const agentFree = helpersOnly > 0
+  const paneWorking = paneStatus === 'working' && !agentFree
+  const working = !agentFree && (feed.status === 'Working' || paneWorking)
   const workingSince = working ? runningTurnStartedAt(feed) : null
-  const incomplete = incompleteReason(feed.completeness)
   const wasWorking = useRef(false)
   // The turn has ended but its reply is not in the history yet: the working line holds until it is, or SETTLE_MS.
   const [settling, setSettling] = useState(false)
@@ -200,13 +193,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const readScreen = useMemo(() => (sessionId === undefined ? undefined : () => loadTerminalScreen({ id: sessionId, generation: 0 })), [sessionId])
   const pickChoice = typeInto === undefined ? undefined : (index: number) => typeInto(choiceKey(index)).then(refresh)
   // A form is answered a key at a time, as a person would: the prompt redraws after each.
-  const pickChoices = typeInto === undefined ? undefined : async (picked: readonly (readonly number[])[]) => {
-    for (const [at, key] of answerKeys(formQuestions(ask), picked).entries()) {
+  const typeKeys = typeInto === undefined ? undefined : async (keys: readonly string[]) => {
+    for (const [at, key] of keys.entries()) {
       if (at > 0) await new Promise<void>((resolve) => { window.setTimeout(resolve, ANSWER_STEP_MS) })
       await typeInto(key)
     }
     refresh()
   }
+  const pickChoices = typeKeys === undefined ? undefined : (answers: readonly FormAnswer[]) => typeKeys(answerKeys(formQuestions(ask), answers))
+  const answerOwn = typeKeys === undefined ? undefined : (text: string) => typeKeys(ownAnswerKeys(ask?.choices?.length ?? 0, text))
   // A chat that follows the agent's own terminal changes its mode, model and reasoning the way its user would: by typing the agent's commands
   // (Shift+Tab, /model, /effort). Offered for Claude, and not while it works, when the keys would land in its turn.
   // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model), until the agent's own file says it.
@@ -340,7 +335,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const replied = lastKind !== undefined && lastKind !== 'user' && lastKind !== 'echo'
   useEffect(() => { repliedRef.current = replied })
   const holdWorking = settling && !replied
-  const allRows = useMemo(() => buildRows(events, working || holdWorking, root, echoText, echoThinking, hideSuccessfulTools), [events, working, holdWorking, root, echoText, echoThinking, hideSuccessfulTools])
+  const freePhrase = agentFree ? `free · ${String(helpersOnly)} ${helpersOnly === 1 ? 'helper' : 'helpers'} working` : null
+  const allRows = useMemo(() => buildRows(events, working || holdWorking || agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase), [events, working, holdWorking, agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase])
   const rows = useMemo(() => allRows.filter((row) => !isPendingApproval(row)), [allRows])
   // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
   // the chat opened (until then it shows what this window remembered, which may be behind) and one after the window was
@@ -455,6 +451,16 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   // An approval's link to its tool step scrolls the list there; the nonce makes a second click on the same link scroll again.
   const [scrollTarget, setScrollTarget] = useState<{ key: string; nonce: number } | null>(null)
+  // A message sent, or queued behind the running turn, takes the chat back to its newest row.
+  const [sentCount, setSentCount] = useState(0)
+  // A message is its words and how often they were said before it, so the same words sent again count, and the echo
+  // going quiet does not.
+  const sentKey = echo === null ? null : `${echo.text}\u0000${String(echo.baseline)}`
+  const [seenSend, setSeenSend] = useState({ sentKey, queued: composer.queue.length })
+  if (seenSend.sentKey !== sentKey || seenSend.queued !== composer.queue.length) {
+    if ((sentKey !== null && sentKey !== seenSend.sentKey) || composer.queue.length > seenSend.queued) setSentCount(sentCount + 1)
+    setSeenSend({ sentKey, queued: composer.queue.length })
+  }
   const goToStep = useCallback((key: string) => { setScrollTarget((current) => ({ key, nonce: (current?.nonce ?? 0) + 1 })) }, [])
 
   // Find (the window's search bar) looks through this chat while it shows: the row that holds the text is scrolled to and marked.
@@ -531,14 +537,14 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   const question = pending !== null
     ? <ApprovalTray event={pending} actions={approval} agent={agent} />
-    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
+    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
-    !offline && incomplete !== null ? `History is incomplete: ${incomplete}.` : null,
     feed.error,
   ].filter((notice): notice is string => notice !== null)
 
   return (
+    <FilesHereContext.Provider value={sessionId === undefined || machineNameOf(sessionId) === null}>
     <div ref={chat} className="mx-chat" onKeyDown={onKeyDown} onClick={keepComposerFocus} onMouseUp={(event) => { const next = pickedText(event); if (next !== undefined) setPicked(next) }}>
       {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed } = confirming; setConfirming(null); runConfirmed(typed) }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
@@ -562,7 +568,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
         <KnownRowsContext.Provider value={known}>
           <OpenFileContext.Provider value={openFile}>
-          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} />
+          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={sentCount} />
           </OpenFileContext.Provider>
         </KnownRowsContext.Provider>
       ) : (
@@ -581,5 +587,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
       />
     </div>
+    </FilesHereContext.Provider>
   )
 }

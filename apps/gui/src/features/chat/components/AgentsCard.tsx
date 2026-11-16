@@ -1,8 +1,10 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { Card, CardHead } from '@/components/ui/card'
 import { AppIcon } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
 import type { SubagentEvent } from '../chatEvents'
+import { OpenSubagentContext } from '../openSubagent'
 import { agentsSummary, elapsedMs, tookText } from '../stepInfo'
 import { StepGlyph } from './cardParts'
 
@@ -22,12 +24,16 @@ type AgentRowProps = {
   process: string
 }
 
-/** One helper agent: its tile and status, its title and type, what it was asked, and its report when opened. */
+/**
+ * One helper agent: its tile and status, its title and type, what it was asked, and its report when opened, with
+ * **Open its chat** while it runs.
+ */
 export function AgentRow({ agent, process }: AgentRowProps) {
   const [open, setOpen] = useState(false)
   const report = agent.report.trim()
-  const hasMore = agent.prompt !== null || report !== ''
   const asked = agent.prompt?.split('\n')[0] ?? null
+  const openChat = useContext(OpenSubagentContext)(agent.title, asked)
+  const hasMore = agent.prompt !== null || report !== '' || openChat !== null
   return (
     <li>
       <button type="button" aria-expanded={hasMore ? open : undefined} disabled={!hasMore} className="mx-agent-row" onClick={() => { setOpen((current) => !current) }}>
@@ -48,6 +54,7 @@ export function AgentRow({ agent, process }: AgentRowProps) {
         <div className="mx-agent-detail">
           {agent.prompt !== null && <p className="mx-agent-prompt">{agent.prompt}</p>}
           {report !== '' && <p className="mx-agent-report">{agent.report}</p>}
+          {openChat !== null && <div><Button variant="soft" size="sm" onClick={openChat}>Open its chat</Button></div>}
         </div>
       )}
     </li>

@@ -5,7 +5,7 @@ import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetComposers } from '../composerStore'
 import { forgetFirstMessages } from '../firstMessage'
 import { ACTIVE_POLL_MS, forgetChatFeeds, IDLE_POLL_MS } from '../useChatFeed'
-import { PASTE_SUBMIT_GAP_MS } from '../useChatComposer'
+import { PASTE_SUBMIT_GAP_MS, RESUBMIT_AFTER_MS } from '../useChatComposer'
 import type { SessionStatus } from '@/features/workspace/model/session'
 import { ChatSession } from './ChatSession'
 
@@ -45,9 +45,9 @@ function open(status: 'Idle' | 'Working' = 'Idle') {
   fake.current = daemon
   const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
   const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
-  const element = (paneStatus?: SessionStatus) => <ChatSession link={LINK} agent="claude" online typeInto={typeInto} {...(paneStatus === undefined ? {} : { paneStatus })} />
+  const element = (paneStatus?: SessionStatus, helpersOnly = 0) => <ChatSession link={LINK} agent="claude" online typeInto={typeInto} helpersOnly={helpersOnly} {...(paneStatus === undefined ? {} : { paneStatus })} />
   const view = render(element())
-  return { daemon, typeInto, user, setPaneStatus: (paneStatus: SessionStatus) => { view.rerender(element(paneStatus)) } }
+  return { daemon, typeInto, user, setPaneStatus: (paneStatus: SessionStatus, helpersOnly = 0) => { view.rerender(element(paneStatus, helpersOnly)) } }
 }
 
 describe('how the chat feels while it waits', () => {
@@ -79,6 +79,45 @@ describe('how the chat feels while it waits', () => {
 
     expect(screen.queryByLabelText('Sending')).not.toBeInTheDocument()
     expect(screen.getAllByText('hello there')).toHaveLength(1)
+  })
+
+  it('types the Enter once more when the message did not start a turn, and only once', async () => {
+    const { typeInto, user } = open()
+    await settle()
+    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
+    await settle(PASTE_SUBMIT_GAP_MS + 1)
+    expect(typeInto).toHaveBeenCalledTimes(2)
+
+    // Still at rest and nothing in the history: the words are sitting in the agent's box.
+    await settle(RESUBMIT_AFTER_MS)
+    expect(typeInto).toHaveBeenCalledTimes(3)
+    expect(typeInto).toHaveBeenLastCalledWith('\r')
+    await settle(RESUBMIT_AFTER_MS * 2)
+    expect(typeInto).toHaveBeenCalledTimes(3)
+  })
+
+  it('types no second Enter once the agent took the message', async () => {
+    const { daemon, typeInto, user, setPaneStatus } = open()
+    await settle()
+    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
+    await settle(PASTE_SUBMIT_GAP_MS + 1)
+    setPaneStatus('working')
+    daemon.status = 'Working'
+    await settle(RESUBMIT_AFTER_MS)
+
+    expect(typeInto).toHaveBeenCalledTimes(2)
+  })
+
+  it('takes a message the agent joined to the one before it as sent', async () => {
+    const { daemon, user } = open()
+    await settle()
+    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'then the integrations{Enter}')
+    await settle(PASTE_SUBMIT_GAP_MS + 1)
+
+    daemon.upsert(daemon.message('t1', 'u2', 'User', 'set it up\nthen the integrations'))
+    await settle(IDLE_POLL_MS)
+
+    expect(screen.queryByLabelText('Sending')).not.toBeInTheDocument()
   })
 
   it('stops saying the agent is thinking after a few seconds, when its own status does not, while the message stays', async () => {
@@ -155,6 +194,22 @@ describe('how the chat feels while it waits', () => {
     await settle(700)
     expect(screen.getByText('asked in the terminal')).toBeInTheDocument()
     expect(screen.queryByText(/claude is thinking/)).not.toBeInTheDocument()
+  })
+
+  it('says the agent is free while only its helpers work, and takes a message at once', async () => {
+    const { typeInto, user, setPaneStatus } = open('Idle')
+    await settle()
+
+    setPaneStatus('working', 3)
+    await settle()
+
+    expect(screen.getByText('claude is free · 3 helpers working')).toBeInTheDocument()
+    expect(screen.queryByText(/claude is thinking/)).not.toBeInTheDocument()
+    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    expect(box).not.toHaveAttribute('placeholder', 'Queue a message for when claude finishes')
+    await user.type(box, 'and Slack too{Enter}')
+    await settle(PASTE_SUBMIT_GAP_MS + 1)
+    expect(typeInto).toHaveBeenCalledWith('\x1b[200~and Slack too\x1b[201~')
   })
 
   it('keeps the working line up for a moment after the turn ends, so the pane is not blank before the reply is read', async () => {

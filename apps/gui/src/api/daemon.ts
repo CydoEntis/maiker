@@ -104,6 +104,8 @@ const TerminalSessionSchema = z.object({
   }).nullable().default(null),
   // The follow-ups its daemon holds for the working agent, oldest first (`TermInfo.queued`).
   queued: z.array(z.string()).default([]),
+  // The agent's own turn is over though helpers may keep the pane working (`TermInfo.own_turn_over`); false from an older daemon.
+  own_turn_over: z.boolean().default(false),
   // The agent's own hook said what its permission prompt asks (not read off the screen).
   ask: z.object({ tool: z.string(), detail: z.string(), answerable: z.boolean().default(false), choices: z.array(z.string()).default([]), questions: z.array(AskQuestionSchema).default([]), form: z.array(AskQuestionSchema).default([]) }).nullable().default(null),
   interrupted: z.object({ agent: z.string(), resume: z.string() }).nullable().default(null),
@@ -135,6 +137,8 @@ const TerminalSessionSchema = z.object({
       state: z.enum(['waiting', 'working', 'passed', 'failed', 'sent_back', 'needs_you', 'skipped', 'unknown']).catch('unknown'),
       note: z.string().nullable().default(null),
       helper: z.string().nullable().default(null),
+      // The answers a step that needs the person offers (`WorkflowStep.choices`); none from an older daemon.
+      choices: z.array(z.string()).default([]),
     })),
     reported_at: z.number().int().nonnegative().default(0),
   })).catch([]).default([]),
@@ -1444,6 +1448,7 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       timeline: term.timeline,
       usage: term.usage,
       queued: term.queued,
+      ownTurnOver: term.own_turn_over,
       pr: term.pr,
       checks: term.checks,
       secretAsk: secrets.map((ask) => ({ id: ask.id, label: ask.label, reason: ask.reason })),

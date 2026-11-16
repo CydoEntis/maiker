@@ -44,14 +44,6 @@ any workflow that answers `/factory run <ticket> (<link>)` in an agent's chat an
 that already reports runs in the project, or into a new chat. Any chat that has reported a run of any workflow
 counts as a factory chat, and a ticket's run is found by the ticket key the run reports.
 
-One factory is **Maiker Factory**, a Claude Code plugin. Install it in a Claude chat, then set it up in the repo:
-
-```
-/plugin marketplace add CydoEntis/maiker-factory
-/plugin install maiker@factory
-/factory setup
-```
-
 ## Workflow runs: how any workflow shows its steps
 
 A workflow tells Maitty where it is with one command. Any workflow can, in any language, under any agent. There is nothing to install, register or configure in Maitty, and Maitty never
@@ -91,6 +83,7 @@ report replaces the earlier one with the same `workflow` and `run`.
 | `steps[].state` | yes | see below | Where the step is. |
 | `steps[].note` | no | 240 characters | One short line, such as why a step was sent back. |
 | `steps[].helper` | no | 240 characters | The name of the subagent doing the step. |
+| `steps[].choices` | no | up to 4, 60 characters each, one line, each once | What the person may answer a `needs_you` step. Dropped on any other state. |
 
 `state` is one of `waiting`, `working`, `passed`, `failed`, `sent_back`, `needs_you` or `skipped`. Text is
 trimmed and control characters are removed. A report that breaks a rule is refused, and the command says
@@ -101,6 +94,18 @@ which field and exits with an error.
 Give a step's `helper` the same name the subagent runs under, and that step opens the subagent's chat. The
 name is the description given to Claude Code's Agent tool, or Codex's task name. Case and punctuation do not
 count, so `ABC-7 builder` matches Codex's `abc_7_builder`. A name that matches nothing is still shown, unlinked.
+
+### Answering with a click
+
+A `needs_you` step with `choices` shows each as a button in the run's drawer on the Work board. A click
+sends `<ticket key or run> · <step>: <choice>` to the chat that reported the run, as the person's own
+message, for example `ABC-7 · spec: Approve the spec`. Read that message in the workflow the same way
+you would read a typed answer; the person can still type anything else. The drawer then says what was
+sent until the run reports again.
+
+```json
+{ "name": "spec", "state": "needs_you", "note": "approve the spec", "choices": ["Approve the spec", "Send it back"] }
+```
 
 ### Where to call it
 

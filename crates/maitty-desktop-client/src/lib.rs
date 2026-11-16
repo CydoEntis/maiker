@@ -2061,7 +2061,32 @@ pub async fn create_conversation(
 }
 
 pub fn claude_executable() -> Result<PathBuf> {
-    executable_on_path("claude")
+    #[cfg(windows)]
+    {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+        windows_claude_from(&path, home.as_deref())
+            .ok_or_else(|| anyhow::anyhow!("Claude Code is not installed: no claude.exe or claude.cmd on PATH"))
+    }
+    #[cfg(not(windows))]
+    {
+        executable_on_path("claude")
+    }
+}
+
+/// Where Claude Code is on Windows. Its native installer puts `claude.exe` in `~/.local/bin`, which
+/// a window started before PATH was updated does not see; an npm install leaves only `claude.cmd`.
+/// Either still runs it, so neither leaves the window without Claude Code's own model list.
+#[cfg(any(windows, test))]
+fn windows_claude_from(path: &std::ffi::OsStr, home: Option<&std::path::Path>) -> Option<PathBuf> {
+    let on_path = |name: &str| std::env::split_paths(path).map(|directory| directory.join(name)).find(|file| file.is_file());
+    let native = on_path("claude.exe")
+        .or_else(|| home.map(|home| home.join(".local").join("bin").join("claude.exe")).filter(|file| file.is_file()));
+    match native {
+        Some(file) => Some(file.canonicalize().unwrap_or(file)),
+        // A batch file runs through cmd, which cannot start one by a `\\?\` path, so it is not canonicalized.
+        None => on_path("claude.cmd"),
+    }
 }
 
 fn claude_config_dir() -> Result<PathBuf> {
@@ -2315,7 +2340,16 @@ const MAX_IDLE_REMOTE_CONNECTIONS: usize = 2;
 
 /// One line to a daemon: what it reads, what it writes.
 pub type Connection = (ipc::Reader, ipc::Writer);
-type IdleConnections = std::sync::Mutex<Vec<Connection>>;
+/// Kept lines, each with when it was last used.
+type IdleConnections = std::sync::Mutex<Vec<(Connection, std::time::Instant)>>;
+
+/// A kept line unused for longer is closed rather than tried. An open chat asks every few seconds,
+/// so a line that sat this long most likely outlived a sleep or a network change, and a line to
+/// another machine that died that way says nothing until ssh's own check gives up (45 s).
+const KEPT_FOR: Duration = Duration::from_secs(30);
+/// How long a question waits on a kept line before it is asked again on a new one. It is a
+/// `Query`, so asking twice changes nothing; a live line answers a page well within this.
+const KEPT_ANSWER_WITHIN: Duration = Duration::from_secs(8);
 
 /// Where a request goes: this computer's daemon, started when none answers, or another machine's.
 #[derive(Clone)]
@@ -2394,6 +2428,49 @@ pub fn forget_remote(key: u16) {
         .remove(&key);
 }
 
+/// Whether asking `query` a second time, after a kept line failed or went quiet while the first
+/// may still be running, changes nothing. Only these go out on kept lines: a commit, push or pull
+/// request asked twice would act twice. Every variant is listed so a new one must be decided.
+fn safe_to_ask_twice(query: &Query) -> bool {
+    match query {
+        Query::Git { .. }
+        | Query::GitIdentityRule { .. }
+        | Query::CloneRepo { .. }
+        | Query::TicketWrite { .. }
+        | Query::SideAnswer { .. } => false,
+        Query::Settings
+        | Query::AllowedCommands
+        | Query::ConversationRead { .. }
+        | Query::ConversationDiff { .. }
+        | Query::ConversationFiles { .. }
+        | Query::ConversationFileRead { .. }
+        | Query::ConversationTerminalScreen { .. }
+        | Query::ConversationTerminalReplay { .. }
+        | Query::TerminalScreen { .. }
+        | Query::TerminalReplay { .. }
+        | Query::Repo { .. }
+        | Query::PaneSearch { .. }
+        | Query::UsageReport { .. }
+        | Query::ListFolders { .. }
+        | Query::GitHubAccounts { .. }
+        | Query::GitHubRepos { .. }
+        | Query::GitHubOwners { .. }
+        | Query::Tickets { .. }
+        | Query::TicketKeys { .. }
+        | Query::TicketLinks { .. }
+        | Query::GitIdentities { .. }
+        | Query::SavedConversations { .. }
+        | Query::List
+        | Query::HelperRead { .. }
+        | Query::Specialists { .. }
+        | Query::Read { .. }
+        | Query::Worktrees { .. }
+        | Query::WorktreeStanding { .. }
+        | Query::CheckOutput { .. }
+        | Query::ClosedSessions => true,
+    }
+}
+
 async fn ask(connection: &mut Connection, message: &ClientMsg) -> Result<Reply> {
     ipc::send_message(&mut connection.1, message).await?;
     receive_reply(&mut connection.0).await
@@ -2411,21 +2488,43 @@ where
     Open: FnOnce() -> Opening,
     Opening: std::future::Future<Output = Result<Connection>>,
 {
-    let reusable = matches!(message, ClientMsg::Query(_));
+    ask_reusing_within(idle, keep_at_most, message, open, KEPT_ANSWER_WITHIN).await
+}
+
+/// `ask_reusing`, giving a kept line `kept_wait` to answer before the question goes on a new one.
+async fn ask_reusing_within<Open, Opening>(
+    idle: &IdleConnections,
+    keep_at_most: usize,
+    message: &ClientMsg,
+    open: Open,
+    kept_wait: Duration,
+) -> Result<Reply>
+where
+    Open: FnOnce() -> Opening,
+    Opening: std::future::Future<Output = Result<Connection>>,
+{
+    let reusable = matches!(message, ClientMsg::Query(query) if safe_to_ask_twice(query));
     let keep = |connection: Connection| {
         if let Ok(mut idle) = idle.lock()
             && idle.len() < keep_at_most
         {
-            idle.push(connection);
+            idle.push((connection, std::time::Instant::now()));
         }
     };
     let kept = if reusable {
-        idle.lock().ok().and_then(|mut idle| idle.pop())
+        idle.lock().ok().and_then(|mut idle| {
+            // The newest is last; one that sat too long is dropped, and so is every older one.
+            let fresh = idle.pop().filter(|(_, since)| since.elapsed() < KEPT_FOR);
+            if fresh.is_none() {
+                idle.clear();
+            }
+            fresh.map(|(connection, _)| connection)
+        })
     } else {
         None
     };
     if let Some(mut kept) = kept
-        && let Ok(reply) = ask(&mut kept, message).await
+        && let Ok(Ok(reply)) = tokio::time::timeout(kept_wait, ask(&mut kept, message)).await
     {
         keep(kept);
         return Ok(reply);
@@ -2568,10 +2667,65 @@ mod kept_connection_tests {
         forget_remote(60_003);
     }
 
+    /// A line whose far end takes questions and never answers, like an ssh line that died quietly.
+    fn silent_line() -> Connection {
+        let (ours, theirs) = tokio::io::duplex(64 * 1024);
+        tokio::spawn(async move {
+            let _held = theirs;
+            std::future::pending::<()>().await;
+        });
+        let (our_read, our_write) = tokio::io::split(ours);
+        maitty_ipc_transport::framed_parts(our_read, our_write)
+    }
+
+    #[tokio::test]
+    async fn a_kept_line_that_went_quiet_is_given_up_quickly_and_the_question_asked_on_a_new_one() {
+        let idle = IdleConnections::default();
+        idle.lock().unwrap().push((silent_line(), std::time::Instant::now()));
+        let wait = std::time::Duration::from_millis(50);
+
+        let reply = super::ask_reusing_within(&idle, MAX_IDLE_CONNECTIONS, &question(), || async { Ok(daemon_answering(1)) }, wait).await;
+
+        assert!(matches!(reply, Ok(Reply::Ok)), "asked again on a new line");
+        assert!(super::KEPT_ANSWER_WITHIN < super::REQUEST_TIMEOUT / 2, "well before the request gives up");
+    }
+
+    #[tokio::test]
+    async fn a_kept_line_that_sat_too_long_is_not_tried() {
+        let idle = IdleConnections::default();
+        let long_ago = std::time::Instant::now().checked_sub(super::KEPT_FOR * 2).expect("a clock that far back");
+        idle.lock().unwrap().push((silent_line(), long_ago));
+        let opened = Arc::new(AtomicUsize::new(0));
+        let counted = opened.clone();
+
+        let reply = ask_reusing(&idle, MAX_IDLE_CONNECTIONS, &question(), || async move {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok(daemon_answering(1))
+        })
+        .await;
+
+        assert!(matches!(reply, Ok(Reply::Ok)));
+        assert_eq!(opened.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_push_never_goes_out_on_a_kept_line_so_it_is_never_sent_twice() {
+        use maitty_shared::protocol::GitRequest;
+        let idle = IdleConnections::default();
+        idle.lock().unwrap().push((silent_line(), std::time::Instant::now()));
+        let push = ClientMsg::Query(Query::Git { term: 1, request: GitRequest::Push, tag: 0 });
+        let wait = std::time::Duration::from_millis(50);
+
+        let reply = super::ask_reusing_within(&idle, MAX_IDLE_CONNECTIONS, &push, || async { Ok(daemon_answering(1)) }, wait).await;
+
+        assert!(matches!(reply, Ok(Reply::Ok)));
+        assert_eq!(idle.lock().unwrap().len(), 1, "the kept line was left alone, and the new one not kept");
+    }
+
     #[tokio::test]
     async fn a_command_never_goes_out_on_a_kept_connection_and_leaves_none_behind() {
         let idle = IdleConnections::default();
-        idle.lock().unwrap().push(daemon_answering(0));
+        idle.lock().unwrap().push((daemon_answering(0), std::time::Instant::now()));
         let command = ClientMsg::Command(Command::SelectWorkspace { ws: 1 });
 
         let reply = ask_reusing(&idle, MAX_IDLE_CONNECTIONS, &command, || async { Ok(daemon_answering(1)) }).await;
@@ -2803,6 +2957,37 @@ mod executable_lookup_tests {
         assert!(output.status.success());
         assert_eq!(String::from_utf8_lossy(&output.stdout), expected);
         std::fs::remove_dir_all(directory).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod windows_claude_tests {
+    use super::windows_claude_from;
+
+    fn folder(name: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("{}-{name}-{}", env!("MAITTY_APP_COMMAND"), std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn claude_is_found_on_path_then_in_its_installers_folder_then_as_an_npm_batch_file() {
+        let root = folder("claude-lookup");
+        let (on_path, home) = (root.join("bin"), root.join("home"));
+        let installed = home.join(".local").join("bin");
+        std::fs::create_dir_all(&on_path).unwrap();
+        std::fs::create_dir_all(&installed).unwrap();
+        let path = std::env::join_paths([&on_path]).unwrap();
+
+        assert_eq!(windows_claude_from(&path, Some(&home)), None);
+        std::fs::write(on_path.join("claude.cmd"), b"").unwrap();
+        assert_eq!(windows_claude_from(&path, Some(&home)), Some(on_path.join("claude.cmd")));
+        std::fs::write(installed.join("claude.exe"), b"").unwrap();
+        assert_eq!(windows_claude_from(&path, Some(&home)), installed.join("claude.exe").canonicalize().ok());
+        std::fs::write(on_path.join("claude.exe"), b"").unwrap();
+        assert_eq!(windows_claude_from(&path, Some(&home)), on_path.join("claude.exe").canonicalize().ok());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
 

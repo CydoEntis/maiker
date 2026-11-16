@@ -368,6 +368,7 @@ fn pane(i: u32) -> TermInfo {
         helper_ask: Vec::new(),
         pr: (status == Status::Done).then(|| pr_of(i)),
         queued: vec!["Then run the GUI tests too".into()],
+        own_turn_over: false,
         root: Some(root_of(i)),
         top: Some(checkout_of(i)),
         since: NOW - 120,

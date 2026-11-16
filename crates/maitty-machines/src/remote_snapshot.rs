@@ -7,6 +7,7 @@
 
 use maitty_shared::hidden::sanitize;
 use maitty_shared::protocol::{Snapshot, TermInfo};
+use maitty_shared::workflow::{CHOICE_MAX_CHARS, CHOICES_MAX, StepState};
 use serde_json::Value;
 
 /// Longest name, title, branch, command or similar one-line string, in characters.
@@ -39,7 +40,10 @@ impl Class {
     /// Fields named here are text blocks or paths; every other string is one line.
     fn of_key(key: &str) -> Option<Class> {
         match key {
-            "said" | "asking" | "text" | "result" | "latest_activity" | "task" => Some(Class::Text),
+            // A queued follow-up keeps its lines: it is shown as written and named back to remove it.
+            "said" | "asking" | "text" | "result" | "latest_activity" | "task" | "queued" => {
+                Some(Class::Text)
+            }
             "cwd" | "root" | "top" | "path" => Some(Class::Path),
             _ => None,
         }
@@ -118,6 +122,18 @@ fn clamp_term(t: &mut TermInfo) {
     t.rows = t.rows.clamp(1, PANE_DIM_MAX);
     t.cpu = t.cpu.clamp(0.0, 100.0);
     t.repeats = t.repeats.map(|n| n.min(REPEATS_MAX));
+    // A step's choices are buttons whose words go back to that machine as the person's message:
+    // held to the few, short ones its own daemon would have kept.
+    for step in t.workflows.iter_mut().flat_map(|run| run.steps.iter_mut()) {
+        if step.state != StepState::NeedsYou {
+            step.choices.clear();
+        }
+        step.choices.truncate(CHOICES_MAX);
+        for choice in &mut step.choices {
+            *choice = choice.chars().take(CHOICE_MAX_CHARS).collect();
+        }
+        step.choices.retain(|choice| !choice.trim().is_empty());
+    }
 }
 
 fn clamp_numbers(snap: &mut Snapshot) {

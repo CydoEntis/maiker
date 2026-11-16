@@ -3,7 +3,7 @@ import { terminalOf } from '@/api/daemon'
 import type { Conversation, PermissionAsk, TerminalDetails } from '@/data/preview'
 import type { Check } from '@/features/inspect/checks'
 import type { PullRequest } from './pullRequest'
-import { listedSubagents, toSubagentView, type SubagentView } from './subagents'
+import { listedSubagents, runningSubagents, toSubagentView, type SubagentView } from './subagents'
 import { toWorkflowView, type WorkflowView } from './workflows'
 
 /** The status vocabulary of the desktop app. Each one has its own shape, never colour alone. */
@@ -80,6 +80,11 @@ export type SessionView = {
   helperAsk: readonly string[]
   /** The agent's subagents, in the order its runtime reported them. */
   subagents: SubagentView[]
+  /**
+   * How many helpers keep the session working after the agent's own turn ended: it is at its prompt and takes a
+   * message meanwhile. Zero while the agent itself works, or when nothing runs.
+   */
+  helpersOnly: number
   /** The workflow runs the session reported, newest first (ADR 0010). */
   workflows: readonly WorkflowView[]
   status: SessionStatus
@@ -166,6 +171,12 @@ function snoozedUntilOf(conversation: Conversation, now: number): number | null 
  * when work starts again, so the window only displays it; a session that is working or needs you
  * shows that instead.
  */
+/** The helpers still running once the agent's own turn ended (`TermInfo.own_turn_over`); zero otherwise. */
+export function helpersOnly(conversation: Conversation, status: SessionStatus): number {
+  if (status !== 'working' || conversation.details?.ownTurnOver !== true) return 0
+  return runningSubagents((conversation.details.subagents ?? []).map(toSubagentView)).length
+}
+
 function statusOf(conversation: Conversation, held: boolean): SessionStatus {
   const status = STATUS_FROM_CONVERSATION[conversation.status]
   const failed = conversation.details?.exit != null
@@ -302,6 +313,7 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     helperAsk: conversation.details?.helperAsk ?? [],
     // Which helpers a row lists (`listedSubagents`): not one that finished, nor one that stopped once the turn is over.
     subagents: listedSubagents((conversation.details?.subagents ?? []).map(toSubagentView), status === 'working'),
+    helpersOnly: helpersOnly(conversation, status),
     workflows: (conversation.details?.workflows ?? []).map(toWorkflowView),
     status,
     lastKnownStatus: lastKnown,

@@ -15,6 +15,10 @@ pub const NOTE_MAX_CHARS: usize = 240;
 pub const LINK_MAX_CHARS: usize = 500;
 /// Most steps one run may have.
 pub const STEPS_MAX: usize = 32;
+/// Most answers one step may offer the person.
+pub const CHOICES_MAX: usize = 4;
+/// Longest answer a step offers, in characters: it is a button's label.
+pub const CHOICE_MAX_CHARS: usize = 60;
 
 /// One run of a workflow: one job, usually for one ticket.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,6 +56,11 @@ pub struct WorkflowStep {
     /// task name), so a view can link the step to that helper in the same pane.
     #[serde(default)]
     pub helper: Option<String>,
+    /// What the person may answer a step that needs them with ("Approve the spec", "Send it
+    /// back"), one short line each. A view offers each as a button that sends it, as the person's
+    /// own message, to the chat that reported the run; the workflow reads it there.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -117,10 +126,29 @@ fn checked_step(step: WorkflowStep) -> Result<WorkflowStep, String> {
     if step.state == StepState::Unknown {
         return Err(format!("step \"{name}\" has an unknown state"));
     }
+    if step.choices.len() > CHOICES_MAX {
+        return Err(format!("step \"{name}\" offers at most {CHOICES_MAX} choices"));
+    }
+    let mut choices = Vec::new();
+    for choice in &step.choices {
+        let Some(choice) = optional("step choice", Some(choice), CHOICE_MAX_CHARS)? else {
+            return Err(format!("step \"{name}\" has an empty choice"));
+        };
+        if choices.contains(&choice) {
+            return Err(format!("step \"{name}\" offers \"{choice}\" twice"));
+        }
+        choices.push(choice);
+    }
+    // Only a step that waits on the person is answered; a choice on any other would send words
+    // nobody asked for.
+    if step.state != StepState::NeedsYou {
+        choices.clear();
+    }
     Ok(WorkflowStep {
         state: step.state,
         note: optional("step note", step.note.as_deref(), NOTE_MAX_CHARS)?,
         helper: optional("step helper", step.helper.as_deref(), NOTE_MAX_CHARS)?,
+        choices,
         name,
     })
 }
@@ -148,6 +176,7 @@ mod tests {
             state,
             note: None,
             helper: None,
+            choices: Vec::new(),
         }
     }
 
@@ -212,5 +241,28 @@ mod tests {
         let later: WorkflowStep =
             serde_json::from_str(r#"{"name":"review","state":"paused"}"#).unwrap();
         assert_eq!(later.state, StepState::Unknown);
+    }
+
+    #[test]
+    fn a_step_that_needs_you_offers_short_one_line_answers() {
+        let asking = |choices: &[&str]| {
+            let mut ask = step("spec", StepState::NeedsYou);
+            ask.choices = choices.iter().map(|c| c.to_string()).collect();
+            checked(run(vec![ask]))
+        };
+        let kept = asking(&["Approve the spec", "  Send it\nback "]).unwrap();
+        assert_eq!(kept.steps[0].choices, ["Approve the spec", "Send it back"]);
+        assert!(asking(&["a", "b", "c", "d", "e"]).is_err(), "at most four");
+        assert!(asking(&[&"x".repeat(CHOICE_MAX_CHARS + 1)]).is_err(), "a button's label");
+        assert!(asking(&["Approve", "Approve"]).is_err(), "each once");
+        assert!(asking(&["  "]).is_err(), "never blank");
+
+        let mut done = step("build", StepState::Passed);
+        done.choices = vec!["Merge it".into()];
+        assert!(checked(run(vec![done])).unwrap().steps[0].choices.is_empty(), "only a step waiting on you is answered");
+
+        let older: WorkflowStep = serde_json::from_str(r#"{"name":"spec","state":"needs_you"}"#).unwrap();
+        assert!(older.choices.is_empty(), "a report without choices still reads");
+        assert!(!serde_json::to_string(&older).unwrap().contains("choices"), "and is sent as an older daemon expects");
     }
 }

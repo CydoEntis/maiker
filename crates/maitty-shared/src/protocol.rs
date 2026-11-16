@@ -2146,6 +2146,10 @@ pub struct TermInfo {
     /// Follow-ups waiting for its turn to end, next first.
     #[serde(default)]
     pub queued: Vec<String>,
+    /// The agent's own turn is over: it is at its prompt and takes a message, though helpers it
+    /// started may keep the pane working. Absent from an older daemon, which reads as not over.
+    #[serde(default)]
+    pub own_turn_over: bool,
     /// The repository's main checkout, if the pane is in a repo.
     pub root: Option<PathBuf>,
     /// The checkout (main or a linked worktree) the pane is in.
@@ -3938,6 +3942,7 @@ mod tests {
                 state: StepState::SentBack,
                 note: Some("two findings".into()),
                 helper: None,
+                choices: Vec::new(),
             }],
             reported_at: 5,
         });

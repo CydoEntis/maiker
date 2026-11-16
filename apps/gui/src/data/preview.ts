@@ -45,6 +45,8 @@ export type TerminalDetails = {
   pr?: PullRequest | null
   /** The follow-ups the pane's daemon holds for its working agent, oldest first. */
   queued?: string[]
+  /** The agent's own turn is over: it takes a message, though helpers it started may keep the pane working. */
+  ownTurnOver?: boolean
   /** The helpers the session asked to start and waits on the person for, one task each; absent from an older daemon. */
   helperAsk?: string[]
   /** The agent's subagents as its runtime reports them; absent from an older daemon. */
@@ -61,7 +63,8 @@ export type WorkflowRun = {
   workflow: string
   run: string
   ticket: { key: string; title: string | null; link: string | null } | null
-  steps: { name: string; state: WorkflowStepState; note: string | null; helper: string | null }[]
+  /** `choices`: what the person may answer a step that needs them, each sent as their own message to the reporting chat. */
+  steps: { name: string; state: WorkflowStepState; note: string | null; helper: string | null; choices: string[] }[]
   /** When the daemon took the report, unix seconds. */
   reportedAt: number
 }
