@@ -848,7 +848,7 @@ fn restore_terminal() {
     }
     {
         use std::io::Write;
-        let _ = write!(std::io::stdout(), "]111");
+        let _ = write!(std::io::stdout(), "\x1b]111\x07");
     }
     ratatui::restore();
 }

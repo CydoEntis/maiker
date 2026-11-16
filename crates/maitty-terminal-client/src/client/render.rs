@@ -34,7 +34,7 @@ pub fn draw(app: &mut App, f: &mut Frame) {
         && !cfg!(test)
     {
         use std::io::Write;
-        let _ = write!(std::io::stdout(), "]11;#{r:02x}{g:02x}{b:02x}");
+        let _ = write!(std::io::stdout(), "\x1b]11;#{r:02x}{g:02x}{b:02x}\x07");
         app.osc_bg = Some(t.bg);
     } else if (terminal_bg || !matches!(t.bg, Color::Rgb(..)))
         && app.osc_bg.is_some()

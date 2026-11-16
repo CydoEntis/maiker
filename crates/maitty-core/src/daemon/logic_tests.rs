@@ -4627,7 +4627,7 @@ fn a_codex_pane_with_lifecycle_hooks_ignores_a_question_shown_on_screen() {
     t.hooked = true;
     t.lifecycle_hooks = true;
     t.status = Status::Working;
-    t.parser.process(b"[2J[H");
+    t.parser.process(b"\x1b[2J\x1b[H");
     t.parser.process(
         &b"
 "
@@ -9280,7 +9280,7 @@ fn a_snooze_ends_when_the_pane_needs_you() {
     d.set_status(t, Status::Idle, "hook: Stop");
     snooze(&mut d);
     let pane = d.terms.get_mut(&t).unwrap();
-    pane.output(b"]133;C]133;D;1");
+    pane.output(b"\x1b]133;C\x07\x1b]133;D;1\x07");
     pane.take_marks();
     assert_eq!(snoozed_until(&d, t), None, "a failed exit wakes it");
     close(&mut d, &[t]);
@@ -9892,7 +9892,7 @@ fn a_desktop_replay_is_the_end_of_the_ring_and_then_the_screen() {
     let tail = term.replay_tail(4);
     let full = term.replay();
 
-    assert!(tail.starts_with(b"6789[0m[2J[H"), "{tail:?}");
+    assert!(tail.starts_with(b"6789\x1b[0m\x1b[2J\x1b[H"), "{tail:?}");
     assert_eq!(term.replay_tail(usize::MAX), full);
     assert!(full.len() > tail.len());
     close(&mut d, &[t]);

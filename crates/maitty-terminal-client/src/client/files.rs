@@ -395,8 +395,7 @@ mod open_tests {
         assert!(opened.is_ok(), "{opened:?}");
         let missing = std::thread::spawn(|| {
             super::open_default(std::path::Path::new(concat!(
-                r"C:
-o\suchile-",
+                r"C:\no\such\file-",
                 env!("APP_COMMAND"),
                 r".txt"
             )))
