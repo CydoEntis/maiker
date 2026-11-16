@@ -6,6 +6,8 @@ import { applyHistoryEntries, createChatProjection, selectChatEvents } from './p
 
 /** How often a working helper's record is read again. A finished one is read once. */
 export const HELPER_POLL_MS = 1500
+/** A failed read of a working helper is tried again after this many polls' time. */
+const HELPER_RETRY_FACTOR = 2
 
 /** A helper's own steps, or why they could not be read (never its text). */
 export type HelperRecordView =
@@ -37,8 +39,11 @@ export function useHelperRecord(term: number | null, helper: string, provider: C
         if (working) timer = window.setTimeout(() => { void read() }, HELPER_POLL_MS)
       } catch (error) {
         if (life.stopped) return
-        // An older daemon, or an agent that keeps no record: the view keeps what the runtime reported.
-        setState({ key, view: { kind: 'unreadable', reason: error instanceof Error ? error.message : String(error) } })
+        // An older daemon, or an agent that keeps no record: the view keeps what the runtime reported. A read that
+        // fails after others worked is a blip: what was read stays, and a working helper is read again.
+        const reason = error instanceof Error ? error.message : String(error)
+        setState((before) => (before?.key === key && before.view.kind === 'rows' ? before : { key, view: { kind: 'unreadable', reason } }))
+        if (working) timer = window.setTimeout(() => { void read() }, HELPER_POLL_MS * HELPER_RETRY_FACTOR)
       }
     }
     void read()
