@@ -14,8 +14,8 @@ export type NotificationAction = {
 
 export type NotificationCardProps = {
   tone: NotificationTone
-  /** The agent's icon with its status badge, or any mark that says who this is about. */
-  icon: ReactNode
+  /** The agent's icon with its status badge, or any mark that says who this is about; a plain message has none. */
+  icon?: ReactNode
   title: string
   /** What happened to it, in words ("needs you"), set after the title in the card's colour. */
   state?: string
@@ -38,7 +38,7 @@ export type NotificationCardProps = {
 export function NotificationCard({ tone, icon, title, state, body, actions = [], time, onClose, countdownMs, closable = true }: NotificationCardProps) {
   return (
     <div className={`mx-notice is-${tone}`} role="status">
-      <span className="mx-notice-icon">{icon}</span>
+      {icon !== undefined && <span className="mx-notice-icon">{icon}</span>}
       <div className="mx-notice-main">
         <div className="mx-notice-head">
           <span className="mx-notice-title">{title}</span>
