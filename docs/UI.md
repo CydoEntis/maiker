@@ -1325,7 +1325,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     elements. There is no HTML anywhere (no `dangerouslySetInnerHTML`), raw tags are text, images are never loaded
     (their alt text shows), and a link is kept only for an `http(s)` address. A link is a button, never an anchor, so it
     never navigates the webview: a click hands the address to the host (`open_link`), which opens it in the person's
-    default browser, and the toast that says so offers **Copy link**. Outside the desktop app a click copies it.
+    default browser, and the toast that says so offers **Copy link**. Outside the desktop app a click copies it. A bare
+    address and inline code that is only an `http(s)` address are links too, the code keeping its chip.
   - *Saving a block* (`exportBlock.ts`, `saveBlock.ts`): a code block has **Copy** and **Save**; a table has **Copy**
     (as Markdown) and **Markdown**, **CSV** and **HTML**. Both are cards whose buttons sit in the head above the content,
     so nothing hangs loose under a table where it reads as part of the next paragraph. A save goes to the export folder of Settings › General
