@@ -78,6 +78,8 @@ type Props = {
   onAddMachine?: () => void
   /** Leaves the page; absent when there is nothing to go back to (no chat is open yet). */
   onCancel?: (() => void) | undefined
+  /** Told the agent the chat will start with, at first and on each change, so the sidebar's draft row shows it. */
+  onAgentChange?: ((agent: ChatAgent) => void) | undefined
   /** A folder and first message to open with (a chat continued from a full one). */
   seed?: { folder: string; message: string } | null
   /** Before the agent's tile: a control the window puts there (Show sidebar, while the sidebar is hidden). */
@@ -105,12 +107,13 @@ type WorkIn = 'auto' | 'folder' | 'tree'
  * shown as its chat (ADR 0003). Enter sends, Ctrl+Enter (⌘Enter on macOS) starts it in the background and keeps the
  * page for the next one, Esc goes back.
  */
-export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassAllowed = false, codexYolo = false, fullAccess = false, browse, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, seed = null, leading }: Props) {
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassAllowed = false, codexYolo = false, fullAccess = false, browse, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
   // On another machine the chat is the agent started in a shell there: this computer's extra models, branches, files and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
   const targetLabel = target?.label ?? 'This computer'
   const [agent, setAgent] = useState<ChatAgent>(defaultAgent)
+  useEffect(() => { onAgentChange?.(agent) }, [agent, onAgentChange])
   // Full access in new chats starts Claude in Bypass permissions (only where Yolo mode allows it) and Codex in Full access.
   const firstMode = (next: ChatAgent): string => (!fullAccess ? START_MODE[next] : next === 'codex' ? CODEX_FULL_MODE : next === 'claude' && bypassAllowed ? BYPASS_MODE : START_MODE[next])
   const [mode, setMode] = useState(() => firstMode(defaultAgent))
