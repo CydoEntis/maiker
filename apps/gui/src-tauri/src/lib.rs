@@ -1380,11 +1380,14 @@ async fn forget_allowed_command(app: tauri::AppHandle, project: String, command_
 #[tauri::command]
 async fn allow_conversation_always(
     app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
     id: u64,
     generation: u64,
     request_id: maitty_shared::conversation::ProviderRequestId,
 ) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::allow_conversation_always(id, generation, request_id, daemon_executable(&app)?)
+    // The chat's own machine remembers the approval: the command runs in its project there.
+    maitty_desktop_client::allow_conversation_always(id, generation, request_id, wire.daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }

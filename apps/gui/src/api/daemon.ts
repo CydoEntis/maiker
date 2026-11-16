@@ -1032,7 +1032,8 @@ export async function forgetAllowedCommand(item: Pick<AllowedCommand, 'project' 
 /** Approves a command request and has the daemon remember it for the conversation's project: the same command is then allowed without asking. */
 export async function allowAlways(conversation: Pick<Conversation, 'id' | 'generation'>, requestId: number | string): Promise<void> {
   await invokeParsed('allow_conversation_always', NullSchema, {
-    id: Number(conversation.id),
+    id: splitConversationKey(Number(conversation.id)).id,
+    ...machineArgOfKey(Number(conversation.id)),
     generation: conversation.generation,
     requestId,
   })

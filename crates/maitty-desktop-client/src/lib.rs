@@ -1758,7 +1758,7 @@ pub async fn allow_conversation_always(
     id: u64,
     generation: u64,
     request_id: maitty_shared::conversation::ProviderRequestId,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationAllowAlways {
@@ -1766,7 +1766,7 @@ pub async fn allow_conversation_always(
             generation,
             request_id,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
