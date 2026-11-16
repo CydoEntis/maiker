@@ -265,8 +265,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    creation order (`model/sidebar.ts`, `bySidebarOrder`). The command palette still lists the most urgent first. A machine can
    be grouped by project and folded. There are no fleets, ships, tabs or tab bar: choosing a session shows the layout it
    is in (`model/layout.ts`), else one of its own. A session's **subagents** are the daemon's `TermInfo.subagent_activity`
-   (`model/subagents.ts`), shown while they run in a bar floating over their session's pane (`RunningSubagents`; not for a session that
-   reported workflow runs, whose helpers are on its Work board), not in the sidebar; **Open its chat** on a row shows its own chat in the pane until you pick a session or **‹ Main session**.
+   (`model/subagents.ts`), shown while they run in a bar floating over their session's terminal (`RunningSubagents`; not for a session that
+   reported workflow runs, whose helpers are on its Work board, and not over a chat, whose agents card already lists them), not in the sidebar; **Open its chat** on a row, or on a running helper's row of the chat's agents card (`OpenSubagentContext`, matched by title or task in `subagentNamed`), shows its own chat in the pane until you pick a session or **‹ Main session**.
    A session's **workflow runs** (the daemon's `workflows`, `model/workflows.ts`) are not in the sidebar either: they are
    the pane's **Work** view (`features/work/`, `usePaneViews().work`), a board placed by `model/board.ts` (a column per reported step, then Needs human and Done), opened from the
    tools bar's Work and left by choosing Chat or Terminal; with no runs it shows `WorkSetup` instead (how to set a
