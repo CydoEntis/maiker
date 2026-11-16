@@ -221,6 +221,8 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
       case 'new-worktree': {
         const refusal = guardLocal(focusedSession, 'worktrees')
         if (refusal !== null) toast.message(refusal)
+        // A new worktree session branches off a terminal pane, which a chat has none of: it moves through its branch menu.
+        else if (focusedSession && isChatSession(focusedSession.conversation)) toast.message('A chat moves to a worktree from its branch menu.')
         else if (focusedSession && online) setWorktreeFrom(focusedSession)
         return
       }
