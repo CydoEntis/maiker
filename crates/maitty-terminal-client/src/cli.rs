@@ -2840,8 +2840,14 @@ fn apply_statusline_setting(
     kept: &std::path::Path,
     before: &str,
 ) -> Result<()> {
-    let change =
-        maitty_provider_claude::update_statusline(root, exe, &app_hook_names(), uninstall, before)?;
+    let change = maitty_provider_claude::update_statusline(
+        root,
+        exe,
+        claude_hook_shell(),
+        &app_hook_names(),
+        uninstall,
+        before,
+    )?;
     if let Some(previous) = change.previous_command_to_save {
         if let Some(dir) = kept.parent() {
             std::fs::create_dir_all(dir)?;
@@ -2902,30 +2908,54 @@ pub fn statusline() {
     }
 }
 
+/// The Git Bash Claude Code runs command lines through on Windows: the one it is told of, else
+/// Git for Windows' own, at its usual places or beside the `git` on PATH.
+fn git_bash() -> Option<PathBuf> {
+    let beside_git = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path)
+            .map(|dir| dir.join("git.exe"))
+            .find(|git| git.is_file())
+            .and_then(|git| git.parent()?.parent().map(|root| root.join("bin").join("bash.exe")))
+    });
+    std::env::var_os("CLAUDE_CODE_GIT_BASH_PATH")
+        .map(PathBuf::from)
+        .into_iter()
+        .chain(
+            [
+                "C:/Program Files/Git/bin/bash.exe",
+                "C:/Program Files (x86)/Git/bin/bash.exe",
+            ]
+            .map(PathBuf::from),
+        )
+        .chain(beside_git)
+        .find(|p| p.is_file())
+}
+
+/// The shell Claude Code runs this computer's hooks and status line through.
+fn claude_hook_shell() -> maitty_provider_claude::HookShell {
+    use maitty_provider_claude::HookShell;
+    if !cfg!(windows) {
+        HookShell::Posix
+    } else if git_bash().is_some() {
+        HookShell::GitBash
+    } else {
+        HookShell::PowerShell
+    }
+}
+
 /// A command line run the way Claude Code runs its own: by bash (Git Bash on Windows, where
-/// cmd stands in when there's none).
+/// PowerShell stands in when there's none).
 fn shell_line(line: &str) -> std::process::Command {
     if cfg!(windows) {
-        let bash = std::env::var_os("CLAUDE_CODE_GIT_BASH_PATH")
-            .map(PathBuf::from)
-            .or_else(|| {
-                [
-                    "C:/Program Files/Git/bin/bash.exe",
-                    "C:/Program Files (x86)/Git/bin/bash.exe",
-                ]
-                .iter()
-                .map(PathBuf::from)
-                .find(|p| p.is_file())
-            });
-        match bash {
+        match git_bash() {
             Some(b) => {
                 let mut c = std::process::Command::new(b);
                 c.args(["-c", line]);
                 c
             }
             None => {
-                let mut c = std::process::Command::new("cmd");
-                c.args(["/C", line]);
+                let mut c = std::process::Command::new("powershell");
+                c.args(["-NoProfile", "-Command", line]);
                 c
             }
         }
@@ -2995,6 +3025,12 @@ fn json_hooks(
                             agent,
                             timeout,
                             matcher: *matcher,
+                            // Only Claude Code's runs are known; other tools keep the quoted line.
+                            shell: if agent == "claude" {
+                                claude_hook_shell()
+                            } else {
+                                maitty_provider_claude::HookShell::Posix
+                            },
                         },
                     ))
                 }),
@@ -3042,7 +3078,10 @@ pub fn stale_claude_hooks() -> Vec<String> {
     let Some(root) = jsonc::parse_value(&text) else {
         return Vec::new();
     };
-    stale_in(&root, &format!("\"{exe}\" hook claude"))
+    stale_in(
+        &root,
+        &maitty_provider_claude::command_line(&exe, "hook claude", claude_hook_shell()),
+    )
 }
 
 /// The app's Claude hooks are in and run this the app (the check `<app> doctor` makes). Reads a
@@ -3057,7 +3096,8 @@ fn stale_in(root: &Value, want: &str) -> Vec<String> {
     maitty_provider_claude::stale_hooks(root, want, &app_hook_names())
 }
 
-/// The app's Claude hooks are in, but not its status line (installed before there was one).
+/// The app's Claude hooks are in, but not its status line (installed before there was one), or
+/// its status line is written for a shell this computer's Claude Code does not run it through.
 fn needs_statusline() -> bool {
     let Ok(text) = std::fs::read_to_string(claude_settings()) else {
         return false;
@@ -3079,7 +3119,11 @@ fn needs_statusline() -> bool {
         .and_then(|s| s.get("command"))
         .and_then(Value::as_str)
         .unwrap_or_default();
-    hooked && !maitty_provider_claude::is_our_statusline(cmd, &app_hook_names())
+    let ours = maitty_provider_claude::is_our_statusline(cmd, &app_hook_names());
+    let as_written = this_exe().is_ok_and(|exe| {
+        cmd == maitty_provider_claude::command_line(&exe, "statusline", claude_hook_shell())
+    });
+    hooked && (!ours || !as_written)
 }
 
 /// False for a side server (<APP>_SOCKET) or a build in a source checkout: neither may take

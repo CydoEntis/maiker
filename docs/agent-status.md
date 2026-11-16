@@ -75,6 +75,14 @@ Codex's published hook schemas. A hook run through PowerShell costs about 150 ms
 call that fires `PreToolUse` and `PostToolUse` takes about 0.3 s longer, inside Codex's 3 s
 hook limit.
 
+Claude Code runs its hooks and its status line (`maitty statusline`, which carries context and
+plan limits) through `sh`, and on Windows through Git Bash, or PowerShell when Git Bash isn't
+installed. PowerShell reads a quoted program path followed by a word as a parse error, so on
+Windows the command line names Maitty's path bare when the path has no space or shell character
+(it runs in both shells). Otherwise it is quoted for Git Bash, or `& "…"` with `"shell":
+"powershell"` without it (`HookShell`, `command_line`). The daemon rewrites a line written for the
+other shell when it starts.
+
 Pi loads `~/.pi/agent/extensions/maitty.js` (or
 `$PI_CODING_AGENT_DIR/extensions/maitty.js`). Use a current Pi with
 `agent_settled`, `ui_prompt_start` and `ui_prompt_end` events. The adapter reports
