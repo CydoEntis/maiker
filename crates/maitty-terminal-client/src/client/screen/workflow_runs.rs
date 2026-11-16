@@ -218,7 +218,7 @@ mod tests {
 
     fn run(states: &[StepState], ticket: Option<&str>) -> WorkflowRun {
         WorkflowRun {
-            workflow: "kitchen".into(),
+            workflow: "factory".into(),
             run: "007".into(),
             ticket: ticket.map(|key| WorkflowTicket { key: key.into(), title: None, link: None }),
             steps: ["intake", "build", "review"]
@@ -248,6 +248,6 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].label, "MAITTY-42");
         assert_eq!(rows[0].step, Some(("build".into(), Working)));
-        assert_eq!(run_label(&run(&[Waiting], None)), "kitchen 007");
+        assert_eq!(run_label(&run(&[Waiting], None)), "factory 007");
     }
 }

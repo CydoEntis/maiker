@@ -474,7 +474,7 @@ mod tests {
 
     fn run(id: &str, steps: &[(&str, StepState)], key: Option<&str>) -> WorkflowRun {
         WorkflowRun {
-            workflow: "kitchen".into(),
+            workflow: "factory".into(),
             run: id.into(),
             ticket: key.map(|key| WorkflowTicket { key: key.into(), title: None, link: None }),
             steps: steps

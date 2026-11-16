@@ -1177,7 +1177,7 @@ fn a_sessions_workflow_runs_show_under_it_and_open_their_steps() {
     use crate::workflow::{StepState::*, WorkflowRun, WorkflowStep, WorkflowTicket};
     let mut app = reference_fixture::world(Stage::None);
     let run = |id: &str, key: Option<&str>, states: [crate::workflow::StepState; 3]| WorkflowRun {
-        workflow: "kitchen".into(),
+        workflow: "factory".into(),
         run: id.into(),
         ticket: key.map(|key| WorkflowTicket { key: key.into(), title: Some("Add export".into()), link: None }),
         steps: ["intake", "build", "review"]

@@ -42,7 +42,7 @@ fn click(app: &mut App, x: u16, y: u16) {
 
 fn run(id: &str, key: &str, title: &str, steps: &[(&str, StepState)]) -> WorkflowRun {
     WorkflowRun {
-        workflow: "kitchen".into(),
+        workflow: "factory".into(),
         run: id.into(),
         ticket: Some(WorkflowTicket { key: key.into(), title: Some(title.into()), link: None }),
         steps: steps

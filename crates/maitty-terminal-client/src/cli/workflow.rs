@@ -59,7 +59,7 @@ mod tests {
     #[test]
     fn a_report_is_read_from_json_and_checked() {
         let run = parse(
-            r#"{"workflow":"kitchen","run":"007","ticket":{"key":"MAITTY-42","title":"Add export"},
+            r#"{"workflow":"factory","run":"007","ticket":{"key":"MAITTY-42","title":"Add export"},
                 "steps":[{"name":"intake","state":"passed"},{"name":"build","state":"working","helper":"MAITTY-42 builder"}]}"#,
         )
         .unwrap();
@@ -72,7 +72,7 @@ mod tests {
     fn a_report_that_is_not_a_run_or_not_allowed_says_why() {
         let not_json = parse("steps: build").unwrap_err();
         assert!(format!("{not_json:#}").contains("not a workflow run"));
-        let empty = parse(r#"{"workflow":"kitchen","run":"1","steps":[]}"#).unwrap_err();
+        let empty = parse(r#"{"workflow":"factory","run":"1","steps":[]}"#).unwrap_err();
         assert!(format!("{empty:#}").contains("at least one step"));
     }
 }

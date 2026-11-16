@@ -37,12 +37,12 @@ mod tests {
     #[test]
     fn a_new_report_replaces_its_run_and_moves_it_to_the_front() {
         let mut runs = Vec::new();
-        record(&mut runs, run("kitchen", "001", StepState::Working), 10);
-        record(&mut runs, run("kitchen", "002", StepState::Working), 11);
+        record(&mut runs, run("factory", "001", StepState::Working), 10);
+        record(&mut runs, run("factory", "002", StepState::Working), 11);
         record(&mut runs, run("other", "001", StepState::Working), 12);
-        record(&mut runs, run("kitchen", "001", StepState::Passed), 13);
+        record(&mut runs, run("factory", "001", StepState::Passed), 13);
         let order: Vec<_> = runs.iter().map(|r| (r.workflow.as_str(), r.run.as_str())).collect();
-        assert_eq!(order, [("kitchen", "001"), ("other", "001"), ("kitchen", "002")]);
+        assert_eq!(order, [("factory", "001"), ("other", "001"), ("factory", "002")]);
         assert_eq!(runs[0].steps[0].state, StepState::Passed);
         assert_eq!(runs[0].reported_at, 13);
     }
@@ -51,7 +51,7 @@ mod tests {
     fn a_pane_keeps_only_its_latest_runs() {
         let mut runs = Vec::new();
         for n in 0..=RUNS_PER_PANE_MAX {
-            record(&mut runs, run("kitchen", &n.to_string(), StepState::Passed), n as u64);
+            record(&mut runs, run("factory", &n.to_string(), StepState::Passed), n as u64);
         }
         assert_eq!(runs.len(), RUNS_PER_PANE_MAX);
         assert!(runs.iter().all(|r| r.run != "0"));

@@ -10381,7 +10381,7 @@ fn a_workflow_report_is_shown_on_its_pane_and_never_changes_its_status() {
         (p.agent, p.hooked, p.status) = (Some("claude".into()), true, Status::Working);
     }
     let run = |state: StepState| WorkflowRun {
-        workflow: "kitchen".into(),
+        workflow: "factory".into(),
         run: "001".into(),
         ticket: None,
         steps: vec![WorkflowStep {
