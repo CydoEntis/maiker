@@ -542,6 +542,12 @@ impl Daemon {
                 if t.conversation_id.is_none() {
                     t.agent = None;
                     t.session = None;
+                    // Its follow-ups were for it: an agent started here next must not get them.
+                    if !t.queue.is_empty() {
+                        tracing::info!("pane {}: dropped {} follow-up(s) queued for an agent that ended", t.id, t.queue.len());
+                        t.queue.clear();
+                        t.queue_sent = None;
+                    }
                     // A pane the desktop app started as this agent ends with it, unless an agent
                     // is back in a moment (`Daemon::close_ended_agents`).
                     if t.owner == Surface::Desktop && t.cmd.is_some() && !t.popup && !t.spare {
@@ -1008,7 +1014,9 @@ impl Daemon {
             // and it is at its prompt: a message waiting for it goes in, as one typed there would.
             let at_prompt = matches!(t.status, Status::Idle | Status::Done)
                 || (t.status == Status::Working && t.own_turn_over && helpers_running(t));
-            let turn_over = at_prompt && t.agent.is_some() && !t.asleep;
+            // An agent the process scan just missed may have exited (Codex says nothing when it
+            // quits): the pane at rest could be its shell, which would run the message.
+            let turn_over = at_prompt && t.agent.is_some() && t.agent_missed == 0 && !t.asleep;
             let last_taken = t
                 .queue_sent
                 .is_none_or(|at| at.elapsed() > QUEUED_TURN_STARTS_WITHIN);

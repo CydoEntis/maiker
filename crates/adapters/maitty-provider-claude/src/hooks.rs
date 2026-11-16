@@ -213,6 +213,9 @@ pub fn status_from_hook(payload: &Value) -> Option<maitty_shared::protocol::Hook
         }
         "Stop" => HookStatus::Done,
         "SessionStart" => HookStatus::Idle,
+        // `/clear` ends one session and starts the next in the same Claude: the agent is still
+        // there, so it is not gone (its queue, its name and the saves all stay).
+        "SessionEnd" if payload.get("reason").and_then(Value::as_str) == Some("clear") => HookStatus::Same,
         "SessionEnd" => HookStatus::Gone,
         _ => return None,
     })
@@ -347,6 +350,11 @@ mod tests {
         assert_eq!(
             status_from_hook(&json!({"hook_event_name":"SessionEnd"})),
             Some(HookStatus::Gone)
+        );
+        assert_eq!(
+            status_from_hook(&json!({"hook_event_name":"SessionEnd","reason":"clear"})),
+            Some(HookStatus::Same),
+            "/clear starts the next session in the same agent"
         );
     }
 

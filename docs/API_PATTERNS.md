@@ -227,7 +227,9 @@ background helpers keep the session working: the agent is back at its prompt. Th
 waits for the turn that one starts (`UserPromptSubmit`), not a minute. Nothing the daemon types for a pane
 (`Term::pending_input`: a queued message's Enter, a moved session's note, a wake) goes in while the pane is Blocked,
 whatever its deadline: the Enter a beat after a message's text would answer a helper's question asked in between. A queue belongs to the agent it was made for:
-a pane whose agent ends or changes (the process scan) drops it. The Enter after a queued command (`/resume`) is
+a pane whose agent ends (its own `SessionEnd`) or changes (the process scan) drops it, and nothing goes in while
+the scan has just missed the agent (`agent_missed`), since the pane at rest may be its shell. Claude's `SessionEnd`
+for `/clear` is not an end: the next session starts in the same agent. The Enter after a queued command (`/resume`) is
 not pressed again when no prompt is reported: such a command opens a menu that a second Enter would answer. `Command::QueueFollowUp { term, text, first }` adds one (`first`,
 a defaulted field, puts it ahead of the ones waiting, for an agent's own command picked while it works),
 `Command::ClearQueue` drops them all, and `Command::DropQueued { term, index, text }` drops one: the one at `index`, and

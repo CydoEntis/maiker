@@ -432,6 +432,35 @@ fn a_session_keeps_its_account_through_sleep_and_restart() {
 }
 
 #[test]
+fn an_agent_that_ends_takes_its_queue_with_it() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.command(0, Command::QueueFollowUp { term: t, text: "for claude".into(), first: false, operation: None }).unwrap();
+    d.apply_hook(from(t, HookStatus::Gone, "SessionEnd", None), Some(true), Vec::new());
+    assert!(d.snapshot().terms[&t].queued.is_empty(), "not kept for the next agent started here");
+    close(&mut d, &[t]);
+}
+
+#[test]
+fn a_queued_message_waits_while_the_agent_may_have_exited() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.hooked, p.status) = (Some("codex".into()), true, Status::Idle);
+        p.agent_missed = 1;
+    }
+    d.command(0, Command::QueueFollowUp { term: t, text: "ls".into(), first: false, operation: None }).unwrap();
+    d.update_statuses();
+    assert_eq!(d.snapshot().terms[&t].queued, ["ls"], "not typed into what may be the shell");
+    d.terms.get_mut(&t).unwrap().agent_missed = 0;
+    d.update_statuses();
+    assert!(d.snapshot().terms[&t].queued.is_empty(), "seen again, so it goes");
+    close(&mut d, &[t]);
+}
+
+#[test]
 fn a_queued_follow_up_goes_in_when_the_turn_is_over() {
     let (mut d, _rx) = daemon();
     let t = pane(&mut d);
