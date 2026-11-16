@@ -179,7 +179,9 @@ commands are `prewarm_agent_session` (the agent names and flag rules of `start_a
 daemon running is older) and `drop_prewarmed_agent`.
 
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
-app's new chat page, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
+app's new chat page and ticket starts, on this computer or another machine, whose own daemon makes it in its checkout
+over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
+absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
 does, requires `project` to be one the app shows (or, from a person's own window, any folder the person picked:
 `may_name_checkout`; a pane's agent, a structured runtime or a rejected client is held to the shown ones) and a git repository, then makes the checkout with

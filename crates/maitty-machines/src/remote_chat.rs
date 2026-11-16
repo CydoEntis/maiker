@@ -46,6 +46,21 @@ pub fn vet_side_answer(reply: Reply) -> Result<Reply, String> {
     }
 }
 
+/// Longest worktree folder taken from another machine, in bytes.
+const WORKTREE_PATH_MAX: usize = 4096;
+
+/// The folder of a worktree another machine's daemon made (`Command::BranchWorktree`), or why it
+/// is refused. It becomes the folder a session starts in there, so it must be one plain absolute
+/// path: a single line, no control or hidden characters, not too long. It is never read here.
+pub fn vet_worktree_reply(reply: Reply) -> Result<Reply, String> {
+    let Reply::Text(folder) = reply else { return Err("it is not a worktree's folder".into()) };
+    let plain = !folder.is_empty()
+        && folder.len() <= WORKTREE_PATH_MAX
+        && folder.starts_with('/')
+        && !folder.chars().any(|c| c.is_control() || is_invisible(c));
+    if plain { Ok(Reply::Text(folder)) } else { Err("its folder is not a plain absolute path".into()) }
+}
+
 /// `text` cut to at most `max` bytes, on a character boundary.
 fn cut_to(mut text: String, max: usize) -> String {
     let mut end = max.min(text.len());
@@ -121,6 +136,17 @@ mod tests {
         assert!(text.starts_with("hi"));
         assert!(text.contains('\n'));
         assert!(!text.chars().any(|c| c == '\x1b' || c == '\u{202e}'));
+    }
+
+    #[test]
+    fn a_worktree_folder_from_another_machine_is_one_plain_absolute_path() {
+        let folder = |text: &str| vet_worktree_reply(Reply::Text(text.into()));
+        assert!(matches!(folder("/home/me/.maitty/worktrees/app/quiet-otter"), Ok(Reply::Text(_))));
+        for bad in ["", "relative/path", "/a\nrm -rf ~", "/a\u{202e}b", "/a\x1b[2J"] {
+            assert!(folder(bad).is_err(), "{bad:?}");
+        }
+        assert!(folder(&format!("/{}", "a".repeat(5000))).is_err());
+        assert!(vet_worktree_reply(Reply::Ok).is_err());
     }
 
     #[test]

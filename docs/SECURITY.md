@@ -821,9 +821,11 @@ path, branch or command: the folder, branch and repository come from that entry,
 typed is the agent's own resume template with the entry's conversation id, which must start with a
 letter or digit and hold only letters, digits, `_` and `-`, at most 128. Making a worktree again
 follows DATABASE "closed sessions": nothing at the path is ever overwritten. Another machine: the
-command is a worktree command, so a window sends it to this computer's daemon only, as it does
-`BranchWorktree` (API_PATTERNS "client routing"; remote worktree management is out of scope, ADR
-0007). Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
+command is a worktree command, so a window sends it to this computer's daemon only (API_PATTERNS
+"client routing"; remote worktree management is out of scope, ADR 0007). `BranchWorktree` is the one
+exception: the desktop app asks another machine's daemon to make a new chat's worktree in its own
+checkout, and takes back only the folder, one plain absolute path (`remote_chat::vet_worktree_reply`),
+which becomes the folder a session starts in there. Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
 
 ## Project-specific: followed transcripts
 

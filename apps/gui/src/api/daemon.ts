@@ -1344,11 +1344,11 @@ export async function switchBranch(folder: string, branch: string, create: boole
 }
 
 /**
- * A worktree of the folder's project on a branch (an existing one, else a new one), made by the daemon the way every
- * other is: trusted like its repo, the repo's setup run, tracked for tidy-up. Resolves to its folder.
+ * A worktree of the folder's project on a branch (an existing one, else a new one), made by the daemon of the folder's
+ * machine the way every other is: trusted like its repo, the repo's setup run, tracked for tidy-up. Resolves to its folder.
  */
-export async function addWorktree(folder: string, branch: string): Promise<string> {
-  return invokeParsed('add_branch_worktree', z.string(), { folder, branch })
+export async function addWorktree(folder: string, branch: string, machine: number = LOCAL_MACHINE): Promise<string> {
+  return invokeParsed('add_branch_worktree', z.string(), { folder, branch, ...(machine === LOCAL_MACHINE ? {} : { machine }) })
 }
 
 /** Opens an agent's official setup page in the browser. */

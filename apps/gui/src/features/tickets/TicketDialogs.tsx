@@ -56,8 +56,7 @@ type StartProps = {
 export function StartTicketDialog({ container, provider, ticket, blockers, blockerState, here, defaultAgent, folder, project, machineName = null, onCancel, onGo }: StartProps) {
   const [agent, setAgent] = useState<ChatAgent>(defaultAgent)
   const remote = machineName !== null
-  const [chosenWorktree, setWorktree] = useState(true)
-  const worktree = chosenWorktree && !remote
+  const [worktree, setWorktree] = useState(true)
   const key = ticketKey(ticket)
   const message = ticketMessage(ticket, provider, blockers)
   const branch = ticketBranch(key, ticket.title)
@@ -78,11 +77,9 @@ export function StartTicketDialog({ container, provider, ticket, blockers, block
               <span className="mx-tk-dim">Folder</span>
               <span className="mx-tk-folder-row"><span className="mx-tk-folder" title={folder}>{folder}</span><span className="mx-tk-dim">Matched from {project}</span></span>
               <span className="mx-tk-dim">Work in</span>
-              {remote
-                ? <span className="mx-tk-folder">This folder</span>
-                : <Segments label="Work in" value={worktree ? 'tree' : 'folder'} items={[{ value: 'tree', label: 'New worktree' }, { value: 'folder', label: 'This folder' }]} onChange={(value) => { setWorktree(value === 'tree') }} />}
+              <Segments label="Work in" value={worktree ? 'tree' : 'folder'} items={[{ value: 'tree', label: 'New worktree' }, { value: 'folder', label: 'This folder' }]} onChange={(value) => { setWorktree(value === 'tree') }} />
               <span />
-              <span className="mx-tk-note">{remote ? `Edits ${machineName}'s checkout directly: a new worktree is made only on this computer.` : worktree ? `Own copy on branch ${branch}. Your checkout stays as it is.` : 'Edits your checkout directly.'}</span>
+              <span className="mx-tk-note">{worktree ? `Own copy on branch ${branch}${remote ? `, made on ${machineName}` : ''}. ${remote ? 'Its' : 'Your'} checkout stays as it is.` : remote ? `Edits ${machineName}'s checkout directly.` : 'Edits your checkout directly.'}</span>
             </div>
           )}
           <div className="mx-tk-sent">

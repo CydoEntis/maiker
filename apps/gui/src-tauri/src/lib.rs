@@ -661,11 +661,18 @@ async fn repo_query(
 }
 
 /// A worktree of the project at `folder` on `branch`, made by the daemon (trusted like its repo, the repo's
-/// setup run, tracked for tidy-up). Answers its folder. This computer's daemon only: the new chat page is
-/// this computer's, and the web view names no executable or machine.
+/// setup run, tracked for tidy-up). Answers its folder. The daemon of `machine` makes it (this computer's when
+/// absent); the web view names no executable.
 #[tauri::command]
-async fn add_branch_worktree(folder: PathBuf, branch: String) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::branch_worktree(folder, branch)
+async fn add_branch_worktree(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    folder: PathBuf,
+    branch: String,
+) -> Result<serde_json::Value, String> {
+    // The project's own machine makes it, in its own checkout; another machine answers only with the new folder.
+    maitty_desktop_client::branch_worktree(folder, branch, wire.worktree_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }

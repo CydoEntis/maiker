@@ -303,11 +303,13 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // A chat on another machine is its daemon's terminal session with the agent typed into the shell, shown as its chat once the
   // agent reports a conversation. The line is built from the closed set `launchFlags` allows (the agent, a permission mode from
   // the fixed list, a model the agent takes by name everywhere, an effort level), so no free text reaches the remote shell;
-  // the first message waits until the agent takes input. A branch or worktree is not made on another machine from here
-  // (ADR 0007: what touches its disk stays local), so asking for one is refused rather than left to edit its checkout.
+  // the first message waits until the agent takes input. A new worktree is made by that machine's daemon in its own
+  // checkout, as on this computer, and the agent starts in it; switching that checkout's branch is not done from here
+  // (ADR 0007), so asking for it is refused rather than left to edit the checkout.
   const startRemoteChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
-    if (request.branch) throw new Error(`A branch or worktree is made only on this computer. Start it in ${request.machineName}'s folder as it is, or switch the branch there first.`)
-    const id = await startOnMachine({ machine: request.machine, name: request.machineName }, request.folder, undefined, !background)
+    if (request.branch?.worktree === false) throw new Error(`A branch is switched only on this computer. Start it in a new worktree, or in ${request.machineName}'s folder as it is.`)
+    const folder = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine) : request.folder
+    const id = await startOnMachine({ machine: request.machine, name: request.machineName }, folder, undefined, !background)
     if (id === null) throw new Error(`${request.machineName} did not report the new session`)
     if (request.message !== '') {
       holdFirstMessage(id, request.message)

@@ -273,6 +273,16 @@ impl Wire {
         self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_side_answer)
     }
 
+    /// Where a request for a branch's worktree goes: `daemon`, taking only the new folder, one
+    /// plain absolute path, from another machine.
+    pub fn worktree_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_worktree_reply)
+    }
+
     /// Where a question about a pane's repository goes. This computer's daemon answers any of
     /// them; another machine's is asked only what `remote_repo::may_ask` allows (what changed and
     /// its diff), and any other question is refused here in the words the window uses for a

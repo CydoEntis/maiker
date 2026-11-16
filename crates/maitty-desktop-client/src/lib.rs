@@ -1285,27 +1285,34 @@ fn standing_shown(standing: Option<maitty_shared::protocol::WorktreeStanding>) -
 /// before the daemon answers (it may take ten minutes), so the usual request limit is too short.
 const BRANCH_WORKTREE_TIMEOUT: Duration = Duration::from_secs(11 * 60);
 
-/// A worktree of `project` on `branch`, made by the daemon the way every other one is: trusted
-/// like its repo, the repo's setup run, tracked for tidy-up. The answer is its folder, the place
-/// to start an agent. A daemon built before the command is told so in words, since it would never
-/// answer.
-pub async fn branch_worktree(project: PathBuf, branch: String) -> Result<Value> {
+/// A worktree of `project` on `branch`, made by the daemon of the machine the project is on, the
+/// way every other one is: trusted like its repo, the repo's setup run, tracked for tidy-up. The
+/// answer is its folder there, the place to start an agent. This computer's daemon built before the
+/// command is told so in words, since it would never answer; another machine's is on this version
+/// or not used.
+pub async fn branch_worktree(project: PathBuf, branch: String, daemon: impl Into<Daemon>) -> Result<Value> {
     let message = ClientMsg::Command(Command::BranchWorktree { project, branch });
-    answered_within(BRANCH_WORKTREE_TIMEOUT, async {
-        let (mut connection, version) = ipc::open_for_user_knowing_version()
-            .await
-            .context("connecting to the local daemon")?;
-        if !daemon_reads(&message, version) {
-            bail!(
-                "the Maitty service running is older than this app and cannot make a worktree yet: restart it (Settings › Daemon), then try again"
-            );
+    let reply = match daemon.into() {
+        Daemon::Local(_) => {
+            answered_within(BRANCH_WORKTREE_TIMEOUT, async {
+                let (mut connection, version) = ipc::open_for_user_knowing_version()
+                    .await
+                    .context("connecting to the local daemon")?;
+                if !daemon_reads(&message, version) {
+                    bail!(
+                        "the Maitty service running is older than this app and cannot make a worktree yet: restart it (Settings › Daemon), then try again"
+                    );
+                }
+                ask(&mut connection, &message).await
+            })
+            .await?
         }
-        match ask(&mut connection, &message).await? {
-            Reply::Text(folder) => Ok(Value::String(folder)),
-            _ => bail!("daemon returned an unexpected worktree reply"),
-        }
-    })
-    .await
+        remote => request_within(message, remote, BRANCH_WORKTREE_TIMEOUT).await?,
+    };
+    match reply {
+        Reply::Text(folder) => Ok(Value::String(folder)),
+        _ => bail!("daemon returned an unexpected worktree reply"),
+    }
 }
 
 /// Where `query` appears in what the app's terminal sessions printed recently.
