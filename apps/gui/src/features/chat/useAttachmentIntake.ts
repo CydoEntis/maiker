@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@/lib/toast'
-import { attachLocalFile, chooseFilesToAttach, MOST_ATTACHMENTS } from '@/api/attachments'
+import { attachLocalFile, attachmentImage, chooseFilesToAttach, MOST_ATTACHMENTS } from '@/api/attachments'
 import { sendFilesToMachine } from '@/api/fileSends'
 import { oversizeMessage, saveImageLocally, sendImageToMachine } from '@/api/imagePaste'
 import { errorMessage } from '@/lib/error-message'
@@ -33,6 +33,20 @@ type Input = {
 }
 
 const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path
+
+/**
+ * The picture of an image on this computer, through the app's own kept copy (the host reads only its own folders), or
+ * null when it cannot be read: the chip then shows the image icon, as before.
+ */
+async function pictureOf(path: string): Promise<Blob | null> {
+  try {
+    const kept = await attachLocalFile(path)
+    return kept.kind === 'image' ? await attachmentImage(kept.path) : null
+  } catch (error) {
+    console.warn('Could not show the attached image', error)
+    return null
+  }
+}
 
 const noun = (count: number) => (count === 1 ? 'file' : 'files')
 
@@ -103,7 +117,18 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
         image: false,
         count: chosen.length,
         start: (transfer) => sendFilesToMachine(where, chosen, transfer),
-        onLanded: (landed) => { keepLanded(target, landed, null) },
+        onLanded: (landed) => {
+          const source = chosen[landed.index]
+          if (source === undefined || kindOf(baseName(source)) !== 'image') {
+            keepLanded(target, landed, null)
+            return
+          }
+          // The window cannot read the other machine's copy, so its thumbnail comes from the file on this computer.
+          void pictureOf(source).then((picture) => {
+            if (picture !== null) keepPicture(landed.remotePath, picture)
+            keepLanded(target, landed, null)
+          })
+        },
       })
       return
     }
