@@ -44,14 +44,6 @@ any workflow that answers `/factory run <ticket> (<link>)` in an agent's chat an
 that already reports runs in the project, or into a new chat. Any chat that has reported a run of any workflow
 counts as a factory chat, and a ticket's run is found by the ticket key the run reports.
 
-One factory is **Maiker Factory**, a Claude Code plugin. Install it in a Claude chat, then set it up in the repo:
-
-```
-/plugin marketplace add CydoEntis/maiker-factory
-/plugin install maiker@factory
-/factory setup
-```
-
 ## Workflow runs: how any workflow shows its steps
 
 A workflow tells Maitty where it is with one command. Any workflow can, in any language, under any agent. There is nothing to install, register or configure in Maitty, and Maitty never
