@@ -643,6 +643,17 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   checked on the way in (printable ASCII, 8 to 200 characters); Plane's address must pass the same
   `check_base_url` that every request does, so a key cannot be saved for an address it could not be
   sent to; Linear's server is fixed and a key for it takes no address.
+- **A repository's ticket file** (`.maitty/tickets.toml`, `daemon/ticket_repo_file.rs`) is the repository's
+  text, so it is untrusted. It is read only when it and its `.maitty` folder are plain (a link is refused), at
+  most 16 KB, as TOML with no unknown keys; every part is checked (GitHub `owner/name`, Plane's address through
+  `check_base_url` and its workspace and project as plain ids, a Linear team id). It only fills a source not
+  linked here, and it never decides where a key goes: a Plane entry is used only when its address and workspace
+  are the ones your saved key is for, and otherwise it is shown as a note and not used. It is never written.
+- **An agent's ticket setup** (`Command::OpenTicketSetup`, `daemon/ticket_setup.rs`, `<app>_tickets_setup`) only
+  opens the setup in the person's windows. The agent never sends or receives a key (the MCP tool refuses
+  anything but an http(s) link, and the reply says only what is linked and whether a key is saved), it cannot
+  save a link, and only the pane itself may ask, for its own project, once per project every 5 seconds. The
+  suggested link is drawn as text and never opened or saved on its own. An ask from another machine is ignored.
 - **Writing to a ticket** (`Query::TicketWrite`, `daemon/tickets_write.rs`) is the one place Maitty changes
   a ticket, and it does two things only: add a comment, or close the ticket. It never edits a ticket's own
   words and never deletes. Nothing is written unless the request carries `confirmed: true`, which the

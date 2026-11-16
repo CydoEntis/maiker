@@ -1028,6 +1028,22 @@ before protocol 108: each added only when its project has none, a name only when
 folder that is not absolute, a repository not written `owner/name`, or a pick whose id is not a ticket id; nothing
 refused is written. At most 500 projects. Human clients only. A damaged file is logged and read as no links.
 
+Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
+`introduced_in` arm, and the new field is `#[serde(default)]`, which an older peer skips) adds:
+
+- `TicketLinks::repo_file: Option<RepoTicketFile { github, plane, linear, notes }>`. For a place on this computer,
+  `answer.project`'s link is what you linked here with the repository's `.maitty/tickets.toml` filling each source
+  you did not (`daemon/ticket_repo_file.rs`); the flags say which parts came from the file and `notes` (at most 4,
+  160 characters each) why any part was not used. `projects` lists only what was linked here, never the file.
+- `Command::OpenTicketSetup { term, folder, source, link }`, from a pane's agent (`<app>_tickets_setup` in
+  `maitty mcp`). Allowed only for the pane's own client (`client.from == Some(term)`), for its own project
+  (`folder`, when given, must be in it). The daemon reads the project's links and key states off the loop, then
+  broadcasts `ServerMsg::TicketSetup(TicketSetupAsk { term, folder, source, link })` to attached human clients
+  (not panes, not structured runtimes), at most once per project every 5 seconds, and replies `Reply::Text` with
+  what is set up, in words: never a key or where it is sent. `link` is one cleaned word (`clean_suggested_link`,
+  512 characters), shown as text. Nothing is saved; the person finishes the setup in the window. Another machine's
+  `TicketSetup` is ignored (`remote_policy`).
+
 The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
 `ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
 `{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them
