@@ -573,39 +573,39 @@ describe('terminal view', () => {
     beforeEach(() => { vi.useFakeTimers() })
     afterEach(() => { vi.useRealTimers() })
 
-    it('never shows a loader for a pane on this computer', async () => {
+    it('hides the screen while it attaches and shows nothing for the first 300 ms', async () => {
       loadTerminalHistory.mockReturnValue(new Promise<TerminalHistory>(() => {}))
       renderTerminal()
 
+      expect(screen.getByRole('region').className).toContain('is-attaching')
+      await act(async () => { await vi.advanceTimersByTimeAsync(299) })
       expect(screen.queryByRole('status')).not.toBeInTheDocument()
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_000) })
-      expect(screen.queryByRole('status')).not.toBeInTheDocument()
-      expect(screen.queryByText(/Connecting|Catching up/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Connecting|Catching up|Loading/)).not.toBeInTheDocument()
     })
 
-    it('shows the catching-up strip for another machine only after 300 ms, and removes it once live', async () => {
+    it('shows placeholder lines for a slow attach, on any machine, and the screen once it is live', async () => {
       let resolveHistory: (history: TerminalHistory) => void = () => {}
       loadTerminalHistory.mockReturnValue(new Promise<TerminalHistory>((resolve) => { resolveHistory = resolve }))
       renderTerminal({ ...conversation, machine: 2, machineName: 'devbox' })
 
-      await act(async () => { await vi.advanceTimersByTimeAsync(299) })
+      await act(async () => { await vi.advanceTimersByTimeAsync(300) })
+      expect(screen.getByRole('status', { name: /^Opening / })).toBeInTheDocument()
       expect(screen.queryByText(/Catching up/)).not.toBeInTheDocument()
-      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
-      expect(screen.getByRole('status')).toHaveTextContent(/Catching up from devbox · \d+ ms/)
 
       await act(async () => {
         resolveHistory({ seq: 3, bytes: bytes('hello ') })
         await vi.advanceTimersByTimeAsync(0)
       })
-      expect(screen.queryByText(/Catching up/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('status', { name: /^Opening / })).not.toBeInTheDocument()
+      expect(screen.getByRole('region').className).not.toContain('is-attaching')
     })
 
-    it('shows nothing for another machine that attaches within 300 ms', async () => {
+    it('shows nothing for an attach within 300 ms', async () => {
       renderTerminal({ ...conversation, machine: 2, machineName: 'devbox' })
       await act(async () => { await vi.advanceTimersByTimeAsync(50) })
       await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
 
-      expect(screen.queryByText(/Catching up/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('status', { name: /^Opening / })).not.toBeInTheDocument()
     })
   })
 

@@ -3,7 +3,7 @@
  * does not look empty or stuck. Static on purpose: an animation that never stops costs a repaint
  * every frame (docs/PERFORMANCE.md), and the wait is short.
  */
-const BLOCK = 'rounded-md bg-raise'
+const BLOCK = 'rounded-md bg-(--line2)'
 
 export function ChatSkeleton() {
   return (
