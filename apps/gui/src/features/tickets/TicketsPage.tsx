@@ -532,6 +532,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
           defaultAgent={host.defaultAgent}
           folder={project.folder}
           project={project.name}
+          machineName={project.machineName}
           onCancel={() => { setDialog(null) }}
           onGo={(choice) => {
             const ticket = dialogTicket

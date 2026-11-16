@@ -42,6 +42,8 @@ type StartProps = {
   defaultAgent: ChatAgent
   folder: string
   project: string
+  /** The name of the other machine the project is on; null on this computer. A worktree is made only here. */
+  machineName?: string | null
   onCancel: () => void
   onGo: (choice: StartChoice) => void
 }
@@ -51,9 +53,11 @@ type StartProps = {
  * Maitty's words, then the ticket's words as a separate, tinted quote. A blocked ticket warns in red; starting is
  * still allowed. Nothing starts without the button or Enter.
  */
-export function StartTicketDialog({ container, provider, ticket, blockers, blockerState, here, defaultAgent, folder, project, onCancel, onGo }: StartProps) {
+export function StartTicketDialog({ container, provider, ticket, blockers, blockerState, here, defaultAgent, folder, project, machineName = null, onCancel, onGo }: StartProps) {
   const [agent, setAgent] = useState<ChatAgent>(defaultAgent)
-  const [worktree, setWorktree] = useState(true)
+  const remote = machineName !== null
+  const [chosenWorktree, setWorktree] = useState(true)
+  const worktree = chosenWorktree && !remote
   const key = ticketKey(ticket)
   const message = ticketMessage(ticket, provider, blockers)
   const branch = ticketBranch(key, ticket.title)
@@ -74,9 +78,11 @@ export function StartTicketDialog({ container, provider, ticket, blockers, block
               <span className="mx-tk-dim">Folder</span>
               <span className="mx-tk-folder-row"><span className="mx-tk-folder" title={folder}>{folder}</span><span className="mx-tk-dim">Matched from {project}</span></span>
               <span className="mx-tk-dim">Work in</span>
-              <Segments label="Work in" value={worktree ? 'tree' : 'folder'} items={[{ value: 'tree', label: 'New worktree' }, { value: 'folder', label: 'This folder' }]} onChange={(value) => { setWorktree(value === 'tree') }} />
+              {remote
+                ? <span className="mx-tk-folder">This folder</span>
+                : <Segments label="Work in" value={worktree ? 'tree' : 'folder'} items={[{ value: 'tree', label: 'New worktree' }, { value: 'folder', label: 'This folder' }]} onChange={(value) => { setWorktree(value === 'tree') }} />}
               <span />
-              <span className="mx-tk-note">{worktree ? `Own copy on branch ${branch}. Your checkout stays as it is.` : 'Edits your checkout directly.'}</span>
+              <span className="mx-tk-note">{remote ? `Edits ${machineName}'s checkout directly: a new worktree is made only on this computer.` : worktree ? `Own copy on branch ${branch}. Your checkout stays as it is.` : 'Edits your checkout directly.'}</span>
             </div>
           )}
           <div className="mx-tk-sent">

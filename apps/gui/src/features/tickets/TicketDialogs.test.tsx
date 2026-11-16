@@ -30,6 +30,14 @@ describe('starting an agent on a ticket', () => {
     expect(onGo).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude', worktree: true, branch: 'agent/gh-142-fix-the-cart' }))
   })
 
+  it("on another machine's project, edits its folder: a worktree is made only on this computer", async () => {
+    const onGo = start({ machineName: 'kingdom' })
+    expect(screen.queryByRole('radiogroup', { name: 'Work in' })).toBeNull()
+    expect(screen.getByText(/Edits kingdom's checkout directly/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Start Claude/ }))
+    expect(onGo).toHaveBeenCalledWith(expect.objectContaining({ worktree: false }))
+  })
+
   it('sends to this chat without the agent and folder choices', async () => {
     const onGo = start({ here: true })
     expect(screen.queryByRole('radiogroup', { name: 'Agent' })).toBeNull()
