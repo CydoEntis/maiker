@@ -132,8 +132,9 @@ webview holds, so a compromised webview could add a text file of those types to 
 the user can write; it cannot overwrite, and cannot write a program.
 
 `agent_models` (`apps/gui/src-tauri/src/claude_models.rs`) starts the installed Claude Code to read
-its model list, and is not a process bridge: the program is the `claude` found on `PATH` by the host,
-the arguments are a constant, the folder is the home folder, and the webview supplies only the
+its model list, and is not a process bridge: the program is the `claude` found on `PATH` by the host
+(on Windows `claude.exe` on `PATH`, else in `~/.local/bin`, else npm's `claude.cmd`, which Windows runs
+through cmd; the constant arguments hold no character cmd reads specially), the arguments are a constant, the folder is the home folder, and the webview supplies only the
 agent's name. One fixed request is written to it, nothing the webview sent; it is stopped as soon as
 it replies or after 20 seconds, and it keeps no session. Each model name it returns is checked
 (`is_model_name`) before it can reach a launch line. It runs as the user with the user's own Claude
