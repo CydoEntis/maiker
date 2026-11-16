@@ -539,8 +539,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
   under 50%, `--m-or` under 75%, `--m-hi` from there). They always show, and each opens Settings › Usage & cost. When
-  a limit starts over is in its tooltip. Only what the agent reported is drawn (ADR 0009); a chat session with no pane
-  has none yet. Where the chat works is in the pane header's crumbs, not in the box.
+  a limit starts over is in its tooltip. For Claude and Codex all three always show, in that order, 0% included; one
+  the agent has not reported yet is an empty ring and "–" in `--dim` ("not reported yet" in its tooltip), never a
+  made-up 0% (ADR 0009). Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
   list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from Codex CLI
   0.167.0). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in

@@ -85,9 +85,20 @@ describe('the usage strip', () => {
     expect(within(strip).getByRole('meter', { name: '5-hour limit' }).parentElement).toHaveAttribute('title', '5-hour limit: 12% used · resets in 3h')
   })
 
-  it('is not drawn when the agent reported nothing', async () => {
+  it('always shows context, 5-hour and weekly for Claude, one not reported yet as a dash rather than a zero', async () => {
     fake.current = new FakeDaemonHistory()
-    render(<ChatSession link={LINK} agent="claude" online usage={{ context: null, limits: [] }} />)
+    render(<ChatSession link={LINK} agent="claude" online usage={{ context: null, limits: [{ name: 'week', used: 0, resetsAt: 0 }] }} />)
+    await settle()
+
+    const meters = within(screen.getByRole('group', { name: 'Usage' }))
+    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context', '5-hour limit', 'Weekly limit'])
+    expect(meters.getByRole('meter', { name: '5-hour limit' })).toHaveAttribute('aria-valuetext', 'not reported yet')
+    expect(meters.getByRole('meter', { name: 'Weekly limit' })).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  it('is not drawn for an agent that reports nothing of the kind', async () => {
+    fake.current = new FakeDaemonHistory()
+    render(<ChatSession link={LINK} agent="gemini" online usage={{ context: null, limits: [] }} />)
     await settle()
 
     expect(screen.queryByRole('group', { name: 'Usage' })).not.toBeInTheDocument()

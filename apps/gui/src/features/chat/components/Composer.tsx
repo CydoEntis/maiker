@@ -341,7 +341,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
             )}
             <ModeControl facts={facts} />
             <span className="mx-spacer" />
-            {facts.usage !== undefined && <UsageMeters usage={facts.usage} onOpen={facts.onOpenUsage} />}
+            {facts.usage !== undefined && <UsageMeters usage={facts.usage} always={agent === 'claude' || agent === 'codex'} onOpen={facts.onOpenUsage} />}
             {stopping ? (
               <button type="button" className="mx-send is-stop" aria-label={`Stop ${agent}`} title={`${agent} is working. Stop it (Esc)`} onClick={stop}><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : busy ? (
@@ -378,24 +378,28 @@ const METER_PATH = 'M6 1H11V11H1V1H6'
 
 /**
  * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
- * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. Only what the agent
- * reported is drawn (ADR 0009); with nothing reported there is none. A click opens Usage & cost.
+ * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. For an agent that
+ * reports them (`always`) all three are drawn, one not reported yet as "–" (ADR 0009: never a made-up zero); for any
+ * other only what it reported, and with nothing reported there is none. A click opens Usage & cost.
  */
-function UsageMeters({ usage, onOpen }: { usage: SessionUsage; onOpen: (() => void) | undefined }) {
-  const items = usageItems(usage, nowSeconds())
+function UsageMeters({ usage, always, onOpen }: { usage: SessionUsage; always: boolean; onOpen: (() => void) | undefined }) {
+  const items = usageItems(usage, nowSeconds(), always)
   if (items.length === 0) return null
   return (
     <span className="mx-usage" role="group" aria-label="Usage">
       {items.map((item) => {
-        const used = item.window === null ? `How much of this chat's memory is used: ${String(item.percent)}%` : item.resetsIn === null ? `${item.label}: ${String(item.percent)}% used` : `${item.label}: ${String(item.percent)}% used · resets in ${item.resetsIn}`
+        const used = item.percent === null
+          ? `${item.label}: not reported yet`
+          : item.window === null ? `How much of this chat's memory is used: ${String(item.percent)}%` : item.resetsIn === null ? `${item.label}: ${String(item.percent)}% used` : `${item.label}: ${String(item.percent)}% used · resets in ${item.resetsIn}`
+        const percent = item.percent ?? 0
         const meter = (
           <>
             <span className="mx-usage-name">{usageName(item)}</span>
-            <svg className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={item.percent} width="12" height="12" viewBox="0 0 12 12">
+            <svg className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} {...(item.percent === null ? { 'aria-valuetext': 'not reported yet' } : { 'aria-valuenow': item.percent })} width="12" height="12" viewBox="0 0 12 12">
               <path d={METER_PATH} className="mx-usage-track" />
-              <path d={METER_PATH} className="mx-usage-fill" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
+              <path d={METER_PATH} className="mx-usage-fill" pathLength={PERCENT} strokeDasharray={`${String(percent)} ${String(PERCENT)}`} />
             </svg>
-            <span className="mx-usage-figure">{item.percent}%</span>
+            <span className="mx-usage-figure">{item.percent === null ? '–' : `${String(item.percent)}%`}</span>
           </>
         )
         return onOpen === undefined
