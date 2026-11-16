@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KeyedProvider, TicketDetail, TicketGroup, TicketKeyState, TicketsResult, TicketSummary, TicketWrite, TicketWritten } from '@/api/tickets'
 import { resetTicketLinksForTest } from './model/ticketLinks'
 import { TicketsPage, type TicketsHost } from './TicketsPage'
+import type { SetupAsk } from './useTicketSetupAsks'
 
 const api = vi.hoisted(() => ({
   loadTicketKeys: vi.fn<() => Promise<TicketsResult<TicketKeyState[]>>>(),
@@ -40,10 +41,10 @@ function host(change: Partial<TicketsHost> = {}): TicketsHost {
   }
 }
 
-function show(page: TicketsHost = host()) {
+function show(page: TicketsHost = host(), setupAsk: SetupAsk | null = null) {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <TicketsPage project={{ name: 'shop', linkKey: ':/home/me/shop', folder: '/home/me/shop', machine: 0, machineName: null }} host={page} />
+      <TicketsPage project={{ name: 'shop', linkKey: ':/home/me/shop', folder: '/home/me/shop', machine: 0, machineName: null }} host={page} setupAsk={setupAsk} />
     </QueryClientProvider>,
   )
   return page
@@ -115,6 +116,29 @@ describe('the Tickets view', () => {
     expect(document.body.innerHTML).not.toContain('lin_api_0123456789')
     await userEvent.click(await screen.findByRole('button', { name: /Core/ }))
     await vi.waitFor(() => { expect(links().projects[0]?.link.linear).toEqual({ id: 'linear:team.1', name: 'Core' }) })
+  })
+})
+
+describe('setup an agent opened', () => {
+  it('opens on the source the agent named, with its link shown as text and nothing saved', async () => {
+    const link = 'https://plane.example/acme/projects/p1/issues/'
+    show(host(), { source: 'plane', link })
+    expect(await screen.findByRole('list', { name: 'Set up Plane' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Plane/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByText(link)).toBeInTheDocument()
+    expect(document.querySelector('.mx-tk-suggested a')).toBeNull()
+    expect(links().projects).toEqual([])
+    expect(api.saveTicketKey).not.toHaveBeenCalled()
+  })
+
+  it("reads the sources a repository's own file names, without a link made here", async () => {
+    links().setRepoFile('/home/me/shop', { linear: { id: 'linear:team.9', name: 'Core' } })
+    api.loadTicketKeys.mockResolvedValue({ ok: true, value: [{ provider: 'Plane', set: false, address: '', workspace: '' }, { provider: 'Linear', set: true, address: '', workspace: '' }] })
+    api.loadTicketGroups.mockImplementation((source) => Promise.resolve({ ok: true, value: source === 'linear' ? [{ id: 'linear:team.9', kind: 'Project', name: 'Core', parent: null, count: 4 }] : [] }))
+    show()
+    await userEvent.click(await screen.findByRole('tab', { name: /Linear/ }))
+    expect(await screen.findByRole('list', { name: 'Tickets' })).toBeInTheDocument()
+    expect(links().projects).toEqual([])
   })
 })
 

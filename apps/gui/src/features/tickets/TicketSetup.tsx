@@ -160,13 +160,17 @@ function GitHubSetup({ project, link, off }: { project: SetupProject; link: Proj
  * folder names none; Plane and Linear need a key once (for every project) and then the project or team this project
  * reads (for it and its worktrees). Each step says which of the two it is.
  */
-export function TicketSetup({ provider, project, link, keys }: { provider: Provider; project: SetupProject; link: ProjectLink; keys: readonly TicketKeyState[] | undefined }) {
-  if (provider === 'github') return <GitHubSetup project={project} link={link} off={link.github === ''} />
+export function TicketSetup({ provider, project, link, keys, suggestedLink }: { provider: Provider; project: SetupProject; link: ProjectLink; keys: readonly TicketKeyState[] | undefined; suggestedLink?: string }) {
+  // A link an agent suggested (`<app>_tickets_setup`): its words, shown as text; nothing is opened or saved from it.
+  const suggested = suggestedLink === undefined ? null : <p className="mx-tk-setup-hint mx-tk-suggested">Your agent suggests <span className="mx-tk-suggested-link">{suggestedLink}</span></p>
+  if (provider === 'github') return <>{suggested}<GitHubSetup project={project} link={link} off={link.github === ''} /></>
   const keyed: KeyedProvider = provider === 'plane' ? 'Plane' : 'Linear'
   const name = PROVIDER_LOOK[provider].name
   const connected = keys?.find((key) => key.provider === keyed)?.set ?? false
   const word = GROUP_WORD[provider]
   return (
+    <>
+    {suggested}
     <ol className="mx-tk-setup" aria-label={`Set up ${name}`}>
       <Step n={1} title={connected ? `${name} is connected on this computer` : `Connect ${name}`} done={connected}>
         {connected ? <span className="mx-tk-setup-hint">For every project. Replace or remove the key in Settings › Tickets › Accounts.</span> : <ConnectKey provider={keyed} source={provider} />}
@@ -175,5 +179,6 @@ export function TicketSetup({ provider, project, link, keys }: { provider: Provi
         {connected ? <PickGroup source={provider} project={project} link={link} /> : <span className="mx-tk-setup-hint">After connecting, pick which {word} this project reads.</span>}
       </Step>
     </ol>
+    </>
   )
 }

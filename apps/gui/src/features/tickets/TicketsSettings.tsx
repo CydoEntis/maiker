@@ -8,7 +8,7 @@ import { SettingsSearch } from '@/features/settings/settingsSearch'
 import { PickerSelect, type PickerItem } from '@/features/settings/components/PickerSelect'
 import type { GitHubSignIn } from '@/features/settings/components/GitHubSection'
 import { errorMessage } from '@/lib/error-message'
-import type { LinkedProject, TicketPlace } from '@/api/ticketLinks'
+import { REPO_TICKETS_FILE, type LinkedProject, type RepoTicketFile, type TicketPlace } from '@/api/ticketLinks'
 import { NO_LINK, useLinkChanges, useTicketLinks, type ProjectLink } from './model/ticketLinks'
 import { KEY_ONCE, PLANE_CLOUD, REPO_SHAPE } from './TicketSetup'
 import type { TicketsProject } from './model/ticketProjects'
@@ -203,6 +203,15 @@ function readsLine(link: ProjectLink): string {
   return [github, link.plane === null ? null : `Plane ${link.plane.name}`, link.linear === null ? null : `Linear ${link.linear.name}`].filter((part) => part !== null).join(' · ')
 }
 
+/** Which sources a repository file gave, in words: "GitHub and Plane from .maitty/tickets.toml"; null when none. */
+function fromFileLine(file: RepoTicketFile | null | undefined): string | null {
+  if (file == null) return null
+  const parts = [file.github ? 'GitHub' : null, file.plane ? 'Plane' : null, file.linear ? 'Linear' : null].filter((part) => part !== null)
+  if (parts.length === 0) return null
+  const named = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${String(parts.at(-1))}`
+  return `${String(named)} from the repo's ${REPO_TICKETS_FILE}`
+}
+
 /** The last part of a folder, as a project's name when no open session names it. */
 function folderName(folder: string): string {
   return folder.split(/[\\/]/).filter((part) => part !== '').pop() ?? folder
@@ -213,6 +222,12 @@ function ProjectEntry({ project, keyed, linked }: { project: ListedProject; keye
   const { save, unlink } = useLinkChanges()
   const { note, settle } = useSaved()
   const [open, setOpen] = useState(false)
+  // What it reads, with its repository's own file filling what was not linked here; the file's words are the daemon's,
+  // cleaned, and shown as text.
+  const asked = useTicketLinks(project.local ? { machineName: project.place.machine, folder: project.place.folder } : null)
+  const file = project.local ? asked.data?.repoFile ?? null : null
+  const fromFile = fromFileLine(file)
+  const reads = fromFile === null ? project.link : asked.data?.project?.link ?? project.link
   const origin = useQuery({ queryKey: ['tickets', 'origin', project.place.machine, project.place.folder], queryFn: () => githubRepoOf(project.place.folder), enabled: open && project.local, retry: false, staleTime: Infinity })
   const detected = origin.data ?? null
   const keep = (link: ProjectLink) => { settle(save(project.place, link), 'Could not save the link') }
@@ -221,10 +236,11 @@ function ProjectEntry({ project, keyed, linked }: { project: ListedProject; keye
   const where = `${project.place.machine === null ? '' : `${project.place.machine} · `}${project.place.folder}`
   return (
     <>
-      <Row label={project.name} detail={`${where} · ${linked ? readsLine(project.link) : 'Not set up yet'}`}>
+      <Row label={project.name} detail={`${where} · ${linked || fromFile !== null ? readsLine(reads) : 'Not set up yet'}${fromFile === null ? '' : ` · ${fromFile}`}`}>
         <button type="button" className="mx-scard-button" aria-expanded={open} onClick={() => { setOpen((now) => !now) }}>{open ? 'Done' : linked ? 'Change' : 'Set up'}</button>
         {linked && <button type="button" className="mx-scard-button is-danger" onClick={() => { settle(unlink(project.place), 'Could not unlink it') }}>Unlink</button>}
       </Row>
+      {file?.notes.map((line) => <p key={line} className="mx-scard-note">{line}</p>)}
       {open && (
         <>
           <Row label="GitHub repo" detail={repoDetail}>

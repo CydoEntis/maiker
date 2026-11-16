@@ -50,6 +50,8 @@ const MACHINE_CLIPBOARD_EVENT: &str = "machine-clipboard";
 const SESSION_ATTENTION_EVENT: &str = "session-attention";
 /// Says a conversation of this computer's daemon changed: `{conversation, generation}`.
 const CONVERSATION_CHANGED_EVENT: &str = "conversation-changed";
+/// An agent of this computer asked for its project's ticket setup: `{term, folder, source, link}`.
+const TICKET_SETUP_EVENT: &str = "ticket-setup";
 const MACHINE_ERROR_EVENT: &str = "machine-error";
 const FOLDER_LISTING_EVENT: &str = "folder-listing";
 /// How a clone a window asked for ended.
@@ -925,6 +927,8 @@ pub enum Reaction {
         tag: u64,
         answer: Result<TicketLinks, TicketError>,
     },
+    /// An agent asked for its project's ticket setup.
+    TicketSetup(maitty_shared::ticket_links::TicketSetupAsk),
     /// A machine's whole snapshot, or none when this computer's line ended.
     Sessions {
         machine: MachineId,
@@ -1018,6 +1022,7 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
             Out::TicketWrite { machine, tag, answer } => Some(Reaction::TicketWrite { machine, tag, answer }),
             Out::TicketLinks { machine, tag, answer } => Some(Reaction::TicketLinks { machine, tag, answer }),
+            Out::TicketSetup(ask) => Some(Reaction::TicketSetup(ask)),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
                 let _ = handle.send(Outgoing {
@@ -1231,6 +1236,9 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             }
             Reaction::TicketLinks { machine, tag, answer } => {
                 let _ = app.emit(TICKET_LINKS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
+            Reaction::TicketSetup(ask) => {
+                let _ = app.emit(TICKET_SETUP_EVENT, ask);
             }
             Reaction::Removed { machine } => {
                 maitty_desktop_client::forget_remote(machine.0);

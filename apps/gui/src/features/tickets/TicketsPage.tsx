@@ -12,6 +12,7 @@ import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
 import { linkOf, placeOf, useTicketLinks, type ProjectLink } from './model/ticketLinks'
 import { TicketSetup } from './TicketSetup'
+import type { SetupAsk } from './useTicketSetupAsks'
 import { GROUP_VIEWS, groupCounts, groupsUnder, isMine, kindWord, matchesSearch, openBlockers, PROVIDER_LOOK, PROVIDERS, ticketKey, type KitchenRun, type Provider } from './model/tickets'
 import { failureOf, ticketsOf, TICKETS_REFRESH_MS, useTicketDetail, useTicketGroups, useTicketList } from './useTicketData'
 import { TicketBoard, TicketRow, TicketSkeleton, type RowState } from './TicketRows'
@@ -132,7 +133,7 @@ const VIEW_ICON: Readonly<Record<GroupKind, IconName>> = { Milestone: 'milestone
  * the list, the board or one kind of group, a selection bar, the ticket page, and the dialogs that start an agent or
  * hand tickets to Kitchen. Ticket text is other people's and is shown as plain text everywhere.
  */
-export function TicketsPage({ project, host, leaving = false }: { project: TicketsProject; host: TicketsHost; leaving?: boolean }) {
+export function TicketsPage({ project, host, leaving = false, setupAsk = null }: { project: TicketsProject; host: TicketsHost; leaving?: boolean; setupAsk?: SetupAsk | null }) {
   const links = useTicketLinks(project)
   const link = linkOf(links.data)
   // The project the daemon took the folder to (a worktree's main checkout), where a link is kept.
@@ -155,7 +156,13 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
     return all
   }, [link, detected.data, keys.data])
   const firstLinked = PROVIDERS.find((provider) => sources[provider].linked) ?? 'github'
-  const [picked, setPicked] = useState<Provider | null>(null)
+  const [picked, setPicked] = useState<Provider | null>(setupAsk?.source ?? null)
+  // An agent's ask opens the source it named; a later ask moves to its source too.
+  const [askSeen, setAskSeen] = useState(setupAsk)
+  if (setupAsk !== askSeen) {
+    setAskSeen(setupAsk)
+    if (setupAsk?.source != null) setPicked(setupAsk.source)
+  }
   const provider = picked ?? firstLinked
   const current = sources[provider]
   const source = current.linked ? current.source : null
@@ -429,7 +436,7 @@ export function TicketsPage({ project, host, leaving = false }: { project: Ticke
           {!current.linked && settling ? (
             <TicketSkeleton />
           ) : !current.linked ? (
-            <TicketSetup provider={provider} project={setupProject} link={link} keys={keys.data} />
+            <TicketSetup provider={provider} project={setupProject} link={link} keys={keys.data} {...(setupAsk === null || setupAsk.link === '' ? {} : { suggestedLink: setupAsk.link })} />
           ) : (
             <>
               {banner !== null && (

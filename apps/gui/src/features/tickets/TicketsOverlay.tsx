@@ -31,7 +31,7 @@ async function queueAll(session: Pick<SessionView, 'id'>, commands: readonly str
 export const TICKETS_EXIT_MS = 220
 
 export function TicketsOverlay({ leaving }: { leaving: boolean }) {
-  const { focusedSession, sessions, root, preferences, setTicketsOpen, setSettingsSection, signInGitHub, startNewChat, saveName, showSessionById, paneViews } = useWorkspace()
+  const { focusedSession, sessions, root, preferences, setTicketsOpen, setSettingsSection, signInGitHub, startNewChat, saveName, showSessionById, paneViews, ticketSetup } = useWorkspace()
   const github = useQuery({ queryKey: ['tickets', 'github-login'], queryFn: () => loadGitHubAccounts(LOCAL_MACHINE), retry: false, staleTime: Infinity })
   const session = focusedSession ?? null
   const project: TicketsProject | null = session === null ? null : ticketProjectOf(session)
@@ -117,5 +117,5 @@ export function TicketsOverlay({ leaving }: { leaving: boolean }) {
     },
     onOpenWork: openWork,
   }
-  return <TicketsPage key={project.linkKey} project={project} host={host} leaving={leaving} />
+  return <TicketsPage key={project.linkKey} project={project} host={host} leaving={leaving} setupAsk={ticketSetup} />
 }
