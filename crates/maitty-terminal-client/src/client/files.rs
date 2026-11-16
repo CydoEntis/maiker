@@ -160,6 +160,17 @@ pub fn quote_path(p: &Path) -> String {
     }
 }
 
+/// A path as one word for the shell that runs a command line: `cmd /S /C` on Windows (double
+/// quotes keep `&`, `^` and spaces literal; a path cannot hold a `"`), `sh -c` elsewhere.
+pub fn shell_word(p: &Path) -> String {
+    let s = p.display().to_string();
+    if cfg!(windows) {
+        format!("\"{s}\"")
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+}
+
 /// Whether a file looks like text: no NUL in its first 8 KB (only those are read).
 pub fn looks_like_text(path: &Path) -> bool {
     use std::io::Read;
@@ -355,6 +366,9 @@ mod tests {
     fn quoting() {
         assert_eq!(quote_path(Path::new("a/b.txt")), "a/b.txt");
         assert_eq!(quote_path(Path::new("my docs/b.txt")), "\"my docs/b.txt\"");
+        if !cfg!(windows) {
+            assert_eq!(shell_word(Path::new("a&b/it's;x")), "'a&b/it'\\''s;x'");
+        }
     }
 }
 

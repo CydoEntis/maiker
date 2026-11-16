@@ -1177,7 +1177,8 @@ impl Config {
         }
     }
 
-    /// `cmd` with `flag model` right after its program (`--model` when `flag` is empty). A
+    /// `cmd` with `flag model` right after its program (`--model` when `flag` is empty), which may
+    /// be a quoted path with spaces, or PowerShell's `& "…"`. A
     /// model with anything but plain name characters is quoted, since it comes from config.
     pub fn with_model(&self, cmd: &str, flag: &str, model: &str) -> String {
         let flag = if flag.is_empty() {
@@ -1194,9 +1195,10 @@ impl Config {
         } else {
             self.quote_for_shell(model)
         };
-        match cmd.split_once(' ') {
-            Some((first, rest)) => format!("{first} {flag} {model} {rest}"),
-            None => format!("{cmd} {flag} {model}"),
+        let (program, rest) = cmd.split_at(program_end(cmd));
+        match rest.trim_start() {
+            "" => format!("{program} {flag} {model}"),
+            rest => format!("{program} {flag} {model} {rest}"),
         }
     }
 
@@ -1439,6 +1441,18 @@ fn which(exe: &str) -> bool {
     std::env::var_os("PATH")
         .map(|p| std::env::split_paths(&p).any(|d| d.join(exe).is_file()))
         .unwrap_or(false)
+}
+
+/// Where a command line's program ends: after its closing quote when it is quoted (`"C:/Program
+/// Files/claude.exe" …`, also behind PowerShell's `& `), else at the first space.
+fn program_end(cmd: &str) -> usize {
+    let start = if cmd.starts_with("& ") { 2 } else { 0 };
+    let program = &cmd[start..];
+    let end = match program.chars().next() {
+        Some(quote @ ('"' | '\'')) => program[1..].find(quote).map(|close| close + 2),
+        _ => program.find(' '),
+    };
+    start + end.unwrap_or(program.len())
 }
 
 #[cfg(test)]
@@ -1996,6 +2010,14 @@ mod tests {
         assert_eq!(
             c.with_model("claude", "", "it's"),
             "claude --model 'it'\\''s'"
+        );
+        assert_eq!(
+            c.with_model("\"C:/Program Files/claude.exe\" 'x'", "", "opus"),
+            "\"C:/Program Files/claude.exe\" --model opus 'x'"
+        );
+        assert_eq!(
+            c.with_model("& \"C:/Program Files/claude.exe\"", "", "opus"),
+            "& \"C:/Program Files/claude.exe\" --model opus"
         );
     }
 
