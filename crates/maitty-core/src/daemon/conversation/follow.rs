@@ -225,15 +225,40 @@ impl Daemon {
             .collect()
     }
 
+    /// Whether a pane already followed is still the same agent's: the pane is there, still the
+    /// desktop app's and awake, and still runs the provider it was followed for. Starting to follow
+    /// needs more (`followable`: a verified hook, a session and its file), but a lapse of those
+    /// while the agent runs is not the agent leaving. Dropping on it made the chat vanish, the pane
+    /// fall back to its terminal, and the chat come back under a new id a moment later.
+    fn still_followed(&self, follower: &Followed) -> bool {
+        self.terms.get(&follower.term).is_some_and(|t| {
+            t.owner == Surface::Desktop
+                && t.remote.is_none()
+                && !t.popup
+                && !t.spare
+                && !t.asleep
+                && !t.process_exited
+                && t.conversation_id.is_none()
+                && provider_of(t.agent.as_deref()) == Some(follower.provider)
+        })
+    }
+
     /// Adds, resets and removes followed conversations to match the panes, and starts a
     /// background read of each file that is due. Called on the daemon's tick.
     pub(in crate::daemon) fn follow_tick(&mut self) {
         let wanted = self.followable();
         let before = self.followed.len();
+        let kept: Vec<ConversationId> = self
+            .followed
+            .iter()
+            .filter(|f| self.still_followed(f))
+            .map(|f| f.id)
+            .collect();
         self.followed.retain(|f| {
-            wanted
-                .iter()
-                .any(|(term, provider, _)| *term == f.term && *provider == f.provider)
+            kept.contains(&f.id)
+                || wanted
+                    .iter()
+                    .any(|(term, provider, _)| *term == f.term && *provider == f.provider)
         });
         let mut changed = self.followed.len() != before;
         for (term, provider, session) in wanted {
