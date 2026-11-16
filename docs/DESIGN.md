@@ -565,7 +565,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   cannot be told apart and times out, and the message stays queued either way.
 - **Pane** (`components/PaneCard.tsx`, `pane.css`, `frame.css`). Agents and shells share one 44px header ruled off by
   a `--line` hairline: the 20px flat app icon with its status badge (named "Agent · Status" for screen readers), the
-  name (14px, 600; the folder and branch in its tooltip) and a pull request's state, then at the right the **Chat ·
+  name (14px, 600; the folder and branch in its tooltip) and a pull request's state (`#45 merged` in `--ok`; once the
+  branch has commits after the merged one, `#45 merged · 3 new commits` in `--working`, since work goes on), then at the right the **Chat ·
   Terminal · Work** tabs (agents with a chat, or with workflow runs; 12.5px 500 `--dim`, the chosen one `--fg` underlined 2px in `--accent`), ⋯ and
   close. Split right, Split down, Maximize, Changes and files and Show or Hide the terminals are in ⋯ and on their
   keys; the tools bar does the side panel and the terminals. Under 360px the tabs go too

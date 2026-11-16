@@ -101,7 +101,8 @@ const TerminalSessionSchema = z.object({
     checks: z.object({ passed: z.number().int().default(0), pending: z.number().int().default(0), failed: z.array(z.string()).default([]) }).default({ passed: 0, pending: 0, failed: [] }),
     review: z.enum(['None', 'Required', 'Approved', 'ChangesRequested']).default('None'),
     conflicting: z.boolean().default(false),
-  }).nullable().default(null),
+    commits_after_merge: z.number().int().nonnegative().default(0),
+  }).transform(({ commits_after_merge: commitsAfterMerge, ...pr }) => ({ ...pr, commitsAfterMerge })).nullable().default(null),
   // The follow-ups its daemon holds for the working agent, oldest first (`TermInfo.queued`).
   queued: z.array(z.string()).default([]),
   // The agent's own turn is over though helpers may keep the pane working (`TermInfo.own_turn_over`); false from an older daemon.

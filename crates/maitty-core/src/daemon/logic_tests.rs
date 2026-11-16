@@ -9489,7 +9489,7 @@ fn pr_merged_for(d: &mut Daemon, t: TermId) {
     d.link_pr(t, Some(MERGED_PR_URL)).unwrap();
     d.prs_read(vec![(
         pr::Place::Link(MERGED_PR_URL.into()),
-        pr::Read::Found(MERGED_PR.into()),
+        pr::Read::Found(MERGED_PR.into(), 0),
     )]);
 }
 
