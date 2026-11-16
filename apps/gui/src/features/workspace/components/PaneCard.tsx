@@ -98,6 +98,7 @@ export function PaneCard(props: PaneCardProps) {
   const shortcutText = useShortcutText()
   const [box, width] = useWidth()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  const menuWasOpen = useRef(false)
   const [naming, setNaming] = useState(false)
   const multi = paneCount > 1
   const full = paneCount >= MAX_PANES
@@ -180,7 +181,18 @@ export function PaneCard(props: PaneCardProps) {
             // While the Work board shows, neither view is underlined; choosing one leaves the board.
             <PaneViewSwitch views={['chat', 'terminal']} view={shown} work={null} onChange={(next) => { if (next !== 'work') props.onViewChange?.(next) }} />
           )}
-          <button type="button" className="mx-pane-control mx-pane-more" aria-label="More pane actions" title="More pane actions" aria-haspopup="menu" onMouseDown={stop} onClick={(event) => { setMenuAt(menuPoint(event, true)) }}>⋯</button>
+          <button
+            type="button"
+            className="mx-pane-control mx-pane-more"
+            aria-label="More pane actions"
+            title="More pane actions"
+            aria-haspopup="menu"
+            aria-expanded={menuAt !== null}
+            // The open menu closes itself on this press, before the click: the click must not open it again.
+            onPointerDown={() => { menuWasOpen.current = menuAt !== null }}
+            onMouseDown={stop}
+            onClick={(event) => { if (!menuWasOpen.current) setMenuAt(menuPoint(event, true)) }}
+          >⋯</button>
           {/* Kept on the only pane too: with the sidebar hidden, it is the one close in reach. */}
           <button type="button" className="mx-pane-control is-close" aria-label={closeLabel} title={closeLabel} onMouseDown={stop} onClick={() => { props.onClose(pane.id) }}><Icon name="close" /></button>
         </span>
