@@ -37,6 +37,12 @@ describe('the Work board', () => {
     expect(boardSummary(board)).toBe('1 needs you · 1 working · 2 done')
   })
 
+  it('counts as working only runs with a step at work, not one waiting between steps', () => {
+    const going = run('1', [['intake', 'passed'], ['build', 'working']], 'MAITTY-42')
+    const between = run('2', [['intake', 'passed'], ['build', 'waiting']], 'MAITTY-43')
+    expect(workBoard([going, between]).workingCount).toBe(1)
+  })
+
   it('says nothing runs when there are no runs, and names a run with no ticket by its workflow', () => {
     expect(boardSummary(workBoard([]))).toBe('Nothing running')
     expect(names(workBoard([run('007', [['spec', 'working']])]))[0]).toEqual(['Spec', ['factory 007']])

@@ -105,7 +105,8 @@ export function workBoard(runs: readonly WorkflowView[]): Board {
     else if (run.needsYou) needs.tickets.push({ run, step: run.current ?? step })
     else steps[names.indexOf(step.name)]?.tickets.push({ run, step })
   }
-  const working = runs.filter((run) => run.active && !run.needsYou).length
+  // In hand means a step is at work; a run waiting between steps is on the board but is not counted as working.
+  const working = runs.filter((run) => runState(run) === 'working').length
   return { columns: [...steps, needs, done], needsCount: needs.tickets.length, workingCount: working, doneCount: done.tickets.length }
 }
 
