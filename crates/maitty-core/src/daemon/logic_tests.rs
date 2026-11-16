@@ -3289,6 +3289,28 @@ fn from(t: TermId, status: HookStatus, event: &str, helper: Option<bool>) -> Cli
 /// A helper asks for permission and is answered: its next news is the work going on, not a
 /// question that "settled itself" into a finish that rings while it still works.
 #[test]
+fn a_queued_messages_enter_waits_while_a_helper_asks_permission() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    d.command(0, Command::QueueFollowUp { term: t, text: "also this".into(), first: false, operation: None }).unwrap();
+    d.apply_hook(from(t, HookStatus::Done, "Stop", None), Some(true), Vec::new());
+    d.update_statuses();
+    assert_eq!(d.terms[&t].pending_input.as_ref().map(|(data, _)| data.clone()), Some(b"\r".to_vec()), "text typed, Enter next");
+
+    // A helper asks before the Enter goes: the Enter would answer its menu.
+    d.apply_hook(from(t, HookStatus::Blocked, "PermissionRequest", Some(true)), Some(true), Vec::new());
+    d.update_statuses();
+    assert_eq!(d.terms[&t].pending_input.as_ref().map(|(data, _)| data.clone()), Some(b"\r".to_vec()), "held");
+
+    d.apply_hook(from(t, HookStatus::Same, "PostToolUse", Some(true)), Some(true), Vec::new());
+    d.update_statuses();
+    assert!(d.terms[&t].pending_input.is_none(), "answered, so the Enter goes");
+    close(&mut d, &[t]);
+}
+
+#[test]
 fn a_helper_answered_after_asking_permission_is_working_again() {
     let (mut d, _rx) = daemon();
     let t = pane(&mut d);

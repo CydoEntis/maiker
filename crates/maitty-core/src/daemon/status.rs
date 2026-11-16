@@ -1040,8 +1040,12 @@ impl Daemon {
         // after a few seconds.
         for t in self.terms.values_mut() {
             let ready = matches!(t.status, Status::Idle | Status::Done) && t.hooked;
+            // Nothing waiting goes into a question the agent asks, deadline or not: a message's
+            // Enter, a beat after its text, would pick the menu's first answer (often "Yes") for a
+            // helper that asked in between. It goes once the question is answered.
+            let asking = t.status == Status::Blocked;
             if let Some((data, by)) = t.pending_input.take() {
-                if ready || Instant::now() >= by {
+                if !asking && (ready || Instant::now() >= by) {
                     // Text, then Enter a beat later, so it lands as a message, not a paste.
                     if data.len() > 1 && data.ends_with(b"\r") {
                         t.input(&data[..data.len() - 1]);
