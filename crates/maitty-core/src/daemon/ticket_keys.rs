@@ -116,7 +116,7 @@ impl KeyStore {
 
     /// Puts `key` in the keychain and reads it back. True only when the keychain gave back exactly
     /// what was put in; anything else leaves no entry behind.
-    fn into_keychain(&self, provider: TicketProvider, key: &Secret) -> bool {
+    fn keep_in_keychain(&self, provider: TicketProvider, key: &Secret) -> bool {
         let account = self.account(provider);
         if self.vault.write(&account, key.expose()).is_err() {
             return false;
@@ -142,7 +142,7 @@ impl KeyStore {
         if let Some(key) = key {
             let key = Secret::new(key);
             let mut storage = KeyStorage::File;
-            if self.into_keychain(provider, &key) {
+            if self.keep_in_keychain(provider, &key) {
                 let without = OnDisk { address: address.clone(), workspace: workspace.clone(), key: None };
                 if self.write_file(provider, &without).is_ok() {
                     storage = KeyStorage::Keychain;
@@ -173,7 +173,7 @@ impl KeyStore {
 
     /// Keeps `saved`: the key in the keychain where there is one, else in the file.
     fn save(&self, provider: TicketProvider, saved: &Saved) -> Result<(), TicketError> {
-        let in_keychain = self.into_keychain(provider, &saved.key);
+        let in_keychain = self.keep_in_keychain(provider, &saved.key);
         let stored = OnDisk {
             address: saved.address.clone(),
             workspace: saved.workspace.clone(),
