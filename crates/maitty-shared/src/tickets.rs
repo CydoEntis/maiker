@@ -234,6 +234,19 @@ pub struct TicketKeyState {
     pub address: String,
     /// The Plane workspace (empty for another provider, and when none is set).
     pub workspace: String,
+    /// Where the key is kept. A daemon from before keychains sends none and keeps it in a file.
+    #[serde(default)]
+    pub stored_in: KeyStorage,
+}
+
+/// Where a daemon keeps a provider's key.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum KeyStorage {
+    /// A file only its owner can read: where a machine with no system keychain keeps it.
+    #[default]
+    File,
+    /// The system's keychain: Windows Credential Manager, the macOS Keychain or the Secret Service.
+    Keychain,
 }
 
 impl TicketKeyState {
@@ -244,6 +257,7 @@ impl TicketKeyState {
             set: self.set,
             address: clean_line(&self.address, TICKET_ADDRESS_MAX_CHARS),
             workspace: clean_line(&self.workspace, TICKET_WORKSPACE_MAX_CHARS),
+            stored_in: self.stored_in,
         }
     }
 }

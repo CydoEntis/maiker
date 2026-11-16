@@ -307,7 +307,7 @@ fn an_unlinked_source_is_set_up_from_its_own_tab() {
     assert!(shown.contains("Set up Plane for shop") && !shown.contains("SECRET123"), "{shown}");
     key(&mut app, KeyCode::Enter);
     let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::TicketKeys { change: TicketKeyChange::Set { .. }, .. }));
-    let state = TicketKeyState { provider: TicketProvider::Plane, set: true, address: "https://plane.example".into(), workspace: "acme".into() };
+    let state = TicketKeyState { provider: TicketProvider::Plane, set: true, address: "https://plane.example".into(), workspace: "acme".into(), stored_in: maitty_shared::tickets::KeyStorage::File };
     keys_reply(&mut app, tag, vec![state]);
     // Connected: the groups are read and picked from, in place.
     let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::Tickets { request: TicketsRequest::Groups, .. }));
@@ -584,10 +584,10 @@ fn a_key_is_sent_once_and_never_drawn() {
     let msgs = sent(&mut rx);
     let tag = tag_of(&msgs, |q| matches!(q, Query::TicketKeys { change: TicketKeyChange::Set { provider: TicketProvider::Plane, address, workspace, key }, .. } if address == "https://plane.example" && workspace == "acme" && key.0 == "plane_api_SECRET123"));
     assert!(!format!("{msgs:?}").contains("SECRET123"), "a request's debug form hides the key");
-    let state = TicketKeyState { provider: TicketProvider::Plane, set: true, address: "https://plane.example".into(), workspace: "acme".into() };
+    let state = TicketKeyState { provider: TicketProvider::Plane, set: true, address: "https://plane.example".into(), workspace: "acme".into(), stored_in: maitty_shared::tickets::KeyStorage::Keychain };
     app.on_machine_server(MachineId::LOCAL, ServerMsg::Reply(Reply::TicketKeys { tag, answer: Ok(vec![state]) }));
     let shown = frame(&mut app, "connected");
-    assert!(shown.contains("Plane connected · key saved") && !shown.contains("SECRET"), "{shown}");
+    assert!(shown.contains("Plane connected · key kept in your system keychain") && !shown.contains("SECRET"), "{shown}");
 }
 
 #[test]
@@ -599,4 +599,16 @@ fn an_older_daemon_is_not_asked() {
     app.act(Action::Tickets);
     assert!(sent(&mut rx).iter().all(|m| !matches!(m, ClientMsg::Query(Query::Tickets { .. } | Query::TicketKeys { .. }))));
     assert!(frame(&mut app, "old daemon").contains("older than"));
+}
+
+#[test]
+fn the_sources_say_where_each_key_is_kept() {
+    use maitty_shared::tickets::KeyStorage;
+    let (mut app, mut rx) = opened_with(github());
+    let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::TicketKeys { change: TicketKeyChange::Status, .. }));
+    let state = |provider: TicketProvider, stored_in: KeyStorage| TicketKeyState { provider, set: true, address: String::new(), workspace: String::new(), stored_in };
+    keys_reply(&mut app, tag, vec![state(TicketProvider::Plane, KeyStorage::Keychain), state(TicketProvider::Linear, KeyStorage::File)]);
+    key(&mut app, KeyCode::Char(','));
+    let shown = frame(&mut app, "sources");
+    assert!(shown.contains("key kept in your system keychain") && shown.contains("key kept in a file: no keychain"), "{shown}");
 }

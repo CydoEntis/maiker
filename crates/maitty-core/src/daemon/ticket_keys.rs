@@ -1,19 +1,33 @@
 //! The keys of the ticket providers that need one (Plane, Linear), kept by the daemon.
 //!
-//! One small file per provider, `<data folder>/ticket-keys/<provider>.json`: the folder is the
-//! owner's alone (`0700`) and the file `0600` on unix, and on Windows it sits in the user's own app
-//! data. It is never `config.toml` (which is synced), a repository, a log line, a snapshot, an
-//! agent's environment or a reply to a client: a client can set a key or remove it and ask
-//! only whether one is set and where it points. In the daemon the key is a `Secret`, which never
-//! prints. Setting one is a human client's alone (the daemon refuses a pane and a structured
-//! runtime before it gets here).
+//! A key is kept in the system's keychain (`keychain`): Windows Credential Manager, the macOS
+//! Keychain or the Secret Service, under an account named for the provider and this data folder,
+//! so a second daemon with its own data folder (a test one beside the real one) never reads or
+//! replaces this one's keys. Beside it, one small file per provider,
+//! `<data folder>/ticket-keys/<provider>.json`, holds what is not secret: Plane's address and
+//! workspace. A machine with no keychain (a server reached over ssh, a Linux with no Secret
+//! Service) keeps the key in that file too, as every daemon did before keychains: the folder is
+//! the owner's alone (`0700`) and the file `0600` on unix, and on Windows it sits in the user's own
+//! app data. A file that still holds a key moves it into the keychain when it is next read, and
+//! the file lets go of it only once the keychain gives it back.
+//!
+//! The key is never `config.toml` (which is synced), a repository, a log line, a snapshot, an
+//! agent's environment or a reply to a client: a client can set a key or remove it and ask only
+//! whether one is set, where it points and where it is kept. In the daemon the key is a `Secret`,
+//! which never prints. Setting one is a human client's alone (the daemon refuses a pane and a
+//! structured runtime before it gets here).
 
+#[cfg(test)]
+use super::keychain::NoVault;
+use super::keychain::{SystemKeychain, Vault, VaultError};
 use super::usage_store::write_file;
 use crate::http::{Secret, check_base_url};
 use maitty_shared::protocol::TicketKeyChange;
-use maitty_shared::tickets::{TICKET_ADDRESS_MAX_CHARS, TICKET_WORKSPACE_MAX_CHARS, TicketError, TicketKeyState, TicketProvider};
+use maitty_shared::tickets::{KeyStorage, TICKET_ADDRESS_MAX_CHARS, TICKET_WORKSPACE_MAX_CHARS, TicketError, TicketKeyState, TicketProvider};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use sha2::{Digest, Sha256};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 /// The folder of keys inside the data folder.
 const FOLDER: &str = "ticket-keys";
@@ -22,15 +36,20 @@ const KEY_MIN_CHARS: usize = 8;
 const KEY_MAX_CHARS: usize = 200;
 /// Linear has one server; the address of its key is not asked for.
 pub(super) const LINEAR_ADDRESS: &str = "https://api.linear.app";
+/// How many hex characters of the data folder's hash name it in a keychain account: enough that
+/// two folders never meet, short enough to read in the keychain's own list.
+const FOLDER_ID_CHARS: usize = 16;
 
-/// What is kept for one provider, as it sits on disk. It has no `Debug`: the key is in it.
+/// What is kept for one provider, as it sits on disk. It has no `Debug`: the key can be in it.
 #[derive(Serialize, Deserialize)]
 struct OnDisk {
     #[serde(default)]
     address: String,
     #[serde(default)]
     workspace: String,
-    key: String,
+    /// The key itself, only where there is no keychain; absent when the keychain holds it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    key: Option<String>,
 }
 
 /// What a provider needs to make a request.
@@ -44,24 +63,37 @@ pub(super) struct Saved {
 
 pub(super) struct KeyStore {
     dir: PathBuf,
+    vault: Arc<dyn Vault>,
+    /// Names this data folder in keychain accounts.
+    folder_id: String,
 }
 
 impl KeyStore {
     pub(super) fn real() -> KeyStore {
-        KeyStore::at(crate::config::data_dir().join(FOLDER))
+        KeyStore::with_vault(crate::config::data_dir().join(FOLDER), Arc::new(SystemKeychain))
     }
 
+    /// Keys kept in files under `dir` alone, with no keychain.
+    #[cfg(test)]
     pub(super) fn at(dir: PathBuf) -> KeyStore {
-        KeyStore { dir }
+        KeyStore::with_vault(dir, Arc::new(NoVault))
+    }
+
+    pub(super) fn with_vault(dir: PathBuf, vault: Arc<dyn Vault>) -> KeyStore {
+        let folder_id = folder_id(&dir);
+        KeyStore { dir, vault, folder_id }
     }
 
     fn path(&self, provider: TicketProvider) -> PathBuf {
         self.dir.join(format!("{}.json", provider.name()))
     }
 
-    /// The key kept for `provider`, `None` when there is none. A file that cannot be read is an
-    /// error that tells the user to set the key again, never a key that is silently not there.
-    pub(super) fn load(&self, provider: TicketProvider) -> Result<Option<Saved>, TicketError> {
+    /// The keychain account of `provider`'s key in this data folder.
+    fn account(&self, provider: TicketProvider) -> String {
+        format!("{}@{}", provider.name(), self.folder_id)
+    }
+
+    fn read_file(&self, provider: TicketProvider) -> Result<Option<OnDisk>, TicketError> {
         let text = match std::fs::read_to_string(self.path(provider)) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -70,13 +102,11 @@ impl KeyStore {
                 return Err(unreadable());
             }
         };
-        let stored: OnDisk = serde_json::from_str(&text).map_err(|_| unreadable())?;
-        Ok(Some(Saved { address: stored.address, workspace: stored.workspace, key: Secret::new(stored.key) }))
+        serde_json::from_str(&text).map(Some).map_err(|_| unreadable())
     }
 
-    fn save(&self, provider: TicketProvider, saved: &Saved) -> Result<(), TicketError> {
-        let stored = OnDisk { address: saved.address.clone(), workspace: saved.workspace.clone(), key: saved.key.expose().to_owned() };
-        let bytes = serde_json::to_vec(&stored).map_err(|_| unwritable())?;
+    fn write_file(&self, provider: TicketProvider, stored: &OnDisk) -> Result<(), TicketError> {
+        let bytes = serde_json::to_vec(stored).map_err(|_| unwritable())?;
         write_file(&self.path(provider), &bytes).map_err(|error| {
             // The cause can name a path but never a key; only that it failed is kept.
             tracing::warn!("couldn't keep the {} key: {}", provider.name(), error.root_cause().to_string().chars().take(100).collect::<String>());
@@ -84,35 +114,130 @@ impl KeyStore {
         })
     }
 
+    /// Puts `key` in the keychain and reads it back. True only when the keychain gave back exactly
+    /// what was put in; anything else leaves no entry behind.
+    fn keep_in_keychain(&self, provider: TicketProvider, key: &Secret) -> bool {
+        let account = self.account(provider);
+        if self.vault.write(&account, key.expose()).is_err() {
+            return false;
+        }
+        match self.vault.read(&account) {
+            Ok(Some(back)) if back == key.expose() => true,
+            _ => {
+                tracing::warn!("the keychain did not give the {} key back; it stays in the file", provider.name());
+                let _ = self.vault.delete(&account);
+                false
+            }
+        }
+    }
+
+    /// The key kept for `provider` and where it is, `None` when there is none. A file or keychain
+    /// entry that cannot be read is an error that tells the user to set the key again, never a key
+    /// that is silently not there. A key still in the file moves into the keychain here.
+    fn load_kept(&self, provider: TicketProvider) -> Result<Option<(Saved, KeyStorage)>, TicketError> {
+        let Some(stored) = self.read_file(provider)? else {
+            return Ok(None);
+        };
+        let OnDisk { address, workspace, key } = stored;
+        if let Some(key) = key {
+            let key = Secret::new(key);
+            let mut storage = KeyStorage::File;
+            if self.keep_in_keychain(provider, &key) {
+                let without = OnDisk { address: address.clone(), workspace: workspace.clone(), key: None };
+                if self.write_file(provider, &without).is_ok() {
+                    storage = KeyStorage::Keychain;
+                } else {
+                    // The file still holds it, so the file is where it is kept.
+                    let _ = self.vault.delete(&self.account(provider));
+                }
+            }
+            return Ok(Some((Saved { address, workspace, key }, storage)));
+        }
+        match self.vault.read(&self.account(provider)) {
+            Ok(Some(key)) => Ok(Some((Saved { address, workspace, key: Secret::new(key) }, KeyStorage::Keychain))),
+            Ok(None) => {
+                tracing::warn!("the {} key is gone from the keychain", provider.name());
+                Err(unreadable())
+            }
+            Err(error) => {
+                tracing::warn!("couldn't read the {} key from the keychain: {error:?}", provider.name());
+                Err(TicketError::Invalid("The system keychain did not give the saved key; unlock it, or set the key again".into()))
+            }
+        }
+    }
+
+    /// The key kept for `provider`, `None` when there is none.
+    pub(super) fn load(&self, provider: TicketProvider) -> Result<Option<Saved>, TicketError> {
+        Ok(self.load_kept(provider)?.map(|(saved, _)| saved))
+    }
+
+    /// Keeps `saved`: the key in the keychain where there is one, else in the file.
+    fn save(&self, provider: TicketProvider, saved: &Saved) -> Result<(), TicketError> {
+        let in_keychain = self.keep_in_keychain(provider, &saved.key);
+        let stored = OnDisk {
+            address: saved.address.clone(),
+            workspace: saved.workspace.clone(),
+            key: if in_keychain { None } else { Some(saved.key.expose().to_owned()) },
+        };
+        let written = self.write_file(provider, &stored);
+        if written.is_err() && in_keychain {
+            let _ = self.vault.delete(&self.account(provider));
+        }
+        written
+    }
+
+    /// Forgets `provider`'s key in the keychain and the file both.
     fn remove(&self, provider: TicketProvider) -> Result<(), TicketError> {
-        match std::fs::remove_file(self.path(provider)) {
+        let from_keychain = match self.vault.delete(&self.account(provider)) {
+            Ok(()) | Err(VaultError::Unavailable) => Ok(()),
+            Err(VaultError::Failed) => {
+                tracing::warn!("couldn't remove the {} key from the keychain", provider.name());
+                Err(TicketError::Invalid("The key could not be removed from the system keychain".into()))
+            }
+        };
+        let from_file = match std::fs::remove_file(self.path(provider)) {
             Ok(()) => Ok(()),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
             Err(error) => {
                 tracing::warn!("couldn't remove the {} key file: {:?}", provider.name(), error.kind());
                 Err(unwritable())
             }
-        }
+        };
+        from_keychain.and(from_file)
     }
 
-    /// Whether each provider has a key. A file that cannot be read shows as not set (and is
+    /// Whether each provider has a key and where. One that cannot be read shows as not set (and is
     /// logged), so the user can set it again.
     pub(super) fn states(&self) -> Vec<TicketKeyState> {
         TicketProvider::ALL
             .into_iter()
             .map(|provider| {
-                let saved = self.load(provider).ok().flatten();
+                let kept = self.load_kept(provider).ok().flatten();
                 let visible = |text: Option<String>| text.unwrap_or_default();
                 TicketKeyState {
                     provider,
-                    set: saved.is_some(),
+                    set: kept.is_some(),
                     // The address of Linear is fixed, so it is no setting to show.
-                    address: visible(saved.as_ref().filter(|_| provider == TicketProvider::Plane).map(|saved| saved.address.clone())),
-                    workspace: visible(saved.map(|saved| saved.workspace)),
+                    address: visible(kept.as_ref().filter(|_| provider == TicketProvider::Plane).map(|(saved, _)| saved.address.clone())),
+                    workspace: visible(kept.as_ref().map(|(saved, _)| saved.workspace.clone())),
+                    stored_in: kept.map_or(KeyStorage::File, |(_, storage)| storage),
                 }
             })
             .collect()
     }
+}
+
+/// A short, stable name for the data folder that holds `dir`: the hash of its real path, so the
+/// same folder named two ways is one and two folders are two. `dir` may not exist yet; its parent,
+/// the data folder, does whenever the daemon runs.
+fn folder_id(dir: &Path) -> String {
+    let real = std::fs::canonicalize(dir).ok().or_else(|| {
+        let parent = std::fs::canonicalize(dir.parent()?).ok()?;
+        Some(parent.join(dir.file_name()?))
+    });
+    let path = real.unwrap_or_else(|| dir.to_path_buf());
+    let digest = Sha256::digest(path.to_string_lossy().as_bytes());
+    digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>().chars().take(FOLDER_ID_CHARS).collect()
 }
 
 fn unreadable() -> TicketError {
@@ -267,6 +392,119 @@ mod tests {
         // Setting it again replaces the broken file.
         change(&store, plane("https://plane.example.com", "w", KEY)).unwrap();
         assert!(store.load(TicketProvider::Plane).unwrap().is_some());
+    }
+
+    use crate::daemon::keychain::fake::FakeVault;
+
+    fn kept_in(vault: Arc<FakeVault>) -> (crate::daemon::persist::ScratchDir, KeyStore) {
+        let root = crate::daemon::persist::scratch_dir();
+        let store = KeyStore::with_vault(root.path().join(FOLDER), vault);
+        (root, store)
+    }
+
+    fn file_text(store: &KeyStore, provider: TicketProvider) -> String {
+        std::fs::read_to_string(store.path(provider)).unwrap()
+    }
+
+    fn plane_state(states: &[TicketKeyState]) -> &TicketKeyState {
+        states.iter().find(|state| state.provider == TicketProvider::Plane).unwrap()
+    }
+
+    #[test]
+    fn with_a_keychain_the_key_goes_there_and_the_file_keeps_only_where_it_points() {
+        let vault = Arc::new(FakeVault::default());
+        let (_root, store) = kept_in(vault.clone());
+        let states = change(&store, plane("http://192.168.1.244", "ideayard", KEY)).unwrap();
+        assert_eq!(plane_state(&states).stored_in, KeyStorage::Keychain);
+        let text = file_text(&store, TicketProvider::Plane);
+        assert!(!text.contains("SECRETVALUE") && text.contains("ideayard"), "{text}");
+        assert_eq!(vault.kept.lock().unwrap().get(&store.account(TicketProvider::Plane)).map(String::as_str), Some(KEY));
+        assert_eq!(store.load(TicketProvider::Plane).unwrap().unwrap().key.expose(), KEY);
+
+        change(&store, TicketKeyChange::Remove { provider: TicketProvider::Plane }).unwrap();
+        assert!(vault.kept.lock().unwrap().is_empty(), "removing forgets it in the keychain");
+        assert!(!store.path(TicketProvider::Plane).exists(), "and the file");
+    }
+
+    #[test]
+    fn with_no_keychain_the_key_stays_in_the_file_and_says_so() {
+        let vault = Arc::new(FakeVault { gone: true, ..FakeVault::default() });
+        let (_root, store) = kept_in(vault);
+        let states = change(&store, plane("http://192.168.1.244", "ideayard", KEY)).unwrap();
+        assert_eq!((plane_state(&states).set, plane_state(&states).stored_in), (true, KeyStorage::File));
+        assert!(file_text(&store, TicketProvider::Plane).contains(KEY));
+        assert_eq!(store.load(TicketProvider::Plane).unwrap().unwrap().key.expose(), KEY);
+        // Removing with no keychain still removes the file.
+        change(&store, TicketKeyChange::Remove { provider: TicketProvider::Plane }).unwrap();
+        assert!(!store.path(TicketProvider::Plane).exists());
+    }
+
+    #[test]
+    fn a_key_still_in_its_file_moves_into_the_keychain_when_it_is_next_read() {
+        let (_root, files) = store();
+        change(&files, plane("https://plane.example.com", "w", KEY)).unwrap();
+        assert!(file_text(&files, TicketProvider::Plane).contains(KEY), "an older daemon's file");
+
+        let vault = Arc::new(FakeVault::default());
+        let store = KeyStore::with_vault(files.dir.clone(), vault.clone());
+        assert_eq!(store.load(TicketProvider::Plane).unwrap().unwrap().key.expose(), KEY);
+        assert!(!file_text(&store, TicketProvider::Plane).contains("SECRETVALUE"), "the file let go of it");
+        assert_eq!(vault.kept.lock().unwrap().len(), 1);
+        assert_eq!(plane_state(&store.states()).stored_in, KeyStorage::Keychain);
+    }
+
+    #[test]
+    fn the_file_keeps_the_key_until_the_keychain_gives_it_back() {
+        let (_root, files) = store();
+        change(&files, plane("https://plane.example.com", "w", KEY)).unwrap();
+        // A keychain that says it kept the key but gives back something else.
+        let vault = Arc::new(FakeVault { lies: true, ..FakeVault::default() });
+        let store = KeyStore::with_vault(files.dir.clone(), vault.clone());
+        assert_eq!(store.load(TicketProvider::Plane).unwrap().unwrap().key.expose(), KEY);
+        assert!(file_text(&store, TicketProvider::Plane).contains(KEY), "the key was not let go of");
+        assert!(vault.kept.lock().unwrap().is_empty(), "and nothing wrong was left in the keychain");
+        assert_eq!(plane_state(&store.states()).stored_in, KeyStorage::File);
+        // A new key set through a keychain that lies stays in the file too.
+        let states = change(&store, plane("https://plane.example.com", "w", "plane_api_OTHERVALUE99")).unwrap();
+        assert_eq!(plane_state(&states).stored_in, KeyStorage::File);
+        assert!(file_text(&store, TicketProvider::Plane).contains("OTHERVALUE"));
+    }
+
+    #[test]
+    fn a_key_gone_from_the_keychain_is_an_error_to_set_again_not_a_missing_key() {
+        let vault = Arc::new(FakeVault::default());
+        let (_root, store) = kept_in(vault.clone());
+        change(&store, plane("https://plane.example.com", "w", KEY)).unwrap();
+        vault.kept.lock().unwrap().clear();
+        assert!(matches!(store.load(TicketProvider::Plane), Err(TicketError::Invalid(_))));
+        assert!(!plane_state(&store.states()).set);
+    }
+
+    #[test]
+    fn two_data_folders_keep_their_keys_apart_in_one_keychain() {
+        let vault = Arc::new(FakeVault::default());
+        let (_real, real) = kept_in(vault.clone());
+        let (_test, test) = kept_in(vault.clone());
+        assert_ne!(real.account(TicketProvider::Plane), test.account(TicketProvider::Plane));
+        change(&real, plane("https://plane.example.com", "real", KEY)).unwrap();
+        change(&test, plane("https://plane.example.com", "test", "plane_api_TESTDAEMONKEY1")).unwrap();
+        assert_eq!(real.load(TicketProvider::Plane).unwrap().unwrap().key.expose(), KEY);
+        assert_eq!(test.load(TicketProvider::Plane).unwrap().unwrap().key.expose(), "plane_api_TESTDAEMONKEY1");
+        change(&test, TicketKeyChange::Remove { provider: TicketProvider::Plane }).unwrap();
+        assert_eq!(real.load(TicketProvider::Plane).unwrap().unwrap().key.expose(), KEY, "the other folder's key stays");
+        // The same folder named before and after its key folder exists is one account.
+        let again = KeyStore::with_vault(real.dir.clone(), vault);
+        assert_eq!(again.account(TicketProvider::Plane), real.account(TicketProvider::Plane));
+    }
+
+    #[test]
+    fn a_folder_is_named_the_same_before_and_after_it_is_made() {
+        let root = crate::daemon::persist::scratch_dir();
+        let dir = root.path().join(FOLDER);
+        let before = folder_id(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(folder_id(&dir), before);
+        assert_eq!(before.len(), FOLDER_ID_CHARS);
     }
 
     #[cfg(unix)]

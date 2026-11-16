@@ -31,8 +31,8 @@ function links() {
   return fake.links
 }
 
-const NO_KEYS: TicketKeyState[] = [{ provider: 'Plane', set: false, address: '', workspace: '' }, { provider: 'Linear', set: false, address: '', workspace: '' }]
-const LINEAR_SET: TicketKeyState[] = [NO_KEYS[0] as TicketKeyState, { provider: 'Linear', set: true, address: '', workspace: '' }]
+const NO_KEYS: TicketKeyState[] = [{ provider: 'Plane', set: false, address: '', workspace: '', stored_in: 'File' }, { provider: 'Linear', set: false, address: '', workspace: '', stored_in: 'File' }]
+const LINEAR_SET: TicketKeyState[] = [NO_KEYS[0] as TicketKeyState, { provider: 'Linear', set: true, address: '', workspace: '', stored_in: 'File' }]
 const SECRET = 'lin_api_0123456789'
 
 function show(signIn = vi.fn()) {
@@ -85,7 +85,7 @@ describe('Settings › Tickets', () => {
   })
 
   it('gives a Linear key to the service once, then never shows it', async () => {
-    api.saveTicketKey.mockResolvedValue({ ok: true, value: LINEAR_SET })
+    api.saveTicketKey.mockResolvedValue({ ok: true, value: [NO_KEYS[0] as TicketKeyState, { provider: 'Linear', set: true, address: '', workspace: '', stored_in: 'Keychain' }] })
     show()
     const field = await screen.findByLabelText('Linear API key')
     expect(field).toHaveAttribute('type', 'password')
@@ -94,9 +94,15 @@ describe('Settings › Tickets', () => {
     const connects = screen.getAllByRole('button', { name: 'Connect' })
     await userEvent.click(connects[connects.length - 1] as HTMLElement)
     expect(api.saveTicketKey).toHaveBeenCalledWith('Linear', '', '', SECRET)
-    expect(await screen.findByText('Connected · key saved')).toBeInTheDocument()
+    expect(await screen.findByText('Connected · Key kept in your system keychain')).toBeInTheDocument()
     expect(screen.queryByLabelText('Linear API key')).toBeNull()
     expect(document.body.innerHTML).not.toContain(SECRET)
+  })
+
+  it('says a key is kept in a file where the machine has no keychain', async () => {
+    api.loadTicketKeys.mockResolvedValue({ ok: true, value: LINEAR_SET })
+    show()
+    expect(await screen.findByText('Connected · Key kept in a file: no keychain on this machine')).toBeInTheDocument()
   })
 
   it('says a key was refused and asks for a new one', async () => {

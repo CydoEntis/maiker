@@ -16,7 +16,7 @@ use maitty_shared::protocol::TICKET_LINKS_SINCE;
 use maitty_shared::ticket_links::{LinkedProject, REPO_TICKETS_FILE, RepoTicketFile, TicketLinkChange, TicketLinks, TicketPlace, TicketSetupAsk, TicketSetupSource};
 use maitty_shared::ticket_paste::{PastedLink, parse_ticket_link};
 use maitty_shared::tickets::{
-    Group, StateCategory, TICKET_COMMENT_MAX_CHARS, TICKET_NAME_MAX_CHARS, TICKETS_PAGE_MAX, Ticket, TicketError,
+    Group, KeyStorage, StateCategory, TICKET_COMMENT_MAX_CHARS, TICKET_NAME_MAX_CHARS, TICKETS_PAGE_MAX, Ticket, TicketError,
     TicketKeyState, TicketProvider, TicketSummary, TicketWrite, TicketWritten, TicketsReply,
     TicketsRequest,
 };
@@ -787,7 +787,7 @@ impl App {
 
     /// A `Reply::TicketKeys`: which providers have a key now. Never a key.
     pub(in crate::client) fn ticket_keys_arrived(&mut self, tag: u64, answer: Result<Vec<TicketKeyState>, TicketError>) {
-        let answer = answer.map(|k| k.into_iter().map(TicketKeyState::cleaned).collect()).map_err(TicketError::cleaned);
+        let answer = answer.map(|k| k.into_iter().map(TicketKeyState::cleaned).collect::<Vec<_>>()).map_err(TicketError::cleaned);
         self.with_tickets(|app, v| {
             if v.asked.remove(&tag) != Some(Asked::Keys) {
                 return;
@@ -796,11 +796,12 @@ impl App {
             let mut picking = None;
             if sent && let Page::Sources(s) = &mut v.page {
                 match &answer {
-                    Ok(_) => {
+                    Ok(states) => {
                         let provider = s.form.as_ref().map(|f| f.provider);
                         let name = provider.map_or("", TicketProvider::name);
+                        let kept = states.iter().find(|k| Some(k.provider) == provider).map_or("key saved", |k| key_kept_in(k.stored_in));
                         s.form = None;
-                        s.note = Some((format!("{} connected · key saved", capital(name)), false));
+                        s.note = Some((format!("{} connected · {kept}", capital(name)), false));
                         // Setting up: the key is for every project; this project's team or project next.
                         if s.setup && let Some(keyed) = provider {
                             picking = Some(keyed);
@@ -971,6 +972,14 @@ impl App {
         }
         let close = std::mem::take(&mut v.closing);
         open && !close
+    }
+}
+
+/// Where the daemon keeps a provider's key, in the words a row shows. The key itself never is.
+fn key_kept_in(storage: KeyStorage) -> &'static str {
+    match storage {
+        KeyStorage::Keychain => "key kept in your system keychain",
+        KeyStorage::File => "key kept in a file: no keychain on this machine",
     }
 }
 
@@ -2205,9 +2214,9 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
                         if refused {
                             ("key refused · Enter to replace".into(), t.err)
                         } else if at.is_empty() {
-                            ("connected · key saved".into(), t.text)
+                            (format!("connected · {}", key_kept_in(k.stored_in)), t.text)
                         } else {
-                            (format!("connected · {at}"), t.text)
+                            (format!("connected · {at} · {}", key_kept_in(k.stored_in)), t.text)
                         }
                     }
                     _ => ("no key · Enter to connect".into(), t.muted),

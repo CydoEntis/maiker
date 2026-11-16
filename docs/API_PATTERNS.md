@@ -980,7 +980,9 @@ Protocol 106 adds `Query::TicketKeys { change, tag }` with `Reply::TicketKeys { 
 ticket provider needs. `change` is a `TicketKeyChange`: `Status`, `Set { provider, address, workspace,
 key }` (the key is a `SecretText`, which prints as hidden) or `Remove { provider }`; `provider` is
 `Plane` or `Linear`. `answer` is the state after the change, one `TicketKeyState { provider, set, address,
-workspace }` per provider, or an `Invalid(line)`; it never holds a key. Plane takes a server address
+workspace, stored_in }` per provider (`stored_in` is `Keychain` or `File`, `#[serde(default)]` to `File`:
+an older daemon sends none and keeps every key in a file, and an older client passes over it, so it
+needs no protocol version), or an `Invalid(line)`; it never holds a key. Plane takes a server address
 (`check_base_url`: https anywhere, http only to your own network) and a workspace; Linear takes a key
 alone, because its one server is fixed in the code. Human clients only: a pane or a structured runtime
 gets `ServerMsg::Error`. A request for a provider with no key answers `TicketError::NotInstalled` (the

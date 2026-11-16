@@ -558,7 +558,7 @@ mod tests {
 
     #[test]
     fn a_source_needs_a_link_and_for_plane_and_linear_a_key() {
-        let keys = [TicketKeyState { provider: TicketProvider::Plane, set: true, address: String::new(), workspace: String::new() }];
+        let keys = [TicketKeyState { provider: TicketProvider::Plane, set: true, address: String::new(), workspace: String::new(), stored_in: maitty_shared::tickets::KeyStorage::File }];
         let none = TicketLink::default();
         assert_eq!(source_for(Provider::Github, &none, None, None), Source::Unlinked(Unlinked::NoLink));
         assert!(source_for(Provider::Github, &none, Some("me/shop"), None).linked());
