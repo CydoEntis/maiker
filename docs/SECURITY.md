@@ -833,7 +833,9 @@ The path comes from a hook report, so it is input, not trust:
   and its name carries the session id the hook reported (Claude `<session>.jsonl`; Codex
   `rollout-…<session>.jsonl`). Anything else is refused with a reason that names no content.
 - Only a pane that is hook-verified, owned by the desktop app and running `claude` or `codex` is followed; a
-  pane cannot make the daemon read a file for another session.
+  pane cannot make the daemon read a file for another session. Once followed, the pane keeps its follower (the same
+  file, the same session) while it still runs that agent, even if the hook goes unverified or its session or file is
+  briefly unknown; a new session, or following again after the agent leaves, needs the verified hook again.
 - Reads are incremental and bounded (4 MiB per poll, a 16 MiB tail first, lines over 1 MiB dropped), run off the
   event loop, never write, and are cleaned and bounded like structured history (`tool_input.rs`). The text is
   held in daemon memory for the conversation's life, never cached, logged or put in a fixture.
