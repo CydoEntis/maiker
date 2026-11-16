@@ -3926,7 +3926,7 @@ mod tests {
         let mut term = pane_from(serde_json::json!({}));
         assert!(term.workflows.is_empty(), "an older peer sends none");
         term.workflows.push(WorkflowRun {
-            workflow: "kitchen".into(),
+            workflow: "factory".into(),
             run: "001".into(),
             ticket: Some(WorkflowTicket {
                 key: "MAITTY-42".into(),
@@ -3953,7 +3953,7 @@ mod tests {
             term: 1,
             token: String::new(),
             run: crate::workflow::WorkflowRun {
-                workflow: "kitchen".into(),
+                workflow: "factory".into(),
                 run: "1".into(),
                 ticket: None,
                 steps: Vec::new(),

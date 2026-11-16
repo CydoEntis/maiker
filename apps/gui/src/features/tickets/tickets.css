@@ -98,8 +98,8 @@
 @container tk (max-width: 560px) { .mx-tk-row .mx-tk-who { display: none; } }
 @container tk (max-width: 480px) { .mx-tk-row .mx-tk-label { display: none; } }
 .mx-tk-blocked { font-size: 11px; color: var(--danger); }
-.mx-tk-kitchen { align-self: flex-start; display: flex; align-items: center; gap: 6px; padding: 0; font-size: 11px; color: var(--fg2) !important; background: transparent; border: 0; cursor: pointer; }
-.mx-tk-kitchen:hover { color: var(--fg) !important; }
+.mx-tk-factory { align-self: flex-start; display: flex; align-items: center; gap: 6px; padding: 0; font-size: 11px; color: var(--fg2) !important; background: transparent; border: 0; cursor: pointer; }
+.mx-tk-factory:hover { color: var(--fg) !important; }
 .mx-tk-spin { flex: none; width: 8px; height: 8px; box-sizing: border-box; border: 1.5px solid var(--line2); border-top-color: var(--working); animation: mx-tk-spin .9s linear infinite; }
 .mx-tk-skel { flex: none; height: 52px; margin: 0 12px; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; justify-content: center; gap: 7px; }
 .mx-tk-skel > span { height: 8px; background: var(--m-raise); animation: mx-tk-pulse 1.2s ease-in-out infinite; }

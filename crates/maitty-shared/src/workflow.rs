@@ -19,7 +19,7 @@ pub const STEPS_MAX: usize = 32;
 /// One run of a workflow: one job, usually for one ticket.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkflowRun {
-    /// The workflow's own name ("kitchen").
+    /// The workflow's own name ("factory", or any other).
     pub workflow: String,
     /// The workflow's id for this run; a report with the same workflow and run replaces the last.
     pub run: String,
@@ -153,7 +153,7 @@ mod tests {
 
     fn run(steps: Vec<WorkflowStep>) -> WorkflowRun {
         WorkflowRun {
-            workflow: "kitchen".into(),
+            workflow: "factory".into(),
             run: "001".into(),
             ticket: None,
             steps,

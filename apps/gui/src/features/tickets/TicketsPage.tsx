@@ -14,14 +14,14 @@ import { linkOf, placeOf, useTicketLinks, type ProjectLink } from './model/ticke
 import { TicketSetup } from './TicketSetup'
 import { parseTicketLink } from './model/pastedLink'
 import type { SetupAsk } from './useTicketSetupAsks'
-import { GROUP_VIEWS, groupCounts, groupsUnder, isMine, kindWord, matchesSearch, openBlockers, PROVIDER_LOOK, PROVIDERS, ticketKey, type KitchenRun, type Provider } from './model/tickets'
+import { GROUP_VIEWS, groupCounts, groupsUnder, isMine, kindWord, matchesSearch, openBlockers, PROVIDER_LOOK, PROVIDERS, ticketKey, type FactoryRun, type Provider } from './model/tickets'
 import { failureOf, ticketsOf, TICKETS_REFRESH_MS, useTicketDetail, useTicketGroups, useTicketList } from './useTicketData'
 import { TicketBoard, TicketRow, TicketSkeleton, type RowState } from './TicketRows'
 import { TicketGroups, type GroupLayout } from './TicketGroups'
 import { TicketDrawer } from './TicketDrawer'
 import { TicketWriteDialog } from './TicketWriteDialog'
 import { writeFailureWords } from './model/ticketWrite'
-import { KitchenDialog, StartTicketDialog, type KitchenTarget, type StartChoice } from './TicketDialogs'
+import { FactoryDialog, StartTicketDialog, type FactoryTarget, type StartChoice } from './TicketDialogs'
 import type { TicketsProject } from './model/ticketProjects'
 import './tickets.css'
 
@@ -36,10 +36,10 @@ export type TicketsHost = {
   defaultAgent: ChatAgent
   /** Who `gh` is signed in as on this computer, for Mine on GitHub; null when not known. */
   githubLogin: string | null
-  /** The chats running Kitchen in this project. */
-  kitchenChats: readonly KitchenTarget[]
-  /** The Kitchen run a chat reports for a ticket key, if any. */
-  runOf: (key: string) => KitchenRun | null
+  /** The chats running a factory in this project. */
+  factoryChats: readonly FactoryTarget[]
+  /** The factory run a chat reports for a ticket key, if any. */
+  runOf: (key: string) => FactoryRun | null
   /** There is a chat in front to send a ticket into. */
   canSendHere: boolean
   onClose: () => void
@@ -47,12 +47,12 @@ export type TicketsHost = {
   onSignInGitHub: () => void
   onStart: (ticket: TicketDetail, choice: StartChoice) => Promise<void>
   onSendHere: (ticket: TicketDetail, text: string) => Promise<void>
-  onSendKitchen: (target: string, tickets: readonly TicketSummary[]) => Promise<void>
+  onSendFactory: (target: string, tickets: readonly TicketSummary[]) => Promise<void>
   onOpenWork: (sessionId: string) => void
 }
 
 type View = 'list' | 'mine' | 'board' | GroupKind
-type Dialog = { kind: 'start' | 'here' | 'comment' | 'close'; id: string } | { kind: 'kitchen'; ids: readonly string[] } | null
+type Dialog = { kind: 'start' | 'here' | 'comment' | 'close'; id: string } | { kind: 'factory'; ids: readonly string[] } | null
 
 /** How long the ticket page takes to slide out (README §1: in .28s, out .19s). */
 const DRAWER_EXIT_MS = 190
@@ -139,7 +139,7 @@ const VIEW_ICON: Readonly<Record<GroupKind, IconName>> = { Milestone: 'milestone
  * Tickets, over the whole chat area: the current chat's project's tickets from GitHub, Plane and Linear, read-only.
  * A tab per provider (always all three, "Not linked" when the project has none), a toolbar (search, scope, the views),
  * the list, the board or one kind of group, a selection bar, the ticket page, and the dialogs that start an agent or
- * hand tickets to Kitchen. Ticket text is other people's and is shown as plain text everywhere.
+ * hand tickets to a factory. Ticket text is other people's and is shown as plain text everywhere.
  */
 export function TicketsPage({ project, host, leaving = false, suggestedLink, setupAsk = null }: {
   project: TicketsProject
@@ -251,8 +251,8 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
   }
   const blockerKeys = (ids: readonly string[]) => ids.map((id) => ticketKey(known.get(id) ?? { id, url: '' }))
 
-  // The selected tickets (and those about to go to Kitchen) are read whole, so their blockers are known before they are sent anywhere.
-  const wholeIds = [...new Set([...selected, ...(dialog?.kind === 'kitchen' ? dialog.ids : [])])].filter((id) => known.has(id))
+  // The selected tickets (and those about to go to a factory) are read whole, so their blockers are known before they are sent anywhere.
+  const wholeIds = [...new Set([...selected, ...(dialog?.kind === 'factory' ? dialog.ids : [])])].filter((id) => known.has(id))
   useQueries({
     queries: wholeIds.map((id) => ({
       queryKey: ['tickets', 'detail', source, id],
@@ -332,7 +332,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
     void client.invalidateQueries({ queryKey: ['tickets', 'list'] })
     return null
   }
-  const kitchen = (ids: readonly string[]) => { if (ids.length > 0) setDialog({ kind: 'kitchen', ids }) }
+  const factory = (ids: readonly string[]) => { if (ids.length > 0) setDialog({ kind: 'factory', ids }) }
   const selectOpen = (ids: readonly string[]) => { setSelected((now) => new Set([...now, ...ids])) }
 
   const onKeyDown = (event: KeyboardEvent) => {
@@ -362,7 +362,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
     if (event.key === ' ' || event.key === 'x') { event.preventDefault(); toggle(focused) }
     else if (event.key === 'Enter') { event.preventDefault(); openTicket(focused) }
     else if (event.key === 's' || event.key === 'S') { event.preventDefault(); openTicket(focused); start(focused, 'start') }
-    else if (event.key === 'k' || event.key === 'K') { event.preventDefault(); kitchen(selected.size > 0 ? [...selected] : [focused]) }
+    else if (event.key === 'k' || event.key === 'K') { event.preventDefault(); factory(selected.size > 0 ? [...selected] : [focused]) }
   }
 
   const go = async (run: () => Promise<void>, failed: string) => {
@@ -507,7 +507,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
                   <button type="button" className="mx-tk-text-button" onClick={() => { setSelected(new Set()) }}>Clear <kbd>Esc</kbd></button>
                   <span className="mx-spacer" />
                   {selected.size === 1 && <button type="button" className="mx-tk-button" onClick={() => { const [only] = selected; if (only !== undefined) { openTicket(only); start(only, 'start') } }}>Start an agent… <kbd>S</kbd></button>}
-                  <button type="button" className="mx-tk-button is-primary" onClick={() => { kitchen([...selected]) }}>Send to Kitchen<kbd>K</kbd></button>
+                  <button type="button" className="mx-tk-button is-primary" onClick={() => { factory([...selected]) }}>Send to Factory<kbd>K</kbd></button>
                 </div>
               )}
             </>
@@ -525,7 +525,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
           now={now}
           run={host.runOf(ticketKey(drawerTicket))}
           onSendHere={host.canSendHere ? () => { start(drawerTicket.id, 'here') } : null}
-          onKitchen={() => { kitchen([drawerTicket.id]) }}
+          onFactory={() => { factory([drawerTicket.id]) }}
           onStart={() => { start(drawerTicket.id, 'start') }}
           onComment={() => { setDialog({ kind: 'comment', id: drawerTicket.id }) }}
           onMarkDone={() => { setDialog({ kind: 'close', id: drawerTicket.id }) }}
@@ -566,18 +566,18 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
           onCancel={() => { setDialog(null) }}
         />
       )}
-      {dialog?.kind === 'kitchen' && (
-        <KitchenDialog
+      {dialog?.kind === 'factory' && (
+        <FactoryDialog
           container={host.container}
           provider={provider}
           tickets={dialog.ids.map((id) => known.get(id)).filter((ticket): ticket is TicketSummary => ticket !== undefined)}
           blockersOf={(id) => { const found = blockersOf(id); return found === null ? null : blockerKeys(found) }}
-          targets={host.kitchenChats}
+          targets={host.factoryChats}
           onCancel={() => { setDialog(null) }}
           onGo={(target, chosen) => {
             setDialog(null)
             setSelected(new Set())
-            void go(() => host.onSendKitchen(target, chosen), 'Could not send to Kitchen')
+            void go(() => host.onSendFactory(target, chosen), 'Could not send to Factory')
           }}
         />
       )}

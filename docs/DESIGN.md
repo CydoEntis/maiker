@@ -670,7 +670,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   empty) and mono count, and "Nothing here" when empty. A run going sits in its first step that has not passed (skipped
   counts as passed). A run's card (`--main`, inset `--line`; `--fg2` while open; a 7% `--needs` wash with a 45% edge
   when it needs you) holds the run's mark (needs, working, waiting, done or failed, `runState`), the ticket key in mono
-  12px 600 (else "kitchen 007"), at the right "done" in `--done` or "failed" in `--err` once over, the title in two
+  12px 600 (else "factory 007"), at the right "done" in `--done` or "failed" in `--err` once over, the title in two
   lines at most ("No ticket" muted without one), the run's **review** steps (named "review …") as 20px mono chips once
   its first step passed (the name without "review": passed `--done` on a 14% wash, working `--working` with a spinner
   and a pulse, needs you `--needs` with "!", failed `--err` with ✕, sent back `--muted` with ↺, waiting dashed, skipped

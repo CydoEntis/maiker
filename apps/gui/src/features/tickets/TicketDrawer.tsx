@@ -2,7 +2,7 @@ import { openLink } from '@/api/daemon'
 import type { TicketDetail, TicketSummary } from '@/api/tickets'
 import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
-import { CATEGORY_LOOK, initials, labelColor, PROVIDER_LOOK, shortAge, ticketKey, type KitchenRun, type Provider } from './model/tickets'
+import { CATEGORY_LOOK, initials, labelColor, PROVIDER_LOOK, shortAge, ticketKey, type FactoryRun, type Provider } from './model/tickets'
 
 type Props = {
   provider: Provider
@@ -16,10 +16,10 @@ type Props = {
   known: ReadonlyMap<string, TicketSummary>
   leaving: boolean
   now: number
-  run: KitchenRun | null
+  run: FactoryRun | null
   /** Null when there is no chat to send into. */
   onSendHere: (() => void) | null
-  onKitchen: () => void
+  onFactory: () => void
   onStart: () => void
   /** Opens the comment dialog; nothing is posted until it is confirmed there. */
   onComment: () => void
@@ -49,10 +49,10 @@ function LinkLine({ url }: { url: string }) {
 /**
  * One ticket over the Tickets view, sliding in from the right: its mark, key and place with **Open in … ↗** and ✕; then
  * the title, the facts, what blocks it (red-edged), its description and comments as plain text in a mono box, its links;
- * and at the foot Comment…, Mark done…, Send to this chat, Send to Kitchen and Start an agent…. Comment and Mark done only open
+ * and at the foot Comment…, Mark done…, Send to this chat, Send to Factory and Start an agent…. Comment and Mark done only open
  * a dialog that shows exactly what will be written; the ticket changes only when that is confirmed.
  */
-export function TicketDrawer({ provider, summary, detail, failed, where, known, leaving, now, run, onSendHere, onKitchen, onStart, onComment, onMarkDone, onOpenWork, onOpenTicket, onClose }: Props) {
+export function TicketDrawer({ provider, summary, detail, failed, where, known, leaving, now, run, onSendHere, onFactory, onStart, onComment, onMarkDone, onOpenWork, onOpenTicket, onClose }: Props) {
   const key = ticketKey(summary)
   const look = PROVIDER_LOOK[provider]
   const state = CATEGORY_LOOK[summary.category]
@@ -116,12 +116,12 @@ export function TicketDrawer({ provider, summary, detail, failed, where, known, 
         )}
       </div>
       <div className="mx-tk-drawer-foot">
-        {run !== null && <button type="button" className="mx-tk-button" onClick={() => { onOpenWork(run.sessionId) }}>In Kitchen · {run.step} · Open Work ›</button>}
+        {run !== null && <button type="button" className="mx-tk-button" onClick={() => { onOpenWork(run.sessionId) }}>In Factory · {run.step} · Open Work ›</button>}
         <span className="mx-tk-foot-note">Maitty changes a ticket only to add a comment or mark it done, and only after you confirm what it writes.</span>
         <button type="button" className="mx-tk-button" onClick={onComment}>Comment…</button>
         <button type="button" className="mx-tk-button" disabled={summary.category === 'Closed'} title={summary.category === 'Closed' ? 'Already done' : undefined} onClick={onMarkDone}>Mark done…</button>
         <button type="button" className="mx-tk-button" disabled={onSendHere === null || detail === null} title={onSendHere === null ? 'Open a chat first' : undefined} onClick={() => { onSendHere?.() }}>Send to this chat</button>
-        <button type="button" className="mx-tk-button" onClick={onKitchen}>Send to Kitchen</button>
+        <button type="button" className="mx-tk-button" onClick={onFactory}>Send to Factory</button>
         <button type="button" className="mx-tk-button is-primary" disabled={detail === null} onClick={onStart}>Start an agent…<kbd>S</kbd></button>
       </div>
     </aside>

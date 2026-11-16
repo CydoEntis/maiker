@@ -226,9 +226,9 @@ fn claude_lines_that_are_not_the_conversation_are_left_out() {
     assert_eq!(said, ["/clear", "real prompt"]);
 }
 
-const SLASH_COMMAND: &str = "<command-name>/plugin</command-name>\n            <command-message>plugin</command-message>\n            <command-args>marketplace add CydoEntis/Kitchen</command-args>";
+const SLASH_COMMAND: &str = "<command-name>/plugin</command-name>\n            <command-message>plugin</command-message>\n            <command-args>marketplace add CydoEntis/maiker-factory</command-args>";
 const SLASH_OUTPUT: &str =
-    "<local-command-stdout>Added the \u{1b}[1mKitchen\u{1b}[0m marketplace</local-command-stdout>";
+    "<local-command-stdout>Added the \u{1b}[1mfactory\u{1b}[0m marketplace</local-command-stdout>";
 
 fn claude_local_command(uuid: &str, text: &str) -> String {
     line(json!({
@@ -242,14 +242,14 @@ fn assert_slash_command_and_output(history: &History) {
     assert_eq!(items.len(), 2);
     assert_eq!(
         message(items[0]),
-        (&Role::User, "/plugin marketplace add CydoEntis/Kitchen")
+        (&Role::User, "/plugin marketplace add CydoEntis/maiker-factory")
     );
     assert_eq!(
         items[1].content,
         Content::Tool {
             kind: "commandExecution".into(),
-            label: "/plugin marketplace add CydoEntis/Kitchen".into(),
-            output: "Added the Kitchen marketplace".into(),
+            label: "/plugin marketplace add CydoEntis/maiker-factory".into(),
+            output: "Added the factory marketplace".into(),
             input: None,
             exit_code: None,
             duration_ms: None,
@@ -394,7 +394,7 @@ fn command_output_whose_command_was_not_read_leaves_the_agents_turn_running() {
     let Content::Tool { output, .. } = &items(&history)[2].content else {
         panic!("not a tool step")
     };
-    assert_eq!(output, "Added the Kitchen marketplace");
+    assert_eq!(output, "Added the factory marketplace");
 }
 
 #[test]

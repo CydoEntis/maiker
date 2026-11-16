@@ -4,7 +4,7 @@ import type { WorkflowRun, WorkflowStepState } from '@/data/preview'
 export type WorkflowView = {
   /** The workflow and its run id: what names the run among the session's. */
   key: string
-  /** The ticket's key, else the workflow and run id ("kitchen 007"). */
+  /** The ticket's key, else the workflow and run id ("factory 007"). */
   label: string
   title: string | null
   link: string | null

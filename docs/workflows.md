@@ -36,10 +36,25 @@ In the desktop app, open the menu of a session on this computer and choose **Spe
 Claude Code and Codex agent files in that project and in your home folder, and opens each one to read.
 It is read-only. Make and edit specialists with the agent's own tools (Claude Code's `/agents`, or the files).
 
+## Factories: handing tickets to a workflow
+
+A **factory** is Maitty's word for any workflow that takes tickets: Maitty knows no factory by name. A factory is
+any workflow that answers `/factory run <ticket> (<link>)` in an agent's chat and reports its runs with
+`maitty workflow report` (below). Tickets' **Send to Factory** types that command, one line per ticket, into a chat
+that already reports runs in the project, or into a new chat. Any chat that has reported a run of any workflow
+counts as a factory chat, and a ticket's run is found by the ticket key the run reports.
+
+One factory is **Maiker Factory**, a Claude Code plugin. Install it in a Claude chat, then set it up in the repo:
+
+```
+/plugin marketplace add CydoEntis/maiker-factory
+/plugin install maiker@factory
+/factory setup
+```
+
 ## Workflow runs: how any workflow shows its steps
 
-A workflow tells Maitty where it is with one command. Kitchen does it, and so can any other workflow, in any
-language, under any agent. There is nothing to install, register or configure in Maitty, and Maitty never
+A workflow tells Maitty where it is with one command. Any workflow can, in any language, under any agent. There is nothing to install, register or configure in Maitty, and Maitty never
 reads a workflow's own files.
 
 ```sh
@@ -129,7 +144,7 @@ which step is waiting.
 
 - Start, order, retry or stop a step. The workflow does that.
 - Make or edit a specialist.
-- Read a workflow's own files (for example `.kitchen/jobs/`).
+- Read a workflow's own files (for example `.factory/jobs/`).
 - Install workflows. There is no plugin store; the command above is the whole contract.
 
 A workflow that never calls the command still runs. Its subagents still show live, but its steps do not.

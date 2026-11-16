@@ -100,42 +100,42 @@ export function StartTicketDialog({ container, provider, ticket, blockers, block
   )
 }
 
-/** A chat Kitchen could take the tickets in: one already running Kitchen in this project, or a new one. */
-export type KitchenTarget = { id: string; label: string; sub: string }
-export const NEW_KITCHEN = 'new'
+/** A chat a factory could take the tickets in: one already running a factory in this project, or a new one. */
+export type FactoryTarget = { id: string; label: string; sub: string }
+export const NEW_FACTORY = 'new'
 
-type KitchenProps = {
+type FactoryProps = {
   container: HTMLElement | null
   provider: Provider
   tickets: readonly TicketSummary[]
   /** The open blockers of each ticket by id; a ticket not in it is still being read. */
   blockersOf: (id: string) => readonly string[] | null
-  targets: readonly KitchenTarget[]
+  targets: readonly FactoryTarget[]
   onCancel: () => void
   onGo: (target: string, tickets: readonly TicketSummary[]) => void
 }
 
 /**
- * Send to Kitchen: one row per ticket, a blocked one dimmed with **Blocked · send anyway** (off), which Kitchen chat
- * takes them (one already running in the project, or a new one), and **Send N to Kitchen**; with nothing left to send
- * the button says so and does nothing. Kitchen gets each ticket's key and link and reads the ticket itself.
+ * Send to Factory: one row per ticket, a blocked one dimmed with **Blocked · send anyway** (off), which Factory chat
+ * takes them (one already running in the project, or a new one), and **Send N to Factory**; with nothing left to send
+ * the button says so and does nothing. The factory gets each ticket's key and link and reads the ticket itself.
  */
-export function KitchenDialog({ container, provider, tickets, blockersOf, targets, onCancel, onGo }: KitchenProps) {
+export function FactoryDialog({ container, provider, tickets, blockersOf, targets, onCancel, onGo }: FactoryProps) {
   const [anyway, setAnyway] = useState<ReadonlySet<string>>(() => new Set())
-  const [target, setTarget] = useState(targets[0]?.id ?? NEW_KITCHEN)
+  const [target, setTarget] = useState(targets[0]?.id ?? NEW_FACTORY)
   const reading = tickets.some((ticket) => blockersOf(ticket.id) === null)
   const blocked = (ticket: TicketSummary) => (blockersOf(ticket.id)?.length ?? 0) > 0
   const send = tickets.filter((ticket) => !blocked(ticket) || anyway.has(ticket.id))
   const skipped = tickets.length - send.length
   const look = PROVIDER_LOOK[provider]
-  const choices: KitchenTarget[] = [...targets, { id: NEW_KITCHEN, label: 'New Kitchen chat', sub: "in the ticket's project" }]
+  const choices: FactoryTarget[] = [...targets, { id: NEW_FACTORY, label: 'New Factory chat', sub: "in the ticket's project" }]
   const go = () => { if (send.length > 0 && !reading) onGo(target, send) }
   const toggle = (id: string) => { setAnyway((now) => { const next = new Set(now); if (!next.delete(id)) next.add(id); return next }) }
   const title = tickets.length === 1 && tickets[0] !== undefined ? ticketKey(tickets[0]) : `${String(tickets.length)} tickets`
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel() }}>
       <DialogContent unstyled container={container} overlayClassName="mx-tk-scrim" className="mx-tk-dialog is-narrow" aria-describedby={undefined} onKeyDown={confirmOnEnter(go)}>
-        <div className="mx-tk-dialog-head"><DialogTitle className="mx-tk-dialog-title">Send {title} to Kitchen</DialogTitle><span className="mx-spacer" /><button type="button" className="mx-tk-x" aria-label="Cancel (Esc)" onClick={onCancel}>✕</button></div>
+        <div className="mx-tk-dialog-head"><DialogTitle className="mx-tk-dialog-title">Send {title} to Factory</DialogTitle><span className="mx-spacer" /><button type="button" className="mx-tk-x" aria-label="Cancel (Esc)" onClick={onCancel}>✕</button></div>
         <div className="mx-tk-dialog-body">
           <div className="mx-tk-send-list">
             {tickets.map((ticket) => {
@@ -156,8 +156,8 @@ export function KitchenDialog({ container, provider, tickets, blockersOf, target
           </div>
           {skipped > 0 && <span className="mx-tk-note is-muted">{skipped} blocked ticket{skipped === 1 ? '' : 's'} will be skipped. Tick "send anyway" to include {skipped === 1 ? 'it' : 'them'}.</span>}
           <div className="mx-tk-form">
-            <span className="mx-tk-dim">Kitchen chat</span>
-            <RadioGroup aria-label="Kitchen chat" className="mx-tk-targets" value={target} onValueChange={setTarget}>
+            <span className="mx-tk-dim">Factory chat</span>
+            <RadioGroup aria-label="Factory chat" className="mx-tk-targets" value={target} onValueChange={setTarget}>
               {choices.map((choice) => (
                 <RadioGroupItem key={choice.id} value={choice.id} className="mx-tk-target">
                   <span className="mx-tk-target-dot">{target === choice.id ? '●' : ''}</span><span className="mx-tk-target-label">{choice.label}</span><span className="mx-tk-dim">{choice.sub}</span>
@@ -165,12 +165,12 @@ export function KitchenDialog({ container, provider, tickets, blockersOf, target
               ))}
             </RadioGroup>
           </div>
-          <span className="mx-tk-note">Kitchen gets each ticket's key and link, and reads the ticket itself. Progress shows in that chat's Work tab.</span>
+          <span className="mx-tk-note">The factory gets each ticket's key and link as `/factory run`, and reads the ticket itself. Progress shows in that chat's Work tab.</span>
         </div>
         <div className="mx-tk-dialog-foot">
           <button type="button" className="mx-tk-button" onClick={onCancel}>Cancel <kbd>Esc</kbd></button>
           <button type="button" className="mx-tk-button is-primary" aria-disabled={send.length === 0 || reading} onClick={go}>
-            {reading ? 'Checking blockers…' : send.length === 0 ? 'Nothing to send' : `Send ${String(send.length)} to Kitchen`}<kbd>Enter</kbd>
+            {reading ? 'Checking blockers…' : send.length === 0 ? 'Nothing to send' : `Send ${String(send.length)} to Factory`}<kbd>Enter</kbd>
           </button>
         </div>
       </DialogContent>

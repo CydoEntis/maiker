@@ -4,7 +4,7 @@ import { toWorkflowView } from '@/features/workspace/model/workflows'
 import { boardSummary, cardNote, columnNames, reviewShort, reviewTrack, runState, sittingStep, workBoard } from './board'
 
 const run = (id: string, steps: Array<[string, WorkflowStepState]>, key: string | null = null) => toWorkflowView({
-  workflow: 'kitchen',
+  workflow: 'factory',
   run: id,
   ticket: key === null ? null : { key, title: null, link: null },
   steps: steps.map(([name, state]) => ({ name, state, note: null, helper: null })),
@@ -39,7 +39,7 @@ describe('the Work board', () => {
 
   it('says nothing runs when there are no runs, and names a run with no ticket by its workflow', () => {
     expect(boardSummary(workBoard([]))).toBe('Nothing running')
-    expect(names(workBoard([run('007', [['spec', 'working']])]))[0]).toEqual(['Spec', ['kitchen 007']])
+    expect(names(workBoard([run('007', [['spec', 'working']])]))[0]).toEqual(['Spec', ['factory 007']])
   })
 
   it('reads a run as a whole: needing you first, then working, then how it ended', () => {

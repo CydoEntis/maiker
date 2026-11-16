@@ -35,8 +35,8 @@ const MARKUP = '**bold** <b>tags</b> [links](https://x.example)'
 
 function host(change: Partial<TicketsHost> = {}): TicketsHost {
   return {
-    container: document.body, defaultAgent: 'claude', githubLogin: 'cydo', kitchenChats: [], runOf: () => null, canSendHere: true,
-    onClose: vi.fn(), onSettings: vi.fn(), onSignInGitHub: vi.fn(), onStart: vi.fn(() => Promise.resolve()), onSendHere: vi.fn(() => Promise.resolve()), onSendKitchen: vi.fn(() => Promise.resolve()), onOpenWork: vi.fn(),
+    container: document.body, defaultAgent: 'claude', githubLogin: 'cydo', factoryChats: [], runOf: () => null, canSendHere: true,
+    onClose: vi.fn(), onSettings: vi.fn(), onSignInGitHub: vi.fn(), onStart: vi.fn(() => Promise.resolve()), onSendHere: vi.fn(() => Promise.resolve()), onSendFactory: vi.fn(() => Promise.resolve()), onOpenWork: vi.fn(),
     ...change,
   }
 }

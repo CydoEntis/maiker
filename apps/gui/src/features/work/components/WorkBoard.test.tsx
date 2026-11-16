@@ -7,7 +7,7 @@ import type { SubagentView } from '@/features/workspace/model/subagents'
 import { WorkBoard } from './WorkBoard'
 
 const report = (run: string, key: string | null, steps: WorkflowRun['steps']): WorkflowRun => ({
-  workflow: 'kitchen', run, ticket: key === null ? null : { key, title: `Title of ${key}`, link: `https://plane.example/${key}` }, steps, reportedAt: 1,
+  workflow: 'factory', run, ticket: key === null ? null : { key, title: `Title of ${key}`, link: `https://plane.example/${key}` }, steps, reportedAt: 1,
 })
 const step = (name: string, state: WorkflowRun['steps'][number]['state'], helper: string | null = null, note: string | null = null) => ({ name, state, note, helper })
 

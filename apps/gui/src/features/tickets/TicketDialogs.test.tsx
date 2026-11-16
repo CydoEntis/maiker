@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TicketDetail, TicketSummary } from '@/api/tickets'
-import { KitchenDialog, NEW_KITCHEN, StartTicketDialog } from './TicketDialogs'
+import { FactoryDialog, NEW_FACTORY, StartTicketDialog } from './TicketDialogs'
 
 afterEach(cleanup)
 
@@ -38,25 +38,25 @@ describe('starting an agent on a ticket', () => {
   })
 })
 
-describe('sending tickets to Kitchen', () => {
+describe('sending tickets to Factory', () => {
   const second: TicketSummary = { ...SUMMARY, id: 'github:me/shop#143', title: 'Fix the till', url: 'https://github.com/me/shop/issues/143' }
 
-  function kitchen(blocked: readonly string[]) {
+  function factory(blocked: readonly string[]) {
     const onGo = vi.fn()
-    render(<KitchenDialog container={document.body} provider="github" tickets={[SUMMARY, second]} blockersOf={(id) => (blocked.includes(id) ? ['#1'] : [])} targets={[]} onCancel={vi.fn()} onGo={onGo} />)
+    render(<FactoryDialog container={document.body} provider="github" tickets={[SUMMARY, second]} blockersOf={(id) => (blocked.includes(id) ? ['#1'] : [])} targets={[]} onCancel={vi.fn()} onGo={onGo} />)
     return onGo
   }
 
   it('skips a blocked ticket unless it is sent anyway', async () => {
-    const onGo = kitchen([second.id])
+    const onGo = factory([second.id])
     expect(screen.getByText(/1 blocked ticket will be skipped/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('checkbox', { name: /send anyway/ }))
-    await userEvent.click(screen.getByRole('button', { name: /Send 2 to Kitchen/ }))
-    expect(onGo).toHaveBeenCalledWith(NEW_KITCHEN, [SUMMARY, second])
+    await userEvent.click(screen.getByRole('button', { name: /Send 2 to Factory/ }))
+    expect(onGo).toHaveBeenCalledWith(NEW_FACTORY, [SUMMARY, second])
   })
 
   it('does nothing when every ticket is blocked', async () => {
-    const onGo = kitchen([SUMMARY.id, second.id])
+    const onGo = factory([SUMMARY.id, second.id])
     await userEvent.click(screen.getByRole('button', { name: /Nothing to send/ }))
     expect(onGo).not.toHaveBeenCalled()
   })
