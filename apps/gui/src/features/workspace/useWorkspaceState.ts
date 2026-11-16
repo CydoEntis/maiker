@@ -66,6 +66,7 @@ import { useMountedTabs } from './useMountedTabs'
 import { useRecentSessions } from './useRecentSessions'
 import { usePutAway } from './usePutAway'
 import { useTerminalDock } from './useTerminalDock'
+import { askNotificationPermission } from '@/features/notifications/native'
 
 const TOAST_MS = 2600
 
@@ -275,6 +276,7 @@ export function useWorkspaceState() {
   }, [])
 
   const showTestNotice = useCallback(() => {
+    void askNotificationPermission()
     showSessionNotice('test', {
       kind: 'done',
       process: 'claude',
