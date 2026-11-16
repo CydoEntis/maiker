@@ -186,7 +186,7 @@ export function PaneCard(props: PaneCardProps) {
         </span>
       </div>
       <div
-        className={`mx-pane-body${shown === 'terminal' ? '' : ' is-chat'}`}
+        className={`mx-pane-body${shown === 'chat' ? ' is-chat' : shown === 'work' ? ' is-work' : ''}`}
         onMouseDown={(event) => {
           // A click on the pane's padding still puts the cursor in its terminal.
           if (event.target !== event.currentTarget) return
@@ -196,6 +196,7 @@ export function PaneCard(props: PaneCardProps) {
       >
         {props.terminal}
         {shown === 'chat' && props.chat}
+        {/* Not under is-chat: that hides all but the chat layer, and hid the board with it. */}
         {shown === 'work' && work?.board}
         {props.overlay}
       </div>
