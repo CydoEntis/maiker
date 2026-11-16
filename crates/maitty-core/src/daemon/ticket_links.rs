@@ -6,10 +6,10 @@
 
 use super::usage_store::write_file;
 use maitty_shared::ticket_links::{
-    LinkedProject, TICKET_LINKS_MAX, TicketLinkChange, TicketLinks, TicketMe, TicketPlace, is_link_folder,
-    is_machine_name, trimmed_folder,
+    LinkedProject, RepoTicketFile, TICKET_LINKS_MAX, TicketLink, TicketLinkChange, TicketLinks, TicketMe, TicketPlace,
+    is_link_folder, is_machine_name, trimmed_folder,
 };
-use maitty_shared::tickets::{TICKET_NAME_MAX_CHARS, TicketError, TicketProvider, clean_line};
+use maitty_shared::tickets::{TICKET_NAME_MAX_CHARS, TicketError, TicketKeyState, TicketProvider, clean_line};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
@@ -118,6 +118,43 @@ pub(super) fn main_checkout(folder: &Path) -> Option<PathBuf> {
     super::git::main_checkout(folder)
 }
 
+/// Reads a project root's ticket file: `None` when it has none, else its text or why not.
+type ReadRepoFile = Box<dyn Fn(&Path) -> Option<Result<String, String>> + Send + Sync>;
+
+/// Where the repository ticket files are read from, and the keys they are checked against.
+pub(super) struct RepoFiles {
+    read: ReadRepoFile,
+    keys: Vec<TicketKeyState>,
+}
+
+impl RepoFiles {
+    /// The files on disk, checked against the keys saved here. Blocks (the key folder).
+    pub(super) fn real() -> RepoFiles {
+        RepoFiles { read: Box::new(super::ticket_repo_file::read_text), keys: super::ticket_keys::KeyStore::real().states() }
+    }
+
+    #[cfg(test)]
+    pub(super) fn fake(read: impl Fn(&Path) -> Option<Result<String, String>> + Send + Sync + 'static, keys: Vec<TicketKeyState>) -> RepoFiles {
+        RepoFiles { read: Box::new(read), keys }
+    }
+
+    /// The asked project's link as it reads: `local` with its repository file filling what was not
+    /// linked here, and what the file gave. Another machine's folder is not read from here.
+    fn project(&self, place: &TicketPlace, local: TicketLink) -> (TicketLink, Option<RepoTicketFile>) {
+        if place.machine.is_some() {
+            return (local, None);
+        }
+        match (self.read)(Path::new(&place.folder)) {
+            None => (local, None),
+            Some(Err(why)) => (local, Some(RepoTicketFile { notes: vec![why], ..RepoTicketFile::default() })),
+            Some(Ok(text)) => {
+                let (link, report) = super::ticket_repo_file::merged(&local, super::ticket_repo_file::parse(&text, &self.keys));
+                (link, Some(report))
+            }
+        }
+    }
+}
+
 fn same_place(project: &LinkedProject, place: &TicketPlace) -> bool {
     project.machine == place.machine && project.folder == place.folder
 }
@@ -129,6 +166,7 @@ pub(super) fn change(
     place: Option<TicketPlace>,
     change: TicketLinkChange,
     main_checkout: impl Fn(&Path) -> Option<PathBuf>,
+    repo_files: &RepoFiles,
 ) -> Result<TicketLinks, TicketError> {
     let mut kept = store.load();
     let resolve = |place: TicketPlace| checked_place(place).map(|place| project_of(place, &main_checkout));
@@ -178,19 +216,26 @@ pub(super) fn change(
     if kept != before {
         store.save(&kept)?;
     }
+    let mut repo_file = None;
     let project = asked.map(|place| {
-        let link = kept.projects.iter().find(|project| same_place(project, &place)).map(|project| project.link.clone()).unwrap_or_default();
+        let local = kept.projects.iter().find(|project| same_place(project, &place)).map(|project| project.link.clone()).unwrap_or_default();
+        let (link, file) = repo_files.project(&place, local);
+        repo_file = file;
         LinkedProject { machine: place.machine, folder: place.folder, link }
     });
     let mut projects = kept.projects;
     projects.sort_by(|a, b| (&a.machine, &a.folder).cmp(&(&b.machine, &b.folder)));
-    Ok(TicketLinks { project, projects, me: kept.me })
+    Ok(TicketLinks { project, projects, me: kept.me, repo_file })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use maitty_shared::ticket_links::{GitHubLink, TicketLink, TicketPick};
+    use maitty_shared::ticket_links::{GitHubLink, TicketPick};
+
+    fn no_files() -> RepoFiles {
+        RepoFiles::fake(|_| None, Vec::new())
+    }
 
     fn store() -> (LinkStore, PathBuf) {
         let dir = std::env::temp_dir().join(format!("maitty-ticket-links-{}-{}", std::process::id(), rand_suffix()));
@@ -225,12 +270,12 @@ mod tests {
         let (store, dir) = store();
         let link = TicketLink { linear: linear("linear:team.1"), ..TicketLink::default() };
         let set = TicketLinkChange::Set { place: here("/wt/feature"), link: link.clone() };
-        let answer = change(&store, Some(here("/wt/feature")), set, checkout).unwrap();
+        let answer = change(&store, Some(here("/wt/feature")), set, checkout, &no_files()).unwrap();
         let project = answer.project.unwrap();
         assert_eq!(project.folder, "/repo", "a worktree is its repository's main checkout");
         assert_eq!(project.link, link);
         // A session in the main checkout, or deeper in it, reads the same link, from the file.
-        let again = change(&LinkStore::at(dir.join(FILE)), Some(here("/repo/src")), TicketLinkChange::Read, checkout).unwrap();
+        let again = change(&LinkStore::at(dir.join(FILE)), Some(here("/repo/src")), TicketLinkChange::Read, checkout, &no_files()).unwrap();
         assert_eq!(again.project.unwrap().link, link);
         assert_eq!(again.projects.len(), 1);
         std::fs::remove_dir_all(dir).unwrap();
@@ -241,15 +286,15 @@ mod tests {
         let (store, dir) = store();
         let shop = TicketLink { github: GitHubLink::Repo("me/shop".into()), ..TicketLink::default() };
         let blog = TicketLink { github: GitHubLink::Off, linear: linear("linear:team.2"), ..TicketLink::default() };
-        change(&store, None, TicketLinkChange::Set { place: here("/shop"), link: shop.clone() }, checkout).unwrap();
-        change(&store, None, TicketLinkChange::Set { place: here("/blog/"), link: blog.clone() }, checkout).unwrap();
+        change(&store, None, TicketLinkChange::Set { place: here("/shop"), link: shop.clone() }, checkout, &no_files()).unwrap();
+        change(&store, None, TicketLinkChange::Set { place: here("/blog/"), link: blog.clone() }, checkout, &no_files()).unwrap();
         let there = TicketPlace { machine: Some("kingdom".into()), folder: "/home/me/shop".into() };
-        change(&store, None, TicketLinkChange::Set { place: there.clone(), link: blog.clone() }, checkout).unwrap();
-        let shop_now = change(&store, Some(here("/shop")), TicketLinkChange::Read, checkout).unwrap();
+        change(&store, None, TicketLinkChange::Set { place: there.clone(), link: blog.clone() }, checkout, &no_files()).unwrap();
+        let shop_now = change(&store, Some(here("/shop")), TicketLinkChange::Read, checkout, &no_files()).unwrap();
         assert_eq!(shop_now.project.unwrap().link, shop, "each project reads its own sources");
-        let blog_now = change(&store, Some(here("/blog")), TicketLinkChange::Read, checkout).unwrap();
+        let blog_now = change(&store, Some(here("/blog")), TicketLinkChange::Read, checkout, &no_files()).unwrap();
         assert_eq!(blog_now.project.unwrap().link, blog, "a trailing separator is the same folder");
-        let gone = change(&store, Some(here("/shop")), TicketLinkChange::Unlink { place: here("/shop") }, checkout).unwrap();
+        let gone = change(&store, Some(here("/shop")), TicketLinkChange::Unlink { place: here("/shop") }, checkout, &no_files()).unwrap();
         assert_eq!(gone.project.unwrap().link, TicketLink::default(), "an unlinked project follows its origin again");
         assert_eq!(gone.projects.len(), 2);
         assert_eq!(gone.projects.iter().filter(|project| project.machine.is_some()).count(), 1, "another machine's folder is its own");
@@ -260,10 +305,10 @@ mod tests {
     fn what_is_refused_is_never_kept() {
         let (store, dir) = store();
         let bad_repo = TicketLink { github: GitHubLink::Repo("../etc".into()), ..TicketLink::default() };
-        assert!(change(&store, None, TicketLinkChange::Set { place: here("/shop"), link: bad_repo }, checkout).is_err());
-        assert!(change(&store, None, TicketLinkChange::Set { place: here("relative"), link: TicketLink::default() }, checkout).is_err());
+        assert!(change(&store, None, TicketLinkChange::Set { place: here("/shop"), link: bad_repo }, checkout, &no_files()).is_err());
+        assert!(change(&store, None, TicketLinkChange::Set { place: here("relative"), link: TicketLink::default() }, checkout, &no_files()).is_err());
         let bad_machine = TicketPlace { machine: Some("a\nb".into()), folder: "/x".into() };
-        assert!(change(&store, None, TicketLinkChange::Unlink { place: bad_machine }, checkout).is_err());
+        assert!(change(&store, None, TicketLinkChange::Unlink { place: bad_machine }, checkout, &no_files()).is_err());
         assert!(!dir.join(FILE).exists(), "nothing was written");
         std::fs::remove_dir_all(dir).unwrap();
     }
@@ -272,15 +317,15 @@ mod tests {
     fn importing_adds_only_what_is_not_kept_yet() {
         let (store, dir) = store();
         let mine = TicketLink { linear: linear("linear:team.1"), ..TicketLink::default() };
-        change(&store, None, TicketLinkChange::Set { place: here("/repo"), link: mine.clone() }, checkout).unwrap();
-        change(&store, None, TicketLinkChange::SetMe { provider: TicketProvider::Plane, name: "Ada".into() }, checkout).unwrap();
+        change(&store, None, TicketLinkChange::Set { place: here("/repo"), link: mine.clone() }, checkout, &no_files()).unwrap();
+        change(&store, None, TicketLinkChange::SetMe { provider: TicketProvider::Plane, name: "Ada".into() }, checkout, &no_files()).unwrap();
         let old = vec![
             LinkedProject { machine: None, folder: "/wt/feature".into(), link: TicketLink { github: GitHubLink::Off, ..TicketLink::default() } },
             LinkedProject { machine: None, folder: "/other".into(), link: TicketLink { github: GitHubLink::Repo("me/other".into()), ..TicketLink::default() } },
             LinkedProject { machine: None, folder: "/empty".into(), link: TicketLink::default() },
         ];
         let me = TicketMe { plane: "Old".into(), linear: "Lin".into() };
-        let answer = change(&store, None, TicketLinkChange::Import { projects: old, me }, checkout).unwrap();
+        let answer = change(&store, None, TicketLinkChange::Import { projects: old, me }, checkout, &no_files()).unwrap();
         assert_eq!(answer.projects.len(), 2, "the repository kept its link; an empty one is not kept");
         assert_eq!(answer.projects.iter().find(|project| project.folder == "/repo").unwrap().link, mine);
         assert_eq!(answer.me, TicketMe { plane: "Ada".into(), linear: "Lin".into() }, "a name already set stays");
@@ -291,9 +336,35 @@ mod tests {
     fn a_damaged_file_reads_as_no_links() {
         let (store, dir) = store();
         std::fs::write(dir.join(FILE), b"{ not json").unwrap();
-        let answer = change(&store, Some(here("/shop")), TicketLinkChange::Read, checkout).unwrap();
+        let answer = change(&store, Some(here("/shop")), TicketLinkChange::Read, checkout, &no_files()).unwrap();
         assert!(answer.projects.is_empty());
         assert_eq!(answer.project.unwrap().link, TicketLink::default());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_repository_file_fills_what_was_not_linked_here_and_says_so() {
+        let (store, dir) = store();
+        let files = RepoFiles::fake(
+            |root| (root == Path::new("/repo")).then(|| Ok("github = \"acme/shop\"\n[linear]\nteam = \"t9\"\n".to_string())),
+            Vec::new(),
+        );
+        let mine = TicketLink { linear: linear("linear:team.1"), ..TicketLink::default() };
+        change(&store, None, TicketLinkChange::Set { place: here("/repo"), link: mine }, checkout, &no_files()).unwrap();
+        let answer = change(&store, Some(here("/wt/feature")), TicketLinkChange::Read, checkout, &files).unwrap();
+        let link = answer.project.unwrap().link;
+        assert_eq!(link.github, GitHubLink::Repo("acme/shop".into()), "the file fills GitHub, which was not set here");
+        assert_eq!(link.linear.unwrap().id, "linear:team.1", "the team linked here wins");
+        let file = answer.repo_file.unwrap();
+        assert!(file.github && !file.linear && !file.plane);
+        assert_eq!(answer.projects[0].link.github, GitHubLink::Origin, "what is kept is only what was linked here");
+        let other = change(&store, Some(here("/other")), TicketLinkChange::Read, checkout, &files).unwrap();
+        assert_eq!(other.repo_file, None, "a folder with no file has nothing from one");
+        let broken = RepoFiles::fake(|_| Some(Err("too big".into())), Vec::new());
+        let said = change(&store, Some(here("/repo")), TicketLinkChange::Read, checkout, &broken).unwrap();
+        assert_eq!(said.repo_file.unwrap().notes, ["too big"]);
+        let there = TicketPlace { machine: Some("kingdom".into()), folder: "/repo".into() };
+        assert_eq!(change(&store, Some(there), TicketLinkChange::Read, checkout, &files).unwrap().repo_file, None, "another machine's folder is not read here");
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

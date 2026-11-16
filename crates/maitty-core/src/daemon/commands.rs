@@ -1134,6 +1134,10 @@ impl Daemon {
                 return Ok(false);
             }
             Command::AnswerSecret { id, value } => self.answer_secret(id, value)?,
+            Command::OpenTicketSetup { term, folder, source, link } => {
+                self.open_ticket_setup(client, term, folder, source, link)?;
+                return Ok(false);
+            }
             Command::LinkPr { term, url } => self.link_pr(term, url.as_deref())?,
             Command::SpendSecret { reference } => {
                 self.spend_secret(client, &reference)?;
