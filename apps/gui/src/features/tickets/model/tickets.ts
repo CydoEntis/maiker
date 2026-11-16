@@ -35,7 +35,6 @@ const DAYS_PER_WEEK = 7
 /** Up to two weeks an age is said in days, then in weeks. */
 const MOST_AGE_DAYS = 14
 const MOST_INITIALS = 2
-const PERCENT = 100
 
 /** The colour of a label's square: red for trouble, else one picked from its name so it never changes. */
 export function labelColor(label: string): string {
@@ -91,6 +90,39 @@ export function isMine(ticket: Pick<TicketSummary, 'assignee'>, me: string | nul
   return me !== null && me !== '' && ticket.assignee !== null && ticket.assignee.toLowerCase() === me.toLowerCase()
 }
 
+/** The assignee filter's value for every ticket, and for the tickets nobody has; names are never empty. */
+export const ANYONE = ''
+export const UNASSIGNED = '\u0000unassigned'
+
+/** One choice of the assignee filter: what it matches, what it says, and whether it is you. */
+export type AssigneeChoice = { value: string; label: string; you: boolean }
+
+/**
+ * The assignee filter's choices: Anyone, then you (when the provider says who you are), then everyone else the read
+ * tickets are assigned to by name, then Unassigned. People are matched ignoring case, as the providers do.
+ */
+export function assigneeChoices(tickets: readonly Pick<TicketSummary, 'assignee'>[], me: string | null): AssigneeChoice[] {
+  const names = new Map<string, string>()
+  for (const { assignee } of tickets) {
+    if (assignee !== null && assignee !== '' && !names.has(assignee.toLowerCase())) names.set(assignee.toLowerCase(), assignee)
+  }
+  const you = me === null || me === '' ? null : me.toLowerCase()
+  const others = [...names.entries()].filter(([key]) => key !== you).map(([, name]) => name).sort((a, b) => a.localeCompare(b))
+  return [
+    { value: ANYONE, label: 'Anyone', you: false },
+    ...(you === null || me === null ? [] : [{ value: names.get(you) ?? me, label: names.get(you) ?? me, you: true }]),
+    ...others.map((name) => ({ value: name, label: name, you: false })),
+    { value: UNASSIGNED, label: 'Unassigned', you: false },
+  ]
+}
+
+/** Whether the ticket passes the assignee filter (`ANYONE`, `UNASSIGNED` or a name). */
+export function matchesAssignee(ticket: Pick<TicketSummary, 'assignee'>, choice: string): boolean {
+  if (choice === ANYONE) return true
+  if (choice === UNASSIGNED) return ticket.assignee === null || ticket.assignee === ''
+  return ticket.assignee !== null && ticket.assignee.toLowerCase() === choice.toLowerCase()
+}
+
 /** Whether the search text is in the ticket's key or title, ignoring case. */
 export function matchesSearch(ticket: Pick<TicketSummary, 'id' | 'url' | 'title'>, search: string): boolean {
   const words = search.trim().toLowerCase()
@@ -111,14 +143,6 @@ export function blockerKey(id: string, known: ReadonlyMap<string, TicketSummary>
   return ticketKey(ticket ?? { id, url: '' })
 }
 
-/** The group kinds a view button is offered for, per provider, in order, and what the button says. */
-export const GROUP_VIEWS: Readonly<Record<Provider, ReadonlyArray<{ kind: GroupKind; label: string }>>> = {
-  github: [{ kind: 'Milestone', label: 'Milestones' }],
-  plane: [{ kind: 'Module', label: 'Modules' }, { kind: 'Cycle', label: 'Cycles' }],
-  // Linear's own projects are modules in the shared model; its teams are the top level.
-  linear: [{ kind: 'Module', label: 'Projects' }, { kind: 'Cycle', label: 'Cycles' }],
-}
-
 /** What one group's kind is called in the scope menu and on its card. */
 export function kindWord(provider: Provider, kind: GroupKind): string {
   if (kind === 'Project') return provider === 'github' ? 'repo' : provider === 'linear' ? 'team' : 'project'
@@ -129,27 +153,6 @@ export function kindWord(provider: Provider, kind: GroupKind): string {
 /** The groups under `top`: those whose parent is it, and for a source with one top level, every group that is not it. */
 export function groupsUnder(groups: readonly TicketGroup[], top: string | null): TicketGroup[] {
   return groups.filter((group) => group.kind !== 'Project' && (top === null || group.parent === null || group.parent === top))
-}
-
-/** How many of a group's read tickets are in each state, and how many open ones are not blocked (`selectable`). */
-export type GroupCounts = { open: number; started: number; closed: number; total: number; selectable: string[]; mine: number }
-
-export function groupCounts(group: string, tickets: readonly TicketSummary[], blocked: (id: string) => boolean, me: string | null): GroupCounts {
-  const inGroup = tickets.filter((ticket) => ticket.groups.includes(group))
-  const count = (category: StateCategory) => inGroup.filter((ticket) => ticket.category === category).length
-  return {
-    open: count('Open'),
-    started: count('Started'),
-    closed: count('Closed'),
-    total: inGroup.length,
-    selectable: inGroup.filter((ticket) => ticket.category !== 'Closed' && !blocked(ticket.id)).map((ticket) => ticket.id),
-    mine: inGroup.filter((ticket) => ticket.category !== 'Closed' && isMine(ticket, me)).length,
-  }
-}
-
-/** A share of a whole as a CSS width; nothing of nothing is nothing. */
-export function share(part: number, whole: number): string {
-  return whole === 0 ? '0%' : `${String((part / whole) * PERCENT)}%`
 }
 
 /** The branch a new worktree for a ticket gets: `agent/<key>-<the title's first words>`, lower case. */

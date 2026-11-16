@@ -89,6 +89,25 @@ describe('the Tickets view', () => {
     expect(screen.queryByText('Reading tickets from GitHub…')).toBeNull()
   })
 
+  it('shows everyone at first and filters by who a ticket is assigned to, with List and Board as the only views', async () => {
+    show()
+    const list = await screen.findByRole('list', { name: 'Tickets' })
+    expect(await within(list).findByText('Fix the till')).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /Mine/ })).toBeNull()
+    expect(screen.getByRole('radio', { name: /List/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Board/ })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Assigned to: Anyone' }))
+    await userEvent.click(await screen.findByRole('menuitemradio', { name: /cydo/ }))
+    expect(within(list).queryByText('Fix the till')).toBeNull()
+    expect(within(list).getByText('Fix the cart')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Assigned to: cydo' }))
+    await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Unassigned' }))
+    expect(within(list).queryByText('Fix the cart')).toBeNull()
+    expect(within(list).getByText('Fix the till')).toBeInTheDocument()
+  })
+
   it('shows placeholders, not a blank box, while an opened ticket is read', async () => {
     api.loadTicket.mockReturnValue(new Promise(() => undefined))
     show()

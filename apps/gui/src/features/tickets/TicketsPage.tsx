@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
-import { githubRepoOf, loadTicket, loadTicketKeys, writeTicket, type GroupKind, type TicketDetail, type TicketFailure, type TicketGroup, type TicketKeyState, type TicketSummary, type TicketWrite } from '@/api/tickets'
+import { githubRepoOf, loadTicket, loadTicketKeys, writeTicket, type TicketDetail, type TicketFailure, type TicketKeyState, type TicketSummary, type TicketWrite } from '@/api/tickets'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
@@ -14,10 +14,9 @@ import { linkOf, placeOf, useTicketLinks, type ProjectLink } from './model/ticke
 import { TicketSetup } from './TicketSetup'
 import { parseTicketLink } from './model/pastedLink'
 import type { SetupAsk } from './useTicketSetupAsks'
-import { GROUP_VIEWS, groupCounts, groupsUnder, isMine, kindWord, matchesSearch, openBlockers, PROVIDER_LOOK, PROVIDERS, ticketKey, type FactoryRun, type Provider } from './model/tickets'
+import { ANYONE, assigneeChoices, groupsUnder, kindWord, matchesAssignee, matchesSearch, openBlockers, PROVIDER_LOOK, PROVIDERS, ticketKey, type FactoryRun, type Provider } from './model/tickets'
 import { failureOf, ticketsOf, TICKETS_REFRESH_MS, useTicketDetail, useTicketGroups, useTicketList } from './useTicketData'
 import { TicketBoard, TicketRow, TicketSkeleton, type RowState } from './TicketRows'
-import { TicketGroups, type GroupLayout } from './TicketGroups'
 import { TicketDrawer } from './TicketDrawer'
 import { TicketWriteDialog } from './TicketWriteDialog'
 import { writeFailureWords } from './model/ticketWrite'
@@ -51,7 +50,7 @@ export type TicketsHost = {
   onOpenWork: (sessionId: string) => void
 }
 
-type View = 'list' | 'mine' | 'board' | GroupKind
+type View = 'list' | 'board'
 type Dialog = { kind: 'start' | 'here' | 'comment' | 'close'; id: string } | { kind: 'factory'; ids: readonly string[] } | null
 
 /** How long the ticket page takes to slide out (README §1: in .28s, out .19s). */
@@ -133,12 +132,10 @@ function suggestedProvider(link: string | undefined): Provider | null {
   return read.ok ? read.link.kind : null
 }
 
-const VIEW_ICON: Readonly<Record<GroupKind, IconName>> = { Milestone: 'milestone', Module: 'modules', Cycle: 'cycle', Project: 'folder' }
-
 /**
  * Tickets, over the whole chat area: the current chat's project's tickets from GitHub, Plane and Linear, read-only.
- * A tab per provider (always all three, "Not linked" when the project has none), a toolbar (search, scope, the views),
- * the list, the board or one kind of group, a selection bar, the ticket page, and the dialogs that start an agent or
+ * A tab per provider (always all three, "Not linked" when the project has none), a toolbar (search, scope, who it is
+ * assigned to, List or Board), the list or the board, a selection bar, the ticket page, and the dialogs that start an agent or
  * hand tickets to a factory. Ticket text is other people's and is shown as plain text everywhere.
  */
 export function TicketsPage({ project, host, leaving = false, suggestedLink, setupAsk = null }: {
@@ -190,7 +187,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
   const [typed, setTyped] = useState('')
   const [search, setSearch] = useState('')
   const [showClosed, setShowClosed] = useState(false)
-  const [layout, setLayout] = useState<GroupLayout>('grid')
+  const [assignee, setAssignee] = useState<string>(ANYONE)
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
   const [focused, setFocused] = useState<string | null>(null)
   const [openId, setOpenId] = useState<string | null>(null)
@@ -218,7 +215,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
     setScope(null)
     setSelected(new Set())
     setOpenId(null)
-    if (view !== 'list' && view !== 'mine' && view !== 'board') setView('list')
+    setAssignee(ANYONE)
   }
 
   const groups = useTicketGroups(source)
@@ -226,15 +223,9 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
   const list = useTicketList(source, listGroup, search, provider === 'plane')
   const tickets = useMemo(() => ticketsOf(list.data?.pages), [list.data])
   const known = useMemo(() => new Map(tickets.map((ticket) => [ticket.id, ticket])), [tickets])
-  const isGroupView = view !== 'list' && view !== 'mine' && view !== 'board'
   const me = provider === 'github' ? host.githubLogin : provider === 'plane' ? links.data?.me.plane ?? '' : links.data?.me.linear ?? ''
-  const meKnown = me !== null && me !== ''
 
-  // A group view counts every ticket of the source, so it reads them all (up to the daemon's limit).
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list
-  useEffect(() => {
-    if (isGroupView && hasNextPage && !isFetchingNextPage) void fetchNextPage()
-  }, [isGroupView, hasNextPage, isFetchingNextPage, fetchNextPage])
   // The list reads its next page when its end scrolls into sight.
   useEffect(() => {
     const end = endRef.current
@@ -267,7 +258,8 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
   const drawer = usePresence(opened !== null, DRAWER_EXIT_MS, reduced)
   const drawerTicket = known.get(openId ?? shownId ?? '') ?? null
 
-  const filtered = useMemo(() => tickets.filter((ticket) => matchesSearch(ticket, typed) && (view !== 'mine' || isMine(ticket, me))), [tickets, typed, view, me])
+  const people = useMemo(() => assigneeChoices(tickets, me), [tickets, me])
+  const filtered = useMemo(() => tickets.filter((ticket) => matchesSearch(ticket, typed) && matchesAssignee(ticket, assignee)), [tickets, typed, assignee])
   const rows = view === 'board' ? filtered : filtered.filter((ticket) => showClosed || ticket.category !== 'Closed')
   const hiddenClosed = filtered.filter((ticket) => ticket.category === 'Closed').length
   const rowState = (ticket: TicketSummary): RowState => ({
@@ -284,7 +276,6 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
   const allGroups = groups.data ?? []
   const topGroup = allGroups.find((group) => group.kind === 'Project' && (top === null || group.id === top)) ?? null
   const children = groupsUnder(allGroups, topGroup?.id ?? top)
-  const kinds = GROUP_VIEWS[provider].filter((entry) => children.some((group) => group.kind === entry.kind))
   const scopeItems: ReadonlyArray<{ id: string | null; name: string; kind: string; depth: number }> = [
     { id: null, name: provider === 'github' ? 'All issues' : 'All tickets', kind: '', depth: 0 },
     ...(topGroup === null ? [] : [{ id: topGroup.id, name: topGroup.name, kind: kindWord(provider, 'Project'), depth: 0 }]),
@@ -333,7 +324,6 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
     return null
   }
   const factory = (ids: readonly string[]) => { if (ids.length > 0) setDialog({ kind: 'factory', ids }) }
-  const selectOpen = (ids: readonly string[]) => { setSelected((now) => new Set([...now, ...ids])) }
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (dialog !== null) return
@@ -377,12 +367,10 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
   const settling = links.isPending || keys.isPending || (provider === 'github' && link.github === null && project.machine === LOCAL_MACHINE && detected.isPending)
   const look = PROVIDER_LOOK[provider]
   const views: Array<{ id: View; label: string; icon: IconName }> = [
-    { id: 'list', label: 'All', icon: 'list' },
-    { id: 'mine', label: 'Mine', icon: 'person' },
+    { id: 'list', label: 'List', icon: 'list' },
     { id: 'board', label: 'Board', icon: 'board' },
-    ...kinds.map((entry) => ({ id: entry.kind, label: entry.label, icon: VIEW_ICON[entry.kind] })),
   ]
-  const groupKindLabel = kinds.find((entry) => entry.kind === view)?.label ?? ''
+  const assigneeName = people.find((person) => person.value === assignee)?.label ?? 'Anyone'
   const selectedTickets = [...selected].map((id) => known.get(id)).filter((ticket): ticket is TicketSummary => ticket !== undefined)
   const selectedBlocked = selectedTickets.filter((ticket) => (blockersOf(ticket.id)?.length ?? 0) > 0).length
   const dialogTicket = dialog !== null && (dialog.kind === 'start' || dialog.kind === 'here') ? detailOf(dialog.id) ?? null : null
@@ -419,25 +407,39 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
                   <input ref={searchRef} value={typed} onChange={(event) => { setTyped(event.target.value) }} placeholder="Search tickets" aria-label="Search tickets" />
                   <kbd>/</kbd>
                 </label>
-                {!isGroupView && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button type="button" className="mx-tk-scope-button" aria-label={`Scope: ${scopeName}`}>
-                        <span className="mx-tk-scope-name">{scopeName}</span><span className="mx-tk-dim">{scopeKind}</span><span className="mx-spacer" /><Icon name="chevronDown" size={10} />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent side="bottom" align="start" container={host.container} aria-label="Scope" className="mx-tk-menu text-fg">
-                      <DropdownMenuRadioGroup value={scope ?? ALL_SCOPE} onValueChange={(value) => { const id = value === ALL_SCOPE ? null : value; setScope(provider === 'github' && id === topGroup?.id ? null : id) }}>
-                        {scopeItems.map((item) => (
-                          <DropdownMenuRadioItem key={item.id ?? ALL_SCOPE} value={item.id ?? ALL_SCOPE} className={`mx-tk-menu-item${item.depth > 0 ? ' is-child' : ''}`}>
-                            <span className="mx-tk-menu-name">{item.name}</span><span className="mx-tk-dim">{item.kind}</span>
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </DropdownMenuRadioGroup>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-                <Segmented aria-label="View" className="mx-tk-seg mx-tk-views" value={view} onValueChange={(value) => { const next = views.find((each) => each.id === value); if (next === undefined) return; setView(next.id); if (next.id !== 'list' && next.id !== 'mine' && next.id !== 'board') setScope(null) }}>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="mx-tk-scope-button" aria-label={`Scope: ${scopeName}`}>
+                      <span className="mx-tk-scope-name">{scopeName}</span><span className="mx-tk-dim">{scopeKind}</span><span className="mx-spacer" /><Icon name="chevronDown" size={10} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="bottom" align="start" container={host.container} aria-label="Scope" className="mx-tk-menu text-fg">
+                    <DropdownMenuRadioGroup value={scope ?? ALL_SCOPE} onValueChange={(value) => { const id = value === ALL_SCOPE ? null : value; setScope(provider === 'github' && id === topGroup?.id ? null : id) }}>
+                      {scopeItems.map((item) => (
+                        <DropdownMenuRadioItem key={item.id ?? ALL_SCOPE} value={item.id ?? ALL_SCOPE} className={`mx-tk-menu-item${item.depth > 0 ? ' is-child' : ''}`}>
+                          <span className="mx-tk-menu-name">{item.name}</span><span className="mx-tk-dim">{item.kind}</span>
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" className="mx-tk-scope-button mx-tk-who-button" aria-label={`Assigned to: ${assigneeName}`}>
+                      <Icon name="person" size={12} /><span className="mx-tk-scope-name">{assigneeName}</span><span className="mx-spacer" /><Icon name="chevronDown" size={10} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent side="bottom" align="start" container={host.container} aria-label="Assigned to" className="mx-tk-menu text-fg">
+                    <DropdownMenuRadioGroup value={assignee} onValueChange={setAssignee}>
+                      {people.map((person) => (
+                        <DropdownMenuRadioItem key={person.value} value={person.value} className="mx-tk-menu-item">
+                          <span className="mx-tk-menu-name">{person.label}</span>{person.you && <span className="mx-tk-dim">you</span>}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Segmented aria-label="View" className="mx-tk-seg mx-tk-views" value={view} onValueChange={(value) => { const next = views.find((each) => each.id === value); if (next !== undefined) setView(next.id) }}>
                   {views.map((each) => (
                     <SegmentedItem key={each.id} value={each.id} title={each.label}>
                       <Icon name={each.icon} /><span data-vlabel="1">{each.label}</span>
@@ -463,22 +465,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
                   {banner.button !== null && <button type="button" className="mx-tk-button" onClick={banner.button.run}>{banner.button.label}</button>}
                 </div>
               )}
-              {view === 'mine' && !meKnown && (
-                <div role="status" className="mx-tk-banner"><span className="mx-tk-banner-glyph">○</span><span className="mx-tk-banner-words"><b>Who are you on {look.name}?</b><span>Add the name you go by there in Settings › Tickets to see the tickets assigned to you.</span></span><button type="button" className="mx-tk-button" onClick={host.onSettings}>Open Settings</button></div>
-              )}
-              {isGroupView ? (
-                <TicketGroups
-                  title={`${groupKindLabel} in ${topGroup?.name ?? current.topName}`}
-                  kindWord={kindWord(provider, view)}
-                  groups={children.filter((group) => group.kind === view)}
-                  countsOf={(group: TicketGroup) => groupCounts(group.id, keyRefused ? [] : tickets, (id) => (blockersOf(id)?.length ?? 0) > 0, me)}
-                  whole={!hasNextPage}
-                  layout={layout}
-                  onLayout={setLayout}
-                  onSelectOpen={selectOpen}
-                  onOpenGroup={(group) => { setScope(group.id); setView('list') }}
-                />
-              ) : view === 'board' ? (
+              {view === 'board' ? (
                 list.isPending ? <TicketSkeleton source={look.name} /> : (
                   <TicketBoard tickets={shownTickets} stateOf={rowState} me={me} now={now} onToggle={toggle} onOpen={openTicket} onOpenWork={host.onOpenWork} />
                 )
@@ -488,8 +475,8 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
                   {!list.isPending && shownTickets.length === 0 && !keyRefused && (failure === null || tickets.length > 0) && (
                     <div className="mx-tk-empty">
                       <span className="mx-tk-empty-title">No tickets match</span>
-                      <span className="mx-tk-dim">{typed !== '' ? `Nothing matches "${typed}" in ${scopeName}.` : view === 'mine' ? `Nothing in ${scopeName} is assigned to you.` : `Nothing open in ${scopeName}.`}</span>
-                      <button type="button" className="mx-tk-button" onClick={() => { setTyped(''); setSearch(''); setScope(null); setShowClosed(true); setView('list') }}>Clear filters</button>
+                      <span className="mx-tk-dim">{typed !== '' ? `Nothing matches "${typed}" in ${scopeName}.` : assignee !== ANYONE ? `Nothing open in ${scopeName} is assigned to ${assigneeName}.` : `Nothing open in ${scopeName}.`}</span>
+                      <button type="button" className="mx-tk-button" onClick={() => { setTyped(''); setSearch(''); setScope(null); setAssignee(ANYONE); setShowClosed(true) }}>Clear filters</button>
                     </div>
                   )}
                   {shownTickets.map((ticket) => <TicketRow key={ticket.id} ticket={ticket} state={rowState(ticket)} me={me} now={now} onToggle={toggle} onOpen={openTicket} onOpenWork={host.onOpenWork} />)}

@@ -970,6 +970,10 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
 
 - **Where it is.** The tools bar's **Tickets** button opens it over the chat area (`TicketsOverlay` in `.mx-main`) and
   closes the side panel; ✕ or the button closes it (DESIGN › *Tools bar*).
+- **The toolbar.** Search, the scope (all of the source, or one milestone, module, cycle or Linear project), who a
+  ticket is assigned to (Anyone first; then you, when the provider's name for you is known; everyone the read tickets
+  name; Unassigned), and List | Board, which only changes the layout. It always opens on the list with Anyone. There
+  are no Mine or group views and no sort.
 - **Accounts once, links per project.** A Plane or Linear key is set once on this computer and serves every project
   (`TicketKeys`). Which sources a project reads (a GitHub repo, a Plane project, a Linear team) is its **link**, kept by
   this computer's daemon (`Query::TicketLinks`, `api/ticketLinks.ts`, `model/ticketLinks.ts`; nothing secret), so the

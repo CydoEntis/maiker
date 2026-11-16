@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TicketDetail, TicketSummary } from '@/api/tickets'
-import { groupCounts, initials, isFactoryChat, isMine, factoryCommand, factoryRunOf, labelColor, matchesSearch, openBlockers, providerOf, shortAge, ticketBranch, ticketKey, ticketMessage } from './tickets'
+import { ANYONE, assigneeChoices, initials, isFactoryChat, isMine, factoryCommand, factoryRunOf, labelColor, matchesAssignee, matchesSearch, openBlockers, providerOf, shortAge, ticketBranch, ticketKey, ticketMessage, UNASSIGNED } from './tickets'
 
 function summary(change: Partial<TicketSummary> = {}): TicketSummary {
   return { id: 'github:me/shop#142', title: 'Fix the cart', stateName: 'open', category: 'Open', labels: [], assignee: null, url: 'https://github.com/me/shop/issues/142', groups: [], updatedAt: '', ...change }
@@ -63,20 +63,23 @@ describe('what a row shows', () => {
   })
 })
 
-describe('blockers and group counts', () => {
+describe('blockers and the assignee filter', () => {
   it('counts a blocker until it is known to be done', () => {
     const known = new Map([['github:me/shop#1', summary({ id: 'github:me/shop#1', category: 'Closed' })], ['github:me/shop#2', summary({ id: 'github:me/shop#2' })]])
     expect(openBlockers({ blockedBy: ['github:me/shop#1', 'github:me/shop#2', 'github:me/shop#3'] }, known)).toEqual(['github:me/shop#2', 'github:me/shop#3'])
   })
 
-  it('counts a group by state, and offers only its open tickets that nothing blocks', () => {
-    const tickets = [
-      summary({ id: 'a', groups: ['m'], assignee: 'cydo' }),
-      summary({ id: 'b', groups: ['m'], category: 'Started' }),
-      summary({ id: 'c', groups: ['m'], category: 'Closed' }),
-      summary({ id: 'd', groups: ['other'] }),
-    ]
-    expect(groupCounts('m', tickets, (id) => id === 'b', 'cydo')).toEqual({ open: 1, started: 1, closed: 1, total: 3, selectable: ['a'], mine: 1 })
+  it('offers Anyone, you, the others by name and Unassigned, and filters by each', () => {
+    const tickets = [summary({ id: 'a', assignee: 'Cydo' }), summary({ id: 'b', assignee: 'ada' }), summary({ id: 'c', assignee: 'cydo' }), summary({ id: 'd' })]
+    expect(assigneeChoices(tickets, 'cydo')).toEqual([
+      { value: ANYONE, label: 'Anyone', you: false },
+      { value: 'Cydo', label: 'Cydo', you: true },
+      { value: 'ada', label: 'ada', you: false },
+      { value: UNASSIGNED, label: 'Unassigned', you: false },
+    ])
+    expect(tickets.filter((ticket) => matchesAssignee(ticket, 'Cydo')).map((ticket) => ticket.id)).toEqual(['a', 'c'])
+    expect(tickets.filter((ticket) => matchesAssignee(ticket, UNASSIGNED)).map((ticket) => ticket.id)).toEqual(['d'])
+    expect(tickets.filter((ticket) => matchesAssignee(ticket, ANYONE))).toHaveLength(4)
   })
 })
 
