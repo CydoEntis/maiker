@@ -176,6 +176,11 @@ asks nothing, so there is nothing to time). The prompt text itself was never see
 for the auto-approved cases, and is drawn in pieces for the person case, so the hooks are the
 only timing source here.
 
+A helper's permission ask makes its session need you, like the agent's own. The helper's next report
+(a tool it ran) means it was answered: the session is working again (`Term::blocked_by_helper`). A
+question that leaves the screen with no report settles into the work still going on (the agent's
+own turn not over, or helpers running), and into a finish only when nothing is.
+
 **Sounds.** A window rings at most once per `ANY_AGAIN_AFTER` (4 s), whichever kind it was: a
 needs-you (two notes) followed by a finish inside that spell is held back, so a burst never
 reads as three dings. The same agent saying the same thing again within `SAME_AGAIN_AFTER`

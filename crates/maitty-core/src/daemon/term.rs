@@ -206,6 +206,12 @@ pub struct Term {
     /// The agent's own turn is over (its own stop, not a helper's), though helpers it started
     /// may still keep it working: it is back at its prompt and takes a message.
     pub own_turn_over: bool,
+    /// The helper whose question (a permission ask) the agent's "needs you" is: its next news
+    /// means it was answered and carries on.
+    pub blocked_by_helper: Option<String>,
+    /// The text whose Enter is pending was an agent command (`/resume`): many open a menu and
+    /// report no prompt, so a second Enter would pick from it.
+    pub enter_after_command: bool,
     /// Its turn stopped with background work still in flight: done for now, but it carries on
     /// by itself when that work ends, so the finish isn't announced.
     pub awaiting_background: bool,
@@ -1014,6 +1020,8 @@ impl Term {
             win32_input: false,
             done_held: None,
             own_turn_over: false,
+            blocked_by_helper: None,
+            enter_after_command: false,
             awaiting_background: false,
             background_known: Vec::new(),
             helper_work: Vec::new(),

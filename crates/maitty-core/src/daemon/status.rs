@@ -128,6 +128,7 @@ impl Daemon {
         else {
             return;
         };
+        let helper_id = subagent.as_ref().map(|sa| sa.id.clone());
         match verdict {
             Some(false) => {
                 tracing::info!(
@@ -170,6 +171,12 @@ impl Daemon {
                     HookStatus::Done | HookStatus::Idle => t.own_turn_over = true,
                     HookStatus::Working | HookStatus::Blocked | HookStatus::Gone => t.own_turn_over = false,
                     HookStatus::Same => {}
+                }
+                // A turn has started on what was typed: the next queued follow-up waits for its
+                // end, not out the minute (`QUEUED_TURN_STARTS_WITHIN`). Helpers can keep the pane
+                // working throughout, so this is the only start there is to see.
+                if event == "UserPromptSubmit" {
+                    t.queue_sent = None;
                 }
             }
             if let Some(sa) = subagent {
@@ -400,6 +407,20 @@ impl Daemon {
                 t.refresh_head();
             }
         }
+        if let Some(t) = self.terms.get_mut(&term) {
+            let helper = helper_id.filter(|id| !id.is_empty());
+            if status == HookStatus::Blocked {
+                t.blocked_by_helper = helper;
+            } else if status == HookStatus::Same
+                && t.status == Status::Blocked
+                && helper.is_some()
+                && t.blocked_by_helper == helper
+            {
+                // The helper that asked something reports again: it was answered and works on.
+                t.blocked_by_helper = None;
+                self.set_status(term, Status::Working, "hook: the helper that asked carries on");
+            }
+        }
         self.hook_report(term, agent, status, &event, &background, &background_agents);
     }
 
@@ -498,8 +519,11 @@ impl Daemon {
             HookStatus::Done if !t.subagents.is_empty() => {
                 t.done_held = Some(now);
                 // Claude wakes to read what its helpers found and stops again: that stop is
-                // the finish to say, not the last helper's.
-                t.awaiting_background = paused;
+                // the finish to say, not the last helper's. Only a stop says so: Claude's "still
+                // waiting for you" a minute later is no stop, and must not undo it.
+                if stopped {
+                    t.awaiting_background = paused;
+                }
                 self.dirty = true;
                 return;
             }
@@ -1021,11 +1045,13 @@ impl Daemon {
                     // Text, then Enter a beat later, so it lands as a message, not a paste.
                     if data.len() > 1 && data.ends_with(b"\r") {
                         t.input(&data[..data.len() - 1]);
+                        t.enter_after_command = data.starts_with(b"/");
                         t.pending_input = Some((b"\r".to_vec(), Instant::now()));
                     } else {
                         t.input(&data);
-                        // The Enter of a message typed for the agent: checked on below.
-                        if data == b"\r" {
+                        // The Enter of a message typed for the agent: checked on below. Not a
+                        // command's: it may have opened a menu, which a second Enter would answer.
+                        if data == b"\r" && !std::mem::take(&mut t.enter_after_command) {
                             t.enter_sent = Some(t.last_input);
                         }
                     }
@@ -1214,9 +1240,11 @@ impl Daemon {
                             .find(|a| &a.name == name)
                             .is_some_and(|d| d.blocked.iter().any(|r| r.is_match(&text)));
                     if !asking {
+                        // A question asked mid-turn, or by a helper, settles into the work going on.
+                        let still_going = t.hooked && (!t.own_turn_over || helpers_running(t));
                         changes.push((
                             t.id,
-                            Status::Done,
+                            if still_going { Status::Working } else { Status::Done },
                             "screen: the question settled itself".to_string(),
                         ));
                     }
