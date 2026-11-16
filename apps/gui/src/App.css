@@ -323,7 +323,10 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .panel-empty > svg { color: var(--primary); margin-bottom: 11px; }
 .panel-empty h2 { color: var(--foreground); font-size: 12px; font-weight: 650; margin: 0 0 5px; }
 .panel-empty p { font-size: 10px; line-height: 1.5; }
-.terminal-view { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 10px; }
+.terminal-view { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 10px; }
+/* While a screen attaches it is hidden, so its history is never seen redrawing; a slow attach shows placeholder lines over it. */
+.terminal-screen.is-attaching .xterm { visibility: hidden; }
+.terminal-attaching { position: absolute; top: 30px; left: 32px; right: 32px; z-index: 1; pointer-events: none; }
 .terminal-heading { color: var(--muted-foreground); font-size: 9px; gap: 7px; min-height: 24px; }
 .terminal-heading > button { margin-left: auto; }
 
@@ -338,10 +341,6 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .terminal-screen .xterm-screen { padding-bottom: 1px; }
 .terminal-input-error { color: var(--danger); font-size: 11px; margin: 8px 2px; }
 /* A remote pane slow to attach: a strip in the flow above the terminal, so it never covers any of it. */
-.terminal-catch-up { position: relative; flex: none; display: flex; align-items: center; gap: 8px; height: 24px; overflow: hidden; padding: 0 2px; font: 12px/1 "Geist Variable", Geist, system-ui, sans-serif; color: var(--muted, var(--muted-foreground)); }
-.terminal-catch-up svg { animation: spin 1s linear infinite; }
-.terminal-catch-up::before { content: ""; position: absolute; top: 0; left: 0; width: 35%; height: 2px; border-radius: 1px; background: var(--accent, var(--primary)); animation: catch-up-slide 1.2s ease-in-out infinite; }
-@keyframes catch-up-slide { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 :root[data-theme="day"] .terminal-output { background: #14202d; }
 :root[data-theme="day"] .terminal-screen { background: #14202d; }
 .terminal-dim { color: #8a9bad; }

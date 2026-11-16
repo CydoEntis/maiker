@@ -1,6 +1,6 @@
-import { machineLabel } from '@/data/machineNicknames'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CircleAlert, LoaderCircle, TerminalSquare } from 'lucide-react'
+import { CircleAlert, TerminalSquare } from 'lucide-react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import type { ITheme, Terminal as XtermTerminal } from '@xterm/xterm'
 import type { WebglAddon } from '@xterm/addon-webgl'
@@ -153,10 +153,10 @@ const INPUT_RETRY_MS = 1500
 /** How long a view waits for the replay the host asked the daemon for before it fetches one itself. */
 const REPLAY_WAIT_MS = 3000
 
-/** A remote attach slower than this shows the "Catching up" strip; a local one never shows anything. */
-const CATCH_UP_DELAY_MS = 300
-/** How often the strip's milliseconds update while it shows. */
-const CATCH_UP_TICK_MS = 100
+/** An attach slower than this shows placeholder lines over the screen; a quicker one shows nothing at all. */
+const ATTACH_SKELETON_DELAY_MS = 300
+/** How many placeholder lines stand in for the screen while it attaches. */
+const ATTACH_SKELETON_LINES = 6
 
 /**
  * Full reset (RIS) sent in the output itself. xterm's `reset()` takes effect at once, ahead of
@@ -223,7 +223,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
   const pausedRef = useRef(paused)
   const showMissed = useRef<(() => void) | null>(null)
   const [connecting, setConnecting] = useState(true)
-  const [catchUpMs, setCatchUpMs] = useState<number | null>(null)
+  const [slowAttach, setSlowAttach] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [inputFailed, setInputFailed] = useState(false)
   const [resizeError, setResizeError] = useState('')
@@ -723,20 +723,13 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     if (emulator) emulator.options.disableStdin = inputDisabled
   }, [inputDisabled])
 
-  // Only another machine can be slow to attach; this computer's panes show nothing while they connect.
+  // The screen stays hidden while it attaches, so its history is never seen redrawing; only a slow attach shows the
+  // placeholder lines, so a quick one does not flash them.
   useEffect(() => {
-    if (machine === 0 || !connecting) return
-    const started = performance.now()
-    let tick = 0
-    const show = window.setTimeout(() => {
-      setCatchUpMs(Math.round(performance.now() - started))
-      tick = window.setInterval(() => { setCatchUpMs(Math.round(performance.now() - started)) }, CATCH_UP_TICK_MS)
-    }, CATCH_UP_DELAY_MS)
-    return () => {
-      window.clearTimeout(show)
-      window.clearInterval(tick)
-    }
-  }, [machine, connecting])
+    if (!connecting) return
+    const show = window.setTimeout(() => { setSlowAttach(true) }, ATTACH_SKELETON_DELAY_MS)
+    return () => { window.clearTimeout(show) }
+  }, [connecting])
 
   useEffect(() => {
     focusedRef.current = focused
@@ -750,14 +743,9 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
   }, [focused, windowActive, connecting, look.cursorBlink])
 
   return <div className="terminal-view">
-    {machine !== 0 && connecting && catchUpMs !== null && !loadError && (
-      <div className="terminal-catch-up" role="status">
-        <LoaderCircle size={13} aria-hidden="true" />
-        <span>Catching up from {machineLabel(conversation.machineName ?? null) ?? 'the machine'} · {catchUpMs} ms</span>
-      </div>
-    )}
+    {connecting && slowAttach && !loadError && <SkeletonLines className="terminal-attaching" label={`Opening ${label}`} lines={ATTACH_SKELETON_LINES} />}
     {loadError && <div className="terminal-input-error" role="status"><p>Could not load the terminal. Check the daemon connection and reopen this session.</p></div>}
-    <div className="terminal-screen" ref={terminalHost} role="region" aria-label={label} />
+    <div className={`terminal-screen${connecting && !loadError ? ' is-attaching' : ''}`} ref={terminalHost} role="region" aria-label={label} />
     {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the daemon could not be reached.</p><Button variant="soft" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
     {resizeError && <div className="terminal-input-error" role="status"><p>{resizeError}</p><Button variant="soft" size="sm" onClick={() => { refitTerminal.current?.() }}>Retry resize</Button></div>}
   </div>
