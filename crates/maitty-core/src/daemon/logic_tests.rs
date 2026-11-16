@@ -8905,6 +8905,80 @@ fn an_agent_that_died_mid_turn_comes_back_as_a_shell_that_offers_the_resume() {
 }
 
 #[test]
+fn a_resume_nobody_took_is_still_offered_after_a_second_restart() {
+    let (mut d, _rx) = daemon();
+    let dir = std::env::temp_dir();
+    let one = |pane: persist::SavedPane| persist::Saved {
+        workspaces: vec![persist::SavedWs {
+            name: String::new(),
+            cwd: dir.clone(),
+            worktree: false,
+            color: None,
+            group: None,
+            tabs: vec![persist::SavedTab {
+                name: String::new(),
+                layout: Node::Leaf(1),
+                focus: 1,
+                panes: [(1, pane)].into(),
+            }],
+            active_tab: 0,
+        }],
+        ..Default::default()
+    };
+    d.restore(one(persist::SavedPane {
+        cwd: Some(dir.clone()),
+        cmd: Some("codex".into()),
+        agent: Some("codex".into()),
+        was_working: true,
+        ..Default::default()
+    }));
+    let first = d.workspaces[0].tabs[0].focus;
+    let offered = d.snapshot().terms[&first].interrupted.clone().expect("offered once");
+
+    // Restarted again before anyone resumed it: the shell's save still carries the offer.
+    let saved = d.saved();
+    let pane = saved.workspaces[0].tabs[0].panes.values().next().unwrap().clone();
+    close(&mut d, &[first]);
+    let (mut d, _rx) = daemon();
+    d.restore(one(pane));
+    let second = d.workspaces[0].tabs[0].focus;
+    assert_eq!(d.snapshot().terms[&second].interrupted, Some(offered));
+    close(&mut d, &[second]);
+}
+
+#[test]
+fn a_pane_asking_a_question_at_a_restart_is_offered_as_cut_short() {
+    let (mut d, _rx) = daemon();
+    let dir = std::env::temp_dir();
+    d.restore(persist::Saved {
+        workspaces: vec![persist::SavedWs {
+            name: String::new(),
+            cwd: dir.clone(),
+            worktree: false,
+            color: None,
+            group: None,
+            tabs: vec![persist::SavedTab {
+                name: String::new(),
+                layout: Node::Leaf(1),
+                focus: 1,
+                panes: [(1, persist::SavedPane { cwd: Some(dir.clone()), ..Default::default() })].into(),
+            }],
+            active_tab: 0,
+        }],
+        ..Default::default()
+    });
+    let t = d.workspaces[0].tabs[0].focus;
+    let term = d.terms.get_mut(&t).unwrap();
+    term.agent = Some("codex".into());
+    term.status = Status::Blocked;
+
+    let saved = d.saved();
+    let pane = saved.workspaces[0].tabs[0].panes.values().next().expect("the pane");
+    assert!(pane.was_working, "not resumed as if its question had been answered");
+    close(&mut d, &[t]);
+}
+
+#[test]
 fn the_timeline_records_status_changes_and_the_shells_prompt_marks() {
     let (mut d, _rx) = daemon();
     let t = pane(&mut d);

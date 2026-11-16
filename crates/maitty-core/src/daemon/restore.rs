@@ -278,7 +278,10 @@ impl Daemon {
             agent: term.agent.clone(),
             session: term.agent.as_ref().and(term.session.clone()),
             unseen: term.status == Status::Done,
-            was_working: term.status == Status::Working,
+            // A question left unanswered is a turn cut short too: resumed silently, the agent
+            // would sit at its prompt as if it had been answered.
+            was_working: matches!(term.status, Status::Working | Status::Blocked),
+            interrupted: term.interrupted.clone().filter(|_| term.agent.is_none()),
             name: if term.name.is_empty() {
                 term.first_prompt.clone()
             } else {
@@ -577,7 +580,8 @@ impl Daemon {
                         .was_working
                         .then(|| pane.agent.clone().zip(cmd.clone()))
                         .flatten()
-                        .map(|(agent, resume)| Interrupted { agent, resume });
+                        .map(|(agent, resume)| Interrupted { agent, resume })
+                        .or_else(|| pane.interrupted.clone());
                     let cmd = cmd.filter(|_| interrupted.is_none());
                     match self.spawn(cmd.as_deref(), &cwd, 120, 32) {
                         Ok(new) => {
