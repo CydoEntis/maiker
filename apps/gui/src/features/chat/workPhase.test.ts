@@ -47,9 +47,15 @@ describe('what the working line says', () => {
 })
 
 describe('telling a message just sent from the same words said before', () => {
-  it('counts only the person\'s messages with exactly those words', () => {
-    const events = [user('a', 'hello'), user('b', ' hello '), user('c', 'hello there')]
+  it('counts the person\'s messages that hold those words', () => {
+    const events = [user('a', 'hello'), user('b', ' hello '), user('c', 'say goodbye')]
     expect(countUserMessages(events, 'hello')).toBe(2)
-    expect(countUserMessages(events, 'goodbye')).toBe(0)
+    expect(countUserMessages(events, 'goodbye')).toBe(1)
+    expect(countUserMessages(events, 'farewell')).toBe(0)
+  })
+
+  it('counts a message the agent took as part of one sent before it', () => {
+    const events = [user('a', 'set it up\nthen go over the integrations')]
+    expect(countUserMessages(events, 'then go over the integrations')).toBe(1)
   })
 })
