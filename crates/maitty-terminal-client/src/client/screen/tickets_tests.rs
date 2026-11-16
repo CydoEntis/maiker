@@ -31,7 +31,7 @@ fn opened_with(link: TicketLink) -> (App, mpsc::UnboundedReceiver<Outgoing>) {
 fn links_of(link: &TicketLink) -> TicketLinks {
     let here = LinkedProject { machine: None, folder: SHOP.into(), link: link.to_daemon() };
     let projects = if link.to_daemon().is_empty() { Vec::new() } else { vec![here.clone()] };
-    TicketLinks { project: Some(here), projects, me: DaemonMe::default() }
+    TicketLinks { project: Some(here), projects, me: DaemonMe::default(), repo_file: None }
 }
 
 fn links_tag(msgs: &[ClientMsg]) -> u64 {
@@ -338,7 +338,7 @@ fn sources_lists_the_accounts_then_every_linked_project() {
     let tag = links_tag(&sent(&mut rx));
     let here = LinkedProject { machine: None, folder: SHOP.into(), link: github().to_daemon() };
     let blog = LinkedProject { machine: Some("kingdom".into()), folder: "/srv/blog".into(), link: maitty_shared::ticket_links::TicketLink { linear: Some(TicketPick { id: "linear:team.1".into(), name: "Core".into() }), ..Default::default() } };
-    links_reply(&mut app, tag, Ok(TicketLinks { project: Some(here.clone()), projects: vec![blog, here], me: DaemonMe { plane: String::new(), linear: "Ada".into() } }));
+    links_reply(&mut app, tag, Ok(TicketLinks { project: Some(here.clone()), projects: vec![blog, here], me: DaemonMe { plane: String::new(), linear: "Ada".into() }, repo_file: None }));
     key(&mut app, KeyCode::Char(','));
     let shown = frame_at(&mut app, "sources", 120, 40);
     assert!(shown.contains("ACCOUNTS") && shown.contains("LINKED PROJECTS"), "{shown}");
@@ -363,6 +363,47 @@ fn an_older_daemon_reads_github_from_the_origin_and_says_why_nothing_else_links(
     });
     let shown = frame(&mut app, "old daemon, no links");
     assert!(shown.contains("older than ticket") && shown.contains("Restart it"), "{shown}");
+}
+
+#[test]
+fn an_agents_ask_opens_the_setup_on_its_source_with_its_link_as_text() {
+    use maitty_shared::ticket_links::{TicketSetupAsk, TicketSetupSource};
+    let mut app = world(Stage::None);
+    let (tx, mut rx) = mpsc::unbounded_channel();
+    app.out = tx;
+    let term = app.selected_term().expect("a session in front");
+    if let Some(info) = app.snap.terms.get_mut(&term.term) {
+        info.root = Some(PathBuf::from(SHOP));
+        info.top = Some(PathBuf::from(SHOP));
+        info.cwd = PathBuf::from(SHOP);
+    }
+    let link = "https://plane.example/acme/projects/p1/issues/";
+    let ask = TicketSetupAsk { term: term.term, folder: SHOP.into(), source: Some(TicketSetupSource::Plane), link: link.into() };
+    app.on_machine_server(MachineId::LOCAL, ServerMsg::TicketSetup(ask.clone()));
+    app.with_tickets(|_, v| v.origin = Some(None));
+    let msgs = sent(&mut rx);
+    links_reply(&mut app, links_tag(&msgs), Ok(links_of(&TicketLink::default())));
+    keys_reply(&mut app, tag_of(&msgs, |q| matches!(q, Query::TicketKeys { .. })), Vec::new());
+    let shown = frame(&mut app, "agent opened plane setup");
+    assert!(shown.contains("Set up Plane for shop") && shown.contains("Your agent suggests") && shown.contains("plane.example/acme"), "{shown}");
+    assert!(!sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Set { .. }, .. }) | ClientMsg::Query(Query::TicketKeys { change: TicketKeyChange::Set { .. }, .. }))), "nothing is saved on an agent's word");
+    // Another machine's agent opens nothing here.
+    app.view = None;
+    app.on_machine_server(MachineId(3), ServerMsg::TicketSetup(ask));
+    assert!(app.view.is_none());
+}
+
+#[test]
+fn sources_say_which_part_came_from_the_repository_file() {
+    use maitty_shared::ticket_links::RepoTicketFile;
+    let (mut app, mut rx) = opened();
+    let tag = links_tag(&sent(&mut rx));
+    let here = LinkedProject { machine: None, folder: SHOP.into(), link: github().to_daemon() };
+    let file = RepoTicketFile { github: true, notes: vec!["It names a Plane at https://p.example, workspace acme, not the one your key is for, so it is not used".into()], ..RepoTicketFile::default() };
+    links_reply(&mut app, tag, Ok(TicketLinks { project: Some(here), projects: Vec::new(), me: DaemonMe::default(), repo_file: Some(file) }));
+    key(&mut app, KeyCode::Char(','));
+    let shown = frame_at(&mut app, "sources from file", 160, 40);
+    assert!(shown.contains("me/shop (from .maitty/tickets.toml)") && shown.contains("not the one your key is for"), "{shown}");
 }
 
 fn opened_with_protocol(protocol: u32) -> (App, mpsc::UnboundedReceiver<Outgoing>) {
