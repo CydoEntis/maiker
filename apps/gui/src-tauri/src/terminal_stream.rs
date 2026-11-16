@@ -325,7 +325,7 @@ impl Wire {
         }
         let id = machine_of(machine);
         let handle = self.handle()?;
-        if !handle.is_up(id) || handle.is_refused(id) {
+        if !handle.takes_requests(id) {
             return Err(refusal(handle, id));
         }
         let route = handle.route(id).ok_or_else(|| refusal(handle, id))?;
@@ -335,7 +335,7 @@ impl Wire {
             name,
             move || {
                 let route = route.clone();
-                Box::pin(async move { maitty_machines::open_remote(&route, crate::hub::dial()?).await })
+                Box::pin(async move { maitty_machines::open_remote(&route, crate::hub::request_dial()?).await })
             },
             vet,
         )))

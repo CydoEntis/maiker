@@ -2523,18 +2523,20 @@ where
     } else {
         None
     };
+    // The daemon refusing a question is an answer on a line that works: the line is kept and the
+    // refusal returned, not asked again on a new one (on another machine, a new ssh process).
     if let Some(mut kept) = kept
-        && let Ok(Ok(reply)) = tokio::time::timeout(kept_wait, ask(&mut kept, message)).await
+        && let Ok(Ok(answer)) = tokio::time::timeout(kept_wait, ask_answer(&mut kept, message)).await
     {
         keep(kept);
-        return Ok(reply);
+        return answer.map_err(|refused| anyhow::anyhow!(refused));
     }
     let mut fresh = open().await?;
-    let reply = ask(&mut fresh, message).await?;
+    let answer = ask_answer(&mut fresh, message).await?;
     if reusable {
         keep(fresh);
     }
-    Ok(reply)
+    answer.map_err(|refused| anyhow::anyhow!(refused))
 }
 
 async fn request(message: ClientMsg, daemon: impl Into<Daemon>) -> Result<Reply> {
@@ -2708,6 +2710,40 @@ mod kept_connection_tests {
         assert_eq!(opened.load(Ordering::SeqCst), 1);
     }
 
+    /// A daemon that refuses every question with an error, and keeps the line.
+    fn daemon_refusing() -> Connection {
+        let (ours, theirs) = tokio::io::duplex(64 * 1024);
+        let (their_read, their_write) = tokio::io::split(theirs);
+        let (mut reader, mut writer) = maitty_ipc_transport::framed_parts(their_read, their_write);
+        tokio::spawn(async move {
+            while let Ok(Some(_)) = maitty_ipc_transport::receive::<ClientMsg>(&mut reader).await {
+                let refused = ServerMsg::Error("no such conversation".into());
+                if maitty_ipc_transport::send(&mut writer, &refused).await.is_err() {
+                    return;
+                }
+            }
+        });
+        let (our_read, our_write) = tokio::io::split(ours);
+        maitty_ipc_transport::framed_parts(our_read, our_write)
+    }
+
+    #[tokio::test]
+    async fn a_refusal_on_a_kept_line_is_the_answer_and_opens_no_new_line() {
+        let idle = IdleConnections::default();
+        idle.lock().unwrap().push((daemon_refusing(), std::time::Instant::now()));
+        let opened = Arc::new(AtomicUsize::new(0));
+        for _ in 0..3 {
+            let counted = opened.clone();
+            let reply = ask_reusing(&idle, MAX_IDLE_CONNECTIONS, &question(), || async move {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Ok(daemon_refusing())
+            })
+            .await;
+            assert_eq!(reply.unwrap_err().to_string(), "no such conversation");
+        }
+        assert_eq!(opened.load(Ordering::SeqCst), 0, "the one line answered every time");
+    }
+
     #[tokio::test]
     async fn a_push_never_goes_out_on_a_kept_line_so_it_is_never_sent_twice() {
         use maitty_shared::protocol::GitRequest;
@@ -2769,6 +2805,20 @@ mod request_timeout_tests {
         let answer = answered_within(Duration::from_secs(5), async { Ok(7) }).await;
 
         assert_eq!(answer.unwrap(), 7);
+    }
+}
+
+/// Ask `message` and tell the daemon's refusal (the inner `Err`, the line still good) from a line
+/// that failed (the outer one).
+async fn ask_answer(connection: &mut Connection, message: &ClientMsg) -> Result<std::result::Result<Reply, String>> {
+    ipc::send_message(&mut connection.1, message).await?;
+    loop {
+        match ipc::receive_server(&mut connection.0).await? {
+            Some(ServerMsg::Reply(reply)) => return Ok(Ok(reply)),
+            Some(ServerMsg::Error(error)) => return Ok(Err(error)),
+            Some(ServerMsg::Bye) | None => bail!("local daemon closed the connection"),
+            Some(_) => continue,
+        }
     }
 }
 

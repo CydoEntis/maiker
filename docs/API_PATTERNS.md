@@ -1366,8 +1366,10 @@ dials at once. A machine's agents stay in the sidebar model through every state 
 is kept, not cleared), and the next `State` replaces it.
 
 **Backoff** (`Backoff::DEFAULT`): no wait before the first dial and before the redial of a line
-that was up; after `n` failures in a row, 250 ms doubled `n - 1` times, never more than 30 s
-(250, 500, 1000, ..., 16000, 30000, 30000). A success resets it.
+that held; after `n` failures in a row, 250 ms doubled `n - 1` times, never more than 30 s
+(250, 500, 1000, ..., 16000, 30000, 30000). A line that held for 30 s (`STEADY_LINE`) resets it; one
+that ends sooner counts as a failure, so a line turned away as soon as it is made is not redialled
+as fast as it ends.
 
 **Failure classes** come from `link_failure::classify`, from structured signals: the error's
 type (`OtherVersion` is `NeedsUpdate`), ssh's exit status, and whether the far side ever sent
