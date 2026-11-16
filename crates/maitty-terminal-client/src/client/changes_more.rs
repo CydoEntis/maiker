@@ -439,7 +439,7 @@ impl App {
                     message.pop();
                 }
                 KeyCode::Char('u') if ctrl => message.clear(),
-                KeyCode::Char(c) if !ctrl && message.chars().count() < TEXT_MAX => message.push(c),
+                KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) && message.chars().count() < TEXT_MAX => message.push(c),
                 _ => {}
             }
             return Some(true);
@@ -459,7 +459,7 @@ impl App {
                     text.pop();
                 }
                 KeyCode::Char('u') if ctrl => text.clear(),
-                KeyCode::Char(c) if !ctrl && text.chars().count() < TEXT_MAX => text.push(c),
+                KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) && text.chars().count() < TEXT_MAX => text.push(c),
                 _ => {}
             }
             return Some(true);

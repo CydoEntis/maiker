@@ -1056,7 +1056,7 @@ impl App {
             KeyCode::Enter if d.row == DraftRow::Command => {
                 self.start_editing(d, point.as_ref(), None)
             }
-            KeyCode::Char(c) if plain && d.row == DraftRow::Command => {
+            KeyCode::Char(c) if (plain || crate::client::input::alt_gr(k)) && d.row == DraftRow::Command => {
                 self.start_editing(d, point.as_ref(), Some(c))
             }
             _ => {}
@@ -1253,7 +1253,7 @@ fn edit_key(d: &mut CheckDraft, k: &KeyEvent) {
             command.pop();
         }
         KeyCode::Char('u') if !plain => command.clear(),
-        KeyCode::Char(c) if plain => command.push(c),
+        KeyCode::Char(c) if (plain || crate::client::input::alt_gr(k)) => command.push(c),
         _ => {}
     }
 }
