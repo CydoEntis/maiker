@@ -269,7 +269,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    reported workflow runs, whose helpers are on its Work board), not in the sidebar; **Open its chat** on a row shows its own chat in the pane until you pick a session or **‹ Main session**.
    A session's **workflow runs** (the daemon's `workflows`, `model/workflows.ts`) are not in the sidebar either: they are
    the pane's **Work** view (`features/work/`, `usePaneViews().work`), a board placed by `model/board.ts` (a column per reported step, then Needs human and Done), opened from the
-   pane's switch and left by choosing Chat or Terminal; the drawer is the shared Dialog mounted in the board. Rename is
+   tools bar's Work and left by choosing Chat or Terminal; with no runs it shows `WorkSetup` instead (how to set a
+   factory up). The pane body is `is-work` then, never `is-chat`, which hides all but the chat layer; the drawer is the shared Dialog mounted in the board. Rename is
    in place (double-click, F2 or the menu). Right-click menus share `MenuPopup` (focus, arrow keys, Esc, kept inside the
    window). Split layouts are this window's own state, up to four panes, mixed right and down with draggable dividers; a
    session closes with a 6 second Undo. **Put away** (the row menu of a finished or idle session in a daemon terminal,

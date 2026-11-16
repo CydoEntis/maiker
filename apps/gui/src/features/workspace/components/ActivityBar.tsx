@@ -37,7 +37,8 @@ const PANEL_TOOLS: readonly { view: InspectView; label: string }[] = [
 /**
  * The tools bar down the window's right edge (layout 2h §3): Changes, Files, History and Checks open the side panel on
  * that view and close it when it already shows it; Tickets opens over the chat area; Terminal, at the foot, shows and
- * hides the focused session's terminal. A chat that runs a workflow gets Work at the top. Every tool works on a project,
+ * hides the focused session's terminal. Work, at the top, shows the chat's factory runs, or how to set a factory up when
+ * it runs none. Every tool works on a project,
  * so the bar shows only while a session is in front.
  */
 export function ActivityBar() {
@@ -72,11 +73,11 @@ export function ActivityBar() {
   const needs = runs.some((run) => run.active && run.needsYou)
   return (
     <nav className="mx-tools" aria-label="Tools">
-      {runs.length > 0 && !newChatOpen && (
+      {!newChatOpen && (
         <>
           <ToolButton
             label="Work"
-            tip={workOn ? 'Back to the chat' : `Work: ${String(live)} ${live === 1 ? 'ticket' : 'tickets'} running`}
+            tip={workOn ? 'Back to the chat' : runs.length === 0 ? 'Work: no factory runs in this chat. Set one up' : `Work: ${String(live)} ${live === 1 ? 'ticket' : 'tickets'} running`}
             path={PATHS.work}
             on={workOn}
             badge={needs ? { text: '!', tone: 'needs' } : live > 0 ? { text: String(live), tone: 'plain' } : null}
