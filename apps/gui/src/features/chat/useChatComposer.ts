@@ -16,6 +16,7 @@ import { wireChoice } from './agentChoice'
 import { paneSendOperation, reserveOperation, STALE_OPERATION, type FailedSend } from './sendOperation'
 import { isBangLine, isSlashLine } from './slashCommands'
 import { withRestoreNote } from './editFromHere'
+import { heldAgain, letGoOf, NO_LET_GO, oneLeft, shownQueued, stillLetGo, type LetGo } from './letGo'
 
 export const PENDING_APPROVAL_NOTE = 'Answer the request above first'
 export const READ_ONLY_NOTE = 'Read-only: talk to the agent in the terminal'
@@ -103,12 +104,18 @@ export type PaneQueue = {
 const NO_QUEUED: readonly string[] = []
 /** A pane's queued messages are numbered below zero by their place, so they never share a number with a conversation's operations. */
 const paneQueuedId = (index: number): number => -(index + 1)
-const NO_TEXTS: ReadonlySet<string> = new Set()
+/** Takes one of `text` out of `list`; whether there was one. */
+function takeOut(list: string[], text: string): boolean {
+  const at = list.indexOf(text)
+  if (at < 0) return false
+  list.splice(at, 1)
+  return true
+}
 const paneQueuedIndex = (id: number): number => -id - 1
 
 
 /** What was just sent into the terminal, and how many times those words were already in the history. */
-export type SentEcho = { readonly text: string; readonly baseline: number; readonly quiet: boolean }
+export type SentEcho = { readonly text: string; readonly baseline: number; readonly quiet: boolean; /** Which send drew it, so a timer of an earlier send of the same words leaves it alone. */ readonly id?: number }
 
 /** A message the daemon holds until the running turn ends. `id` is its operation number. */
 const NO_PENDING: ReadonlySet<number> = new Set()
@@ -239,12 +246,12 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   const attach = useAttachmentIntake({ conversation, blocked: disabledReason, machine: link.machine ?? null })
   // Queued messages this box let go of (removed, taken back, sent now): they leave the list at once, before the pane's
   // list catches up, and come back only if the daemon refuses.
-  const [letGo, setLetGo] = useState<ReadonlySet<string>>(NO_TEXTS)
-  // One no longer in the pane's list is forgotten, so the same words queued again later show.
-  if ([...letGo].some((text) => !paneQueued.includes(text))) setLetGo(new Set([...letGo].filter((text) => paneQueued.includes(text))))
+  const [letGo, setLetGo] = useState<readonly LetGo[]>(NO_LET_GO)
+  const caughtUp = stillLetGo(letGo, paneQueued)
+  if (caughtUp !== letGo) setLetGo(caughtUp)
   const queue = useMemo<readonly QueuedItem[]>(() => [
     ...feed.queued.map((message) => ({ id: message.operation, text: message.text })),
-    ...paneQueued.flatMap((text, index) => (letGo.has(text) ? [] : [{ id: paneQueuedId(index), text }])),
+    ...shownQueued(paneQueued, letGo).map(({ index, text }) => ({ id: paneQueuedId(index), text })),
   ], [feed.queued, paneQueued, letGo])
 
   const setDraft = useCallback((text: string) => {
@@ -257,12 +264,21 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   const eventsNow = useLatest(() => selectChatEvents(feed.projection))
   // At rest, not asking anything: only then can an Enter be nothing but the send of words left in the box.
   const restingNow = useLatest(() => !paneWorking && (feed.status === 'Idle' || feed.status === 'Done'))
+  // Each drawn message has its own number: the same words sent twice in a row keep their full time each.
+  const echoes = useRef(0)
+  const showEcho = useCallback((text: string, baseline: number, quiet: boolean) => {
+    echoes.current += 1
+    const id = echoes.current
+    setEcho({ text, baseline, quiet, id })
+    // The "thinking" line it brings is only a stand-in until the agent's own status says so: it stops after a few seconds, the message stays.
+    if (!quiet) window.setTimeout(() => { setEcho((current) => (current?.id === id ? { ...current, quiet: true } : current)) }, ECHO_THINKING_MS)
+    window.setTimeout(() => { setEcho((current) => (current?.id === id ? null : current)) }, ECHO_MAX_MS)
+    return id
+  }, [])
   useEffect(() => onOutsideSend(link.conversation, (text) => {
-    setEcho({ text, baseline: countUserMessages(eventsNow(), text), quiet: false })
-    window.setTimeout(() => { setEcho((current) => (current?.text === text ? { ...current, quiet: true } : current)) }, ECHO_THINKING_MS)
-    window.setTimeout(() => { setEcho((current) => (current?.text === text ? null : current)) }, ECHO_MAX_MS)
+    showEcho(text, countUserMessages(eventsNow(), text), false)
     refresh()
-  }), [link.conversation, eventsNow, refresh])
+  }), [link.conversation, eventsNow, refresh, showEcho])
 
   const send = useCallback(async (text: string): Promise<boolean> => {
     setSending(true)
@@ -278,10 +294,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
           }, RESUBMIT_AFTER_MS)
         }
         // Drawn at once: the history only has it when the agent next writes its file.
-        setEcho({ text, baseline, quiet: false })
-        // The "thinking" line it brings is only a stand-in until the agent's own status says so: it stops after a few seconds, the message stays.
-        window.setTimeout(() => { setEcho((current) => (current?.text === text ? { ...current, quiet: true } : current)) }, ECHO_THINKING_MS)
-        window.setTimeout(() => { setEcho((current) => (current?.text === text ? null : current)) }, ECHO_MAX_MS)
+        showEcho(text, baseline, false)
         refresh()
         window.setTimeout(refresh, FOLLOW_UP_REFRESH_MS)
         return true
@@ -296,11 +309,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     retry.current = { text, operation }
     // Drawn at once, as the agent's own history only has it once the turn has begun. A message that
     // is queued behind a running turn shows in the queue instead, so it is not drawn twice.
-    const drawn = !running
-    if (drawn) {
-      setEcho({ text, baseline: countUserMessages(selectChatEvents(feed.projection), text), quiet: true })
-      window.setTimeout(() => { setEcho((current) => (current?.text === text ? null : current)) }, ECHO_MAX_MS)
-    }
+    const drawn = running ? null : showEcho(text, countUserMessages(selectChatEvents(feed.projection), text), true)
     try {
       const picked = agent === undefined ? null : wireChoice(conversation, agent)
       const target = { id: String(conversation), generation: link.generation }
@@ -311,7 +320,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     } catch (failure) {
       const message = errorMessage(failure, 'Could not send the message')
       setError(message)
-      if (drawn) setEcho((current) => (current?.text === text ? null : current))
+      if (drawn !== null) setEcho((current) => (current?.id === drawn ? null : current))
       // A number the daemon has passed (another window sent in between) is not tried again; read, then pick a new one.
       if (STALE_OPERATION.test(message)) {
         retry.current = null
@@ -321,7 +330,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     } finally {
       setSending(false)
     }
-  }, [conversation, link.generation, agent, feed, refresh, typeText, running, eventsNow, restingNow])
+  }, [conversation, link.generation, agent, feed, refresh, typeText, running, eventsNow, restingNow, showEcho])
 
   const submit = useCallback(() => {
     const { draft, attachments, note: boxNote } = peekComposer(conversation)
@@ -338,13 +347,13 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
         revokePreviews(files)
         return
       }
-      // A message that did not go is given back, unless something new was typed or attached meanwhile.
-      const now = peekComposer(conversation)
-      if (now.draft !== '' || now.attachments.length > 0) {
-        revokePreviews(files)
-        return
-      }
-      updateComposer(conversation, (state) => ({ ...state, draft: text, attachments: files, note: note ?? state.note }))
+      // A message that did not go is given back, ahead of anything typed or attached meanwhile.
+      updateComposer(conversation, (state) => ({
+        ...state,
+        draft: state.draft.trim() === '' ? text : text === '' ? state.draft : `${text}\n\n${state.draft}`,
+        attachments: [...files, ...state.attachments],
+        note: note ?? state.note,
+      }))
     }
     // An agent's own command that runs beside a working turn is typed in now; with files attached the message is a paste, not a command.
     const typedNow = busy && files.length === 0 && runsMidTurn(agent, text)
@@ -368,13 +377,13 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   }, [disabledReason, sending, conversation, send, holding, paneQueue, agent, busy])
 
   // The ones this box took back, so their leaving the queue is not read as the daemon having sent them.
-  const taken = useRef(new Set<string>())
+  const taken = useRef<string[]>([])
   const takeBack = useCallback((operation: number): { text: string; gone: Promise<void> } | null => {
     const index = paneQueuedIndex(operation)
     const text = paneQueued[index]
     if (text === undefined || paneQueue === undefined) return null
-    taken.current.add(text)
-    setLetGo((current) => new Set([...current, text]))
+    taken.current.push(text)
+    setLetGo((current) => letGoOf(current, paneQueued, text))
     return { text, gone: paneQueue.drop(index, text) }
   }, [paneQueued, paneQueue])
 
@@ -383,8 +392,8 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
    * moment ago, the pane's next list leaves it out; if not, it is still waiting, so it must not look gone.
    */
   const notLetGo = useCallback((text: string, failure: unknown, fallback: string) => {
-    taken.current.delete(text)
-    setLetGo((current) => new Set([...current].filter((held) => held !== text)))
+    takeOut(taken.current, text)
+    setLetGo((current) => heldAgain(current, text))
     setError(errorMessage(failure, fallback))
   }, [])
 
@@ -393,10 +402,11 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   useEffect(() => {
     const before = queuedBefore.current
     queuedBefore.current = paneQueued
-    const first = before[0]
-    if (first === undefined || before.length !== paneQueued.length + 1 || before.slice(1).some((text, index) => text !== paneQueued[index])) return
-    if (taken.current.delete(first)) return
-    announceOutsideSend(link.conversation, first)
+    const left = oneLeft(before, paneQueued)
+    if (left === null) return
+    // One this box took back is not the daemon having sent it, wherever it was in the queue.
+    if (takeOut(taken.current, left.text) || !left.first) return
+    announceOutsideSend(link.conversation, left.text)
   }, [paneQueued, link.conversation])
 
   const sendQueuedNow = useCallback((operation: number) => {
@@ -426,10 +436,10 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     // Typed in only once the daemon has let go of it, or it would go in twice.
     taking.gone.then(
       () => send(taking.text).then((delivered) => {
-        // The daemon has let go of it, so a message that did not reach the agent goes back in the box, not nowhere.
+        // The daemon has let go of it, so a message that did not reach the agent goes back in the box, not nowhere,
+        // with its files as attachments rather than the lines that name them.
         if (delivered) return
-        const words = taking.text
-        updateComposer(conversation, (state) => ({ ...state, draft: state.draft.trim() === '' ? words : `${words}\n\n${state.draft}` }))
+        updateComposer(conversation, messageIntoDraft(taking.text))
       }),
       (failure: unknown) => { notLetGo(taking.text, failure, 'Could not send the queued message now') },
     )

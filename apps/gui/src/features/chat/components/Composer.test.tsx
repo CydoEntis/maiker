@@ -161,6 +161,19 @@ describe('sending', () => {
     expect(box).toHaveValue('')
   })
 
+  it('gives a failed message back ahead of what was typed while it was going', async () => {
+    const { user, box } = await open()
+    let fail: (reason: Error) => void = () => undefined
+    fake.submitMessage.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject }))
+
+    await user.type(box, 'first{Enter}')
+    await user.type(box, 'second')
+    act(() => { fail(new Error('the daemon went away')) })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('the daemon went away')
+    expect(box).toHaveValue('first\n\nsecond')
+  })
+
   it('is off, with the reason, while the daemon is offline', async () => {
     const { box } = await open(() => undefined, false)
 
