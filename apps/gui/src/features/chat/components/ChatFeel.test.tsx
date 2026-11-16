@@ -5,7 +5,7 @@ import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetComposers } from '../composerStore'
 import { forgetFirstMessages } from '../firstMessage'
 import { ACTIVE_POLL_MS, forgetChatFeeds, IDLE_POLL_MS } from '../useChatFeed'
-import { PASTE_SUBMIT_GAP_MS } from '../useChatComposer'
+import { PASTE_SUBMIT_GAP_MS, RESUBMIT_AFTER_MS } from '../useChatComposer'
 import type { SessionStatus } from '@/features/workspace/model/session'
 import { ChatSession } from './ChatSession'
 
@@ -79,6 +79,45 @@ describe('how the chat feels while it waits', () => {
 
     expect(screen.queryByLabelText('Sending')).not.toBeInTheDocument()
     expect(screen.getAllByText('hello there')).toHaveLength(1)
+  })
+
+  it('types the Enter once more when the message did not start a turn, and only once', async () => {
+    const { typeInto, user } = open()
+    await settle()
+    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
+    await settle(PASTE_SUBMIT_GAP_MS + 1)
+    expect(typeInto).toHaveBeenCalledTimes(2)
+
+    // Still at rest and nothing in the history: the words are sitting in the agent's box.
+    await settle(RESUBMIT_AFTER_MS)
+    expect(typeInto).toHaveBeenCalledTimes(3)
+    expect(typeInto).toHaveBeenLastCalledWith('\r')
+    await settle(RESUBMIT_AFTER_MS * 2)
+    expect(typeInto).toHaveBeenCalledTimes(3)
+  })
+
+  it('types no second Enter once the agent took the message', async () => {
+    const { daemon, typeInto, user, setPaneStatus } = open()
+    await settle()
+    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
+    await settle(PASTE_SUBMIT_GAP_MS + 1)
+    setPaneStatus('working')
+    daemon.status = 'Working'
+    await settle(RESUBMIT_AFTER_MS)
+
+    expect(typeInto).toHaveBeenCalledTimes(2)
+  })
+
+  it('takes a message the agent joined to the one before it as sent', async () => {
+    const { daemon, user } = open()
+    await settle()
+    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'then the integrations{Enter}')
+    await settle(PASTE_SUBMIT_GAP_MS + 1)
+
+    daemon.upsert(daemon.message('t1', 'u2', 'User', 'set it up\nthen the integrations'))
+    await settle(IDLE_POLL_MS)
+
+    expect(screen.queryByLabelText('Sending')).not.toBeInTheDocument()
   })
 
   it('stops saying the agent is thinking after a few seconds, when its own status does not, while the message stays', async () => {

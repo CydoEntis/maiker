@@ -81,6 +81,12 @@ const ECHO_MAX_MS = 20_000
 const ECHO_THINKING_MS = 4_000
 /** A second read soon after a send, because a quiet chat is read only every few seconds. */
 const FOLLOW_UP_REFRESH_MS = 700
+/**
+ * How long a pasted message is given to start a turn before its Enter is typed once more. An agent still closing its
+ * last turn can read the Enter as part of the paste; the words then sit in its box, unsent, and the next message is
+ * added to them. A second Enter on an empty box does nothing.
+ */
+export const RESUBMIT_AFTER_MS = 1_500
 
 /** The follow-ups a pane's daemon holds for its working agent, and the ways to add one and to take one back. */
 export type PaneQueue = {
@@ -249,6 +255,8 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
 
   // A comment sent from the diff is drawn in the chat at once, like a message typed here.
   const eventsNow = useLatest(() => selectChatEvents(feed.projection))
+  // At rest, not asking anything: only then can an Enter be nothing but the send of words left in the box.
+  const restingNow = useLatest(() => !paneWorking && (feed.status === 'Idle' || feed.status === 'Done'))
   useEffect(() => onOutsideSend(link.conversation, (text) => {
     setEcho({ text, baseline: countUserMessages(eventsNow(), text), quiet: false })
     window.setTimeout(() => { setEcho((current) => (current?.text === text ? { ...current, quiet: true } : current)) }, ECHO_THINKING_MS)
@@ -262,8 +270,15 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     if (typeText !== undefined) {
       try {
         await typeMessage(typeText, agent, text)
+        const baseline = countUserMessages(selectChatEvents(feed.projection), text)
+        if (!isSlashLine(text) && !isBangLine(text)) {
+          window.setTimeout(() => {
+            if (countUserMessages(eventsNow(), text) > baseline || !restingNow()) return
+            typeText('\r').catch((failure: unknown) => { setError(errorMessage(failure, 'Could not type into the terminal')) })
+          }, RESUBMIT_AFTER_MS)
+        }
         // Drawn at once: the history only has it when the agent next writes its file.
-        setEcho({ text, baseline: countUserMessages(selectChatEvents(feed.projection), text), quiet: false })
+        setEcho({ text, baseline, quiet: false })
         // The "thinking" line it brings is only a stand-in until the agent's own status says so: it stops after a few seconds, the message stays.
         window.setTimeout(() => { setEcho((current) => (current?.text === text ? { ...current, quiet: true } : current)) }, ECHO_THINKING_MS)
         window.setTimeout(() => { setEcho((current) => (current?.text === text ? null : current)) }, ECHO_MAX_MS)
@@ -306,7 +321,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     } finally {
       setSending(false)
     }
-  }, [conversation, link.generation, agent, feed, refresh, typeText, running])
+  }, [conversation, link.generation, agent, feed, refresh, typeText, running, eventsNow, restingNow])
 
   const submit = useCallback(() => {
     const { draft, attachments, note: boxNote } = peekComposer(conversation)

@@ -1167,7 +1167,10 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   starting or the machine was busy the two can arrive together, and the agent reads the Enter as a new line and leaves
   the message unsent in its box. An agent with hooks reports a prompt the moment it is submitted, so when no report
   comes within three seconds the daemon presses Enter once more (`Term::enter_again_due`), never when something was
-  typed into the pane since. Attachments are off for it. **New terminal** (the sidebar button, Ctrl/Cmd+Shift+T,
+  typed into the pane since. A message the chat box pastes into an agent's terminal gets the same second Enter from
+  the window when, 1.5 s later (`RESUBMIT_AFTER_MS`), the agent is still at rest and its history does not hold the
+  message; a message the agent joined to the one before it counts as sent (`countUserMessages` matches the words
+  inside a message, not only a whole one). Attachments are off for it. **New terminal** (the sidebar button, Ctrl/Cmd+Shift+T,
   a project's **New terminal here**, the palette) is a plain shell with no chat view. A chat session of ADR 0003, with
   no terminal, still starts from a shell's empty chat card (**Start a Claude chat** / **Start a Codex chat**) and
   stops the agent when closed (`closeChatSession`: end, then put away; if the stop fails it stays open).

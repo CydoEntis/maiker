@@ -57,8 +57,13 @@ export function describeWork(events: readonly ChatEvent[], root: string | null):
   return THINKING
 }
 
-/** How many times the person said exactly this, so a message just sent can be told from the same words said before. */
+/**
+ * How many of the person's messages hold these words, so a message just sent can be told from the same words said
+ * before. Held, not equal: an agent can take two sends as one message (the first left unsent in its box), and the
+ * second is still said.
+ */
 export function countUserMessages(events: readonly ChatEvent[], text: string): number {
   const wanted = text.trim()
-  return events.filter((event) => event.kind === 'message' && event.role === 'user' && event.text.trim() === wanted).length
+  if (wanted === '') return 0
+  return events.filter((event) => event.kind === 'message' && event.role === 'user' && event.text.includes(wanted)).length
 }
