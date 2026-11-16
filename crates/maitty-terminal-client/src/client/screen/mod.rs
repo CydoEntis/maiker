@@ -670,7 +670,7 @@ pub(super) fn choices(parser: Option<&vt100::Parser>) -> Vec<String> {
             let t = l
                 .trim()
                 .trim_matches(|c: char| "│┃ ".contains(c))
-                .trim_start_matches(['❯', '>', ' '])
+                .trim_start_matches(['❯', '›', '>', ' '])
                 .trim();
             let mut chars = t.chars();
             let (Some(d), Some('.')) = (chars.next(), chars.next()) else {

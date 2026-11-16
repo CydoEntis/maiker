@@ -53,9 +53,9 @@ pub(super) fn hook_thread(tx: mpsc::Sender<Ev>) -> std::sync::mpsc::Sender<HookJ
 pub(super) const QUESTION_GONE_AFTER: Duration = Duration::from_secs(2);
 /// How long a "needs you" with no question anywhere on screen lasts (you typed nothing).
 pub(super) const UNASKED_QUESTION_GONE_AFTER: Duration = Duration::from_secs(8);
-/// A numbered choice an agent offers ("❯ 1. Yes"): a question, whatever its wording.
+/// A numbered choice an agent offers ("❯ 1. Yes", Codex's "› 1. …"): a question, whatever its wording.
 static CHOICES: std::sync::LazyLock<regex::Regex> =
-    std::sync::LazyLock::new(|| regex::Regex::new(r"(?m)^[\s│┃]*[❯>]?\s*1\.\s+\S").unwrap());
+    std::sync::LazyLock::new(|| regex::Regex::new(r"(?m)^[\s│┃]*[❯›>]?\s*1\.\s+\S").unwrap());
 /// Codex can keep working while an asynchronous question waits in its composer.
 static CODEX_QUEUED_QUESTION: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
     regex::Regex::new(crate::config::CODEX_QUEUED_QUESTION_PATTERN).unwrap()

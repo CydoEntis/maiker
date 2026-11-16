@@ -9939,6 +9939,25 @@ fn codex_ask(d: &mut Daemon, t: TermId, detail: &str) {
     d.apply_hook(permission_report(t, HookStatus::Blocked, "PermissionRequest", "codex", "Bash", detail), None, vec![]);
 }
 
+/// Codex marks the choice under its cursor with `›`. A question whose first choice is not "Yes"
+/// was not seen on screen, so after a while the pane went back to Working while it still asked.
+#[test]
+fn a_codex_question_with_its_own_choices_keeps_needing_you() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.terms.get_mut(&t).unwrap().agent = Some("codex".into());
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(permission_report(t, HookStatus::Blocked, "PermissionRequest", "codex", "Bash", "deploy"), None, vec![]);
+    assert_eq!(d.terms[&t].status, Status::Blocked);
+    let screen = format!("\x1b[2J\x1b[H{}Which environment?\r\n\u{203a} 1. Staging\r\n  2. Production\r\n", "\r\n".repeat(30));
+    let pane = d.terms.get_mut(&t).unwrap();
+    pane.parser.process(screen.as_bytes());
+    pane.blocked_at = Some(Instant::now() - super::status::UNASKED_QUESTION_GONE_AFTER - Duration::from_secs(1));
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Blocked, "its choices are still on screen");
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn a_codex_prompt_is_answerable_only_while_its_screen_has_the_checked_menu() {
     let (mut d, _rx) = daemon();
