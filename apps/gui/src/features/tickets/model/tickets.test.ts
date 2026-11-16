@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TicketDetail, TicketSummary } from '@/api/tickets'
-import { groupCounts, initials, isKitchenChat, isMine, kitchenCommand, kitchenRunOf, labelColor, matchesSearch, openBlockers, providerOf, shortAge, ticketBranch, ticketKey, ticketMessage } from './tickets'
+import { groupCounts, initials, isFactoryChat, isMine, factoryCommand, factoryRunOf, labelColor, matchesSearch, openBlockers, providerOf, shortAge, ticketBranch, ticketKey, ticketMessage } from './tickets'
 
 function summary(change: Partial<TicketSummary> = {}): TicketSummary {
   return { id: 'github:me/shop#142', title: 'Fix the cart', stateName: 'open', category: 'Open', labels: [], assignee: null, url: 'https://github.com/me/shop/issues/142', groups: [], updatedAt: '', ...change }
@@ -104,24 +104,26 @@ describe('what is sent about a ticket', () => {
     expect(message.quote).toBe('(The ticket has no description.)')
   })
 
-  it("gives Kitchen its own run command with the key and the link", () => {
-    expect(kitchenCommand(summary())).toBe('/kitchen run #142 (https://github.com/me/shop/issues/142)')
-    expect(kitchenCommand(summary({ url: '' }))).toBe('/kitchen run #142')
+  it("hands a factory the generic run command with the key and the link", () => {
+    expect(factoryCommand(summary())).toBe('/factory run #142 (https://github.com/me/shop/issues/142)')
+    expect(factoryCommand(summary({ url: '' }))).toBe('/factory run #142')
   })
 })
 
-describe('Kitchen runs', () => {
-  const run = (label: string, active: boolean, step: string | null) => ({ key: 'kitchen:run', label, active, current: step === null ? null : { name: step } })
+describe('factory runs', () => {
+  const run = (label: string, active: boolean, step: string | null, workflow = 'factory') => ({ key: `${workflow}:run`, label, active, current: step === null ? null : { name: step } })
 
-  it('knows a chat that runs Kitchen', () => {
-    expect(isKitchenChat({ id: 's', workflows: [run('#1', true, 'spec')] })).toBe(true)
-    expect(isKitchenChat({ id: 's', workflows: [] })).toBe(false)
+  it('knows a chat that runs a factory, whatever its workflow is called', () => {
+    expect(isFactoryChat({ id: 's', workflows: [run('#1', true, 'spec')] })).toBe(true)
+    expect(isFactoryChat({ id: 's', workflows: [run('#1', true, 'spec', 'my-pipeline')] })).toBe(true)
+    expect(isFactoryChat({ id: 's', workflows: [] })).toBe(false)
   })
 
   it('finds the run of a ticket, the one still going first', () => {
     const sessions = [{ id: 'old', workflows: [run('#142', false, null)] }, { id: 'now', workflows: [run('#142', true, 'build')] }]
-    expect(kitchenRunOf(sessions, '#142')).toEqual({ sessionId: 'now', step: 'build' })
-    expect(kitchenRunOf(sessions.slice(0, 1), '#142')).toEqual({ sessionId: 'old', step: 'done' })
-    expect(kitchenRunOf(sessions, '#9')).toBeNull()
+    expect(factoryRunOf(sessions, '#142')).toEqual({ sessionId: 'now', step: 'build' })
+    expect(factoryRunOf(sessions.slice(0, 1), '#142')).toEqual({ sessionId: 'old', step: 'done' })
+    expect(factoryRunOf(sessions, '#9')).toBeNull()
+    expect(factoryRunOf([{ id: 'other', workflows: [run('#7', true, 'review', 'my-pipeline')] }], '#7')).toEqual({ sessionId: 'other', step: 'review' })
   })
 })

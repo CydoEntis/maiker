@@ -1,15 +1,15 @@
 import type { MouseEvent } from 'react'
 import type { TicketSummary } from '@/api/tickets'
-import { CATEGORIES, CATEGORY_LOOK, initials, isMine, labelColor, shortAge, ticketKey, type KitchenRun } from './model/tickets'
+import { CATEGORIES, CATEGORY_LOOK, initials, isMine, labelColor, shortAge, ticketKey, type FactoryRun } from './model/tickets'
 
-/** What a row needs beyond the ticket: whether it is ticked, focused or open, what blocks it and its Kitchen run. */
+/** What a row needs beyond the ticket: whether it is ticked, focused or open, what blocks it and its factory run. */
 export type RowState = {
   checked: boolean
   focused: boolean
   open: boolean
   /** The keys of the blockers not done yet, when the ticket was read whole; empty when nothing blocks it or it is not known. */
   blockedBy: readonly string[]
-  run: KitchenRun | null
+  run: FactoryRun | null
 }
 
 type RowProps = {
@@ -40,7 +40,7 @@ function Tick({ checked, label, onToggle }: { checked: boolean; label: string; o
 
 /**
  * One ticket in the list or on a board card: tick, key, title (two lines at most), then state, labels, the assignee's
- * initials and its age; under them what blocks it, or its Kitchen run with the step it is on. Ticket text is text.
+ * initials and its age; under them what blocks it, or its factory run with the step it is on. Ticket text is text.
  */
 export function TicketRow({ ticket, state, me, now, onToggle, onOpen, onOpenWork }: RowProps) {
   const key = ticketKey(ticket)
@@ -66,8 +66,8 @@ export function TicketRow({ ticket, state, me, now, onToggle, onOpen, onOpenWork
         </span>
         {state.blockedBy.length > 0 && <span className="mx-tk-blocked"><span className="mx-tk-glyph">✕</span> Blocked by {state.blockedBy.join(', ')}</span>}
         {state.run !== null && (
-          <button type="button" className="mx-tk-kitchen" title="Open its run in the Work tab" onClick={(event) => { event.stopPropagation(); if (state.run) onOpenWork(state.run.sessionId) }}>
-            <span className="mx-tk-spin" aria-hidden="true" />In Kitchen · {state.run.step} ›
+          <button type="button" className="mx-tk-factory" title="Open its run in the Work tab" onClick={(event) => { event.stopPropagation(); if (state.run) onOpenWork(state.run.sessionId) }}>
+            <span className="mx-tk-spin" aria-hidden="true" />In Factory · {state.run.step} ›
           </button>
         )}
       </div>

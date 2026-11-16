@@ -187,24 +187,27 @@ export function ticketMessage(ticket: TicketDetail, provider: Provider, blockers
   return { lead, quote, text: `${lead}\n\n${quoted}` }
 }
 
-/** What Kitchen is sent for a ticket: its own run command with the key, and the link it reads the ticket from. */
-export function kitchenCommand(ticket: Pick<TicketSummary, 'id' | 'url'>): string {
-  return ticket.url === '' ? `/kitchen run ${ticketKey(ticket)}` : `/kitchen run ${ticketKey(ticket)} (${ticket.url})`
+/**
+ * What a factory is sent for a ticket: the generic `/factory run` with the key, and the link it reads the ticket from.
+ * A factory is any workflow that answers this command and reports its runs (docs/workflows.md), not one in particular.
+ */
+export function factoryCommand(ticket: Pick<TicketSummary, 'id' | 'url'>): string {
+  return ticket.url === '' ? `/factory run ${ticketKey(ticket)}` : `/factory run ${ticketKey(ticket)} (${ticket.url})`
 }
 
-/** A Kitchen run of a ticket, as some chat reports it: the chat, and the step it is on. */
-export type KitchenRun = { sessionId: string; step: string }
+/** A factory's run of a ticket, as some chat reports it: the chat, and the step it is on. */
+export type FactoryRun = { sessionId: string; step: string }
 
 type RunsOf = { id: string; workflows: ReadonlyArray<{ key: string; label: string; active: boolean; current: { name: string } | null }> }
 
-/** Whether a chat runs Kitchen: some run it reports is Kitchen's. */
-export function isKitchenChat(session: RunsOf): boolean {
-  return session.workflows.some((run) => run.key.toLowerCase().startsWith('kitchen:'))
+/** Whether a chat runs a factory: it has reported a run of any workflow, whatever that workflow is called. */
+export function isFactoryChat(session: RunsOf): boolean {
+  return session.workflows.length > 0
 }
 
 /** The run a chat reports for a ticket (by its key), the one still going first. One ticket, one run. */
-export function kitchenRunOf(sessions: readonly RunsOf[], key: string): KitchenRun | null {
-  let found: KitchenRun | null = null
+export function factoryRunOf(sessions: readonly RunsOf[], key: string): FactoryRun | null {
+  let found: FactoryRun | null = null
   for (const session of sessions) {
     for (const run of session.workflows) {
       if (run.label !== key) continue

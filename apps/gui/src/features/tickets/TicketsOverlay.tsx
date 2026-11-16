@@ -13,8 +13,8 @@ import { useWorkspace } from '@/features/workspace/workspaceContext'
 import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
 import { projectFolder, ticketProjectOf, type TicketsProject } from './model/ticketProjects'
-import { isKitchenChat, kitchenCommand, kitchenRunOf, ticketKey } from './model/tickets'
-import { NEW_KITCHEN, type KitchenTarget, type StartChoice } from './TicketDialogs'
+import { isFactoryChat, factoryCommand, factoryRunOf, ticketKey } from './model/tickets'
+import { NEW_FACTORY, type FactoryTarget, type StartChoice } from './TicketDialogs'
 import { TicketsPage, type TicketsHost } from './TicketsPage'
 
 /** Leaves each command with a chat's daemon, typed in turn as the agent finishes the one before. */
@@ -25,7 +25,7 @@ async function queueAll(session: Pick<SessionView, 'id'>, commands: readonly str
 /**
  * Tickets over the chat area for the chat in front, wired to the window: starting an agent opens a new chat (in a new
  * worktree when asked) named after the ticket, Send to this chat sends the framed ticket into the chat in front, and
- * Send to Kitchen leaves Kitchen's own run command with a chat that runs it, or a new one.
+ * Send to Factory types the generic `/factory run` command into a chat that runs a factory, or a new one.
  */
 /** How long Tickets takes to slide out (`--panel-out`). */
 export const TICKETS_EXIT_MS = 220
@@ -35,11 +35,11 @@ export function TicketsOverlay({ leaving }: { leaving: boolean }) {
   const github = useQuery({ queryKey: ['tickets', 'github-login'], queryFn: () => loadGitHubAccounts(LOCAL_MACHINE), retry: false, staleTime: Infinity })
   const session = focusedSession ?? null
   const project: TicketsProject | null = session === null ? null : ticketProjectOf(session)
-  const kitchenChats = useMemo<KitchenTarget[]>(() => {
+  const factoryChats = useMemo<FactoryTarget[]>(() => {
     if (session === null) return []
     const folder = projectFolder(session)
     return sessions
-      .filter((each) => each.machine === session.machine && projectFolder(each) === folder && !each.ended && isKitchenChat(each))
+      .filter((each) => each.machine === session.machine && projectFolder(each) === folder && !each.ended && isFactoryChat(each))
       .map((each) => ({ id: each.id, label: displayName(each), sub: `${each.repoName ?? folderNameOf(each)} · ${String(each.workflows.filter((run) => run.active).length)} running` }))
   }, [session, sessions])
   if (project === null || session === null) {
@@ -59,8 +59,8 @@ export function TicketsOverlay({ leaving }: { leaving: boolean }) {
     container: root,
     defaultAgent: preferences.defaultAgent,
     githubLogin: github.data?.accounts.find((account) => account.active)?.login ?? github.data?.accounts[0]?.login ?? null,
-    kitchenChats,
-    runOf: (key) => kitchenRunOf(sessions, key),
+    factoryChats,
+    runOf: (key) => factoryRunOf(sessions, key),
     canSendHere: session.process !== '' && !session.ended,
     onClose: () => { setTicketsOpen(false) },
     onSettings: () => { setSettingsSection('tickets') },
@@ -90,16 +90,16 @@ export function TicketsOverlay({ leaving }: { leaving: boolean }) {
       await sendAgentMessage(session, text)
       toast.success(`Sent ${ticketKey(ticket)} to this chat`)
     },
-    onSendKitchen: async (target: string, chosen: readonly TicketSummary[]) => {
-      const fresh = chosen.filter((ticket) => kitchenRunOf(sessions, ticketKey(ticket)) === null)
+    onSendFactory: async (target: string, chosen: readonly TicketSummary[]) => {
+      const fresh = chosen.filter((ticket) => factoryRunOf(sessions, ticketKey(ticket)) === null)
       if (fresh.length === 0) {
-        toast.message('Already in Kitchen')
+        toast.message('Already in Factory')
         return
       }
-      const commands = fresh.map(kitchenCommand)
-      if (target !== NEW_KITCHEN) {
+      const commands = fresh.map(factoryCommand)
+      if (target !== NEW_FACTORY) {
         const chat = sessions.find((each) => each.id === target)
-        if (chat === undefined) throw new Error('That Kitchen chat has closed')
+        if (chat === undefined) throw new Error('That Factory chat has closed')
         await queueAll(chat, commands)
         toast.success(`Sent ${String(fresh.length)} to ${displayName(chat)}`, { action: { label: 'Open Work', onClick: () => { openWork(chat.id) } } })
         return
@@ -109,9 +109,9 @@ export function TicketsOverlay({ leaving }: { leaving: boolean }) {
       await startNewChat({ folder: project.folder, agent: 'claude', model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: first, branch: null, machine: project.machine, machineName: session.machineName ?? 'This computer', resume: null }, {
         background: true,
         onPlaced: (id) => {
-          saveName(id, `Kitchen: ${fresh.length === 1 ? ticketKey(fresh[0] ?? { id: '', url: '' }) : `${String(fresh.length)} tickets`}`)
+          saveName(id, `Factory: ${fresh.length === 1 ? ticketKey(fresh[0] ?? { id: '', url: '' }) : `${String(fresh.length)} tickets`}`)
           queueAll({ id }, rest).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not queue the other tickets')) })
-          toast.success(`Sent ${String(fresh.length)} to a new Kitchen chat`, { action: { label: 'Open Work', onClick: () => { openWork(id) } } })
+          toast.success(`Sent ${String(fresh.length)} to a new Factory chat`, { action: { label: 'Open Work', onClick: () => { openWork(id) } } })
         },
       })
     },
