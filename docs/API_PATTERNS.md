@@ -665,7 +665,7 @@ with no protocol change. For an owned desktop pane whose hook-verified agent is 
 whose hook gave a session id (and, for Claude, its transcript path), the snapshot's `conversations` holds
 a `ConversationSummary` with `execution: Native`, `native_term: <pane>`, the pane's `status` and no
 checks; `Query::ConversationRead` serves its history. The id is the daemon's, stays while the pane runs
-the agent, and its `generation` rises when the pane's session id changes. It is in memory only (never in
+the agent (a lapse of the hook or of its session does not drop it), and its `generation` rises when the pane's session id changes. It is in memory only (never in
 the session file or history cache). `ConversationSend`, `Approve`, `AnswerInput`, `Cancel` and `End` on it
 fail with a "read-only" error; `Rename` and `Archive` fail as for an unknown id (the pane is named and
 closed as a pane). A client the pane does not belong to (ADR 0004) gets "No such conversation". The

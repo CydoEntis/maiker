@@ -717,6 +717,33 @@ async fn the_conversation_goes_when_the_agent_does_and_its_id_is_not_reused() {
 }
 
 #[tokio::test]
+async fn a_lapse_of_the_hook_or_session_keeps_the_chat_and_its_id() {
+    type Change = fn(&mut crate::daemon::term::Term);
+    let lapses: [(&str, Change); 3] = [
+        ("the hook went unverified", |t| t.hooked = false),
+        ("the session was not known for a moment", |t| t.session = None),
+        ("the transcript was not named for a moment", |t| t.transcript = None),
+    ];
+    for (name, lapse) in lapses {
+        let mut world = World::new();
+        world.follow().await;
+        let first = world.id();
+
+        lapse(world.daemon.terms.get_mut(&world.pane).unwrap());
+        world.daemon.follow_tick();
+        assert!(world.summary().is_some(), "{name}: the chat stays");
+
+        let path = world.path.clone();
+        let term = world.daemon.terms.get_mut(&world.pane).unwrap();
+        term.hooked = true;
+        term.session = Some(SESSION.into());
+        term.transcript = Some(path);
+        world.daemon.follow_tick();
+        assert_eq!(world.id(), first, "{name}: the same chat, not a new one");
+    }
+}
+
+#[tokio::test]
 async fn the_terminal_app_cannot_read_what_the_desktop_apps_pane_did() {
     let mut world = World::new();
     world.follow().await;
