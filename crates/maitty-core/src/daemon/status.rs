@@ -165,10 +165,25 @@ impl Daemon {
         if let Some(t) = self.terms.get_mut(&term) {
             // A helper's first event can be the first reliable source of the parent ID.
             // Set the thread before recording its helper, or the later ID check clears it.
+            // Ids end up in a shell command on restore: `session_id` keeps them boring.
             if let Some(id) = session_id {
+                // A new session (/clear, /resume) has none of the old one's helpers.
                 if t.session.as_deref() != Some(id) {
                     t.subagents.clear();
                     t.subagent_hooks_seen = false;
+                    t.helper_work.clear();
+                    let now = term::unix_now();
+                    for activity in &mut t.subagent_activity {
+                        if activity.state.active() {
+                            activity.state = SubagentState::ConnectionLost;
+                            activity.updated_at = now;
+                            activity.latest_activity = Some(
+                                "Parent session changed before child completion was reported"
+                                    .into(),
+                            );
+                            self.dirty = true;
+                        }
+                    }
                 }
                 t.session = Some(id.clone());
             }
@@ -387,31 +402,6 @@ impl Daemon {
             }
             if let Some(n) = name {
                 t.name = n;
-            }
-            // Ids end up in a shell command on restore: keep them boring.
-            if let Some(id) = session.filter(|s| {
-                !s.is_empty()
-                    && s.len() < 128
-                    && s.chars()
-                        .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
-            }) {
-                if t.session.as_deref() != Some(&id) {
-                    t.subagents.clear();
-                    t.helper_work.clear();
-                    let now = term::unix_now();
-                    for activity in &mut t.subagent_activity {
-                        if activity.state.active() {
-                            activity.state = SubagentState::ConnectionLost;
-                            activity.updated_at = now;
-                            activity.latest_activity = Some(
-                                "Parent session changed before child completion was reported"
-                                    .into(),
-                            );
-                            self.dirty = true;
-                        }
-                    }
-                }
-                t.session = Some(id);
             }
             // An agent stays in the group of the folder it started in: only its first
             // report places it, so its row doesn't jump as it works in other folders.

@@ -460,6 +460,31 @@ fn another_session_ending_inside_the_agents_turn_leaves_the_pane_agent_alone() {
     close(&mut d, &[t]);
 }
 
+/// /clear or /resume while a helper's end was never reported: the new session starts with none of
+/// the old one's helpers, and the old one's is shown as cut off, not still running.
+#[test]
+fn a_new_session_drops_the_old_sessions_helpers() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let in_session = |status, event, helper, session: &str| {
+        let mut m = from(t, status, event, helper);
+        if let ClientMsg::Hook { session: s, .. } = &mut m {
+            *s = Some(session.into());
+        }
+        m
+    };
+    d.apply_hook(in_session(HookStatus::Working, "UserPromptSubmit", None, "first"), Some(true), Vec::new());
+    d.apply_hook(in_session(HookStatus::Working, "SubagentStart", Some(true), "first"), Some(true), Vec::new());
+    assert!(!d.terms[&t].subagents.is_empty());
+    d.apply_hook(in_session(HookStatus::Done, "Stop", None, "first"), Some(true), Vec::new());
+    d.apply_hook(in_session(HookStatus::Idle, "SessionStart", None, "second"), Some(true), Vec::new());
+    let pane = &d.terms[&t];
+    assert!(pane.subagents.is_empty());
+    assert!(pane.helper_work.is_empty());
+    assert!(pane.subagent_activity.iter().all(|a| !a.state.active()), "{:?}", pane.subagent_activity);
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn an_agent_that_ends_takes_its_queue_with_it() {
     let (mut d, _rx) = daemon();
