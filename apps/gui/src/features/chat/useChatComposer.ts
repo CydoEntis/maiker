@@ -98,8 +98,6 @@ const NO_QUEUED: readonly string[] = []
 /** A pane's queued messages are numbered below zero by their place, so they never share a number with a conversation's operations. */
 const paneQueuedId = (index: number): number => -(index + 1)
 const NO_TEXTS: ReadonlySet<string> = new Set()
-/** The daemon's words when a queued message it was asked about is not in its queue any more (`DropQueued`). */
-const NO_LONGER_QUEUED = 'no longer queued'
 const paneQueuedIndex = (id: number): number => -id - 1
 
 
@@ -233,8 +231,8 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     : readOnly ? READ_ONLY_NOTE : !online ? 'The daemon is offline' : awaitingAnswer ? PENDING_APPROVAL_NOTE : null
   const conversation = link.conversation
   const attach = useAttachmentIntake({ conversation, blocked: disabledReason, machine: link.machine ?? null })
-  // Queued messages this box let go of (removed, taken back, sent now): they leave the list at once, and stay gone when
-  // the daemon says it no longer holds them, though the pane's list may take a moment, or longer, to say so too.
+  // Queued messages this box let go of (removed, taken back, sent now): they leave the list at once, before the pane's
+  // list catches up, and come back only if the daemon refuses.
   const [letGo, setLetGo] = useState<ReadonlySet<string>>(NO_TEXTS)
   // One no longer in the pane's list is forgotten, so the same words queued again later show.
   if ([...letGo].some((text) => !paneQueued.includes(text))) setLetGo(new Set([...letGo].filter((text) => paneQueued.includes(text))))
@@ -366,16 +364,11 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   }, [paneQueued, paneQueue])
 
   /**
-   * A queued message the daemon would not let go of. When it no longer holds it (most often it went to the agent a
-   * moment ago) it stays out of the list and `whenGone` says so, if anything needs saying; any other refusal puts it back
-   * with the reason.
+   * A queued message the daemon would not let go of goes back on the list with the reason. If it went to the agent a
+   * moment ago, the pane's next list leaves it out; if not, it is still waiting, so it must not look gone.
    */
-  const notLetGo = useCallback((text: string, failure: unknown, fallback: string, whenGone: string | null) => {
+  const notLetGo = useCallback((text: string, failure: unknown, fallback: string) => {
     taken.current.delete(text)
-    if (errorMessage(failure, '').includes(NO_LONGER_QUEUED)) {
-      setError(whenGone)
-      return
-    }
     setLetGo((current) => new Set([...current].filter((held) => held !== text)))
     setError(errorMessage(failure, fallback))
   }, [])
@@ -423,7 +416,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
         const words = taking.text
         updateComposer(conversation, (state) => ({ ...state, draft: state.draft.trim() === '' ? words : `${words}\n\n${state.draft}` }))
       }),
-      (failure: unknown) => { notLetGo(taking.text, failure, 'Could not send the queued message now', null) },
+      (failure: unknown) => { notLetGo(taking.text, failure, 'Could not send the queued message now') },
     )
   }, [disabledReason, sending, sendingNow, send, takeBack, notLetGo, conversation, link.generation, refresh])
 
@@ -431,8 +424,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     if (operation < 0) {
       const taking = takeBack(operation)
       if (taking === null) return
-      // Gone already is what was asked for: it is not queued any more.
-      taking.gone.catch((failure: unknown) => { notLetGo(taking.text, failure, 'Could not remove the queued message', null) })
+      taking.gone.catch((failure: unknown) => { notLetGo(taking.text, failure, 'Could not remove the queued message') })
       return
     }
     dequeueMessage({ id: String(conversation), generation: link.generation }, operation)
@@ -454,7 +446,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
       // The words go back in the box only once the daemon has let go of them, or a message sent a moment ago would be sent twice.
       taking.gone.then(
         () => { updateComposer(conversation, intoDraft) },
-        (failure: unknown) => { notLetGo(taking.text, failure, 'Could not take the queued message back', 'That message already went to the agent') },
+        (failure: unknown) => { notLetGo(taking.text, failure, 'Could not take the queued message back') },
       )
       return
     }

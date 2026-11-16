@@ -544,6 +544,20 @@ fn a_queued_follow_up_goes_in_when_the_turn_is_over() {
     assert_eq!(queued(&d).len(), 3, "naming the wrong one drops nothing");
     drop(&mut d, 1, "one").unwrap();
     assert_eq!(queued(&d), ["/model opus", "two"]);
+    // Another machine's window names it as it was shown there: tabs as spaces, hidden characters gone.
+    d.command(
+        0,
+        Command::QueueFollowUp {
+            term: t,
+            text: "look\tat this\u{200b}\n\nAttached: a.png".into(),
+            first: false,
+            operation: None,
+        },
+    )
+    .unwrap();
+    assert!(drop(&mut d, 2, "").is_err(), "nothing names nothing");
+    drop(&mut d, 2, "look at this\n\nAttached: a.png").unwrap();
+    assert_eq!(queued(&d), ["/model opus", "two"]);
     d.command(0, Command::ClearQueue { term: t }).unwrap();
     d.terms.get_mut(&t).unwrap().agent = None;
     assert!(

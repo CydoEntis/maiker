@@ -31,9 +31,9 @@ afterEach(() => {
   fake.current = null
 })
 
-/** A pane whose list still shows a message its daemon already gave the agent, as a late snapshot does. */
-function staleQueue(drop: PaneQueue['drop']): PaneQueue {
-  return { queued: ['already went'], add: () => Promise.resolve(), drop }
+/** A pane holding one queued message, whose daemon answers a removal with `drop`. */
+function oneQueued(drop: PaneQueue['drop']): PaneQueue {
+  return { queued: ['still waiting'], add: () => Promise.resolve(), drop }
 }
 
 function open(queue: PaneQueue) {
@@ -44,28 +44,27 @@ function open(queue: PaneQueue) {
   render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }} agent="claude" online typeInto={typeInto} paneQueue={queue} sessionId="s1" />)
 }
 
-describe('removing a queued message the daemon no longer holds', () => {
-  it('takes it off the list at once and keeps it off, with no error, though the pane still lists it', async () => {
+describe('removing a queued message', () => {
+  it('takes it off the list at once', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    open(staleQueue(() => Promise.reject(new Error('that follow-up is no longer queued there'))))
+    open(oneQueued(() => new Promise(() => undefined)))
     await act(async () => { await vi.advanceTimersByTimeAsync(IDLE_POLL_MS) })
 
     await user.click(screen.getByRole('button', { name: 'Remove queued message' }))
-    await act(async () => { await vi.advanceTimersByTimeAsync(IDLE_POLL_MS) })
 
-    expect(screen.queryByText('already went')).not.toBeInTheDocument()
-    expect(screen.queryByText(/no longer queued/)).not.toBeInTheDocument()
+    expect(screen.queryByText('still waiting')).not.toBeInTheDocument()
   })
 
-  it('puts it back with the reason when the daemon refuses for another reason', async () => {
+  it.each(['that follow-up is no longer queued there', 'the daemon is offline'])('puts it back with the reason when the daemon refuses: %s', async (reason) => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    open(staleQueue(() => Promise.reject(new Error('the daemon is offline'))))
+    open(oneQueued(() => Promise.reject(new Error(reason))))
     await act(async () => { await vi.advanceTimersByTimeAsync(IDLE_POLL_MS) })
 
     await user.click(screen.getByRole('button', { name: 'Remove queued message' }))
     await act(async () => { await vi.advanceTimersByTimeAsync(IDLE_POLL_MS) })
 
-    expect(screen.getByText('already went')).toBeInTheDocument()
-    expect(screen.getByText(/the daemon is offline/)).toBeInTheDocument()
+    // Still listed: the daemon has not let go of it, so it may yet be sent.
+    expect(screen.getByText('still waiting')).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(reason))).toBeInTheDocument()
   })
 })

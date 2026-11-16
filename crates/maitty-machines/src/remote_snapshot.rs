@@ -39,7 +39,10 @@ impl Class {
     /// Fields named here are text blocks or paths; every other string is one line.
     fn of_key(key: &str) -> Option<Class> {
         match key {
-            "said" | "asking" | "text" | "result" | "latest_activity" | "task" => Some(Class::Text),
+            // A queued follow-up keeps its lines: it is shown as written and named back to remove it.
+            "said" | "asking" | "text" | "result" | "latest_activity" | "task" | "queued" => {
+                Some(Class::Text)
+            }
             "cwd" | "root" | "top" | "path" => Some(Class::Path),
             _ => None,
         }
