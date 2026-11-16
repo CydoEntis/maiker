@@ -1,3 +1,4 @@
+import { OpenSubagentContext, subagentNamed, type OpenSubagent } from '@/features/chat/openSubagent'
 import { movePanes } from './paneTransition'
 import { useCallback } from 'react'
 import { TerminalView } from '@/TerminalView'
@@ -115,6 +116,11 @@ export function WorkspacePane({ shown, pane, kept }: {
   const branchMenu = chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? undefined : { folder: session.cwd, onNewWorktree: () => { void moveToWorktree(session) }, ...(moveRefusal(session) === null ? {} : { newWorktreeBlocked: moveRefusal(session) ?? '' }) }
   // The panel has something for this pane: its repository. A pane of another machine keeps the button, which says why not.
   const hasPanel = session.machine !== LOCAL_MACHINE || repoPaneOf(session) !== null
+  const chatShown = chat.view === 'chat' && !kept && !workOpen && hasChat(chat.availability)
+  const openHelperChat: OpenSubagent = (title, asked) => {
+    const found = subagentNamed(session.subagents, title, asked)
+    return found === null ? null : () => { showSubagent(session.id, found.id) }
+  }
   return (
     <PaneCard
       pane={pane}
@@ -132,6 +138,7 @@ export function WorkspacePane({ shown, pane, kept }: {
       {...(chatOnly || !hasChat(chat.availability) ? {} : { onViewChange: (view: PaneView) => { if (view === 'terminal') showTerminal(); else paneViews.choose(session.id, view) } })}
       work={work}
       chat={chat.view === 'chat' && !kept && !workOpen ? (
+        <OpenSubagentContext.Provider value={openHelperChat}>
         <ChatPane
           availability={chat.availability}
           hasTerminal={!chatOnly}
@@ -163,8 +170,10 @@ export function WorkspacePane({ shown, pane, kept }: {
           onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
           fullAccessDefault={preferences.fullAccessNewChats}
         />
+        </OpenSubagentContext.Provider>
       ) : undefined}
-      overlay={kept || session.workflows.length > 0 ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
+      // The chat shows its helpers in its own agents card, so the bar floats over the terminal only.
+      overlay={kept || session.workflows.length > 0 || chatShown ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
       panelOpen={inspectOpen && focused}
       {...(hasPanel ? { onPanel: () => { togglePanel(pane.id, session.id) } } : {})}
       changed={{ added: session.diffAdded, removed: session.diffRemoved }}

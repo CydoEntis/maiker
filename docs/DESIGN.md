@@ -428,7 +428,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   it clears from the running-subagents bar. One that still needs you stays.
 - **Running subagents** (`RunningSubagents`, the daemon's `subagent_activity`, `model/subagents.ts`). A 34px bar floats
   under the pane's header, as wide as the chat's column, on the menu surface (`--card`, a `--line2` edge, `--sh-pop`),
-  over the chat and the terminal alike, only while one or more subagents run: the spinner, "N subagents running", the
+  over the terminal only (a chat lists its helpers in its own agents card, whose running rows unfold to **Open its
+  chat**), only while one or more subagents run: the spinner, "N subagents running", the
   first one's task and what it is doing (plain text, `--dim`), "+N more" and a chevron. The whole bar is the toggle
   (named Show / Hide the subagents), and the chevron turns over while it is open. Opening extends it downward over the
   feed (at most `min(440px, 60vh)`, scrolling past that) without moving it; the feed fades behind it into `--main`
