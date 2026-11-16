@@ -1232,7 +1232,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   rebuilt, or the conversation started over) replaces what the feed held. A failed read, or a daemon that predates
   `resume`, falls back to the old way: ask again for the last page read, or read from the start when that cursor is
   stale. A failed read is tried again after 500 ms (`RETRY_READ_MS`); the chat says "Reconnecting to the daemon" with
-  the reason only when that one fails too, since one failure is usually a stale kept line, not a lost daemon. Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
+  the reason only when that one fails too, since one failure is usually a stale kept line, not a lost daemon. A chat whose
+  history starts partway (`MissingPages`: the daemon reads only the last 16 MB of a transcript and keeps 20,000
+  entries, or a read failed and it started over) says "History is incomplete: older messages are not shown, …". Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
   objects. A new generation shows a fresh projection. Pending approvals come with every page and go to `applyApprovals`. The last
   feed per conversation is kept (8 at most), so reopening a chat shows it at once.
 - **List.** `VirtualList` draws only the rows near the view (`transform` placement, measured heights, stable event

@@ -76,7 +76,8 @@ const INCOMPLETE_WORD: Record<string, string> = {
   Disconnected: 'the connection to the provider was lost while it ran',
   UnsupportedItem: 'it holds an item this app cannot show',
   InvalidEvent: 'the provider sent an event this app could not read',
-  MissingPages: 'some pages could not be read',
+  // Mostly a very long conversation: the daemon reads only the last 16 MB of its file (and keeps 20,000 entries).
+  MissingPages: 'older messages are not shown, because the conversation is too long to load whole or part of it could not be read',
   RevisionExhausted: 'it changed more often than the daemon can follow',
 }
 
