@@ -166,13 +166,13 @@ describe('the Tickets view', () => {
 })
 
 describe('setup an agent opened', () => {
-  it('opens on the source the agent named, with its link shown as text and nothing saved', async () => {
+  it('opens on the source the agent named, with its link in the paste box and nothing saved', async () => {
     const link = 'https://plane.example/acme/projects/p1/issues/'
     show(host(), { source: 'plane', link })
     expect(await screen.findByRole('list', { name: 'Set up Plane' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: /Plane/ })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByText(link)).toBeInTheDocument()
-    expect(document.querySelector('.mx-tk-suggested a')).toBeNull()
+    expect(screen.getByRole('textbox', { name: /^Link to your Plane/ })).toHaveValue(link)
+    expect(document.querySelector('.mx-tk-setup a')).toBeNull()
     expect(links().projects).toEqual([])
     expect(api.saveTicketKey).not.toHaveBeenCalled()
   })
