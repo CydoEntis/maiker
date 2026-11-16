@@ -278,12 +278,7 @@ mod tests {
                 "#!/bin/sh\nhere=\"$(dirname \"$0\")\"\nif [ \"$1\" = auth ]; then cat \"$here/auth.txt\"; exit {}; fi\necho \"$@\" > \"$here/args.txt\"\ncat \"$here/rest.txt\"\nexit {}\n",
                 auth.1, rest.1
             );
-            std::fs::write(&program, script).unwrap();
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-            }
+            crate::test_support::write_program(&program, &script);
             program
         }
     }

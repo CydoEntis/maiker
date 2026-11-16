@@ -73,12 +73,7 @@ mod tests {
             let script = format!(
                 "#!/bin/sh\nhere=\"$(dirname \"$0\")\"\necho \"$@\" > \"$here/args.txt\"\ncat \"$here/out.txt\"\ncat \"$here/err.txt\" >&2\nexit {status}\n"
             );
-            std::fs::write(&program, script).unwrap();
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-            }
+            crate::test_support::write_program(&program, &script);
             program
         }
     }

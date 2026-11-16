@@ -1704,10 +1704,8 @@ mod tests {
         let bin = tmp.join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let fake = |name: &str, body: &str| {
-            use std::os::unix::fs::PermissionsExt;
             let p = bin.join(name);
-            std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
-            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+            crate::test_support::write_program(&p, &format!("#!/bin/sh\n{body}\n"));
             p
         };
         let exe = fake(env!("APP_COMMAND"), &format!("echo {}", tmp.display()));

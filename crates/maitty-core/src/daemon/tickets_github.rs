@@ -336,13 +336,9 @@ mod tests {
     }
 
     fn make_runnable(program: &Path) {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(program, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        #[cfg(not(unix))]
-        let _ = program;
+        let script = std::fs::read_to_string(program).unwrap();
+        std::fs::remove_file(program).unwrap();
+        crate::test_support::write_program(program, &script);
     }
 
     /// Every question the pretend `gh` was asked, one a line.
