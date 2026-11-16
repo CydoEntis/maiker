@@ -331,7 +331,7 @@ impl Wire {
         let route = handle.route(id).ok_or_else(|| refusal(handle, id))?;
         let name = handle.name_of(id).ok_or_else(|| refusal(handle, id))?;
         Ok(Daemon::Remote(RemoteDaemon::new(
-            id.0,
+            handle.line_key(id),
             name,
             move || {
                 let route = route.clone();
@@ -868,7 +868,8 @@ pub enum Reaction {
         status: Status,
     },
     /// A machine was taken out of the list.
-    Removed { machine: MachineId },
+    /// `lines` names the request lines kept for it, closed with it.
+    Removed { machine: MachineId, lines: maitty_desktop_client::RemoteKey },
     /// The shared settings of this computer's daemon.
     Settings(SharedSettings),
     /// A conversation of this computer's daemon changed.
@@ -973,7 +974,7 @@ pub fn react(
         }
         Update::Removed { machine } => {
             streams.forget(machine);
-            return vec![Reaction::Removed { machine }];
+            return vec![Reaction::Removed { machine, lines: handle.line_key(machine) }];
         }
         Update::LineUp { machine } => {
             // Panes a view was watching are asked for again; the replay that comes puts each
@@ -1240,8 +1241,8 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::TicketSetup(ask) => {
                 let _ = app.emit(TICKET_SETUP_EVENT, ask);
             }
-            Reaction::Removed { machine } => {
-                maitty_desktop_client::forget_remote(machine.0);
+            Reaction::Removed { machine, lines } => {
+                maitty_desktop_client::forget_remote(lines);
                 if let Ok(mut states) = app.state::<MachineStates>().0.lock() {
                     states.remove(&machine.0);
                 }

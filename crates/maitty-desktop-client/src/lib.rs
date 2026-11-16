@@ -2393,8 +2393,8 @@ type Opening = Pin<Box<dyn Future<Output = Result<Connection>> + Send>>;
 /// ssh and trusts nothing a remote says: every reply goes through `vet` before anything reads it.
 #[derive(Clone)]
 pub struct RemoteDaemon {
-    /// The machine's number for this run, which never names another machine.
-    key: u16,
+    /// Whose list it is in and the machine's number there, which never names another machine.
+    key: RemoteKey,
     name: String,
     open: Arc<dyn Fn() -> Opening + Send + Sync>,
     vet: Arc<dyn Fn(Reply) -> Result<Reply, String> + Send + Sync>,
@@ -2402,7 +2402,7 @@ pub struct RemoteDaemon {
 
 impl RemoteDaemon {
     pub fn new(
-        key: u16,
+        key: RemoteKey,
         name: String,
         open: impl Fn() -> Opening + Send + Sync + 'static,
         vet: impl Fn(Reply) -> Result<Reply, String> + Send + Sync + 'static,
@@ -2434,16 +2434,20 @@ impl RemoteDaemon {
 
 /// The lines kept for each machine, by its number for this run. A machine's number is never
 /// reused (ADR 0007), so one machine's lines cannot serve another.
-static REMOTE_IDLE: std::sync::Mutex<BTreeMap<u16, Arc<IdleConnections>>> =
+static REMOTE_IDLE: std::sync::Mutex<BTreeMap<RemoteKey, Arc<IdleConnections>>> =
     std::sync::Mutex::new(BTreeMap::new());
 
-fn remote_idle(key: u16) -> Arc<IdleConnections> {
+/// A machine as the kept lines know it: the list it is in (each machines hub numbers its own from
+/// 1) and its number there.
+pub type RemoteKey = (u64, u16);
+
+fn remote_idle(key: RemoteKey) -> Arc<IdleConnections> {
     let mut all = REMOTE_IDLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     all.entry(key).or_default().clone()
 }
 
 /// Close the lines kept for a machine that was taken out of the list.
-pub fn forget_remote(key: u16) {
+pub fn forget_remote(key: RemoteKey) {
     REMOTE_IDLE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -2654,7 +2658,7 @@ mod kept_connection_tests {
     fn remote(key: u16, opened: &Arc<AtomicUsize>, vet_ok: bool) -> RemoteDaemon {
         let opened = opened.clone();
         RemoteDaemon::new(
-            key,
+            (0, key),
             "box".into(),
             move || {
                 opened.fetch_add(1, Ordering::SeqCst);
@@ -2674,11 +2678,11 @@ mod kept_connection_tests {
         assert_eq!(first.load(Ordering::SeqCst), 1);
         assert_eq!(second.load(Ordering::SeqCst), 1, "a line kept for one machine never serves another");
 
-        forget_remote(60_001);
+        forget_remote((0, 60_001));
         request(question(), Daemon::Remote(remote(60_001, &first, true))).await.unwrap();
         assert_eq!(first.load(Ordering::SeqCst), 2, "a machine taken out of the list keeps no lines");
-        forget_remote(60_001);
-        forget_remote(60_002);
+        forget_remote((0, 60_001));
+        forget_remote((0, 60_002));
     }
 
     #[tokio::test]
@@ -2688,7 +2692,7 @@ mod kept_connection_tests {
             .await
             .unwrap_err();
         assert!(format!("{failure:#}").contains("refused"), "{failure:#}");
-        forget_remote(60_003);
+        forget_remote((0, 60_003));
     }
 
     /// A line whose far end takes questions and never answers, like an ssh line that died quietly.

@@ -100,9 +100,14 @@ pub struct HubHandle {
     shared: Arc<Shared>,
 }
 
+/// Numbers each hub made in this process.
+static NEXT_HUB: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 /// What the hub and the host's commands both look at.
 #[derive(Default)]
 struct Shared {
+    /// Which hub this is, so lines kept for its machines are never another hub's (`RemoteKey`).
+    id: u64,
     /// Machines with a line.
     up: Mutex<BTreeSet<MachineId>>,
     /// Machines whose daemon said who it is on a line and was the one recorded for the name. It
@@ -256,6 +261,11 @@ impl HubHandle {
         lock(&self.shared.verified).contains(&machine) && !self.is_refused(machine)
     }
 
+    /// How kept request lines name `machine`: by this hub and its number here.
+    pub fn line_key(&self, machine: MachineId) -> maitty_desktop_client::RemoteKey {
+        (self.shared.id, machine.0)
+    }
+
     /// The machine's name, as it is configured.
     pub fn name_of(&self, machine: MachineId) -> Option<String> {
         lock(&self.shared.names).get(&machine).cloned()
@@ -395,6 +405,7 @@ impl Hub {
                 outbox: outbox_tx,
                 commands: commands_tx,
                 shared: Arc::new(Shared {
+                    id: NEXT_HUB.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
                     names: Mutex::new(names),
                     opts: Mutex::new(opts),
                     routes: Mutex::new(routes),
