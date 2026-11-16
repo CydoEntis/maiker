@@ -2047,10 +2047,24 @@ fn a_replaced_session_keeps_its_place_among_its_helpers() {
         Some(woken),
         "and its helper is still its own"
     );
-    // Moved into a worktree: the same again.
+    // Moved into a worktree: the same again, with its helpers' records.
+    d.terms.get_mut(&woken).unwrap().subagent_activity.push(SubagentActivity {
+        id: "reviewer-1".into(),
+        name: "reviewer".into(),
+        parent: None,
+        state: SubagentState::Completed,
+        task: None,
+        model: None,
+        effort: None,
+        started_at: Some(1),
+        updated_at: 2,
+        latest_activity: None,
+        result: Some("looks fine".into()),
+    });
     d.relocate(woken, &std::env::temp_dir());
     let moved = d.workspaces[1].tabs[0].focus;
     assert!(moved != woken, "a new process in the new folder");
+    assert_eq!(d.terms[&moved].subagent_activity.len(), 1, "its helpers' history moved with it");
     assert_eq!(d.terms[&moved].started_by, Some(lead));
     assert_eq!(d.terms[&helper].started_by, Some(moved));
     close(&mut d, &[lead, moved, helper]);
