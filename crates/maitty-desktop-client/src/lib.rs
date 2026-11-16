@@ -2340,7 +2340,16 @@ const MAX_IDLE_REMOTE_CONNECTIONS: usize = 2;
 
 /// One line to a daemon: what it reads, what it writes.
 pub type Connection = (ipc::Reader, ipc::Writer);
-type IdleConnections = std::sync::Mutex<Vec<Connection>>;
+/// Kept lines, each with when it was last used.
+type IdleConnections = std::sync::Mutex<Vec<(Connection, std::time::Instant)>>;
+
+/// A kept line unused for longer is closed rather than tried. An open chat asks every few seconds,
+/// so a line that sat this long most likely outlived a sleep or a network change, and a line to
+/// another machine that died that way says nothing until ssh's own check gives up (45 s).
+const KEPT_FOR: Duration = Duration::from_secs(30);
+/// How long a question waits on a kept line before it is asked again on a new one. It is a
+/// `Query`, so asking twice changes nothing; a live line answers a page well within this.
+const KEPT_ANSWER_WITHIN: Duration = Duration::from_secs(8);
 
 /// Where a request goes: this computer's daemon, started when none answers, or another machine's.
 #[derive(Clone)]
@@ -2436,21 +2445,43 @@ where
     Open: FnOnce() -> Opening,
     Opening: std::future::Future<Output = Result<Connection>>,
 {
+    ask_reusing_within(idle, keep_at_most, message, open, KEPT_ANSWER_WITHIN).await
+}
+
+/// `ask_reusing`, giving a kept line `kept_wait` to answer before the question goes on a new one.
+async fn ask_reusing_within<Open, Opening>(
+    idle: &IdleConnections,
+    keep_at_most: usize,
+    message: &ClientMsg,
+    open: Open,
+    kept_wait: Duration,
+) -> Result<Reply>
+where
+    Open: FnOnce() -> Opening,
+    Opening: std::future::Future<Output = Result<Connection>>,
+{
     let reusable = matches!(message, ClientMsg::Query(_));
     let keep = |connection: Connection| {
         if let Ok(mut idle) = idle.lock()
             && idle.len() < keep_at_most
         {
-            idle.push(connection);
+            idle.push((connection, std::time::Instant::now()));
         }
     };
     let kept = if reusable {
-        idle.lock().ok().and_then(|mut idle| idle.pop())
+        idle.lock().ok().and_then(|mut idle| {
+            // The newest is last; one that sat too long is dropped, and so is every older one.
+            let fresh = idle.pop().filter(|(_, since)| since.elapsed() < KEPT_FOR);
+            if fresh.is_none() {
+                idle.clear();
+            }
+            fresh.map(|(connection, _)| connection)
+        })
     } else {
         None
     };
     if let Some(mut kept) = kept
-        && let Ok(reply) = ask(&mut kept, message).await
+        && let Ok(Ok(reply)) = tokio::time::timeout(kept_wait, ask(&mut kept, message)).await
     {
         keep(kept);
         return Ok(reply);
@@ -2593,10 +2624,51 @@ mod kept_connection_tests {
         forget_remote(60_003);
     }
 
+    /// A line whose far end takes questions and never answers, like an ssh line that died quietly.
+    fn silent_line() -> Connection {
+        let (ours, theirs) = tokio::io::duplex(64 * 1024);
+        tokio::spawn(async move {
+            let _held = theirs;
+            std::future::pending::<()>().await;
+        });
+        let (our_read, our_write) = tokio::io::split(ours);
+        maitty_ipc_transport::framed_parts(our_read, our_write)
+    }
+
+    #[tokio::test]
+    async fn a_kept_line_that_went_quiet_is_given_up_quickly_and_the_question_asked_on_a_new_one() {
+        let idle = IdleConnections::default();
+        idle.lock().unwrap().push((silent_line(), std::time::Instant::now()));
+        let wait = std::time::Duration::from_millis(50);
+
+        let reply = super::ask_reusing_within(&idle, MAX_IDLE_CONNECTIONS, &question(), || async { Ok(daemon_answering(1)) }, wait).await;
+
+        assert!(matches!(reply, Ok(Reply::Ok)), "asked again on a new line");
+        assert!(super::KEPT_ANSWER_WITHIN < super::REQUEST_TIMEOUT / 2, "well before the request gives up");
+    }
+
+    #[tokio::test]
+    async fn a_kept_line_that_sat_too_long_is_not_tried() {
+        let idle = IdleConnections::default();
+        let long_ago = std::time::Instant::now().checked_sub(super::KEPT_FOR * 2).expect("a clock that far back");
+        idle.lock().unwrap().push((silent_line(), long_ago));
+        let opened = Arc::new(AtomicUsize::new(0));
+        let counted = opened.clone();
+
+        let reply = ask_reusing(&idle, MAX_IDLE_CONNECTIONS, &question(), || async move {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Ok(daemon_answering(1))
+        })
+        .await;
+
+        assert!(matches!(reply, Ok(Reply::Ok)));
+        assert_eq!(opened.load(Ordering::SeqCst), 1);
+    }
+
     #[tokio::test]
     async fn a_command_never_goes_out_on_a_kept_connection_and_leaves_none_behind() {
         let idle = IdleConnections::default();
-        idle.lock().unwrap().push(daemon_answering(0));
+        idle.lock().unwrap().push((daemon_answering(0), std::time::Instant::now()));
         let command = ClientMsg::Command(Command::SelectWorkspace { ws: 1 });
 
         let reply = ask_reusing(&idle, MAX_IDLE_CONNECTIONS, &command, || async { Ok(daemon_answering(1)) }).await;

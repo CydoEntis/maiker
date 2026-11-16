@@ -584,7 +584,10 @@ connected once per run of the window and ahead of time (when the new chat page o
 chat that is working asks the daemon for news every 300 ms (`ACTIVE_POLL_MS`), not every second.
 The daemon also says when a conversation changed (`ServerMsg::ConversationChanged`), so the chat
 reads then and, once told, polls only every second (`TOLD_ACTIVE_POLL_MS`); its reads go out on a
-connection kept open between them (`IDLE_CONNECTIONS` in `maitty-desktop-client`).
+connection kept open between them (`IDLE_CONNECTIONS` in `maitty-desktop-client`). A kept line unused for 30 s
+is closed rather than tried (`KEPT_FOR`), and one that has not answered within 8 s is given up and the question asked
+on a new line (`KEPT_ANSWER_WITHIN`): a line to another machine that died quietly (sleep, a network change) otherwise
+held a chat's reads until ssh's own check ended it, 45 s later.
 What is left is the shell's own startup and the agent's own startup, which Maitty does not control.
 Measure it on Windows with a screen recording at 30 fps: count frames from Enter to the first
 "thinking" line.
