@@ -2795,9 +2795,30 @@ fn keep_copy(running: &std::path::Path, folder: &std::path::Path) -> Result<Path
     let partial = folder.join(format!("{name}.partial"));
     std::fs::copy(running, &partial)
         .with_context(|| format!("copying {} to {}", running.display(), partial.display()))?;
-    std::fs::rename(&partial, &target)
-        .with_context(|| format!("replacing {}", target.display()))?;
+    replace_file(&partial, &target).with_context(|| format!("replacing {}", target.display()))?;
     Ok(target)
+}
+
+/// `from` renamed over `to`. Windows refuses to replace a program that is running (a hook in
+/// flight), but lets it be renamed: the old copy is moved aside first and removed once nothing
+/// runs it, at the next replacement if not now.
+fn replace_file(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    let Err(refused) = std::fs::rename(from, to) else {
+        return Ok(());
+    };
+    if !cfg!(windows) || !to.exists() {
+        return Err(refused);
+    }
+    let aside = to.with_extension("old");
+    if aside.exists() {
+        std::fs::remove_file(&aside)?;
+    }
+    std::fs::rename(to, &aside)?;
+    std::fs::rename(from, to)?;
+    if let Err(e) = std::fs::remove_file(&aside) {
+        tracing::debug!("{} is still running; removed next time: {e}", aside.display());
+    }
+    Ok(())
 }
 
 /// The copy has the running file's size and is not older than it.

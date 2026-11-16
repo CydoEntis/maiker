@@ -263,12 +263,27 @@ pub fn stale_hooks(root: &Value, wanted: &str, app_names: &[&str]) -> Vec<String
         .filter_map(|group| group.get("hooks").and_then(Value::as_array))
         .flatten()
         .filter_map(|hook| hook.get("command").and_then(Value::as_str))
-        .filter(|command| *command != wanted)
+        .filter(|command| !same_command(command, wanted, cfg!(windows)))
         .map(String::from)
         .collect();
     stale.sort();
     stale.dedup();
     stale
+}
+
+/// Whether two hook commands run the same program with the same arguments. On Windows a path's
+/// case does not matter (`C:\Users` and `c:\users` are one file); a command seen as different
+/// there would be rewritten on every start.
+fn same_command(a: &str, b: &str, paths_ignore_case: bool) -> bool {
+    if a == b {
+        return true;
+    }
+    let ((a_program, a_args), (b_program, b_args)) = (split_command(a), split_command(b));
+    paths_ignore_case && a_args == b_args && a_program.eq_ignore_ascii_case(b_program) && {
+        // Only the path may differ in case: quoting and the call operator must match too.
+        let shape = |command: &str, program: &str| command.replacen(program, "", 1);
+        shape(a, a_program) == shape(b, b_program)
+    }
 }
 
 fn split_command(command: &str) -> (&str, &str) {
@@ -288,7 +303,7 @@ fn split_command(command: &str) -> (&str, &str) {
 mod tests {
     use super::{
         HookShell, JsonHookGroupOptions, command_line, is_our_hook_group, is_our_name, is_our_statusline, json_hook_group,
-        replace_json_hook_group, runs_our_hook, stale_hooks, status_from_hook, update_statusline,
+        replace_json_hook_group, runs_our_hook, same_command, stale_hooks, status_from_hook, update_statusline,
     };
     use jsonc_parser::cst::CstInputValue;
     use serde_json::json;
@@ -323,6 +338,16 @@ mod tests {
         }});
 
         assert_eq!(stale_hooks(&root, wanted, APP_NAMES), [stale]);
+    }
+
+    #[test]
+    fn a_hook_path_differing_only_in_case_is_the_same_on_windows_only() {
+        let wanted = "& \"C:/Users/Me/maitty.exe\" hook claude";
+        let lower = "& \"c:/users/me/maitty.exe\" hook claude";
+        assert!(same_command(lower, wanted, true));
+        assert!(!same_command(lower, wanted, false));
+        assert!(!same_command("& \"c:/users/me/maitty.exe\" hook codex", wanted, true));
+        assert!(!same_command("\"c:/users/me/maitty.exe\" hook claude", wanted, true));
     }
 
     #[test]
