@@ -2810,6 +2810,12 @@ fn an_agent_stopped_by_a_limit_is_told_to_continue_when_it_resets() {
     d.auto_continue();
     assert!(d.terms[&t].pending_input.is_none(), "not before");
     d.terms.get_mut(&t).unwrap().resume_at = Some(now - 1);
+    // An Enter still waiting to go in is not replaced: "continue" waits for it.
+    d.terms.get_mut(&t).unwrap().pending_input = Some((b"\r".to_vec(), Instant::now()));
+    d.auto_continue();
+    assert_eq!(d.terms[&t].pending_input.as_ref().map(|(b, _)| b.as_slice()), Some(&b"\r"[..]));
+    assert!(d.terms[&t].resume_at.is_some(), "still to come");
+    d.terms.get_mut(&t).unwrap().pending_input = None;
     d.auto_continue();
     assert_eq!(
         d.terms[&t]
