@@ -174,8 +174,10 @@ fn windows_powershell(script: &str) -> Result<std::process::Output> {
 
 #[cfg(windows)]
 fn windows_user_path() -> Result<String> {
-    let output =
-        windows_powershell("[Environment]::GetEnvironmentVariable('Path','User')")?;
+    // As stored: `%VARIABLE%` entries unexpanded, so writing it back keeps them working.
+    let output = windows_powershell(
+        "[string](Get-Item 'HKCU:\\Environment').GetValue('Path','','DoNotExpandEnvironmentNames')",
+    )?;
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
@@ -188,7 +190,11 @@ fn set_windows_user_path(value: &str) -> Result<()> {
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "[Environment]::SetEnvironmentVariable('Path',$env:MAITTY_NEW_USER_PATH,'User')",
+            // An expandable string keeps `%VARIABLE%` entries working; setting and clearing a
+            // variable tells running programs the environment changed.
+            "Set-ItemProperty -Path 'HKCU:\\Environment' -Name Path -Type ExpandString -Value $env:MAITTY_NEW_USER_PATH; \
+             [Environment]::SetEnvironmentVariable('MAITTY_PATH_CHANGED','1','User'); \
+             [Environment]::SetEnvironmentVariable('MAITTY_PATH_CHANGED',$null,'User')",
         ])
         .env("MAITTY_NEW_USER_PATH", value)
         .creation_flags(0x0800_0000)

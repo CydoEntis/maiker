@@ -28,7 +28,9 @@ New-Item -ItemType Directory -Force $tmp | Out-Null
 function Fetch($name) {
     $gh = Get-Command gh -ErrorAction SilentlyContinue
     $signedIn = $false
-    if ($gh) { gh auth status *> $null; $signedIn = ($LASTEXITCODE -eq 0) }
+    # Windows PowerShell 5.1 turns a native program's redirected error output into an error, which
+    # 'Stop' would throw: a GitHub CLI that is not signed in must only mean "download directly".
+    if ($gh) { & { $ErrorActionPreference = 'Continue'; gh auth status *> $null }; $signedIn = ($LASTEXITCODE -eq 0) }
     if ($signedIn) {
         # A private repo: the GitHub CLI brings your sign-in. A call that fails (an expired
         # sign-in, one that cannot see this repo) falls back to the direct download.
@@ -74,9 +76,16 @@ try {
         throw
     }
 
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    if ((Setting 'NO_PATH') -ne '1' -and -not (($userPath -split ';') -contains $dir)) {
-        [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ";$dir"), 'User')
+    # The user's PATH as stored, %VARIABLES% unexpanded (a user may have none at all), written back
+    # as an expandable string so those entries keep working.
+    $envKey = Get-Item 'HKCU:\Environment'
+    $userPath = [string]$envKey.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+    $entries = @($userPath -split ';' | Where-Object { $_ -ne '' })
+    if ((Setting 'NO_PATH') -ne '1' -and -not ($entries -contains $dir)) {
+        Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Type ExpandString -Value (($entries + $dir) -join ';')
+        # Tell running programs (Explorer, new terminals) the environment changed.
+        [Environment]::SetEnvironmentVariable("$($envPrefix)_PATH_CHANGED", '1', 'User')
+        [Environment]::SetEnvironmentVariable("$($envPrefix)_PATH_CHANGED", $null, 'User')
         Write-Host "Added $dir to your PATH (new terminals pick it up)."
     }
     if (-not (($env:Path -split ';') -contains $dir)) { $env:Path = "$env:Path;$dir" }
