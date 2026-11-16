@@ -143,15 +143,29 @@ impl Daemon {
             }
             None => {}
         }
+        let session_id = session.as_ref().filter(|s| {
+            !s.is_empty()
+                && s.len() < 128
+                && s.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+        });
+        // Another session reporting while the pane's own agent is mid-turn is an agent it ran (a
+        // headless `claude -p`) whose processes could not be read (`reports_from_nested_agent`):
+        // the pane's agent cannot change sessions inside a turn. Taken for the pane's, its end
+        // said the pane's agent was gone.
+        if subagent.is_none()
+            && let (Some(t), Some(id)) = (self.terms.get(&term), session_id)
+            && t.status == Status::Working
+            && !t.own_turn_over
+            && t.session.as_deref().is_some_and(|own| own != id)
+        {
+            tracing::debug!("pane {term}: ignoring {event} from session {id} inside its own agent's turn");
+            return;
+        }
         if let Some(t) = self.terms.get_mut(&term) {
             // A helper's first event can be the first reliable source of the parent ID.
             // Set the thread before recording its helper, or the later ID check clears it.
-            if let Some(id) = session.as_ref().filter(|s| {
-                !s.is_empty()
-                    && s.len() < 128
-                    && s.chars()
-                        .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
-            }) {
+            if let Some(id) = session_id {
                 if t.session.as_deref() != Some(id) {
                     t.subagents.clear();
                     t.subagent_hooks_seen = false;

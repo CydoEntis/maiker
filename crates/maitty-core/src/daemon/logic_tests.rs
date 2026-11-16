@@ -431,6 +431,35 @@ fn a_session_keeps_its_account_through_sleep_and_restart() {
     close(&mut d, &[t, plain]);
 }
 
+/// The agent runs `claude -p` as a command and its processes cannot be read: the headless one's
+/// own session starts, works and ends inside the pane agent's turn. None of it is the pane's.
+#[test]
+fn another_session_ending_inside_the_agents_turn_leaves_the_pane_agent_alone() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let in_session = |status, event, session: &str| {
+        let mut m = from(t, status, event, None);
+        if let ClientMsg::Hook { session: s, .. } = &mut m {
+            *s = Some(session.into());
+        }
+        m
+    };
+    d.apply_hook(in_session(HookStatus::Working, "UserPromptSubmit", "pane-session"), None, Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Working);
+    for (status, event) in [(HookStatus::Idle, "SessionStart"), (HookStatus::Done, "Stop"), (HookStatus::Gone, "SessionEnd")] {
+        d.apply_hook(in_session(status, event, "headless-session"), None, Vec::new());
+    }
+    let pane = &d.terms[&t];
+    assert_eq!(pane.session.as_deref(), Some("pane-session"));
+    assert_eq!(pane.status, Status::Working, "the pane's agent is still at work");
+    assert_eq!(pane.agent.as_deref(), Some("claude"));
+    // Once its own turn is over, a new session is the pane's own (/clear, /resume).
+    d.apply_hook(in_session(HookStatus::Done, "Stop", "pane-session"), None, Vec::new());
+    d.apply_hook(in_session(HookStatus::Idle, "SessionStart", "after-clear"), None, Vec::new());
+    assert_eq!(d.terms[&t].session.as_deref(), Some("after-clear"));
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn an_agent_that_ends_takes_its_queue_with_it() {
     let (mut d, _rx) = daemon();
