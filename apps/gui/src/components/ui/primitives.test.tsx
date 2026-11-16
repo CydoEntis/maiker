@@ -83,7 +83,7 @@ describe('Tag and FileBadge', () => {
 
   it('gives each file type its own tone and never the needs colour', () => {
     expect(['TS', 'TSX', 'JSON', 'YAML', 'SQL', 'ENV', 'MD', 'LOG'].map(typeTone)).toEqual([
-      'var(--tag-ts)', 'var(--tag-tsx)', 'var(--tag-data)', 'var(--tag-data)', 'var(--tag-sql)', 'var(--tag-env)', 'var(--tag-text)', 'var(--tag-text)',
+      'var(--tag-ts)', 'var(--tag-tsx)', 'var(--tag-data)', 'var(--tag-data)', 'var(--tag-sql)', 'var(--tag-env)', 'var(--tag-md)', 'var(--tag-text)',
     ])
   })
 

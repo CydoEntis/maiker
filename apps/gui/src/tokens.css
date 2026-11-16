@@ -20,12 +20,21 @@
   --code-fn: var(--ansi-blue);
   --code-num: var(--working);
   --code-com: var(--dim);
-  /* File-type tags have their own tone, never the needs colour. */
+  /* File-type tags have their own tone, never the needs colour: each common type its own, so a list of files reads at a glance. */
   --tag-ts: var(--ansi-blue);
   --tag-tsx: var(--working);
   --tag-data: var(--ansi-mag);
   --tag-sql: var(--ok);
   --tag-env: var(--danger);
+  --tag-md: var(--ansi-green);
+  --tag-rs: color-mix(in oklab, var(--ansi-mag) 62%, var(--danger));
+  --tag-py: color-mix(in oklab, var(--ansi-blue) 50%, var(--ansi-green));
+  --tag-go: color-mix(in oklab, var(--ansi-blue) 55%, var(--fg));
+  --tag-toml: color-mix(in oklab, var(--ansi-mag) 50%, var(--ansi-blue));
+  --tag-css: color-mix(in oklab, var(--ansi-blue) 60%, var(--ansi-mag));
+  --tag-html: color-mix(in oklab, var(--danger) 55%, var(--working));
+  --tag-sh: color-mix(in oklab, var(--ok) 55%, var(--fg));
+  --tag-img: color-mix(in oklab, var(--ansi-green) 50%, var(--working));
   --tag-text: var(--fg2);
 
   /* Spacing */

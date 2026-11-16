@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { HighlightedLine } from '@/components/HighlightedLine'
+import { TypeTag } from '@/components/ui/tag'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { type HighlightedLines, highlightFile, repoDiff, repoFile, repoTree, writeProjectFile } from './api'
 import { changeKind, type ChangeKind } from './changeKind'
@@ -28,7 +29,7 @@ function baseName(path: string): string {
 
 function FileName({ name }: { name: string }) {
   const tag = fileTag(name)
-  return <>{tag !== null && <span className="mx-files-tag" aria-hidden="true">{tag}</span>}<span className="mx-files-name">{name}</span></>
+  return <>{tag !== null && <span className="mx-files-tag" aria-hidden="true"><TypeTag tag={tag} /></span>}<span className="mx-files-name">{name}</span></>
 }
 
 /** A tree row's left padding: a base, then one step in for each folder level. */

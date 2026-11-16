@@ -150,7 +150,8 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-files-view .mx-patch { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .mx-files-heading { margin: 8px 8px 4px; font-size: 11px; font-weight: 600; color: var(--dim); }
 .mx-files-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mx-files-tag { flex: none; min-width: 26px; padding: 0 3px; border-radius: 4px; font: 600 9.5px var(--mono); line-height: 15px; text-align: center; color: var(--muted); background: rgba(var(--hl), calc(.07 * var(--hk))); }
+/* The tag itself is the shared TypeTag, in its type's tone; this only keeps the names lined up. */
+.mx-files-tag { flex: none; min-width: 26px; display: flex; justify-content: center; }
 .mx-files-mark { flex: none; width: 14px; font: 600 10.5px var(--mono); text-align: center; }
 .mx-files-mark.is-add { color: var(--ok); }
 .mx-files-mark.is-edit { color: var(--warn); }

@@ -26,9 +26,18 @@ function Tag({ className, tone, ...props }: React.ComponentProps<"span"> & Varia
 const TYPE_TONE: Readonly<Record<string, string>> = {
   TS: "var(--tag-ts)", JS: "var(--tag-ts)",
   TSX: "var(--tag-tsx)", JSX: "var(--tag-tsx)",
-  JSON: "var(--tag-data)", "{ }": "var(--tag-data)", YML: "var(--tag-data)", YAML: "var(--tag-data)", TOML: "var(--tag-data)",
+  JSON: "var(--tag-data)", "{ }": "var(--tag-data)", YML: "var(--tag-data)", YAML: "var(--tag-data)",
+  TOML: "var(--tag-toml)",
   SQL: "var(--tag-sql)",
   ENV: "var(--tag-env)",
+  MD: "var(--tag-md)",
+  RS: "var(--tag-rs)",
+  PY: "var(--tag-py)",
+  GO: "var(--tag-go)",
+  CSS: "var(--tag-css)",
+  HTML: "var(--tag-html)",
+  SH: "var(--tag-sh)", PS: "var(--tag-sh)",
+  IMG: "var(--tag-img)", SVG: "var(--tag-img)",
 }
 
 /** The colour a file-type tag is drawn in: grey for any type without its own. */
