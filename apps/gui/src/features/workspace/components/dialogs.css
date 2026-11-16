@@ -86,15 +86,6 @@
 .mx-nc-title { margin: 0; font-size: clamp(26px, 3.4vw, 36px); font-weight: 650; line-height: 1.1; letter-spacing: -.025em; color: var(--fg); text-wrap: balance; }
 .mx-nc-on { flex: none; font-size: 12px; color: var(--dim); white-space: nowrap; }
 /* Open as Terminal: the terminal the agent will start in, drawn in the terminal's own face. */
-.mx-nc-term { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 16px 20px; font: 13px/1.5 var(--mono); color: var(--fg2); background: var(--term); }
-.mx-nc-term p { margin: 0; }
-.mx-nc-term-welcome { align-self: flex-start; max-width: 100%; margin-bottom: 10px; padding: 8px 14px; border: 1px solid var(--accent-line); }
-.mx-nc-term-mark { color: var(--accent-text); }
-.mx-nc-term-dim { color: var(--dim); overflow-wrap: anywhere; }
-.mx-nc-term-prompt { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--accent-text); }
-.mx-nc-term-prompt input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font: inherit; color: var(--fg); }
-.mx-nc-term-prompt input::placeholder { color: var(--dim); }
-.mx-nc-term-notes { flex: none; padding: 0 20px 12px; }
 /* The field's ring already says where the keys go, so the input inside draws none of its own. */
 .mx-chip-search input:focus-visible { outline: none; }
 
@@ -144,4 +135,8 @@
 .mx-where-work-option.is-tree[data-state="checked"] { color: var(--ansi-blue); }
 .mx-where-work-option:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .mx-clone-into { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; color: var(--dim); }
-
+/* The new page's Terminal choice: which computer, one line on what it is, and Open terminal. */
+.mx-nc-shell { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; max-width: 560px; width: 100%; margin: 0 auto; padding: 48px 20px; }
+.mx-nc-shell .mx-nc-machine { padding: 0; }
+.mx-nc-shell-text { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--fg2); }
+.mx-nc-shell-title { font-size: 14px; font-weight: 600; color: var(--fg); }
