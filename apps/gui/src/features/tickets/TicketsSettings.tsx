@@ -11,6 +11,7 @@ import { errorMessage } from '@/lib/error-message'
 import type { LinkedProject, TicketPlace } from '@/api/ticketLinks'
 import { NO_LINK, useLinkChanges, useTicketLinks, type ProjectLink } from './model/ticketLinks'
 import { KEY_ONCE, PLANE_CLOUD, REPO_SHAPE } from './TicketSetup'
+import { parseTicketLink, PASTED_LINK_MAX_CHARS } from './model/pastedLink'
 import type { TicketsProject } from './model/ticketProjects'
 import { PROVIDER_LOOK, type Provider } from './model/tickets'
 import { failureOf, useTicketGroups } from './useTicketData'
@@ -79,7 +80,19 @@ function KeyCard({ provider, source }: Keyed) {
   const [key, setKey] = useState('')
   const [busy, setBusy] = useState(false)
   const [note, setNote] = useState<string | null>(null)
+  const [pasteText, setPasteText] = useState('')
+  const [pasteNote, setPasteNote] = useState<string | null>(null)
   const plane = provider === 'Plane'
+  const fillFromLink = () => {
+    const read = parseTicketLink(pasteText)
+    if (!read.ok || read.link.kind !== 'plane') {
+      setPasteNote(read.ok ? 'That is not a link to a Plane' : read.reason)
+      return
+    }
+    setPasteNote(null)
+    setAddress(read.link.address)
+    setWorkspace(read.link.workspace)
+  }
   const formOpen = !set || replacing || refused
   const savedAddress = state?.address ?? ''
   const shownAddress = address ?? (savedAddress === '' ? PLANE_CLOUD : savedAddress)
@@ -119,6 +132,10 @@ function KeyCard({ provider, source }: Keyed) {
         <form onSubmit={(event) => { event.preventDefault(); save() }}>
           {plane && (
             <>
+              <Row label="Link" detail={pasteNote ?? 'Paste any page of your Plane to fill the address and workspace.'}>
+                <input className={`mx-scard-input${pasteNote === null ? '' : ' is-invalid'}`} aria-label="Link to your Plane" placeholder="https://app.plane.so/workspace/projects/…" value={pasteText} maxLength={PASTED_LINK_MAX_CHARS} spellCheck={false} autoComplete="off" onChange={(event) => { setPasteText(event.target.value); setPasteNote(null) }} />
+                <button type="button" className="mx-scard-button" disabled={pasteText.trim() === ''} onClick={fillFromLink}>Use link</button>
+              </Row>
               <Row label="Address" detail={addressOk ? 'Where your Plane is.' : 'Starts with https://'}>
                 <input className={`mx-scard-input${addressOk ? '' : ' is-invalid'}`} aria-label="Plane address" value={shownAddress} maxLength={MOST_FIELD_CHARS} spellCheck={false} autoComplete="off" onChange={(event) => { setAddress(event.target.value) }} />
               </Row>
