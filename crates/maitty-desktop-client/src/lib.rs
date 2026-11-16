@@ -2428,6 +2428,49 @@ pub fn forget_remote(key: u16) {
         .remove(&key);
 }
 
+/// Whether asking `query` a second time, after a kept line failed or went quiet while the first
+/// may still be running, changes nothing. Only these go out on kept lines: a commit, push or pull
+/// request asked twice would act twice. Every variant is listed so a new one must be decided.
+fn safe_to_ask_twice(query: &Query) -> bool {
+    match query {
+        Query::Git { .. }
+        | Query::GitIdentityRule { .. }
+        | Query::CloneRepo { .. }
+        | Query::TicketWrite { .. }
+        | Query::SideAnswer { .. } => false,
+        Query::Settings
+        | Query::AllowedCommands
+        | Query::ConversationRead { .. }
+        | Query::ConversationDiff { .. }
+        | Query::ConversationFiles { .. }
+        | Query::ConversationFileRead { .. }
+        | Query::ConversationTerminalScreen { .. }
+        | Query::ConversationTerminalReplay { .. }
+        | Query::TerminalScreen { .. }
+        | Query::TerminalReplay { .. }
+        | Query::Repo { .. }
+        | Query::PaneSearch { .. }
+        | Query::UsageReport { .. }
+        | Query::ListFolders { .. }
+        | Query::GitHubAccounts { .. }
+        | Query::GitHubRepos { .. }
+        | Query::GitHubOwners { .. }
+        | Query::Tickets { .. }
+        | Query::TicketKeys { .. }
+        | Query::TicketLinks { .. }
+        | Query::GitIdentities { .. }
+        | Query::SavedConversations { .. }
+        | Query::List
+        | Query::HelperRead { .. }
+        | Query::Specialists { .. }
+        | Query::Read { .. }
+        | Query::Worktrees { .. }
+        | Query::WorktreeStanding { .. }
+        | Query::CheckOutput { .. }
+        | Query::ClosedSessions => true,
+    }
+}
+
 async fn ask(connection: &mut Connection, message: &ClientMsg) -> Result<Reply> {
     ipc::send_message(&mut connection.1, message).await?;
     receive_reply(&mut connection.0).await
@@ -2460,7 +2503,7 @@ where
     Open: FnOnce() -> Opening,
     Opening: std::future::Future<Output = Result<Connection>>,
 {
-    let reusable = matches!(message, ClientMsg::Query(_));
+    let reusable = matches!(message, ClientMsg::Query(query) if safe_to_ask_twice(query));
     let keep = |connection: Connection| {
         if let Ok(mut idle) = idle.lock()
             && idle.len() < keep_at_most
@@ -2663,6 +2706,20 @@ mod kept_connection_tests {
 
         assert!(matches!(reply, Ok(Reply::Ok)));
         assert_eq!(opened.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn a_push_never_goes_out_on_a_kept_line_so_it_is_never_sent_twice() {
+        use maitty_shared::protocol::GitRequest;
+        let idle = IdleConnections::default();
+        idle.lock().unwrap().push((silent_line(), std::time::Instant::now()));
+        let push = ClientMsg::Query(Query::Git { term: 1, request: GitRequest::Push, tag: 0 });
+        let wait = std::time::Duration::from_millis(50);
+
+        let reply = super::ask_reusing_within(&idle, MAX_IDLE_CONNECTIONS, &push, || async { Ok(daemon_answering(1)) }, wait).await;
+
+        assert!(matches!(reply, Ok(Reply::Ok)));
+        assert_eq!(idle.lock().unwrap().len(), 1, "the kept line was left alone, and the new one not kept");
     }
 
     #[tokio::test]
