@@ -980,10 +980,25 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
   108 are handed to the daemon once (this computer's only; the daemon keeps any it already has) and then dropped.
   Every read goes through this computer's daemon.
 - **Setting up in place.** A source a project has not set up shows its setup where its tickets would be
-  (`TicketSetup.tsx`), as numbered steps that each say whether they are for every project or this one: GitHub with no
-  origin asks for `owner/name` (or, turned off, offers the origin again); Plane and Linear show 1 Connect (the key
-  form, "used for every project", never shown again) and 2 Pick the project or team for this project from the
-  provider's list ("Saved for <project> and every worktree of it"). A pick saves at once and the list shows.
+  (`TicketSetup.tsx`), as numbered steps that each say whether they are for every project or this one. Every source
+  starts from **a pasted link** to the project (any page of it; `parseTicketLink`, mirrored in Rust as
+  `maitty_shared::ticket_paste` for the terminal app), read only when Use link is pressed (or on paste) and never
+  opened: a GitHub link (`https://github.com/o/r/…` or `git@github.com:o/r.git`) saves the repository at once; a Plane
+  link (`<address>/<workspace>/projects/<id>/…`, the address keeping any port or path prefix) fills the key form's
+  address and workspace, so only the key is typed, and after connecting offers **Link <project>** for the project
+  whose id it names; a Linear team or issue link names the team key, matched to a team whose name reads the same
+  (the daemon's team list carries no keys), else it says no team matches and the list stays to pick from. A link for
+  another source says which tab it goes on; a Plane link for another Plane or workspace than the saved key says to
+  replace the key. **Enter the details instead** folds out the typed fields (`owner/name`; Plane's address and
+  workspace). Plane and Linear then show Connect (the key form, "used for every project", never shown again; the key
+  box is the only place a key goes) and Pick the project or team for this project from the provider's list ("Saved
+  for <project> and every worktree of it"). A pick saves at once and the list shows. Settings › Tickets › Accounts'
+  Plane card has a Link row that fills its address and workspace the same way. `TicketSetup`, `TicketsPage` and
+  `TicketsOverlay` take `suggestedLink`, which only fills the paste box (its source's tab opens first). In the
+  terminal app the setup's first step is the same link line (Enter uses it, Tab types the details instead), a link
+  pasted on a source's setup screen opens it, the key form starts on the key with the address and workspace filled,
+  and the pick's cursor lands on the project or team the link names (Enter links it); `TicketsView::suggest_link`
+  fills the next setup's link line.
 - **Ticket text is text.** Titles, bodies, comments and labels are drawn as React text, never as Markdown or HTML;
   links show as text with ↗ and open in the browser only on a click (`openLink`, http and https only).
 - **What is sent.** Start an agent and Send to this chat show **exactly what will be sent** before anything goes:
