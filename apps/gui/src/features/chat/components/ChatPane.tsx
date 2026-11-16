@@ -37,6 +37,8 @@ export type ChatPaneProps = {
   sessionId?: string
   /** The pane's live status, from the sidebar's source. */
   paneStatus?: SessionStatus
+  /** Helpers keeping the session working after the agent's own turn ended (`Session.helpersOnly`). */
+  helpersOnly?: number
   /** What runs in the pane: the agent, or the shell's own name. */
   process: string
   /** The computer is connected to the daemon; starting an agent types into the shell. */
@@ -103,6 +105,7 @@ export function ChatPane(props: ChatPaneProps) {
             {...(props.fileSearch === undefined ? {} : { fileSearch: props.fileSearch })}
             {...(props.sessionId === undefined ? {} : { sessionId: props.sessionId })}
             {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })}
+            {...(props.helpersOnly === undefined ? {} : { helpersOnly: props.helpersOnly })}
             {...(props.windowActions === undefined ? {} : { windowActions: props.windowActions })}
           />
         )

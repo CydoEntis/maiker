@@ -1353,7 +1353,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   working line under it, until the history has those words (`countUserMessages` against the count at send time); it is
   dropped after 20 s rather than left standing as sent. The **working line** says what the agent is doing from the newest
   step still running (`workPhase.ts`): "reading src/app.ts", "writing hello.txt", "running npm test", "thinking". It says
-  only what the history says.
+  only what the history says. When only helpers keep the session working after the agent's own turn ended
+  (`Session.helpersOnly`, from `TermInfo.own_turn_over`), it says "claude is free · 3 helpers working" with no timer, and
+  the box sends at once instead of queueing: the agent is at its prompt.
 - **Mode and model.** The message box's bottom row says how Claude is set up, from its own transcript and
   never a guess: the permission mode is a shield whose tooltip and name say it (`Ask before edits`, `Accept edits`, `Plan mode`, `Auto`; the shield is in the
   danger colour for `Bypass permissions`, like Full access), "not reported yet" until the file has said one; in Plan mode a strip in the box says "Plan mode · Reads and plans. Changes nothing until you approve." and the placeholder is "Reply to the plan…". A Claude chat that follows a terminal agent

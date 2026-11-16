@@ -222,7 +222,8 @@ from Codex's `models_cache.json`. Nothing is guessed: a pane whose files say non
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
 into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
-(`Term::own_turn_over`), even while background helpers keep the session working: the agent is back at its prompt. The next
+(`Term::own_turn_over`, sent as `TermInfo.own_turn_over`, a defaulted field an older daemon leaves false), even while
+background helpers keep the session working: the agent is back at its prompt. The next
 waits for the turn that one starts (`UserPromptSubmit`), not a minute. A queue belongs to the agent it was made for:
 a pane whose agent ends or changes (the process scan) drops it. The Enter after a queued command (`/resume`) is
 not pressed again when no prompt is reported: such a command opens a menu that a second Enter would answer. `Command::QueueFollowUp { term, text, first }` adds one (`first`,

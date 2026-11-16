@@ -45,6 +45,8 @@ export type TerminalDetails = {
   pr?: PullRequest | null
   /** The follow-ups the pane's daemon holds for its working agent, oldest first. */
   queued?: string[]
+  /** The agent's own turn is over: it takes a message, though helpers it started may keep the pane working. */
+  ownTurnOver?: boolean
   /** The helpers the session asked to start and waits on the person for, one task each; absent from an older daemon. */
   helperAsk?: string[]
   /** The agent's subagents as its runtime reports them; absent from an older daemon. */

@@ -130,6 +130,11 @@ type Props = {
   asking?: string
   /** The pane's own status, live in the sidebar: the chat shows working at once and reads then, instead of at its next poll. */
   paneStatus?: SessionStatus
+  /**
+   * Helpers keeping the session working after the agent's own turn ended: the agent is at its prompt, so the chat
+   * takes a message at once and says so, instead of "thinking" and queueing.
+   */
+  helpersOnly?: number
   /** The session's id: a message typed while its agent was starting is held under it, and goes out from here. */
   sessionId?: string
   /** A subagent whose own chat shows instead of the session's, and the way back. */
@@ -163,10 +168,11 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
+export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
-  const paneWorking = paneStatus === 'working'
-  const working = feed.status === 'Working' || paneWorking
+  const agentFree = helpersOnly > 0
+  const paneWorking = paneStatus === 'working' && !agentFree
+  const working = !agentFree && (feed.status === 'Working' || paneWorking)
   const workingSince = working ? runningTurnStartedAt(feed) : null
   const incomplete = incompleteReason(feed.completeness)
   const wasWorking = useRef(false)
@@ -341,7 +347,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const replied = lastKind !== undefined && lastKind !== 'user' && lastKind !== 'echo'
   useEffect(() => { repliedRef.current = replied })
   const holdWorking = settling && !replied
-  const allRows = useMemo(() => buildRows(events, working || holdWorking, root, echoText, echoThinking, hideSuccessfulTools), [events, working, holdWorking, root, echoText, echoThinking, hideSuccessfulTools])
+  const freePhrase = agentFree ? `free · ${String(helpersOnly)} ${helpersOnly === 1 ? 'helper' : 'helpers'} working` : null
+  const allRows = useMemo(() => buildRows(events, working || holdWorking || agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase), [events, working, holdWorking, agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase])
   const rows = useMemo(() => allRows.filter((row) => !isPendingApproval(row)), [allRows])
   // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
   // the chat opened (until then it shows what this window remembered, which may be behind) and one after the window was

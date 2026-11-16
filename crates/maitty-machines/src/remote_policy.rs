@@ -464,6 +464,7 @@ mod tests {
             panic!("a pane delta is applied");
         };
         assert_eq!(changed[0].queued, ["first line\n\nAttached files:\n- a.png[2J"]);
+        assert!(!changed[0].own_turn_over, "a daemon that predates it never says the turn is over");
     }
 
     #[test]
