@@ -107,7 +107,7 @@ impl App {
             self.paste_into_secret(&s);
             return;
         }
-        if self.paste_into_files(&s) || self.paste_into_references(&s) {
+        if self.paste_into_files(&s) || self.paste_into_references(&s) || self.paste_into_tickets(&s) {
             return;
         }
         // Another view with the keys has no text box: the pane behind is not what you were
@@ -131,6 +131,7 @@ impl App {
             }
             // The app's own text boxes take the paste, not the pane behind them.
             Mode::Find(v) => v.query.push_str(s.lines().next().unwrap_or("")),
+            Mode::FindSessions(v) => App::session_find_paste(v, &s),
             Mode::GoTo { query, .. } => query.push_str(s.lines().next().unwrap_or("").trim()),
             Mode::KeyMap(km) if km.view == screen::KeyView::Search && km.step.is_none() => {
                 themes::append_query(&mut km.query, s.lines().next().unwrap_or(""));
@@ -178,6 +179,7 @@ impl App {
                     _ => {}
                 }
             }
+            Mode::Clone(v) => v.type_text(s.trim()),
             Mode::Finder(fd) => {
                 fd.q.push_str(s.lines().next().unwrap_or("").trim());
                 fd.sel = 0;
@@ -199,12 +201,18 @@ impl App {
                 let data = if bracketed {
                     format!("\x1b[200~{body}\x1b[201~")
                 } else {
-                    body
+                    body.clone()
                 };
                 if let Some(p) = self.parsers.get_mut(&term) {
                     p.screen_mut().set_scrollback(0);
                 }
                 self.send_input(term, data.into_bytes());
+                // Each pane of a broadcasting tab gets the paste the way it takes one.
+                for peer in self.broadcast_peers(term) {
+                    let bracketed = self.parsers.get(&peer).is_some_and(|p| p.screen().bracketed_paste());
+                    let data = if bracketed { format!("\x1b[200~{body}\x1b[201~") } else { body.clone() };
+                    self.send_input(peer, data.into_bytes());
+                }
             }
         }
     }
@@ -395,8 +403,17 @@ impl App {
             Mode::Side => self.on_side_key(&k),
             Mode::ScreenMenu(m) => self.on_hy_menu_key(*m, &k),
             Mode::Find(v) => self.on_find_key(*v, &k),
+            Mode::FindSessions(v) => self.on_session_find_key(*v, &k),
             Mode::Branch(v) => self.on_branch_key(*v, &k),
             Mode::Usage => self.on_usage_key(&k),
+            Mode::Run { term, board, .. } => self.on_run_key(term, board, &k),
+            Mode::Work { term, sel } => self.on_board_key(term, sel, &k),
+            Mode::StatusLog { term, top } => self.on_status_log_key(term, top, &k),
+            Mode::Approved(v) => self.on_approved_key(*v, &k),
+            Mode::MachineInfo(v) => self.on_machine_info_key(*v, &k),
+            Mode::Helper(v) => self.on_helper_key(*v, &k),
+            Mode::Clone(v) => self.on_clone_key(*v, &k),
+            Mode::Specialists(v) => self.on_specialists_key(*v, &k),
             Mode::History { sel } => self.on_history_key(sel, &k),
             Mode::Tidy(v) => self.on_tidy_key(*v, &k),
             Mode::Machines(v) => self.on_machines_key(*v, &k),
@@ -485,10 +502,11 @@ impl App {
                 ws,
                 cmd,
                 items,
+                branches,
                 mut query,
                 mut sel,
             } => {
-                let rows = self.worktree_rows(items.as_deref(), &query);
+                let rows = self.worktree_rows(items.as_deref(), branches.as_deref(), &query);
                 let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
                 match k.code {
                     KeyCode::Esc => {
@@ -499,6 +517,20 @@ impl App {
                         self.mode = Mode::Normal;
                         match rows.get(sel) {
                             Some(WtRow::Existing(w)) => self.open_worktree(w, cmd),
+                            Some(WtRow::Branch(branch)) => {
+                                self.leave_shortcut_mode();
+                                self.notify(format!("adding a worktree on {branch}…"), false);
+                                self.cmd(Command::NewWorktree {
+                                    ws,
+                                    branch: branch.clone(),
+                                    base: None,
+                                    cmd,
+                                    split: None,
+                                    from: None,
+                                    agent: None,
+                                    prompt: None,
+                                });
+                            }
                             Some(WtRow::Create(text)) => {
                                 let mut words = text.split_whitespace();
                                 if let Some(branch) = words.next().map(str::to_string) {
@@ -541,6 +573,7 @@ impl App {
                     ws,
                     cmd,
                     items,
+                    branches,
                     query,
                     sel,
                 };
@@ -620,6 +653,16 @@ impl App {
         }
         // Typing goes to the prompt at the bottom; the agent scrolls there itself.
         self.paged_up.remove(&term);
+        if keys::is_image_paste_key(k)
+            && remote_image::is_remote(term)
+            && self.term_info(term).is_some_and(|t| t.agent.is_some())
+        {
+            self.image_key_to_machine(term, data);
+            return;
+        }
+        for peer in self.broadcast_peers(term) {
+            self.send_input(peer, data.clone());
+        }
         self.send_input(term, data);
     }
 
@@ -1394,6 +1437,12 @@ impl App {
                     }
                     Some(View::References(v)) => {
                         v.sel = i;
+                        if double {
+                            self.on_view_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+                        }
+                    }
+                    Some(View::Tickets(v)) => {
+                        v.click_row(i);
                         if double {
                             self.on_view_key(&KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
                         }

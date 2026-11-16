@@ -158,6 +158,15 @@ fn tools() -> Value {
             }, "required": ["label"] }
         },
         {
+            "name": concat!(env!("APP_COMMAND"), "_tickets_setup"),
+            "description": concat!("Open this project's ticket setup (GitHub issues, Plane or Linear) in ", env!("APP_COMMAND"), " for the user, with a link you suggest filled in. Use it when the user wants their tickets set up. Never ask for an API key in chat: the user pastes any key into ", env!("APP_COMMAND"), "'s own box and picks the project there. You get back what was opened and what is already linked or connected."),
+            "inputSchema": { "type": "object", "properties": {
+                "link": { "type": "string", "description": "A link to the user's Plane project, Linear team or GitHub repository, if you know it." },
+                "source": { "type": "string", "enum": ["github", "plane", "linear"], "description": "Which source to open on." },
+                "path": { "type": "string", "description": "A folder in the project, if not the one you run in." }
+            } }
+        },
+        {
             "name": concat!(env!("APP_COMMAND"), "_interrupt"),
             "description": "Interrupt what a session is doing (Ctrl+C).",
             "inputSchema": { "type": "object", "properties": { "id": id, "machine": machine }, "required": ["id"] }
@@ -296,6 +305,7 @@ impl Server {
             concat!(env!("APP_COMMAND"), "_start") => self.start(args),
             concat!(env!("APP_COMMAND"), "_references") => self.references(args),
             concat!(env!("APP_COMMAND"), "_request_secret") => self.request_secret(args),
+            concat!(env!("APP_COMMAND"), "_tickets_setup") => self.tickets_setup(args),
             concat!(env!("APP_COMMAND"), "_interrupt") => self.session(args).and_then(|t| {
                 cli::send(&Target::current(), Some(t.id), "\x03".into(), false)
                     .map(|_| format!("interrupted {}", t.id))
@@ -592,6 +602,27 @@ impl Server {
         ))
     }
 
+    /// Open the caller's project's ticket setup in the windows. Nothing is saved and no key passes
+    /// through here; the daemon answers with what it opened and what is set up.
+    fn tickets_setup(&self, args: &Value) -> Result<String, String> {
+        let term = self.me.ok_or(concat!(
+            "only an agent running in a ",
+            env!("APP_COMMAND"),
+            " pane can open the ticket setup"
+        ))?;
+        let (source, link) = setup_args(args)?;
+        let folder = match args.get("path") {
+            None | Some(Value::Null) => None,
+            Some(Value::String(p)) => Some(self.project_at(p)?.to_string_lossy().into_owned()),
+            Some(_) => return Err("path must be a string".into()),
+        };
+        match cli::block_on(cli::request(ClientMsg::Command(Command::OpenTicketSetup { term, folder, source, link }))) {
+            Ok(Reply::Text(said)) => Ok(said),
+            Ok(_) => Err("unexpected reply".into()),
+            Err(e) => Err(format!("{e:#}")),
+        }
+    }
+
     /// The references of the caller's project, or of the project `path` is in (within scope).
     fn references(&self, args: &Value) -> Result<String, String> {
         if crate::ipc::has_structured_identity() {
@@ -737,6 +768,31 @@ impl Server {
     }
 }
 
+/// The source and link an agent gave the ticket setup, checked: a link is one web address, never
+/// anything that could be a key.
+fn setup_args(args: &Value) -> Result<(Option<maitty_shared::ticket_links::TicketSetupSource>, String), String> {
+    use maitty_shared::ticket_links::{TicketSetupSource, clean_suggested_link};
+    let source = match args.get("source") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(name)) => Some(
+            TicketSetupSource::from_name(name.trim()).ok_or_else(|| format!("source is github, plane or linear, not {name:?}"))?,
+        ),
+        Some(_) => return Err("source must be a string".into()),
+    };
+    let link = match args.get("link") {
+        None | Some(Value::Null) => String::new(),
+        Some(Value::String(link)) => {
+            let clean = clean_suggested_link(link);
+            if !link.trim().is_empty() && !(clean.starts_with("https://") || clean.starts_with("http://")) {
+                return Err("link is a web address of the project (https://…), or leave it out".into());
+            }
+            clean
+        }
+        Some(_) => return Err("link must be a string".into()),
+    };
+    Ok((source, link))
+}
+
 fn run_instructions(reference: &str) -> String {
     format!(
         concat!(
@@ -843,7 +899,7 @@ pub fn run() -> Result<()> {
                 "protocolVersion": params.get("protocolVersion").cloned().unwrap_or(json!("2025-06-18")),
                 "capabilities": { "tools": {} },
                 "serverInfo": { "name": env!("APP_COMMAND"), "version": env!("APP_VERSION") },
-                "instructions": concat!(env!("APP_COMMAND"), " runs your user's coding agents side by side. Use ", env!("APP_COMMAND"), "_list/read/send/start for helpers. Before UI, front-end or design work, call ", env!("APP_COMMAND"), "_references and open the images it lists: they are the user's reference screenshots and designs for this project. Don't answer prompts unless the user allows it; when you do, pass ", env!("APP_COMMAND"), "_answer the prompt id ", env!("APP_COMMAND"), "_list gave you.")
+                "instructions": concat!(env!("APP_COMMAND"), " runs your user's coding agents side by side. Use ", env!("APP_COMMAND"), "_list/read/send/start for helpers. Before UI, front-end or design work, call ", env!("APP_COMMAND"), "_references and open the images it lists: they are the user's reference screenshots and designs for this project. Don't answer prompts unless the user allows it; when you do, pass ", env!("APP_COMMAND"), "_answer the prompt id ", env!("APP_COMMAND"), "_list gave you. To set up the user's tickets (GitHub, Plane, Linear), call ", env!("APP_COMMAND"), "_tickets_setup; never ask for an API key in chat.")
             })),
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": tools() })),
@@ -1068,6 +1124,20 @@ mod tests {
         let mut cfg = crate::config::Config::default();
         cfg.mcp.scope = scope.into();
         Server::new(cfg, root.to_path_buf(), None, Reach::live())
+    }
+
+    #[test]
+    fn the_ticket_setup_takes_a_web_address_and_a_known_source_only() {
+        use maitty_shared::ticket_links::TicketSetupSource;
+        assert_eq!(setup_args(&json!({})).unwrap(), (None, String::new()));
+        let (source, link) = setup_args(&json!({ "source": "plane", "link": " https://plane.example/acme/projects/p1/issues/ " })).unwrap();
+        assert_eq!((source, link.as_str()), (Some(TicketSetupSource::Plane), "https://plane.example/acme/projects/p1/issues/"));
+        assert!(setup_args(&json!({ "source": "jira" })).is_err());
+        assert!(setup_args(&json!({ "link": "plane_api_0123456789abcdef" })).is_err(), "a key is not a link");
+        assert!(setup_args(&json!({ "link": 7 })).is_err());
+        assert_eq!(setup_args(&json!({ "link": "https://a.b/c d" })).map(|(_, link)| link), Err("link is a web address of the project (https://…), or leave it out".into()));
+        let no_pane = Server::new(crate::config::Config::default(), PathBuf::from("/"), None, Reach::live());
+        assert!(no_pane.tickets_setup(&json!({})).unwrap_err().contains("only an agent"));
     }
 
     #[test]

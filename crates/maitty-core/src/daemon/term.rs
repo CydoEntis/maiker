@@ -191,6 +191,8 @@ pub struct Term {
     pub subagent_hooks_seen: bool,
     /// Runtime-reported child lifecycle, retained after completion for inspection.
     pub subagent_activity: Vec<SubagentActivity>,
+    /// Workflow runs reported from this pane, newest first (ADR 0010). Never read for status.
+    pub workflows: Vec<maitty_shared::workflow::WorkflowRun>,
     /// The shell reports its directory itself (OSC 7 / 9;9); trust that over process scans.
     pub cwd_reported: bool,
     /// Stopped by an older the app version; resumes when focused.
@@ -207,6 +209,9 @@ pub struct Term {
     /// The background tasks still running at its last stop: one of those (a dev server) is no
     /// reason to hold a later turn's finish.
     pub background_known: Vec<String>,
+    /// Background work a helper started itself: (helper id, task id). A helper whose turn ends
+    /// while one of these runs is waiting on it, not finished: it wakes when the work ends.
+    pub helper_work: Vec<(String, String)>,
     /// When a subagent last showed signs of life (started, used a tool, asked something).
     pub subagent_seen: Option<Instant>,
     /// The agent's progress indicator (OSC 9;4) went away: an Esc-cancel ends no turn by hook.
@@ -725,13 +730,31 @@ impl Term {
         paused
     }
 
-    /// Drops every helper still counted as running, with `why` as each one's last word. True
-    /// when there was one.
-    pub fn forget_unreported_subagents(&mut self, why: &str) -> bool {
-        let mut forgot = !self.subagents.is_empty();
-        self.subagents.clear();
+    /// The helpers that started work of their own that is among `running`: each wakes when its
+    /// work ends, so it has not finished.
+    pub fn helpers_waiting_on(&self, running: &[String]) -> Vec<String> {
+        let mut waiting: Vec<String> = Vec::new();
+        for (helper, task) in &self.helper_work {
+            if running.contains(task) && !waiting.contains(helper) {
+                waiting.push(helper.clone());
+            }
+        }
+        waiting
+    }
+
+    /// Drops every helper still counted as running but those in `keep`, with `why` as each one's
+    /// last word. True when there was one.
+    pub fn forget_unreported_subagents(&mut self, why: &str, keep: &[String]) -> bool {
+        let before = self.subagents.len();
+        self.subagents.retain(|(id, _)| keep.contains(id));
+        self.helper_work.retain(|(helper, _)| keep.contains(helper));
+        let mut forgot = self.subagents.len() != before;
         let now = unix_now();
-        for activity in self.subagent_activity.iter_mut().filter(|a| a.state.active()) {
+        for activity in self
+            .subagent_activity
+            .iter_mut()
+            .filter(|a| a.state.active() && !keep.contains(&a.id))
+        {
             activity.state = SubagentState::ConnectionLost;
             activity.updated_at = now;
             activity.latest_activity = Some(why.to_string());
@@ -982,12 +1005,14 @@ impl Term {
             subagents: Vec::new(),
             subagent_hooks_seen: false,
             subagent_activity: Vec::new(),
+            workflows: Vec::new(),
             cwd_reported: false,
             asleep: false,
             win32_input: false,
             done_held: None,
             awaiting_background: false,
             background_known: Vec::new(),
+            helper_work: Vec::new(),
             subagent_seen: None,
             grants: None,
             started_by: None,

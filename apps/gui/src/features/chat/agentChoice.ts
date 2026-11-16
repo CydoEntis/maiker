@@ -47,6 +47,14 @@ export const KNOWN_MODELS: Readonly<Record<ChatAgent, readonly ModelOption[]>> =
   ],
 }
 
+/**
+ * The model to start an agent with on another machine: one every install takes by name, else the account's default
+ * there. A model read from this computer's agent may not exist on that one.
+ */
+export function everywhereModel(agent: ChatAgent, model: string): string {
+  return KNOWN_MODELS[agent].some((known) => known.id === model) ? model : DEFAULT_PICK
+}
+
 const modelListeners = new Set<() => void>()
 let discovered: Partial<Record<ChatAgent, readonly ModelOption[]>> = {}
 
@@ -93,6 +101,17 @@ export function menuModels(models: readonly ModelOption[]): readonly ModelOption
 export function pickedModel(models: readonly ModelOption[], choice: string): ModelOption | undefined {
   const rows = menuModels(models)
   return rows.find((model) => model.id === choice) ?? rows.find((model) => model.isDefault === true) ?? rows[0]
+}
+
+/**
+ * The row for the model the agent's own files say it runs: by its id, else by its name, since Claude
+ * names "claude-opus-5-5" where the menu has "Opus 5.5".
+ */
+export function modelInUse(models: readonly ModelOption[], current: string | null): ModelOption | undefined {
+  if (current === null) return undefined
+  const rows = menuModels(models)
+  const name = modelLabel(current)?.toLowerCase()
+  return rows.find((row) => row.id === current) ?? rows.find((row) => row.label.toLowerCase() === name)
 }
 
 /** What picking a row stores: the default's row stores "nothing picked", so no model is sent for it. */
@@ -166,7 +185,9 @@ export function defaultChoice(): AgentChoice {
 
 const STORAGE_KEY = 'maitty.gui.agentChoice.v1'
 const listeners = new Set<() => void>()
-type Stored = Record<string, { model?: string; reasoning?: ReasoningPick }>
+/** A chat's pick, and what its agent last said it runs (see `noteAgentSaid`). */
+type StoredChoice = { model?: string; reasoning?: ReasoningPick; saidModel?: string; saidEffort?: string }
+type Stored = Record<string, StoredChoice>
 let cache: Stored | null = null
 
 function table(): Stored {
@@ -204,6 +225,10 @@ export function wireChoice(conversation: number, agent: ChatAgent): WireChoice |
 }
 
 export function writeChoice(conversation: number, change: Partial<AgentChoice>): void {
+  store(conversation, change)
+}
+
+function store(conversation: number, change: StoredChoice): void {
   const all = table()
   all[String(conversation)] = { ...all[String(conversation)], ...change }
   cache = all
@@ -213,6 +238,21 @@ export function writeChoice(conversation: number, change: Partial<AgentChoice>):
     // The choice still holds for this run; only its memory across restarts is lost.
   }
   for (const listener of listeners) listener()
+}
+
+/**
+ * What the agent's own files now say it runs. When that changes (a `/model` or `/effort` typed in the terminal, or a
+ * pick the agent has taken up), the agent's word replaces the chat's pick: the message box then names what is true,
+ * and the next message does not send the old pick back. Remembered with the choice, so a change made while the chat
+ * was not open still counts. A model or effort the files do not say (null) changes nothing.
+ */
+export function noteAgentSaid(conversation: number, said: { readonly model: string | null; readonly effort: string | null }): void {
+  const saved = table()[String(conversation)]
+  const change: StoredChoice = {
+    ...(said.model !== null && said.model !== saved?.saidModel ? { model: DEFAULT_PICK, saidModel: said.model } : {}),
+    ...(said.effort !== null && said.effort !== saved?.saidEffort ? { reasoning: DEFAULT_PICK, saidEffort: said.effort } : {}),
+  }
+  if (Object.keys(change).length > 0) store(conversation, change)
 }
 
 /** Drops the in-memory copy so the next read goes to storage again. For tests. */

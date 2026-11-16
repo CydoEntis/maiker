@@ -2,37 +2,27 @@ import { ageOf, type SavedRead } from '../model/newChatHost'
 
 type Props = {
   read: SavedRead
-  folderName: string
-  /** Own copy or a new worktree is chosen: a resumed conversation leaves it out for this start. */
-  leavesCopy: boolean
-  /** The message box has text, which goes to the conversation picked. */
-  withMessage: boolean
   disabled: boolean
   now: number
   onPick: (id: string) => void
 }
 
-/** The new chat page's Resume list: the conversations the agent saved for the folder, newest first, each a click from resuming. */
-export function ResumeList({ read, folderName, leavesCopy, withMessage, disabled, now, onPick }: Props) {
-  if (read.kind === 'failed') return <p className="mx-nc-quiet">Could not read the saved conversations.</p>
-  if (read.kind === 'older') return <p className="mx-nc-quiet">Restart the Maitty service to see saved conversations.</p>
-  if (read.kind !== 'listed' || read.list.length === 0) return null
+/** The conversations an agent saved for a folder, newest first, each its first message and how long ago it was active; a click resumes it. */
+export function ResumeList({ read, disabled, now, onPick }: Props) {
+  if (read.kind === 'none') return <p role="status">Looking for saved conversations…</p>
+  if (read.kind === 'failed') return <p role="status">Could not read the saved conversations.</p>
+  if (read.kind === 'older') return <p role="status">Restart the Maitty service to see saved conversations.</p>
+  if (read.list.length === 0) return <p role="status">No conversation saved for this folder yet.</p>
   return (
-    <div className="mx-nc-resume">
-      <h3 className="mx-nc-heading">Resume</h3>
-      {leavesCopy && <p className="mx-nc-quiet">{`A resumed conversation continues in ${folderName}, the folder it was saved in, not in a copy of its own.`}</p>}
-      {withMessage && <p className="mx-nc-quiet">Your message is sent to the conversation you pick.</p>}
-      <ul className="mx-nc-tasks" aria-label="Resume">
-        {read.list.map((saved) => (
-          <li key={saved.id}>
-            <button type="button" disabled={disabled} title={saved.first_message} onClick={() => { onPick(saved.id) }}>
-              <span aria-hidden="true">↻</span>
-              <span className="mx-nc-resume-text">{saved.first_message}</span>
-              <span className="mx-chip-count">{ageOf(saved.last_active, now)}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <ul className="mx-recent-list" aria-label="Saved conversations">
+      {read.list.map((saved) => (
+        <li key={saved.id}>
+          <button type="button" className="mx-recent-row" aria-disabled={disabled} title={saved.first_message} onClick={() => { if (!disabled) onPick(saved.id) }}>
+            <span className="mx-recent-text"><span className="mx-recent-title">{saved.first_message}</span></span>
+            <span className="mx-recent-when">{ageOf(saved.last_active, now)}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
   )
 }

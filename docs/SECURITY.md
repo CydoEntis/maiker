@@ -148,13 +148,20 @@ the webview itself never navigates. What the page then does is the browser's to 
 
 `agent_auth_status` and `agent_sign_out` (`agent_auth.rs`) ask an agent's own command line whether
 its account is signed in (`claude auth status --json`, `codex login status`) and end the sign-in
-(`claude auth logout`, `codex logout`), for Settings › Agents. The program is the one the host finds
+(`claude auth logout`, `codex logout`), for Settings › Permissions. The program is the one the host finds
 on PATH, the arguments are constants, the webview supplies only the agent's name (any other name is
 refused), and each run is stopped after 15 seconds. The host reads no credential file and keeps
 none: the window is told who is signed in (the account's email and plan, as the agent prints them),
 which is the person's own, shown only in Settings and never logged. Signing in is the agent's own
 interactive command in an ordinary terminal session (`start_agent_session` with `auth login` or
 `login`, each a plain word that `agent_command` allows).
+
+`start_github_sign_in(machine)` starts GitHub's own sign-in for Settings › GitHub: a terminal session
+in the home folder of this computer or of the machine named, whose first command is the constant
+`GITHUB_SIGN_IN_COMMAND` (`gh auth login --web --git-protocol https`, in `maitty-desktop-client`). The
+webview supplies the machine and nothing else, so it is not a way to run a program of the window's
+choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
+password or token from it.
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
 `maitty-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
@@ -175,6 +182,24 @@ For Codex the same command asks for its skills instead (`codex_skills.rs`): it s
 app-server` with that one fixed argument in the same checked folder, sends `initialize` and
 `skills/list` for that folder, reads the answer and stops it. No message is sent. The names and
 descriptions are cleaned the same way before the webview sees them.
+
+Side answers (`Query::SideAnswer`, `daemon/conversation/side.rs`) are the one place the daemon starts Claude Code
+outside a pane or a structured chat: for the chat's `/btw` and the commands that only report, it runs `claude -p
+--resume <session> --fork-session --no-session-persistence`, a copy of the session that is never saved. Only the
+daemon starts it (ADR 0001); the webview and the host name only the conversation and the ask. The session id is the
+daemon's own record (the hook's for a followed pane, the binding's for a structured chat) and must be a UUID; the
+folder is the pane's or the binding's; the program is the binding's, or for a pane `claude` (`claude.exe` on Windows)
+found on the login PATH; the model is one the transcript named, kept only if it is a plain model name. The arguments
+are an array, never a shell line, and the ask goes on standard input, so a question that starts with a dash is never
+read as an option. A question runs with no tools and no MCP servers (`--tools "" --strict-mcp-config`), so the copy can
+only answer; a command keeps the session's tools and servers, which it reports on, and is one of a fixed list that
+takes nothing after its name, so none changes a setting (`/config key=value` and `/goal <condition>` are sent to the
+conversation as typed instead). The pane and structured-chat variables are removed from its environment, so its hooks
+report for no pane. A followed pane is answered only for the app it is shown in, as its history is. Three run at most
+at once; each is killed after 90 seconds or when the daemon drops it (`kill_on_drop`). Standard error is discarded; the
+answer is cut at 64 KiB with control characters removed, and a failure is reported in the daemon's words, never
+Claude Code's output. It runs as the user with the user's Claude Code settings, so start-up hooks run as for any
+session, and it uses the person's plan like any message.
 
 Assets: the user's shells and agent sessions (which can run any command as the
 user), their source code, and API keys in `config.local.toml`. Threats: another
@@ -239,7 +264,7 @@ A chat's **Always in this project** (`ConversationAllowAlways`, ADR 0005) is kep
 `chat-allowed-commands.json` in Maitty's data folder: the project and the hash of the exact command as the
 provider sent it (not the text shown, which has secrets hidden). Only a human client can send it; the daemon
 refuses it from a pane or a structured client, and for anything but a command request. Residual risk: a process
-running as the same OS user can edit that file, as with `check-approvals.json`. A person takes a rule back with `ForgetAllowedCommand` (Settings → Agents), refused from a pane; the daemon drops it from memory and the file at once.
+running as the same OS user can edit that file, as with `check-approvals.json`. A person takes a rule back with `ForgetAllowedCommand` (Settings → Permissions), refused from a pane; the daemon drops it from memory and the file at once.
 
 What a pull request's reviewers and bots wrote reaches the pane's agent as a queued message
 (`sessions.pr_wake`, on by default), so it is untrusted text: it is cut short, flattened to one
@@ -490,6 +515,7 @@ that is not this one (`remote_policy.rs`, `remote_snapshot.rs` in `maitty-machin
 | `Reply::ClosedSessions` | answer, cleaned | the closed sessions a window asked that machine for: at most 50, every field one clean line, cut short; the folder is a label for that machine and never touches this computer's disk |
 | `AskRemoveWorktree` | ignore | names a folder on this computer's disk to delete; remote worktree management is out of scope (ADR 0007) |
 | `Reply::SavedConversations` | ignore | saved conversations are listed for this computer's folders only; another machine's are out of scope |
+| `Reply::SideAnswer` | ignore | side answers are asked of this computer's daemon only; another machine's are out of scope |
 | `AutoWorkspace` | ignore | announces a workspace and arms this computer's undo |
 
 The opt-ins are read from the machine's `[[machines]]` entry by name; a machine no entry names
@@ -518,6 +544,21 @@ is a fixed set of host commands that take a machine's name or number, never a pr
 - **Files stay on their machine.** Features that read a pane's files or repository are refused for another
   machine's pane by the window and again by the host's commands, in the terminal app's words, so a pane
   number from another machine can never reach a pane of this computer.
+- **A machine's changes are the one repository answer taken.** `repo_query` asks another machine's daemon
+  only what changed and its diff (`remote_repo::may_ask`); a file's text, a folder listing, branches,
+  history and writes are refused by the host before anything is sent. The answer passes
+  `remote_repo::vet_repo_reply`: anything but a status or a diff is dropped, every string loses its
+  escapes and control characters, a path or branch is one line of at most 4,096 characters, and the lists
+  are cut to the sizes a daemon's own answer may have. The diff is shown as text and never run or written
+  to this computer's disk.
+- **Fetch, pull, push, commit and Create PR on a machine** take one of those five words and a pane number
+  from the window, plus a commit's message and file names; never a command, an address or a folder. That
+  machine's daemon checks the message and names and runs its own git and `gh` in the pane's folder
+  (`Query::Git`). The one-line answer passes `remote_repo::vet_git_reply`: cleaned, one line, at most 512
+  characters, and checked against what was asked. A commit's answer must open with a commit id, and a
+  pull request's must be exactly `https://github.com/<owner>/<repo>/pull/<number>`
+  (`maitty_shared::github::is_pull_request_address`), so a machine cannot hand the window any other
+  address to show. Any other answer is dropped.
 - **No install or restart.** A machine that needs the app shows the command to run; the desktop app never
   installs, updates or restarts anything on it.
 - **A different daemon at a known name** is refused (the shared daemon-id store) and says so; Remove then
@@ -525,12 +566,162 @@ is a fixed set of host commands that take a machine's name or number, never a pr
 
 ## Project-specific: auth and permissions
 
+- **Cloning a repository** (`Query::CloneRepo`, `daemon/clone.rs`) takes an address from a client, so the
+  daemon checks it before git sees it: at most 2,048 bytes, no whitespace or control character, not
+  starting with `-` (git would read an option), and only an `https://`, `ssh://` or `git://` address or
+  the `user@host:path` form. A local path, `file://`, `http://` and git's `ext::` transport are refused:
+  they would read this computer's own disk, send credentials in the clear, or run a program. The address
+  is passed after `--` as one argument, never through a shell. The new folder's name comes from the
+  address and may hold no path separator or other character a folder name cannot. Only a person's
+  client may ask; a pane's or an agent's connection is refused. The daemon reads no credential: git uses
+  whatever the machine already has, and fails when it would have to ask.
+- **Reading who commits** (`Query::GitIdentities`, `daemon/git_identity.rs`): the daemon reads the
+  machine's global git config through git itself: the default `user.name` and `user.email`, and the
+  folder of every `includeIf "gitdir:…"` entry. It reads further only into files that sit directly in
+  its own `git-identities` folder and name the folder they are for; what a rule set outside Maitty
+  points at is never opened. No credential is read (a rule holds a GitHub login, never a token), nothing
+  is written, and only a person's client may ask.
+- **Writing a folder's rule** (`Query::GitIdentityRule`, `daemon/git_rule.rs`): the daemon writes the
+  machine's global git config, and only this: one `includeIf "gitdir:<folder>/".path` entry and one file
+  of its own in `<data dir>/git-identities/`. The file sets the folder's commit name and email, the GitHub
+  login, and a credential helper that runs `gh auth token --user <login>` when git needs github.com's
+  password inside that folder. The login is checked to be a GitHub login (letters, digits, dashes, no
+  leading dash) before it is put in the helper's command, and must be signed in on the machine; the name
+  and email may hold no control character; the folder must exist and may hold no pattern character or
+  quote. No token is written: `gh` keeps it and hands it to git when asked. The person sees the exact
+  lines before they are written (`Preview`). A rule set outside Maitty is never replaced or removed, and a
+  removal takes out only Maitty's entry and file. Only a person's client may ask.
+- **Changing a checkout on request** (`Query::Git`, `daemon/sync.rs`, `commit.rs`, `pull_request.rs`):
+  fetch, fast-forward pull, push, commit and open a pull request for the checkout a pane is in. Only a
+  person's client may ask, with the pane checks of `Query::Repo`. The request is one of five words; the
+  only text taken from the client is a commit message (trimmed, at most 16 KiB, no control character but
+  a line break or tab) and the commit's paths (relative, no `..`, no `.git` part, no leading `-`, no
+  control character, read literally by git). Everything is passed as arguments, never through a shell.
+  git runs with `GIT_TERMINAL_PROMPT=0` and `gh` with its prompts off, so neither can ask for a
+  credential, and each request is stopped at its limit. Nothing merges, rebases, forces or amends. A
+  pull request answers only a `https://github.com/<owner>/<repo>/pull/<number>` address.
+- **Who is signed in to GitHub** (`Query::GitHubAccounts`, `daemon/github.rs`) runs the machine's own
+  `gh auth status --json hosts` with fixed arguments and nothing from the client in them. Only the
+  logins and which one is active leave the daemon; a token is never asked for (`--show-token` is never
+  passed), read from `gh`'s files, logged or sent. A login is kept only when it is letters, digits and
+  dashes, at most 39 long, both where it is read and again when it arrives from another machine. Only a
+  person's client may ask.
+- **Listing GitHub repositories** (`Query::GitHubRepos`, `Query::GitHubOwners`, `daemon/github.rs`) puts
+  two things from a client on `gh`'s command line, so both are checked first: an owner must be a login
+  (`maitty_shared::github::is_login`: letters, digits and dashes, no dash at either end, so it can never
+  be read as an option), and a search may hold only letters, digits, spaces, dots, underscores and
+  dashes, at most 100 characters, and is passed after `--`. A `:` is refused, so a search cannot carry a
+  GitHub qualifier that widens it past the owner. Each is one argument, never a shell line. A repository
+  is passed on only when its name is `owner/name` in GitHub's own characters, and the address to clone
+  is built from that name (`clone_address`), so text from `gh` or from another machine never becomes an
+  address by itself. Only a person's client may ask.
+- **Reading tickets** (`Query::Tickets`, `daemon/tickets_github.rs`, `maitty_shared::tickets`) reads a
+  repository's milestones, issues and issue comments through the machine's own `gh`, and writes
+  nothing: there is no request that comments, labels, closes or edits. The repository must be
+  `owner/name` (`is_repo`); an assignee must be a login; a label and a search are checked, and each is
+  joined to its flag (`--label=…`) so it can never be read as a flag of its own; a milestone or an
+  issue must belong to that repository. Everything is an argument list, never a shell line, and `gh`'s
+  prompts are off. No token is asked for, kept, logged or sent. **What comes back is other people's
+  writing and is not trusted**: control and hidden characters are dropped (`hidden::sanitize`), every
+  string is cut, lists and comments are capped, a number that is not a whole number is refused, an
+  address is built from the checked repository and number (a pull request link must be exactly a
+  GitHub pull request's address), and `gh`'s output is read only up to 4 MiB. No ticket text is
+  logged, and a failure is one of a few fixed lines, never `gh`'s own words (which may echo a token).
+  A ticket's text that looks like an instruction is still only text; it reaches an agent only framed
+  as the ticket's words (MAITTY-394). The same cleaning is applied again to an answer from another
+  machine (`remote_policy::vet`), and only a person's client may ask.
+- **A ticket provider's key** (Plane, Linear; `Query::TicketKeys`, `daemon/ticket_keys.rs`) is held by the
+  daemon of the computer that reads the tickets, in the system's keychain (`daemon/keychain.rs`:
+  Windows Credential Manager, the macOS login Keychain, the Secret Service on Linux), so it is not a
+  file an agent running as the same user can read by opening it. A machine with no keychain (no Secret
+  Service, a server reached over ssh) keeps it in one small file per provider in Maitty's data folder
+  (`ticket-keys/plane.json`, `ticket-keys/linear.json`: the folder `0700`, the file `0600` on unix; on
+  Windows the user's own app data, which only they and administrators can read), and the client says
+  so ("Key kept in a file: no keychain on this machine"). A key moves from the file to the keychain only
+  once the keychain gives it back unchanged (DATABASE). A keychain error is never logged as it came,
+  since one kind of it holds the stored bytes; only "unavailable" or "failed" is kept. The keychain
+  crates (`keyring-core` and one native store per platform; the Secret Service one over pure-Rust D-Bus
+  with Rust crypto) run no build script and log no secret. The key is never
+  in `config.toml` (which is synced), a repository, a log line, a snapshot, an agent's environment or
+  a reply to a client. A person's client sets or removes a key; a pane and a structured runtime are
+  refused before the request is read ([ADR 0006](adr/0006-secrets-never-enter-chat.md): a secret is
+  never typed into a conversation). The only thing a client can read back is whether a key is set, where
+  it is kept (`stored_in`: keychain or file), and Plane's server address and workspace, which are not
+  secret. In the daemon the key is a `Secret`: it
+  prints as `Secret(..)`, and on the wire it is a `SecretText`, which prints as `<hidden>`. A key is
+  checked on the way in (printable ASCII, 8 to 200 characters); Plane's address must pass the same
+  `check_base_url` that every request does, so a key cannot be saved for an address it could not be
+  sent to; Linear's server is fixed and a key for it takes no address.
+- **A repository's ticket file** (`.maitty/tickets.toml`, `daemon/ticket_repo_file.rs`) is the repository's
+  text, so it is untrusted. It is read only when it and its `.maitty` folder are plain (a link is refused), at
+  most 16 KB, as TOML with no unknown keys; every part is checked (GitHub `owner/name`, Plane's address through
+  `check_base_url` and its workspace and project as plain ids, a Linear team id). It only fills a source not
+  linked here, and it never decides where a key goes: a Plane entry is used only when its address and workspace
+  are the ones your saved key is for, and otherwise it is shown as a note and not used. It is never written.
+- **An agent's ticket setup** (`Command::OpenTicketSetup`, `daemon/ticket_setup.rs`, `<app>_tickets_setup`) only
+  opens the setup in the person's windows. The agent never sends or receives a key (the MCP tool refuses
+  anything but an http(s) link, and the reply says only what is linked and whether a key is saved), it cannot
+  save a link, and only the pane itself may ask, for its own project, once per project every 5 seconds. The
+  suggested link is drawn as text and never opened or saved on its own. An ask from another machine is ignored.
+- **Writing to a ticket** (`Query::TicketWrite`, `daemon/tickets_write.rs`) is the one place Maitty changes
+  a ticket, and it does two things only: add a comment, or close the ticket. It never edits a ticket's own
+  words and never deletes. Nothing is written unless the request carries `confirmed: true`, which the
+  desktop sets only after the person saw the provider, the ticket and the exact text and clicked to confirm;
+  the daemon refuses a pane or a structured runtime outright (human clients only) and answers an
+  unconfirmed request with a refusal before it reads a key, starts `gh` or sends a byte, so a refused
+  write leaves the ticket as it was. The comment is checked by `clean_comment` (not empty, at most 4,000
+  characters, no control, hidden or tab characters, `\n` line breaks) and is refused rather than quietly
+  changed, so the text confirmed is the text written. The ticket id must belong to the named source (a
+  GitHub issue of that repository, a Plane work item, a Linear issue). GitHub goes through the user's own
+  `gh`, with the text joined to its flag (`--body=<text>`); Plane's comment is a `POST` whose text is
+  HTML-escaped into paragraphs, and closing is a `PATCH` to a state of its `completed` group; Linear's
+  comment and `issueUpdate` take the text and ids as GraphQL variables, never as query text, to the
+  same fixed server. A write is sent once and never retried (a retry could comment twice). Failures are
+  the same fixed lines as the reads; no key, ticket text or server word is logged. Not yet checked against
+  a live Plane or Linear server.
+- **Reading Plane and Linear** (`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`, over
+  `daemon/ticket_http.rs`) sends a stored key to a server, so what goes where is fixed. *Sent:* the key
+  in one header (`X-API-Key` for Plane, `Authorization` for Linear), the request path, and for Linear a
+  GraphQL query; a person's search words, label and name go to Linear as query *variables*, never into
+  the query text, and to Plane not at all (it is filtered here). *Sent to:* Plane's address from the key
+  file, which must pass `check_base_url` on every call (https anywhere; http only to loopback, a private
+  or link-local address, a name with no dots or ending `.local`/`.lan`), with its workspace and every id
+  restricted to letters, digits and dashes before it enters a path; Linear's one server,
+  `https://api.linear.app/graphql`, a constant that the key file cannot change. Every request in these
+  two files is a read: Plane's calls are all `GET`, Linear's are all `query`. The only writes are in
+  `daemon/tickets_write.rs` (next item). *How:*
+  the system `curl` (no new dependency), with the key on its standard input as a config, never on the
+  command line where `ps` shows it; `--disable` so a user's `.curlrc` cannot change it; no redirect is
+  followed, so a key is never forwarded; Plane may be spoken to over http or https, Linear over https
+  only; 20 seconds and 4 MiB at most (the reader stops at the cap even when the server does not say how
+  long its answer is). *Refused:* a control character in a request, a header name that is not plain, an
+  address that fails `check_base_url`. *What comes back is other people's writing and is not trusted:*
+  cleaned and capped as GitHub's is, an id that is not plain characters is dropped, a ticket's address
+  is built here (Plane) or kept only when it is `https://linear.app/…` (Linear), a pull request link
+  must be exactly a GitHub pull request's address, HTML in a Plane description is reduced to text.
+  *Never in any message, log or `Debug`:* the key, a ticket's text, and the server's own words: a
+  failure is one of a few fixed lines (key refused, not found, rate limited, "the server had an error",
+  "could not be reached", "larger than can be read"), and a refused key is `SignedOut`. Linear's cost is
+  capped (at most 50 nodes a connection, 8 pages a list, small fixed nested lists) so a query cannot be
+  refused as too complex or used up a rate limit. A ticket's text that looks like an instruction is
+  still only text. Not yet checked against a live Plane or Linear server; the shapes follow their public
+  APIs.
+
 No user accounts. Access to the daemon is access to its local socket: a named
 pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
 (`maitty-<user>-<label>.sock`). Socket access must stay limited to the user who
 started the daemon. Status reports (`maitty hook`) are accepted only from a
 process inside the pane (traced through its process tree) or carrying that
 pane's `MAITTY_PANE_TOKEN`, a random secret set only in that pane's environment.
+Workflow reports (`maitty workflow report`, ADR 0010) need the same token, and structured callers
+may not send one. A report is checked at the boundary (`workflow::checked`): every string loses
+control and hidden characters, names and notes have length limits, a run has at most 32 steps, and a
+ticket link must be `http` or `https`. A report never changes status, so a process in the pane can
+only mislabel its own pane's workflow view.
+Listing specialist agents (`Query::Specialists`, ADR 0010) reads only the fixed agent folders of the
+pane's repository and the user's home, never a path a client names; it is for human clients with read
+access to the pane, writes nothing, and bounds the count and size of what it returns. Names,
+descriptions and file text lose control and hidden characters before they leave the daemon.
 Remote work goes over the user's own `ssh`, so SSH's authentication applies.
 The one-shot commands (`--on build ...`, `--pane build/4`) treat the machine they reach the same way.
 What it answers is untrusted: a list (`ls`, `wait`) is cleaned like a window's snapshot
@@ -642,11 +833,21 @@ The path comes from a hook report, so it is input, not trust:
   and its name carries the session id the hook reported (Claude `<session>.jsonl`; Codex
   `rollout-…<session>.jsonl`). Anything else is refused with a reason that names no content.
 - Only a pane that is hook-verified, owned by the desktop app and running `claude` or `codex` is followed; a
-  pane cannot make the daemon read a file for another session.
+  pane cannot make the daemon read a file for another session. Once followed, the pane keeps its follower (the same
+  file, the same session) while it still runs that agent, even if the hook goes unverified or its session or file is
+  briefly unknown; a new session, or following again after the agent leaves, needs the verified hook again.
 - Reads are incremental and bounded (4 MiB per poll, a 16 MiB tail first, lines over 1 MiB dropped), run off the
   event loop, never write, and are cleaned and bounded like structured history (`tool_input.rs`). The text is
   held in daemon memory for the conversation's life, never cached, logged or put in a fixture.
 - A followed conversation is read-only, and reading never changes a status.
+
+A helper's own record (`Query::HelperRead`, ADR 0010) is read the same way, once per ask, for human
+clients only and only for a pane the client is shown. The helper must be one the pane's verified
+reports listed, its id is letters, digits, `-` and `_` (at most 128), and its file is found from the
+pane's reports, never from the request: Claude's must be exactly `<session>/subagents/agent-<id>.jsonl`
+beside the transcript that passed the checks above (no link out of that folder), and Codex's must be a
+rollout named for the helper whose parent chain reaches the pane's thread. The last 4 MiB is read and
+the reply holds the newest entries within 256 KiB.
 
 ## Project-specific: chat sessions started from the desktop
 
@@ -664,7 +865,9 @@ The agent runs with the user's permissions, so the window's start path is narrow
   that waits for a person's answer, and there is no auto-approve. There is no way to change a running session's
   posture, and no read-only-to-writable switch, in the window. Answers are human-only, bound to the current generation and the exact request id (unchanged
   from the structured runtime rules above).
-- **Where it runs.** The folder is a project the app already shows; a branch start also needs a git
+- **Where it runs.** The folder is a project the app already shows, or one a person picked in their own window (a
+  client that is not a pane's agent, a structured runtime or a rejected client: `may_name_checkout`); an agent cannot
+  point a checkout at a repository the app has never been shown. A branch start also needs a git
   repository and a valid branch name (`branch_agent::branch_problem`), and the worktree is made by the daemon
   (`create_trusted_worktree`: the trust copy and the repo's allowed setup hook only). The window never builds a
   path or runs git. A start for another machine is refused in the window.
@@ -676,6 +879,22 @@ The agent runs with the user's permissions, so the window's start path is narrow
   running out of sight; if the stop fails nothing is hidden.
 - Secret masking in history is the daemon's (ticket 18), at the point where history is stored and served; the
   window adds no copy of a message.
+
+## Project-specific: cloning a repository from the desktop
+
+The new chat page's Clone from GitHub runs `git clone` in the desktop host (`git_clone`, `src-tauri/src/clone.rs`),
+off the UI thread, with the user's permissions. What was pasted never reaches git as typed:
+
+- It is read as a GitHub owner and repository name (owner/repo, a github.com page or HTTPS address, or
+  `git@github.com:`). Each name is checked: ASCII letters, digits, `-`, `_` and `.`, at most 100 characters, not
+  starting with `-` or `.`. Anything else, including another host, a user or token in the address, `file://` or
+  `ext::`, is refused.
+- The address git is given is built again from the two checked names, after `--`, so no option or transport can
+  reach the command line.
+- The target is a new folder named after the repository inside an absolute folder that exists; an existing folder
+  is never written into.
+- Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses
+  the credentials git already has. Maitty stores no GitHub token.
 
 ## Project-specific: the message the daemon sends by itself
 

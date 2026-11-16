@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef } from 'react'
-import { matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction } from './model/shortcuts'
+import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction } from './model/shortcuts'
 import type { ChatAgent, ChatAvailability, PaneView } from './model/chatView'
 import { toast } from '@/lib/toast'
 import { defaultSessionFolder } from '@/api/daemon'
@@ -18,7 +18,7 @@ import { jumpToast, nextNeedsYou, NOTHING_NEEDS_YOU } from '@/features/needs-you
 import { resolveStartFolder } from './model/startFolder'
 
 /** Listens for the keyboard: a shortcut runs its action, and Esc closes the topmost layer. */
-export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform }: {
+export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
   runShortcut: (action: ShortcutAction) => void
   canUndoClose: boolean
   dialogOpen: boolean
@@ -35,9 +35,10 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
   setDrawerOpen: Dispatch<SetStateAction<boolean>>
   setFocusMode: Dispatch<SetStateAction<boolean>>
   platform: Platform
+  keyOverrides: KeyOverrides
 }) {
-  const shortcutState = useRef({ runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen })
-  useEffect(() => { shortcutState.current = { runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen } })
+  const shortcutState = useRef({ runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
+  useEffect(() => { shortcutState.current = { runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
   useEffect(() => {
     // How each layer of the Esc ladder closes. A new dialog adds its closer here and its id to ESC_LADDER.
     const closers: Partial<Record<EscLayer, () => void>> = {
@@ -50,7 +51,9 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
     const onKeyDown = (event: KeyboardEvent) => {
       const state = shortcutState.current
       if (state.welcomeOpen) return
-      const match = matchShortcut(event, platform)
+      // Settings › Hotkeys is taking down a new key: every key, Esc too, is the field's.
+      if (event.target instanceof Element && event.target.closest(`[${KEY_CAPTURE_ATTRIBUTE}]`)) return
+      const match = matchShortcut(event, platform, state.keyOverrides)
       if (state.shortcutsOpen) {
         // Only its own key closes it; Esc is the dialog's.
         if (match?.action === 'shortcuts') {
@@ -93,7 +96,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
 }
 
 /** What each shortcut does. The palette and the keyboard both go through it. */
-export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences, home, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, chatOf, paneViews, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom }: {
+export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences, home, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, chatOf, paneViews, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
   newSession: (machine?: number) => void
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
@@ -122,6 +125,7 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
   setFindOpen: Dispatch<SetStateAction<boolean>>
   online: boolean
   setWorktreeFrom: Dispatch<SetStateAction<SessionView | null>>
+  toggleTerminal: () => void
 }) {
   const runShortcut = useCallback((action: ShortcutAction) => {
     switch (action) {
@@ -208,6 +212,9 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
       case 'inspect':
         toggleInspect()
         return
+      case 'terminal':
+        toggleTerminal()
+        return
       case 'find':
         setFindOpen((open) => !open)
         return
@@ -225,6 +232,6 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
         }
         return
     }
-  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences.defaultAgent, preferences.terminalFontSize, preferences.startFolder, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, home, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, chatOf, paneViews, online, setWorktreeFrom])
+  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences.defaultAgent, preferences.terminalFontSize, preferences.startFolder, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, home, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, chatOf, paneViews, online, setWorktreeFrom, toggleTerminal])
   return { runShortcut }
 }

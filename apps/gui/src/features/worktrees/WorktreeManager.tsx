@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { useState } from 'react'
 import type { RepoWorktree } from '@/features/inspect/api'
 import { messageOf } from '@/features/inspect/useRepoQuery'
@@ -29,7 +30,7 @@ function WorktreeRow({ entry, main, machine, onChanged }: RowProps) {
       .finally(() => { setBusy(false); setSure(false); refresh() })
   }
   if (standing.isError) return <li><strong>{entry.branch}</strong> <span>{messageOf(standing.error)}</span></li>
-  if (!standing.data) return <li><strong>{entry.branch}</strong> <span>Reading…</span></li>
+  if (!standing.data) return <li><strong>{entry.branch}</strong> <SkeletonLines label="Reading" lines={1} className="inline-flex w-24 align-middle" /></li>
   const data = standing.data
   if (data.missing) {
     return (

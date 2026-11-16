@@ -375,11 +375,23 @@ impl App {
                 };
                 self.announce_copy(&text, native, Some(from));
             }
+            ServerMsg::Error(e) if machine == MachineId::LOCAL && self.helper_failed(&e) => {}
+            ServerMsg::Error(e) if self.clone_failed(machine, &e) || self.specialists_failed(machine, &e) => {}
             ServerMsg::Error(e) => {
                 // The output a failure waited for may be what failed; a later reply is not its.
                 self.screen.failure_ask = None;
+                self.remote_changes_failed(machine, &e);
                 if machine == MachineId::LOCAL {
                     self.resume_failed();
+                    self.pane_search_failed();
+                }
+                self.tidy_failed(machine);
+                // A listing another machine refused leaves the Finder waiting no more.
+                if let Mode::Finder(fd) = &mut self.mode
+                    && fd.machine == machine
+                    && fd.waiting
+                {
+                    (fd.waiting, fd.missing) = (false, true);
                 }
                 self.notify(e, true);
             }
@@ -432,8 +444,70 @@ impl App {
             {
                 self.saved_conversations_arrived(tag, found)
             }
+            // Changes for a pane on another machine: that machine's answers.
+            ServerMsg::Reply(Reply::Repo { tag, reply }) if self.remote_diff_waits(machine, tag) => {
+                self.remote_diff_arrived(reply)
+            }
+            ServerMsg::Reply(Reply::GitDone { tag, outcome })
+                if self.remote_git_waits(machine, tag) =>
+            {
+                self.remote_git_done(outcome)
+            }
+            // Find in every session asks this computer's daemon only.
+            ServerMsg::Reply(Reply::Search(hits)) if machine == MachineId::LOCAL => {
+                self.pane_search_arrived(hits)
+            }
+            // Tickets are read and written through this computer's daemon only.
+            ServerMsg::Reply(Reply::Tickets { tag, answer }) if machine == MachineId::LOCAL => {
+                self.tickets_arrived(tag, answer)
+            }
+            ServerMsg::Reply(Reply::TicketKeys { tag, answer }) if machine == MachineId::LOCAL => {
+                self.ticket_keys_arrived(tag, answer)
+            }
+            ServerMsg::Reply(Reply::TicketWrite { tag, answer }) if machine == MachineId::LOCAL => {
+                self.ticket_write_arrived(tag, answer)
+            }
+            ServerMsg::Reply(Reply::TicketLinks { tag, answer }) if machine == MachineId::LOCAL => {
+                self.ticket_links_arrived(tag, answer)
+            }
+            // An agent of this computer asked for its project's ticket setup.
+            ServerMsg::TicketSetup(ask) if machine == MachineId::LOCAL => self.ticket_setup_asked(ask),
+            ServerMsg::TicketSetup(_) => {}
+            // Closed sessions are kept by this computer's daemon only.
+            ServerMsg::Reply(Reply::ClosedSessions(list)) if machine == MachineId::LOCAL => {
+                self.closed_sessions_arrived(list)
+            }
+            ServerMsg::Reply(Reply::HelperRead(record)) if machine == MachineId::LOCAL => {
+                self.helper_arrived(record)
+            }
+            ServerMsg::Reply(Reply::Cloned { tag, outcome }) => self.cloned_arrived(machine, tag, outcome),
+            ServerMsg::Reply(Reply::GitHubRepos { tag, answer }) => self.github_repos_arrived(machine, tag, answer),
+            ServerMsg::Reply(Reply::GitHubOwners { tag, answer }) => self.github_owners_arrived(machine, tag, answer),
+            ServerMsg::Reply(Reply::Specialists(list)) => self.specialists_arrived(machine, list),
+            ServerMsg::Reply(Reply::WorktreeStanding(standing)) => self.tidy_standing_arrived(machine, standing),
+            ServerMsg::Reply(Reply::Folders { tag, listing }) => {
+                if let Mode::Finder(fd) = &mut self.mode
+                    && fd.machine == machine
+                {
+                    fd.listed_remote(tag, listing);
+                }
+            }
             ServerMsg::Reply(Reply::Text(text)) if self.check_asked_of(machine) => {
                 self.check_output_arrived(text)
+            }
+            // Usage is kept by this computer's daemon only.
+            ServerMsg::Reply(Reply::UsageReport(report)) if machine == MachineId::LOCAL => {
+                self.usage_report_arrived(report)
+            }
+            // A machine's details ask its own daemon.
+            ServerMsg::Reply(
+                reply @ (Reply::GitHubAccounts { .. }
+                | Reply::GitIdentities { .. }
+                | Reply::GitIdentityRuleDone { .. }),
+            ) => self.machine_info_reply(machine, reply),
+            // Approvals are kept by this computer's daemon only.
+            ServerMsg::Reply(Reply::AllowedCommands(list)) if machine == MachineId::LOCAL => {
+                self.approved_arrived(list)
             }
             ServerMsg::Welcome { .. } | ServerMsg::Reply(_) => {}
         }
@@ -656,6 +730,10 @@ impl App {
         let Some(View::Changes(v)) = &mut self.view else {
             return;
         };
+        // Another machine's diffs came with its review.
+        if Self::remote_diff_for_selection(v) {
+            return;
+        }
         let Some(r) = v.review.as_mut() else { return };
         if r.diff_sel == Some(r.sel) {
             return;
@@ -690,6 +768,14 @@ impl App {
         let Some(dir) = fd.wanted.take() else {
             return;
         };
+        if fd.remote() {
+            let tag = screen::next_listing_tag();
+            fd.tag = tag;
+            let machine = fd.machine;
+            let path = dir.display().to_string();
+            self.send(machine, ClientMsg::Query(Query::ListFolders { path, tag }));
+            return;
+        }
         self.spawn_bg(move || {
             let (list, repo) = screen::Finder::list_folders(&dir);
             Bg::FolderList(dir, list, repo)

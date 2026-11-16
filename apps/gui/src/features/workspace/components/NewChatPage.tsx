@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useWarmAgent, type WarmAgent, type WarmSpec } from '../useWarmAgent'
 import { toast } from '@/lib/toast'
 import { pasteFromHost, pickFromClipboard, unsupportedMessage } from '@/features/terminal/clipboardImage'
@@ -7,34 +7,41 @@ import { registerComposerDrop } from '@/features/chat/composerDrop'
 import { updateComposer, useComposerState } from '@/features/chat/composerStore'
 import { revokePreviews, useAttachmentIntake } from '@/features/chat/useAttachmentIntake'
 import { DraftAttachments } from '@/features/chat/components/Attachments'
+import { useKeepTyping } from '@/features/chat/useKeepTyping'
 import { errorMessage } from '@/lib/error-message'
 import { DEFAULT_PICK, modelsFor, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
-import { CODEX_FULL_MODE, DANGER_MODES, modeLabel, START_MODE } from '@/features/chat/chatMeta'
+import { BYPASS_MODE, CODEX_FULL_MODE, DANGER_MODES, modeLabel, START_MODE } from '@/features/chat/chatMeta'
 import { AgentPicker } from '@/features/chat/components/AgentPicker'
 import { PermissionMenu } from '@/features/chat/components/PermissionMenu'
+import { MAX_SHOWN, SlashPicker } from '@/features/chat/components/SlashPicker'
+import { commandText, matchCommands, slashQuery, useSlashCommands, type SlashCommand } from '@/features/chat/slashCommands'
 import { openAgentDocs } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { CHAT_AGENTS, chatAgentOf, type ChatAgent } from '../model/chatView'
-import { abilitiesOf, hasAbility } from '../model/agentAbilities'
-import { ageOf, nowSeconds, splitRecent, useFolderBranches, useGlances, useInstalledAgents, useSavedConversations, useSyncState } from '../model/newChatHost'
-import { Switch } from '@/components/ui/switch'
-import type { NewSessionProject } from '../model/newSession'
-import { branchNameFromMessage, suggestBranchName } from '../model/worktreeName'
-import { Icon } from './glyphs'
+import { RadioGroup, RadioGroupItem, Segmented, SegmentedItem } from '@/components/ui/radio-group'
+import { chatAgentOf, DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '../model/chatView'
+import { abilitiesOf } from '../model/agentAbilities'
+import { ageOf, nowSeconds, useFolderBranches, useInstalledAgents } from '../model/newChatHost'
+import type { BusyBranches, NewSessionProject } from '../model/newSession'
+import { MAX_SESSION_NAME_LENGTH } from '../model/session'
+import { suggestBranchName } from '../model/worktreeName'
+import { AppIcon, Icon } from './glyphs'
 import { ChipMenu, type ChipItem } from './NewChatMenus'
-import { ResumeList } from './ResumeList'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import { isMacPlatform } from '../model/shortcuts'
 
 /** The branch a chat starts on when it is not the folder's current one: switch to it, or work in a new worktree of it. */
 export type BranchChoice = { name: string; create: boolean; worktree: boolean }
 
-/** What the page asks the window to start: a chat with this agent, model and effort, in this folder, and its first message; `resume` names a saved conversation to continue. */
-export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null }
+/**
+ * What the page asks the window to start: a chat with this agent, model and effort, in this folder, and its first message;
+ * `resume` names a saved conversation to continue. `view` is how it opens (its chat or its terminal), and `name` the name
+ * typed for it; without one the first message names it.
+ */
+export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; view?: PaneView; name?: string }
 
-/** How a start is asked for: `background` starts the chat without opening it, and the page stays for the next. */
-export type NewChatStartOptions = { background?: boolean }
+/** How a start is asked for: `background` starts the chat without opening it, and the page stays for the next; `onPlaced` hears its id. */
+export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's chats only). */ onPlaced?: (id: string) => void }
 
 /** The key the first message's files are kept under: no conversation exists yet, and a real one is never negative. */
 const NEW_CHAT_DRAFT = -1
@@ -48,67 +55,77 @@ type Props = {
   machine: number
   /** The projects that computer has sessions in, the focused one first. */
   projects: readonly NewSessionProject[]
+  /** The branches other chats are working on, per folder: a chat started on one gets a worktree of its own. */
+  busy?: BusyBranches
   defaultAgent: ChatAgent
+  /** How each agent's chat opens unless this page picks the other view (Settings › Chat). */
+  viewDefaults?: ChatViewDefaults
   /** Yolo mode is on for Claude, so a Claude chat may start in Bypass permissions. */
   bypassAllowed?: boolean
   /** Yolo mode is on for Codex, so every Codex chat starts with full access whatever is picked here. */
   codexYolo?: boolean
-  /** The system's folder picker, whose answer is null when it is cancelled; null itself for another machine, whose disk this window cannot browse. */
+  /** Settings › Chat › Full access in new chats: the mode starts on the agent's full-access one, where it has one it may take. */
+  fullAccess?: boolean
+  /** A folder picker whose answer is null when it is cancelled: the system's for this computer, the window's own for another machine. Null when there is none. */
   browse: (() => Promise<string | null>) | null
+  /** Clones a repository from GitHub onto that computer and answers with its new folder, or null when it is cancelled. Without it the page has no such button. */
+  clone?: (() => Promise<string | null>) | null
   onStart: (request: NewChatRequest, options?: NewChatStartOptions) => Promise<void>
   /** Starts the chat's agent while the first message is written (`useWarmAgent`); without it the agent starts on send. */
   onWarm?: WarmAgent
   onOtherMachine: (machine: number) => void
-  /** Opens the dialog that adds a machine; without it the list has no such row. */
+  /** Opens the dialog that adds a machine; without it the machine list has no such row. */
   onAddMachine?: () => void
-  onCancel: () => void
+  /** Leaves the page; absent when there is nothing to go back to (no chat is open yet). */
+  onCancel?: (() => void) | undefined
+  /** Told the agent the chat will start with, at first and on each change, so the sidebar's draft row shows it. */
+  onAgentChange?: ((agent: ChatAgent) => void) | undefined
   /** A folder and first message to open with (a chat continued from a full one). */
   seed?: { folder: string; message: string } | null
-}
-
-/** How many other recent projects the page offers to switch to. */
-const SWITCH_CHIPS = 4
-
-/** What the page offers to start with once a folder is picked; a click starts the chat with it. */
-const SUGGESTED_TASKS = ['Explain how this project is laid out', 'Review my uncommitted changes', 'Find and fix a failing test'] as const
-
-/** The permission mode an agent starts in when the page's own picks are another agent's: its usual one, where it has modes, and none under Codex's Yolo setting, whose flag cannot be combined with one. */
-function defaultModeOf(agent: ChatAgent, codexYolo: boolean): string {
-  const usual = START_MODE[agent]
-  const modes = abilitiesOf(agent).permissionModes?.modes ?? []
-  return modes.includes(usual) && !(abilitiesOf(agent).yoloExcludesMode && codexYolo) ? usual : 'default'
+  /** Before the agent's tile: a control the window puts there (Show sidebar, while the sidebar is hidden). */
+  leading?: ReactNode
 }
 
 const lastPart = (path: string): string => path.split(/[\\/]/).filter(Boolean).at(-1) ?? path
 const isPath = (text: string): boolean => /^(~|\/|[A-Za-z]:[\\/])/.test(text)
 /** The key that starts a chat in the background, as this platform writes it. */
 const BACKGROUND_KEY = isMacPlatform(navigator.userAgent) ? '⌘Enter' : 'Ctrl+Enter'
+/** A name git takes for a new branch. */
+const BRANCH_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
+/** The width of the header's menus. */
+const MENU_WIDTH = 300
+const NO_BUSY: BusyBranches = new Map()
+
+/** Where the chat works: in the checkout, a worktree of its own, or `auto`: a worktree only when another chat is on that branch here. */
+type WorkIn = 'auto' | 'folder' | 'tree'
 
 /**
- * A new agent chat (layout 2f). First a folder is picked from the projects, a pasted path or the
- * system's folder picker; then three buttons say where the chat works (project, branch, a new
- * worktree or this folder) over a few tasks to start from. The message box is under both, with the
- * agent, model and effort on its model button and the permission mode beside it. The chat it starts
- * is the agent in a terminal the daemon owns, shown as its chat (ADR 0003). Enter sends, Ctrl+Enter (⌘Enter on macOS)
- * starts it in the background and keeps the page for the next one, Esc goes back.
+ * A new agent chat (layout 2h). The header says where it works, as the pane header of a running chat does: its name
+ * (typed here, or the first message's words), then the project, the branch and whether it works in this folder or a
+ * worktree of its own, each a menu; at its right, whether it opens as its chat or its terminal. Under it, the question
+ * and the message box, or the terminal it will start in. The chat it starts is the agent in a terminal the daemon owns,
+ * shown as its chat (ADR 0003). Enter sends, Ctrl+Enter (⌘Enter on macOS) starts it in the background and keeps the
+ * page for the next one, Esc goes back.
  */
-export function NewChatPage({ machines, machine, projects, defaultAgent, bypassAllowed = false, codexYolo = false, browse, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, seed = null }: Props) {
-  // On another machine the chat is the agent started in a shell there: this computer's models, branches, files and installed agents say nothing of it.
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassAllowed = false, codexYolo = false, fullAccess = false, browse, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
+  // On another machine the chat is the agent started in a shell there: this computer's extra models, branches, files and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
   const targetLabel = target?.label ?? 'This computer'
   const [agent, setAgent] = useState<ChatAgent>(defaultAgent)
-  const [mode, setMode] = useState(START_MODE[defaultAgent])
+  useEffect(() => { onAgentChange?.(agent) }, [agent, onAgentChange])
+  // Full access in new chats starts Claude in Bypass permissions (only where Yolo mode allows it) and Codex in Full access.
+  const firstMode = (next: ChatAgent): string => (!fullAccess ? START_MODE[next] : next === 'codex' ? CODEX_FULL_MODE : next === 'claude' && bypassAllowed ? BYPASS_MODE : START_MODE[next])
+  const [mode, setMode] = useState(() => firstMode(defaultAgent))
   const [choice, setChoice] = useState<AgentChoice>({ model: DEFAULT_PICK, reasoning: START_REASONING })
   const [picked, setFolder] = useState<string | null>(seed?.folder ?? null)
   const [extra, setExtra] = useState<NewSessionProject | null>(seed === null ? null : { folder: seed.folder, name: lastPart(seed.folder), color: 'var(--dim)' })
   const [message, setMessage] = useState(seed?.message ?? '')
+  const [name, setName] = useState('')
+  const [view, setView] = useState<PaneView | null>(null)
   const [branchPick, setBranchPick] = useState<{ folder: string; pick: BranchChoice } | null>(null)
-  // Own copy: the agent works in a worktree of its own, so the checkout is untouched. On unless it is turned off.
-  const [treeMode, setTreeMode] = useState(true)
-  // Other agents the same message also starts with, each on a new branch in a worktree of its own.
-  const [alsoPicked, setAlsoPicked] = useState<ReadonlySet<ChatAgent>>(() => new Set())
-  const [busy, setBusy] = useState(false)
+  const [workIn, setWorkIn] = useState<WorkIn>('auto')
+  const [starting, setStarting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const background = useBackgroundStarts(onStart)
   // Branch names chats started from this page took, which the branch list may not show yet: the next suggestion avoids them.
@@ -116,8 +133,9 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   const text = useRef<HTMLTextAreaElement>(null)
   const box = useRef<HTMLDivElement>(null)
   const { attachments } = useComposerState(NEW_CHAT_DRAFT)
+  useKeepTyping(text, attachments.length)
   // A new chat runs on this computer, so its files are copied here and named by path in the first message.
-  const attach = useAttachmentIntake({ conversation: NEW_CHAT_DRAFT, blocked: remote ? `Files stay on this computer, not on ${targetLabel}` : busy ? 'The chat is starting' : null })
+  const attach = useAttachmentIntake({ conversation: NEW_CHAT_DRAFT, blocked: remote ? `Files stay on this computer, not on ${targetLabel}` : starting ? 'The chat is starting' : null })
   const { addPaths } = attach
   useEffect(() => {
     const element = box.current
@@ -136,41 +154,41 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
     if (pick.kind === 'image') attach.addImage(pick.image)
     else toast.error(unsupportedMessage(pick.type))
   }
-  const [query, setQuery] = useState('')
-  // It opens ready to type, on the most recent project; the list of projects comes first only when there is none.
+  // It opens ready to type, on the most recent project.
   const folder = picked ?? projects[0]?.folder ?? ''
   const shown = extra === null || projects.some((project) => project.folder === extra.folder) ? projects : [...projects, extra]
   const current = shown.find((project) => project.folder === folder)
-  const folderName = current?.name ?? (folder === '' ? 'Choose a folder' : folder.split(/[\\/]/).filter(Boolean).at(-1) ?? folder)
+  const folderName = current?.name ?? (folder === '' ? 'Choose a folder' : lastPart(folder))
   const installed = useInstalledAgents()
   const [branches, reloadBranches] = useFolderBranches(remote ? '' : folder)
   // A branch chosen for one folder means nothing in another.
   const explicit = branchPick?.folder === folder ? branchPick.pick : null
-  const { state: sync, busy: pulling, pull } = useSyncState(remote ? '' : folder, true)
+  const here = branches?.current ?? null
+  // The branch the chat would be on, and the chat already working on it here, if one is.
+  const onBranch = explicit !== null && !explicit.create ? explicit.name : here
+  const busyHere = busyBranches.get(folder)
+  const busyWith = onBranch === null ? undefined : busyHere?.get(onBranch)
+  // Auto works in the folder unless another chat is on that branch, which would then be edited by two at once.
+  const treeMode = workIn === 'tree' || (workIn === 'auto' && busyWith !== undefined)
   const takenBranches = useMemo(() => new Set([...(branches?.branches ?? []).map((entry) => entry.name), ...takenNames]), [branches, takenNames])
-  // Rolled once per list of names in use, so a message with no usable words does not reroll it on every key.
-  const twoWordName = useMemo(() => (treeMode && branches !== null ? suggestBranchName(takenBranches) : null), [treeMode, branches, takenBranches])
-  // A page opened with a message (a full chat's summary) keeps two words: every summary begins alike.
-  const fromMessage = (sent: string, taken: ReadonlySet<string>) => (seed === null ? branchNameFromMessage(sent, taken) : null)
-  // With Own copy on and no branch chosen, the chat gets a new branch named after what it sends, in a worktree.
-  const suggestedFor = (sent: string) => (twoWordName === null ? null : fromMessage(sent, takenBranches) ?? twoWordName)
-  const suggested = suggestedFor(message)
-  const chosen = useMemo(() => explicit ?? (treeMode && suggested !== null ? { name: suggested, create: true, worktree: true } : null), [explicit, treeMode, suggested])
-  const branch = chosen
+  // In a worktree of its own with no branch chosen, the chat gets a new branch with a two-word name. It is rolled once
+  // per list of names in use and never copies the message, which is no name for a branch.
+  const suggested = useMemo(() => (treeMode && branches !== null ? suggestBranchName(takenBranches) : null), [treeMode, branches, takenBranches])
+  const branch = useMemo<BranchChoice | null>(() => {
+    if (explicit !== null) return { ...explicit, worktree: treeMode }
+    return treeMode && suggested !== null ? { name: suggested, create: true, worktree: true } : null
+  }, [explicit, treeMode, suggested])
   const isInstalled = (id: string) => (installed === null ? chatAgentOf(id) !== null : installed.includes(id))
   const agentMissing = !remote && !isInstalled(agent)
-  // Only this computer's daemon reads saved conversations, and only Claude's and Codex's.
-  const saved = useSavedConversations(folder, remote || agentMissing || !hasAbility(agent, 'resumeSaved') ? null : agent)
+  const opensAs: PaneView = view ?? viewDefaults[agent]
 
-  // The message box takes the keys once there is a folder; before that the search field has them.
+  // The message box takes the keys once there is a folder.
   useEffect(() => { if (folder !== '') text.current?.focus() }, [folder])
 
   const pickAgent = (next: ChatAgent) => {
     setAgent(next)
-    // The chat's own agent is not one of the others.
-    setAlsoPicked((now) => new Set([...now].filter((other) => other !== next)))
     // A mode is the agent's own too.
-    setMode(START_MODE[next])
+    setMode(firstMode(next))
     // A model is the agent's own; the other agent's name means nothing to it.
     if (!modelsFor(next).some((option) => option.id === choice.model)) setChoice((now) => ({ ...now, model: DEFAULT_PICK }))
   }
@@ -178,62 +196,25 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   // The Yolo setting already starts Codex with full access, and its flag cannot be combined with a mode's.
   const forcedFull = abilitiesOf(agent).yoloExcludesMode && codexYolo
   const startMode = !forcedFull && modes.includes(mode) ? mode : 'default'
-  // Only agents this computer is known to have: while the list is unread, none is offered.
-  const alsoOffered = remote || branches === null || installed === null ? [] : CHAT_AGENTS.filter((other) => other !== agent && installed.includes(other))
-  const alsoWith = treeMode ? alsoOffered.filter((other) => alsoPicked.has(other)) : []
-  const alsoWhy = useId()
-  const toggleAlso = (other: ChatAgent, on: boolean) => {
-    if (!treeMode) return
-    setAlsoPicked((now) => new Set(on ? [...now, other] : [...now].filter((name) => name !== other)))
-  }
   // A branch or a worktree is made when the chat starts, so only a chat on the folder as it is can have its agent started ahead.
   const warmSpec = useMemo<WarmSpec | null>(
     () => (remote || folder === '' || agentMissing || branch !== null ? null : { folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode }),
     [remote, folder, agentMissing, branch, agent, choice.model, choice.reasoning, startMode],
   )
   // A start in the background takes the warm agent; asking again while it starts would make a second one.
-  useWarmAgent(onWarm, warmSpec, busy || background.pending > 0)
-  const requestFor = (task: string, resume: string | null): NewChatRequest => {
-    // A saved conversation continues in the folder it was saved in, so a worktree is left out for this start.
-    const startBranch = remote || (resume !== null && branch?.worktree === true) ? null : branch
-    // A suggested task is sent instead of the box's text, so a branch the page named is named after the task.
-    const named = explicit === null && startBranch !== null ? { ...startBranch, name: suggestedFor(task) ?? startBranch.name } : startBranch
-    return { folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments), branch: named, machine, machineName: targetLabel, resume }
-  }
-  // The page's model, effort and mode are the main agent's; each other agent ticked starts on its own defaults, on a new
-  // branch in a worktree of its own. A saved conversation is the main agent's, so resuming one starts no others.
-  const alsoRequests = (main: NewChatRequest, task: string): NewChatRequest[] => {
-    if (main.resume !== null) return []
-    const taken = new Set([...takenBranches, ...(main.branch === null ? [] : [main.branch.name])])
-    return alsoWith.map((other) => {
-      const name = fromMessage(task, taken) ?? suggestBranchName(taken)
-      taken.add(name)
-      return { ...main, agent: other, model: DEFAULT_PICK, reasoning: START_REASONING, mode: defaultModeOf(other, codexYolo), branch: { name, create: true, worktree: true } }
-    })
-  }
-  const takeNames = (requests: readonly NewChatRequest[]) => {
-    const names = requests.flatMap((request) => (request.branch?.create === true ? [request.branch.name] : []))
-    if (names.length > 0) setTakenNames((now) => new Set([...now, ...names]))
-  }
-  // The others start in the background beside the main start; the box keeps the message until the main one opens, so a
-  // failed other has nothing to put back. They are unticked once they go, so trying the main start again starts it alone.
-  const start = (task: string = message, resume: string | null = null) => {
-    if (busy || folder === '' || agentMissing) return
-    setBusy(true)
+  useWarmAgent(onWarm, warmSpec, starting || background.pending > 0)
+  const typedName = name.trim()
+  const requestFor = (task: string): NewChatRequest => ({
+    folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments),
+    branch: remote ? null : branch, machine, machineName: targetLabel, resume: null, view: opensAs, ...(typedName === '' ? {} : { name: typedName }),
+  })
+  const start = (task: string = message) => {
+    if (starting || folder === '' || agentMissing) return
+    setStarting(true)
     setError(null)
-    const request = requestFor(task, resume)
-    const others = alsoRequests(request, task)
-    onStart(request)
-      .catch((failure: unknown) => {
-        const reason = errorMessage(failure, 'Could not start the chat')
-        setError(others.length > 0 ? `Could not start the chat with ${AGENT_LABEL[request.agent]}: ${reason}` : reason)
-      })
-      .finally(() => { setBusy(false); reloadBranches() })
-    if (others.length > 0) {
-      takeNames(others)
-      background.launch(others, null)
-      setAlsoPicked(new Set())
-    }
+    onStart(requestFor(task))
+      .catch((failure: unknown) => { setError(errorMessage(failure, 'Could not start the chat')) })
+      .finally(() => { setStarting(false); reloadBranches() })
   }
   // The box is emptied for the next chat and every other choice stays. A new branch's name is taken, so the next start
   // gets another. Another machine's chat is typed into a shell there and opened to do it, so there it is a plain start.
@@ -242,13 +223,13 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
       start()
       return
     }
-    if (busy || folder === '' || agentMissing) return
-    const request = requestFor(message, null)
-    const requests = [request, ...alsoRequests(request, message)]
-    takeNames(requests)
+    if (starting || folder === '' || agentMissing) return
+    const request = requestFor(message)
+    if (request.branch?.create === true) setTakenNames((now) => new Set([...now, request.branch?.name ?? '']))
     if (request.branch?.create === true && explicit?.create === true) setBranchPick(null)
-    background.launch(requests, { text: message, attachments })
+    background.launch([request], { text: message, attachments })
     setMessage('')
+    setName('')
     updateComposer(NEW_CHAT_DRAFT, (state) => ({ ...state, attachments: [] }))
   }
   // A failed start's message comes back after whatever has been typed since, never over it.
@@ -262,271 +243,261 @@ export function NewChatPage({ machines, machine, projects, defaultAgent, bypassA
   const openFolder = (path: string) => {
     setExtra({ folder: path, name: lastPart(path), color: 'var(--dim)' })
     setFolder(path)
-    setQuery('')
   }
   const pickOther = () => {
     if (browse === null) return
-    void browse().then((chosen) => {
-      if (chosen === null) return
-      openFolder(chosen)
-    })
+    void browse().then((chosen) => { if (chosen !== null) openFolder(chosen) })
+  }
+  const cloneOne = () => {
+    if (clone === null) return
+    void clone().then((cloned) => { if (cloned !== null) openFolder(cloned) })
+  }
+
+  // The agent's commands, offered while a slash and a name are typed: picking one writes it into the first message.
+  const query = slashQuery(message)
+  const [closedFor, setClosedFor] = useState<string | null>(null)
+  const commandsFrom = abilitiesOf(agent).slashCommands === null || remote || folder === '' ? null : { agent, folder }
+  const picking = query !== null && closedFor !== message && commandsFrom !== null
+  const slash = useSlashCommands(commandsFrom, picking)
+  const matches = useMemo(() => (query === null ? [] : matchCommands(slash.commands, query)), [slash.commands, query])
+  const [cursor, setCursor] = useState({ query: '', index: 0 })
+  const active = cursor.query === query ? Math.min(cursor.index, Math.max(0, Math.min(matches.length, MAX_SHOWN) - 1)) : 0
+  const complete = (command: SlashCommand) => {
+    setMessage(commandText(command))
+    text.current?.focus()
+  }
+  const pickerKey = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if (!picking) return false
+    if (event.key === 'Escape') {
+      setClosedFor(message)
+      return true
+    }
+    const chosen = matches[active]
+    if (chosen === undefined) return false
+    const count = Math.min(matches.length, MAX_SHOWN)
+    if (event.key === 'ArrowDown') setCursor({ query, index: (active + 1) % count })
+    else if (event.key === 'ArrowUp') setCursor({ query, index: (active + count - 1) % count })
+    else if ((event.key === 'Tab' && !event.shiftKey) || (event.key === 'Enter' && !event.shiftKey)) complete(chosen)
+    else return false
+    return true
+  }
+  const onTextKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.nativeEvent.isComposing) return
+    if (pickerKey(event)) {
+      event.preventDefault()
+      event.stopPropagation()
+    }
   }
   const onKeyDown = (event: KeyboardEvent) => {
-    if (event.nativeEvent.isComposing) return
-    if (event.key === 'Enter' && !event.shiftKey && event.target === text.current) {
+    if (event.nativeEvent.isComposing || event.defaultPrevented) return
+    const typing = event.target === text.current || (event.target instanceof HTMLElement && event.target.dataset.prompt === 'true')
+    if (event.key === 'Enter' && !event.shiftKey && typing) {
       event.preventDefault()
       if (event.ctrlKey || event.metaKey) startInBackground()
       else start()
-    } else if (event.key === 'Escape') {
+    } else if (event.key === 'Escape' && onCancel !== undefined && event.target instanceof Node && event.currentTarget.contains(event.target)) {
+      // An Escape from a menu (portalled, so outside this element) closes only that.
       event.preventDefault()
       onCancel()
     }
   }
 
   const empty = message.trim() === '' && attachments.length === 0
+  const off = starting || folder === '' || agentMissing
+  const [now] = useState(nowSeconds)
 
   const folderItem = (project: NewSessionProject): ChipItem => ({
     key: project.folder,
     label: project.name,
     sub: project.folder,
     icon: <span className="mx-ns-square" style={{ background: project.color }} aria-hidden="true" />,
-    right: project.sessions === undefined ? undefined : <span className="mx-chip-count">{project.sessions}</span>,
     checked: project.folder === folder,
     onPick: () => { setFolder(project.folder) },
   })
-  const { recent, rest } = splitRecent(shown)
-  const folderSections = [{ heading: 'Recent projects', items: recent.map(folderItem) }, ...(rest.length > 0 ? [{ heading: `All on ${remote ? targetLabel : 'this computer'}`, items: rest.map(folderItem) }] : [])]
   const fromPath = (typed: string): ChipItem | null => {
     if (!isPath(typed)) return null
     return { key: 'path', label: `Use ${typed}`, icon: <Icon name="folder" size={12} />, checked: false, onPick: () => { openFolder(typed) } }
   }
-  const elsewhere = machines.filter((candidate) => candidate.machine !== machine)
-  const [now] = useState(nowSeconds)
-  const [pulledNow, setPulledNow] = useState(false)
-  // The other recent projects, a click away; each shows its branch and how far behind it is.
-  const switchTo = shown.filter((project) => project.folder !== folder).slice(0, SWITCH_CHIPS)
-  const glances = useGlances(remote ? [] : switchTo.map((project) => project.folder))
-  const here = branch !== null && !branch.worktree ? branch.name : branches?.current ?? ''
-  const inWorktree = new Set((branches?.worktrees ?? []).flatMap((tree) => (tree.branch === null ? [] : [tree.branch])))
-  const branchLabel = branch?.name ?? branches?.current ?? 'detached'
-  const pickBranch = (pick: BranchChoice) => { setBranchPick({ folder, pick }) }
-  // Own copy off drops a worktree pick: the agent edits the checkout, on the branch the folder is on.
-  const setOwnCopy = (on: boolean) => {
-    setTreeMode(on)
-    if (!on && branch?.worktree === true) setBranchPick(null)
-    if (on) setBranchPick(null)
-  }
-  const newBranchRows: ChipItem[] = treeMode && branch?.worktree === true && branch.create
-    ? [{ key: 'tree-new-branch', label: branch.name, sub: `A new branch from ${branches?.current ?? 'here'}, in its own worktree`, icon: <Icon name="plus" size={12} />, checked: true, onPick: () => undefined }]
-    : []
-  const worktreeRows: ChipItem[] = (branches?.worktrees ?? []).filter((tree) => !tree.main).map((tree) => {
-    const name = tree.branch ?? lastPart(tree.path)
+  const elsewhere = machines.filter((candidate) => !candidate.local)
+  const machinePick = (
+    <div className="mx-nc-machine">
+      <h3 className="mx-chip-title">Machine</h3>
+      <Segmented aria-label="Machine" value={remote ? 'remote' : 'local'} className="mx-where-work"
+        onValueChange={(next) => {
+          if (next === 'local') onOtherMachine(LOCAL_MACHINE)
+          else if (next === 'remote' && elsewhere[0] !== undefined) onOtherMachine(elsewhere[0].machine)
+          else if (next === 'remote') onAddMachine?.()
+        }}>
+        <SegmentedItem value="local" className="mx-where-work-option">This computer</SegmentedItem>
+        <SegmentedItem value="remote" className="mx-where-work-option">Remote machine</SegmentedItem>
+      </Segmented>
+      {remote && (
+        <div className="mx-nc-machines">
+          {elsewhere.map((candidate) => (
+            <button key={candidate.machine} type="button" className={`mx-nc-machine-chip${candidate.machine === machine ? ' is-on' : ''}`} onClick={() => { onOtherMachine(candidate.machine) }}>
+              <span aria-hidden="true">■</span>{candidate.label}
+            </button>
+          ))}
+          {onAddMachine !== undefined && <button type="button" className="mx-nc-machine-chip" onClick={onAddMachine}>+ Add a machine…</button>}
+        </div>
+      )}
+      <h3 className="mx-chip-title">Folder</h3>
+    </div>
+  )
+  const branchRows: ChipItem[] = (branches?.branches ?? []).map((entry) => {
+    const who = busyHere?.get(entry.name) ?? null
     return {
-      key: `tree:${tree.path}`,
-      label: name,
-      sub: tree.path,
-      icon: <Icon name="folder" size={13} />,
-      right: <span className="mx-chip-count">{ageOf(tree.when, now)}</span>,
-      checked: tree.path === folder,
-      onPick: () => { setExtra({ folder: tree.path, name, color: 'var(--dim)' }); setFolder(tree.path); setBranchPick(null) },
+      key: `branch:${entry.name}`,
+      label: entry.name,
+      right: who === null ? <span className="mx-chip-count">{ageOf(entry.when, now)}</span> : <span className="mx-nc-in-use" title={`${who} is working on it`}>in use</span>,
+      checked: (explicit?.name ?? here) === entry.name && explicit?.create !== true,
+      onPick: () => { setBranchPick({ folder, pick: { name: entry.name, create: false, worktree: treeMode } }) },
     }
   })
-  const branchRows: ChipItem[] = (branches?.branches ?? []).filter((entry) => !treeMode || !inWorktree.has(entry.name)).map((entry) => ({
-    key: `branch:${entry.name}`,
-    label: entry.name,
-    icon: <Icon name="branch" size={13} />,
-    right: <span className="mx-chip-count">{ageOf(entry.when, now)}</span>,
-    checked: treeMode ? branch?.worktree === true && !branch.create && branch.name === entry.name : entry.name === here,
-    onPick: () => { pickBranch({ name: entry.name, create: false, worktree: treeMode }) },
-  }))
-  const branchSections = [
-    ...(newBranchRows.length > 0 ? [{ heading: 'New branch', items: newBranchRows }] : []),
-    ...(worktreeRows.length > 0 ? [{ heading: 'Worktrees', items: worktreeRows }] : []),
-    { heading: 'Branches', items: branchRows },
-  ]
   const fromBranchName = (typed: string): ChipItem | null => {
-    if (!/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(typed) || (branches?.branches ?? []).some((entry) => entry.name === typed)) return null
-    return { key: 'new-branch', label: `Create branch ${typed}`, icon: <Icon name="plus" size={12} />, checked: false, onPick: () => { pickBranch({ name: typed, create: true, worktree: treeMode }) } }
+    if (!BRANCH_NAME.test(typed) || (branches?.branches ?? []).some((entry) => entry.name === typed)) return null
+    return { key: 'new-branch', label: `+ Create ${typed} from ${here ?? 'here'}`, checked: false, onPick: () => { setBranchPick({ folder, pick: { name: typed, create: true, worktree: treeMode } }) } }
   }
-
-  // Step 1: what the search field shows under it.
-  const needle = query.trim().toLowerCase()
-  const matching = shown.filter((project) => needle === '' || `${project.name} ${project.folder}`.toLowerCase().includes(needle))
-  const typedPath = isPath(query.trim()) && !shown.some((project) => project.folder === query.trim()) ? query.trim() : null
-  const listTitle = needle === '' ? 'Recent projects' : typedPath !== null && matching.length === 0 ? 'Open folder' : 'Matching projects'
-  const pickFirst = () => {
-    const first = matching[0]
-    if (first !== undefined) setFolder(first.folder)
-    else if (typedPath !== null) openFolder(typedPath)
-  }
-  const otherMachines = elsewhere.map((candidate) => (
-    <button key={candidate.machine} type="button" className="mx-chip-action" onClick={() => { onOtherMachine(candidate.machine) }}><span className="mx-chip-dot" aria-hidden="true" />Start on {candidate.label}…</button>
-  ))
-  const addMachine = onAddMachine && <button type="button" className="mx-chip-action" onClick={onAddMachine}><Icon name="plus" size={12} />Add a machine…</button>
+  const branchLabel = branch?.create === true ? branch.name : onBranch ?? 'detached'
+  const workRows: ChipItem[] = [
+    { key: 'folder', label: 'This folder', sub: `Edits your checkout of ${onBranch ?? 'its branch'} directly.`, checked: !treeMode, onPick: () => { setWorkIn('folder') } },
+    { key: 'tree', label: 'New worktree', sub: 'Its own copy on a new branch. Your checkout stays untouched.', checked: treeMode, onPick: () => { setWorkIn('tree') } },
+  ]
+  const notes = <StartNotes error={error} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(errorMessage(failure, 'Could not open the setup page')) }) }} />
+  const busyLine = busyWith !== undefined && workIn !== 'folder' && onBranch !== null
+    ? `${busyWith} is already working on ${onBranch} here, so this chat gets its own worktree. Your checkout stays untouched.`
+    : null
 
   return (
     <section className="mx-newchat" aria-label="New agent chat" onKeyDown={onKeyDown}>
-      <button type="button" className="mx-icon-button mx-newchat-close" aria-label="Close" title="Close (Esc)" onClick={onCancel}><Icon name="close" size={13} /></button>
-      <div className="mx-nc-top">
-        <h2 className="mx-nc-title">What should we work on?</h2>
-        {folder === '' ? (
-          <div className="mx-nc-find">
-            <label className="mx-nc-search">
-              <Icon name="search" size={15} />
-              <input autoFocus aria-label="Search projects or paste a path" placeholder="Search projects or paste a path…" value={query} onChange={(event) => { setQuery(event.target.value) }}
-                onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); pickFirst() } }} />
-              {browse !== null && <button type="button" className="mx-nc-browse" onClick={pickOther}>Browse…</button>}
-            </label>
-            <h3 className="mx-nc-heading">{listTitle}</h3>
-            <ul className="mx-nc-list" aria-label={listTitle}>
-              {matching.map((project) => (
-                <li key={project.folder}>
-                  <button type="button" className="mx-nc-project" onClick={() => { setFolder(project.folder) }}>
-                    <span className="mx-nc-folder" style={{ '--tone': project.color } as CSSProperties} aria-hidden="true"><Icon name="folder" size={15} /></span>
-                    <span className="mx-nc-project-text">
-                      <span className="mx-nc-project-name"><strong>{project.name}</strong><span>{project.folder}</span></span>
-                      <span className="mx-nc-project-sub">{targetLabel}{project.sessions === undefined ? '' : ` · ${String(project.sessions)} ${project.sessions === 1 ? 'session' : 'sessions'}`}</span>
-                    </span>
-                  </button>
-                </li>
-              ))}
-              {typedPath !== null && (
-                <li><button type="button" className="mx-nc-project" onClick={() => { openFolder(typedPath) }}><span className="mx-nc-folder" aria-hidden="true"><Icon name="folder" size={15} /></span><span className="mx-nc-project-text"><span className="mx-nc-project-name"><strong>Open {lastPart(typedPath)}</strong><span>{typedPath}</span></span></span></button></li>
-              )}
-            </ul>
-            {matching.length === 0 && typedPath === null && <p className="mx-nc-none">No projects match. {browse === null ? 'Paste a full path.' : 'Paste a full path, or use Browse…'}</p>}
-            {(elsewhere.length > 0 || onAddMachine) && <div className="mx-nc-elsewhere">{otherMachines}{addMachine}</div>}
-          </div>
-        ) : (
-          <>
-            <div className="mx-nc-picks">
-              <ChipMenu title="Project" side="bottom" label={<strong>{folderName}</strong>} summary={folderName} icon={<span className="mx-ns-square" style={{ background: current?.color ?? 'var(--dim)' }} aria-hidden="true" />} search="Search projects" width={300}
-                sections={folderSections} fromQuery={fromPath}
-                footer={<>{browse !== null && <button type="button" className="mx-chip-action" onClick={pickOther}><Icon name="folder" size={12} />Browse for a folder…</button>}{otherMachines}{addMachine}</>} />
-              {branches !== null && (
-                <>
-                  <ChipMenu title="Branch" side="bottom" summary={branchLabel} label={<span className="mx-nc-branch">{branchLabel}</span>} icon={<span className="mx-nc-branch"><Icon name="branch" size={12} /></span>}
-                    search="Search or create a branch" width={320} sections={branchSections} fromQuery={fromBranchName} />
-                </>
-              )}
-              {branches !== null && (
-                <label className="mx-own-copy" title="The agent works in a worktree of its own, so your checkout stays as it is.">
-                  <Icon name="worktree" size={13} />
-                  <span>Own copy</span>
-                  <Switch checked={treeMode} onCheckedChange={setOwnCopy} aria-label="Own copy" />
-                </label>
-              )}
-            </div>
-            {sync !== null && !remote && (
-              <p className="mx-nc-sync" aria-live="polite">
-                {treeMode ? (
-                  <>
-                    <span className="mx-nc-dot" aria-hidden="true" />
-                    {`Starts from ${sync.branch ?? 'here'}`}{sync.upstream !== null && sync.behind > 0 ? ` · ↓${String(sync.behind)} behind ${sync.upstream}` : ''}
-                  </>
-                ) : sync.upstream !== null && sync.behind > 0 ? (
-                  <>
-                    <span className="mx-nc-behind">↓{sync.behind} behind {sync.upstream}</span>
-                    <button type="button" className="mx-nc-pull" disabled={sync.dirty || pulling} title={sync.dirty ? 'You have uncommitted changes. Commit or stash first.' : `Run git pull --ff-only`} onClick={() => { void pull().then(() => { setPulledNow(true) }).catch((failure: unknown) => { toast.error(errorMessage(failure, 'Could not pull')) }) }}>↓ Pull</button>
-                  </>
-                ) : sync.upstream !== null ? (
-                  <><span className="mx-nc-dot" aria-hidden="true" />{pulledNow ? 'Pulled · up to date with' : 'Up to date with'} {sync.upstream}</>
-                ) : null}
-              </p>
-            )}
-            {switchTo.length > 0 && (
-              <div className="mx-nc-switch" role="group" aria-label="Switch to">
-                <span className="mx-nc-switch-label">Switch to</span>
-                {switchTo.map((project) => {
-                  const glance = glances.get(project.folder)
-                  return (
-                    <button key={project.folder} type="button" className="mx-nc-switch-chip" title={`${project.folder}${remote ? ` · ${targetLabel}` : ''}`} onClick={() => { setFolder(project.folder) }}>
-                      <span className="mx-ns-square" style={{ background: project.color }} aria-hidden="true" />
-                      <span>{project.name}</span>
-                      {remote && <span className="mx-nc-switch-machine">· {targetLabel}</span>}
-                      {glance?.branch != null && <span className="mx-nc-branch">{glance.branch}</span>}
-                      {glance !== undefined && glance.behind > 0 && <span className="mx-nc-behind">↓{glance.behind}</span>}
-                    </button>
-                  )
-                })}
+      <header className="mx-nc-head">
+        {leading}
+        <span className="mx-nc-agent" title={AGENT_LABEL[agent]}><AppIcon process={agent} size={26} /></span>
+        <span className="mx-nc-where">
+          <input className="mx-nc-name" value={name} placeholder="Name this chat" aria-label="Chat name" maxLength={MAX_SESSION_NAME_LENGTH}
+            title="Type a name, or leave it empty and your first message names the chat" onChange={(event) => { setName(event.target.value) }} />
+          <span className="mx-crumb-sep" aria-hidden="true">/</span>
+          <ChipMenu variant="crumb" side="bottom" width={MENU_WIDTH} title="Project folder and machine" summary={remote ? `${folderName} on ${targetLabel}` : folderName}
+            label={<span className="mx-nc-crumb-name">{folderName}{remote && <span className="mx-nc-crumb-machine">@{targetLabel}</span>}</span>}
+            icon={<span className="mx-crumb-square is-project" style={{ background: current?.color ?? 'var(--dim)' }} aria-hidden="true" />}
+            search="Search folders or paste a path" extra={machinePick} sections={[{ heading: 'Folder', items: shown.map(folderItem) }]} fromQuery={fromPath}
+            footer={(
+              <div className="mx-nc-menu-foot">
+                {browse !== null && <button type="button" className="mx-chip-action" onClick={pickOther}>Browse…</button>}
+                {clone !== null && <button type="button" className="mx-chip-action" onClick={cloneOne}>Clone from GitHub…</button>}
               </div>
-            )}
-            <ul className="mx-nc-tasks" aria-label="Suggested tasks">
-              {SUGGESTED_TASKS.map((task) => (
-                <li key={task}><button type="button" disabled={busy || agentMissing} onClick={() => { start(task) }}><span aria-hidden="true">→</span>{task}</button></li>
-              ))}
-            </ul>
-            <ResumeList read={saved} folderName={folderName} leavesCopy={branch?.worktree === true} withMessage={!empty} disabled={busy || agentMissing} now={now} onPick={(id) => { start(message, id) }} />
-          </>
-        )}
-      </div>
+            )} />
+          {branches !== null && (
+            <>
+              <span className="mx-crumb-sep" aria-hidden="true">/</span>
+              <ChipMenu variant="crumb" side="bottom" width={MENU_WIDTH} title="Branch" summary={branchLabel} heading={`Branch in ${folderName}`}
+                label={<span className="mx-crumb-branch">{branchLabel}</span>} icon={<span className="mx-crumb-branch-icon"><Icon name="branch" size={12} /></span>}
+                search="Find or create a branch" sections={[{ heading: 'Branches', items: branchRows }]} fromQuery={fromBranchName} />
+              <span className="mx-crumb-sep" aria-hidden="true">·</span>
+              <ChipMenu variant="crumb" side="bottom" width={MENU_WIDTH} title="Work in" summary={treeMode ? 'New worktree' : 'This folder'} heading="Work in"
+                label={<span className={treeMode ? 'mx-nc-worktree' : 'mx-nc-here'}>{treeMode ? 'new worktree' : 'this folder'}</span>}
+                sections={[{ heading: 'Work in', items: workRows }]} below={busyLine === null ? undefined : <p className="mx-chip-note">{busyLine}</p>} />
+            </>
+          )}
+        </span>
+        <span className="mx-nc-head-end">
+          <RadioGroup aria-label="Open as" title="How this chat opens. Set the default in Settings › Chat." orientation="horizontal" value={opensAs}
+            onValueChange={(next) => { if (next === 'chat' || next === 'terminal') setView(next) }} className="mx-view-switch">
+            <RadioGroupItem value="chat" className="mx-view-option">Chat</RadioGroupItem>
+            <RadioGroupItem value="terminal" className="mx-view-option">Terminal</RadioGroupItem>
+          </RadioGroup>
+          {onCancel !== undefined && <button type="button" className="mx-pane-control" aria-label="Close" title="Close (Esc)" onClick={onCancel}><Icon name="close" size={13} /></button>}
+        </span>
+      </header>
+      {opensAs === 'terminal' ? (
+        <DraftTerminal agent={AGENT_LABEL[agent]} folder={folder} branch={branch} here={here} message={message} disabled={off} onType={setMessage} />
+      ) : (
+        <div className="mx-nc-start"><h1 className="mx-nc-title">What are we building today?</h1></div>
+      )}
+      {opensAs === 'chat' && (
       <div ref={box} className="mx-composer">
         <div className="mx-composer-column">
-          <div className="mx-newchat-stack mx-field">
-            <div className="mx-box">
-              <DraftAttachments attachments={attachments} onRemove={attach.remove} />
-              <textarea ref={text} onPaste={onPaste} aria-label="First message" rows={2} value={message} placeholder={folder === '' ? 'Pick a folder above, then describe a task…' : 'Describe a task, or pick one above…'} className="mx-box-text" onChange={(event) => { setMessage(event.target.value) }} />
-              <div className="mx-box-row">
-                {!remote && <button type="button" className="mx-box-attach" aria-label="Attach files" title="Attach files" onClick={attach.pick}><Icon name="plus" size={16} /></button>}
-                <span className="mx-spacer" />
-                <button type="button" className={`mx-send${busy || folder === '' || agentMissing ? ' is-off' : ''}`} aria-label={empty ? 'Start chat' : 'Send message'} title={folder === '' ? 'Pick a folder first' : `${empty ? 'Start an empty chat' : 'Send (Enter)'}${remote ? '' : ` · ${BACKGROUND_KEY} starts it and keeps this page open`}`} disabled={busy || folder === '' || agentMissing} onClick={() => { start() }}>
-                  <Icon name="arrowUp" size={15} strokeWidth={2.2} />
-                </button>
-              </div>
-            </div>
-            <div className="mx-ctxtray">
-              <AgentPicker agentOnly={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} onAgent={pickAgent} />
+          <div className="mx-box">
+            {picking && <SlashPicker agent={AGENT_LABEL[agent]} typed={message.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={complete} onHover={(index) => { setCursor({ query, index }) }} />}
+            <DraftAttachments attachments={attachments} onRemove={attach.remove} />
+            <textarea ref={text} onPaste={onPaste} onKeyDown={onTextKey} aria-label="First message" rows={2} value={message} placeholder="Describe a task, or type / for commands" className="mx-box-text" onChange={(event) => { setMessage(event.target.value) }}
+              {...(picking && matches.length > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-slash-list', 'aria-activedescendant': `mx-slash-${String(active)}` } : {})} />
+            {!remote && <button type="button" className="mx-box-attach" aria-label="Attach files" title="Attach files" onClick={attach.pick}><Icon name="plus" size={16} /></button>}
+            <div className="mx-box-row">
+              <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} onAgent={pickAgent} />
               {forcedFull ? (
-                <span className="mx-tray-fact is-danger" title="Yolo mode is on for Codex (Settings, General), so it starts with full access. Turn the setting off to pick another mode.">{modeLabel(CODEX_FULL_MODE)}</span>
+                <span className="mx-mode-button is-static is-danger" role="img" aria-label={`Permission mode: ${modeLabel(CODEX_FULL_MODE) ?? ''}`} title="Yolo mode is on for Codex (Settings, General), so it starts with full access. Turn the setting off to pick another mode."><Icon name="shield" size={13} /></span>
               ) : modes.length > 0 ? (
                 <PermissionMenu agent={AGENT_LABEL[agent]} label="Starting permission mode" mode={mode} modes={modes} onPick={setMode}
                   bypassOff={bypassAllowed ? undefined : { note: 'needs Yolo mode', why: 'Turn on Yolo mode for Claude in Settings, General, to start a chat in this mode.' }}>
-                  <button type="button" className={`mx-tray-fact is-button${DANGER_MODES.includes(mode) ? ' is-danger' : ''}`} title="The permission mode this chat starts in" aria-label={`Starting permission mode: ${modeLabel(mode) ?? mode}. Pick another.`}>
-                    {modeLabel(mode)}
-                    <Icon name="chevronDown" size={10} />
+                  <button type="button" className={`mx-mode-button${DANGER_MODES.includes(mode) ? ' is-danger' : ''}`} title={`Permissions: ${modeLabel(mode) ?? mode}`} aria-label={`Starting permission mode: ${modeLabel(mode) ?? mode}. Pick another.`}>
+                    <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />
                   </button>
                 </PermissionMenu>
               ) : (
-                <span className="mx-tray-fact" title="This chat asks before it runs a tool">Asks before running</span>
+                <span className="mx-mode-button is-static" role="img" aria-label="Asks before running" title="This chat asks before it runs a tool"><Icon name="shield" size={13} /></span>
               )}
               <span className="mx-spacer" />
-              {remote && <span className="mx-tray-fact" title={`Model and effort are the agent's own on ${targetLabel}`}>On {targetLabel}</span>}
-              {folder !== '' && <span className="mx-tray-fact" title={folder}>{folder}</span>}
+              {remote && <span className="mx-nc-on" title={`The agent starts on ${targetLabel}`}>On {targetLabel}</span>}
+              <button type="button" className={`mx-send${off || empty ? ' is-off' : ''}`} aria-label={empty ? 'Start chat' : 'Send message'} title={folder === '' ? 'Pick a folder first' : `${empty ? 'Start an empty chat' : 'Send (Enter)'}${remote ? '' : ` · ${BACKGROUND_KEY} starts it and keeps this page open`}`} disabled={off} onClick={() => { start() }}>
+                <Icon name="arrowUp" size={15} strokeWidth={2.2} />
+              </button>
             </div>
           </div>
-          {alsoOffered.length > 0 && (
-            <div className="mx-nc-also" role="group" aria-label="Also start with">
-              <span className="mx-nc-switch-label">Also start with</span>
-              {alsoOffered.map((other) => (
-                <label key={other} className="mx-nc-also-agent">
-                  <input type="checkbox" aria-disabled={!treeMode} aria-describedby={treeMode ? undefined : alsoWhy} checked={alsoWith.includes(other)} onChange={(event) => { toggleAlso(other, event.target.checked) }} />
-                  {AGENT_LABEL[other]}
-                </label>
-              ))}
-              {!treeMode && <span id={alsoWhy} className="mx-nc-also-why">Each agent needs a copy of its own. Turn on Own copy to start several.</span>}
-            </div>
-          )}
-          {error !== null && <p role="alert" className="mx-composer-error">{error}</p>}
-          {background.failed.map((failed) => (
-            <p key={failed.key} role="alert" className="mx-composer-error">
-              {`Could not start ${failedStartLabel(failed)}: ${failed.reason} `}
-              {failed.draft !== null && (
-                <>
-                  <button type="button" className="mx-text-button" aria-label={`Put back ${failedStartLabel(failed)}`} onClick={() => { putBack(failed.key) }}>Put back</button>
-                  {' · '}
-                </>
-              )}
-              <button type="button" className="mx-text-button" aria-label={`Dismiss ${failedStartLabel(failed)}`} onClick={() => { background.dismiss(failed.key) }}>Dismiss</button>
-            </p>
-          ))}
-          {agentMissing && (
-            <p role="alert" className="mx-composer-error">
-              {`${AGENT_LABEL[agent]} is not installed on this computer. Pick another agent from the model button, or `}
-              <button type="button" className="mx-text-button" onClick={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(errorMessage(failure, 'Could not open the setup page')) }) }}>set it up</button>.
-            </p>
-          )}
+          {notes}
         </div>
       </div>
+      )}
+      {opensAs === 'terminal' && <div className="mx-nc-term-notes">{notes}</div>}
     </section>
+  )
+}
+
+/**
+ * The page when the chat opens as its terminal: the terminal it will start in, with the agent's welcome and where it
+ * works (the agent's own welcome comes when it starts), and a prompt line that takes the first task. Enter starts it there.
+ */
+function DraftTerminal({ agent, folder, branch, here, message, disabled, onType }: { agent: string; folder: string; branch: BranchChoice | null; here: string | null; message: string; disabled: boolean; onType: (text: string) => void }) {
+  return (
+    <div className="mx-nc-term" aria-label="Draft terminal">
+      <div className="mx-nc-term-welcome">
+        <p><span className="mx-nc-term-mark" aria-hidden="true">✻</span> {agent} starts here</p>
+        <p className="mx-nc-term-dim">cwd: {folder === '' ? 'pick a folder above' : folder}</p>
+        <p className="mx-nc-term-dim">{branch?.worktree === true ? `new worktree from ${here ?? 'here'}` : `branch: ${branch?.name ?? here ?? 'detached'}`}</p>
+      </div>
+      <p className="mx-nc-term-dim">Already in the folder you picked, so no cd needed.</p>
+      <p className="mx-nc-term-dim">Change the project or branch above and it restarts there.</p>
+      <label className="mx-nc-term-prompt">
+        <span aria-hidden="true">›</span>
+        <input autoFocus data-prompt="true" aria-label="First task" value={message} disabled={disabled} placeholder="Type a task. It starts when you press Enter." onChange={(event) => { onType(event.target.value) }} />
+      </label>
+    </div>
+  )
+}
+
+/** What went wrong with a start, under the box: the start's own failure, the background starts that failed, a missing agent. */
+function StartNotes({ error, background, onPutBack, agentMissing, onSetUp }: { error: string | null; background: ReturnType<typeof useBackgroundStarts>; onPutBack: (key: number) => void; agentMissing: ChatAgent | null; onSetUp: () => void }) {
+  return (
+    <>
+      {error !== null && <p role="alert" className="mx-composer-error">{error}</p>}
+      {background.failed.map((failed) => (
+        <p key={failed.key} role="alert" className="mx-composer-error">
+          {`Could not start ${failedStartLabel(failed)}: ${failed.reason} `}
+          {failed.draft !== null && (
+            <>
+              <button type="button" className="mx-text-button" aria-label={`Put back ${failedStartLabel(failed)}`} onClick={() => { onPutBack(failed.key) }}>Put back</button>
+              {' · '}
+            </>
+          )}
+          <button type="button" className="mx-text-button" aria-label={`Dismiss ${failedStartLabel(failed)}`} onClick={() => { background.dismiss(failed.key) }}>Dismiss</button>
+        </p>
+      ))}
+      {agentMissing !== null && (
+        <p role="alert" className="mx-composer-error">
+          {`${AGENT_LABEL[agentMissing]} is not installed on this computer. Pick another agent from the model button, or `}
+          <button type="button" className="mx-text-button" onClick={onSetUp}>set it up</button>.
+        </p>
+      )}
+    </>
   )
 }

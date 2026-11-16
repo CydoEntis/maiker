@@ -253,3 +253,28 @@ in a loop: a count kept in memory would start at zero with each daemon. The time
 is recorded before the send, and the send commits the snapshot before the message
 reaches the provider. Times older than five minutes are dropped at the next send;
 a time ahead of the clock still counts.
+
+## Project-specific: ticket keys
+
+`daemon/ticket_keys.rs` keeps the key of each ticket provider that needs one (Plane, Linear). The key
+itself goes in the system's keychain (`daemon/keychain.rs`: Windows Credential Manager, the macOS login
+Keychain, the Secret Service on Linux), under the service `maitty ticket keys` and the account
+`<provider>@<folder id>`, where the folder id is the first 16 hex characters of the SHA-256 of the
+data folder's real path, so a second daemon with its own data folder (a test one beside the real one)
+keeps keys of its own. Beside it, one file each, `ticket-keys/<provider>.json` in the data folder:
+`{"address", "workspace"}`, and `"key"` too only on a machine with no keychain (no Secret Service, a
+server reached over ssh), where the key stays in the file as it did before keychains. The file is not
+synced, not in `config.toml` and not in a snapshot. It is written the way the usage store is
+(`write_file`: a private temporary file, synced, renamed over the old one; `0700` folder and `0600`
+file on unix), so a crash leaves the old key or the new one.
+
+**Migration.** A file that still holds a key (from an older daemon, or written while the keychain was
+away) moves it into the keychain the next time it is read: the key is written to the keychain and read
+back, and only when it comes back the same is the file rewritten without it. A keychain that fails or
+gives back something else leaves the key in the file and no entry behind. A key set while the
+keychain works never reaches the file. A file that does not parse, or a keychain entry that is gone or
+cannot be read, is reported as "set it again", never read as a key that is not there and never
+deleted; setting a key replaces it. Removing a key deletes its keychain entry and its file.
+
+See [SECURITY](SECURITY.md) for who may set a key
+and what a client can read back.

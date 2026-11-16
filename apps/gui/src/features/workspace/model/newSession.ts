@@ -1,4 +1,4 @@
-import { projectColor, projectOf } from './sidebar'
+import { isShell, projectColor, projectOf } from './sidebar'
 import type { SessionView } from './session'
 
 /** A project the New session dialog offers: the folder a session starts in, its name and colour. */
@@ -27,6 +27,25 @@ export function machineProjects(sessions: readonly SessionView[], machine: numbe
     projects.set(startFolder, { folder: startFolder, name, color: projectColor(name) })
   }
   return [...projects.values()]
+}
+
+/** The branches chats are working on, per project folder, each with the name of a chat on it. */
+export type BusyBranches = ReadonlyMap<string, ReadonlyMap<string, string>>
+
+/**
+ * Which branch each project folder's chats work on, in the folder itself (not a worktree of their own): a new chat on one
+ * of them gets a worktree, so two agents never edit one checkout at once. Shells are left out; they edit nothing alone.
+ */
+export function busyBranchesOf(sessions: readonly SessionView[], machine: number, nameOf: (session: SessionView) => string): BusyBranches {
+  const busy = new Map<string, Map<string, string>>()
+  for (const session of sessions) {
+    if (session.machine !== machine || session.worktree || session.branch === null || session.ended || isShell(session)) continue
+    const folder = session.repoRoot ?? session.cwd
+    const branches = busy.get(folder) ?? new Map<string, string>()
+    if (!branches.has(session.branch)) branches.set(session.branch, nameOf(session))
+    busy.set(folder, branches)
+  }
+  return busy
 }
 
 /** How many of a first message's words name the session it starts. */

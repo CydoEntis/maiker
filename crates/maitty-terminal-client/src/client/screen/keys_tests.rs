@@ -120,8 +120,8 @@ fn the_menu_has_the_v26_sections_and_skips_their_headers() {
     assert_eq!(
         labels,
         [
-            "Shell here", "Pane beside this", "Files", "Changes", "Branches", "History",
-            "References", "Inbox", "Search commands", "All keys", "Collapse sidebar", "Settings",
+            "Shell here", "Pane beside this", "Clone a repository…", "Files", "Changes", "Branches", "History",
+            "References", "Tickets", "Inbox", "Search commands", "All keys", "Collapse sidebar", "Settings",
         ]
     );
     let (mut app, _rx) = app_with_channel();

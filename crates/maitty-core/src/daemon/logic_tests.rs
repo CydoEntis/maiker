@@ -3216,6 +3216,88 @@ fn a_codex_turn_that_ends_while_its_child_agent_runs_stays_working() {
     a_turn_that_ends_while_its_helper_runs_stays_working("codex", "project");
 }
 
+/// A Claude report listing `running` as its background tasks, of which `agents` are helpers.
+fn with_background(mut msg: ClientMsg, running: &[&str], agents: &[&str], reported: bool) -> ClientMsg {
+    if let ClientMsg::Hook {
+        background,
+        background_agents,
+        background_reported,
+        ..
+    } = &mut msg
+    {
+        *background = running.iter().map(|id| id.to_string()).collect();
+        *background_agents = agents.iter().map(|id| id.to_string()).collect();
+        *background_reported = reported;
+    }
+    msg
+}
+
+/// Claude Code 2.1.325, as captured from its hooks: a background helper (`a1`) puts a shell
+/// (`b1`) in the background and ends its own turn; its `SubagentStop` lists `b1` running, and
+/// the parent's next `Stop` lists only `b1`, not the helper. When `b1` ends, Claude starts the
+/// helper again (`SubagentStart`), it finishes, and its last stop lists no work of its own.
+#[test]
+fn a_helper_waiting_on_its_own_shell_keeps_its_session_working() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let mut seen = viewer(&mut d);
+    let say = |d: &mut Daemon, msg| d.apply_hook(msg, Some(true), Vec::new());
+    let helper = |status, event, start| report_with_helper(t, "claude", status, event, Some(start));
+    say(&mut d, report_with_helper(t, "claude", HookStatus::Working, "UserPromptSubmit", None));
+    say(&mut d, helper(HookStatus::Working, "SubagentStart", true));
+    say(&mut d, turn_end_report(t, "claude", Some(&["a1"])));
+    assert_eq!(d.terms[&t].status, Status::Working, "its helper runs");
+
+    // The helper starts its shell in the background, then ends its turn waiting on it.
+    say(&mut d, with_background(helper(HookStatus::Same, "PostToolUse", true), &["b1"], &[], false));
+    say(&mut d, with_background(helper(HookStatus::Same, "SubagentStop", false), &["a1", "b1"], &["a1"], true));
+    assert_eq!(d.terms[&t].status, Status::Working, "the helper paused, it did not finish");
+    assert_eq!(d.terms[&t].subagents.len(), 1, "still listed");
+    assert_eq!(d.terms[&t].subagent_activity[0].state, SubagentState::Working);
+
+    // Claude wakes the parent to say the helper stopped; the parent's stop lists only the shell.
+    say(&mut d, report_with_helper(t, "claude", HookStatus::Working, "UserPromptSubmit", None));
+    say(&mut d, with_background(turn_end_report(t, "claude", None), &["b1"], &[], true));
+    rests_at_its_idle_prompt(&mut d, t, "✳ project");
+    assert_eq!(d.terms[&t].status, Status::Working, "held on the helper's own work");
+    assert_eq!(d.terms[&t].subagents.len(), 1, "not forgotten for missing from the list");
+    assert_eq!(times_told_done(&mut seen), 0, "nothing finished yet");
+
+    // The shell ends: Claude starts the helper again, it works and stops with nothing left.
+    say(&mut d, helper(HookStatus::Working, "SubagentStart", true));
+    say(&mut d, helper(HookStatus::Same, "PreToolUse", true));
+    say(&mut d, with_background(helper(HookStatus::Same, "SubagentStop", false), &["a1"], &["a1"], true));
+    assert!(d.terms[&t].subagents.is_empty(), "now it finished");
+    assert!(d.terms[&t].helper_work.is_empty(), "its work is forgotten with it");
+    assert_eq!(times_told_done(&mut seen), 0, "the parent still wakes to read it");
+
+    // The parent reads what it found and ends its turn: that is the finish, said once.
+    say(&mut d, report_with_helper(t, "claude", HookStatus::Working, "UserPromptSubmit", None));
+    say(&mut d, turn_end_report(t, "claude", Some(&[])));
+    assert_eq!(d.terms[&t].status, Status::Done);
+    assert_eq!(times_told_done(&mut seen), 1, "one finish, said once");
+    close(&mut d, &[t]);
+}
+
+/// A helper's shell that ended without the helper stopping again (it was lost) holds nothing:
+/// the parent's stop lists neither, so the helper is forgotten as before.
+#[test]
+fn a_helper_whose_own_work_is_gone_is_forgotten_at_the_next_stop() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let say = |d: &mut Daemon, msg| d.apply_hook(msg, Some(true), Vec::new());
+    let helper = |status, event, start| report_with_helper(t, "claude", status, event, Some(start));
+    say(&mut d, report_with_helper(t, "claude", HookStatus::Working, "UserPromptSubmit", None));
+    say(&mut d, helper(HookStatus::Working, "SubagentStart", true));
+    say(&mut d, with_background(helper(HookStatus::Same, "PostToolUse", true), &["b1"], &[], false));
+    say(&mut d, with_background(helper(HookStatus::Same, "SubagentStop", false), &["a1", "b1"], &["a1"], true));
+    say(&mut d, with_background(turn_end_report(t, "claude", None), &[], &[], true));
+    assert_eq!(d.terms[&t].status, Status::Done, "nothing of its own runs any more");
+    assert!(d.terms[&t].subagents.is_empty());
+    assert!(d.terms[&t].helper_work.is_empty());
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn a_helper_started_after_the_turn_ended_keeps_its_session_working() {
     let (mut d, _rx) = daemon();
@@ -9459,6 +9541,7 @@ fn permission_report(term: TermId, status: HookStatus, event: &str, agent: &str,
             answerable: true,
             choices: Vec::new(),
             questions: Vec::new(),
+            form: Vec::new(),
         });
     }
     msg
@@ -10285,4 +10368,105 @@ fn a_conversation_terminal_its_hooks_never_named_is_remembered_by_its_conversati
         ("codex", "native-1", Some("parser fix"), &cwd)
     );
     close(&mut d, &[a]);
+}
+
+#[test]
+fn a_workflow_report_is_shown_on_its_pane_and_never_changes_its_status() {
+    use maitty_shared::workflow::{StepState, WorkflowRun, WorkflowStep};
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let token = d.terms[&t].token.clone();
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.hooked, p.status) = (Some("claude".into()), true, Status::Working);
+    }
+    let run = |state: StepState| WorkflowRun {
+        workflow: "factory".into(),
+        run: "001".into(),
+        ticket: None,
+        steps: vec![WorkflowStep {
+            name: "review".into(),
+            state,
+            note: None,
+            helper: None,
+        }],
+        reported_at: 0,
+    };
+    let send = |d: &mut Daemon, token: &str, run: WorkflowRun| {
+        d.handle(Ev::Msg(
+            1,
+            ClientMsg::WorkflowReport {
+                term: t,
+                token: token.into(),
+                run,
+            },
+        ));
+    };
+    send(&mut d, "wrong", run(StepState::Working));
+    assert!(d.snapshot().terms[&t].workflows.is_empty(), "only with the pane's secret");
+    let mut nameless = run(StepState::Working);
+    nameless.steps.clear();
+    send(&mut d, &token, nameless);
+    assert!(d.snapshot().terms[&t].workflows.is_empty(), "a run that fails its checks is refused");
+    send(&mut d, &token, run(StepState::NeedsYou));
+    let snap = d.snapshot();
+    let shown = &snap.terms[&t].workflows;
+    assert_eq!(shown.len(), 1);
+    assert_eq!(shown[0].steps[0].state, StepState::NeedsYou);
+    assert!(shown[0].reported_at > 0, "the daemon stamps the time");
+    assert_eq!(snap.terms[&t].status, Status::Working, "a workflow never sets status");
+    close(&mut d, &[t]);
+}
+
+#[test]
+fn a_pane_saved_before_workflow_reports_restores_with_none() {
+    let old: persist::SavedPane =
+        serde_json::from_str(r#"{"cwd":null,"cmd":null,"agent":"claude","session":"abc123","aside":0}"#)
+            .unwrap();
+    assert!(old.workflows.is_empty());
+}
+
+#[test]
+fn a_helpers_record_is_read_only_for_a_helper_the_panes_agent_reported_and_only_by_a_person() {
+    let (mut d, _rx) = daemon();
+    let (t, asking) = (pane(&mut d), pane(&mut d));
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.session) = (Some("claude".into()), Some("S1".into()));
+    }
+    let ask = |d: &mut Daemon, client: ClientId, helper: &str| {
+        d.message(client, ClientMsg::Query(Query::HelperRead { term: t, helper: helper.into() }));
+    };
+    let (tx, mut person) = mpsc::channel(16);
+    d.handle(Ev::Connected(7, tx, false, crate::protocol::Surface::Terminal, true));
+    ask(&mut d, 7, "a1b2");
+    assert!(
+        matches!(person.try_recv(), Ok(ServerMsg::Error(e)) if e.contains("no such helper")),
+        "a helper the agent never reported is no file to read"
+    );
+    d.terms.get_mut(&t).unwrap().subagent_activity.push(SubagentActivity {
+        id: "a1b2".into(),
+        name: "general-purpose".into(),
+        parent: None,
+        state: SubagentState::Completed,
+        task: None,
+        model: None,
+        effort: None,
+        started_at: None,
+        updated_at: 0,
+        latest_activity: None,
+        result: None,
+    });
+    ask(&mut d, 7, "a1b2");
+    assert!(
+        matches!(person.try_recv(), Ok(ServerMsg::Error(e)) if e.contains("transcript")),
+        "a Claude helper is found only beside the transcript the pane's hooks named"
+    );
+    let (tx, mut agent) = mpsc::channel(16);
+    d.handle(Ev::Connected(8, tx, false, crate::protocol::Surface::Terminal, true));
+    let token = d.terms[&asking].token.clone();
+    d.handle(Ev::From(8, asking, token));
+    ask(&mut d, 8, "a1b2");
+    assert!(matches!(agent.try_recv(), Ok(ServerMsg::Error(_))), "another pane's agent may not read it");
+    close(&mut d, &[t, asking]);
 }

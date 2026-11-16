@@ -29,7 +29,13 @@ export function useSessionReplies({ sessionMap, flash, showSessionById, setDismi
     }
     // The answer is typed into the session's own prompt; the GUI never decides for it.
     // Claude Code's permission menu numbers its choices and ignores a bare `y`; only that key is verified.
-    const keys = abilitiesOf(target.process).sidebarAnswerKeys[answer]
+    const abilities = abilitiesOf(target.process)
+    const keys = abilities.sidebarAnswerKeys[answer]
+    // A key with no verified meaning, or a prompt the daemon did not mark answerable, is left to the person.
+    if (keys === undefined || (abilities.sidebarNeedsAnswerable && target.ask?.answerable !== true)) {
+      flash(`Answer ${displayName(target)} in its chat or terminal`)
+      return
+    }
     void sendTo(target, keys)
       .then(() => { flash(`Sent “${answer}” to ${displayName(target)}`) })
       .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not answer the session')) })

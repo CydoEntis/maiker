@@ -2,9 +2,10 @@ import { act, renderHook } from '@testing-library/react'
 import { toast } from '@/lib/toast'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { forgetComposers, peekComposer } from './composerStore'
+import { keptPicture } from './keptPictures'
 import { useAttachmentIntake } from './useAttachmentIntake'
 
-const attach = vi.hoisted(() => ({ attachLocalFile: vi.fn(), chooseFilesToAttach: vi.fn() }))
+const attach = vi.hoisted(() => ({ attachLocalFile: vi.fn(), attachmentImage: vi.fn(), chooseFilesToAttach: vi.fn() }))
 const sends = vi.hoisted(() => ({
   sendFilesToMachine: vi.fn<(machine: string, paths: readonly string[], transfer: string) => Promise<void>>(),
   sendImageToMachine: vi.fn<(machine: string, bytes: Uint8Array, transfer: string) => Promise<void>>(),
@@ -26,6 +27,7 @@ beforeEach(() => {
   forgetComposers()
   vi.restoreAllMocks()
   attach.attachLocalFile.mockReset()
+  attach.attachmentImage.mockReset()
   attach.chooseFilesToAttach.mockReset()
   sends.sendFilesToMachine.mockReset().mockResolvedValue(undefined)
   sends.sendImageToMachine.mockReset().mockResolvedValue(undefined)
@@ -54,6 +56,20 @@ describe('attaching in a chat on another machine', () => {
     hear({ kind: 'done', transfer: transferOf(), sent: 1, count: 1 })
     await settle()
     expect(peekComposer(7).attachments).toMatchObject([{ path: '/home/dev/.cache/pastes/paste-1-0a1b2c3d-Design_Final.zip', name: 'Design Final.zip', size: 2048, kind: 'archive', preview: null }])
+  })
+
+  it('shows a picked image sent there with a thumbnail read from the file on this computer', async () => {
+    attach.attachLocalFile.mockResolvedValue({ path: '/cache/attachments/a-shot.png', name: 'shot.png', size: 3, kind: 'image' })
+    attach.attachmentImage.mockResolvedValue(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }))
+    const { result } = intake()
+    result.current.addPaths(['/home/me/shot.png'])
+    await settle()
+    hear({ kind: 'sent', transfer: transferOf(), file: 'shot.png', index: 0, count: 1, remotePath: '/home/dev/.cache/pastes/paste-1-0a1b2c3d-shot.png', bytes: 3 })
+    hear({ kind: 'done', transfer: transferOf(), sent: 1, count: 1 })
+    await settle()
+    expect(attach.attachLocalFile).toHaveBeenCalledWith('/home/me/shot.png')
+    expect(peekComposer(7).attachments).toMatchObject([{ path: '/home/dev/.cache/pastes/paste-1-0a1b2c3d-shot.png', name: 'shot.png', kind: 'image' }])
+    expect(keptPicture('/home/dev/.cache/pastes/paste-1-0a1b2c3d-shot.png')).not.toBeNull()
   })
 
   it('sends a pasted image the same way and shows its thumbnail', async () => {

@@ -110,6 +110,9 @@ up to its own version. Outside it the connection is refused. Inside it the newer
 the daemon does not send a client a message newer than the client (`ServerMsg::introduced_in`)
 and passes over a request it cannot decode from a newer client; a client checks
 `ClientMsg::introduced_in` before sending an older daemon a request that needs an answer.
+One client is stricter: the desktop window's line to another machine (`Dial::newest_only`)
+refuses a daemon on an older version even inside the window, so the machine shows
+`needs-update` and the window offers its update.
 Bump `PROTOCOL_VERSION` when a message shape changes incompatibly: a field removed, renamed
 or retyped, or a new enum variant (an old decoder rejects it). An added field with
 `#[serde(default)]` is compatible (messages are named msgpack maps and unknown fields
@@ -178,7 +181,8 @@ daemon running is older) and `drop_prewarmed_agent`.
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
 app's new chat page, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
-does, requires `project` to be one the app shows and a git repository, then makes the checkout with
+does, requires `project` to be one the app shows (or, from a person's own window, any folder the person picked:
+`may_name_checkout`; a pane's agent, a structured runtime or a rejected client is held to the shown ones) and a git repository, then makes the checkout with
 `create_trusted_worktree` (the `worktree.dir` template, an existing local or remote branch else a new one from HEAD,
 trusted like its repo), runs the repo's `on_create` setup, lists the folder in `made_worktrees` and replies
 `Reply::Text(folder)`. The window starts its agent in that folder. It came in protocol 81 (`BRANCH_WORKTREE_SINCE`, with
@@ -186,6 +190,30 @@ its arm in `ClientMsg::introduced_in`); `COMPATIBLE_SINCE` stays 78 because an o
 command is `add_branch_worktree` (`maitty_desktop_client::branch_worktree`); it waits up to eleven minutes, since the
 setup hook may take ten, and says the service is from an older release instead of asking a daemon that would never
 answer. It is this computer's daemon only. Structured runtimes may not ask for it.
+
+`ClientMsg::WorkflowReport { term, token, run }` is a workflow's progress from a process in the pane
+(`maitty workflow report`, which reads one run as JSON from stdin; ADR 0010). The daemon takes it
+only with the pane's token, checks it (`maitty_shared::workflow::checked`), stamps `reported_at`
+and keeps it in `TermInfo.workflows`, newest first: a report replaces the earlier one with the same
+workflow and run, and a pane keeps its latest 20 runs, saved with it. It is display only and never
+changes status. It came in protocol 95 (`WORKFLOW_REPORT_SINCE`, with its arm in
+`ClientMsg::introduced_in`); `COMPATIBLE_SINCE` stays 78, since the command checks the daemon's
+version and tells the person to restart an older one instead of sending. `TermInfo.workflows` is a
+defaulted field, empty from an older daemon.
+
+`Query::HelperRead { term, helper }` answers `Reply::HelperRead(HelperRecord)`: what one of the pane's
+helpers did, as history entries read from its own record (Claude's side-chain file, a Codex helper's
+rollout from where its own task begins), oldest first, with `start_missing` when the start is left
+out. The read runs off the event loop; a refusal is a `ServerMsg::Error` naming why, never content.
+It came in protocol 95 (`HELPER_READ_SINCE`, with arms in both `introduced_in`). Clients ask again
+while the view is open; it is not followed.
+
+`Query::Specialists { term }` answers `Reply::Specialists(SpecialistList)`: the Claude Code and Codex
+agent files (`.claude/agents/*.md`, `.codex/agents/*.toml`) of the pane's repository (the nearest
+folder above its working folder that holds `.git`) and of the user's home (`~/.claude/agents`,
+`$CODEX_HOME/agents`), project first, each with its name, description, path and text. It is
+read-only, for human clients, read off the event loop, and bounded (`specialists::SPECIALISTS_MAX`
+files, `SPECIALIST_TEXT_MAX` bytes of each). It came in protocol 95 (`SPECIALISTS_SINCE`).
 
 A pane's effort (`TermInfo.effort`, an optional field: no `PROTOCOL_VERSION` bump, a test decodes the old shape) is read by the
 daemon from the agent's own files every five seconds off the loop (`usage::poll_effort`): for Claude the level in the newest request
@@ -637,7 +665,7 @@ with no protocol change. For an owned desktop pane whose hook-verified agent is 
 whose hook gave a session id (and, for Claude, its transcript path), the snapshot's `conversations` holds
 a `ConversationSummary` with `execution: Native`, `native_term: <pane>`, the pane's `status` and no
 checks; `Query::ConversationRead` serves its history. The id is the daemon's, stays while the pane runs
-the agent, and its `generation` rises when the pane's session id changes. It is in memory only (never in
+the agent (a lapse of the hook or of its session does not drop it), and its `generation` rises when the pane's session id changes. It is in memory only (never in
 the session file or history cache). `ConversationSend`, `Approve`, `AnswerInput`, `Cancel` and `End` on it
 fail with a "read-only" error; `Rename` and `Archive` fail as for an unknown id (the pane is named and
 closed as a pane). A client the pane does not belong to (ADR 0004) gets "No such conversation". The
@@ -864,6 +892,20 @@ A retry with the same `operation` while the steer or interrupt is under way is a
 message sent now out of turn can leave the conversation's receipt with a higher number than a message still waiting,
 so `ConversationSend` looks at the waiting queue before it judges a number stale.
 
+Protocol 104 adds `Query::SideAnswer { id, ask, tag }` and `Reply::SideAnswer { tag, answer }`
+(`daemon/conversation/side.rs`): Claude Code's answer beside a conversation, for the chat's `/btw` and the commands
+that only report, without adding to it. Both have their own `introduced_in` arm (`SIDE_ANSWER_SINCE`) and
+`COMPATIBLE_SINCE` stays 78, since an older daemon is never asked and an older client never sent the reply. Human
+clients only, read grant. `ask` is `Question(text)` (1 to `SIDE_QUESTION_MAX_CHARS` characters, no NUL) or
+`Command(name)`, one of a fixed list that only reports and takes nothing (`context`, `usage`, `skill-doctor`, `goal`,
+`advisor`, `config`, `mcp`). The client names nothing else: for a followed pane the daemon takes the session id the
+hook gave, the pane's folder, the model the transcript last named and the `claude` on the login PATH, and answers only
+the app the pane is shown in; for a structured chat it takes the binding's session, folder, program and config folder.
+A session id that is not a UUID, another agent, or an unknown conversation is answered at once (`Failed`,
+`NotSupported`); otherwise the reply comes when Claude Code is done, from a background task. `answer` is
+`Answered { text }` (control characters removed, cut at `SIDE_ANSWER_MAX_BYTES`), `NotSupported`, or
+`Failed { reason }` in the daemon's words, never Claude Code's output. The desktop client waits 100 seconds.
+
 Protocol 92 adds `Command::SnoozePane { term, until }` and the defaulted `TermInfo.snoozed_until` (unix seconds;
 an older peer decodes it as `None`, and a test decodes the old shape). `until: None`, or a time already past, wakes the
 pane; a time more than a week ahead is refused, and so is a snooze of a chat session's pane (`conversation_id`) or of a
@@ -877,6 +919,226 @@ clients display it. Only a person snoozes: an agent pane's connection is refused
 (`SNOOZE_SINCE`); `COMPATIBLE_SINCE` stays 78, since an older daemon is simply not asked and an older client reads
 the pane without the field.
 The desktop app sends it through the `snooze_terminal_session { machine, term, until }` command (`PaneCommand::Snooze`).
+
+Protocol 95 adds `Query::CloneRepo { address, parent, tag }` and `Reply::Cloned { tag, outcome }`
+(`CLONE_SINCE`; `COMPATIBLE_SINCE` stays): `git clone` of `address` into a new folder, named after the
+repository, inside `parent` on the daemon's computer (`crates/maitty-core/src/daemon/clone.rs`).
+`outcome` is the new folder's path with `/` separators, or one line saying why nothing was cloned; a
+refusal is an answer, not `ServerMsg::Error`, so the client that asked can match it by `tag`. The
+address rules are in [SECURITY](SECURITY.md#project-specific-auth-and-permissions). `parent` follows the
+rules of `ListFolders` and must be a folder that is there; a file or folder of the new name already
+there is a refusal. Human clients only. git runs off the event loop, cannot ask a question
+(`GIT_TERMINAL_PROMPT=0`, no input), and is stopped after ten minutes; a clone that fails or is stopped
+leaves no folder. An answer from another machine is cut and cleaned to one line (`remote_policy::vet`).
+The desktop host sends it through `clone_repository(machine, address, parent, tag)` and raises a
+`repository-cloned` event with the tag and either `folder` or `refused` (`apps/gui/src/api/cloneRepository.ts`
+waits on it). The host refuses only what could not be a request (empty, over-long, a control
+character); the daemon is the judge of the address. A reply from another machine normally counts as an
+answer for 30 seconds after a request; a clone's is expected for the daemon's limit plus 30 seconds
+(`routing::answer_window`), and a quick answer to something else never uses up that wait.
+
+Protocol 96 adds `Query::GitHubAccounts { tag }` and `Reply::GitHubAccounts { tag, report }`
+(`GITHUB_ACCOUNTS_SINCE`; `COMPATIBLE_SINCE` stays): who is signed in to github.com on the daemon's
+computer, as its GitHub command line says (`gh auth status --json hosts`,
+`crates/maitty-core/src/daemon/github.rs`). `report` is `installed` (false when the machine has no
+`gh`), `accounts` (login and whether it is the active one, active first, at most
+`GITHUB_ACCOUNTS_MAX`, only sign-ins that still work) and `problem` (one line when `gh` could not be
+read: too old to answer in JSON, or no answer in 15 seconds). Nobody signed in is an empty list, not a
+problem. Human clients only; `gh` runs off the event loop and cannot ask a question. A report from
+another machine keeps only logins GitHub could have given out and one clean `problem` line
+(`remote_policy::vet`). A program run with a time limit goes through `proc::run_within`. The desktop
+host sends it through `github_accounts(machine, tag)` and raises a `github-accounts` event with the tag
+and the report (`apps/gui/src/api/githubAccounts.ts` waits on it for 20 seconds).
+
+Protocol 105 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets { tag, answer }`
+(`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
+arm, and nothing an older peer sends or reads changed). It reads tickets, read-only; there is no
+request that writes. `source` is a GitHub repository, `owner/name`, read with the machine's own
+`gh` (`daemon/tickets_github.rs`), or `plane` or `linear`, read with the key the daemon kept
+(`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`; below). A repository name has a slash and the
+providers' do not, so the one message carries all three and an older daemon answers `Invalid`. `request` is a `TicketsRequest`: `Groups` (the repository as a
+`Project` group and its milestones as `Milestone` groups with their ticket count), `List(Filter)`
+(`group`, `state` category, `assignee`, `label`, `search`, `page`; `TICKETS_PAGE_SIZE` (30) a page,
+page 0 to `TICKETS_PAGE_MAX`; `gh` pages only by size, so it is asked for everything up to one past
+the page; GitHub has no `Started` state, so that filter lists nothing) or `Get { id }`. `answer` is
+`Ok(TicketsReply)` (`Groups`, `List(TicketPage)` or `Ticket`) or `Err(TicketError)`: `NotInstalled`,
+`SignedOut`, `NotFound`, `RateLimited`, or `Unreachable(line)` and `Invalid(line)`, whose lines are
+fixed words, never `gh`'s own. Ids are `provider:key`: `github:owner/name#12` for an issue,
+`github:owner/name!3` for a milestone, `github:owner/name` for the repository; an address is built
+from the checked repository and number, never copied. A ticket carries its body, at most
+`TICKET_COMMENTS_MAX` (50, the oldest first, `comments_more` says there were more), the pull
+requests that close it as `links`, and `blocked_by` ids (`gh api …/dependencies/blocked_by`; a GitHub
+that does not know it gives none). Every string is cleaned and cut and every list capped by the pure
+rules in `crates/maitty-shared/src/tickets.rs` (`TicketsReply::cleaned`), by the daemon and again
+for an answer from another machine (`remote_policy::vet`; the verdict is *answer*). Human clients
+only: a pane or a structured runtime gets `ServerMsg::Error`. `gh` runs off the event loop, at most
+twice (30 seconds each), and `gh`'s output is read only up to 4 MiB.
+
+Protocol 106 adds `Query::TicketKeys { change, tag }` with `Reply::TicketKeys { tag, answer }`
+(`TICKET_KEYS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own
+`introduced_in` arm, and no field or variant an older peer reads changed). It keeps the key a keyed
+ticket provider needs. `change` is a `TicketKeyChange`: `Status`, `Set { provider, address, workspace,
+key }` (the key is a `SecretText`, which prints as hidden) or `Remove { provider }`; `provider` is
+`Plane` or `Linear`. `answer` is the state after the change, one `TicketKeyState { provider, set, address,
+workspace, stored_in }` per provider (`stored_in` is `Keychain` or `File`, `#[serde(default)]` to `File`:
+an older daemon sends none and keeps every key in a file, and an older client passes over it, so it
+needs no protocol version), or an `Invalid(line)`; it never holds a key. Plane takes a server address
+(`check_base_url`: https anywhere, http only to your own network) and a workspace; Linear takes a key
+alone, because its one server is fixed in the code. Human clients only: a pane or a structured runtime
+gets `ServerMsg::Error`. A request for a provider with no key answers `TicketError::NotInstalled` (the
+client shows "add your key"); a key the provider refuses is `SignedOut`. The files are written off the
+event loop. Where the key lives: [SECURITY](SECURITY.md) and [DATABASE](DATABASE.md#project-specific-ticket-keys).
+
+Plane and Linear ids follow `provider:key` with `.`, `!` and `#` as separators: Plane `plane:<project>`
+(a project), `plane:<project>!<module>` (a module), `plane:<project>#<work item>`; Linear
+`linear:team.<id>` (a `Project` group), `linear:project.<id>` (a `Module`), `linear:cycle.<id>` (a
+`Cycle`) and `linear:issue.<id>`. A Plane list needs a `group` (a project or module); a Linear list may
+have none. Plane filters nothing server-side, so a page is cut from at most five pages of 100 work items
+read in Plane's order; Linear is asked for the state, assignee, label, title text and group, and read a
+cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 seconds each) before
+`RateLimited`; Linear's is reported at once. A Plane `blocked_by` comes from
+`work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
+inverse `blocks` relations.
+
+Protocol 107 adds `Query::TicketWrite { source, id, write, confirmed, tag }` with `Reply::TicketWrite { tag, answer }`
+(`TICKET_WRITE_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in`
+arm). `write` is a `TicketWrite`: `Comment { text }` or `Close`; `source` and `id` are as for `Tickets`.
+`answer` is `Ok(TicketWritten::Commented | Closed)` or a `TicketError`. These are the only two writes, and the
+only ones the feature will have: no edit, no delete. The daemon writes only when `confirmed` is true, which a
+client sets after showing the person the provider, the ticket and the exact text; an unconfirmed request is
+answered `Invalid("The write was not confirmed")` and nothing is sent anywhere. Human clients only: a pane or a
+structured runtime gets `ServerMsg::Error`. The comment is checked by `maitty_shared::tickets::clean_comment`
+(1 to 4,000 characters, no control, hidden or tab characters; a bad one is refused, never trimmed to fit).
+GitHub runs `gh issue comment` / `gh issue close` (30 seconds); Plane `POST`s `…/issues/<id>/comments/` or
+`PATCH`es the work item to the project's first `completed` state; Linear runs `commentCreate`, or finds its
+team's first `completed` state and runs `issueUpdate`. A write is never retried. Details and limits:
+[SECURITY](SECURITY.md).
+
+Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
+(`TICKET_LINKS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm).
+The daemon keeps which sources each project reads (`maitty_shared::ticket_links`, `daemon/ticket_links.rs`,
+`<data folder>/ticket-links.json`), so every client of a computer shows a project the same tickets. A provider's key is
+set once for all projects (`TicketKeys`); a link is per project: `github` (`Origin`, the default; `Repo("owner/name")`;
+`Off`), a Plane project and a Linear team (`TicketPick { id, name }`). A project is a `TicketPlace { machine, folder }`:
+`machine` is `None` for this computer, whose folder the daemon takes to its repository's main checkout (the parent of
+`git rev-parse --git-common-dir`), so every worktree of a repository shares one link; another machine's folder (by its
+`[[machines]]` name) is kept as the client gave it. `place` is the folder in front, answered back resolved in
+`answer.project` (with an empty link when it has none); `change` is `Read`, `Set { place, link }`, `Unlink { place }`,
+`SetMe { provider, name }` (your name in Plane or Linear, for Mine) or `Import { projects, me }` (links a client kept
+before protocol 108: each added only when its project has none, a name only when unset). `answer` is
+`Ok(TicketLinks { project, projects, me })`, every linked project sorted by machine and folder, or `Invalid` for a
+folder that is not absolute, a repository not written `owner/name`, or a pick whose id is not a ticket id; nothing
+refused is written. At most 500 projects. Human clients only. A damaged file is logged and read as no links.
+
+Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
+`introduced_in` arm, and the new field is `#[serde(default)]`, which an older peer skips) adds:
+
+- `TicketLinks::repo_file: Option<RepoTicketFile { github, plane, linear, notes }>`. For a place on this computer,
+  `answer.project`'s link is what you linked here with the repository's `.maitty/tickets.toml` filling each source
+  you did not (`daemon/ticket_repo_file.rs`); the flags say which parts came from the file and `notes` (at most 4,
+  160 characters each) why any part was not used. `projects` lists only what was linked here, never the file.
+- `Command::OpenTicketSetup { term, folder, source, link }`, from a pane's agent (`<app>_tickets_setup` in
+  `maitty mcp`). Allowed only for the pane's own client (`client.from == Some(term)`), for its own project
+  (`folder`, when given, must be in it). The daemon reads the project's links and key states off the loop, then
+  broadcasts `ServerMsg::TicketSetup(TicketSetupAsk { term, folder, source, link })` to attached human clients
+  (not panes, not structured runtimes), at most once per project every 5 seconds, and replies `Reply::Text` with
+  what is set up, in words: never a key or where it is sent. `link` is one cleaned word (`clean_suggested_link`,
+  512 characters), shown as text. Nothing is saved; the person finishes the setup in the window. Another machine's
+  `TicketSetup` is ignored (`remote_policy`).
+
+The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
+`ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
+`{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them
+with zod). A source longer than 256 bytes is refused in the host. Ticket answers are expected for 60 seconds plus
+the clone margin (`routing::TICKETS_ANSWER_WINDOW`); the window waits 95 seconds. `github_repo_of(folder)` answers
+the `owner/name` a folder of this computer pushes to (`git remote get-url origin`, read by
+`maitty_shared::github::repo_of_remote`), or null.
+
+Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
+(`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`
+answers the lines `Apply` would write and writes nothing; `Apply { folder, identity }` writes them;
+`Remove { folder }` takes away the rule Maitty wrote for a folder (named as the report names it). `outcome`
+is the lines by file (`GitConfigWrite { file, lines }`, each line `key = value`) or one line saying why not.
+A rule is a file `<data dir>/git-identities/<16 hex digits of the folder's SHA-256>.gitconfig` holding
+`user.name`, `user.email`, `credential.https://github.com.username`, an empty
+`credential.https://github.com.helper` (which drops earlier helpers), a helper that answers `get` with
+`gh auth token --hostname github.com --user <login>`, and `maitty.folder`; plus one
+`includeIf "gitdir:<folder>/"` entry in the global config (`gitdir/i:` on Windows and macOS) pointing at
+it. `gh auth git-credential` is not used because it only answers for the active account. The folder must
+exist, is made absolute with `/` separators, and may not hold `* ? [ \ "`; the name and email are one
+line each; the login must be signed in on the machine (`gh auth status`). A folder whose entry points
+anywhere else (a rule set outside Maitty) is refused, both to write and to remove. Applying twice leaves
+one entry. Everything is written with `git config --global` and `--file`, never as text; the desktop host
+sends it with `git_identity_rule(machine, change)`, and an answer from another machine is cleaned and cut
+to 4 files of 16 lines (`remote_policy::vet_rule_reply`). Human clients only.
+
+Protocol 101 adds `Query::GitIdentities { tag }` with `Reply::GitIdentities { tag, report }`
+(`GIT_IDENTITIES_SINCE`; `COMPATIBLE_SINCE` stays). The report is the machine's global `user.name`
+and `user.email` (each absent when not set) and its folder rules: every
+`includeIf "gitdir:<folder>/"` (or `gitdir/i:`) entry of the global git config, in git's order, the
+last one for a folder standing for it, at most `GIT_IDENTITY_RULES_MAX` (100). A rule Maitty wrote
+has an `identity` (`name`, `email`, GitHub `login`): its entry points at a file directly inside
+`<data dir>/git-identities/` whose `maitty.folder` names that folder, and the login is that file's
+`credential.https://github.com.username`. Any other rule has `identity: None` and only its folder is
+read. A machine without git answers `installed: false`; a config git cannot read answers `problem`.
+The daemon asks git (`git config --global --get`, `--get-regexp`, `--file … --get`) and never reads
+or writes the file itself. Human clients only; git runs off the event loop, five seconds a question.
+The desktop host asks with `git_identities(machine)`, which answers the report as JSON
+(`apps/gui/src/api/gitIdentities.ts`); from another machine only that report is taken, cleaned
+(`remote_policy::vet_identities_reply`).
+
+Protocol 100 adds `GitRequest::PullRequest` to `Query::Git` (`GIT_PULL_REQUEST_SINCE`;
+`COMPATIBLE_SINCE` stays). The daemon pushes the branch as `Push` does, then runs
+`gh pr create --fill --head <branch>` in the checkout. The answer's line is the pull request's
+address, kept only when it is `https://github.com/<owner>/<repo>/pull/<number>` (`pr::pull_request_url`,
+which also drops anything after the number); a pull request that is already open for the branch is
+answered with its address. Without `gh` the line says the branch was pushed and to get it from
+cli.github.com; any other failure is the first line `gh` said, cleaned and cut to 300 characters
+(nobody signed in reads "To get started with GitHub CLI, please run:  gh auth login"). No token is
+read. git and `gh` together are stopped after `GIT_SYNC_LIMIT_SECS` (60).
+
+Protocol 99 adds `GitRequest::Commit { message, paths }` to `Query::Git` (`GIT_COMMIT_SINCE`;
+`COMPATIBLE_SINCE` stays). With `paths` the daemon stages and commits those files only (`git add -A --`
+then `git commit --only --`), and whatever else is staged stays staged and out of the commit; with none
+it commits everything that changed. The answer's line is the new commit's short id, a space and its
+subject. A path is a file's name relative to the checkout: one that is empty, absolute, starts with
+`-`, holds `..`, a `.git` part or a control character is refused, and git is told to read every path
+literally (`--literal-pathspecs`), so a `*` or a `:(…)` is a name, not a pattern. The message is trimmed
+and may be at most `GIT_COMMIT_MESSAGE_MAX_BYTES` (16 KiB) with no control character but a line break
+or a tab; an empty one is refused. The paths together may be at most `GIT_COMMIT_PATHS_MAX_BYTES`
+(24 KiB). The repository's hooks run and signing is as the repository has it; nothing is amended. The
+request is stopped after `GIT_COMMIT_LIMIT_SECS` (120).
+
+Protocol 98 adds `Query::Git { term, request, tag }` with `Reply::GitDone { tag, outcome }`
+(`GIT_SYNC_SINCE`; `COMPATIBLE_SINCE` stays). `request` is a `GitRequest`: `Fetch` (`git fetch --prune`),
+`Pull` (`git pull --ff-only`) or `Push` (`git push`, or `git push -u origin <branch>` for a branch with
+no upstream yet), run in the folder pane `term` is in. `outcome` is one line either way: `Fetched`,
+`Pulled`, `Already up to date` or `Pushed <branch>`, or why nothing happened. A checkout on no branch
+and a pull with no upstream are refused before git runs; a branch that is both ahead of and behind
+its upstream is not pulled and stays as it was. Nothing merges, rebases or forces. Human clients only,
+with the same pane checks as `Query::Repo` (an unknown pane is `ServerMsg::Error`); git runs off the
+event loop with `GIT_TERMINAL_PROMPT=0` and the whole request is stopped after `GIT_SYNC_LIMIT_SECS`
+(60). An answer from another machine is cut and cleaned to one line (`remote_policy::vet`).
+
+Protocol 97 adds `Query::GitHubRepos { owner, search, tag }` with `Reply::GitHubRepos { tag, answer }`,
+and `Query::GitHubOwners { tag }` with `Reply::GitHubOwners { tag, answer }` (`GITHUB_REPOS_SINCE`;
+`COMPATIBLE_SINCE` stays). Each `answer` is a `GitHubAnswer`: `NotInstalled`, `NotSignedIn`,
+`Failed(one line)` or `Listed(…)`; having no `gh` and nobody signed in are answers, not
+`ServerMsg::Error`. Repositories are `owner`'s, or the signed-in account's when none is named
+(`gh repo list`), narrowed by `search` when there is one (`gh search repos --owner`): at most
+`GITHUB_REPOS_MAX` (200), each with `name` (`owner/name`), a one-line `description` cut at 300
+characters, `private`, `pushed_at` and `clone_url`, and `more` when there were more. Owners are the
+signed-in login, then its organisations (`gh org list`), at most `GITHUB_OWNERS_MAX`. Human clients
+only; `gh` runs off the event loop and is stopped after `GITHUB_LIST_LIMIT_SECS` (30). What a login,
+a repository name and a time may look like is in `maitty_shared::github`; `clone_url` is always built
+from the checked name (`clone_address`), by the daemon and again when the answer comes from another
+machine (`remote_policy::vet`), never copied from what was printed or sent. The desktop host sends
+them through `github_repos(machine, owner, search, tag)` and `github_owners(machine, tag)` and raises
+`github-repos` and `github-owners` events: the tag, a `state` (`listed`, `not-installed`,
+`not-signed-in` or `failed`), `why` for a failure and `listed` for a list
+(`apps/gui/src/api/githubRepos.ts`). Their answers are expected for 75 seconds
+(`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
+answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
 Protocol 70 adds `Query::UsageReport { period }` (`day`, `week` or `month`; rolling windows
 ending today, UTC) and `Reply::UsageReport`, answered from the daemon's usage store
@@ -932,6 +1194,11 @@ cannot read it as an option). The prompt goes in the agent's command line quoted
 (`Config::agent_command`), as the MCP `start` tool does, never interpolated. The worktree itself is the
 usual one (`create_trusted_worktree`, the repo's setup hook, the `[worktree] dir` naming, clean-up when
 its last session closes). Local projects only: the window refuses another machine's project.
+
+`ConversationSummary.helpers` lists the helpers a chat session's provider reported starting, at its
+current generation (ADR 0010; Codex's `subAgentActivity` items). It is display only and never
+status. It is a defaulted field, empty from an older daemon, so it needs no `PROTOCOL_VERSION` bump;
+a test decodes the old shape.
 
 Protocol 65 removes the handoff between chat and terminal
 (`ConversationHandoffToNative`, `ConversationHandoffToChat`): a session is a chat

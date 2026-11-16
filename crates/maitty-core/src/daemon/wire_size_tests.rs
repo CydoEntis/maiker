@@ -315,6 +315,7 @@ fn ask() -> PermissionAsk {
             "No, and tell Claude what to do differently".into(),
         ],
         questions: Vec::new(),
+        form: Vec::new(),
     }
 }
 
@@ -402,6 +403,7 @@ fn pane(i: u32) -> TermInfo {
             code: Some(1),
             at: NOW - 400,
         }),
+        workflows: Vec::new(),
     }
 }
 
@@ -425,6 +427,7 @@ fn conversation(i: u32) -> ConversationSummary {
         archived: false,
         root: Some(root_of(i)),
         branch: Some(branch_of(i)),
+        helpers: Vec::new(),
     }
 }
 

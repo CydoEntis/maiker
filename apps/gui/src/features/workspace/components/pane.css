@@ -1,13 +1,13 @@
 /* The workspace card and its panes (README: Workspace and panes). One pane is no card of its own; two or
    more each get a faint card, and the focused one a teal ring drawn above its content. */
 
-.mx-main-wrap { flex: 1; min-width: 0; display: flex; padding: 12px; }
+/* The chat column keeps room to be used: the side panel beside it gives way first (inspect.css). */
+.mx-main-wrap { flex: 1; min-width: min(var(--chat-min, 400px), 100%); display: flex; padding: 12px; }
 .mx-main {
   flex: 1; min-width: 0; position: relative; display: flex; flex-direction: column; overflow: hidden;
-  background: linear-gradient(180deg, rgba(var(--hl), calc(.035 * var(--hk) * var(--gk))), rgba(var(--hl), calc(.012 * var(--hk) * var(--gk))) 120px), var(--main);
+  background: var(--main);
   border: 1px solid rgba(var(--hl), calc(.09 * var(--hk)));
   border-radius: var(--r14);
-  box-shadow: inset 0 1px 0 rgba(var(--hl), calc(.05 * var(--hk) * var(--gk))), 0 10px 30px -12px rgba(var(--sd), calc(.7 * var(--sk) * var(--gk)));
   transition: border-color .2s ease;
 }
 
@@ -34,50 +34,55 @@
 .mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 0 0 1.5px transparent; transition: box-shadow .15s; }
 .mx-pane.is-focused .mx-pane-ring { box-shadow: inset 0 0 0 1.5px var(--accent-line), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
 
-.mx-pane-head { flex: none; height: calc(42px * var(--pad, 1)); display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; cursor: default; }
+/* The pane header (desktop frame, section 4): the agent's tile and badge, the title, then the view tabs and controls. */
+.mx-pane-head { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); cursor: default; }
 .mx-pane-head.is-draggable { cursor: grab; }
-.mx-pane-icon { position: relative; width: 26px; height: 26px; flex: none; }
-.mx-pane-icon .mx-app-icon.size-26 { width: 26px; height: 26px; border-radius: 8px; font-size: 11.5px; }
-.mx-pane-icon .mx-badge { right: -4px; bottom: -4px; width: 14px; height: 14px; border-radius: calc(4px * var(--rk)); font-size: 9px; font-weight: 800; line-height: 1; }
-.mx-pane-icon .mx-badge.is-working { background: var(--bg); overflow: hidden; color: var(--working); font-family: var(--mono); }
-.mx-pane-icon .mx-badge.is-working .mx-spin { font-size: 9px; line-height: 1; }
-.mx-pane-icon .mx-badge.is-unknown { width: 13px; height: 13px; background: var(--bg); border: 1.5px dashed var(--dim); box-shadow: none; }
-.mx-pane-title { flex: 1; min-width: 64px; display: flex; flex-direction: column; gap: 1px; white-space: nowrap; overflow: hidden; }
-.mx-pane-name { font-size: calc(15px * var(--tab-text, 1)); line-height: calc(19px * var(--tab-text, 1)); font-weight: 600; letter-spacing: -.01em; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
-.mx-pane-where { display: flex; align-items: center; gap: 8px; min-width: 0; line-height: 14px; }
-.mx-pane-cwd { font-size: 11px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
-.mx-pane-branch.is-worktree { color: var(--ansi-blue); }
-.mx-pane-branch { display: flex; align-items: center; gap: 4px; flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--ansi-mag); }
+.mx-pane-show-sidebar { flex: none; width: 28px; height: 28px; margin-left: -4px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
+.mx-pane-show-sidebar:hover { background: var(--m-hover); color: var(--fg); }
+.mx-pane-show-sidebar:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+.mx-pane-icon { position: relative; width: 20px; height: 20px; flex: none; }
+.mx-pane-head { container: pane-head / inline-size; }
+.mx-pane-title { flex: 1; min-width: 64px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
+.mx-pane-title .mx-inline-name { flex: 0 1 220px; min-width: 60px; height: 28px; padding: 0 6px; margin-left: -6px; font: 600 14px var(--ui); color: var(--fg); background: var(--m-well); border: 1px solid var(--accent); outline: none; }
+
+/* Where the chat works, after its name (layout 2h): the project, locked, then the branch. The project goes first as the
+   pane narrows, then the branch's name, leaving its mark. */
+.mx-crumbs { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.mx-crumb-sep { flex: none; color: var(--line2); }
+.mx-crumb-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.mx-crumb-project svg { flex: none; color: var(--dim); }
+.mx-crumb-square { flex: none; width: 7px; height: 7px; }
+.mx-crumb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-crumb { flex: 0 1 auto; min-width: 0; height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; border-radius: var(--r-control); white-space: nowrap; outline: none; }
+.mx-crumb:not(.is-static):hover, .mx-crumb[data-state="open"] { background: var(--m-hover); }
+.mx-crumb:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent-line); }
+.mx-crumb > svg:last-child { flex: none; color: var(--dim); }
+.mx-crumb-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); color: var(--branch); }
+.mx-crumb-branch-icon { flex: none; display: inline-flex; color: var(--branch); }
+.mx-crumb-branch-icon svg { stroke: currentColor; }
+.mx-crumb-branch.is-worktree, .mx-crumb-branch-icon.is-worktree { color: var(--ansi-blue); }
+@container pane-head (max-width: 700px) { .mx-crumb-project, .mx-crumb-sep.is-project { display: none; } }
+@container pane-head (max-width: 560px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child { display: none; } }
+.mx-pane-name { font-size: 14px; line-height: 18px; font-weight: 600; letter-spacing: -.01em; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
 .mx-pane-pr { flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
 .mx-pane-pr.is-bad { color: var(--danger); }
 .mx-pane-pr.is-good { color: var(--ok); }
 .mx-pane-pr.is-waiting { color: var(--working); }
-.mx-pane-controls { display: flex; align-items: center; gap: 0; margin-left: auto; }
-.mx-pane-control { width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--dim); transition: background-color .14s ease, color .14s ease; }
-.mx-pane-control:not(:disabled):hover { background: rgba(var(--hl), calc(.09 * var(--hk))); color: var(--fg); }
+.mx-pane-controls { display: flex; align-items: center; gap: 2px; margin-left: auto; height: 100%; }
+.mx-pane-control { width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--dim); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-pane-control:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
 .mx-pane-control.is-close:not(:disabled):hover { background: var(--danger-soft); color: var(--danger); }
 .mx-pane-control:disabled { opacity: .3; }
-.mx-pane-control.is-armed { background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); color: var(--danger); }
 
-/* The terminal | chat switch sits in a dark, sunken tray. */
-.mx-view-switch {
-  position: relative; height: 30px; padding: 2px; border-radius: 9px; flex: none;
-  background: rgba(var(--sd), calc(.3 * var(--sk))); border: 1px solid rgba(var(--hl), calc(.1 * var(--hk)));
-}
-.mx-view-switch { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 2px; }
-.mx-view-thumb {
-  pointer-events: none; position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc(50% - 3px); border-radius: 7px;
-  background: linear-gradient(180deg, rgba(var(--hl), calc(.12 * var(--hk) * var(--gk))), rgba(var(--hl), calc(.06 * var(--hk) * var(--gk))));
-  box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.14 * var(--hk) * var(--gk))), 0 1px 3px rgba(var(--sd), calc(.4 * var(--sk) * var(--gk)));
-  transition: transform .32s cubic-bezier(.2, .8, .2, 1);
-}
-.mx-view-switch.is-chat .mx-view-thumb { transform: translateX(calc(100% + 2px)); }
-.mx-view-option { position: relative; z-index: 1; display: flex; height: 24px; width: 30px; align-items: center; justify-content: center; border-radius: 7px; color: var(--muted); }
-.mx-view-option[aria-checked="true"] { color: var(--fg); }
-.mx-view-switch { margin-right: 4px; }
-.mx-pane-control.is-on { color: var(--fg); background: rgba(var(--hl), calc(.09 * var(--hk))); }
-.mx-pane-panel { position: relative; }
-.mx-pane-dot { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--done); box-shadow: 0 0 0 1.5px var(--m-pane); }
+/* The view tabs: plain words the height of the header, the chosen one underlined in the accent. */
+.mx-view-switch { display: flex; align-items: stretch; gap: 16px; height: 100%; margin-right: 10px; flex: none; }
+.mx-view-option { display: flex; align-items: center; padding: 0 1px; font-size: 12.5px; font-weight: 500; color: var(--dim); transition: color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
+.mx-view-option:hover { color: var(--fg); }
+.mx-view-option[aria-checked="true"] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-view-option:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.mx-view-option { gap: 5px; }
+.mx-view-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
+.mx-view-needs { width: 7px; height: 7px; border-radius: 2px; background: var(--needs); }
 
 .mx-pane-body { position: relative; flex: 1; min-height: 0; padding: 4px 10px 6px; font-family: var(--mono); line-height: 1.6; cursor: text; display: flex; }
 .mx-pane-body > * { flex: 1; min-width: 0; min-height: 0; }
@@ -87,9 +92,9 @@
 .mx-pane.is-terminal { background: var(--main); }
 /* Two or more panes are separate cards on the window's ground with a gap between them, not boxes inside one big card. */
 /* A pane with terminals pinned under it is a card too, so the two read as a pair. */
-.mx-pane.is-card, .mx-pane-cell:has(> .mx-terms) > .mx-pane { background: var(--main); border: 1px solid var(--m-line); box-shadow: var(--m-edge), var(--m-shadow); }
-.mx-main:has(> .mx-pane-stack > .mx-panes.is-split:not(.is-kept)), .mx-main:has(> .mx-pane-stack > .mx-panes:not(.is-kept) .mx-terms.is-under) { background: none; border-color: transparent; box-shadow: none; backdrop-filter: none; overflow: visible; }
-.mx-panes.is-split, .mx-panes:has(.mx-terms.is-under) { padding: 0; }
+.mx-pane.is-card { background: var(--main); border: 1px solid var(--line); }
+.mx-main:has(> .mx-pane-stack > .mx-panes.is-split:not(.is-kept)) { background: none; border-color: transparent; box-shadow: none; overflow: visible; }
+.mx-panes.is-split { padding: 0; }
 
 /* The gap between two columns, or two panes of a column, is the handle: it lights while hovered or dragged. */
 .mx-split-handle { flex: none; position: relative; z-index: 6; touch-action: none; }
@@ -103,7 +108,6 @@
 .mx-pane-body .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
 .mx-pane-body .terminal-screen { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; padding: 0; }
 .mx-pane-body .terminal-screen:focus-within { border-color: transparent; box-shadow: none; }
-.mx-pane-body .terminal-view.is-transparent .xterm, .mx-pane-body .terminal-view.is-transparent .xterm-viewport, .mx-pane-body .terminal-view.is-transparent .xterm-screen { background-color: transparent !important; }
 .mx-pane-body .terminal-input-error, .mx-pane-body .terminal-load-status { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 0; font-family: "Geist Variable", Geist, system-ui, sans-serif; font-size: 12.5px; color: var(--muted); }
 .mx-pane-body .terminal-input-error p { margin: 0; color: var(--danger); }
 .mx-pane.is-broadcast { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ansi-mag) 60%, transparent), 0 14px 34px rgba(0, 0, 0, .3); }
@@ -128,56 +132,71 @@
 ::view-transition-old(*):only-child { animation: mx-pane-leave .22s cubic-bezier(.4, 0, 1, 1) both; }
 ::view-transition-new(*):only-child { animation: mx-pane-enter .3s cubic-bezier(.2, .8, .2, 1) both; }
 
-/* An agent's own terminals: a tab of the side panel, or a drawer under its chat. */
-.mx-terms { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.mx-terms.is-panel { flex: 1; }
-/* Under the chat: a glass card of its own. Its height eases between folded and open; the terminal inside keeps the
-   open size throughout and is only uncovered, so its text is never fitted again on the way. */
-.mx-terms.is-under {
-  position: relative; flex: none; height: min(var(--terms-open), 60cqh); min-height: 42px; overflow: hidden;
-  border-radius: var(--r14); border: 1px solid rgba(var(--hl), calc(.11 * var(--hk)));
-  background: color-mix(in srgb, var(--main) 70%, transparent); backdrop-filter: blur(26px) saturate(1.35);
-  box-shadow: var(--m-edge), var(--m-shadow);
-  transition: height .28s cubic-bezier(.2, .8, .2, 1);
-  animation: mx-rise .3s cubic-bezier(.2, .8, .2, 1);
+/* The terminal dock (layout 2h): one card beside the chat for the focused session's own terminals. At the bottom and on
+   the right it shares the room with the chat; full, the chat steps aside. It slides in and out on the panel timing. */
+.mx-termwrap { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 8px; }
+.mx-termwrap[data-dock="right"] { flex-direction: row; }
+.mx-termwrap[data-dock="full"]:not([data-leaving]) > .mx-main { display: none; }
+.mx-tdock {
+  position: relative; flex: none; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel);
+  container: tdock / inline-size;
 }
-.mx-terms.is-under.is-folded { height: 42px; }
-.mx-terms.is-under.is-resizing { transition: none; }
-@keyframes mx-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-.mx-terms-body { flex: none; height: calc(min(var(--terms-open), 60cqh) - 42px); min-height: 0; display: flex; flex-direction: column; transition: opacity .2s; }
-.mx-terms.is-folded .mx-terms-body { opacity: 0; pointer-events: none; }
-.mx-terms-grip { position: absolute; top: 0; left: 40%; right: 40%; height: 8px; cursor: row-resize; z-index: 2; display: flex; justify-content: center; }
-.mx-terms-grip::after { content: ""; width: 36px; height: 3px; margin-top: 2px; border-radius: 3px; background: rgba(var(--hl), calc(.16 * var(--hk))); transition: background .15s; }
-.mx-terms-grip:hover::after, .mx-terms.is-resizing .mx-terms-grip::after { background: var(--accent); }
-.mx-terms-head { flex: none; height: 40px; display: flex; align-items: center; gap: 6px; padding: 0 8px; min-width: 0; }
-.mx-terms.is-panel .mx-terms-head { height: 42px; border-bottom: 1px solid var(--pane-line); }
-.mx-terms-fold { flex: none; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--fg2); }
-.mx-terms-fold:not(:disabled):hover { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
-.mx-terms-rule { flex: none; width: 1px; height: 16px; margin: 0 2px; background: rgba(var(--hl), calc(.1 * var(--hk))); }
-.mx-terms-tabs { display: flex; align-items: center; gap: 4px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.mx-terms-tab { flex: none; height: 26px; display: flex; align-items: center; border-radius: 999px; color: var(--muted); transition: background .15s, color .15s; }
-.mx-terms-tab:hover { color: var(--fg); }
-.mx-terms-tab.is-current { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
-.mx-terms-pick { height: 100%; display: flex; align-items: center; gap: 7px; padding: 0 4px 0 10px; font-size: 12px; color: inherit; white-space: nowrap; }
-.mx-terms-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
-.mx-terms-dot.is-ended { background: var(--dim); }
-.mx-terms-close { width: 20px; height: 20px; margin-right: 3px; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--dim); }
-.mx-terms-add { width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 50%; color: var(--dim); }
-.mx-terms-tool { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 7px; color: var(--dim); }
-.mx-terms-pin { flex: none; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; font-size: 12px; color: var(--muted); }
-.mx-terms-close:not(:disabled):hover, .mx-terms-add:not(:disabled):hover, .mx-terms-tool:hover, .mx-terms-pin:hover { background: rgba(var(--hl), calc(.09 * var(--hk))); color: var(--fg); }
-.mx-terms-close:disabled, .mx-terms-add:disabled { opacity: .35; }
-/* The path gives its room up before a tab does. */
-.mx-terms-where { flex: 0 1000 auto; min-width: 0; font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* The well is the terminal's own ground: the terminal paints that colour itself, so a tinted well would show as a frame around it. */
-.mx-terms-screen { flex: 1; min-height: 0; display: flex; margin: 0 6px 6px; padding: 10px 12px; border-radius: 10px; font-family: var(--mono); line-height: 1.6; background: var(--main); box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.07 * var(--hk))); cursor: text; }
-.mx-terms.is-panel .mx-terms-screen { margin: 8px; border-radius: 12px; }
-.mx-terms-screen > * { flex: 1; min-width: 0; min-height: 0; }
-.mx-terms-screen .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
-.mx-terms-screen .terminal-screen { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; padding: 0; }
-.mx-terms-screen .terminal-screen:focus-within { border-color: transparent; box-shadow: none; }
-.mx-terms-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; font-size: 12.5px; line-height: 1.5; color: var(--dim); text-align: center; }
-.mx-terms-empty strong { font-size: 13.5px; font-weight: 600; color: var(--fg2); }
-.mx-terms-start { margin-top: 8px; height: 30px; padding: 0 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
-.mx-terms-start:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 88%, #fff); }
-.mx-terms-start:disabled { opacity: .5; }
+.mx-tdock[data-dock="bottom"] { height: var(--tdock-h, clamp(120px, calc(100vh - 480px), 260px)); animation: mx-dock-from-bottom var(--panel-in); }
+.mx-tdock[data-dock="right"] { width: var(--tdock-w, min(440px, 45%)); animation: mx-panel-from-right var(--panel-in); }
+.mx-tdock[data-dock="full"] { flex: 1; animation: mx-dock-fade .2s ease-out; }
+.mx-tdock[data-leaving] { pointer-events: none; animation: mx-dock-to-bottom var(--panel-out) forwards; }
+.mx-tdock[data-dock="right"][data-leaving] { animation-name: mx-panel-to-right; }
+.mx-tdock.is-resizing { user-select: none; }
+@keyframes mx-dock-from-bottom { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+@keyframes mx-dock-to-bottom { to { opacity: 0; transform: translateY(24px); } }
+@keyframes mx-panel-to-right { to { opacity: 0; transform: translateX(28px); } }
+@keyframes mx-dock-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.mx-tdock-grip { position: absolute; z-index: 2; }
+.mx-tdock-grip.is-height { top: 0; left: 0; right: 0; height: 5px; cursor: row-resize; }
+.mx-tdock-grip.is-width { top: 0; bottom: 0; left: 0; width: 6px; cursor: col-resize; }
+.mx-tdock-grip:hover, .mx-tdock.is-resizing .mx-tdock-grip { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+
+.mx-tdock-head { flex: none; height: 44px; display: flex; align-items: center; gap: 4px; padding: 0 6px 0 8px; min-width: 0; }
+.mx-tdock-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
+.mx-tdock-tab { position: relative; flex: none; height: 26px; display: flex; align-items: center; color: var(--muted); }
+.mx-tdock-tab:hover { color: var(--fg); }
+.mx-tdock-tab.is-on { color: var(--fg); background: var(--m-hover); box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-tdock-pick { height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 10px; font: 500 12px var(--mono); color: inherit; white-space: nowrap; }
+.mx-tdock-prompt { color: var(--accent-text); }
+/* Closing a tab ends its shells, so its × waits for the pointer instead of sitting on every tab. */
+.mx-tdock-tab-close { width: 0; height: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: 0; transition: opacity .12s ease; }
+.mx-tdock-tab:hover .mx-tdock-tab-close, .mx-tdock-tab-close:focus-visible { width: 18px; margin-right: 4px; opacity: 1; }
+.mx-tdock-tab-close:not(:disabled):hover { color: var(--fg); background: var(--m-hover); }
+.mx-tdock-tool { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); }
+.mx-tdock-tool.is-menu { width: auto; height: 28px; gap: 4px; padding: 0 6px; color: var(--muted); }
+.mx-tdock-tool:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
+.mx-tdock-tool:disabled { opacity: .35; }
+.mx-tdock-spacer { flex: 1; min-width: 8px; }
+.mx-tdock-path { min-width: 0; font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-tdock-rule { flex: none; width: 1px; height: 16px; margin: 0 4px; background: var(--line2); }
+.mx-tdock-inline { display: contents; }
+.mx-tdock-menu { display: none; }
+.mx-tdock .mx-tdock-docks { flex: none; height: 28px; display: flex; align-items: center; gap: 2px; padding: 2px; margin: 0 2px; background: var(--m-well); border: 1px solid var(--line); box-shadow: none; border-radius: var(--r-control); }
+.mx-tdock-docks .mx-tdock-dock { width: 26px; height: 22px; padding: 0; justify-content: center; }
+.mx-tdock-dock svg, .mx-tdock-menu-list svg { width: 14px; height: 14px; }
+.mx-tdock-menu-list { min-width: 200px; }
+/* A narrow dock drops its path first, then folds its split and dock buttons into one menu. */
+@container tdock (max-width: 600px) { .mx-tdock-path { display: none; } }
+@container tdock (max-width: 380px) { .mx-tdock-inline { display: none; } .mx-tdock-menu { display: block; } }
+
+.mx-tdock-body { flex: 1; min-height: 0; display: flex; gap: 6px; padding: 0 6px 6px; }
+.mx-tdock-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
+.mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: 9px 12px; font-family: var(--mono); line-height: 1.6; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); cursor: text; transition: box-shadow .15s ease; }
+.mx-tdock-split.is-focus { box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-tdock-split > :first-child { flex: 1; min-width: 0; min-height: 0; }
+.mx-tdock-split .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
+.mx-tdock-split .terminal-screen { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; padding: 0; }
+.mx-tdock-split-close { position: absolute; top: 5px; right: 5px; z-index: 1; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
+.mx-tdock-split-close:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
+.mx-tdock-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; font-size: 12.5px; line-height: 1.5; color: var(--dim); text-align: center; }
+.mx-tdock-empty strong { font-size: 13.5px; font-weight: 600; color: var(--fg2); }
+.mx-tdock-start { margin-top: 8px; height: 30px; padding: 0 14px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
+.mx-tdock-start:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
+.mx-tdock-start:disabled { opacity: .5; }

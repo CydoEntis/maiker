@@ -482,6 +482,19 @@ mod tests {
         assert!(write_file(root, "src/a.txt", &"x".repeat(300 * 1024)).is_err());
     }
 
+    #[test]
+    fn a_file_deleted_since_it_was_opened_is_said_in_words() {
+        let dir = crate::daemon::persist::scratch_dir();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("src")).expect("folder");
+
+        let error = write_file(root, "src/gone.txt", "x").expect_err("nothing to replace");
+
+        let said = format!("{error:#}");
+        assert!(said.contains("src/gone.txt is no longer there: it was moved or deleted"), "{said}");
+        assert!(!said.contains("No such file"), "{said}");
+    }
+
     #[cfg(unix)]
     #[test]
     fn a_link_is_never_followed_to_write_through_it() {

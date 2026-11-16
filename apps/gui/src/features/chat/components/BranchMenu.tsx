@@ -18,11 +18,11 @@ export type BranchMenuSpec = {
 }
 
 /**
- * The tray's branch button (layout 2g): it opens, above the box, **This chat works on** with the folder's
- * branches, the current one ticked. Picking another switches the folder's branch, so the agent's next edits go there;
- * work already done stays on its branch.
+ * The branch crumb of a chat's pane header (layout 2h): it opens, under the header, **Branch in <project>** with the
+ * folder's branches, the current one ticked. Picking another switches the folder's branch, so the agent's next edits go
+ * there; work already done stays on its branch.
  */
-export function BranchMenu({ spec, branch, worktree }: { spec: BranchMenuSpec; branch: string; worktree: boolean }) {
+export function BranchMenu({ spec, branch, worktree, project }: { spec: BranchMenuSpec; branch: string; worktree: boolean; project: string }) {
   const queryClient = useQueryClient()
   const [read, reload] = useFolderBranches(spec.folder)
   const [busy, setBusy] = useState(false)
@@ -46,13 +46,15 @@ export function BranchMenu({ spec, branch, worktree }: { spec: BranchMenuSpec; b
   }))
   return (
     <ChipMenu
-      title="This chat works on"
+      title="Change branch"
       summary={branch}
-      side="top"
+      side="bottom"
+      variant="crumb"
+      heading={`Branch in ${project}`}
       width={300}
-      label={<span className="mx-nc-branch">{branch}</span>}
-      icon={<span className="mx-nc-branch"><Icon name={worktree ? 'worktree' : 'branch'} size={12} /></span>}
-      sections={[{ heading: 'This chat works on', items: rows }]}
+      label={<span className={`mx-crumb-branch${worktree ? ' is-worktree' : ''}`}>{branch}</span>}
+      icon={<span className={`mx-crumb-branch-icon${worktree ? ' is-worktree' : ''}`}><Icon name={worktree ? 'worktree' : 'branch'} size={12} /></span>}
+      sections={[{ heading: `Branch in ${project}`, items: rows }]}
       footer={(
         <>
           {spec.onNewWorktree !== undefined && <button type="button" className="mx-chip-action" onClick={spec.onNewWorktree} disabled={spec.newWorktreeBlocked !== undefined} title={spec.newWorktreeBlocked}><Icon name="worktree" size={12} />Move to a new worktree…</button>}

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { toSessionView, type SessionView } from './session'
-import { byUrgency, canPutAway, canSnooze, inProject, machineGroups, projectChoices, projectColor, projectGroups, projectSections, rowTitle, rowWord, splitPutAway, statusSections, terminalSessions } from './sidebar'
+import { byUrgency, canPutAway, canSnooze, inProject, machineGroups, projectChoices, projectColor, projectGroups, projectSections, rowTitle, rowWord, splitPutAway, statusSections } from './sidebar'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(1)) }))
 
@@ -133,18 +133,16 @@ describe('status sections', () => {
   })
 })
 
-describe('terminals', () => {
-  it('are left out of the status and project sections and listed on their own, as created', () => {
+describe('shells', () => {
+  it('are ordinary rows of the status and project sections, as created', () => {
     const all = [session(3, { process: 'pnpm' }), session(1), session(2, { agent: 'claude' }), session(4, { details: exited })]
-    expect(terminalSessions(all).map((item) => item.id)).toEqual(['t1', 't3', 't4'])
-    expect(statusSections(all).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t2'])
-    expect(projectSections(all, [LOCAL_HEAD]).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t2'])
+    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['idle', ['t1', 't2', 't3', 't4']]])
+    expect(projectSections(all, [LOCAL_HEAD]).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t1', 't2', 't3', 't4'])
   })
 
-  it('stay with the agents while they need you', () => {
+  it('sit with what needs you while they ask', () => {
     const all = [session(1, { status: 'needs-you' }), session(2)]
-    expect(terminalSessions(all).map((item) => item.id)).toEqual(['t2'])
-    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t1']]])
+    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t1']], ['idle', ['t2']]])
   })
 })
 
@@ -173,8 +171,7 @@ describe('putting a session away', () => {
     const { listed, putAway } = splitPutAway([away(3, { agent: 'claude' }), session(1, { agent: 'claude' }), away(2), session(4)])
     expect(putAway.map((item) => item.id)).toEqual(['t2', 't3'])
     expect(listed.map((item) => item.id)).toEqual(['t1', 't4'])
-    expect(statusSections(listed).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t1'])
-    expect(terminalSessions(listed).map((item) => item.id)).toEqual(['t4'])
+    expect(statusSections(listed).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t1', 't4'])
   })
 
   it('lists a put-away session that needs you under Needs you, still put away on the daemon', () => {

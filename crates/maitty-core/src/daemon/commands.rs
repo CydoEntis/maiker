@@ -680,9 +680,9 @@ impl Daemon {
                     anyhow::bail!("{problem}");
                 }
                 // The same limit as a chat on a branch: no checkout (and no setup hook) in a
-                // repository the app has never been shown.
+                // repository the app has never been shown, unless a person picked the folder.
                 let project = Some(clean_path(project))
-                    .filter(|dir| dir.is_absolute() && dir.is_dir() && self.is_known_project(dir))
+                    .filter(|dir| dir.is_absolute() && dir.is_dir() && self.may_name_checkout(client, dir))
                     .ok_or_else(|| {
                         anyhow::anyhow!(
                             "that is not a project in the app: open a session in it first"
@@ -1134,6 +1134,10 @@ impl Daemon {
                 return Ok(false);
             }
             Command::AnswerSecret { id, value } => self.answer_secret(id, value)?,
+            Command::OpenTicketSetup { term, folder, source, link } => {
+                self.open_ticket_setup(client, term, folder, source, link)?;
+                return Ok(false);
+            }
             Command::LinkPr { term, url } => self.link_pr(term, url.as_deref())?,
             Command::SpendSecret { reference } => {
                 self.spend_secret(client, &reference)?;

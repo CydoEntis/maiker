@@ -594,7 +594,7 @@ fn the_n_and_s_keys_turn_toasts_and_sounds_on_and_off_and_the_chosen_machine_say
     let mut v = view(Some(hosts()));
     v.machine_sel = Some(0);
     let (text, ..) = shown(&mut app, v, 200, 45);
-    assert!(text.contains("Alerts from build: toasts off · sounds off"), "off until turned on:\n{text}");
+    assert!(text.contains("From build: toasts off · sounds off · copies to your clipboard on"), "off until turned on:\n{text}");
 
     app.on_key(KeyEvent::new(KeyCode::Char('n'), KeyModifiers::NONE));
     assert!(app.cfg.machines[0].notices && !app.cfg.machines[0].sounds);
@@ -611,4 +611,41 @@ fn the_n_and_s_keys_turn_toasts_and_sounds_on_and_off_and_the_chosen_machine_say
     assert!(!app.cfg.machines[0].notices);
     let written = std::fs::read_to_string(&app.machine_flow.local_config).unwrap();
     assert!(!written.contains("notices"), "off is the default, so the key goes: {written}");
+}
+
+#[test]
+fn c_turns_copies_off_at_once_and_asks_before_turning_them_on() {
+    let mut app = app_with(&[("build", "dev@build.lan")]);
+    let dir = std::env::temp_dir().join(format!("clipboard-grant-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    app.machine_flow.local_config = dir.join("config.local.toml");
+    let _ = std::fs::remove_file(&app.machine_flow.local_config);
+    crate::client::machine_config::add_machine(&app.machine_flow.local_config, "build", "dev@build.lan").unwrap();
+    let mut v = view(Some(hosts()));
+    v.machine_sel = Some(0);
+    open(&mut app, v);
+    assert!(app.cfg.machines[0].clipboard, "on unless turned off");
+
+    app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+    assert!(!app.cfg.machines[0].clipboard, "off needs no question");
+    let written = std::fs::read_to_string(&app.machine_flow.local_config).unwrap();
+    assert!(written.contains("clipboard = false"), "{written}");
+
+    app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+    for (w, h) in SIZES {
+        let (text, ..) = frame(&mut app, w, h);
+        assert!(text.contains("Let build copy to your clipboard?"), "{text}");
+        assert!(text.contains("Enter allow") || text.contains("Enter  allow"), "{text}");
+    }
+    assert!(!app.cfg.machines[0].clipboard, "asking changes nothing");
+    app.on_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert!(!app.cfg.machines[0].clipboard, "Esc keeps it off");
+    let Mode::Machines(v) = &app.mode else { panic!("{:?}", app.mode) };
+    assert_eq!(v.step, MachineStep::Browse, "and stays in the dialog");
+
+    app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+    app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(app.cfg.machines[0].clipboard, "Enter allows it");
+    let (text, ..) = frame(&mut app, 160, 45);
+    assert!(text.contains("Copying to your clipboard from build is now on."), "{text}");
 }

@@ -13,6 +13,9 @@ const HELPER_TITLE_CHARS: usize = 120;
 const MAX_PLAN_BYTES: usize = 64 * 1024;
 /// Largest summary text kept for one reasoning item.
 const MAX_REASONING_BYTES: usize = 64 * 1024;
+/// The item a provider's own summary of the earlier conversation arrives as. It is kept as a tool
+/// step of this kind, with the summary as its output.
+pub(super) const CONTEXT_SUMMARY_ITEM: &str = "contextSummary";
 
 fn tool_label(item: &Value) -> String {
     item.get("command")
@@ -167,11 +170,34 @@ pub(super) fn notification(
             exit_code: None,
             duration_ms: None,
         },
+        // The transcript reader has already cleaned and bounded the text.
+        CONTEXT_SUMMARY_ITEM => Content::Tool {
+            kind: kind.into(),
+            label: String::new(),
+            output: item
+                .get("text")
+                .and_then(Value::as_str)
+                .ok_or(IncompleteReason::InvalidEvent)?
+                .into(),
+            input: None,
+            exit_code: None,
+            duration_ms: None,
+        },
         "collabAgentToolCall" => Content::Tool {
             kind: kind.into(),
             label: helper_title(item),
             output: String::new(),
             input: helper_input(item),
+            exit_code: None,
+            duration_ms: None,
+        },
+        // A helper starting or finishing (Codex 0.166); the helper itself is tracked apart
+        // (`codex_helpers`), and its own events never reach this history.
+        "subAgentActivity" => Content::Tool {
+            kind: kind.into(),
+            label: helper_activity_label(item),
+            output: String::new(),
+            input: None,
             exit_code: None,
             duration_ms: None,
         },
@@ -261,6 +287,22 @@ fn helper_title(item: &Value) -> String {
             .get("tool")
             .and_then(Value::as_str)
             .map_or_else(|| "Helper agent".into(), clean_text),
+    }
+}
+
+/// "Started helper review" or "Helper review finished", by the task name Codex gave it.
+fn helper_activity_label(item: &Value) -> String {
+    let name = item
+        .get("agentPath")
+        .and_then(Value::as_str)
+        .and_then(|path| path.rsplit('/').find(|part| !part.is_empty()))
+        .map(clean_text)
+        .filter(|name| !name.is_empty())
+        .map(|name| name.chars().take(HELPER_TITLE_CHARS).collect::<String>());
+    let name = name.as_deref().unwrap_or("helper");
+    match item.get("kind").and_then(Value::as_str) {
+        Some("completed") => format!("Helper {name} finished"),
+        _ => format!("Started helper {name}"),
     }
 }
 

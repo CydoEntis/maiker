@@ -91,7 +91,7 @@ describe('usage page period', () => {
     expect(await screen.findByText(/Last 30 days/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true')
 
-    await user.click(screen.getByRole('button', { name: 'Day' }))
+    await user.click(screen.getByRole('button', { name: 'Today' }))
     expect(await screen.findByText(/Today \(UTC\)/)).toBeInTheDocument()
   })
 })
@@ -120,7 +120,7 @@ describe('usage page figures', () => {
     expect(screen.getByRole('note')).toHaveTextContent('2 sessions reported no cost')
 
     api.loadUsageReport.mockResolvedValue(report({ sessionsWithoutCost: 0 }))
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Day' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Today' }))
     await waitFor(() => { expect(screen.queryByRole('note')).not.toBeInTheDocument() })
   })
 

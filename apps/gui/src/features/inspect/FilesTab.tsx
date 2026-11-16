@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { HighlightedLine } from '@/components/HighlightedLine'
+import { TypeTag } from '@/components/ui/tag'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { type HighlightedLines, highlightFile, repoDiff, repoFile, repoTree, writeProjectFile } from './api'
 import { changeKind, type ChangeKind } from './changeKind'
@@ -28,7 +29,7 @@ function baseName(path: string): string {
 
 function FileName({ name }: { name: string }) {
   const tag = fileTag(name)
-  return <>{tag !== null && <span className="mx-files-tag" aria-hidden="true">{tag}</span>}<span className="mx-files-name">{name}</span></>
+  return <>{tag !== null && <span className="mx-files-tag" aria-hidden="true"><TypeTag tag={tag} /></span>}<span className="mx-files-name">{name}</span></>
 }
 
 /** A tree row's left padding: a base, then one step in for each folder level. */
@@ -63,7 +64,7 @@ function ancestorsOf(path: string): string[] {
  * The repository's files, read-only: the changed ones listed first, then the tree (folders open in place, each read when
  * first opened), and the chosen file beside them. A changed file opens as its diff, with the whole file a click away.
  */
-export function FilesTab({ term, machine = 0, lookAt }: { term: number; /** The machine the session is on; a file is edited on this computer (0) only. */ machine?: number; lookAt: LookAt | null }) {
+export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: number; /** The machine the session is on; a file is edited on this computer (0) only. */ machine?: number; lookAt: LookAt | null; /** Opens the project's references, the first entry of the tree. */ onReferences?: () => void }) {
   const client = useQueryClient()
   // The text being edited, and what the file said when the edit began (so a change made meanwhile is noticed).
   const [edit, setEdit] = useState<{ file: string; original: string; draft: string } | null>(null)
@@ -148,6 +149,13 @@ export function FilesTab({ term, machine = 0, lookAt }: { term: number; /** The 
   return (
     <div className="mx-files">
       <nav className="mx-files-tree" aria-label="Files">
+        {onReferences !== undefined && (
+          <button type="button" className="mx-files-refs" onClick={onReferences}>
+            <Icon name="references" size={13} />
+            <span>References</span>
+            <Icon name="chevron" />
+          </button>
+        )}
         {changed.size > 0 && (
           <>
             <p className="mx-files-heading">Changed</p>

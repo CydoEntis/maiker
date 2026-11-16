@@ -1,21 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { ageOf, isWorktree, launchFlags, splitRecent, yoloFlags } from './newChatHost'
+import { ageOf, launchFlags, yoloFlags } from './newChatHost'
 
-const project = (name: string) => ({ folder: `/dev/${name}`, name, color: 'red' })
-
-describe('isWorktree', () => {
-  const branches = { current: 'dev', branches: [], worktrees: [{ path: 'C:/dev/app', branch: 'dev', main: true, when: 1 }, { path: 'C:/dev/app-worktrees/keen-otter', branch: 'fix', main: false, when: 2 }] }
-
-  it('tells a worktree from the main checkout, however the path is spelled', () => {
-    expect(isWorktree(branches, 'C:\\dev\\app-worktrees\\Keen-Otter\\')).toBe(true)
-    expect(isWorktree(branches, 'C:\\dev\\app')).toBe(false)
-  })
-
-  it('says nothing when git has not answered or does not list the folder', () => {
-    expect(isWorktree(null, 'C:/dev/app')).toBeNull()
-    expect(isWorktree(branches, 'C:/elsewhere')).toBeNull()
-  })
-})
 
 describe('launchFlags', () => {
   it('puts a picked Claude model and effort on the launch line', () => {
@@ -62,18 +47,6 @@ describe('ageOf', () => {
 
   it('is empty when the time is unknown', () => {
     expect(ageOf(null, now)).toBe('')
-  })
-})
-
-describe('splitRecent', () => {
-  it('takes the first three as recent and the rest as the others', () => {
-    const { recent, rest } = splitRecent(['a', 'b', 'c', 'd', 'e'].map(project))
-    expect(recent.map((item) => item.name)).toEqual(['a', 'b', 'c'])
-    expect(rest.map((item) => item.name)).toEqual(['d', 'e'])
-  })
-
-  it('has no others when there are three or fewer', () => {
-    expect(splitRecent(['a', 'b'].map(project)).rest).toEqual([])
   })
 })
 

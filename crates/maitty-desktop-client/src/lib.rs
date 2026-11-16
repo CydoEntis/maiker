@@ -261,10 +261,16 @@ fn saved_agent_count() -> usize {
         .count()
 }
 
-fn stop_mismatched_daemon() -> Result<()> {
-    let pid = std::fs::read_to_string(ipc::pid_file())
+/// The process the pid file names as this socket's daemon.
+fn daemon_pid() -> Option<u32> {
+    std::fs::read_to_string(ipc::pid_file())
         .ok()
         .and_then(|value| value.trim().parse::<u32>().ok())
+}
+
+/// Stops the daemon the pid file names, and says which process that was.
+fn stop_mismatched_daemon() -> Result<u32> {
+    let pid = daemon_pid()
         .filter(|pid| is_app_daemon(*pid))
         .ok_or_else(|| {
             anyhow::anyhow!("couldn't identify the local {APP_NAME} ({APP_COMMAND}) daemon process")
@@ -290,7 +296,7 @@ fn stop_mismatched_daemon() -> Result<()> {
         status.success(),
         "couldn't stop the old daemon process {pid}"
     );
-    Ok(())
+    Ok(pid)
 }
 
 fn is_app_daemon(pid: u32) -> bool {
@@ -366,17 +372,31 @@ pub async fn restart_stale_daemon(app_version: &str, expected_version: &str) -> 
 /// wait until it lets go of the socket.
 async fn stop_local_daemon() -> Result<()> {
     validate_restart_activity(read_activity().as_ref(), session_file().is_file())?;
-    tokio::task::spawn_blocking(stop_mismatched_daemon)
+    let stopped = tokio::task::spawn_blocking(stop_mismatched_daemon)
         .await
         .context(format!("waiting for the local {APP_NAME} service to stop"))??;
     for _ in 0..50 {
-        if !ipc::is_running().await {
-            ipc::remove_pid_file();
+        let listening = ipc::is_running().await;
+        let named = daemon_pid();
+        if stopped_daemon_is_gone(stopped, listening, named) {
+            // A daemon that already took over wrote its own pid file: only the stopped one's goes.
+            if named == Some(stopped) {
+                ipc::remove_pid_file();
+            }
             return Ok(());
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    bail!("the old daemon still holds the local service socket")
+    bail!(
+        "the old {APP_NAME} service (process {stopped}) did not stop within 5 seconds, so it still holds the local service socket"
+    )
+}
+
+/// Whether the stopped daemon let go of the socket. Something listening is not proof that it
+/// has not: this app's own connections start the next daemon the moment the old one drops, and
+/// only one daemon holds a socket, so a pid file naming another process means the old one is gone.
+fn stopped_daemon_is_gone(stopped: u32, listening: bool, named: Option<u32>) -> bool {
+    !listening || named.is_some_and(|pid| pid != stopped)
 }
 
 fn validate_restart_confirmation(daemon_protocol: u32, expected_protocol: u32) -> Result<()> {
@@ -413,6 +433,32 @@ pub async fn read_conversation(
     match reply {
         Reply::ConversationRead(history) => Ok(serde_json::to_value(history)?),
         _ => bail!("daemon returned an unexpected conversation history reply"),
+    }
+}
+
+/// The longest helper id the window may ask about; the daemon checks it again.
+const HELPER_ID_MAX: usize = 128;
+
+/// What one of a pane's helpers did, from its own record (ADR 0010), as JSON for the window.
+pub async fn read_helper(term: u32, helper: String, daemon: impl Into<Daemon>) -> Result<Value> {
+    if helper.is_empty()
+        || helper.len() > HELPER_ID_MAX
+        || !helper.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        bail!("invalid helper id");
+    }
+    match request(ClientMsg::Query(Query::HelperRead { term, helper }), daemon).await? {
+        Reply::HelperRead(record) => Ok(serde_json::to_value(record)?),
+        _ => bail!("daemon returned an unexpected helper reply"),
+    }
+}
+
+/// The Claude Code and Codex agent files of a pane's project and its user's home, read-only (ADR
+/// 0010), as JSON for the window.
+pub async fn read_specialists(term: u32, daemon: impl Into<Daemon>) -> Result<Value> {
+    match request(ClientMsg::Query(Query::Specialists { term }), daemon).await? {
+        Reply::Specialists(list) => Ok(serde_json::to_value(list)?),
+        _ => bail!("daemon returned an unexpected specialists reply"),
     }
 }
 
@@ -605,6 +651,16 @@ fn run_git(dir: &std::path::Path, args: &[&str]) -> std::result::Result<String, 
     } else {
         Err(String::from_utf8_lossy(&out.stderr).lines().next().unwrap_or("git failed").trim().to_string())
     }
+}
+
+/// The GitHub repository (`owner/name`) a folder's `origin` remote points at, or `None` when it has no such remote.
+/// Git runs off the caller's thread with fixed arguments; a folder git cannot read has none.
+pub async fn github_repo_of(folder: PathBuf) -> Result<Option<String>> {
+    tokio::task::spawn_blocking(move || {
+        run_git(&folder, &["remote", "get-url", "origin"]).ok().and_then(|address| maitty_shared::github::repo_of_remote(&address))
+    })
+    .await
+    .context("reading the folder's remote")
 }
 
 /// The files that more than one of these checkouts (name, folder) changed since their branches parted. Git runs
@@ -849,6 +905,26 @@ pub async fn start_agent_session(
     }
 }
 
+pub use maitty_shared::protocol::GITHUB_SIGN_IN_COMMAND;
+
+/// The request that starts a terminal session in `cwd` running GitHub's sign-in, for this computer's daemon or
+/// another machine's.
+pub fn github_sign_in_message(cwd: PathBuf) -> ClientMsg {
+    ClientMsg::Command(Command::NewWorkspace {
+        cwd: Some(cwd),
+        name: None,
+        cmd: Some(GITHUB_SIGN_IN_COMMAND.to_owned()),
+    })
+}
+
+/// Start GitHub's sign-in as the first command of a new terminal session on this computer, in `home`.
+pub async fn start_github_sign_in(home: PathBuf, daemon_executable: PathBuf) -> Result<Value> {
+    match request(github_sign_in_message(home), daemon_executable).await? {
+        Reply::Ok => Ok(Value::Null),
+        _ => bail!("daemon returned an unexpected terminal session reply"),
+    }
+}
+
 /// The command that keeps an agent warm in a folder: the same line `start_agent_session` sends, so the session started
 /// next with the same agent, flags and folder is the one already running.
 pub fn prewarm_message(cwd: PathBuf, agent: &str, flags: &[String]) -> Result<ClientMsg> {
@@ -1039,24 +1115,64 @@ pub async fn rename_terminal_session(
     }
 }
 
-/// A read-only question about the repository a pane is in. `question` is a `RepoRequest` as
-/// JSON; the daemon scopes it to the pane's own checkout.
-pub async fn repo_query(term: u32, question: Value, daemon_executable: PathBuf) -> Result<Value> {
-    let question: maitty_shared::repo::RepoRequest =
-        serde_json::from_value(question).context("invalid repository request")?;
+/// A read-only question about the repository a pane is in, asked of the daemon that owns the
+/// pane; that daemon scopes it to the pane's own checkout. A question newer than the oldest local
+/// daemon this app talks to is refused in words when the running one is older.
+pub async fn repo_query(term: u32, question: maitty_shared::repo::RepoRequest, daemon: impl Into<Daemon>) -> Result<Value> {
     let message = ClientMsg::Query(Query::Repo {
         term,
         tag: 0,
         request: question,
     });
-    let reply = if repo_question_needs_version(&message) {
-        ask_running_daemon_if_it_reads(&message).await?
-    } else {
-        request(message, daemon_executable).await?
+    let reply = match daemon.into() {
+        Daemon::Local(_) if repo_question_needs_version(&message) => ask_running_daemon_if_it_reads(&message).await?,
+        daemon => request(message, daemon).await?,
     };
     match reply {
         Reply::Repo { reply, .. } => Ok(serde_json::to_value(reply)?),
         _ => bail!("daemon returned an unexpected repository reply"),
+    }
+}
+
+/// Which commit name and email git uses on a daemon's machine, and its folder rules, as a
+/// `GitIdentityReport` in JSON. The daemon reads them and writes nothing.
+pub async fn git_identities(daemon: impl Into<Daemon>) -> Result<Value> {
+    match request(ClientMsg::Query(Query::GitIdentities { tag: 0 }), daemon).await? {
+        Reply::GitIdentities { report, .. } => Ok(serde_json::to_value(report)?),
+        _ => bail!("daemon returned an unexpected answer about who commits"),
+    }
+}
+
+/// Preview, write or remove a folder's rule on a daemon's machine. The lines it would write, wrote
+/// or took away, by file, as JSON; or an error whose text is the daemon's one line saying why not.
+pub async fn git_identity_rule(change: maitty_shared::protocol::GitRuleChange, daemon: impl Into<Daemon>) -> Result<Value> {
+    match request(ClientMsg::Query(Query::GitIdentityRule { change, tag: 0 }), daemon).await? {
+        Reply::GitIdentityRuleDone { outcome: Ok(files), .. } => Ok(serde_json::to_value(files)?),
+        Reply::GitIdentityRuleDone { outcome: Err(why), .. } => bail!("{why}"),
+        _ => bail!("daemon returned an unexpected answer about a folder's rule"),
+    }
+}
+
+/// How long an answer to `request` is waited for: a little longer than the daemon gives it, so
+/// the daemon's own "stopped after" line is what arrives.
+fn git_request_timeout(request: &maitty_shared::protocol::GitRequest) -> Duration {
+    use maitty_shared::protocol::{GIT_COMMIT_LIMIT_SECS, GIT_SYNC_LIMIT_SECS, GitRequest};
+    const SLACK_SECS: u64 = 15;
+    Duration::from_secs(SLACK_SECS + match request {
+        GitRequest::Commit { .. } => GIT_COMMIT_LIMIT_SECS,
+        GitRequest::Fetch | GitRequest::Pull | GitRequest::Push | GitRequest::PullRequest => GIT_SYNC_LIMIT_SECS,
+    })
+}
+
+/// Have the daemon that owns pane `term` do `request` to the checkout the pane is in. The line
+/// saying what happened, or an error whose text is the daemon's one line saying why not.
+pub async fn git_request(term: u32, request: maitty_shared::protocol::GitRequest, daemon: impl Into<Daemon>) -> Result<String> {
+    let limit = git_request_timeout(&request);
+    let asked = ClientMsg::Query(Query::Git { term, request, tag: 0 });
+    match request_within(asked, daemon, limit).await? {
+        Reply::GitDone { outcome: Ok(line), .. } => Ok(line),
+        Reply::GitDone { outcome: Err(why), .. } => bail!("{why}"),
+        _ => bail!("daemon returned an unexpected git reply"),
     }
 }
 
@@ -1502,7 +1618,7 @@ pub async fn send_conversation_now(
     });
     let reply = match daemon.into() {
         Daemon::Local(_) => ask_running_daemon_if_it_reads(&message).await?,
-        Daemon::Remote(remote) => remote.request(message).await?,
+        Daemon::Remote(remote) => remote.request(message, REQUEST_TIMEOUT).await?,
     };
     match reply {
         Reply::Ok => Ok(Value::Null),
@@ -1713,6 +1829,30 @@ pub async fn saved_conversations(agent: String, folder: String) -> Result<Value>
         match ask(&mut connection, &message).await? {
             Reply::SavedConversations { found, .. } => Ok(serde_json::to_value(found)?),
             _ => bail!("daemon returned an unexpected saved conversations reply"),
+        }
+    })
+    .await
+}
+
+/// How long a side answer may take: the daemon's own limit, with a margin for the connection.
+const SIDE_ANSWER_TIMEOUT: Duration = Duration::from_secs(100);
+
+/// Claude Code's answer beside conversation `id` on this computer, as the daemon's `SideAnswer`, without adding to
+/// the conversation. Refused in words when the daemon running is older than the question.
+pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk) -> Result<Value> {
+    let message = ClientMsg::Query(Query::SideAnswer {
+        id: maitty_shared::conversation::ConversationId(id),
+        ask: side,
+        tag: 0,
+    });
+    answered_within(SIDE_ANSWER_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("connecting to the local daemon")?;
+        refuse_unless_daemon_reads(&message, version)?;
+        match ask(&mut connection, &message).await? {
+            Reply::SideAnswer { answer, .. } => Ok(serde_json::to_value(answer)?),
+            _ => bail!("daemon returned an unexpected side answer reply"),
         }
     })
     .await
@@ -2219,17 +2359,17 @@ impl RemoteDaemon {
         }
     }
 
-    async fn request(&self, message: ClientMsg) -> Result<Reply> {
+    async fn request(&self, message: ClientMsg, limit: Duration) -> Result<Reply> {
         let idle = remote_idle(self.key);
         let asked = ask_reusing(&idle, MAX_IDLE_REMOTE_CONNECTIONS, &message, || {
             (self.open)()
         });
-        let reply = match tokio::time::timeout(REQUEST_TIMEOUT, asked).await {
+        let reply = match tokio::time::timeout(limit, asked).await {
             Ok(answer) => answer.with_context(|| format!("asking {}", self.name))?,
             Err(_) => bail!(
                 "{} did not answer within {} seconds",
                 self.name,
-                REQUEST_TIMEOUT.as_secs()
+                limit.as_secs()
             ),
         };
         (self.vet)(reply).map_err(|why| anyhow::anyhow!("{} sent an answer that was refused: {why}", self.name))
@@ -2299,10 +2439,15 @@ where
 }
 
 async fn request(message: ClientMsg, daemon: impl Into<Daemon>) -> Result<Reply> {
+    request_within(message, daemon, REQUEST_TIMEOUT).await
+}
+
+/// `request`, for a question the daemon may take up to `limit` to answer.
+async fn request_within(message: ClientMsg, daemon: impl Into<Daemon>, limit: Duration) -> Result<Reply> {
     match daemon.into() {
         Daemon::Local(daemon_executable) => {
             answered_within(
-                REQUEST_TIMEOUT,
+                limit,
                 ask_reusing(&IDLE_CONNECTIONS, MAX_IDLE_CONNECTIONS, &message, || async {
                     ipc::open_or_spawn_for_user(&daemon_executable)
                         .await
@@ -2311,7 +2456,7 @@ async fn request(message: ClientMsg, daemon: impl Into<Daemon>) -> Result<Reply>
             )
             .await
         }
-        Daemon::Remote(remote) => remote.request(message).await,
+        Daemon::Remote(remote) => remote.request(message, limit).await,
     }
 }
 
@@ -2488,9 +2633,18 @@ async fn receive_reply(reader: &mut ipc::Reader) -> Result<Reply> {
 #[cfg(test)]
 mod restart_confirmation_tests {
     use super::{
-        Activity, can_restart_mismatched_daemon, is_daemon_command_line, update_status,
-        validate_restart_activity, validate_restart_confirmation,
+        Activity, can_restart_mismatched_daemon, is_daemon_command_line, stopped_daemon_is_gone,
+        update_status, validate_restart_activity, validate_restart_confirmation,
     };
+
+    #[test]
+    fn a_daemon_that_took_over_the_socket_means_the_stopped_one_is_gone() {
+        assert!(stopped_daemon_is_gone(7, false, Some(7)));
+        assert!(stopped_daemon_is_gone(7, false, None));
+        assert!(stopped_daemon_is_gone(7, true, Some(8)));
+        assert!(!stopped_daemon_is_gone(7, true, Some(7)));
+        assert!(!stopped_daemon_is_gone(7, true, None));
+    }
 
     #[test]
     fn the_daemon_to_restart_may_be_the_terminal_apps_or_the_one_the_desktop_app_bundles() {
@@ -2655,6 +2809,18 @@ mod executable_lookup_tests {
 #[cfg(test)]
 mod agent_command_tests {
     use super::agent_command;
+
+    #[test]
+    fn the_github_sign_in_is_one_fixed_line_whatever_folder_it_starts_in() {
+        use super::{ClientMsg, Command, github_sign_in_message};
+        for folder in ["~", "/home/dev", "; rm -rf ~"] {
+            let ClientMsg::Command(Command::NewWorkspace { cwd, name, cmd }) = github_sign_in_message(folder.into()) else {
+                panic!("a sign-in is a new terminal session");
+            };
+            assert_eq!(cmd.as_deref(), Some("gh auth login --web --git-protocol https"));
+            assert_eq!((cwd, name), (Some(folder.into()), None));
+        }
+    }
 
     fn words(items: &[&str]) -> Vec<String> {
         items.iter().map(|item| (*item).to_string()).collect()

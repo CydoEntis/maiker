@@ -9,7 +9,7 @@ import type { SessionView } from './session'
 describe('abilitiesOf', () => {
   it('gives Claude its own commands, Shift+Tab modes, a structured chat, moves, verified keys, live model chips, `!` lines, saved conversations, model discovery and hooked asks', () => {
     expect(abilitiesOf('claude')).toEqual({
-      slashCommands: { list: 'agent', skillsAfterDollar: false, enterAfterPause: false },
+      slashCommands: { list: 'agent', skillsAfterDollar: false, enterAfterPause: true },
       permissionModes: { modes: PICKABLE_MODES, switchBy: 'shift-tab' },
       structuredChat: true,
       moveToWorktree: true,
@@ -17,6 +17,7 @@ describe('abilitiesOf', () => {
       // The sidebar and the chat disagree today: the chat declines with Esc, the sidebar types `n` (and `a`),
       // which Claude's menu ignores. Pinned as each behaves, not reconciled.
       sidebarAnswerKeys: { y: '1', a: 'a', n: 'n' },
+      sidebarNeedsAnswerable: false,
       changeAgent: true,
       bangToTerminal: true,
       resumeSaved: true,
@@ -36,9 +37,8 @@ describe('abilitiesOf', () => {
       structuredChat: true,
       moveToWorktree: true,
       answerKeys: CODEX_ANSWER_KEYS,
-      // The chat answers Codex's approval menu with `y` and Esc, while the sidebar types the bare letters.
-      // Pinned as each behaves, not reconciled.
-      sidebarAnswerKeys: { y: 'y', a: 'a', n: 'n' },
+      sidebarAnswerKeys: { y: 'y', n: '\x1b' },
+      sidebarNeedsAnswerable: true,
       changeAgent: false,
       bangToTerminal: false,
       resumeSaved: true,
@@ -59,6 +59,7 @@ describe('abilitiesOf', () => {
       moveToWorktree: false,
       answerKeys: null,
       sidebarAnswerKeys: { y: 'y', a: 'a', n: 'n' },
+      sidebarNeedsAnswerable: false,
       changeAgent: false,
       bangToTerminal: true,
       resumeSaved: false,

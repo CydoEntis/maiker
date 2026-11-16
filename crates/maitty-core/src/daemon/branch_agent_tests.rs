@@ -297,3 +297,56 @@ fn a_worktree_asked_by_folder_is_made_tracked_and_answered_with_its_folder() {
     close_all(&mut d);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_person_may_name_a_repository_the_app_has_not_seen_and_an_agent_may_not() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let _in_rt = rt.enter();
+    let (mut d, mut rx) = daemon_with(Config::default());
+    let root = scratch("branch-worktree-picked");
+    // No workspace or pane is in it: the person picked it on the new chat page.
+    let repo = repo_in(&root);
+    let (tx, mut client_rx) = mpsc::channel(64);
+    d.handle(Ev::Connected(
+        1,
+        tx,
+        false,
+        crate::protocol::Surface::Terminal,
+        true,
+    ));
+    let ask = || Command::BranchWorktree {
+        project: repo.clone(),
+        branch: "feat/picked".into(),
+    };
+
+    // An agent acting from a pane cannot point a checkout (and its setup hook) at it.
+    let pane = TermId::MAX;
+    d.clients.get_mut(&1).expect("the client").from = Some(pane);
+    let error = d.command(1, ask()).expect_err("refused").to_string();
+    assert!(error.contains("not a project"), "{error:?}");
+    assert!(d.made_worktrees.is_empty());
+
+    // The person's own window can.
+    d.clients.get_mut(&1).expect("the client").from = None;
+    d.handle(Ev::Msg(1, ClientMsg::Command(ask())));
+    let until = Instant::now() + Duration::from_secs(60);
+    let answer = loop {
+        if let Ok(msg) = client_rx.try_recv() {
+            break msg;
+        }
+        assert!(Instant::now() < until, "the daemon never answered");
+        match rx.try_recv() {
+            Ok(ev) => d.handle(ev),
+            Err(_) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    };
+    let ServerMsg::Reply(Reply::Text(folder)) = answer else {
+        panic!("expected the new folder, got {answer:?}")
+    };
+    assert_eq!(
+        crate::gitfs::head(Path::new(&folder)).map(|h| h.branch).as_deref(),
+        Some("feat/picked")
+    );
+    close_all(&mut d);
+    let _ = std::fs::remove_dir_all(&root);
+}

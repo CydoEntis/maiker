@@ -1,5 +1,4 @@
 import { Panel } from '@/components/ui/panel'
-import { LOCAL_MACHINE } from '@/api/machines'
 import { UpdateSlot } from '@/features/updates/UpdateSlot'
 import { skipUpdate } from '@/features/updates/updateMemory'
 import { Sidebar } from './Sidebar'
@@ -9,7 +8,7 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sidebarSessions, sidebarMachineHeads, focusedId, openSubagent, online, canStart, renameInline, renameId, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, newSession, newTerminal, setSettingsSection, setRenamingMachine, setUpdateAsk, showSessionById, showSubagent, setRenameId, saveName, openInSplit, splitSubagent, copyPathOf, copyText, showChangesOf, markDone, putAway, bringBack, snooze, unsnooze, setGetFileId, endSession, newChatOpen, serviceFooterText, updateProgress, updater, runningVersion, skippedVersion, restartNow, setSkippedVersion, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen } = useWorkspace()
+  const { sidebarSessions, sidebarMachineHeads, focusedId, online, canStart, renameInline, renameId, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, newSession, newTerminal, setSettingsSection, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, openInSplit, copyPathOf, copyText, showChangesOf, markDone, putAway, bringBack, snooze, unsnooze, setGetFileId, endSession, newChatOpen, newChatMachine, newChatAgent, serviceFooterText, updateProgress, updater, runningVersion, skippedVersion, restartNow, setSkippedVersion, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId } = useWorkspace()
   const updateSlot = (variant: 'footer' | 'rail') => (
     <UpdateSlot
       variant={variant}
@@ -30,7 +29,6 @@ export function WorkspaceSidebars() {
       sessions={sidebarSessions}
       machines={sidebarMachineHeads}
       focusedId={focusedId}
-      openSubagent={openSubagent}
       mode={mode}
       online={online}
       canStart={canStart}
@@ -55,11 +53,9 @@ export function WorkspaceSidebars() {
       onRenameMachine={setRenamingMachine}
       onUpdateMachine={(name, action) => { afterPick(); setUpdateAsk({ name, action }) }}
       onShowSession={(id) => { afterPick(); showSessionById(id) }}
-      onShowSubagent={(sessionId, subagentId) => { afterPick(); showSubagent(sessionId, subagentId) }}
       onRenameSession={setRenameId}
       onSetName={saveName}
       onSplitSession={(id, direction) => { afterPick(); openInSplit(id, direction) }}
-      onSplitSubagent={(sessionId, subagentId) => { afterPick(); splitSubagent(sessionId, subagentId) }}
       onCopyPath={copyPathOf}
       onCopyText={copyText}
       onShowChanges={(id) => { afterPick(); showChangesOf(id) }}
@@ -69,12 +65,13 @@ export function WorkspaceSidebars() {
       onSnooze={snooze}
       onUnsnooze={unsnooze}
       onGetFile={setGetFileId}
+      onSpecialists={setSpecialistsId}
       onEndSession={endSession}
       onOpenSettings={() => { afterPick(); setSettingsSection('appearance') }}
       onRecentSessions={() => { afterPick(); setRecentOpen(true) }}
       updateSlot={updateSlot('footer')}
       railUpdateSlot={updateSlot('rail')}
-      draft={newChatOpen ? { machine: LOCAL_MACHINE } : null}
+      draft={newChatOpen ? { machine: newChatMachine, process: newChatAgent ?? preferences.defaultAgent } : null}
       serviceText={serviceFooterText}
       updateProgress={updateProgress}
     />
@@ -82,7 +79,8 @@ export function WorkspaceSidebars() {
 
   return (
     <>
-      {!focusMode && renderSidebar(sidebarMode, noop, toggleSidebar)}
+      {/* Hidden, the sidebar leaves no rail: the pane header's Show sidebar button brings it back. */}
+      {!focusMode && sidebarMode !== 'hidden' && renderSidebar(sidebarMode, noop, toggleSidebar)}
             {!focusMode && drawerShown && (
               <Panel label="Sessions" onClose={() => { setDrawerOpen(false) }} scrimClassName="mx-drawer-scrim" className="mx-drawer">
                 {renderSidebar('docked', () => { setDrawerOpen(false) }, () => { setDrawerOpen(false) })}

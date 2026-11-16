@@ -11,16 +11,17 @@ export type UsageItem = {
   readonly percent: number
   /** How long until the limit starts over (`2d 4h`); null for the context, which does not. */
   readonly resetsIn: string | null
-  /** The limit's window as the tray says it after the figure (`week`, `5h`); null for the context. */
+  /** The limit's window as the meter says it beside the figure (`week`, `5h`); null for the context. */
   readonly window: string | null
-  readonly tone: 'plain' | 'warn' | 'danger'
+  /** Which of the theme's four meter colours it wears. */
+  readonly tone: 'ok' | 'mid' | 'high' | 'max'
 }
 
 const FULL = 100
-/** From here a meter is amber (layout 2g: four fifths): worth a look before it is a problem. */
-const WARN_FROM = 80
-/** From here it is red: the next long turn may not fit. */
-const DANGER_FROM = 90
+/** Where a meter moves to the theme's next colour (the desktop mock's steps): a quarter, a half, three quarters. */
+const MID_FROM = 25
+const HIGH_FROM = 50
+const MAX_FROM = 75
 const MINUTE = 60
 const HOUR = 3600
 const DAY = 86_400
@@ -28,7 +29,7 @@ const DAY = 86_400
 /** The names the daemon gives the limit windows, as the strip says them; any other is shown as it came. */
 const LIMIT_LABEL: Readonly<Record<string, string>> = { '5h': '5-hour limit', week: 'Weekly limit' }
 
-const toneOf = (percent: number): UsageItem['tone'] => (percent >= DANGER_FROM ? 'danger' : percent >= WARN_FROM ? 'warn' : 'plain')
+const toneOf = (percent: number): UsageItem['tone'] => (percent >= MAX_FROM ? 'max' : percent >= HIGH_FROM ? 'high' : percent >= MID_FROM ? 'mid' : 'ok')
 const whole = (value: number): number => Math.min(FULL, Math.max(0, Math.round(value)))
 
 /** `2d 4h`, `3h 10m`, `12m`: the two largest parts of a wait, or `now` when it is over. */

@@ -5,59 +5,6 @@ in [shortcuts](shortcuts.md); every setting is in [`config.example.toml`](../con
 
 ## Using it
 
-Structured Codex conversations use the daemon without creating a terminal pane.
-They appear in the existing session list; selecting an unbound conversation keeps
-the sidebar focused. Native terminal handoff and interactive request answers are
-later work. Existing `maitty send` still types into a PTY.
-
-Start with a verified Codex 0.164.0 executable and existing absolute paths:
-
-```powershell
-maitty conversation start --executable C:\tools\codex.exe --config-root C:\codex-home --cwd C:\project
-maitty conversation send --conversation 1 --generation 1 --operation 1 "Review the failing test"
-maitty conversation read --conversation 1 --limit 128
-```
-
-Commands print JSON. Start returns `conversation` and `generation`; use those
-values for send. Increment `--operation` for each new prompt. Repeating an
-acknowledged operation with identical text returns its receipt without sending
-again. Uncertain delivery refuses automatic resend; inspect native/provider
-evidence before deciding how to continue.
-
-`start --session <exact-Thread.id>` resumes that exact native thread with the same
-explicit executable/config-root/cwd inputs. A missing thread fails. Reconnect
-recorded Maitty identity with `start --conversation <id> --generation <current>`;
-it uses recorded settings and returns a newly fenced generation. No picker,
-latest-session selection or implicit fork is used. Interrupted creation intent
-has no confirmed identity and cannot automatically create another thread.
-
-New bindings also accept `--model`, `--model-provider`, `--approval`
-(`untrusted`, `on-request`, `never`; default `on-request`) and `--sandbox`
-(`read-only`, `workspace-write`; default `read-only`). Workspace write disables
-network and additional temporary-directory writable roots. Native profiles are
-unsupported. A provider posture mismatch fails before turn submission.
-
-`read --cursor '<JSON cursor>'` continues a page; limit is 1–128 and each page is
-at most 256 KiB. A cursor becomes stale when history or generation changes.
-Completeness and item state are separate from page exhaustion. Unsupported or
-incomplete native history disables sending. Provider approval/question requests
-remain visibly blocked and unanswered. Checkpoint failures and pending approvals
-remain visible even when the provider has finished.
-
-Structured mutations require `[restore] enabled=true`. Setting `output=false`
-removes/prevents Maitty's transcript cache while preserving content-free identity
-and delivery receipts; explicit reads may hydrate memory for that connection.
-
-Structured tools authenticate as that runtime and follow configured MCP grants.
-Granted list/read/send/reference operations remain available. Starting further
-helpers from a structured runtime is refused until conversation-owned helper
-consent is supported; native helper starts keep their existing behavior.
-Structured admission supports the default/all Codex shell environment policy.
-Custom filtering, environment-set/profile policies or explicit MCP environment
-values that conflict with its reserved identity fail with a native-terminal
-alternative. Runtime MCP environment allowlists are augmented without editing
-your configuration or storing authentication values in thread settings.
-
 Click **menu** at the bottom of the sidebar (or press the leader, then `.`) for the common
 commands: new session, shell, pane, tab, Inbox, Search commands, All keys, the sidebar and Settings.
 **Search commands** (leader, then `Space`) finds every command, including **Connect agents**
@@ -177,6 +124,10 @@ helpers. An older `[mcp] helpers_at_once` in `config.toml` still counts until `[
 helpers_at_once` is set. The commander and `[team]` jobs are gone; an old `config.toml` that
 still has them loads, and they are ignored.
 
+Agents can also start their own subagents (Claude Code and Codex specialists). Those show under
+their session with their own steps, and a workflow can show its progress there too: see
+[Specialists and workflows](workflows.md).
+
 ## Panes are real terminals
 
 - **Scroll:** the wheel, or `PageUp` / `PageDown` at a prompt (full-screen programs keep those
@@ -196,6 +147,9 @@ still has them loads, and they are ignored.
   another machine the image is sent to that machine over ssh (up to 25 MB), kept there in
   `~/.cache/maitty/pastes` (private, cleared after a week), and its path there is pasted. It needs
   ssh to that machine (not a custom transport) and a login that works without a prompt.
+  An agent's own image key, `Ctrl+V` or `Alt+V` (Claude Code on Windows), typed into an agent on
+  another machine does the same when this computer's clipboard holds an image; with no image the
+  key reaches the agent as typed.
 - **Files to another machine:** in a pane on another machine, `Ctrl+Space`, then `d`, asks for a
   file's path (type it, or drop the file on the terminal: the path is pasted into the box). The
   file (up to 100 MB; a folder is sent too, up to 1 GB, see *Sending a file or a folder to a machine*) goes to that machine over ssh the same way as an image,
@@ -450,12 +404,41 @@ list sessions (`maitty_list`), read a screen (`maitty_read`), send a message
 (`maitty_send`), wait for a turn to end (`maitty_wait`), answer a prompt (`maitty_answer`),
 interrupt (`maitty_interrupt`), start helpers (`maitty_start`, see *Helpers* above) and list the
 project's references (`maitty_references`, see *References* above) and ask you for a secret
-(`maitty_request_secret`, see *Secrets and pull requests* below).
+(`maitty_request_secret`, see *Secrets and pull requests* below), and open the ticket setup
+(`maitty_tickets_setup`, see *Setting up tickets with an agent* below).
 `[mcp] approve` sets whether agents may answer "yes" to prompts and `[mcp] scope` whether
 they reach only their project or every session; `maitty grant <pane> read,write,…` changes
 one pane's rights.
 
 An agent can also reach another machine you have opened to agents; see *Agents on a machine* under *Machines*.
+
+### Setting up tickets with an agent
+
+Ask your agent to set up the project's tickets (for example "set up Plane tickets for this repo with
+https://plane.example/acme/projects/…"). It calls `maitty_tickets_setup`, which opens Tickets in your
+Maitty window on that project and source, with the link it suggests shown beside the steps. You finish it
+there: paste any key into Maitty's own box, never into the chat, and pick the project. The agent saves
+nothing and never sees a key; it hears back only what is linked and whether a key is saved.
+
+A repository can name its ticket sources in a committed `.maitty/tickets.toml`, so a clone or another
+computer needs only the keys:
+
+```toml
+github = "acme/shop"
+
+[plane]
+address = "https://plane.example"
+workspace = "acme"
+project = "3f1c…"          # the Plane project's id
+name = "Shop"              # optional
+
+[linear]
+team = "9b2e…"             # the Linear team's id, not its key such as ENG
+name = "Core"              # optional
+```
+
+Anything you link in Maitty wins over the file. A `[plane]` entry is used only when your saved Plane key is
+for the same address and workspace; otherwise Settings › Tickets says why it was not used.
 
 ## From any shell
 
@@ -476,6 +459,61 @@ maitty worktree feature/login -- codex
 The worktree command creates or opens a separate checkout for the task. When an
 agent asks for input, its status turns red and it appears in the Inbox. Select it,
 answer, and return to your other work.
+
+## Structured Codex conversations
+
+Structured Codex conversations use the daemon without creating a terminal pane.
+They appear in the existing session list; selecting an unbound conversation keeps
+the sidebar focused. Native terminal handoff and interactive request answers are
+later work. Existing `maitty send` still types into a PTY.
+
+Start with a verified Codex 0.164.0 executable and existing absolute paths:
+
+```powershell
+maitty conversation start --executable C:\tools\codex.exe --config-root C:\codex-home --cwd C:\project
+maitty conversation send --conversation 1 --generation 1 --operation 1 "Review the failing test"
+maitty conversation read --conversation 1 --limit 128
+```
+
+Commands print JSON. Start returns `conversation` and `generation`; use those
+values for send. Increment `--operation` for each new prompt. Repeating an
+acknowledged operation with identical text returns its receipt without sending
+again. Uncertain delivery refuses automatic resend; inspect native/provider
+evidence before deciding how to continue.
+
+`start --session <exact-Thread.id>` resumes that exact native thread with the same
+explicit executable/config-root/cwd inputs. A missing thread fails. Reconnect
+recorded Maitty identity with `start --conversation <id> --generation <current>`;
+it uses recorded settings and returns a newly fenced generation. No picker,
+latest-session selection or implicit fork is used. Interrupted creation intent
+has no confirmed identity and cannot automatically create another thread.
+
+New bindings also accept `--model`, `--model-provider`, `--approval`
+(`untrusted`, `on-request`, `never`; default `on-request`) and `--sandbox`
+(`read-only`, `workspace-write`; default `read-only`). Workspace write disables
+network and additional temporary-directory writable roots. Native profiles are
+unsupported. A provider posture mismatch fails before turn submission.
+
+`read --cursor '<JSON cursor>'` continues a page; limit is 1–128 and each page is
+at most 256 KiB. A cursor becomes stale when history or generation changes.
+Completeness and item state are separate from page exhaustion. Unsupported or
+incomplete native history disables sending. Provider approval/question requests
+remain visibly blocked and unanswered. Checkpoint failures and pending approvals
+remain visible even when the provider has finished.
+
+Structured mutations require `[restore] enabled=true`. Setting `output=false`
+removes/prevents Maitty's transcript cache while preserving content-free identity
+and delivery receipts; explicit reads may hydrate memory for that connection.
+
+Structured tools authenticate as that runtime and follow configured MCP grants.
+Granted list/read/send/reference operations remain available. Starting further
+helpers from a structured runtime is refused until conversation-owned helper
+consent is supported; native helper starts keep their existing behavior.
+Structured admission supports the default/all Codex shell environment policy.
+Custom filtering, environment-set/profile policies or explicit MCP environment
+values that conflict with its reserved identity fail with a native-terminal
+alternative. Runtime MCP environment allowlists are augmented without editing
+your configuration or storing authentication values in thread settings.
 
 ## Machines
 
@@ -584,7 +622,8 @@ A machine you add only needs the `maitty` program. There is no desktop app on it
   PATH ssh gives it. Only a copy kept somewhere else needs `remote_cmd` set to its full path.
 - **A version close enough.** This computer, the machine and any desktop app talk when their versions are the
   same or close enough that the newer one still speaks the older one's protocol; releases say when that
-  stops being true. A machine too old to talk to shows `needs update`; run `maitty machine update <name>`. A machine too new for
+  stops being true. A machine too old to talk to shows `needs update`; run `maitty machine update <name>`. The desktop
+  app asks more: a machine on any older version shows `needs update` there, with its **update** button. A machine too new for
   this computer shows `newer than this app` and has no update button: update this computer instead
   (`maitty update`, or the desktop app's own update). A machine is never downgraded from here.
 
@@ -824,8 +863,31 @@ no sounds, so there is no switch for them.
 
 A new session (**New session**, ⌘T) starts where the focused session is. On another machine it asks for a
 folder there, starting at `~`, because the folder picker is this computer's; a folder that does not exist
-opens in the machine's home folder. Files, Changes, worktrees and the other features that read a pane's files
-are for this computer's sessions only.
+opens in the machine's home folder. To start on a project that is not on the machine yet, use **Clone a
+repository…** on the new chat page (beside Browse…, or in the project menu): paste the repository's address,
+pick the folder it goes inside, and the chat opens on the new folder. The side panel's **Changes** tab
+works for a session on another machine too: it lists the changed files and their diffs, read from that
+machine. You can commit there too: tick the files, write the message, and **Commit**, **Pull** / **Push** /
+**Fetch** and **Create PR** all run on that machine, with its git name and its GitHub sign-in (a pull only
+fast-forwards; Create PR needs `gh` signed in there, see Settings › GitHub). The panel's Files, Branches, History and References tabs say they are
+local-only. If that machine is signed in to
+GitHub, the dialog also lists your repositories there: search, pick an owner, and click one to fill in its
+address. It works for this computer and for
+another machine, and uses whatever git sign-in that machine already has; a private repository the machine
+cannot sign in to fails with git's own message. **Settings › GitHub** shows who each connected machine is
+signed in to GitHub as, read from that machine's GitHub CLI (`gh`); Maitty never sees the token. A machine
+that is not signed in has **Sign in** there: it opens a terminal on that machine running `gh auth login`,
+which shows a one-time code and opens GitHub in your browser. Finish it, close the terminal, and the row
+updates. A machine with somebody signed in has **Details**: every account signed in there (the active one
+marked), the name and email its commits carry, and its folder rules, the folders where git uses another
+account and identity. A rule you made by hand in your git config shows as "set outside Maitty". **Add
+another account** starts the same sign-in. **Add a folder rule** gives a folder its own account, name and
+email: choose the folder, pick one of the accounts signed in there, type the name and email, and click
+**Show the lines** to see exactly what Maitty will write to git's config. Nothing changes until you click
+**Write these lines**. From then on, commits in any repository inside that folder carry that name and
+email, and git signs in to GitHub there as that account. A rule Maitty made has **Change** and **Remove**;
+Remove asks once. Cloning into a folder a rule covers says "Will use <account>" under the destination. Files, worktrees and the other features that read a pane's files
+are for this computer's sessions only; Changes is the exception described above.
 
 **Dropping files or folders on a session of another machine** sends them there: drag up to 10 files or folders from
 your file manager onto the pane. Each goes over ssh (not a custom transport) into `~/.cache/maitty/pastes` on that
@@ -913,48 +975,51 @@ Sessions › Keep each pane's recent output) stops saving it and deletes what wa
 ## The desktop chat
 
 In the desktop app an agent has a chat view as well as its terminal. For an agent that runs in a
-terminal it is the same session: the Terminal and Chat switch never restarts the agent. (A chat that
+terminal it is the same session: switching between the Chat and Terminal tabs in its pane's header never restarts the agent. (A chat that
 Maitty's background service runs, see [Worktrees](#worktrees), has no terminal.) This part is about working in the chat and
 checking what the agent did. What the status marks mean is in [What a session's status
 means](#what-a-sessions-status-means).
 
+A session running a workflow that reports to Maitty (`maitty workflow report`) also gets **Work** in that switch, with
+the number of runs going and an amber square when one needs you. Work shows its runs as a board: one column per step,
+each ticket in the step it is on. Finished runs are hidden until you choose **Show**. Click a ticket to see its steps in
+a drawer, with **Open ticket**; click a step's helper to see what that helper was asked and is doing. Maitty only shows
+the runs; the workflow itself decides every step.
+
 ### Starting a chat
 
-**New chat** (the top of the sidebar, or **New agent chat…** in the command palette, Ctrl+Shift+T, ⌘T
-on a Mac) opens a page that asks "What
-should we work on?". Pick a project (or paste a path, or **Browse…**), write the first message and
-press Enter. The page opens on your most recent project, and shows the project list only when you
-have none. The agent starts in its own terminal and the chat opens. (**New agent chat** without the
-dots, Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in the start
-folder.)
+**New chat** (the `+` at the top of the sidebar, the Maitty menu at the top left of the window, or **New agent chat…** in the command palette, Ctrl+Shift+T, ⌘T
+on a Mac) opens a page that asks "What are we building today?". When nothing is running, the window
+opens on this page. It starts on your most recent project: write the first message and press Enter.
+The agent starts in its own terminal and the chat opens. (**New agent chat** without the dots,
+Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in the start folder.)
 
-Under the project there are a few more choices. **Branch**, **Own copy** and **Also start with**
-are left out when the folder is not a git repository, and for a session on another machine.
+**Where the chat runs** is in the page's header, as it is on a running chat's pane:
 
-- **Branch.** Pick a branch, or type a new name to create one.
-- **Own copy** is on by default. The agent works in a worktree of its own, on a new branch named
-  from your message, so your checkout stays as it is. A line under it says what it starts from, and
-  how far behind its upstream it is. Turn it off and the agent edits the checkout. Then, if the
-  checkout is behind, a **↓ Pull** button runs `git pull --ff-only`. It is refused while you have
-  uncommitted changes.
-- **Model, effort and permission mode** sit on the buttons under the message box. The agent is on
-  the model button too. If an agent is not installed, the page says so and offers **set it up**.
-- **Suggested tasks** under the choices start a chat on that task with one click, and **Resume**
-  lists the conversations Claude or Codex saved for the folder. Resuming starts in that folder
-  without a worktree.
+- **Name.** Type a name for the chat, or leave it empty and the first message names it.
+- **Project.** Pick another project, paste a path, **Browse…**, or **Clone from GitHub…**. The
+  **Machine** switch at the top picks this computer or another machine.
+- **Branch.** Pick a branch, or type a new name to create one. A branch another chat is working on
+  says **in use**.
+- **Work in.** The chat works in the folder as it is, unless another chat is already on that branch
+  there: then it gets a worktree of its own, on a new branch with a short two-word name (like
+  `quiet-otter`), so the two never edit the same files, and the menu says why. Choose **This folder**
+  or **New worktree** to decide yourself.
+- **Open as.** Chat or Terminal, at the right. Each agent's default is in Settings › Chat. With
+  Terminal, the page shows the terminal the agent will start in; type the first task on its prompt line.
 
-**Several agents at once.** Under the message box, **Also start with** lists the other agents
-installed on this computer. Tick one or more and the same message goes to each, every one in its own
-worktree and on its own new branch (`fix-login`, `fix-login-2`, …). That needs Own copy. With it off
-the boxes cannot be ticked, and the page says "Each agent needs a copy of its own. Turn on Own copy
-to start several." The chat you
-see open is the agent on the model button. The others start on their own default model, effort and
-permission mode, and they are listed in the sidebar. They start only when you start a new chat, not
-when you resume a saved one,.
+Branch and Work in are left out when the folder is not a git repository, and on another machine.
+**Model and effort** are on the model button in the message box, and the **permission mode** is the
+shield beside it. The agent is on the model button too. If an agent is not installed, the page says
+so and offers **set it up**.
+
+**Resume a saved chat.** In the command palette, **Resume a saved chat…** lists the conversations
+Claude or Codex saved for a project on this computer. Pick one and its agent starts in that folder
+with that conversation.
 
 **Keep drafting.** Press Ctrl+Enter (⌘Enter on a Mac) instead of Enter. The chat starts and is listed
 in the sidebar, but it is not opened. The page stays, the message box and its files are emptied, and
-every other choice is kept, so you can write the next chat while the first one starts. With Own copy on,
+every other choice is kept, so you can write the next chat while the first one starts. In a new worktree,
 the next one gets a new branch name. If a start fails, a line under the box says why, with **Put back**,
 which puts the message and its files back in the box after whatever you typed since, and **Dismiss**.
 On another machine Ctrl+Enter is a plain start. Esc closes the page.
@@ -964,12 +1029,18 @@ On another machine Ctrl+Enter is a plain start. Esc closes the page.
 When an agent stops to ask you something, its session needs you and the chat shows a card over the
 message box. The message box is off, and says why, until you have answered.
 
-- **Wants to run a command** (or "Wants to use <tool>"). For Claude the card has **Yes, once** and
+- **Wants to run a command** (or "Wants to use <tool>"). For Claude the card has **Yes once** and
   **No**, and the keys `y` and `n` do the same from anywhere in the chat except a text field. They
   type Claude's own answer into its terminal.
-- **A question Claude asks.** Each choice is a button. A prompt with several questions (up to 4, each
-  with 2 to 4 choices) shows each one with its choices and one **Send answers** button, which stays
-  off until every question has an answer. Nothing is typed to the agent before then, so you can still
+- **A plan Claude wants to start on** (in plan mode). The card shows the plan, formatted, with
+  Claude's own menu for it, each choice in Claude's words with its number key (on Claude Code 2.1.325:
+  "Yes, and use auto mode", "Yes, manually approve edits", "Tell Claude what to change"), and **Keep planning**
+  (`n`, Esc in the terminal). When the menu cannot be read off the screen (another machine's session), the card
+  leaves the answer to the terminal instead of guessing a key.
+- **A question Claude asks.** Each choice is a button, and its number key picks it. A prompt with several questions (up to 4, each
+  with 2 to 4 choices) shows them one at a time, with a tab for each: use **Next** and **Back**, or a
+  tab, to move between them. **Send answers**, on the last one, stays off until every question has an answer. A question that takes several answers has boxes to tick
+  ("Pick any"); tick at least one. Nothing is typed to the agent before then, so you can still
   change an answer. A question beyond those limits, or "Type something", is answered in the terminal.
 - **Codex, and any menu the chat has no buttons for.** Maitty does not press a button for these,
   because it has not checked that those keys are right. The card shows the question as the terminal
@@ -977,7 +1048,7 @@ message box. The message box is off, and says why, until you have answered.
   the way you would. For a session on another machine the screen cannot be read: the card says the
   question is in the terminal and keeps the keys.
 
-A chat that Maitty's background service runs (see [Worktrees](#worktrees)) shows **Yes, once**,
+A chat that Maitty's background service runs (see [Worktrees](#worktrees)) shows **Yes once**,
 **This session** and **No** instead, with **Always in this project** for a command.
 
 ### Queue and Send now
@@ -1084,9 +1155,9 @@ The same dialog has a **Session** choice: **Terminal** (the default, as above) o
 session is Claude or Codex run by Maitty's background service instead of in a terminal, so the chat
 has a message box that works: Enter sends, Stop interrupts, a message sent while the agent is busy
 waits in a queue (with Remove), and each permission the agent asks for appears in the chat with
-**Yes, once (y)**, **This session (a)** and **No (n)**; a command also has **Always in this project**,
+**Yes once (y)**, **This session (a)** and **No (n)**; a command also has **Always in this project**,
 which approves that exact command (written the same) in that project from then on. Those are kept
-in `chat-allowed-commands.json` in Maitty's data folder, never in the repo. Settings → Agents lists
+in `chat-allowed-commands.json` in Maitty's data folder, never in the repo. Settings → Permissions lists
 them with a **Forget** for each, which takes effect at once (a second service running on the same
 computer drops it only when it next starts). Nothing else is ever remembered: a file change, an extra permission or a
 question always asks. A chat session has no terminal (to use the agent's own screen, start a terminal

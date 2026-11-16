@@ -55,6 +55,17 @@ impl App {
             self.require_session_term(key);
             return;
         }
+        // Another machine's Changes come from its own daemon.
+        if a == Action::Changes
+            && let Some(term) = self.selected_term()
+            && !self.is_local_pane(term)
+        {
+            self.leave_shortcut_mode();
+            self.screen.cursor = None;
+            self.mode = Mode::Normal;
+            self.open_remote_changes(term);
+            return;
+        }
         // These read or change the files of the pane they apply to, which on another machine
         // are not on this computer.
         if let Some(feature) = routing::Feature::of(&a)
@@ -75,6 +86,7 @@ impl App {
             Action::PasteImage => self.paste_image(),
             Action::SendFile => self.send_file_action(),
             Action::Find(tab) => self.open_find(tab),
+            Action::FindSessions => self.open_session_find(),
             Action::AgentStatusSetup => self.menu(
                 "Connect an agent · it then reports working, needs you and done itself".into(),
                 maitty_agent_integrations::STATUS_AGENTS
@@ -91,6 +103,7 @@ impl App {
             Action::ReloadAgents => self.reload_agents_from_menu(),
             Action::Branches => self.toggle_branch_sheet(),
             Action::References => self.toggle_references_sheet(),
+            Action::Tickets => self.toggle_tickets_sheet(),
             Action::History => self.mode = Mode::History { sel: 0 },
             Action::Machines => self.open_machines(),
             Action::SpawnTab(c) => {
@@ -201,6 +214,7 @@ impl App {
                     return;
                 }
                 let ws = w.id;
+                let dir = w.cwd.clone();
                 self.send(
                     self.focus_machine(),
                     ClientMsg::Query(Query::Worktrees { ws }),
@@ -209,9 +223,11 @@ impl App {
                     ws,
                     cmd,
                     items: None,
+                    branches: None,
                     query: String::new(),
                     sel: 0,
                 };
+                self.load_worktree_branches(ws, dir);
             }
             Action::RemoveWorktree => {
                 let Some(w) = self.active_ws() else { return };
@@ -250,6 +266,14 @@ impl App {
             Action::TidyWorktrees => self.tidy_open_here(),
             Action::ResumeConversation => self.ask_saved_conversations(),
             Action::PutAway => self.put_away_list(),
+            Action::CloneRepo => self.open_clone_repo(),
+            Action::OpenFolderOn => self.pick_folder_machine(),
+            Action::Specialists => self.open_specialists(),
+            Action::WorkBoard => self.open_work_board(),
+            Action::StatusLog => self.open_status_log(),
+            Action::RecentSessions => self.ask_closed_sessions(),
+            Action::Broadcast => self.toggle_broadcast(),
+            Action::ResetWidths => self.reset_widths(),
             Action::None => {}
             // The rest are handled by screen_act above.
             _ => {}
@@ -332,7 +356,15 @@ impl App {
             Action::Worktrees,
             Action::NewSession,
             Action::ResumeConversation,
+            Action::RecentSessions,
             Action::PutAway,
+            Action::CloneRepo,
+            Action::OpenFolderOn,
+            Action::Specialists,
+            Action::WorkBoard,
+            Action::StatusLog,
+            Action::Broadcast,
+            Action::ResetWidths,
             Action::CloseSplit,
             Action::StopAgent,
             Action::Message,
@@ -341,9 +373,11 @@ impl App {
             Action::Files,
             Action::Find(0),
             Action::Find(1),
+            Action::FindSessions,
             Action::Changes,
             Action::Branches,
             Action::References,
+            Action::Tickets,
             Action::CopyMode,
             Action::Search,
             Action::ScrollUp,
@@ -435,6 +469,7 @@ impl App {
             Some(task.ws).filter(|w| *w != 0),
         );
         self.show_view(View::Changes(Box::new(views::ChangesView {
+            extra: Default::default(),
             dir: top.clone(),
             review: None,
             error: None,

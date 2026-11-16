@@ -1,5 +1,5 @@
 import { parseTaskNotifications } from './taskNotification'
-import type { ApprovalEvent, ChatEvent, CommandEvent, EditEvent, ItemStatus, MessageEvent, SubagentEvent, TodoEvent, ToolEvent, TurnEvent } from './chatEvents'
+import type { ApprovalEvent, ChatEvent, CommandEvent, EditEvent, ItemStatus, MessageEvent, SubagentEvent, SummaryEvent, TodoEvent, ToolEvent, TurnEvent } from './chatEvents'
 import { startsTable, streamingText } from './markdown'
 import { describeStep } from './stepInfo'
 import { describeWork } from './workPhase'
@@ -34,6 +34,8 @@ export type ChatRow =
   | { readonly kind: 'echo'; readonly key: string; readonly text: string }
   /** A helper agent reporting back (the harness's `<task-notification>`), as one quiet line. */
   | { readonly kind: 'report'; readonly key: string; readonly text: string }
+  /** Where the agent summarised the earlier conversation to make room: one line that opens to the summary. */
+  | { readonly kind: 'summary'; readonly key: string; readonly event: SummaryEvent }
   /** The line under the last item while a turn runs, with what the agent is doing (`describeWork`). */
   | { readonly kind: 'working'; readonly key: string; readonly phrase: string }
 
@@ -82,6 +84,12 @@ function mergedStatus(a: ItemStatus, b: ItemStatus): ItemStatus {
  * step between two messages ends the first, so the text and the steps keep the order they happened in.
  * `hideSuccessfulTools` leaves out the runs `isQuietRun` allows to go (Settings › Chat).
  */
+/** Whether a turn held nothing but a slash command's own lines: what the person typed and what it printed, or the summary a compaction made. */
+function onlyCommands(events: readonly ChatEvent[], turnId: string): boolean {
+  const own = events.filter((event) => event.turnId === turnId && event.kind !== 'turn')
+  return own.some((event) => event.kind === 'note' || event.kind === 'summary') && own.every((event) => event.kind === 'note' || event.kind === 'summary' || (event.kind === 'message' && event.role === 'user'))
+}
+
 export function buildRows(events: readonly ChatEvent[], working: boolean, root: string | null = null, echoText: string | null = null, echoThinking = true, hideSuccessfulTools = false): ChatRow[] {
   const rows: ChatRow[] = []
   const edits = new Map<string, EditEvent[]>()
@@ -112,7 +120,12 @@ export function buildRows(events: readonly ChatEvent[], working: boolean, root: 
       case 'approval':
         rows.push({ kind: 'approval', key: event.id, event, step: null })
         break
+      case 'note':
+        rows.push({ kind: 'report', key: event.id, text: event.text })
+        break
       case 'turn': {
+        // A turn that was only a command the person ran and what it printed took no work, so it gets no "Finished in 0s".
+        if (event.outcome === 'completed' && onlyCommands(events, event.turnId)) break
         rows.push({ kind: 'divider', key: event.id, event })
         const changed = changesOf(edits.get(event.turnId) ?? [])
         if (changed !== null) rows.push({ kind: 'changes', key: `changes:${event.turnId}`, ...changed, turn: event.timed ? { startedAtMs: event.startedAtMs, endedAtMs: event.endedAtMs } : null })
@@ -126,6 +139,9 @@ export function buildRows(events: readonly ChatEvent[], working: boolean, root: 
       }
       case 'todo':
         rows.push({ kind: 'step', key: event.id, event })
+        break
+      case 'summary':
+        rows.push({ kind: 'summary', key: event.id, event })
         break
       case 'edit':
       case 'command':

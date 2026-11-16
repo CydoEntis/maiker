@@ -1,17 +1,22 @@
-import { TitleBar } from '@/components/TitleBar'
 import { Toaster } from '@/components/ui/sonner'
+import { KeyOverridesContext } from '@/features/shortcuts/platform'
 import { ReducedMotionContext } from './components/motion'
 import { useWorkspaceState } from './useWorkspaceState'
 import { WorkspaceContext } from './workspaceContext'
 import { WorkspaceSidebars } from './components/WorkspaceSidebars'
 import { WorkspaceMain } from './components/WorkspaceMain'
 import { WorkspaceDialogs } from './components/WorkspaceDialogs'
+import { AppTitleBar } from './components/AppTitleBar'
+import { WorkspaceSidePanel } from './components/WorkspaceSidePanel'
+import { ActivityBar } from './components/ActivityBar'
 import './workspace.css'
 import './components/sidebar.css'
 import './components/pane.css'
 import './components/menu.css'
 import './components/dialogs.css'
+import './components/frame.css'
 import '@/features/chat/chat.css'
+import '@/features/work/work.css'
 
 export function DesktopApp() {
   const workspace = useWorkspaceState()
@@ -19,16 +24,20 @@ export function DesktopApp() {
   return (
     <WorkspaceContext.Provider value={workspace}>
     <ReducedMotionContext.Provider value={reducedMotion}>
+    <KeyOverridesContext.Provider value={preferences.keyOverrides}>
         <div ref={setRoot} className={`mx-app${narrow ? ' is-narrow' : ''}`} style={rootStyle} data-motion={reducedMotion ? 'reduced' : 'full'} data-theme-kind={theme.light ? 'light' : 'dark'} data-side={preferences.sidebarSide}>
-          <TitleBar />
+          <AppTitleBar />
           <div className="mx-window" role="application" aria-label="Maitty">
             <WorkspaceSidebars />
             <WorkspaceMain />
+            <WorkspaceSidePanel />
+            {!workspace.focusMode && <ActivityBar />}
             <WorkspaceDialogs />
           </div>
           <Toaster position={preferences.toastPosition} theme={theme.light ? 'light' : 'dark'} />
           <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{machineSaid}</div>
         </div>
+    </KeyOverridesContext.Provider>
     </ReducedMotionContext.Provider>
     </WorkspaceContext.Provider>
   )

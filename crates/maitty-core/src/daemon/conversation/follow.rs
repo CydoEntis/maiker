@@ -57,6 +57,10 @@ pub(in crate::daemon) struct Followed {
     error: Option<String>,
     /// The mode and model the file last said.
     meta: crate::conversation::SessionMeta,
+    /// The name Claude Code last gave the session (`/rename`), as read so far.
+    title: Option<String>,
+    /// The file was not there when following began: everything in it is new, names included.
+    born_empty: bool,
 }
 
 impl Followed {
@@ -85,6 +89,8 @@ impl Followed {
             last_read: None,
             error: None,
             meta: crate::conversation::SessionMeta::default(),
+            title: None,
+            born_empty: false,
         }
     }
 
@@ -102,6 +108,12 @@ impl Followed {
         self.error.clone()
     }
 
+    /// What a side answer resumes, from what the hook and the file said: the agent's session id,
+    /// the transcript the hook named, and the model the file last named.
+    pub fn side_parts(&self) -> (&str, Option<&std::path::Path>, Option<&str>) {
+        (&self.session, self.hint.as_deref(), self.meta.model.as_deref())
+    }
+
     fn reset(&mut self, generation: u64, session: &str, hint: Option<PathBuf>) {
         let mut history = History::new(self.id);
         history.completeness = Completeness::Loading;
@@ -115,6 +127,8 @@ impl Followed {
         self.parser = Some(Transcript::new(format_of(self.provider), session));
         self.last_read = None;
         self.error = None;
+        self.title = None;
+        self.born_empty = false;
         // A read still in flight belongs to the old session; its result is dropped on arrival
         // because the session no longer matches.
     }
@@ -153,6 +167,7 @@ pub struct Done {
     result: Result<Chunk, ReadFailure>,
 }
 
+#[derive(Debug)]
 pub(in crate::daemon) enum ReadFailure {
     /// The file is not one this pane's session may be read from (path, name or place).
     Refused(&'static str),
@@ -161,7 +176,7 @@ pub(in crate::daemon) enum ReadFailure {
 }
 
 impl ReadFailure {
-    fn words(&self) -> &'static str {
+    pub(in crate::daemon) fn words(&self) -> &'static str {
         match self {
             Self::Refused(why) => why,
             Self::NotFound => "The agent's transcript file was not found",
@@ -210,15 +225,40 @@ impl Daemon {
             .collect()
     }
 
+    /// Whether a pane already followed is still the same agent's: the pane is there, still the
+    /// desktop app's and awake, and still runs the provider it was followed for. Starting to follow
+    /// needs more (`followable`: a verified hook, a session and its file), but a lapse of those
+    /// while the agent runs is not the agent leaving. Dropping on it made the chat vanish, the pane
+    /// fall back to its terminal, and the chat come back under a new id a moment later.
+    fn still_followed(&self, follower: &Followed) -> bool {
+        self.terms.get(&follower.term).is_some_and(|t| {
+            t.owner == Surface::Desktop
+                && t.remote.is_none()
+                && !t.popup
+                && !t.spare
+                && !t.asleep
+                && !t.process_exited
+                && t.conversation_id.is_none()
+                && provider_of(t.agent.as_deref()) == Some(follower.provider)
+        })
+    }
+
     /// Adds, resets and removes followed conversations to match the panes, and starts a
     /// background read of each file that is due. Called on the daemon's tick.
     pub(in crate::daemon) fn follow_tick(&mut self) {
         let wanted = self.followable();
         let before = self.followed.len();
+        let kept: Vec<ConversationId> = self
+            .followed
+            .iter()
+            .filter(|f| self.still_followed(f))
+            .map(|f| f.id)
+            .collect();
         self.followed.retain(|f| {
-            wanted
-                .iter()
-                .any(|(term, provider, _)| *term == f.term && *provider == f.provider)
+            kept.contains(&f.id)
+                || wanted
+                    .iter()
+                    .any(|(term, provider, _)| *term == f.term && *provider == f.provider)
         });
         let mut changed = self.followed.len() != before;
         for (term, provider, session) in wanted {
@@ -328,11 +368,13 @@ impl Daemon {
             return;
         };
         follower.in_flight = false;
+        let mut renamed = None;
         match done.result {
             // Nothing has been read yet and there is no file: the agent has not been given its first
             // prompt, which is where it writes it. That is an empty chat, not a fault.
             Err(ReadFailure::NotFound) if follower.offset.is_none() => {
                 follower.error = None;
+                follower.born_empty = true;
                 if follower.parser.is_none() {
                     follower.parser = Some(Transcript::new(
                         format_of(follower.provider),
@@ -369,11 +411,26 @@ impl Daemon {
                     history.revision = follower.history.revision.saturating_add(1);
                     follower.history = history;
                 }
+                // A name given while the pane is followed renames it, `/rename` typed in the chat or the
+                // terminal alike. The names already in the file when it is first read are history: a
+                // name given in the window since must not be put back by a restart.
+                let title = chunk.parser.custom_title().map(str::to_owned);
+                let first_read = (follower.offset.is_none() && !follower.born_empty) || chunk.restarted;
+                if !first_read && title.is_some() && title != follower.title {
+                    renamed = title.clone().map(|title| (follower.term, title));
+                }
+                follower.title = title;
                 follower.offset = Some(chunk.offset);
                 follower.meta = chunk.parser.meta().clone();
                 follower.parser = Some(chunk.parser);
                 apply_notes(follower, chunk.notes, chunk.start_missing);
             }
+        }
+        if let Some((term, title)) = renamed
+            && let Some(pane) = self.terms.get_mut(&term)
+        {
+            pane.label = title;
+            self.dirty = true;
         }
     }
 
@@ -611,7 +668,7 @@ fn read_new(
 const GEMINI_ID_CHARS: usize = 8;
 
 /// The user's home folder, the only place a followed transcript may be read from.
-fn user_home() -> Option<PathBuf> {
+pub(in crate::daemon) fn user_home() -> Option<PathBuf> {
     directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf())
 }
 
@@ -627,7 +684,7 @@ fn find_by_session(provider: Provider, session: &str) -> Option<PathBuf> {
 /// The path came from a hook report, so it is not trusted: it must be a regular `.jsonl` file
 /// whose real path (symbolic links followed) is inside the user's home folder, and whose name
 /// carries the session id the hook reported, so a pane cannot point the daemon at another file.
-fn checked_path(
+pub(super) fn checked_path(
     path: &Path,
     provider: Provider,
     session: &str,

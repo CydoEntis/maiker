@@ -41,7 +41,7 @@ export function UsageTable({ rows, totals, today, sessionForTerm, onOpenSession 
   const sorted = sortSessions(rows, sort, labelOf)
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-pane-line">
+    <div className="min-h-0 flex-1 overflow-auto rounded-(--r-panel) border border-pane-line">
       <table className="w-full border-collapse text-[12.5px]">
         <caption className="sr-only">Sessions in this period. Press a column header to sort by it.</caption>
         <thead>

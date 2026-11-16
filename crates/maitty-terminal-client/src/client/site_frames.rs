@@ -485,6 +485,7 @@ fn changes(app: &mut App) {
         confirm: None,
     };
     app.show_view(View::Changes(Box::new(views::ChangesView {
+        extra: Default::default(),
         dir,
         review: Some(review),
         error: None,

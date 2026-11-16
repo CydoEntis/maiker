@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { hotkeyRows, type Platform } from '@/features/workspace/model/shortcuts'
+import { useKeyOverrides } from '@/features/shortcuts/platform'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 
 /** The shortcuts worth knowing on day one, as the keymap names them, with a shorter label for the long ones. */
@@ -34,7 +35,7 @@ export function WelcomeDialog({ platform, startFolder, portalContainer, validate
   const [missing, setMissing] = useState(false)
   const [checking, setChecking] = useState(false)
   const last = step === STEPS.length - 1
-  const rows = hotkeyRows(platform)
+  const rows = hotkeyRows(platform, useKeyOverrides())
 
   const next = async () => {
     const typed = draft.trim()

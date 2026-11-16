@@ -119,6 +119,15 @@ export type ToolEvent = ItemFields & {
   readonly detail: string
 }
 
+/**
+ * The agent's own summary of the conversation so far, written when it ran out of room and carried on
+ * from the summary. Nobody typed it.
+ */
+export type SummaryEvent = ItemFields & {
+  readonly kind: 'summary'
+  readonly text: string
+}
+
 export type UserInputQuestion = {
   readonly id: string
   readonly header: string
@@ -181,13 +190,24 @@ export type TurnEvent = {
   readonly timed: boolean
 }
 
+/**
+ * What a slash command the person ran in the agent's terminal printed ("Set model to Haiku 5.5"): the agent's own
+ * reply to the command, shown as a quiet line under it, not as a shell command it ran.
+ */
+export type CommandNoteEvent = ItemFields & {
+  readonly kind: 'note'
+  readonly text: string
+}
+
 export type ChatEvent =
   | MessageEvent
+  | CommandNoteEvent
   | ReasoningEvent
   | EditEvent
   | CommandEvent
   | TodoEvent
   | SubagentEvent
   | ToolEvent
+  | SummaryEvent
   | ApprovalEvent
   | TurnEvent

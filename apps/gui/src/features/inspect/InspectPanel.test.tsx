@@ -26,38 +26,35 @@ function renderPanel(view: InspectView, extra: { agentWorking?: boolean } = {}) 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <InspectPanel term={5} terminals={null} changedFiles={2} view={view} agentWorking={extra.agentWorking ?? false} timeline={[]} lookAt={null} onView={vi.fn()} onClose={vi.fn()} onNotice={onNotice} />
+      <InspectPanel term={5} changedFiles={2} view={view} agentWorking={extra.agentWorking ?? false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={onNotice} />
     </QueryClientProvider>,
   )
   return { onNotice }
 }
 
+/** The panel for pane 5 of the machine build. */
+function renderOnBuild(view: InspectView) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <InspectPanel term={5} machine={1} machineName="build" changedFiles={1} view={view} agentWorking={false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
+    </QueryClientProvider>,
+  )
+}
+
 beforeEach(() => { vi.mocked(isTauri).mockReturnValue(true) })
 
 describe('Inspect panel', () => {
-  it('offers every view, and shows the session’s terminals on that tab', () => {
+  it('names the picked view in its header', () => {
     daemonAnswers({})
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} terminals={<p>its terminals</p>} changedFiles={0} view="terminal" agentWorking={false} timeline={[]} lookAt={null} onView={vi.fn()} onClose={vi.fn()} onNotice={vi.fn()} />
+        <InspectPanel term={5} changedFiles={0} view="history" agentWorking={false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Changes', 'Files', 'Terminal', 'Checks', 'Branches', 'History', 'Timeline', 'References'])
-    expect(screen.getByText('its terminals')).toBeTruthy()
-    cleanup()
-  })
-
-  it('shows only the Terminal tab for a session with no repository to ask about', () => {
-    daemonAnswers({})
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={client}>
-        <InspectPanel term={null} terminals={<p>its terminals</p>} changedFiles={0} view="changes" agentWorking={false} timeline={[]} lookAt={null} onView={vi.fn()} onClose={vi.fn()} onNotice={vi.fn()} />
-      </QueryClientProvider>,
-    )
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Terminal'])
-    expect(screen.getByText('its terminals')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'History' })).toBeTruthy()
+    expect(screen.queryByRole('tab', { name: 'Terminal' })).toBeNull()
     cleanup()
   })
 
@@ -81,6 +78,107 @@ describe('Inspect panel', () => {
     expect(screen.getByLabelText('Diff').textContent).toContain('+z')
   })
 
+  it('reads the changes of a session on another machine from that machine', async () => {
+    daemonAnswers({
+      Status: { branch: 'main', ahead: 0, behind: 0, files: [{ path: 'a.txt', kind: 'Modified' }] },
+      Diff: { files: [{ path: 'a.txt', additions: 1, deletions: 1, binary: false, patch: '@@ -1 +1 @@\n-old\n+new\n' }], additions: 1, deletions: 1, total_files: 1, truncated: false },
+    })
+    renderOnBuild('changes')
+
+    const files = await screen.findByRole('list', { name: 'Changed files' })
+    expect(within(files).getByText('a.txt')).toBeTruthy()
+    expect(screen.getByLabelText('Diff').textContent).toContain('+new')
+    expect(vi.mocked(invoke)).toHaveBeenCalledWith('repo_query', { machine: 1, term: 5, question: { Diff: { path: null } } })
+    expect(vi.mocked(invoke).mock.calls.every(([, args]) => (args as { machine?: number }).machine === 1), 'nothing is asked of this computer').toBe(true)
+    cleanup()
+  })
+
+  it('commits the ticked files of a checkout on another machine there, then opens a pull request and shows where it is', async () => {
+    const asked: Array<[string, unknown]> = []
+    const file = (path: string) => ({ path, additions: 1, deletions: 0, binary: false, patch: '@@ -0,0 +1 @@\n+new\n' })
+    vi.mocked(invoke).mockReset().mockImplementation((command, args) => {
+      asked.push([command, args])
+      if (command === 'git_commit_all') return Promise.resolve('1a2b3c4')
+      if (command === 'git_create_pull_request') return Promise.resolve('https://github.com/o/r/pull/12')
+      const question = (args as { question: Question }).question
+      if (question === 'Status') return Promise.resolve({ Status: { branch: 'main', ahead: 0, behind: 0, files: [] } })
+      return Promise.resolve({ Diff: { files: [file('a.txt'), file('b.txt')], additions: 2, deletions: 0, total_files: 2, truncated: false } })
+    })
+    const onNotice = vi.fn()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <InspectPanel term={5} machine={1} machineName="build" changedFiles={2} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onClose={vi.fn()} onNotice={onNotice} />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Commit b.txt' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Commit 1 of 2 files' }))
+    await waitFor(() => { expect(onNotice).toHaveBeenCalledWith('Committed 1 file as 1a2b3c4') })
+    expect(asked).toContainEqual(['git_commit_all', { machine: 1, folder: '', message: 'Add refunds', paths: ['a.txt'], term: 5 }])
+    fireEvent.click(screen.getByRole('button', { name: 'Create PR' }))
+    expect(await screen.findByText('https://github.com/o/r/pull/12')).toBeTruthy()
+    expect(asked).toContainEqual(['git_create_pull_request', { machine: 1, folder: '', term: 5 }])
+    cleanup()
+  })
+
+  it('pulls a checkout on another machine with the same button, on that machine', async () => {
+    const asked: Array<[string, unknown]> = []
+    vi.mocked(invoke).mockReset().mockImplementation((command, args) => {
+      asked.push([command, args])
+      if (command === 'git_sync') return Promise.resolve('Pulled')
+      const question = (args as { question: Question }).question
+      if (question === 'Status') return Promise.resolve({ Status: { branch: 'main', ahead: 0, behind: 2, files: [] } })
+      return Promise.resolve({ Diff: { files: [{ path: 'a.txt', additions: 1, deletions: 0, binary: false, patch: '@@ -0,0 +1 @@\n+new\n' }], additions: 1, deletions: 0, total_files: 1, truncated: false } })
+    })
+    const onNotice = vi.fn()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <InspectPanel term={5} machine={1} machineName="build" changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onClose={vi.fn()} onNotice={onNotice} />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Pull 2' }))
+    await waitFor(() => { expect(onNotice).toHaveBeenCalledWith('Pulled') })
+    expect(asked).toContainEqual(['git_sync', { machine: 1, folder: '', action: 'pull', term: 5 }])
+    cleanup()
+  })
+
+  it('says why a push on another machine failed, in the machine\'s words', async () => {
+    vi.mocked(invoke).mockReset().mockImplementation((command, args) => {
+      if (command === 'git_sync') return Promise.reject(new Error('main has no upstream, and there is no remote named origin to push it to'))
+      const question = (args as { question: Question }).question
+      if (question === 'Status') return Promise.resolve({ Status: { branch: 'main', ahead: 1, behind: 0, files: [] } })
+      return Promise.resolve({ Diff: { files: [], additions: 0, deletions: 0, total_files: 0, truncated: false } })
+    })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={client}>
+        <InspectPanel term={5} machine={1} machineName="build" changedFiles={0} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onClose={vi.fn()} onNotice={vi.fn()} />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Push 1' }))
+    expect((await screen.findByRole('alert')).textContent).toBe('main has no upstream, and there is no remote named origin to push it to')
+    cleanup()
+  })
+
+  it('says Files is local-only for a session on another machine and asks nothing', () => {
+    daemonAnswers({})
+    renderOnBuild('files')
+    expect(screen.getByText('Files is local-only in v1: the files are on build, not on this computer.')).toBeTruthy()
+    expect(vi.mocked(invoke)).not.toHaveBeenCalled()
+    cleanup()
+  })
+
+  it('opens History on the status log for a session on another machine, and says its snapshots are local-only', () => {
+    daemonAnswers({})
+    renderOnBuild('history')
+    expect(screen.getByRole('radio', { name: 'Status log' })).toBeChecked()
+    fireEvent.click(screen.getByRole('radio', { name: 'Snapshots' }))
+    expect(screen.getByText('History is local-only in v1: the files are on build, not on this computer.')).toBeTruthy()
+    expect(vi.mocked(invoke)).not.toHaveBeenCalled()
+    cleanup()
+  })
+
   it('opens a comment box on a clicked diff line, sends the comment to the agent and keeps it under the line', async () => {
     daemonAnswers({
       Diff: { files: [{ path: 'src/a.ts', additions: 1, deletions: 1, binary: false, patch: '@@ -3 +3 @@\n-old\n+new\n' }], additions: 1, deletions: 1, total_files: 1, truncated: false },
@@ -89,7 +187,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} terminals={null} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} comments={{ agent: 'Claude', onSend }} onView={vi.fn()} onClose={vi.fn()} onNotice={vi.fn()} />
+        <InspectPanel term={5} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} comments={{ agent: 'Claude', onSend }} onClose={vi.fn()} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByText(/\+new/))
@@ -116,7 +214,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} terminals={null} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onView={vi.fn()} onClose={vi.fn()} onNotice={onNotice} />
+        <InspectPanel term={5} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onClose={vi.fn()} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     expect(await screen.findByLabelText('Commit message')).toHaveValue('Add refunds')
@@ -124,7 +222,7 @@ describe('Inspect panel', () => {
     await waitFor(() => { expect(onNotice).toHaveBeenCalledWith('Committed 1 file as abc1234') })
     expect(asked).toContainEqual(['git_commit_all', { machine: 0, folder: '/home/me/app', message: 'Add refunds', paths: null }])
     fireEvent.click(screen.getByLabelText('Commit a.txt'))
-    expect(screen.getByRole('button', { name: 'Commit 0 files' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Tick files to commit' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Create PR' }))
     expect(await screen.findByText('https://github.com/o/r/pull/7')).toBeTruthy()
     expect(asked).toContainEqual(['git_create_pull_request', { machine: 0, folder: '/home/me/app' }])
@@ -139,7 +237,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} terminals={null} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onView={vi.fn()} onClose={vi.fn()} onNotice={vi.fn()} />
+        <InspectPanel term={5} changedFiles={1} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onClose={vi.fn()} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Commit 1 file' }))
@@ -201,13 +299,14 @@ describe('Inspect panel', () => {
     expect(alert).not.toHaveTextContent('Trying again automatically')
   })
 
-  it.each(['files', 'changes', 'branches', 'history', 'references'] as const)(
-    'explains a plain folder on the %s tab instead of calling it an error, and says what to do',
+  it.each(['files', 'changes', 'history'] as const)(
+    'explains a plain folder on the %s view instead of calling it an error, and says what to do',
     async (view) => {
       vi.mocked(invoke).mockReset().mockRejectedValue('git rev-parse --show-toplevel: fatal: not a git repository (or any of the parent directories): .git')
       renderPanel(view)
-      const note = await screen.findByRole('status')
-      expect(note).toHaveTextContent('This folder isn’t a git project yet')
+      // The placeholder bars are a status too while the folder is read, so the note is found by its words.
+      const note = (await screen.findByText(/This folder isn’t a git project yet/)).closest('[role="status"]')
+      expect(note).not.toBeNull()
       expect(note).toHaveTextContent('git init')
       expect(screen.queryByRole('alert')).toBeNull()
     },
@@ -244,19 +343,20 @@ describe('Inspect panel', () => {
     expect(await screen.findByLabelText('Preview of main.go')).toBeTruthy()
   })
 
-  it('marks the current branch and its distance from the upstream', async () => {
+  it('names the branch and its distance from the upstream above the changes', async () => {
     daemonAnswers({
       Status: { branch: 'main', ahead: 2, behind: 0, files: [] },
-      Branches: [{ name: 'feature', current: false }, { name: 'main', current: true }],
+      Diff: { files: [], additions: 0, deletions: 0, total_files: 0, truncated: false },
     })
-    renderPanel('branches')
-    expect(await screen.findByText('↑2')).toBeTruthy()
-    expect(screen.getByText('current')).toBeTruthy()
+    renderPanel('changes')
+    expect(await screen.findByText('↑2 ↓0')).toBeTruthy()
+    expect(screen.getByTitle('Branch main')).toBeTruthy()
   })
 
-  it('lists reference files, or explains where they go', async () => {
-    daemonAnswers({ References: [{ name: 'home.png', kind: 'image', bytes: 2048, modified: NOW }] })
-    renderPanel('references')
+  it('lists reference files from the top of the Files tree', async () => {
+    daemonAnswers({ Tree: [], References: [{ name: 'home.png', kind: 'image', bytes: 2048, modified: NOW }] })
+    renderPanel('files')
+    fireEvent.click(await screen.findByRole('button', { name: 'References' }))
     expect(await screen.findByText('home.png')).toBeTruthy()
     expect(screen.getByText(/image · 2 KB/)).toBeTruthy()
   })
@@ -280,6 +380,20 @@ describe('Inspect history', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Restore files' }))
     await waitFor(() => { expect(onNotice).toHaveBeenCalledWith(expect.stringContaining('Restored 2 files')) })
     expect(vi.mocked(invoke)).toHaveBeenCalledWith('restore_snapshot', { term: 5, commit: 'feed1234' })
+  })
+
+  it('says when the agent\'s snapshots could not be read, keeps the commits, and reads them again on Try again', async () => {
+    daemonAnswers({ Log: history.Log })
+    renderPanel('history')
+
+    expect((await screen.findByRole('alert')).textContent).toContain("Could not load the agent's snapshots")
+    expect(screen.getByText('first commit')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Restore' })).toBeNull()
+
+    daemonAnswers(history)
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('button', { name: 'Restore' })).toBeTruthy()
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('will not restore while the agent is working', async () => {
@@ -308,7 +422,7 @@ describe('Inspect history', () => {
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
       const panel = (shown: Turn) => (
         <QueryClientProvider client={client}>
-          <InspectPanel term={5} terminals={null} changedFiles={2} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onView={vi.fn()} onClose={vi.fn()} onNotice={vi.fn()} />
+          <InspectPanel term={5} changedFiles={2} view="changes" agentWorking={false} timeline={[]} lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onClose={vi.fn()} onNotice={vi.fn()} />
         </QueryClientProvider>
       )
       const { rerender } = render(panel(turn))

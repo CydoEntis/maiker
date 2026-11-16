@@ -224,6 +224,7 @@ fn a_chat_command_goes_to_the_machine_that_lists_the_chat() {
         archived: false,
         root: None,
         branch: None,
+        helpers: Vec::new(),
     };
     app.remotes.get_mut(&THERE).unwrap().snap.conversations = vec![chat];
     app.archive_conversation(id);
@@ -289,14 +290,12 @@ fn focus_moving_between_a_local_and_a_remote_pane_toggles_the_gate() {
 fn every_gated_action_is_refused_on_a_remote_pane_and_none_opens_anything() {
     for action in [
         Action::Files,
-        Action::Changes,
         Action::Find(0),
         Action::Branches,
         Action::References,
         Action::AgentStatusSetup,
         Action::NewWorktree(None),
         Action::RemoveWorktree,
-        Action::TidyWorktrees,
         Action::ResumeConversation,
     ] {
         let (mut app, mut rx) = two_machines();
@@ -399,7 +398,7 @@ fn a_remote_cwd_that_exists_here_is_never_read_as_a_local_folder() {
         "kept as the other machine's path, not checked here"
     );
 
-    for action in [Action::Changes, Action::Files, Action::Find(1)] {
+    for action in [Action::Files, Action::Find(1)] {
         app.notice = None;
         app.act(action);
         assert!(app.notice.is_some());
@@ -482,6 +481,7 @@ fn a_remote_worktree_listing_never_fills_this_computers_picker() {
         ws: 1,
         cmd: None,
         items: None,
+        branches: None,
         query: String::new(),
         sel: 0,
     };
@@ -630,4 +630,36 @@ fn a_file_that_cannot_be_sent_ends_as_an_error_toast_and_frees_the_next_send() {
     assert!(error, "{text}");
     assert!(text.starts_with("could not read file.txt"), "{text}");
     assert!(app.sending.is_none(), "the next send may start");
+}
+
+#[test]
+fn an_agent_s_image_paste_key_on_another_machine_looks_here_first_then_goes_on_as_typed() {
+    let (mut app, mut rx) = two_machines();
+    let (btx, mut bg) = mpsc::unbounded_channel();
+    app.bg = btx;
+    focus(&app, THERE);
+    sent(&mut rx);
+    let alt_v = KeyEvent::new(KeyCode::Char('v'), KeyModifiers::ALT);
+    app.on_key(alt_v);
+    assert!(sent(&mut rx).is_empty(), "held while this computer's clipboard is read");
+    // Tests read no clipboard, so there is no image: the key reaches the agent unchanged.
+    let started = std::time::Instant::now();
+    let read = loop {
+        if let Ok(read) = bg.try_recv() {
+            break read;
+        }
+        assert!(started.elapsed().as_secs() < 10, "the clipboard read never came back");
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    app.on_bg(read);
+    let out = sent(&mut rx);
+    assert!(
+        matches!(out.as_slice(), [Outgoing { machine: THERE, msg: ClientMsg::Input { data, .. } }] if data == b"\x1bv"),
+        "{out:?}"
+    );
+
+    focus(&app, MachineId::LOCAL);
+    sent(&mut rx);
+    app.on_key(alt_v);
+    assert_eq!(sent(&mut rx).len(), 1, "an agent here reads this clipboard itself");
 }

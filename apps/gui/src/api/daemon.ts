@@ -8,7 +8,28 @@ import { LOCAL_MACHINE, addressOf, machineArgs, terminalOf, terminalSessionId } 
 import { conversationKey, machineArgOfKey, splitConversationKey } from './conversationKey'
 import { previewConversations, type Conversation, type Message, type SessionStatus } from '@/data/preview'
 
+/** One question of an agent's prompt; `multi` when it takes any number of its choices. */
+const AskQuestionSchema = z.object({ question: z.string(), choices: z.array(z.string()), multi: z.boolean().default(false) })
+
 const StatusSchema = z.enum(['None', 'Idle', 'Working', 'Blocked', 'Done'])
+// A subagent as the daemon reports it (`SubagentActivity`); times are unix seconds.
+const SubagentActivitySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  state: z.enum(['Starting', 'Working', 'WaitingForInput', 'AwaitingApproval', 'Completed', 'Failed', 'Cancelled', 'ConnectionLost']),
+  task: z.string().nullable().default(null),
+  started_at: z.number().int().nonnegative().nullable().default(null),
+  updated_at: z.number().int().nonnegative().default(0),
+  latest_activity: z.string().nullable().default(null),
+  result: z.string().nullable().default(null),
+})
+type SubagentActivity = z.infer<typeof SubagentActivitySchema>
+
+/** A subagent in the shape a session's details carry. */
+function toSubagentDetail(child: SubagentActivity) {
+  return { id: child.id, name: child.name, state: child.state, task: child.task, startedAt: child.started_at, updatedAt: child.updated_at, latest: child.latest_activity, result: child.result }
+}
+
 const ConversationSummarySchema = z.object({
   id: z.number().int().nonnegative(),
   generation: z.number().int().nonnegative(),
@@ -24,6 +45,8 @@ const ConversationSummarySchema = z.object({
   archived: z.boolean().default(false),
   root: z.string().nullable().default(null),
   branch: z.string().nullable().default(null),
+  // The helpers a chat session's provider reported starting (ADR 0010); empty from an older daemon.
+  helpers: z.array(SubagentActivitySchema).default([]),
 })
 const WorkspaceSummarySchema = z.object({
   cwd: z.string(),
@@ -82,7 +105,7 @@ const TerminalSessionSchema = z.object({
   // The follow-ups its daemon holds for the working agent, oldest first (`TermInfo.queued`).
   queued: z.array(z.string()).default([]),
   // The agent's own hook said what its permission prompt asks (not read off the screen).
-  ask: z.object({ tool: z.string(), detail: z.string(), answerable: z.boolean().default(false), choices: z.array(z.string()).default([]), questions: z.array(z.object({ question: z.string(), choices: z.array(z.string()) })).default([]) }).nullable().default(null),
+  ask: z.object({ tool: z.string(), detail: z.string(), answerable: z.boolean().default(false), choices: z.array(z.string()).default([]), questions: z.array(AskQuestionSchema).default([]), form: z.array(AskQuestionSchema).default([]) }).nullable().default(null),
   interrupted: z.object({ agent: z.string(), resume: z.string() }).nullable().default(null),
   // How the last command ended, when it ended in failure (the daemon's `TermInfo.exit`); absent from an older daemon.
   exit: z.object({ code: z.number().int().nullable().default(null), at: z.number().default(0) }).nullable().default(null),
@@ -99,16 +122,22 @@ const TerminalSessionSchema = z.object({
   // The helpers the session asked to start and waits on the person for, one task each (`TermInfo.helper_ask`).
   helper_ask: z.array(z.string()).default([]),
   // The agent's subagents as its runtime reports them (`TermInfo.subagent_activity`); times are unix seconds.
-  subagent_activity: z.array(z.object({
-    id: z.string(),
-    name: z.string(),
-    state: z.enum(['Starting', 'Working', 'WaitingForInput', 'AwaitingApproval', 'Completed', 'Failed', 'Cancelled', 'ConnectionLost']),
-    task: z.string().nullable().default(null),
-    started_at: z.number().int().nonnegative().nullable().default(null),
-    updated_at: z.number().int().nonnegative().default(0),
-    latest_activity: z.string().nullable().default(null),
-    result: z.string().nullable().default(null),
-  })).default([]),
+  subagent_activity: z.array(SubagentActivitySchema).default([]),
+  // The workflow runs this pane reported (`TermInfo.workflows`, ADR 0010), newest first. Display only. A shape this
+  // build cannot read is dropped rather than freezing the pane.
+  workflows: z.array(z.object({
+    workflow: z.string(),
+    run: z.string(),
+    ticket: z.object({ key: z.string(), title: z.string().nullable().default(null), link: z.string().nullable().default(null) }).nullable().default(null),
+    steps: z.array(z.object({
+      name: z.string(),
+      // A state added later reads as unknown.
+      state: z.enum(['waiting', 'working', 'passed', 'failed', 'sent_back', 'needs_you', 'skipped', 'unknown']).catch('unknown'),
+      note: z.string().nullable().default(null),
+      helper: z.string().nullable().default(null),
+    })),
+    reported_at: z.number().int().nonnegative().default(0),
+  })).catch([]).default([]),
 })
 const PlanLimitSchema = z.object({ name: z.string(), used: z.number(), resets_at: z.number().default(0) })
 
@@ -703,6 +732,57 @@ export async function readConversationPage(id: number, cursor: HistoryCursor | n
   return page
 }
 
+// A helper's own record (ADR 0010). Entries stay raw: the chat projection validates each one.
+const HelperRecordSchema = z.object({
+  term: z.number().int().nonnegative(),
+  helper: z.string(),
+  entries: z.array(z.unknown()),
+  start_missing: z.boolean(),
+})
+export type HelperRecord = z.infer<typeof HelperRecordSchema>
+
+/** The longest helper id a pane's agent gives; the host and the daemon check it again. */
+const HELPER_ID_MAX = 128
+const HELPER_ID = /^[A-Za-z0-9_-]+$/
+
+/** What one of this computer's panes' helpers did, from its own record. */
+export async function readHelper(term: number, helper: string): Promise<HelperRecord> {
+  if (!isDesktop()) throw new Error("A helper's work needs the desktop app")
+  if (!Number.isSafeInteger(term) || term < 0) throw new Error('Pane id is invalid')
+  if (helper.length > HELPER_ID_MAX || !HELPER_ID.test(helper)) throw new Error('Helper id is invalid')
+  const record = await invokeParsed('read_helper', HelperRecordSchema, { term, helper })
+  if (record.term !== term || record.helper !== helper) throw new Error('Daemon returned a different helper')
+  return record
+}
+
+// A pane's specialist agent files (ADR 0010), read-only.
+const SpecialistFileSchema = z.object({
+  tool: z.enum(['claude', 'codex', 'unknown']),
+  scope: z.enum(['project', 'home', 'unknown']),
+  name: z.string(),
+  description: z.string().nullable(),
+  path: z.string(),
+  text: z.string(),
+  text_cut: z.boolean(),
+})
+const SpecialistListSchema = z.object({
+  term: z.number().int().nonnegative(),
+  project: z.string(),
+  files: z.array(SpecialistFileSchema),
+  truncated: z.boolean(),
+})
+export type SpecialistFile = z.infer<typeof SpecialistFileSchema>
+export type SpecialistList = z.infer<typeof SpecialistListSchema>
+
+/** The Claude Code and Codex agent files one of this computer's panes can see, project first. */
+export async function readSpecialists(term: number): Promise<SpecialistList> {
+  if (!isDesktop()) throw new Error('Specialist agents need the desktop app')
+  if (!Number.isSafeInteger(term) || term < 0) throw new Error('Pane id is invalid')
+  const list = await invokeParsed('read_specialists', SpecialistListSchema, { term })
+  if (list.term !== term) throw new Error('Daemon returned a different pane')
+  return list
+}
+
 export async function loadConversationDiff(conversation: Conversation): Promise<ConversationDiff> {
   if (terminalOf(conversation.id) !== null) throw new Error('Changes are shown for chat sessions')
   if (!isDesktop() || conversation.generation === undefined) {
@@ -1174,6 +1254,33 @@ export async function savedConversations(agent: 'claude' | 'codex', folder: stri
   return found === 'NotSupported' ? [] : found.Listed
 }
 
+/** The commands Claude Code answers beside a conversation, with nothing after the name: each only reports. */
+export const SIDE_COMMANDS = ['context', 'usage', 'skill-doctor', 'goal', 'advisor', 'config', 'mcp'] as const
+export type SideCommand = (typeof SIDE_COMMANDS)[number]
+/** What a side answer asks: a question answered from the conversation (`/btw`), or one of `SIDE_COMMANDS`. */
+export type SideAsk = { readonly question: string } | { readonly command: SideCommand }
+export type SideReply = { readonly ok: true; readonly text: string } | { readonly ok: false; readonly reason: string }
+
+const SideAnswerSchema = z.union([
+  z.object({ Answered: z.object({ text: z.string() }) }),
+  z.literal('NotSupported'),
+  z.object({ Failed: z.object({ reason: z.string() }) }),
+])
+
+/**
+ * Claude Code's answer beside a chat's conversation, which it never adds to: the daemon resumes a copy of the session
+ * that is not saved. On this computer only, where the daemon holds the session.
+ */
+export async function sideAnswer(conversation: number, ask: SideAsk): Promise<SideReply> {
+  if (!isDesktop()) throw new Error('Side answers need the desktop app')
+  const { machine, id } = splitConversationKey(conversation)
+  if (machine !== LOCAL_MACHINE) return { ok: false, reason: 'Side answers work for sessions on this computer for now.' }
+  const wire = 'question' in ask ? { Question: ask.question } : { Command: ask.command }
+  const answer = await invokeParsed('side_answer', SideAnswerSchema, { id, ask: wire })
+  if (answer === 'NotSupported') return { ok: false, reason: 'Only Claude answers beside a conversation.' }
+  return 'Answered' in answer ? { ok: true, text: answer.Answered.text } : { ok: false, reason: answer.Failed.reason }
+}
+
 const ClosedSessionSchema = z.object({
   agent: z.string(),
   session: z.string(),
@@ -1237,26 +1344,6 @@ export async function switchBranch(folder: string, branch: string, create: boole
  */
 export async function addWorktree(folder: string, branch: string): Promise<string> {
   return invokeParsed('add_branch_worktree', z.string(), { folder, branch })
-}
-
-const SyncStateSchema = z.object({
-  branch: z.string().nullable(),
-  upstream: z.string().nullable(),
-  behind: z.number().int().nonnegative(),
-  ahead: z.number().int().nonnegative(),
-  dirty: z.boolean(),
-  fetched: z.boolean(),
-}).nullable()
-export type SyncState = NonNullable<z.infer<typeof SyncStateSchema>>
-
-/** How a folder's checkout stands against its upstream, asking the remote first when `fetch`; null outside a git repository. */
-export async function folderSyncState(folder: string, fetch: boolean): Promise<SyncState | null> {
-  return invokeParsed('git_sync_state', SyncStateSchema, { folder, fetch })
-}
-
-/** Fast-forwards the folder's checkout to its upstream; refused with the reason when it has uncommitted changes. */
-export async function pullFolder(folder: string): Promise<void> {
-  await invokeParsed('git_pull', NullSchema, { folder })
 }
 
 /** Opens an agent's official setup page in the browser. */
@@ -1362,7 +1449,8 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       secretAsk: secrets.map((ask) => ({ id: ask.id, label: ask.label, reason: ask.reason })),
       limits: limits.map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })),
       helperAsk: term.helper_ask,
-      subagents: term.subagent_activity.map((child) => ({ id: child.id, name: child.name, state: child.state, task: child.task, startedAt: child.started_at, updatedAt: child.updated_at, latest: child.latest_activity, result: child.result })),
+      subagents: term.subagent_activity.map(toSubagentDetail),
+      workflows: term.workflows.map((run) => ({ workflow: run.workflow, run: run.run, ticket: run.ticket, steps: run.steps, reportedAt: run.reported_at })),
     },
     ...(chat ? { chat } : {}),
   }
@@ -1413,6 +1501,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           agent: summary.provider.toLowerCase(),
           process: summary.provider.toLowerCase(),
           chat: { conversation: summary.id, generation: summary.generation },
+          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: summary.helpers.map(toSubagentDetail) },
         }
       : {}),
   }

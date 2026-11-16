@@ -10,6 +10,20 @@ const turn = (outcome: TurnEvent['outcome'], timed: boolean): TurnEvent => ({ ki
 const writtenDoc = (id: string) => editEvent(id, { tool: 'Write', file: '/home/me/Downloads/plan.md', status: 'completed', change: 'add', diff: { status: 'available', hunks: [{ header: '@@ -0,0 +1,2 @@', lines: [{ kind: 'add', text: '# Plan' }, { kind: 'add', text: 'Do it.' }] }], added: 2, removed: 0, truncated: false } })
 
 describe('buildRows', () => {
+  it('shows a slash command as the person typed it with its output beneath, and no "Finished in 0s" after it', () => {
+    const note = { ...message('o1', 'agent', ''), kind: 'note' as const, text: 'Set model to Haiku 5.5' }
+    const rows = buildRows([message('u1', 'user', '/model'), note, turn('completed', true)], false)
+
+    expect(rows).toMatchObject([{ kind: 'user' }, { kind: 'report', text: 'Set model to Haiku 5.5' }])
+    // A turn with work in it keeps its divider.
+    expect(buildRows([message('u1', 'user', 'hi'), message('a1', 'agent', 'Hello.'), turn('completed', true)], false).at(-1)?.kind).toBe('divider')
+  })
+
+  it('draws no "Finished in 0s" under a turn that only summarised the conversation', () => {
+    const summary = { ...message('s1', 'agent', ''), kind: 'summary' as const, text: 'Earlier: we fixed the tests.' }
+    expect(buildRows([summary, turn('completed', true)], false)).toMatchObject([{ kind: 'summary' }])
+  })
+
   it('shows reasoning between two tool steps as its own row, so the steps do not fold across it', () => {
     const rows = buildRows([command('c1'), reasoningEvent('r1', 'Weighing two fixes'), command('c2')], false)
 
