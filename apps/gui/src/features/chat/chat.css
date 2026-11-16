@@ -358,6 +358,9 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-option-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-weight: 600; overflow-wrap: anywhere; }
 .mx-option-about { font-size: 12px; font-weight: 400; line-height: 1.45; color: var(--muted); }
 .mx-option-key { flex: none; padding: 1px 5px; border: 1px solid currentColor; font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--muted); opacity: .7; }
+.mx-option.is-own { align-items: center; cursor: text; }
+.mx-option-input { flex: 1; min-width: 0; height: 22px; padding: 0; border: 0; background: transparent; font-size: 13px; color: var(--fg); outline: none; }
+.mx-option-input::placeholder { color: var(--dim); font-weight: 400; }
 .mx-waiting-input { width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--line2); background: var(--m-well); font-size: 13px; color: var(--fg); outline: none; }
 .mx-waiting-input::placeholder { color: var(--dim); }
 .mx-waiting-input:focus-visible { border-color: var(--focus); }
@@ -485,6 +488,7 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-usage-item.is-mid { --usage-ink: var(--m-mid); }
 .mx-usage-item.is-high { --usage-ink: var(--m-or); }
 .mx-usage-item.is-max { --usage-ink: var(--m-hi); }
+.mx-usage-item.is-none { --usage-ink: transparent; color: var(--dim); }
 /* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
 .mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
 button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

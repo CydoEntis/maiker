@@ -17,7 +17,7 @@ const HERE = [{ machine: 0, label: 'This computer', local: true }]
 const DEV_BUSY: BusyBranches = new Map([['/dev/growth', new Map([['dev', 'Fix login']])]])
 const TWO_WORDS = /^[a-z]+-[a-z]+(-[0-9]+)?$/
 
-type Extra = { busy?: BusyBranches; onCancel?: () => void; viewDefaults?: ChatViewDefaults; clone?: () => Promise<string | null>; onWarm?: (spec: unknown) => void }
+type Extra = { busy?: BusyBranches; onCancel?: () => void; onNewShell?: (machine: number) => void; viewDefaults?: ChatViewDefaults; clone?: () => Promise<string | null>; onWarm?: (spec: unknown) => void }
 
 function page(onStart: (request: NewChatRequest) => Promise<void> = () => Promise.resolve(), extra: Extra = {}) {
   return render(
@@ -69,7 +69,7 @@ describe('the new chat page', () => {
   })
 
   it('says in its header where the chat works: its name, the project, the branch and the folder or a worktree', async () => {
-    page()
+    page(undefined, { onNewShell: vi.fn() })
     expect(screen.getByRole('textbox', { name: 'Chat name' })).toHaveValue('')
     await pickProject('growth')
     expect(await screen.findByRole('button', { name: 'Branch: dev' })).toBeInTheDocument()
@@ -180,20 +180,27 @@ describe('the new chat page', () => {
     await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ name: 'Login fix', view: 'chat' })) })
   })
 
-  it('opens as its terminal when Terminal is picked, and takes the first task on the prompt line', async () => {
+  it('opens a plain shell on the picked computer when Terminal is picked, with no agent in it', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
-    page(onStart)
+    const onNewShell = vi.fn()
+    page(onStart, { onNewShell })
     await ready()
     await userEvent.click(screen.getByRole('radio', { name: 'Terminal' }))
     expect(screen.queryByRole('textbox', { name: 'First message' })).not.toBeInTheDocument()
-    expect(screen.getByLabelText('Draft terminal')).toHaveTextContent('cwd: /dev/growth')
-    await userEvent.type(screen.getByRole('textbox', { name: 'First task' }), 'go{Enter}')
-    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ message: 'go', view: 'terminal' })) })
+    expect(screen.queryByRole('textbox', { name: 'Chat name' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('New terminal')).toHaveTextContent(/run claude, codex or any command/)
+    await userEvent.click(screen.getByRole('button', { name: 'Open terminal' }))
+    expect(onNewShell).toHaveBeenCalledWith(0)
+    expect(onStart).not.toHaveBeenCalled()
   })
 
-  it('opens as the agent\'s default view from Settings', () => {
-    page(undefined, { viewDefaults: { claude: 'terminal', codex: 'chat', gemini: 'chat' } })
-    expect(screen.getByRole('radio', { name: 'Terminal' })).toBeChecked()
+  it('starts as Chat, and the chat opens as the agent\'s default view from Settings', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    page(onStart, { viewDefaults: { claude: 'terminal', codex: 'chat', gemini: 'chat' }, onNewShell: vi.fn() })
+    expect(screen.getByRole('radio', { name: 'Chat' })).toBeChecked()
+    await ready()
+    await userEvent.type(box(), 'hello{Enter}')
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ view: 'terminal' })) })
   })
 
   it('goes back on Close or Escape, and has no Close when there is nothing to go back to', async () => {

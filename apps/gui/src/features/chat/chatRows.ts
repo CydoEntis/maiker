@@ -90,7 +90,7 @@ function onlyCommands(events: readonly ChatEvent[], turnId: string): boolean {
   return own.some((event) => event.kind === 'note' || event.kind === 'summary') && own.every((event) => event.kind === 'note' || event.kind === 'summary' || (event.kind === 'message' && event.role === 'user'))
 }
 
-export function buildRows(events: readonly ChatEvent[], working: boolean, root: string | null = null, echoText: string | null = null, echoThinking = true, hideSuccessfulTools = false): ChatRow[] {
+export function buildRows(events: readonly ChatEvent[], working: boolean, root: string | null = null, echoText: string | null = null, echoThinking = true, hideSuccessfulTools = false, workingPhrase: string | null = null): ChatRow[] {
   const rows: ChatRow[] = []
   const edits = new Map<string, EditEvent[]>()
   for (const event of events) {
@@ -158,7 +158,7 @@ export function buildRows(events: readonly ChatEvent[], working: boolean, root: 
   const shown = hideSuccessfulTools ? withoutQuietRuns(rows) : rows
   // A message just sent is drawn at once, and the agent is taken to be at work on it, until the history says so itself.
   if (echoText !== null) shown.push({ kind: 'echo', key: ECHO_ROW_KEY, text: echoText })
-  if (working || (echoText !== null && echoThinking)) shown.push({ kind: 'working', key: WORKING_ROW_KEY, phrase: describeWork(events, root) })
+  if (working || (echoText !== null && echoThinking)) shown.push({ kind: 'working', key: WORKING_ROW_KEY, phrase: workingPhrase ?? describeWork(events, root) })
   return linkApprovals(shown, events, root)
 }
 

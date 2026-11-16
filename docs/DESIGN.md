@@ -289,8 +289,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Tools bar** (`ActivityBar.tsx`, `frame.css`; layout 2h). A 40px column at the window's edge opposite the sidebar,
   a card on `--main` with a `--line` hairline, 8px from the edges. Its 32px buttons are `--muted`; the open one is on a
   faint wash with a 2px `--accent` line on its inner edge. Top to bottom: **Work** (always; with no runs it opens the
-  setup view, `WorkSetup`: a factory running elsewhere in the project, Maiker Factory's install commands with Copy,
-  and Open Tickets; then a divider), **Changes** (a plain badge with the changed-file count), **Files**, **History**,
+  setup view, `WorkSetup`: a factory running elsewhere in the project, what a factory is (no factory named), and
+  Open Tickets; then a divider), **Changes** (a plain badge with the changed-file count), **Files**, **History**,
   **Checks** (a red badge with the checks that want you), **Tickets** (the Tickets view over the chat area, UI ›
   *Tickets view*), and at its foot **Terminal** (shows or hides the terminal dock with the focused session's
   terminals, adding the first when it has none; `toggleTerminal`). A view button opens the side panel on that view, or closes it when it is already showing it;
@@ -428,7 +428,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   it clears from the running-subagents bar. One that still needs you stays.
 - **Running subagents** (`RunningSubagents`, the daemon's `subagent_activity`, `model/subagents.ts`). A 34px bar floats
   under the pane's header, as wide as the chat's column, on the menu surface (`--card`, a `--line2` edge, `--sh-pop`),
-  over the chat and the terminal alike, only while one or more subagents run: the spinner, "N subagents running", the
+  over the terminal only (a chat lists its helpers in its own agents card, whose running rows unfold to **Open its
+  chat**), only while one or more subagents run: the spinner, "N subagents running", the
   first one's task and what it is doing (plain text, `--dim`), "+N more" and a chevron. The whole bar is the toggle
   (named Show / Hide the subagents), and the chevron turns over while it is open. Opening extends it downward over the
   feed (at most `min(440px, 60vh)`, scrolling past that) without moving it; the feed fades behind it into `--main`
@@ -538,8 +539,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
   under 50%, `--m-or` under 75%, `--m-hi` from there). They always show, and each opens Settings › Usage & cost. When
-  a limit starts over is in its tooltip. Only what the agent reported is drawn (ADR 0009); a chat session with no pane
-  has none yet. Where the chat works is in the pane header's crumbs, not in the box.
+  a limit starts over is in its tooltip. For Claude and Codex all three always show, in that order, 0% included; one
+  the agent has not reported yet is an empty ring and "–" in `--dim` ("not reported yet" in its tooltip), never a
+  made-up 0% (ADR 0009). Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
   list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from Codex CLI
   0.167.0). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
@@ -680,7 +682,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   counts as passed). A run's card (`--main`, inset `--line`; `--fg2` while open; a 7% `--needs` wash with a 45% edge
   when it needs you) holds the run's mark (needs, working, waiting, done or failed, `runState`), the ticket key in mono
   12px 600 (else "factory 007"), at the right "done" in `--done` or "failed" in `--err` once over, the title in two
-  lines at most ("No ticket" muted without one), the run's **review** steps (named "review …") as 20px mono chips once
+  lines at most ("No ticket" muted without one), a **step bar** (`CardTrack`: one 4px segment per step, gap 3, `--line2`
+  while waiting, `--done` once passed, `--working` pulsing while in hand, `--needs` pulsing when it needs you, `--err`
+  failed, `--muted` sent back, named in its tooltip) so the card shows where the run is, the run's **review** steps (named "review …") as 20px mono chips once
   its first step passed (the name without "review": passed `--done` on a 14% wash, working `--working` with a spinner
   and a pulse, needs you `--needs` with "!", failed `--err` with ✕, sent back `--muted` with ↺, waiting dashed, skipped
   struck through), and the step's note wrapped, or "a and b are working." when several steps are in hand. A click opens
@@ -741,8 +745,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   badge (type tag, folder in `--dim`, name in `--fg`, cut from the front so the name stays). A **command on its own**
   is a card: its mark, `$` and the command, an exit tag ("exit 0" in `--done`, "exit 1" in `--err`), the time and
   **Copy command** in the head, and the last 6 lines of output on `--well` with "Show all N lines"; a failed one has the
-  `--err` edge and starts open. An **edit on its own** is a card: its mark, the file badge, the change tag, +A −R and
-  **Open in side panel** in the head, and the diff below (line numbers in a 36px gutter, a sign column, added lines
+  `--err` edge. An **edit on its own** is a card: its mark, the file badge, the change tag, +A −R and
+  **Open in side panel** in the head, and the diff below when opened (line numbers in a 36px gutter, a sign column, added lines
   tinted `--done` at 13%, removed `--err` at 13%, syntax colours from `--code-*`, folded past 12 lines); a secret file,
   a diff too large to show and a file still being written each say so in the well instead. A Markdown file the agent
   wrote is a **document card** (a file badge and "wrote N lines", **Read** and **Copy** in the head, its title and first
@@ -817,10 +821,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **New chat page (layout 2h).** The header is a pane's: the agent's 26px tile, the name field (14px semibold, a
   hover fill, the accent border while typing), then the same crumbs, project, branch and `·` work in (`new worktree` in
   `--ansi-blue`, `this folder` in `--muted`), each a menu with a small `--dim` heading; a branch another chat is on says
-  **in use** in `--warn`. Open as Chat | Terminal and the × at the right. "What are we building today?" is
-  `clamp(26px, 3.4vw, 36px)` at 650, centred and low, just over the message box. Open as Terminal draws the terminal
-  on `--term` in mono: a box ringed in the accent line naming the agent and its folder, two dim lines, and a prompt
-  line.
+  **in use** in `--warn`. Chat | Terminal and the × at the right. "What are we building today?" is
+  `clamp(26px, 3.4vw, 36px)` at 650, centred and low, just over the message box. Terminal swaps the header's agent
+  and crumbs for "New terminal" (14px 600) and the page for a 560px column: the This computer | Remote machine switch
+  and machine chips, one `--fg2` line saying it is a plain shell, and a primary **Open terminal** (`ShellStart`).
 - **Model menu (layout 2h).** 300px, square, on `--main` with a `--line2` edge, opening up from the right of the
   message box. The agent switch is a segmented control across the top (a column per agent, the picked one raised with a
   `--line2` ring), then 32px model rows (dim "default", an accent ✓), then a 44px foot in a grid: Effort in `--muted`,

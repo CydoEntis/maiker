@@ -137,6 +137,22 @@ describe('a conversation list that follows its newest row', () => {
     expect(latest()).toBeNull()
   })
 
+  it('goes back to the newest row and follows it when the person sends something, from wherever they had scrolled', () => {
+    const sent = (count: number, toLatest: number) => <VirtualList items={rows(count)} getKey={(key) => key} estimate={ROW} label="Conversation" renderItem={(key) => <p>{key}</p>} toLatest={toLatest} />
+    const { rerender } = render(sent(20, 0))
+    const element = scroller()
+    rerender(sent(21, 0))
+    fireEvent.wheel(element, { deltaY: -3 })
+    act(() => { element.scrollTop = 300 })
+    fireEvent.scroll(element)
+    expect(latest()).not.toBeNull()
+
+    rerender(sent(22, 1))
+
+    expect(element.scrollTop).toBe(22 * ROW)
+    expect(latest()).toBeNull()
+  })
+
   it('places a row that has just come in at its measured height in the same commit, not a frame later', () => {
     const measured = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(30)
     render(list(3))

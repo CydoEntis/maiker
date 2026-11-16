@@ -221,7 +221,14 @@ line of its transcript, present only when a level was set; for Codex the level i
 from Codex's `models_cache.json`. Nothing is guessed: a pane whose files say none has none, and the window then says "agent's own".
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
-into a question, and keeps the rest across a restart. `Command::QueueFollowUp { term, text, first }` adds one (`first`,
+into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
+(`Term::own_turn_over`, sent as `TermInfo.own_turn_over`, a defaulted field an older daemon leaves false), even while
+background helpers keep the session working: the agent is back at its prompt. The next
+waits for the turn that one starts (`UserPromptSubmit`), not a minute. Nothing the daemon types for a pane
+(`Term::pending_input`: a queued message's Enter, a moved session's note, a wake) goes in while the pane is Blocked,
+whatever its deadline: the Enter a beat after a message's text would answer a helper's question asked in between. A queue belongs to the agent it was made for:
+a pane whose agent ends or changes (the process scan) drops it. The Enter after a queued command (`/resume`) is
+not pressed again when no prompt is reported: such a command opens a menu that a second Enter would answer. `Command::QueueFollowUp { term, text, first }` adds one (`first`,
 a defaulted field, puts it ahead of the ones waiting, for an agent's own command picked while it works),
 `Command::ClearQueue` drops them all, and `Command::DropQueued { term, index, text }` drops one: the one at `index`, and
 only while it still reads `text`, since the queue moves when a turn ends. `DropQueued` came in protocol 80

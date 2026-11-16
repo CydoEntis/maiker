@@ -12,7 +12,7 @@ use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_s
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 const MAX_PENDING_MARKS: usize = 64;
@@ -111,7 +111,7 @@ pub struct Term {
     pub conversation_id: Option<crate::conversation::ConversationId>,
     master: Box<dyn MasterPty + Send>,
     /// To the pane's input thread (see `input_thread`).
-    writer: std::sync::mpsc::SyncSender<Vec<u8>>,
+    writer: std::sync::mpsc::SyncSender<InputChunk>,
     killer: Box<dyn ChildKiller + Send + Sync>,
     pub pid: Option<u32>,
     pub process_exited: bool,
@@ -203,6 +203,15 @@ pub struct Term {
     pub win32_input: bool,
     /// "Done" arrived while subagents were still running: hold it until they finish.
     pub done_held: Option<Instant>,
+    /// The agent's own turn is over (its own stop, not a helper's), though helpers it started
+    /// may still keep it working: it is back at its prompt and takes a message.
+    pub own_turn_over: bool,
+    /// The helper whose question (a permission ask) the agent's "needs you" is: its next news
+    /// means it was answered and carries on.
+    pub blocked_by_helper: Option<String>,
+    /// The text whose Enter is pending was an agent command (`/resume`): many open a menu and
+    /// report no prompt, so a second Enter would pick from it.
+    pub enter_after_command: bool,
     /// Its turn stopped with background work still in flight: done for now, but it carries on
     /// by itself when that work ends, so the finish isn't announced.
     pub awaiting_background: bool,
@@ -1010,6 +1019,9 @@ impl Term {
             asleep: false,
             win32_input: false,
             done_held: None,
+            own_turn_over: false,
+            blocked_by_helper: None,
+            enter_after_command: false,
             awaiting_background: false,
             background_known: Vec::new(),
             helper_work: Vec::new(),
@@ -1144,7 +1156,7 @@ impl Term {
                         .into_bytes()
                 }
             };
-            queue_input(&self.writer, reply);
+            queue_input(&self.writer, InputChunk::now(reply));
             rest = &rest[at + len..];
         }
         self.parser.process(rest);
@@ -1297,7 +1309,15 @@ impl Term {
 
     pub fn input(&mut self, data: &[u8]) {
         self.last_input = Instant::now();
-        queue_input(&self.writer, data.to_vec());
+        // A pane asking something reads each key as one choice. Keys sent a beat apart can still
+        // reach this daemon together (a link that holds small packets back, such as SSH from
+        // Windows), and an agent that reads them in one go takes them as typed text: a form's
+        // answers were lost that way. While it asks, each write keeps its own beat.
+        let chunk = InputChunk {
+            bytes: data.to_vec(),
+            apart: self.status == Status::Blocked,
+        };
+        queue_input(&self.writer, chunk);
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
@@ -1425,18 +1445,46 @@ pub fn unix_now() -> u64 {
 /// rather than stalling the daemon (and every other pane) on a blocked write.
 const INPUT_QUEUE: usize = 1024;
 
+/// How long apart the input thread writes keys for a pane that asks something, so the agent
+/// reads each on its own even when it is slow to redraw between them.
+const KEYS_APART: Duration = Duration::from_millis(80);
+
+/// Bytes for a pane's input, and whether they must reach it a beat after the write before.
+pub(super) struct InputChunk {
+    bytes: Vec<u8>,
+    apart: bool,
+}
+
+impl InputChunk {
+    fn now(bytes: Vec<u8>) -> Self {
+        Self { bytes, apart: false }
+    }
+}
+
+/// How long to wait before writing a chunk: what is left of `KEYS_APART` since the last write,
+/// when the chunk must be apart; nothing otherwise.
+fn wait_before(apart: bool, last_write: Option<Instant>, now: Instant) -> Duration {
+    match last_write {
+        Some(last) if apart => KEYS_APART.saturating_sub(now.saturating_duration_since(last)),
+        _ => Duration::ZERO,
+    }
+}
+
 /// A thread that owns the pane's input and writes what it's sent, so a program that isn't
 /// reading blocks only this thread. It ends when the pane goes (the sender drops, or the
 /// write fails because the terminal closed).
-fn input_thread(mut w: Box<dyn Write + Send>) -> std::sync::mpsc::SyncSender<Vec<u8>> {
-    let (tx, rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(INPUT_QUEUE);
+fn input_thread(mut w: Box<dyn Write + Send>) -> std::sync::mpsc::SyncSender<InputChunk> {
+    let (tx, rx) = std::sync::mpsc::sync_channel::<InputChunk>(INPUT_QUEUE);
     let spawned = std::thread::Builder::new()
         .name("pane-input".into())
         .spawn(move || {
+            let mut last_write = None;
             for chunk in rx {
-                if w.write_all(&chunk).and_then(|_| w.flush()).is_err() {
+                std::thread::sleep(wait_before(chunk.apart, last_write, Instant::now()));
+                if w.write_all(&chunk.bytes).and_then(|_| w.flush()).is_err() {
                     break;
                 }
+                last_write = Some(Instant::now());
             }
         });
     if let Err(e) = spawned {
@@ -1446,7 +1494,7 @@ fn input_thread(mut w: Box<dyn Write + Send>) -> std::sync::mpsc::SyncSender<Vec
 }
 
 /// Hand bytes to the pane's input thread without waiting; false when they were dropped.
-fn queue_input(tx: &std::sync::mpsc::SyncSender<Vec<u8>>, data: Vec<u8>) -> bool {
+fn queue_input(tx: &std::sync::mpsc::SyncSender<InputChunk>, data: InputChunk) -> bool {
     match tx.try_send(data) {
         Ok(()) => true,
         Err(std::sync::mpsc::TrySendError::Full(_)) => {
@@ -1729,7 +1777,7 @@ mod tests {
         let big = vec![b'x'; 1024];
         let mut dropped = false;
         for _ in 0..super::INPUT_QUEUE + 10 {
-            dropped |= !super::queue_input(&tx, big.clone());
+            dropped |= !super::queue_input(&tx, super::InputChunk::now(big.clone()));
         }
         assert!(
             start.elapsed() < std::time::Duration::from_secs(5),
@@ -1739,6 +1787,19 @@ mod tests {
             dropped,
             "past the queue, input is dropped instead of waited for"
         );
+    }
+
+    #[test]
+    fn keys_for_a_pane_that_asks_are_written_a_beat_apart() {
+        use super::{KEYS_APART, wait_before};
+        use std::time::{Duration, Instant};
+        let now = Instant::now();
+        let just = now.checked_sub(Duration::from_millis(5)).unwrap_or(now);
+        assert!(wait_before(true, Some(just), now) > KEYS_APART / 2, "two keys that came together are spread");
+        assert_eq!(wait_before(false, Some(just), now), Duration::ZERO, "plain typing never waits");
+        assert_eq!(wait_before(true, None, now), Duration::ZERO, "the first key goes at once");
+        let long_ago = now.checked_sub(KEYS_APART * 2).unwrap_or(now);
+        assert_eq!(wait_before(true, Some(long_ago), now), Duration::ZERO, "nor one that already came a beat later");
     }
 
     #[test]

@@ -583,7 +583,8 @@ const EFFORT_SET_PREFIX: &str = "<local-command-stdout>Set effort level to ";
 
 /// The effort level Claude's transcript says last: the newest request line names it when the level was set
 /// (`/effort`, `--effort`, a setting), and an `/effort` typed in the terminal says it at once, before any request.
-/// A session at the model's own default writes none, and then nothing is said.
+/// A session at the model's own default writes none, and then nothing is said. Newer Claude Code puts the level in
+/// the request's `output_config`; older ones put it at the top of the request.
 fn claude_effort(tail: &str) -> Option<String> {
     tail.lines()
         .rev()
@@ -591,7 +592,9 @@ fn claude_effort(tail: &str) -> Option<String> {
         .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
         .find_map(|value| {
             if value["type"] == "api-request" {
-                return Some(value["params"]["effort"].as_str().map(str::to_owned));
+                let params = &value["params"];
+                let level = params["output_config"]["effort"].as_str().or_else(|| params["effort"].as_str());
+                return Some(level.map(str::to_owned));
             }
             let said = value.pointer("/message/content").or_else(|| value.get("content"))?.as_str()?;
             let level: String = said.strip_prefix(EFFORT_SET_PREFIX)?.chars().take_while(char::is_ascii_alphabetic).collect();
@@ -989,6 +992,10 @@ mod tests {
         assert_eq!(claude_effort(&format!("{named}\n{system}")).as_deref(), Some("low"));
         assert_eq!(claude_effort(&format!("{named}\n{quoted}")).as_deref(), Some("high"));
         assert_eq!(claude_effort(&format!("{typed}\n{named}")).as_deref(), Some("high"));
+        // Newer Claude Code names the level in the request's output settings.
+        let configured = r#"{"type":"api-request","params":{"model":"claude-opus-5-5","output_config":{"effort":"medium"}}}"#;
+        assert_eq!(claude_effort(configured).as_deref(), Some("medium"));
+        assert_eq!(claude_effort(&format!("{configured}\n{plain}")), None);
     }
 
     #[test]

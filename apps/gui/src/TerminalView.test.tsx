@@ -76,7 +76,7 @@ vi.mock('@xterm/xterm', () => ({
     onBinary() { return { dispose: vi.fn() } }
     attachCustomKeyEventHandler(handler: NonNullable<typeof terminalState.keyHandler>) { terminalState.keyHandler = handler }
     write(data: Uint8Array, done?: () => void) { terminalState.writes.push(data); terminalState.duringWrite?.(data); done?.() }
-    parser = { registerOscHandler: (ident: number, handler: (data: string) => boolean | Promise<boolean>) => { terminalState.oscHandlers.set(ident, handler); return { dispose: vi.fn() } } }
+    parser = { registerOscHandler: (ident: number, handler: (data: string) => boolean | Promise<boolean>) => { terminalState.oscHandlers.set(ident, handler); return { dispose: vi.fn() } }, registerCsiHandler: () => ({ dispose: vi.fn() }) }
     dispose() {}
   },
 }))
@@ -244,15 +244,14 @@ describe('terminal view', () => {
     expect(sendTerminalInput).toHaveBeenCalledTimes(1)
   })
 
-  it("answers a program's background query with the theme colour, not the see-through canvas", async () => {
+  it("leaves a program's colour query to the daemon, which has answered it already", async () => {
     renderTerminal()
     expect(await screen.findByRole('region', { name: 'Native Codex terminal' })).toBeInTheDocument()
     await waitFor(() => { expect(terminalState.oscHandlers.has(11)).toBe(true) })
 
     expect(terminalState.oscHandlers.get(11)?.('?')).toBe(true)
-    await waitFor(() => { expect(sendTerminalInput).toHaveBeenCalledWith(binding, '\u001b]11;rgb:0606/0d0d/1616\u001b\\') })
     expect(terminalState.oscHandlers.get(10)?.('?')).toBe(true)
-    await waitFor(() => { expect(sendTerminalInput).toHaveBeenCalledWith(binding, '\u001b]10;rgb:c9c9/d6d6/e3e3\u001b\\') })
+    expect(sendTerminalInput).not.toHaveBeenCalled()
     // Setting a colour is xterm's business.
     expect(terminalState.oscHandlers.get(11)?.('#000000')).toBe(false)
   })
@@ -573,39 +572,39 @@ describe('terminal view', () => {
     beforeEach(() => { vi.useFakeTimers() })
     afterEach(() => { vi.useRealTimers() })
 
-    it('never shows a loader for a pane on this computer', async () => {
+    it('hides the screen while it attaches and shows nothing for the first 300 ms', async () => {
       loadTerminalHistory.mockReturnValue(new Promise<TerminalHistory>(() => {}))
       renderTerminal()
 
+      expect(screen.getByRole('region').className).toContain('is-attaching')
+      await act(async () => { await vi.advanceTimersByTimeAsync(299) })
       expect(screen.queryByRole('status')).not.toBeInTheDocument()
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_000) })
-      expect(screen.queryByRole('status')).not.toBeInTheDocument()
-      expect(screen.queryByText(/Connecting|Catching up/)).not.toBeInTheDocument()
+      expect(screen.queryByText(/Connecting|Catching up|Loading/)).not.toBeInTheDocument()
     })
 
-    it('shows the catching-up strip for another machine only after 300 ms, and removes it once live', async () => {
+    it('shows placeholder lines for a slow attach, on any machine, and the screen once it is live', async () => {
       let resolveHistory: (history: TerminalHistory) => void = () => {}
       loadTerminalHistory.mockReturnValue(new Promise<TerminalHistory>((resolve) => { resolveHistory = resolve }))
       renderTerminal({ ...conversation, machine: 2, machineName: 'devbox' })
 
-      await act(async () => { await vi.advanceTimersByTimeAsync(299) })
+      await act(async () => { await vi.advanceTimersByTimeAsync(300) })
+      expect(screen.getByRole('status', { name: /^Opening / })).toBeInTheDocument()
       expect(screen.queryByText(/Catching up/)).not.toBeInTheDocument()
-      await act(async () => { await vi.advanceTimersByTimeAsync(1) })
-      expect(screen.getByRole('status')).toHaveTextContent(/Catching up from devbox · \d+ ms/)
 
       await act(async () => {
         resolveHistory({ seq: 3, bytes: bytes('hello ') })
         await vi.advanceTimersByTimeAsync(0)
       })
-      expect(screen.queryByText(/Catching up/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('status', { name: /^Opening / })).not.toBeInTheDocument()
+      expect(screen.getByRole('region').className).not.toContain('is-attaching')
     })
 
-    it('shows nothing for another machine that attaches within 300 ms', async () => {
+    it('shows nothing for an attach within 300 ms', async () => {
       renderTerminal({ ...conversation, machine: 2, machineName: 'devbox' })
       await act(async () => { await vi.advanceTimersByTimeAsync(50) })
       await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
 
-      expect(screen.queryByText(/Catching up/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('status', { name: /^Opening / })).not.toBeInTheDocument()
     })
   })
 

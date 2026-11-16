@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { useWarmAgent, type WarmAgent, type WarmSpec } from '../useWarmAgent'
 import { toast } from '@/lib/toast'
@@ -76,6 +77,8 @@ type Props = {
   onOtherMachine: (machine: number) => void
   /** Opens the dialog that adds a machine; without it the machine list has no such row. */
   onAddMachine?: () => void
+  /** Opens a plain shell on that computer, with no agent in it: the page's Terminal choice. Without it the page has no such choice. */
+  onNewShell?: (machine: number) => void
   /** Leaves the page; absent when there is nothing to go back to (no chat is open yet). */
   onCancel?: (() => void) | undefined
   /** Told the agent the chat will start with, at first and on each change, so the sidebar's draft row shows it. */
@@ -107,7 +110,7 @@ type WorkIn = 'auto' | 'folder' | 'tree'
  * shown as its chat (ADR 0003). Enter sends, Ctrl+Enter (⌘Enter on macOS) starts it in the background and keeps the
  * page for the next one, Esc goes back.
  */
-export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassAllowed = false, codexYolo = false, fullAccess = false, browse, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassAllowed = false, codexYolo = false, fullAccess = false, browse, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onNewShell, onCancel, onAgentChange, seed = null, leading }: Props) {
   // On another machine the chat is the agent started in a shell there: this computer's extra models, branches, files and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
@@ -122,7 +125,8 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const [extra, setExtra] = useState<NewSessionProject | null>(seed === null ? null : { folder: seed.folder, name: lastPart(seed.folder), color: 'var(--dim)' })
   const [message, setMessage] = useState(seed?.message ?? '')
   const [name, setName] = useState('')
-  const [view, setView] = useState<PaneView | null>(null)
+  // Chat starts an agent; Terminal opens a plain shell with no agent in it.
+  const [kind, setKind] = useState<'chat' | 'terminal'>('chat')
   const [branchPick, setBranchPick] = useState<{ folder: string; pick: BranchChoice } | null>(null)
   const [workIn, setWorkIn] = useState<WorkIn>('auto')
   const [starting, setStarting] = useState(false)
@@ -180,7 +184,8 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   }, [explicit, treeMode, suggested])
   const isInstalled = (id: string) => (installed === null ? chatAgentOf(id) !== null : installed.includes(id))
   const agentMissing = !remote && !isInstalled(agent)
-  const opensAs: PaneView = view ?? viewDefaults[agent]
+  // The agent's chat opens as Settings › Chat says for it; it can be switched once it runs.
+  const opensAs: PaneView = viewDefaults[agent]
 
   // The message box takes the keys once there is a folder.
   useEffect(() => { if (folder !== '') text.current?.focus() }, [folder])
@@ -319,9 +324,8 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     return { key: 'path', label: `Use ${typed}`, icon: <Icon name="folder" size={12} />, checked: false, onPick: () => { openFolder(typed) } }
   }
   const elsewhere = machines.filter((candidate) => !candidate.local)
-  const machinePick = (
-    <div className="mx-nc-machine">
-      <h3 className="mx-chip-title">Machine</h3>
+  const machineChoice = (
+    <>
       <Segmented aria-label="Machine" value={remote ? 'remote' : 'local'} className="mx-where-work"
         onValueChange={(next) => {
           if (next === 'local') onOtherMachine(LOCAL_MACHINE)
@@ -341,6 +345,12 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
           {onAddMachine !== undefined && <button type="button" className="mx-nc-machine-chip" onClick={onAddMachine}>+ Add a machine…</button>}
         </div>
       )}
+    </>
+  )
+  const machinePick = (
+    <div className="mx-nc-machine">
+      <h3 className="mx-chip-title">Machine</h3>
+      {machineChoice}
       <h3 className="mx-chip-title">Folder</h3>
     </div>
   )
@@ -372,6 +382,9 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     <section className="mx-newchat" aria-label="New agent chat" onKeyDown={onKeyDown}>
       <header className="mx-nc-head">
         {leading}
+        {kind === 'terminal' ? (
+          <span className="mx-nc-where"><span className="mx-nc-shell-title">New terminal</span></span>
+        ) : (<>
         <span className="mx-nc-agent" title={AGENT_LABEL[agent]}><AppIcon process={agent} size={26} /></span>
         <span className="mx-nc-where">
           <input className="mx-nc-name" value={name} placeholder="Name this chat" aria-label="Chat name" maxLength={MAX_SESSION_NAME_LENGTH}
@@ -400,21 +413,24 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
             </>
           )}
         </span>
+        </>)}
         <span className="mx-nc-head-end">
-          <RadioGroup aria-label="Open as" title="How this chat opens. Set the default in Settings › Chat." orientation="horizontal" value={opensAs}
-            onValueChange={(next) => { if (next === 'chat' || next === 'terminal') setView(next) }} className="mx-view-switch">
-            <RadioGroupItem value="chat" className="mx-view-option">Chat</RadioGroupItem>
-            <RadioGroupItem value="terminal" className="mx-view-option">Terminal</RadioGroupItem>
-          </RadioGroup>
+          {onNewShell !== undefined && (
+            <RadioGroup aria-label="Start" title="Chat starts an agent. Terminal opens a plain shell: cd anywhere and run what you like." orientation="horizontal" value={kind}
+              onValueChange={(next) => { if (next === 'chat' || next === 'terminal') setKind(next) }} className="mx-view-switch">
+              <RadioGroupItem value="chat" className="mx-view-option">Chat</RadioGroupItem>
+              <RadioGroupItem value="terminal" className="mx-view-option">Terminal</RadioGroupItem>
+            </RadioGroup>
+          )}
           {onCancel !== undefined && <button type="button" className="mx-pane-control" aria-label="Close" title="Close (Esc)" onClick={onCancel}><Icon name="close" size={13} /></button>}
         </span>
       </header>
-      {opensAs === 'terminal' ? (
-        <DraftTerminal agent={AGENT_LABEL[agent]} folder={folder} branch={branch} here={here} message={message} disabled={off} onType={setMessage} />
+      {kind === 'terminal' && onNewShell !== undefined ? (
+        <ShellStart where={targetLabel} machineChoice={elsewhere.length > 0 || onAddMachine !== undefined ? machineChoice : null} onOpen={() => { onNewShell(machine) }} />
       ) : (
         <div className="mx-nc-start"><h1 className="mx-nc-title">What are we building today?</h1></div>
       )}
-      {opensAs === 'chat' && (
+      {kind === 'chat' && (
       <div ref={box} className="mx-composer">
         <div className="mx-composer-column">
           <div className="mx-box">
@@ -448,29 +464,20 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
         </div>
       </div>
       )}
-      {opensAs === 'terminal' && <div className="mx-nc-term-notes">{notes}</div>}
     </section>
   )
 }
 
 /**
- * The page when the chat opens as its terminal: the terminal it will start in, with the agent's welcome and where it
- * works (the agent's own welcome comes when it starts), and a prompt line that takes the first task. Enter starts it there.
+ * The page's Terminal choice: a plain shell on the picked computer, with no agent in it. It opens in that computer's start
+ * folder; from there the person goes where they like and runs claude, codex or anything else.
  */
-function DraftTerminal({ agent, folder, branch, here, message, disabled, onType }: { agent: string; folder: string; branch: BranchChoice | null; here: string | null; message: string; disabled: boolean; onType: (text: string) => void }) {
+function ShellStart({ where, machineChoice, onOpen }: { where: string; machineChoice: ReactNode; onOpen: () => void }) {
   return (
-    <div className="mx-nc-term" aria-label="Draft terminal">
-      <div className="mx-nc-term-welcome">
-        <p><span className="mx-nc-term-mark" aria-hidden="true">✻</span> {agent} starts here</p>
-        <p className="mx-nc-term-dim">cwd: {folder === '' ? 'pick a folder above' : folder}</p>
-        <p className="mx-nc-term-dim">{branch?.worktree === true ? `new worktree from ${here ?? 'here'}` : `branch: ${branch?.name ?? here ?? 'detached'}`}</p>
-      </div>
-      <p className="mx-nc-term-dim">Already in the folder you picked, so no cd needed.</p>
-      <p className="mx-nc-term-dim">Change the project or branch above and it restarts there.</p>
-      <label className="mx-nc-term-prompt">
-        <span aria-hidden="true">›</span>
-        <input autoFocus data-prompt="true" aria-label="First task" value={message} disabled={disabled} placeholder="Type a task. It starts when you press Enter." onChange={(event) => { onType(event.target.value) }} />
-      </label>
+    <div className="mx-nc-shell" aria-label="New terminal">
+      {machineChoice !== null && <div className="mx-nc-machine">{machineChoice}</div>}
+      <p className="mx-nc-shell-text">A plain terminal on {where}. Go to any folder and run claude, codex or any command.</p>
+      <Button autoFocus className="self-start" onClick={onOpen}>Open terminal</Button>
     </div>
   )
 }

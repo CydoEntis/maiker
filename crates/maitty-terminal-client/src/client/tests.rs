@@ -147,6 +147,7 @@ mod design_tests {
             helper_ask: Vec::new(),
             pr: None,
             queued: Vec::new(),
+            own_turn_over: false,
             root: None,
             top: None,
             since: 0,

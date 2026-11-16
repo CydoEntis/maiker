@@ -1005,8 +1005,9 @@ Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in
   there: then it gets a worktree of its own, on a new branch with a short two-word name (like
   `quiet-otter`), so the two never edit the same files, and the menu says why. Choose **This folder**
   or **New worktree** to decide yourself.
-- **Open as.** Chat or Terminal, at the right. Each agent's default is in Settings › Chat. With
-  Terminal, the page shows the terminal the agent will start in; type the first task on its prompt line.
+- **Chat or Terminal**, at the right. Chat starts an agent; it opens as its chat or its terminal as Settings › Chat
+  says for that agent, and you can switch once it runs. Terminal opens a plain shell, with no agent in it, on this
+  computer or a remote machine: go to any folder and run claude, codex or any command yourself.
 
 Branch and Work in are left out when the folder is not a git repository, and on another machine.
 **Model and effort** are on the model button in the message box, and the **permission mode** is the
@@ -1041,7 +1042,8 @@ message box. The message box is off, and says why, until you have answered.
   with 2 to 4 choices) shows them one at a time, with a tab for each: use **Next** and **Back**, or a
   tab, to move between them. **Send answers**, on the last one, stays off until every question has an answer. A question that takes several answers has boxes to tick
   ("Pick any"); tick at least one. Nothing is typed to the agent before then, so you can still
-  change an answer. A question beyond those limits, or "Type something", is answered in the terminal.
+  change an answer. Every question also has **Your own answer** under its choices, the box Claude's menu calls "Type
+  something": write in it to answer in your own words. A question beyond those limits is answered in the terminal.
 - **Codex, and any menu the chat has no buttons for.** Maitty does not press a button for these,
   because it has not checked that those keys are right. The card shows the question as the terminal
   draws it, with a row of **↑ ↓ ← → Enter Esc** buttons. They press those keys in the agent's terminal,

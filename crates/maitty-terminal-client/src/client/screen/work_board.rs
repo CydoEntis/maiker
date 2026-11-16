@@ -479,7 +479,7 @@ mod tests {
             ticket: key.map(|key| WorkflowTicket { key: key.into(), title: None, link: None }),
             steps: steps
                 .iter()
-                .map(|(name, state)| WorkflowStep { name: (*name).into(), state: *state, note: None, helper: None })
+                .map(|(name, state)| WorkflowStep { name: (*name).into(), state: *state, note: None, helper: None, choices: Vec::new() })
                 .collect(),
             reported_at: 1,
         }

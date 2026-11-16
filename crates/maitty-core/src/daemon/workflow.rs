@@ -29,6 +29,7 @@ mod tests {
                 state,
                 note: None,
                 helper: None,
+                choices: Vec::new(),
             }],
             reported_at: 0,
         }

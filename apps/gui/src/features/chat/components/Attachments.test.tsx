@@ -1,3 +1,5 @@
+import { SentAttachments } from './Attachments'
+import { FilesHereContext } from '../filesHere'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { toast } from '@/lib/toast'
@@ -325,12 +327,33 @@ describe('a sent message', () => {
     expect(screen.queryByText(/attachments\/attach-/)).not.toBeInTheDocument()
   })
 
+  it('draws no empty band for the blank lines Claude Code stores in front of a pasted message', async () => {
+    await open({ prepare: (daemon) => { daemon.upsert(daemon.message('t3', 'u3', 'User', `\n\nthe gap\n`)) } })
+
+    expect(screen.getByText('the gap').textContent).toBe('the gap')
+  })
+
   it('says a file is no longer available when the host no longer has it', async () => {
     fake.attachmentsExist.mockResolvedValue([false, true])
     await open({ prepare: message })
 
     const gone = screen.getByText('Design_Final.zip').closest('li')
     expect(gone).toHaveTextContent('no longer available')
+    expect(screen.getByText('Pasted image.png').closest('li')).not.toHaveTextContent('no longer available')
+  })
+})
+
+describe('a sent message of a chat on another machine', () => {
+  it('never calls its files gone, since this computer cannot look at them', async () => {
+    fake.attachmentsExist.mockResolvedValue([false])
+    render(
+      <FilesHereContext.Provider value={false}>
+        <SentAttachments files={[{ path: '/home/dev/.cache/maitty/pastes/paste-1-0a1b2c3d-image.png', name: 'Pasted image.png', kind: 'image' }]} />
+      </FilesHereContext.Provider>,
+    )
+    await act(async () => { await Promise.resolve() })
+
+    expect(fake.attachmentsExist).not.toHaveBeenCalled()
     expect(screen.getByText('Pasted image.png').closest('li')).not.toHaveTextContent('no longer available')
   })
 })

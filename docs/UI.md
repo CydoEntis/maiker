@@ -162,7 +162,7 @@ own sign-in (`start_github_sign_in`); when that session ends the page asks every
 adds machines (the behaviour is the terminal app's [Machines dialog](#project-specific-machines-dialog),
 with the host list read off the UI thread, the look at the machine ended by a 12 s limit or Cancel, and a
 login that needs a person run in a session named `ssh <name>`); **New session** (⌘T, Ctrl+Shift+T, ⌘K, the sidebar's New agent chat, a machine's New agent chat here) opens, on this computer, the
-**new agent chat page** (`NewChatPage`, layout 2h) over the panes; with no chat on this computer it is what the window shows, with no Close (`WorkspaceMain`, `noChats`). Its header is a pane's: the window's own control at the left (`leading`, Show sidebar while the sidebar is hidden), the agent's tile, a **name** field ("Name this chat"; empty, the first message names the chat), then crumbs: the **project** (a square in its colour; its menu has **Machine**, This computer | Remote machine, with a chip per other machine and **+ Add a machine…**, then the folders with a search that takes a pasted path, and **Browse…** and **Clone from GitHub…** under them), the **branch** (hidden outside a git repository; "Branch in <project>": each branch with the age of its last commit, or **in use** in the warning colour when another chat works on it here, and a typed name offers "+ Create <name> from <current>") and **Work in** (this folder | new worktree, each with a line saying what it does). At the right, **Open as** Chat | Terminal (each agent's default from Settings › Chat) and the × when there is somewhere to go back to. Under it, "What are we building today?" sits low over the message box; with Terminal picked, the terminal the agent will start in takes the page instead (`DraftTerminal`: the agent, the folder and the branch, and a prompt line that starts it on Enter). Work in starts as **auto**: the folder as it is, unless another chat on this computer works on the same branch there (`busyBranchesOf`), when it is a worktree of its own and the menu says "<chat> is already working on <branch> here, so this chat gets its own worktree. Your checkout stays untouched." **Clone from GitHub…** opens `CloneRepoDialog`Beside it, and in the project dropdown, **Clone a repository…** opens `CloneRepoDialog` ("Clone a repository to this computer" or to the machine's name): a repository address and the folder the clone goes inside, which starts as the folder last cloned into on that machine (kept in this window's storage) or else the start folder, with **Choose…** for the same folder picker. Under the address is the machine's own GitHub repositories (`GitHubRepoPicker`, `github_repos` and `github_owners`): a search box that asks again 300 ms after typing stops, an owner menu when the account has organisations, and a list, newest pushed first, with `· private` on a private one; Up and Down move, Enter or a click fills the address and does not start the clone. A list of 200 says "Showing the first 200 repositories. Search to find the others." A machine that is not signed in says "Sign in to GitHub on <machine> to pick from your repositories." with **Open GitHub settings** (which closes the dialog and opens Settings › GitHub); one without `gh` says where to get it; a list that could not be loaded says why. Pasting an address works in every case. The machine's daemon runs git (`clone_repository`); when a folder rule Maitty wrote on that machine covers the destination folder, "Will use <login>" shows under it (the rules are read as the dialog opens; a machine that cannot say shows no line); while it runs the dialog says "Cloning…" and cannot be closed, a refusal is shown in the machine's own words with the address kept, and the new folder becomes the page's project. No folder is chosen for the person: the message box cannot send until one is. Choosing New worktree takes a new branch under a random two-word name (`suggestBranchName` in `model/worktreeName.ts`, like `quiet-otter`, with `-2`, `-3`, … when it is in use), which the branch crumb then shows; the message is never copied into it, and a typed name replaces it. The agent, its model and its effort are on the model button in the box's bottom row (see *Agent, model and effort*), where the agent switch shows because the chat has not started; an agent that is not installed says so under the box, with **set it up** opening the agent's official page (`open_agent_docs`, a fixed list, never a caller's address). The permission mode the chat starts in is the shield beside it (`PermissionMenu`); while Settings › Chat › **Full access in new chats** is on it starts on the agent's full-access mode (Codex's Full access; Claude's Bypass permissions only where Yolo mode allows it, else its usual mode): Claude's modes, or for Codex **Read only**,
+**new agent chat page** (`NewChatPage`, layout 2h) over the panes; with no chat on this computer it is what the window shows, with no Close (`WorkspaceMain`, `noChats`). Its header is a pane's: the window's own control at the left (`leading`, Show sidebar while the sidebar is hidden), the agent's tile, a **name** field ("Name this chat"; empty, the first message names the chat), then crumbs: the **project** (a square in its colour; its menu has **Machine**, This computer | Remote machine, with a chip per other machine and **+ Add a machine…**, then the folders with a search that takes a pasted path, and **Browse…** and **Clone from GitHub…** under them), the **branch** (hidden outside a git repository; "Branch in <project>": each branch with the age of its last commit, or **in use** in the warning colour when another chat works on it here, and a typed name offers "+ Create <name> from <current>") and **Work in** (this folder | new worktree, each with a line saying what it does). At the right, **Chat** | Terminal and the × when there is somewhere to go back to. Chat starts an agent, which opens as its chat or its terminal as Settings › Chat says for it. Under it, "What are we building today?" sits low over the message box. With Terminal picked the page starts no agent: it shows the machine choice and **Open terminal** (`ShellStart`), which opens a plain shell in that computer's start folder (`onNewShell`, the window's `newTerminal`), where the person goes anywhere and runs any command. Work in starts as **auto**: the folder as it is, unless another chat on this computer works on the same branch there (`busyBranchesOf`), when it is a worktree of its own and the menu says "<chat> is already working on <branch> here, so this chat gets its own worktree. Your checkout stays untouched." **Clone from GitHub…** opens `CloneRepoDialog`Beside it, and in the project dropdown, **Clone a repository…** opens `CloneRepoDialog` ("Clone a repository to this computer" or to the machine's name): a repository address and the folder the clone goes inside, which starts as the folder last cloned into on that machine (kept in this window's storage) or else the start folder, with **Choose…** for the same folder picker. Under the address is the machine's own GitHub repositories (`GitHubRepoPicker`, `github_repos` and `github_owners`): a search box that asks again 300 ms after typing stops, an owner menu when the account has organisations, and a list, newest pushed first, with `· private` on a private one; Up and Down move, Enter or a click fills the address and does not start the clone. A list of 200 says "Showing the first 200 repositories. Search to find the others." A machine that is not signed in says "Sign in to GitHub on <machine> to pick from your repositories." with **Open GitHub settings** (which closes the dialog and opens Settings › GitHub); one without `gh` says where to get it; a list that could not be loaded says why. Pasting an address works in every case. The machine's daemon runs git (`clone_repository`); when a folder rule Maitty wrote on that machine covers the destination folder, "Will use <login>" shows under it (the rules are read as the dialog opens; a machine that cannot say shows no line); while it runs the dialog says "Cloning…" and cannot be closed, a refusal is shown in the machine's own words with the address kept, and the new folder becomes the page's project. No folder is chosen for the person: the message box cannot send until one is. Choosing New worktree takes a new branch under a random two-word name (`suggestBranchName` in `model/worktreeName.ts`, like `quiet-otter`, with `-2`, `-3`, … when it is in use), which the branch crumb then shows; the message is never copied into it, and a typed name replaces it. The agent, its model and its effort are on the model button in the box's bottom row (see *Agent, model and effort*), where the agent switch shows because the chat has not started; an agent that is not installed says so under the box, with **set it up** opening the agent's official page (`open_agent_docs`, a fixed list, never a caller's address). The permission mode the chat starts in is the shield beside it (`PermissionMenu`); while Settings › Chat › **Full access in new chats** is on it starts on the agent's full-access mode (Codex's Full access; Claude's Bypass permissions only where Yolo mode allows it, else its usual mode): Claude's modes, or for Codex **Read only**,
 **Auto** (nothing is sent, so Codex's own settings stand) and **Full access** in red, which go on the launch line as
 `--sandbox` and `--ask-for-approval`. While Yolo mode is on for Codex the page says Full access and offers no menu, since
 that setting already starts it so. A running Codex chat has the same three modes on its permission button: a pick types
@@ -265,12 +265,12 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    creation order (`model/sidebar.ts`, `bySidebarOrder`). The command palette still lists the most urgent first. A machine can
    be grouped by project and folded. There are no fleets, ships, tabs or tab bar: choosing a session shows the layout it
    is in (`model/layout.ts`), else one of its own. A session's **subagents** are the daemon's `TermInfo.subagent_activity`
-   (`model/subagents.ts`), shown while they run in a bar floating over their session's pane (`RunningSubagents`; not for a session that
-   reported workflow runs, whose helpers are on its Work board), not in the sidebar; **Open its chat** on a row shows its own chat in the pane until you pick a session or **‹ Main session**.
+   (`model/subagents.ts`), shown while they run in a bar floating over their session's terminal (`RunningSubagents`; not for a session that
+   reported workflow runs, whose helpers are on its Work board, and not over a chat, whose agents card already lists them), not in the sidebar; **Open its chat** on a row, or on a running helper's row of the chat's agents card (`OpenSubagentContext`, matched by title or task in `subagentNamed`), shows its own chat in the pane until you pick a session or **‹ Main session**.
    A session's **workflow runs** (the daemon's `workflows`, `model/workflows.ts`) are not in the sidebar either: they are
    the pane's **Work** view (`features/work/`, `usePaneViews().work`), a board placed by `model/board.ts` (a column per reported step, then Needs human and Done), opened from the
-   tools bar's Work and left by choosing Chat or Terminal; with no runs it shows `WorkSetup` instead (how to set a
-   factory up). The pane body is `is-work` then, never `is-chat`, which hides all but the chat layer; the drawer is the shared Dialog mounted in the board. Rename is
+   tools bar's Work and left by choosing Chat or Terminal; with no runs it shows `WorkSetup` instead (what a
+   factory is to Maitty, naming none, and Open Tickets). The pane body is `is-work` then, never `is-chat`, which hides all but the chat layer; the drawer is the shared Dialog mounted in the board. Rename is
    in place (double-click, F2 or the menu). Right-click menus share `MenuPopup` (focus, arrow keys, Esc, kept inside the
    window). Split layouts are this window's own state, up to four panes, mixed right and down with draggable dividers; a
    session closes with a 6 second Undo. **Put away** (the row menu of a finished or idle session in a daemon terminal,
@@ -1160,14 +1160,23 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   that takes several answers (`multiSelect`, even a lone one) comes as `PermissionAsk.form`, which a peer from before
   it does not read, so it leaves that prompt to the terminal instead of answering a key per question. The form gives
   such a question checkboxes ("Pick any", at least one) and types each ticked number, then → to move on (checked
-  against Claude Code 2.1.325); a question with one answer still takes its number. The prompt's own "Type something"
-  is still answered in the terminal. The box stays off while
+  against Claude Code 2.1.325); a question with one answer still takes its number. After the choices, every question
+  (a lone one too) has a **Your own answer** row, the prompt's own "Type something": a one-line box that counts as the
+  answer once it holds words (for a question with one answer it replaces the pick). Its keys, checked against Claude
+  Code 2.1.325: for one answer, the row's number, the words and Enter; for several, ↓ once per choice to reach the
+  row (typing ticks it), the words, Tab to its Submit row and Enter (→ there would move the text cursor). A lone
+  question's row has its own **Send**. The daemon writes each key a beat (80 ms) after the last while the pane asks
+  something (`KEYS_APART`), because keys that reach an agent in one read are taken as typed text and the menu ignores
+  them. The box stays off while
   the tray shows, because typed text would answer that prompt. A message the daemon types for an agent (the
   first message of a new chat, or a queued one) is its text and then Enter a tick later; when the agent was still
   starting or the machine was busy the two can arrive together, and the agent reads the Enter as a new line and leaves
   the message unsent in its box. An agent with hooks reports a prompt the moment it is submitted, so when no report
   comes within three seconds the daemon presses Enter once more (`Term::enter_again_due`), never when something was
-  typed into the pane since. Attachments are off for it. **New terminal** (the sidebar button, Ctrl/Cmd+Shift+T,
+  typed into the pane since. A message the chat box pastes into an agent's terminal gets the same second Enter from
+  the window when, 1.5 s later (`RESUBMIT_AFTER_MS`), the agent is still at rest and its history does not hold the
+  message; a message the agent joined to the one before it counts as sent (`countUserMessages` matches the words
+  inside a message, not only a whole one). Attachments are off for it. **New terminal** (the sidebar button, Ctrl/Cmd+Shift+T,
   a project's **New terminal here**, the palette) is a plain shell with no chat view. A chat session of ADR 0003, with
   no terminal, still starts from a shell's empty chat card (**Start a Claude chat** / **Start a Codex chat**) and
   stops the agent when closed (`closeChatSession`: end, then put away; if the stop fails it stays open).
@@ -1222,20 +1231,25 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   changed since, so a 1,000-entry conversation costs one small read per poll. A page that says `reset` (the history was
   rebuilt, or the conversation started over) replaces what the feed held. A failed read, or a daemon that predates
   `resume`, falls back to the old way: ask again for the last page read, or read from the start when that cursor is
-  stale. Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
+  stale. A failed read is tried again after 500 ms (`RETRY_READ_MS`); the chat says "Reconnecting to the daemon" with
+  the reason only when that one fails too, since one failure is usually a stale kept line, not a lost daemon. A history
+  the daemon marks incomplete (`completeness`, such as a long transcript of which it reads only the last 16 MB) shows
+  no notice: the chat shows what it has. Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
   objects. A new generation shows a fresh projection. Pending approvals come with every page and go to `applyApprovals`. The last
   feed per conversation is kept (8 at most), so reopening a chat shows it at once.
 - **List.** `VirtualList` draws only the rows near the view (`transform` placement, measured heights, stable event
   ids as keys), follows the newest row until the reader moves up (any move up, however small, and a wheel move up at once),
   then offers "Jump to the latest message"; it follows again when the reader scrolls back down to within 48 px of the
-  bottom (`followAfterScroll`). Rows
+  bottom (`followAfterScroll`), and when the person sends or queues a message, which takes the view back to the newest
+  row from wherever it was (`VirtualList`'s `toLatest`). Rows
   are `buildRows(events)`: one agent message per turn (adjacent agent messages of a turn are joined; a step between
   two messages keeps their order), user bubbles, step cards, approvals, turn dividers, and the working line last.
   Two or more steps that follow each other (edits, commands, tools; never the to-do list) fold into one **work row**
   (`workSummary.ts`, `WorkCard`): a line such as "Read 2 files, edited 3, ran 1 command" with the daemon's own time for
   the run, as a card head that opens every step. Under it are the run's latest 3 steps as rows, each openable on its
-  own, and a "+N more" line when it leaves steps out. A run with a failed step starts open, and so does one whose
-  pending request is about a step the fold hides. A command or an edit that stands alone is a card with its facts in
+  own, and a "+N more" line when it leaves steps out. Every run and every step starts folded, a failed one too (its
+  line says so), so a long turn stays short; only a run whose pending request is about a step the fold hides starts
+  open. A command or an edit that stands alone is a card with its facts in
   the head (`StepView` with `alone`); inside a run it stays a row.
   The agent's reasoning (the daemon's `Reasoning` history items, Claude's thinking and Codex's reasoning summary) is one
   folded **Thought** row (`ThoughtRow`, a `thought` row of `buildRows`): reasoning that follows each other in a turn merge
@@ -1301,7 +1315,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     changed-files bar wears the edit glyph. A table column of figures (`numericColumns`: every cell a number, maybe
     with a currency or a short unit) sits right, in mono, unless the table set its alignment.
   - *Tool step:* the verb and target are read from the tool's own input (`toolFacts.ts`): "Read `src/a.ts` lines
-    40–88", "Search `pattern` in src", "Fetch example.com/docs", "Skill maiker:factory" and its arguments, an extension's server
+    40–88", "Search `pattern` in src", "Fetch example.com/docs", "Skill review:pr" and its arguments, an extension's server
     and tool. Nothing the input does not hold (hit counts, a status code) is shown. Click opens the input and the
     result, bounded.
   - *Edit step:* the file as a badge, Added / Modified / Deleted where the history says, `+N` `−N`; it opens to the
@@ -1311,7 +1325,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   - *Command step:* the command's first line, then the live clock or `exit N · time`; it opens to the whole command
     and the last 3 lines of output with "Show all N lines". The elapsed time is the provider's duration, else the
     daemon's start and completion times; the exit code exists for Codex only, so for Claude it reads "exit code not
-    reported". One that failed starts open.
+    reported". Every one starts folded, a failed one too.
   - *Approval card:* see Approvals. *Helper agents:* consecutive helper calls are one card, "3 agents, 2 working",
     a row each (title, type, what it was asked, its time); a row opens what it was asked and its report. *Plan:*
     the agent's own to-do items, "N of M done" and a progress bar. *Working line:* "claude is working · m:ss"; no token count,
@@ -1320,7 +1334,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     elements. There is no HTML anywhere (no `dangerouslySetInnerHTML`), raw tags are text, images are never loaded
     (their alt text shows), and a link is kept only for an `http(s)` address. A link is a button, never an anchor, so it
     never navigates the webview: a click hands the address to the host (`open_link`), which opens it in the person's
-    default browser, and the toast that says so offers **Copy link**. Outside the desktop app a click copies it.
+    default browser, and the toast that says so offers **Copy link**. Outside the desktop app a click copies it. A bare
+    address and inline code that is only an `http(s)` address are links too, the code keeping its chip.
   - *Saving a block* (`exportBlock.ts`, `saveBlock.ts`): a code block has **Copy** and **Save**; a table has **Copy**
     (as Markdown) and **Markdown**, **CSV** and **HTML**. Both are cards whose buttons sit in the head above the content,
     so nothing hangs loose under a table where it reads as part of the next paragraph. A save goes to the export folder of Settings › General
@@ -1347,7 +1362,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   working line under it, until the history has those words (`countUserMessages` against the count at send time); it is
   dropped after 20 s rather than left standing as sent. The **working line** says what the agent is doing from the newest
   step still running (`workPhase.ts`): "reading src/app.ts", "writing hello.txt", "running npm test", "thinking". It says
-  only what the history says.
+  only what the history says. When only helpers keep the session working after the agent's own turn ended
+  (`Session.helpersOnly`, from `TermInfo.own_turn_over`), it says "claude is free · 3 helpers working" with no timer, and
+  the box sends at once instead of queueing: the agent is at its prompt.
 - **Mode and model.** The message box's bottom row says how Claude is set up, from its own transcript and
   never a guess: the permission mode is a shield whose tooltip and name say it (`Ask before edits`, `Accept edits`, `Plan mode`, `Auto`; the shield is in the
   danger colour for `Bypass permissions`, like Full access), "not reported yet" until the file has said one; in Plan mode a strip in the box says "Plan mode · Reads and plans. Changes nothing until you approve." and the placeholder is "Reply to the plan…". A Claude chat that follows a terminal agent

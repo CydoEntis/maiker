@@ -17,6 +17,8 @@ type Props<T> = {
   overscan?: number
   /** Scrolls the row with this key to the top of the view; a new `nonce` scrolls again to the same row. */
   scrollTarget?: { key: string; nonce: number } | null
+  /** Each new value takes the view back to the newest row and follows it again (the person just sent something). */
+  toLatest?: number
 }
 
 /** Used until the list has been laid out, and where there is no layout (tests). */
@@ -35,7 +37,7 @@ const READER_SCROLL_MS = 1200
  * heights are measured as they are drawn, and the list follows its newest row until the reader
  * moves up; then it offers a way back to it.
  */
-export function VirtualList<T>({ items, getKey, estimate, renderItem, label, overscan = DEFAULT_OVERSCAN, scrollTarget = null }: Props<T>) {
+export function VirtualList<T>({ items, getKey, estimate, renderItem, label, overscan = DEFAULT_OVERSCAN, scrollTarget = null, toLatest = 0 }: Props<T>) {
   const scroller = useRef<HTMLDivElement>(null)
   // Whether the list follows its newest row, and where it was last seen (`followAfterScroll`).
   const follow = useRef<FollowState>({ following: true, top: 0, total: 0 })
@@ -226,6 +228,14 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     place(element, plan.from, totalNow.current)
     glide.current = requestAnimationFrame(step)
   }
+
+  // Sending is asking to see the answer: a reader scrolled up is taken back down.
+  const handledLatest = useRef(toLatest)
+  useEffect(() => {
+    if (handledLatest.current === toLatest) return
+    handledLatest.current = toLatest
+    jumpToLatest()
+  })
 
   const drawn = items.slice(range.start, range.end)
   return (

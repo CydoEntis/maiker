@@ -37,11 +37,10 @@ function RedactionNote({ texts }: { texts: readonly (string | null)[] }) {
   return note === null ? null : <p className="mx-step-note">{note}</p>
 }
 
-/** Opens by itself when the step failed, until the person opens or closes it themselves. */
-function useOpen(byItself: boolean): [boolean, () => void] {
-  const [chosen, setChosen] = useState<boolean | null>(null)
-  const open = chosen ?? byItself
-  return [open, () => { setChosen(!open) }]
+/** Folded until the person opens it: a chat of many steps stays short, and its lines say how each one went. */
+function useOpen(): [boolean, () => void] {
+  const [open, setOpen] = useState(false)
+  return [open, () => { setOpen(!open) }]
 }
 
 const looksLikeFile = (target: string) => /^[^\s"'`]+\.[A-Za-z0-9]+$/.test(target)
@@ -73,7 +72,7 @@ type ToolStepProps = {
 
 /** Any tool with no card of its own: a read, a search, a fetch, an extension's tool. Opens to its input and result. */
 export function ToolStep({ event, root = null, waiting = false }: ToolStepProps) {
-  const [open, toggle] = useOpen(false)
+  const [open, toggle] = useOpen()
   const facts = toolFacts(event, root)
   const meta = event.status === 'failed' ? FAILED_WORD : event.status === 'interrupted' ? STOPPED_WORD : facts.kind === 'file' ? facts.lines : null
   const result = event.detail.trim()
@@ -140,10 +139,10 @@ function CommandOutput({ event }: { event: CommandEvent }) {
  * A command the agent ran. In a run it is one line, the command's first line and how it ended, as the
  * agent's own terminal shows it; opened it is the whole command and the last lines of its output (all
  * of it on request). On its own it is a card with the command in its head, open on its output once it
- * has ended. One that failed starts open anywhere: that is the one worth reading.
+ * has ended. Every one starts folded, a failed one too: its line says it failed, and opening it shows why.
  */
 export function CommandStep({ event, alone = false, waiting = false }: CommandStepProps) {
-  const [open, toggle] = useOpen(event.status === 'failed' || (alone && event.status === 'completed'))
+  const [open, toggle] = useOpen()
   const typed = event.command.split('\n')
   const first = typed[0] ?? ''
   const running = event.status === 'running'
@@ -255,16 +254,14 @@ type EditStepProps = {
   root: string | null
   /** Opens this file's diff in the Changes panel; absent where there is no repository. */
   onOpen: ((file: string) => void) | null
-  /** Its diff shows from the start, as a step outside a folded run does. */
-  startOpen?: boolean
   /** On its own in the chat: a card with the file in its head and its diff below. */
   alone?: boolean
   waiting?: boolean
 }
 
 /** A file change: the file, what happened to it and its counts, opening to the first lines of its diff. */
-export function EditStep({ event, root, onOpen, startOpen = false, alone = false, waiting = false }: EditStepProps) {
-  const [open, toggle] = useOpen(startOpen || alone || event.status === 'failed')
+export function EditStep({ event, root, onOpen, alone = false, waiting = false }: EditStepProps) {
+  const [open, toggle] = useOpen()
   const file = event.file === null ? null : relativePath(event.file, root)
   const name = file ?? 'a file'
   const verb = event.tool === 'Write' ? 'Write' : 'Edit'
