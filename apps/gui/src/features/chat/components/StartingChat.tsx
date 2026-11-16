@@ -6,7 +6,9 @@ import { errorMessage } from '@/lib/error-message'
 import { NO_EVENTS_HINT_AFTER_MS, noEventsHint, waitingInTerminalHint, type ChatAgent } from '@/features/workspace/model/chatView'
 import { keepComposerFocus } from '../keepComposerFocus'
 import { buildAttachmentMessage, parseAttachmentMessage } from '../attachmentMessage'
+import { machineNameOf } from '@/api/machines'
 import { SentAttachments } from './Attachments'
+import { FilesHereContext } from '../filesHere'
 import { updateComposer, useComposerState } from '../composerStore'
 import { carryDraft, draftKeyFor, entrustFirstMessage, holdFirstMessage, useHeldFirstMessage, useStartChoice } from '../firstMessage'
 import { revokePreviews, useAttachmentIntake } from '../useAttachmentIntake'
@@ -116,6 +118,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
 
   const abilities = abilitiesOf(agent)
   return (
+    <FilesHereContext.Provider value={machineNameOf(sessionId) === null}>
     <div className="mx-chat is-starting" onClick={keepComposerFocus}>
       {/* It floats over the conversation (chat.css), so it comes and goes without moving anything. A question that can be
           answered here is its own notice (the tray over the message box), so this one stays away. */}
@@ -152,5 +155,6 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
         }}
       />
     </div>
+    </FilesHereContext.Provider>
   )
 }

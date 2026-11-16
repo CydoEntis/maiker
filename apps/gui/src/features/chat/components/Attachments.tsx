@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useContext, useEffect, useState } from 'react'
+import { FilesHereContext } from '../filesHere'
 import { File as FileIcon, FileArchive, Image as ImageIcon, X } from 'lucide-react'
 import { attachmentsExist, type AttachmentKind } from '@/api/attachments'
 import type { SentAttachment } from '../attachmentMessage'
@@ -68,17 +69,19 @@ export function DraftAttachments({ attachments, onRemove }: { attachments: reado
 
 /** Whether each kept file is still there; unknown (true) until the host answers, so a chip does not flash "gone". */
 function useStillThere(paths: readonly string[]): readonly boolean[] {
+  const here = useContext(FilesHereContext)
   const key = paths.join('\n')
   const [there, setThere] = useState<{ key: string; flags: readonly boolean[] } | null>(null)
   useEffect(() => {
+    if (!here) return
     let current = true
     attachmentsExist(key.split('\n'))
       .then((flags) => { if (current) setThere({ key, flags }) })
       // Not knowing is not the file being gone: the chips stay as they are.
       .catch((error: unknown) => { console.warn('Could not check the attached files', error) })
     return () => { current = false }
-  }, [key])
-  return there?.key === key ? there.flags : paths.map(() => true)
+  }, [key, here])
+  return here && there?.key === key ? there.flags : paths.map(() => true)
 }
 
 /** The files a sent message carried, from its stored paths; a file that was cleared reads "no longer available". */

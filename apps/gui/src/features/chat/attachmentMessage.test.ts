@@ -57,6 +57,17 @@ describe('the message an attachment makes', () => {
   })
 })
 
+describe('blank lines around the words', () => {
+  it('are left out of the message, so the sent bubble has no empty band', () => {
+    const sent = buildAttachmentMessage('\n\n  \nlook at this\n\n', [{ path: '/k/a.png' }])
+    expect(sent).toBe(`look at this\n\n${ATTACHMENT_HEADER}\n- /k/a.png`)
+  })
+
+  it('are dropped when an older message is read back', () => {
+    expect(parseAttachmentMessage(`\n\nlook\n\n${ATTACHMENT_HEADER}\n- /k/a.png`)?.text).toBe('look')
+  })
+})
+
 describe('a file kept on another machine', () => {
   it('reads back with the name a person gave, not the prefix the far side added (ADR 0007)', () => {
     const log = '/home/dev/.cache/pastes/paste-1730000000002-0a1b2c3d-build_log.txt'
