@@ -67,7 +67,15 @@ pub(crate) fn is_older(daemon: &str, app: &str) -> bool {
 
 /// What `<executable> --version` prints after the program name, if it runs.
 fn installed_version(executable: &Path) -> Option<String> {
-    let output = Command::new(executable).arg("--version").output().ok()?;
+    let mut command = Command::new(executable);
+    command.arg("--version");
+    // Asked at every start and update: without this a console window flashes each time.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
+    let output = command.output().ok()?;
     output.status.success().then_some(())?;
     let text = String::from_utf8_lossy(&output.stdout);
     text.trim()
