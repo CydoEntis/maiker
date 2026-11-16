@@ -17,7 +17,7 @@ import { errorMessage } from '@/lib/error-message'
 import { appendToScreen, cachedScreen, replaceScreen, screenKey } from '@/features/terminal/screenCache'
 import { isWindowActive, useWindowActive } from '@/lib/window-activity'
 import { hasWebgl2 } from '@/lib/gpu'
-import { oscColor } from '@/lib/osc-color'
+import { leaveQueriesToDaemon } from '@/lib/daemonAnswers'
 import { beginFlush, countKeyReply, forgetRenderer, reportRenderer } from '@/lib/perf-meter'
 import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, fontStackFor, type TerminalFontWeight } from '@/lib/terminalFont'
 import { saysNotConnected } from '@/lib/serviceLine'
@@ -68,11 +68,6 @@ const DEFAULT_THEME: ITheme = { background: '#060d16', foreground: '#c9d6e3', cu
  */
 const FLUSH_GAP_MS = 32
 const NO_MINIMUM_CONTRAST = 1
-
-/** The slots a program's colour query names (`ESC ] 11 ; ? ST` asks for the background). */
-const OSC_FOREGROUND = 10
-const OSC_BACKGROUND = 11
-const OSC_QUERY = '?'
 
 /**
  * Draws the terminal with WebGL, which paints rows on the GPU instead of rebuilding them as DOM
@@ -389,20 +384,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         } else {
           reportRenderer(terminalInstance, 'dom')
         }
-        // On a see-through canvas xterm's own answer to a program's colour query would be black
-        // (it drops the alpha): a program that paints with the colour it was told, as Claude Code
-        // does, would then leave black bars on the glass. Answer with the theme's colours instead;
-        // anything but a query falls through to xterm.
-        const answerColorQuery = (slot: 'foreground' | 'background') => (data: string) => {
-          if (data !== OSC_QUERY) return false
-          if (replayWrites > 0) return true
-          const color = oscColor((lookRef.current.theme ?? DEFAULT_THEME)[slot] ?? '')
-          if (color === null) return false
-          send(`\x1b]${String(slot === 'background' ? OSC_BACKGROUND : OSC_FOREGROUND)};${color}\x1b\\`)
-          return true
-        }
-        terminalInstance.parser.registerOscHandler(OSC_FOREGROUND, answerColorQuery('foreground'))
-        terminalInstance.parser.registerOscHandler(OSC_BACKGROUND, answerColorQuery('background'))
+        leaveQueriesToDaemon(terminalInstance.parser)
         // Cmd/Ctrl-click on a web address opens it in the person's own browser, through the host (`open_link`).
         terminalInstance.registerLinkProvider({
           provideLinks: (y, callback) => {

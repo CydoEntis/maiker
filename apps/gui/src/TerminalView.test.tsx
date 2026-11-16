@@ -76,7 +76,7 @@ vi.mock('@xterm/xterm', () => ({
     onBinary() { return { dispose: vi.fn() } }
     attachCustomKeyEventHandler(handler: NonNullable<typeof terminalState.keyHandler>) { terminalState.keyHandler = handler }
     write(data: Uint8Array, done?: () => void) { terminalState.writes.push(data); terminalState.duringWrite?.(data); done?.() }
-    parser = { registerOscHandler: (ident: number, handler: (data: string) => boolean | Promise<boolean>) => { terminalState.oscHandlers.set(ident, handler); return { dispose: vi.fn() } } }
+    parser = { registerOscHandler: (ident: number, handler: (data: string) => boolean | Promise<boolean>) => { terminalState.oscHandlers.set(ident, handler); return { dispose: vi.fn() } }, registerCsiHandler: () => ({ dispose: vi.fn() }) }
     dispose() {}
   },
 }))
@@ -244,15 +244,14 @@ describe('terminal view', () => {
     expect(sendTerminalInput).toHaveBeenCalledTimes(1)
   })
 
-  it("answers a program's background query with the theme colour, not the see-through canvas", async () => {
+  it("leaves a program's colour query to the daemon, which has answered it already", async () => {
     renderTerminal()
     expect(await screen.findByRole('region', { name: 'Native Codex terminal' })).toBeInTheDocument()
     await waitFor(() => { expect(terminalState.oscHandlers.has(11)).toBe(true) })
 
     expect(terminalState.oscHandlers.get(11)?.('?')).toBe(true)
-    await waitFor(() => { expect(sendTerminalInput).toHaveBeenCalledWith(binding, '\u001b]11;rgb:0606/0d0d/1616\u001b\\') })
     expect(terminalState.oscHandlers.get(10)?.('?')).toBe(true)
-    await waitFor(() => { expect(sendTerminalInput).toHaveBeenCalledWith(binding, '\u001b]10;rgb:c9c9/d6d6/e3e3\u001b\\') })
+    expect(sendTerminalInput).not.toHaveBeenCalled()
     // Setting a colour is xterm's business.
     expect(terminalState.oscHandlers.get(11)?.('#000000')).toBe(false)
   })

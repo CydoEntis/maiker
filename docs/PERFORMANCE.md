@@ -383,7 +383,10 @@ keys nobody pressed. Ticket 40.
    `eval`. T3 Code carries its terminal the same way. This needs an ADR (a new local listener,
    the token, `connect-src` in the CSP) and the security checklist.
 3. **Stop answering queries in replayed output** (ticket 40): while a view writes history or a
-   replay, what xterm sends through `onData` is dropped; only live output may be answered.
+   replay, what xterm sends through `onData` is dropped; only live output may be answered. Live
+   output's colour, cursor, status and device-attribute queries are not xterm's to answer either: the
+   daemon answers them at once (`process_answering_queries`), and the window's late second answer
+   landed on the shell prompt as `11;rgb:…` (`lib/daemonAnswers.ts`).
 4. **Then the probe and the budgets below**, so the next release is measured.
 
 **Keys no longer wait for replies (2026-11-06).** With step 2 built, a release build on the owner's
