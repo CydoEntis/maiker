@@ -4518,13 +4518,28 @@ mod tests {
         assert!(matches!(decode::<Query>(&bytes), Ok(Query::TicketKeys { tag: 4, change: TicketKeyChange::Set { .. } })));
         assert_eq!(ClientMsg::Query(set).introduced_in(), TICKET_KEYS_SINCE);
 
-        let state = TicketKeyState { provider: TicketProvider::Linear, set: true, address: String::new(), workspace: String::new() };
+        let state = TicketKeyState { provider: TicketProvider::Linear, set: true, address: String::new(), workspace: String::new(), stored_in: crate::tickets::KeyStorage::File };
         for answer in [Ok(vec![state]), Err(TicketError::Invalid("no".into()))] {
             let reply = ServerMsg::Reply(Reply::TicketKeys { tag: 4, answer });
             assert_eq!(reply.introduced_in(), TICKET_KEYS_SINCE);
             let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
             assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
         }
+        // Where the key is kept is a field an older peer passes over, and a state from an older
+        // daemon, which kept every key in a file, reads as kept in a file: no version change.
+        #[derive(serde::Serialize, serde::Deserialize)]
+        struct OldKeyState {
+            provider: TicketProvider,
+            set: bool,
+            address: String,
+            workspace: String,
+        }
+        let old = OldKeyState { provider: TicketProvider::Plane, set: true, address: "https://plane.example".into(), workspace: "w".into() };
+        let read: TicketKeyState = decode(&encode(&old).unwrap()).unwrap();
+        assert_eq!(read.stored_in, crate::tickets::KeyStorage::File);
+        let new = TicketKeyState { stored_in: crate::tickets::KeyStorage::Keychain, ..read };
+        let by_old: OldKeyState = decode(&encode(&new).unwrap()).unwrap();
+        assert_eq!((by_old.set, by_old.workspace.as_str()), (true, "w"));
         // A message an older peer already reads is not changed, so the window stays where it was.
         const { assert!(TICKET_KEYS_SINCE > TICKETS_SINCE && TICKET_KEYS_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_KEYS_SINCE) };
     }

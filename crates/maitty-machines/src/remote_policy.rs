@@ -687,7 +687,7 @@ mod tests {
     #[test]
     fn where_another_machines_keys_stand_is_cleaned_and_capped() {
         use maitty_shared::tickets::{TicketKeyState, TicketProvider};
-        let state = |provider| TicketKeyState { provider, set: true, address: "https://p\u{1b}[0m.example\u{202e}".into(), workspace: "w\n".into() };
+        let state = |provider| TicketKeyState { provider, set: true, address: "https://p\u{1b}[0m.example\u{202e}".into(), workspace: "w\n".into(), stored_in: maitty_shared::tickets::KeyStorage::Keychain };
         let sent = ServerMsg::Reply(Reply::TicketKeys { tag: 2, answer: Ok(vec![state(TicketProvider::Plane), state(TicketProvider::Linear), state(TicketProvider::Plane)]) });
         assert_eq!(allow(&nothing_on(), &sent), Verdict::Answer);
         assert!(vet(&nothing_on(), false, "box", sent.clone()).is_none());
@@ -696,6 +696,7 @@ mod tests {
         };
         assert_eq!(states.len(), TicketProvider::ALL.len());
         assert_eq!((states[0].address.as_str(), states[0].workspace.as_str()), ("https://p[0m.example", "w"));
+        assert_eq!(states[0].stored_in, maitty_shared::tickets::KeyStorage::Keychain, "where the key is kept comes through");
     }
 
     #[test]

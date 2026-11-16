@@ -23,6 +23,7 @@ mod git_rule;
 mod github;
 mod helpers;
 mod identity;
+mod keychain;
 mod last_lines;
 mod pane_terminal;
 mod permission_ask;

@@ -631,14 +631,23 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   as the ticket's words (MAITTY-394). The same cleaning is applied again to an answer from another
   machine (`remote_policy::vet`), and only a person's client may ask.
 - **A ticket provider's key** (Plane, Linear; `Query::TicketKeys`, `daemon/ticket_keys.rs`) is held by the
-  daemon of the computer that reads the tickets, in one small file per provider in Maitty's data
-  folder (`ticket-keys/plane.json`, `ticket-keys/linear.json`: the folder `0700`, the file `0600` on
-  unix; on Windows the user's own app data, which only they and administrators can read). It is never
+  daemon of the computer that reads the tickets, in the system's keychain (`daemon/keychain.rs`:
+  Windows Credential Manager, the macOS login Keychain, the Secret Service on Linux), so it is not a
+  file an agent running as the same user can read by opening it. A machine with no keychain (no Secret
+  Service, a server reached over ssh) keeps it in one small file per provider in Maitty's data folder
+  (`ticket-keys/plane.json`, `ticket-keys/linear.json`: the folder `0700`, the file `0600` on unix; on
+  Windows the user's own app data, which only they and administrators can read), and the client says
+  so ("Key kept in a file: no keychain on this machine"). A key moves from the file to the keychain only
+  once the keychain gives it back unchanged (DATABASE). A keychain error is never logged as it came,
+  since one kind of it holds the stored bytes; only "unavailable" or "failed" is kept. The keychain
+  crates (`keyring-core` and one native store per platform; the Secret Service one over pure-Rust D-Bus
+  with Rust crypto) run no build script and log no secret. The key is never
   in `config.toml` (which is synced), a repository, a log line, a snapshot, an agent's environment or
   a reply to a client. A person's client sets or removes a key; a pane and a structured runtime are
   refused before the request is read ([ADR 0006](adr/0006-secrets-never-enter-chat.md): a secret is
-  never typed into a conversation). The only thing a client can read back is whether a key is set, and
-  Plane's server address and workspace, which are not secret. In the daemon the key is a `Secret`: it
+  never typed into a conversation). The only thing a client can read back is whether a key is set, where
+  it is kept (`stored_in`: keychain or file), and Plane's server address and workspace, which are not
+  secret. In the daemon the key is a `Secret`: it
   prints as `Secret(..)`, and on the wire it is a `SecretText`, which prints as `<hidden>`. A key is
   checked on the way in (printable ASCII, 8 to 200 characters); Plane's address must pass the same
   `check_base_url` that every request does, so a key cannot be saved for an address it could not be
