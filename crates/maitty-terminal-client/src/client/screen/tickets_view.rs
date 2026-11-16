@@ -14,6 +14,7 @@ use crate::client::{Bg, Btn, View};
 use crate::protocol::{ClientMsg, Query, TicketKeyChange};
 use maitty_shared::protocol::TICKET_LINKS_SINCE;
 use maitty_shared::ticket_links::{LinkedProject, TicketLinkChange, TicketLinks, TicketPlace};
+use maitty_shared::ticket_paste::{PastedLink, parse_ticket_link};
 use maitty_shared::tickets::{
     Group, StateCategory, TICKET_COMMENT_MAX_CHARS, TICKET_NAME_MAX_CHARS, TICKETS_PAGE_MAX, Ticket, TicketError,
     TicketKeyState, TicketProvider, TicketSummary, TicketWrite, TicketWritten, TicketsReply,
@@ -108,6 +109,20 @@ struct Sources {
     /// Pick a Plane project or a Linear team from what the provider lists.
     pick: Option<(Provider, usize)>,
     note: Option<(String, bool)>,
+    /// The setup's first step: a link to the project, being typed or pasted.
+    paste: Option<String>,
+    /// The project or team the pasted link named, put under the cursor once the list is read.
+    want: Option<Want>,
+}
+
+/// What a pasted link asks the pick to land on.
+#[derive(Clone, PartialEq)]
+enum Want {
+    /// A Plane project, by the group id the daemon gives it (`plane:<id>`).
+    Group(String),
+    /// A Linear team, by its key: the daemon's team list has no keys, so it lands on a team whose
+    /// name reads the same.
+    TeamKey(String),
 }
 
 /// The form a key is typed into. The key is held as `SecretText`, which never prints, and is
@@ -236,6 +251,8 @@ pub(crate) struct TicketsView {
     old_daemon: bool,
     /// Esc on the list (or the Tickets key) asked to close the view.
     closing: bool,
+    /// A link the next setup starts its paste step with (`suggest_link`).
+    suggested_link: Option<String>,
 }
 
 impl TicketsView {
@@ -261,7 +278,24 @@ impl TicketsView {
             tickets: HashMap::new(),
             old_daemon: false,
             closing: false,
+            suggested_link: None,
         }
+    }
+
+    /// Starts the next setup's paste step with `link`, such as one an agent suggested
+    /// (feat/tk-agent opens Tickets with it), and opens the tab of the source it names. It only
+    /// fills the step: nothing is read or saved until the person presses Enter on it.
+    pub(crate) fn suggest_link(&mut self, link: &str) {
+        if let Ok(pasted) = parse_ticket_link(link) {
+            self.provider = match pasted {
+                PastedLink::Github { .. } => Provider::Github,
+                PastedLink::Plane { .. } => Provider::Plane,
+                PastedLink::Linear { .. } => Provider::Linear,
+            };
+        }
+        let mut kept = String::new();
+        push_capped(&mut kept, link.trim());
+        self.suggested_link = Some(kept);
     }
 
     fn keys_known(&self) -> Option<&[TicketKeyState]> {
@@ -352,7 +386,7 @@ impl TicketsView {
         match &self.page {
             Page::List => self.typing,
             Page::Comment { .. } => true,
-            Page::Sources(s) => s.edit.is_some() || s.form.as_ref().is_some_and(|f| !f.sending),
+            Page::Sources(s) => s.paste.is_some() || s.edit.is_some() || s.form.as_ref().is_some_and(|f| !f.sending),
             _ => false,
         }
     }
@@ -684,6 +718,7 @@ impl App {
                 }
                 (Asked::Groups { source }, Ok(TicketsReply::Groups(groups))) => {
                     v.groups.insert(source, Ok(groups));
+                    aim_pick(v);
                 }
                 (Asked::Groups { source }, Ok(_)) => {
                     v.groups.insert(source, Err(TicketError::Invalid("The service gave an answer to another question".into())));
@@ -739,6 +774,7 @@ impl App {
                 } else if let Page::Sources(s) = &mut v.page {
                     s.pick = Some((provider, 0));
                     app.ask_groups(v, keyed.name());
+                    aim_pick(v);
                 }
             }
             if v.list.of.is_none() && !v.list.loading {
@@ -825,10 +861,19 @@ impl App {
         let Some(View::Tickets(v)) = &mut self.view else {
             return false;
         };
+        let one_line = || text.lines().next().unwrap_or_default().trim().to_string();
+        // A link pasted on a source's setup screen starts its setup with it, on the tab it is for.
+        if matches!(v.page, Page::List) && !v.typing && v.setup_ready() && !v.source(&v.link(), v.provider).linked() {
+            v.suggest_link(&one_line());
+            if v.setup_ready() && !v.source(&v.link(), v.provider).linked() {
+                v.page = Page::Sources(Sources { setup: true, paste: v.suggested_link.take(), ..Sources::default() });
+            }
+            self.dirty = true;
+            return true;
+        }
         if !v.typing() {
             return false;
         }
-        let one_line = || text.lines().next().unwrap_or_default().trim().to_string();
         match &mut v.page {
             Page::List => push_capped(&mut v.search, &one_line()),
             Page::Comment { text: typed, problem, .. } => {
@@ -839,6 +884,9 @@ impl App {
                 if let Some(f) = &mut s.form {
                     push_capped(f.text_mut(), &one_line());
                     f.error = None;
+                } else if let Some(typed) = &mut s.paste {
+                    push_capped(typed, &one_line());
+                    s.note = None;
                 } else if let Some((_, typed)) = &mut s.edit {
                     push_capped(typed, &one_line());
                 }
@@ -886,6 +934,38 @@ fn key_failure(e: &TicketError) -> String {
         TicketError::NotFound => "The provider has no such workspace.".into(),
         TicketError::RateLimited => "Too many requests. Try again in a minute.".into(),
         TicketError::NotInstalled => "The service could not keep the key.".into(),
+    }
+}
+
+/// The source a pasted link is for.
+fn pasted_provider(pasted: &PastedLink) -> Provider {
+    match pasted {
+        PastedLink::Github { .. } => Provider::Github,
+        PastedLink::Plane { .. } => Provider::Plane,
+        PastedLink::Linear { .. } => Provider::Linear,
+    }
+}
+
+/// Puts the project or team a pasted link named under the pick's cursor once its list is read,
+/// and says whether it was found. It moves the cursor only: Enter still links it.
+fn aim_pick(v: &mut TicketsView) {
+    let Page::Sources(s) = &mut v.page else { return };
+    let (Some((provider, _)), Some(want)) = (s.pick, s.want.clone()) else { return };
+    let source = provider.keyed().map_or("", TicketProvider::name);
+    let Some(Ok(groups)) = v.groups.get(source) else { return };
+    let tops = tk::tops(groups);
+    let found = tops.iter().position(|g| match &want {
+        Want::Group(id) => g.id.eq_ignore_ascii_case(id),
+        Want::TeamKey(key) => g.name.trim().eq_ignore_ascii_case(key),
+    });
+    s.want = None;
+    match found {
+        Some(at) => {
+            let name = tk::shown(&tops[at].name, false);
+            s.pick = Some((provider, at));
+            s.note = Some((format!("The link names {name}: Enter links it"), false));
+        }
+        None => s.note = Some((format!("No {} this key sees matches the link: pick it", provider.top_word()), true)),
     }
 }
 
@@ -1029,16 +1109,49 @@ impl App {
     /// The setup of the list's source for the project in front: GitHub asks for a repository,
     /// Plane and Linear for a key (once, for every project) and then the project or team.
     fn start_setup(&mut self, v: &mut TicketsView) -> Page {
+        Page::Sources(Sources { setup: true, paste: Some(v.suggested_link.take().unwrap_or_default()), ..Sources::default() })
+    }
+
+    /// The setup's steps after the paste step, with what `pasted` filled in: GitHub's repository
+    /// is saved at once; Plane's address and workspace go into the key form, and the project or
+    /// team the link names is put under the cursor. With nothing pasted, the steps as typed by hand.
+    fn setup_after_paste(&mut self, v: &mut TicketsView, pasted: Option<PastedLink>) -> Option<Page> {
         let mut s = Sources { setup: true, ..Sources::default() };
+        if let Some(PastedLink::Github { repo }) = &pasted {
+            let name = v.project.as_ref().map_or_else(String::new, |p| p.name.clone());
+            if !self.set_ticket_link(v, |l| l.github = Some(repo.clone())) {
+                s.paste = Some(String::new());
+                return Some(Page::Sources(s));
+            }
+            self.notify(format!("GitHub reads {repo} for {name}"), false);
+            self.tickets_reload(v);
+            return Some(Page::List);
+        }
+        s.want = match &pasted {
+            Some(PastedLink::Plane { project: Some(id), .. }) => Some(Want::Group(format!("plane:{id}"))),
+            Some(PastedLink::Linear { team_key }) => Some(Want::TeamKey(team_key.clone())),
+            _ => None,
+        };
         match (v.provider.keyed(), v.source(&v.link(), v.provider)) {
             (None, _) => s.edit = Some((SourceRow::GithubRepo, String::new())),
-            (Some(keyed), Source::Unlinked(Unlinked::NoKey)) => s.form = Some(KeyForm::new(keyed, v.keys_known())),
+            (Some(keyed), Source::Unlinked(Unlinked::NoKey)) => {
+                let mut form = KeyForm::new(keyed, v.keys_known());
+                if let Some(PastedLink::Plane { address, workspace, .. }) = pasted {
+                    form.address = address;
+                    form.workspace = workspace;
+                    // Only the key is left to type.
+                    form.at = form.fields() - 1;
+                }
+                s.form = Some(form);
+            }
             (Some(keyed), _) => {
                 self.ask_groups(v, keyed.name());
                 s.pick = Some((v.provider, 0));
             }
         }
-        Page::Sources(s)
+        v.page = Page::Sources(s);
+        aim_pick(v);
+        Some(std::mem::replace(&mut v.page, Page::List))
     }
 
     /// A shell on this computer running `gh auth login`: GitHub is read with this computer's `gh`.
@@ -1242,6 +1355,33 @@ impl App {
         let Some(p) = v.project.clone() else { return Some(Page::List) };
         // Setting up goes back to the list whenever it is left or done.
         let back = |s: Sources| Some(if s.setup { Page::List } else { Page::Sources(s) });
+        if let Some(mut typed) = s.paste.take() {
+            match k.code {
+                KeyCode::Esc => return back(s),
+                // Tab: the details typed by hand instead.
+                KeyCode::Tab => return self.setup_after_paste(v, None),
+                KeyCode::Enter if typed.trim().is_empty() => return self.setup_after_paste(v, None),
+                KeyCode::Enter => match parse_ticket_link(&typed) {
+                    Ok(pasted) if pasted_provider(&pasted) == v.provider => return self.setup_after_paste(v, Some(pasted)),
+                    Ok(pasted) => {
+                        let other = pasted_provider(&pasted).name();
+                        s.note = Some((format!("That is a {other} link: paste it on the {other} tab"), true));
+                    }
+                    Err(why) => s.note = Some((why.to_string(), true)),
+                },
+                KeyCode::Backspace => {
+                    typed.pop();
+                    s.note = None;
+                }
+                KeyCode::Char(c) if !k.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+                    push_capped(&mut typed, &c.to_string());
+                    s.note = None;
+                }
+                _ => {}
+            }
+            s.paste = Some(typed);
+            return Some(Page::Sources(s));
+        }
         if let Some(mut f) = s.form.take() {
             if f.sending {
                 s.form = Some(f);
@@ -1754,7 +1894,7 @@ fn setup_lines(v: &TicketsView, p: &TicketsProject, why: Unlinked, w: u16, c: St
         }
     };
     lines.push(vec![]);
-    lines.push([crate::client::design::keycap(t, "Enter"), vec![seg(format!(" {enter}"), c.fg(t.muted))]].concat());
+    lines.push([crate::client::design::keycap(t, "Enter"), vec![seg(format!(" {enter}, or paste a link to the project here"), c.fg(t.muted))]].concat());
     lines.extend(wrapped(&saved_for(&p.name), w, c.fg(t.muted)));
     for failed in [v.links.as_ref().and_then(|l| l.as_ref().err()), v.keys.as_ref().and_then(|k| k.as_ref().err())].into_iter().flatten() {
         lines.push(vec![]);
@@ -1882,6 +2022,29 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
     }
     y += 2;
     let room = Rect { y, height: inner.bottom().saturating_sub(y), ..inner };
+    if let Some(typed) = &s.paste {
+        let what = match v.provider {
+            Provider::Github => "repository",
+            Provider::Plane => "Plane project",
+            Provider::Linear => "Linear team",
+        };
+        let example = match v.provider {
+            Provider::Github => "https://github.com/owner/name",
+            Provider::Plane => "https://app.plane.so/workspace/projects/…",
+            Provider::Linear => "https://linear.app/team-name/team/ENG",
+        };
+        let field = if typed.is_empty() { seg(example.to_string(), c.fg(t.muted)) } else { seg(tk::shown(typed, false), c.fg(t.strong)) };
+        let lines = [
+            wrapped(&format!("Paste a link to your {what}: any page of it, copied from the browser. The rest is filled from it."), room.width, c.fg(t.text)),
+            vec![vec![]],
+            vec![vec![seg("link       ", c.fg(t.accent)), field, seg("▏", c.fg(t.accent))]],
+            vec![vec![]],
+            wrapped("Enter uses the link · Tab enters the details instead · Esc goes back", room.width, c.fg(t.muted)),
+        ]
+        .concat();
+        draw_lines(buf, room, &lines, 0);
+        return;
+    }
     if let Some(f) = &s.form {
         return draw_key_form(buf, room, c, t, f);
     }

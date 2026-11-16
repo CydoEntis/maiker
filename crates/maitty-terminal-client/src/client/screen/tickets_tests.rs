@@ -294,6 +294,10 @@ fn an_unlinked_source_is_set_up_from_its_own_tab() {
     let shown = frame(&mut app, "plane, no key");
     assert!(shown.contains("Connect Plane") && shown.contains("Pick the Plane project for shop") && shown.contains("once on this computer"), "{shown}");
     key(&mut app, KeyCode::Enter);
+    let shown = frame(&mut app, "setup paste step");
+    assert!(shown.contains("Paste a link to your Plane project") && shown.contains("Tab enters the details instead"), "{shown}");
+    // The details typed by hand instead of a link.
+    key(&mut app, KeyCode::Tab);
     typed(&mut app, "https://plane.example");
     key(&mut app, KeyCode::Tab);
     typed(&mut app, "acme");
@@ -326,10 +330,60 @@ fn github_without_an_origin_asks_for_the_repository() {
     let shown = frame(&mut app, "github, no origin");
     assert!(shown.contains("Which repository are shop's issues in?"), "{shown}");
     key(&mut app, KeyCode::Enter);
+    key(&mut app, KeyCode::Tab);
     typed(&mut app, "me/shop");
     key(&mut app, KeyCode::Enter);
     assert!(sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Set { link, .. }, .. }) if link.github == GitHubLink::Repo("me/shop".into()))));
     assert!(frame(&mut app, "repo set").contains("reading tickets…"));
+}
+
+#[test]
+fn a_pasted_github_link_sets_the_repository() {
+    let (mut app, mut rx) = opened_with(TicketLink::default());
+    sent(&mut rx);
+    key(&mut app, KeyCode::Enter);
+    assert!(app.paste_into_tickets("https://github.com/me/shop/issues/3"));
+    key(&mut app, KeyCode::Enter);
+    assert!(sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Set { link, .. }, .. }) if link.github == GitHubLink::Repo("me/shop".into()))));
+}
+
+#[test]
+fn a_link_for_another_source_says_which_tab_it_goes_on() {
+    let (mut app, mut rx) = opened_with(TicketLink::default());
+    sent(&mut rx);
+    key(&mut app, KeyCode::Enter);
+    typed(&mut app, "https://linear.app/acme/team/ENG");
+    key(&mut app, KeyCode::Enter);
+    let shown = frame(&mut app, "wrong tab");
+    assert!(shown.contains("That is a Linear link: paste it on the Linear tab"), "{shown}");
+    assert!(!sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Set { .. }, .. }))));
+}
+
+#[test]
+fn a_pasted_plane_link_fills_the_key_form_and_lands_on_its_project() {
+    const ID: &str = "3f2b1c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+    let (mut app, mut rx) = opened_with(TicketLink { github: Some(String::new()), ..TicketLink::default() });
+    let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::TicketKeys { .. }));
+    keys_reply(&mut app, tag, Vec::new());
+    key(&mut app, KeyCode::Right);
+    // A link pasted on the setup screen opens the setup with it.
+    assert!(app.paste_into_tickets(&format!("http://192.168.1.244/ideayard/projects/{ID}/issues/")));
+    key(&mut app, KeyCode::Enter);
+    // Only the key is left: the address and workspace came from the link.
+    assert!(app.paste_into_tickets("plane_api_SECRET123"));
+    let shown = frame(&mut app, "key form from link");
+    assert!(shown.contains("192.168.1.244") && shown.contains("ideayard") && !shown.contains("SECRET123"), "{shown}");
+    key(&mut app, KeyCode::Enter);
+    let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::TicketKeys { change: TicketKeyChange::Set { address, workspace, .. }, .. } if address == "http://192.168.1.244" && workspace == "ideayard"));
+    let state = TicketKeyState { provider: TicketProvider::Plane, set: true, address: "http://192.168.1.244".into(), workspace: "ideayard".into() };
+    keys_reply(&mut app, tag, vec![state]);
+    let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::Tickets { request: TicketsRequest::Groups, .. }));
+    let group = |id: &str, name: &str| Group { id: id.into(), name: name.into(), kind: GroupKind::Project, parent: None, ticket_count: None };
+    reply(&mut app, tag, Ok(TicketsReply::Groups(vec![group("plane:00000000-0000-4000-8000-000000000000", "Other"), group(&format!("plane:{ID}"), "MAITTY")])));
+    let shown = frame(&mut app, "aimed pick");
+    assert!(shown.contains("The link names MAITTY: Enter links it"), "{shown}");
+    key(&mut app, KeyCode::Enter);
+    assert!(sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketLinks { change: TicketLinkChange::Set { link, .. }, .. }) if link.plane.as_ref().is_some_and(|p| p.name == "MAITTY"))));
 }
 
 #[test]
