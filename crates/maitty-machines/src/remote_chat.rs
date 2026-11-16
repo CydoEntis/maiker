@@ -7,7 +7,7 @@
 
 use crate::remote_snapshot::{ITEMS_MAX, NODES_MAX};
 use maitty_shared::hidden::{is_invisible, sanitize};
-use maitty_shared::protocol::Reply;
+use maitty_shared::protocol::{Reply, SIDE_ANSWER_MAX_BYTES, SideAnswer};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -27,6 +27,33 @@ pub fn vet_chat_reply(reply: Reply) -> Result<Reply, String> {
         Reply::ConversationQueued(receipt) => Ok(Reply::ConversationQueued(cleaned(receipt)?)),
         _ => Err("it is not an answer a chat asks for".into()),
     }
+}
+
+/// A side answer (`/btw`) from another machine's daemon, made safe, or why it is refused. Only a
+/// side answer passes, its text cut to what a side answer may hold and every string cleaned like a
+/// chat's.
+pub fn vet_side_answer(reply: Reply) -> Result<Reply, String> {
+    match reply {
+        Reply::SideAnswer { tag, answer } => {
+            let answer = match cleaned(answer)? {
+                SideAnswer::Answered { text } => SideAnswer::Answered { text: cut_to(text, SIDE_ANSWER_MAX_BYTES) },
+                SideAnswer::Failed { reason } => SideAnswer::Failed { reason: cut_to(reason, SIDE_ANSWER_MAX_BYTES) },
+                SideAnswer::NotSupported => SideAnswer::NotSupported,
+            };
+            Ok(Reply::SideAnswer { tag, answer })
+        }
+        _ => Err("it is not a side answer".into()),
+    }
+}
+
+/// `text` cut to at most `max` bytes, on a character boundary.
+fn cut_to(mut text: String, max: usize) -> String {
+    let mut end = max.min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text.truncate(end);
+    text
 }
 
 /// `answer` with every string in it made safe to draw and its lists cut to what an answer may
@@ -81,6 +108,29 @@ fn clean_text(text: &str) -> String {
 mod tests {
     use super::*;
     use maitty_shared::conversation::{ConversationId, QueuedReceipt};
+
+    #[test]
+    fn a_side_answer_from_another_machine_is_cleaned_and_cut() {
+        let long = format!("hi\x1b[2J\u{202e}\n{}", "é".repeat(SIDE_ANSWER_MAX_BYTES));
+        let Ok(Reply::SideAnswer { tag: 4, answer: SideAnswer::Answered { text } }) =
+            vet_side_answer(Reply::SideAnswer { tag: 4, answer: SideAnswer::Answered { text: long } })
+        else {
+            panic!("a side answer passes");
+        };
+        assert!(text.len() <= SIDE_ANSWER_MAX_BYTES);
+        assert!(text.starts_with("hi"));
+        assert!(text.contains('\n'));
+        assert!(!text.chars().any(|c| c == '\x1b' || c == '\u{202e}'));
+    }
+
+    #[test]
+    fn only_a_side_answer_answers_a_side_question() {
+        assert!(vet_side_answer(Reply::Ok).is_err());
+        assert!(matches!(
+            vet_side_answer(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported }),
+            Ok(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported })
+        ));
+    }
 
     #[test]
     fn chat_text_keeps_lines_and_tabs_and_loses_escapes_and_hidden_characters() {

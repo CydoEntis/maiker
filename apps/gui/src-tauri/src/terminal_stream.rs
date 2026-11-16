@@ -263,6 +263,16 @@ impl Wire {
         self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_chat_reply)
     }
 
+    /// Where a side question (`/btw`) about a chat goes: `daemon`, taking only a side answer from
+    /// another machine.
+    pub fn side_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_side_answer)
+    }
+
     /// Where a question about a pane's repository goes. This computer's daemon answers any of
     /// them; another machine's is asked only what `remote_repo::may_ask` allows (what changed and
     /// its diff), and any other question is refused here in the words the window uses for a

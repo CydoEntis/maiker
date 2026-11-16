@@ -683,8 +683,15 @@ async fn saved_conversations(agent: String, folder: String) -> Result<serde_json
 /// resumes a copy of the session that is never saved. The webview names the conversation and the ask, one of a
 /// fixed set of commands or a question; the daemon checks both and finds the session, the folder and the program.
 #[tauri::command]
-async fn side_answer(id: u64, ask: maitty_shared::protocol::SideAsk) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::side_answer(id, ask)
+async fn side_answer(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    id: u64,
+    ask: maitty_shared::protocol::SideAsk,
+) -> Result<serde_json::Value, String> {
+    // The chat's own machine answers: Claude Code resumes a copy of the session where the session is.
+    maitty_desktop_client::side_answer(id, ask, wire.side_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }

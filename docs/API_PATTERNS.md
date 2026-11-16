@@ -910,7 +910,9 @@ clients only, read grant. `ask` is `Question(text)` (1 to `SIDE_QUESTION_MAX_CHA
 `advisor`, `config`, `mcp`). The client names nothing else: for a followed pane the daemon takes the session id the
 hook gave, the pane's folder, the model the transcript last named and the `claude` on the login PATH, and answers only
 the app the pane is shown in; for a structured chat it takes the binding's session, folder, program and config folder.
-A session id that is not a UUID, another agent, or an unknown conversation is answered at once (`Failed`,
+The desktop app asks the daemon of the machine the chat is on (a request line for another machine, never asked
+twice); another machine's reply passes `remote_chat::vet_side_answer`. A session id that is not a UUID, another agent,
+or an unknown conversation is answered at once (`Failed`,
 `NotSupported`); otherwise the reply comes when Claude Code is done, from a background task. `answer` is
 `Answered { text }` (control characters removed, cut at `SIDE_ANSWER_MAX_BYTES`), `NotSupported`, or
 `Failed { reason }` in the daemon's words, never Claude Code's output. The desktop client waits 100 seconds.

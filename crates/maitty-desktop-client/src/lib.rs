@@ -1859,25 +1859,32 @@ pub async fn saved_conversations(agent: String, folder: String) -> Result<Value>
 /// How long a side answer may take: the daemon's own limit, with a margin for the connection.
 const SIDE_ANSWER_TIMEOUT: Duration = Duration::from_secs(100);
 
-/// Claude Code's answer beside conversation `id` on this computer, as the daemon's `SideAnswer`, without adding to
-/// the conversation. Refused in words when the daemon running is older than the question.
-pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk) -> Result<Value> {
+/// Claude Code's answer beside conversation `id`, from the daemon of the machine the chat is on, as its `SideAnswer`,
+/// without adding to the conversation. Refused in words when this computer's daemon is older than the question.
+pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk, daemon: impl Into<Daemon>) -> Result<Value> {
     let message = ClientMsg::Query(Query::SideAnswer {
         id: maitty_shared::conversation::ConversationId(id),
         ask: side,
         tag: 0,
     });
-    answered_within(SIDE_ANSWER_TIMEOUT, async {
-        let (mut connection, version) = ipc::open_for_user_knowing_version()
-            .await
-            .context("connecting to the local daemon")?;
-        refuse_unless_daemon_reads(&message, version)?;
-        match ask(&mut connection, &message).await? {
-            Reply::SideAnswer { answer, .. } => Ok(serde_json::to_value(answer)?),
-            _ => bail!("daemon returned an unexpected side answer reply"),
+    let reply = match daemon.into() {
+        // This computer's daemon may be older than the app; another machine's is on this version or not used (`dial`).
+        Daemon::Local(_) => {
+            answered_within(SIDE_ANSWER_TIMEOUT, async {
+                let (mut connection, version) = ipc::open_for_user_knowing_version()
+                    .await
+                    .context("connecting to the local daemon")?;
+                refuse_unless_daemon_reads(&message, version)?;
+                ask(&mut connection, &message).await
+            })
+            .await?
         }
-    })
-    .await
+        remote => request_within(message, remote, SIDE_ANSWER_TIMEOUT).await?,
+    };
+    match reply {
+        Reply::SideAnswer { answer, .. } => Ok(serde_json::to_value(answer)?),
+        _ => bail!("daemon returned an unexpected side answer reply"),
+    }
 }
 
 /// The agent sessions this computer's daemon recorded as closed, newest first, each with `folder_present`: whether its

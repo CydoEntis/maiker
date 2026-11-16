@@ -1274,14 +1274,13 @@ const SideAnswerSchema = z.union([
 
 /**
  * Claude Code's answer beside a chat's conversation, which it never adds to: the daemon resumes a copy of the session
- * that is not saved. On this computer only, where the daemon holds the session.
+ * that is not saved. The chat's own machine answers, where its daemon holds the session.
  */
 export async function sideAnswer(conversation: number, ask: SideAsk): Promise<SideReply> {
   if (!isDesktop()) throw new Error('Side answers need the desktop app')
-  const { machine, id } = splitConversationKey(conversation)
-  if (machine !== LOCAL_MACHINE) return { ok: false, reason: 'Side answers work for sessions on this computer for now.' }
+  const { id } = splitConversationKey(conversation)
   const wire = 'question' in ask ? { Question: ask.question } : { Command: ask.command }
-  const answer = await invokeParsed('side_answer', SideAnswerSchema, { id, ask: wire })
+  const answer = await invokeParsed('side_answer', SideAnswerSchema, { id, ...machineArgOfKey(conversation), ask: wire })
   if (answer === 'NotSupported') return { ok: false, reason: 'Only Claude answers beside a conversation.' }
   return 'Answered' in answer ? { ok: true, text: answer.Answered.text } : { ok: false, reason: answer.Failed.reason }
 }

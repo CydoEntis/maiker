@@ -518,8 +518,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   works; a failure is the card in the `err` tone with the daemon's reason. `/btw` alone puts `/btw ` in the box. One of
   the reporting commands typed with something after it (`/goal tests pass`, `/config editor=vim`) changes something,
   so it goes to Claude Code as typed. `/mobile`, `/privacy-settings` and `/artifacts`, which Claude Code shows as a
-  QR code or a browser page, are the same card with the web address to open. Side answers are for sessions on this
-  computer; another machine's card says so.
+  QR code or a browser page, are the same card with the web address to open. A chat on another machine is answered
+  by that machine.
   **`/rename <name>`** names the Maitty session too (the sidebar's rename) and still goes to Claude Code, so both
   agree. A name Claude Code gives a session with a terminal, by `/rename` typed in the chat or the terminal, with a name
   or alone, renames the pane as well: the daemon reads the transcript's `custom-title` line (`follow.rs`; the names

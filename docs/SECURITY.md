@@ -516,7 +516,7 @@ that is not this one (`remote_policy.rs`, `remote_snapshot.rs` in `maitty-machin
 | `Reply::ClosedSessions` | answer, cleaned | the closed sessions a window asked that machine for: at most 50, every field one clean line, cut short; the folder is a label for that machine and never touches this computer's disk |
 | `AskRemoveWorktree` | ignore | names a folder on this computer's disk to delete; remote worktree management is out of scope (ADR 0007) |
 | `Reply::SavedConversations` | ignore | saved conversations are listed for this computer's folders only; another machine's are out of scope |
-| `Reply::SideAnswer` | ignore | side answers are asked of this computer's daemon only; another machine's are out of scope |
+| `Reply::SideAnswer` | ignore on the attached line | a side answer is asked on a request line to the chat's machine and taken only there, through `remote_chat::vet_side_answer`: nothing but a side answer passes, every string is cleaned like a chat's and the text is cut at `SIDE_ANSWER_MAX_BYTES` |
 | `AutoWorkspace` | ignore | announces a workspace and arms this computer's undo |
 
 The opt-ins are read from the machine's `[[machines]]` entry by name; a machine no entry names
