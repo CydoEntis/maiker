@@ -119,7 +119,7 @@ pub async fn open_stream_for_user(daemon_executable: &std::path::Path) -> Result
             Err(error) => last_error = Some(error),
         }
     }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("daemon did not start")))
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("The Maitty service did not start. Try again; if it keeps happening, run maitty in a terminal to see why.")))
 }
 
 async fn open_as(attach: bool) -> Result<(Reader, Writer)> {
@@ -175,7 +175,7 @@ pub async fn open_or_spawn_for_user(
             Err(error) => last_error = Some(error),
         }
     }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("daemon did not start")))
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("The Maitty service did not start. Try again; if it keeps happening, run maitty in a terminal to see why.")))
 }
 
 fn spawn_daemon(executable: &std::path::Path) -> Result<()> {

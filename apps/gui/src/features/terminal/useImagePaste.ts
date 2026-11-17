@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@/lib/toast'
 import { machineNameOf } from '@/api/machines'
 import { oversizeMessage, saveImageLocally } from '@/api/imagePaste'
-import { errorMessage } from '@/lib/error-message'
 import { formatDroppedPaths } from './droppedPaths'
 
 type Options = {
@@ -55,7 +54,7 @@ export function useImagePaste(options: Options): (sessionId: string, image: Blob
           }
           toast.success('Pasted the image', { id: LOCAL_TOAST, duration: 2000 })
         })
-        .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not paste the image'), { id: LOCAL_TOAST }) })
+        .catch((error: unknown) => { toast.failure(error, 'Could not paste the image', { id: LOCAL_TOAST }) })
       return
     }
     if (!isConnected(machine)) {
@@ -64,7 +63,7 @@ export function useImagePaste(options: Options): (sessionId: string, image: Blob
     }
     readBytes(image)
       .then((bytes) => { sendImage(sessionId, machine, bytes) })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not read the image')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not read the image') })
   }, [])
 }
 

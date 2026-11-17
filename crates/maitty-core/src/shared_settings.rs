@@ -4,7 +4,7 @@
 //! typed route to it for the desktop app (`Command::SetSetting`). The value is checked before
 //! the file is opened, so a refused change leaves it untouched.
 
-use crate::config::{Config, NEW_AGENTS, edit_config_at, validate_spinner};
+use crate::config::{Config, NEW_AGENTS, bypass_agents, edit_config_at, validate_spinner};
 use crate::settings_view::{SETTING_TEXT_MAX_BYTES, SettingKey, SettingValue, SharedSettings};
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -33,12 +33,17 @@ pub fn read(cfg: &Config) -> SharedSettings {
         start_dir: cfg.ui.start_dir.clone(),
         reduce_motion: !cfg.ui.motion,
         window_style: cfg.ui.window_style,
+        bypass_off: bypass_agents()
+            .filter(|agent| !cfg.permissions.bypasses(agent))
+            .map(|agent| agent.to_string())
+            .collect(),
+        update_machines: cfg.updates.machines,
     }
 }
 
 /// Where one setting lives in config.toml, and what to write there.
 struct Edit {
-    path: &'static [&'static str],
+    path: Vec<&'static str>,
     value: toml_edit::Value,
     /// Other spellings of the key that are read, and would clash with the one written.
     aliases: &'static [&'static str],
@@ -46,7 +51,7 @@ struct Edit {
 
 fn edit(path: &'static [&'static str], value: impl Into<toml_edit::Value>) -> Edit {
     Edit {
-        path,
+        path: path.to_vec(),
         value: value.into(),
         aliases: &[],
     }
@@ -64,8 +69,31 @@ fn theme_name(name: &str) -> Result<&str> {
     Ok(name)
 }
 
-/// Check `value` for `key` and say what to write. Errors name the setting and what it takes.
-fn plan(key: SettingKey, value: SettingValue) -> Result<Edit> {
+/// Check `value` for `key` and say what to write: one key, or for the bypass switches one per agent.
+fn plan(key: SettingKey, value: SettingValue) -> Result<Vec<Edit>> {
+    let (SettingKey::BypassOff, SettingValue::List(off)) = (key, &value) else {
+        return plan_one(key, value).map(|edit| vec![edit]);
+    };
+    if let Some(unknown) = off
+        .iter()
+        .find(|agent| !bypass_agents().any(|known| known == agent.as_str()))
+    {
+        anyhow::bail!(
+            "bypass permissions has no switch for \"{unknown}\"; use one of: {}",
+            bypass_agents().collect::<Vec<_>>().join(", ")
+        );
+    }
+    Ok(bypass_agents()
+        .map(|agent| Edit {
+            path: vec!["permissions", "bypass", agent],
+            value: (!off.iter().any(|name| name == agent)).into(),
+            aliases: &[],
+        })
+        .collect())
+}
+
+/// Check `value` for a key kept in one place. Errors name the setting and what it takes.
+fn plan_one(key: SettingKey, value: SettingValue) -> Result<Edit> {
     use SettingValue as V;
     Ok(match (key, value) {
         (SettingKey::DefaultAgent, V::Text(agent)) => {
@@ -103,6 +131,7 @@ fn plan(key: SettingKey, value: SettingValue) -> Result<Edit> {
             );
             edit(&["ui", "start_dir"], dir)
         }
+        (SettingKey::UpdateMachines, V::Bool(on)) => edit(&["updates", "machines"], on),
         (SettingKey::ReduceMotion, V::Bool(reduce)) => Edit {
             aliases: &["reduce_motion"],
             ..edit(&["ui", "motion"], !reduce)
@@ -117,30 +146,32 @@ fn plan(key: SettingKey, value: SettingValue) -> Result<Edit> {
 /// Change one shared setting in `file`, keeping its comments and every other key. A missing
 /// file is created.
 pub fn apply_to(file: &Path, key: SettingKey, value: SettingValue) -> Result<()> {
-    let change = plan(key, value)?;
+    let changes = plan(key, value)?;
     edit_config_at(file, |doc| {
-        let (leaf, tables) = change.path.split_last().context("empty setting path")?;
-        let mut table = doc.as_table_mut();
-        for part in tables {
-            if !table.contains_key(part) {
-                let mut new = toml_edit::Table::new();
-                new.set_implicit(true);
-                table.insert(part, toml_edit::Item::Table(new));
+        for change in changes {
+            let (leaf, tables) = change.path.split_last().context("empty setting path")?;
+            let mut table = doc.as_table_mut();
+            for part in tables {
+                if !table.contains_key(part) {
+                    let mut new = toml_edit::Table::new();
+                    new.set_implicit(true);
+                    table.insert(part, toml_edit::Item::Table(new));
+                }
+                table = table[*part]
+                    .as_table_mut()
+                    .with_context(|| format!("`{part}` in config.toml is not a table"))?;
             }
-            table = table[*part]
-                .as_table_mut()
-                .with_context(|| format!("`{part}` in config.toml is not a table"))?;
-        }
-        for alias in change.aliases {
-            table.remove(alias);
-        }
-        let mut value = change.value;
-        if let Some(old) = table.get_mut(leaf).and_then(toml_edit::Item::as_value_mut) {
-            // Replacing the whole entry discards comments attached to its key and value.
-            *value.decor_mut() = old.decor().clone();
-            *old = value;
-        } else {
-            table.insert(leaf, toml_edit::value(value));
+            for alias in change.aliases {
+                table.remove(alias);
+            }
+            let mut value = change.value;
+            if let Some(old) = table.get_mut(leaf).and_then(toml_edit::Item::as_value_mut) {
+                // Replacing the whole entry discards comments attached to its key and value.
+                *value.decor_mut() = old.decor().clone();
+                *old = value;
+            } else {
+                table.insert(leaf, toml_edit::value(value));
+            }
         }
         Ok(())
     })
@@ -228,6 +259,46 @@ mod tests {
             )
         );
         assert_eq!(read(&load(&file)).sidebar_side, SidebarSide::Right);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_bypass_switches_are_written_one_per_agent_and_read_back() {
+        let dir = dir("bypass");
+        let file = dir.join("config.toml");
+        std::fs::write(&file, FIXTURE).unwrap();
+        assert!(read(&load(&file)).bypass_off.is_empty(), "all on by default");
+        apply_to(
+            &file,
+            SettingKey::BypassOff,
+            SettingValue::List(vec!["codex".into()]),
+        )
+        .unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.starts_with(FIXTURE), "the rest of the file is kept: {text}");
+        assert!(text.contains("[permissions.bypass]\nclaude = true\ncodex = false\ngemini = true\n"), "{text}");
+        assert_eq!(read(&load(&file)).bypass_off, ["codex"]);
+        apply_to(&file, SettingKey::BypassOff, SettingValue::List(vec![])).unwrap();
+        assert!(read(&load(&file)).bypass_off.is_empty());
+        let refused = apply_to(
+            &file,
+            SettingKey::BypassOff,
+            SettingValue::List(vec!["aider".into()]),
+        );
+        assert!(refused.unwrap_err().to_string().contains("no switch for \"aider\""));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn remote_machines_update_themselves_unless_switched_off() {
+        let dir = dir("update-machines");
+        let file = dir.join("config.toml");
+        std::fs::write(&file, FIXTURE).unwrap();
+        assert!(read(&load(&file)).update_machines, "on by default");
+        apply_to(&file, SettingKey::UpdateMachines, SettingValue::Bool(false)).unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.contains("[updates]\nmachines = false\n"), "{text}");
+        assert!(!read(&load(&file)).update_machines);
         std::fs::remove_dir_all(dir).unwrap();
     }
 

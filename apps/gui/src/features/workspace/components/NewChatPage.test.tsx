@@ -22,15 +22,18 @@ type Extra = { busy?: BusyBranches; onCancel?: () => void; onNewShell?: (machine
 function page(onStart: (request: NewChatRequest) => Promise<void> = () => Promise.resolve(), extra: Extra = {}) {
   return render(
     <div className="mx-app">
-      <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" browse={() => Promise.resolve(null)} onStart={onStart} onOtherMachine={() => undefined} onCancel={() => undefined} {...extra} />
+      <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" bypassOff={ALL_OFF} browse={() => Promise.resolve(null)} onStart={onStart} onOtherMachine={() => undefined} onCancel={() => undefined} {...extra} />
     </div>,
   )
 }
 
-function codexPage(onStart: () => Promise<void>, codexYolo = false) {
+/** Bypass Permissions switched off for every agent, so a mode can be picked as before it was on by default. */
+const ALL_OFF = ['claude', 'codex', 'gemini'] as const
+
+function codexPage(onStart: () => Promise<void>, bypass = false) {
   return render(
     <div className="mx-app">
-      <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="codex" codexYolo={codexYolo} browse={() => Promise.resolve(null)} onStart={onStart} onOtherMachine={() => undefined} onCancel={() => undefined} />
+      <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="codex" bypassOff={bypass ? [] : ALL_OFF} browse={() => Promise.resolve(null)} onStart={onStart} onOtherMachine={() => undefined} onCancel={() => undefined} />
     </div>,
   )
 }
@@ -264,29 +267,29 @@ describe('the new chat page', () => {
     await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', mode: 'codexReadOnly' })) })
   })
 
-  it('starts on the agent\'s full-access mode while Full access in new chats is on', async () => {
+  it('starts Claude in Bypass permissions by default, and another mode can still be picked', async () => {
     const onStart = vi.fn(() => Promise.resolve())
     render(
       <div className="mx-app">
-        <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="codex" fullAccess browse={null} onStart={onStart} onOtherMachine={() => undefined} />
+        <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" browse={null} onStart={onStart} onOtherMachine={() => undefined} />
       </div>,
     )
-    expect(screen.getByRole('button', { name: /^Starting permission mode: Full access/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Starting permission mode: Bypass permissions/ })).toBeInTheDocument()
     await pickProject('growth')
     await userEvent.click(screen.getByRole('button', { name: 'Start chat' }))
-    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', mode: 'codexFullAccess' })) })
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude', mode: 'bypassPermissions' })) })
   })
 
-  it('keeps Claude on its usual mode with full access on when Yolo mode does not allow Bypass permissions', () => {
+  it('keeps Claude on its usual mode while its Bypass Permissions is off', () => {
     render(
       <div className="mx-app">
-        <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" fullAccess browse={null} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} />
+        <NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" bypassOff={['claude']} browse={null} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} />
       </div>,
     )
     expect(screen.getByRole('button', { name: /^Starting permission mode: Ask before edits/ })).toBeInTheDocument()
   })
 
-  it('says a Codex chat starts with full access while its Yolo setting is on, and sends no mode of its own', async () => {
+  it('says a Codex chat starts with full access while its Bypass Permissions is on, and sends no mode of its own', async () => {
     const onStart = vi.fn(() => Promise.resolve())
     codexPage(onStart, true)
     expect(screen.getByRole('img', { name: 'Permission mode: Full access' })).toBeInTheDocument()
@@ -355,7 +358,8 @@ describe('starting a chat and going on writing', () => {
     await userEvent.type(box(), 'a new draft')
     fail(new Error('The worktree could not be made'))
 
-    expect(await screen.findByText(/Could not start “fix the login”: The worktree could not be made/)).toBeInTheDocument()
+    expect(await screen.findByText('Could not start “fix the login”')).toBeInTheDocument()
+    expect(screen.getByText('The worktree could not be made.')).toBeInTheDocument()
     expect(box()).toHaveValue('a new draft')
     await userEvent.click(screen.getByRole('button', { name: 'Put back “fix the login”' }))
     expect(box()).toHaveValue('a new draft\n\nfix the login')

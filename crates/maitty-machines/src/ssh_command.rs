@@ -208,6 +208,19 @@ pub(crate) fn ssh_argv_probe(
 const RESTART_IF_IDLE: &str = "restart-if-idle";
 /// Added to it to restart even with sessions open, when they are saved.
 const RESTART_NOW: &str = "--now";
+/// Added to it to restart with sessions open, when they are saved and no agent is working or waiting.
+const RESTART_AGENTS_IDLE: &str = "--agents-idle";
+
+/// When the far daemon may restart to take a new version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestartWhen {
+    /// Only with no session open.
+    NoSession,
+    /// Also with sessions open, when they are saved; a turn in progress is lost.
+    Now,
+    /// Also with sessions open, when they are saved and no agent is mid-turn, so nothing is lost.
+    AgentsIdle,
+}
 /// The subcommand that prints how many sessions are open on the far side and how many are busy.
 const ACTIVITY: &str = "activity";
 
@@ -401,20 +414,24 @@ pub(crate) fn ssh_argv_put_folder(
     Ok(build(ssh, target, remote, Shape::PROXY))
 }
 
-/// `<program> restart-if-idle` on the far side: the installed app restarts its daemon when no
-/// session is open, or with `now` also when its sessions are saved. `program` is the path it
-/// was installed to.
+/// `<program> restart-if-idle` on the far side: the installed app restarts its daemon when
+/// `when` allows it. `program` is the path it was installed to.
 pub(crate) fn ssh_argv_restart_if_idle(
     ssh: &[String],
     target: &str,
     program: &str,
-    now: bool,
+    when: RestartWhen,
 ) -> Result<Vec<String>, SshCommandError> {
     validate_target(target)?;
     let mut remote = format!("{} {RESTART_IF_IDLE}", remote_program(program)?);
-    if now {
+    let flag = match when {
+        RestartWhen::NoSession => None,
+        RestartWhen::Now => Some(RESTART_NOW),
+        RestartWhen::AgentsIdle => Some(RESTART_AGENTS_IDLE),
+    };
+    if let Some(flag) = flag {
         remote.push(' ');
-        remote.push_str(RESTART_NOW);
+        remote.push_str(flag);
     }
     Ok(build(ssh, target, remote, Shape::PROBE))
 }
@@ -1018,12 +1035,12 @@ mod tests {
 
     #[test]
     fn restart_if_idle_runs_the_installed_path_with_a_home_shorthand_kept() {
-        let argv = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", false).unwrap();
+        let argv = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", RestartWhen::NoSession).unwrap();
         assert_eq!(
             argv.last().unwrap(),
             "~/'.local/bin/maitty' restart-if-idle"
         );
-        assert!(ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "", false).is_err());
+        assert!(ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "", RestartWhen::NoSession).is_err());
     }
 
     /// A POSIX shell reads the popup line back as exactly the argv it was built from.
@@ -1103,10 +1120,12 @@ mod tests {
 
     #[test]
     fn restart_now_adds_one_fixed_flag_and_nothing_else() {
-        let idle = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", false).unwrap();
-        let now = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", true).unwrap();
-        assert_eq!(now.last().unwrap(), &format!("{} --now", idle.last().unwrap()));
-        assert_eq!(now[..now.len() - 1], idle[..idle.len() - 1]);
+        let idle = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", RestartWhen::NoSession).unwrap();
+        for (when, flag) in [(RestartWhen::Now, "--now"), (RestartWhen::AgentsIdle, "--agents-idle")] {
+            let asked = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", when).unwrap();
+            assert_eq!(asked.last().unwrap(), &format!("{} {flag}", idle.last().unwrap()));
+            assert_eq!(asked[..asked.len() - 1], idle[..idle.len() - 1]);
+        }
     }
 
     #[test]

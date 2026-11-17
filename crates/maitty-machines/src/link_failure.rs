@@ -98,12 +98,51 @@ fn says_login_failed(said: &str) -> bool {
 }
 
 fn why_unreachable(end: &SshEnd) -> String {
-    end.said
+    let last = end
+        .said
         .lines()
         .rev()
         .map(clean)
         .find(|line| !line.is_empty())
-        .unwrap_or_else(|| clean(&end.message))
+        .unwrap_or_else(|| clean(&end.message));
+    in_plain_words(&last)
+}
+
+/// ssh's usual network failures, put in plain words with what to check. Matched on its own
+/// wording, which is the same in every OpenSSH release this app supports; anything else is shown
+/// as ssh said it.
+const PLAIN_SSH: [(&str, &str); 7] = [
+    ("Could not resolve hostname", "Its host name could not be found. Check the host in its settings, or that this computer's network is up."),
+    ("Connection timed out", "It did not answer in time. Check that it is on and reachable from this network."),
+    ("Operation timed out", "It did not answer in time. Check that it is on and reachable from this network."),
+    ("No route to host", "There is no network path to it. Check the network or VPN on this computer."),
+    ("Network is unreachable", "There is no network path to it. Check the network or VPN on this computer."),
+    ("Connection refused", "It refused the connection, so its ssh server may be off. Start ssh on it, then retry."),
+    ("Connection closed by", "It closed the connection. Retry; if it keeps happening, check its ssh server."),
+];
+
+/// The reason a machine could not be reached: ssh's words in plain ones where they are a known
+/// failure, with ssh's own line kept after them in brackets.
+fn in_plain_words(said: &str) -> String {
+    match PLAIN_SSH.iter().find(|(token, _)| said.contains(token)) {
+        Some((_, plain)) => format!("{plain} ({said})"),
+        None => said.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod plain_words {
+    use super::in_plain_words;
+
+    #[test]
+    fn a_known_ssh_failure_reads_as_a_sentence_and_keeps_ssh_s_line() {
+        let said = "ssh: Could not resolve hostname box: Name or service not known";
+        assert_eq!(
+            in_plain_words(said),
+            format!("Its host name could not be found. Check the host in its settings, or that this computer's network is up. ({said})")
+        );
+        assert_eq!(in_plain_words("kex_exchange_identification: read: Connection reset"), "kex_exchange_identification: read: Connection reset");
+    }
 }
 
 /// Text from another machine, made safe to put on screen: no control characters (so no escape
@@ -228,7 +267,7 @@ mod tests {
         assert_eq!(
             class(Some(255), said),
             FailureClass::Unreachable(
-                "ssh: connect to host box port 22: Connection refused".into()
+                "It refused the connection, so its ssh server may be off. Start ssh on it, then retry. (ssh: connect to host box port 22: Connection refused)".into()
             )
         );
     }

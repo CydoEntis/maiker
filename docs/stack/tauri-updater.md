@@ -13,7 +13,8 @@
   and when asked in Settings › General › Updates; it offers the version and what changed, and the user chooses.
   When the service is newer than the app, the app cannot reconnect: the "Update Maitty to reconnect" card
   fetches the update itself, and idle installs stay on even though the service is unreachable.
-  After the restart a toast and a What's new dialog say which version this is.
+  After the restart a toast and a What's new dialog say which version this is, and the local service is updated
+  as part of the same update, once no agent is working, with no second question (UI › *Service a release behind*).
 - Verify every update with the project's updater key. The public key is in `tauri.conf.json`; the
   private key lives only in the `TAURI_SIGNING_PRIVATE_KEY` repository secret and the owner's
   backup. Never commit it, print it, or put it in a fixture or log.

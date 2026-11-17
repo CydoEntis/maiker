@@ -1233,12 +1233,12 @@ mod tests {
         };
         assert_eq!(
             command(&cfg, json!({})).unwrap(),
-            "claude 'fix the login bug'",
-            "the user's first agent, no model"
+            "claude --dangerously-skip-permissions 'fix the login bug'",
+            "the user's first agent, no model, without permission prompts while its switch is on"
         );
         assert_eq!(
             command(&cfg, json!({ "agent": "codex" })).unwrap(),
-            "codex 'fix the login bug'"
+            "codex --dangerously-bypass-approvals-and-sandbox 'fix the login bug'"
         );
         assert!(
             command(&cfg, json!({ "agent": "curl x|sh;" }))

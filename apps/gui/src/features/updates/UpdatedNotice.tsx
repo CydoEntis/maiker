@@ -11,10 +11,12 @@ type Props = {
   update: RestartedUpdate
   /** Called once the toast is gone and the dialog, if it was opened, is closed. */
   onDone: () => void
+  /** The Maitty service still runs the older release and is restarted once no agent is at work. */
+  serviceFinishing?: boolean
 }
 
 /** After a restart into an update: a quiet pill with a way into What's new, and that dialog. */
-export function UpdatedNotice({ update, onDone }: Props) {
+export function UpdatedNotice({ update, onDone, serviceFinishing = false }: Props) {
   const [toastShown, setToastShown] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const lines = noteLines(update.notes)
@@ -38,6 +40,7 @@ export function UpdatedNotice({ update, onDone }: Props) {
         >
           <span aria-hidden="true" className="size-1.5 rounded-full bg-[var(--ok)]" />
           <strong className="font-semibold">Updated to {update.version}</strong>
+          {serviceFinishing && <span className="text-[var(--muted)]">· the service finishes once agents are idle</span>}
           <span aria-hidden="true" className="text-[var(--dim)]">·</span>
           <button type="button" className="cursor-pointer rounded-full px-1.5 py-0.5 font-semibold text-[var(--accent-text)] hover:underline" onClick={() => { setDialogOpen(true); setToastShown(false) }}>What's new</button>
           <button type="button" aria-label="Dismiss" className="grid size-6 cursor-pointer place-items-center rounded-full text-[var(--muted)] hover:text-[var(--fg)]" onClick={() => { setToastShown(false) }}><X size={13} aria-hidden="true" /></button>

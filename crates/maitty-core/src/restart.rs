@@ -134,6 +134,12 @@ pub fn may_restart_now(published: Option<&Activity>, session_saved: bool) -> boo
     session_saved || published.is_some_and(|a| a.sessions == 0)
 }
 
+/// Whether a daemon may be restarted with nothing lost: no session is open, or they are saved and no agent is
+/// working or waiting, so the next daemon restores them and resumes each agent where it stopped.
+pub fn may_restart_with_agents_idle(published: Option<&Activity>, session_saved: bool) -> bool {
+    published.is_some_and(|a| a.sessions == 0 || (session_saved && a.busy() == 0))
+}
+
 /// Whether a saved session exists for the next daemon to restore.
 pub fn session_is_saved() -> bool {
     crate::daemon::session_is_saved()
@@ -166,6 +172,16 @@ mod tests {
     }
 
     const OLDER: u32 = crate::protocol::PROTOCOL_VERSION - 1;
+
+    #[test]
+    fn a_daemon_restarts_with_agents_idle_only_when_nothing_is_lost() {
+        assert!(may_restart_with_agents_idle(Some(&no_sessions()), false));
+        assert!(may_restart_with_agents_idle(Some(&activity(0, 0)), true));
+        assert!(!may_restart_with_agents_idle(Some(&activity(0, 0)), false), "unsaved sessions would end");
+        assert!(!may_restart_with_agents_idle(Some(&activity(1, 0)), true), "a turn in progress would stop");
+        assert!(!may_restart_with_agents_idle(Some(&activity(0, 1)), true), "a question waiting would be lost");
+        assert!(!may_restart_with_agents_idle(None, true), "a daemon that said nothing is left alone");
+    }
 
     #[test]
     fn only_a_daemon_that_published_this_version_counts_as_running_it() {

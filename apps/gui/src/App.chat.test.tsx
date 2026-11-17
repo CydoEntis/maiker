@@ -179,7 +179,7 @@ describe('the Terminal | Chat view of a pane', () => {
     expect(within(pane).getByRole('heading', { name: 'Chat view is for agent sessions' })).toBeInTheDocument()
 
     await user.click(within(pane).getByRole('button', { name: 'Start claude here' }))
-    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude\r')
+    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude --dangerously-skip-permissions\r')
     expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
 
     await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')

@@ -26,6 +26,7 @@ vi.mock('@/api/fileSends', async (importOriginal) => ({
 }))
 
 const toasts = vi.hoisted(() => ({
+  failure: vi.fn(),
   loading: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
@@ -119,7 +120,7 @@ describe('files sent to the machine of a pane', () => {
     host.send.mockRejectedValue('docs is not a file; only files can be sent')
     const transfer = await start(() => true)
     await flush()
-    expect(toasts.error).toHaveBeenCalledWith('docs is not a file; only files can be sent', expect.objectContaining({ id: transfer }))
+    expect(toasts.failure).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Could not send to /), expect.objectContaining({ id: transfer }))
   })
 
   it('ignores what it did not start', async () => {
@@ -181,7 +182,7 @@ describe('a pasted image sent to the machine of a pane', () => {
     host.image.mockRejectedValue('sending files to fly needs ssh, and it is reached by its own command')
     const transfer = await startImage(() => true)
     await flush()
-    expect(toasts.error).toHaveBeenCalledWith('sending files to fly needs ssh, and it is reached by its own command', expect.objectContaining({ id: transfer }))
+    expect(toasts.failure).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Could not send to /), expect.objectContaining({ id: transfer }))
   })
 
   it('shows a failed send as an error toast and a cancelled one as a plain message', async () => {

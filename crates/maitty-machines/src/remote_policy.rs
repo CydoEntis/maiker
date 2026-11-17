@@ -877,6 +877,8 @@ mod tests {
                 start_dir: String::new(),
                 reduce_motion: false,
                 window_style: Default::default(),
+                bypass_off: Vec::new(),
+                update_machines: true,
             }),
             ServerMsg::Raise,
             ServerMsg::ConversationChanged {

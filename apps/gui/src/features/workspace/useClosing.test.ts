@@ -9,7 +9,7 @@ import type { SessionView } from './model/session'
 import { useClosing } from './useClosing'
 
 vi.mock('@/api/daemon', () => ({ closeSessionWithUndo: vi.fn(), undoCloseSession: vi.fn() }))
-vi.mock('@/lib/toast', () => ({ toast: Object.assign(vi.fn(() => 'toast'), { error: vi.fn() }) }))
+vi.mock('@/lib/toast', () => ({ toast: Object.assign(vi.fn(() => 'toast'), { error: vi.fn(), failure: vi.fn() }) }))
 
 const session = (id: string) => ({ id, name: id, title: id, process: 'shell', conversation: { id }, ended: false }) as unknown as SessionView
 
@@ -24,7 +24,7 @@ describe('closing several sessions', () => {
     const sessions = [session('a'), session('b')]
     const { result } = renderHook(() => useClosing({ setLayout, queryClient: new QueryClient(), layout, sessions, flash: vi.fn(), paneSessions: new Map(), agentTerminals: new Map() }))
     act(() => { result.current.endSessions(['a', 'b']) })
-    await waitFor(() => { expect(toast.error).toHaveBeenCalledWith('it is busy') })
+    await waitFor(() => { expect(toast.failure).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Could not end /)) })
     await waitFor(() => { expect(visibleSessionIds(layout)).toEqual(new Set(['b'])) })
     expect(wasClosed('b')).toBe(false)
     expect(wasClosed('a')).toBe(true)

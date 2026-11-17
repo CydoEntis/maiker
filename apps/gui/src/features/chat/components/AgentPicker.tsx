@@ -152,7 +152,8 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
                 )
               })}
             </RadioGroup>
-            <span className="mx-mm-level">{choice.reasoning !== DEFAULT_PICK ? REASONING_LABEL[choice.reasoning] : inUseWord !== null ? `${inUseWord} · agent's own` : "Agent's own"}</span>
+            {/* Nothing picked: the agent runs at its own setting, which is named when its files say it. */}
+            <span className="mx-mm-level" title={choice.reasoning === DEFAULT_PICK ? `${AGENT_LABEL[agent]}'s own setting. Pick a level to change it.` : undefined}>{choice.reasoning !== DEFAULT_PICK ? REASONING_LABEL[choice.reasoning] : inUseWord ?? 'Default'}</span>
           </div>
         ) : (
           <p className="mx-mm-note">{`${AGENT_LABEL[agent]} has no effort setting to pick here.`}</p>

@@ -211,6 +211,7 @@ const INSTALL: Flags = Flags {
     force: false,
     restart: false,
     wait: false,
+    agents_idle: false,
 };
 const YES: Flags = Flags {
     install: false,
@@ -218,6 +219,7 @@ const YES: Flags = Flags {
     force: false,
     restart: false,
     wait: false,
+    agents_idle: false,
 };
 const NO_FLAGS: Flags = Flags {
     install: false,
@@ -225,6 +227,7 @@ const NO_FLAGS: Flags = Flags {
     force: false,
     restart: false,
     wait: false,
+    agents_idle: false,
 };
 
 fn run(
@@ -358,6 +361,25 @@ fn wait_installs_then_asks_the_far_daemon_to_restart_when_idle() {
     let commands = remote.commands();
     assert!(
         commands.last().unwrap().ends_with("restart-if-idle"),
+        "{commands:?}"
+    );
+}
+
+#[test]
+fn agents_idle_installs_then_asks_the_far_daemon_to_restart_once_no_agent_works() {
+    needs_sh!();
+    let remote = Remote::new(LINUX);
+    remote.install(".local/bin/maitty", "0.1.0");
+    let flags = Flags {
+        agents_idle: true,
+        ..YES
+    };
+    let mut person = Person::absent();
+    run(&remote, AT_HOME, flags, &new_build(&remote), &mut person).unwrap();
+    assert!(person.heard("waiting until no agent is working or waiting"), "{:?}", person.said);
+    let commands = remote.commands();
+    assert!(
+        commands.last().unwrap().ends_with("restart-if-idle --agents-idle"),
         "{commands:?}"
     );
 }

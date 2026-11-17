@@ -9,7 +9,8 @@ import { updateComposer, useComposerState } from '@/features/chat/composerStore'
 import { revokePreviews, useAttachmentIntake } from '@/features/chat/useAttachmentIntake'
 import { DraftAttachments } from '@/features/chat/components/Attachments'
 import { useKeepTyping } from '@/features/chat/useKeepTyping'
-import { errorMessage } from '@/lib/error-message'
+import { explainError, type ExplainedError } from '@/lib/error-message'
+import { ErrorNote } from '@/components/ErrorNote'
 import { DEFAULT_PICK, modelsFor, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { BYPASS_MODE, CODEX_FULL_MODE, DANGER_MODES, modeLabel, START_MODE } from '@/features/chat/chatMeta'
@@ -61,12 +62,11 @@ type Props = {
   defaultAgent: ChatAgent
   /** How each agent's chat opens unless this page picks the other view (Settings › Chat). */
   viewDefaults?: ChatViewDefaults
-  /** Yolo mode is on for Claude, so a Claude chat may start in Bypass permissions. */
-  bypassAllowed?: boolean
-  /** Yolo mode is on for Codex, so every Codex chat starts with full access whatever is picked here. */
-  codexYolo?: boolean
-  /** Settings › Chat › Full access in new chats: the mode starts on the agent's full-access one, where it has one it may take. */
-  fullAccess?: boolean
+  /**
+   * The agents whose Bypass Permissions is off (Settings › Permissions). Every other one starts on its skip-permissions
+   * mode: Claude on Bypass permissions (another mode can still be picked), Codex on Full access, fixed.
+   */
+  bypassOff?: readonly ChatAgent[]
   /** A folder picker whose answer is null when it is cancelled: the system's for this computer, the window's own for another machine. Null when there is none. */
   browse: (() => Promise<string | null>) | null
   /** Clones a repository from GitHub onto that computer and answers with its new folder, or null when it is cancelled. Without it the page has no such button. */
@@ -98,6 +98,8 @@ const BRANCH_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
 /** The width of the header's menus. */
 const MENU_WIDTH = 300
 const NO_BUSY: BusyBranches = new Map()
+/** No agent switched off: every one starts on its skip-permissions mode. */
+const NONE_OFF: readonly ChatAgent[] = []
 
 /** Where the chat works: in the checkout, a worktree of its own, or `auto`: a worktree only when another chat is on that branch here. */
 type WorkIn = 'auto' | 'folder' | 'tree'
@@ -110,15 +112,16 @@ type WorkIn = 'auto' | 'folder' | 'tree'
  * shown as its chat (ADR 0003). Enter sends, Ctrl+Enter (⌘Enter on macOS) starts it in the background and keeps the
  * page for the next one, Esc goes back.
  */
-export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassAllowed = false, codexYolo = false, fullAccess = false, browse, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onNewShell, onCancel, onAgentChange, seed = null, leading }: Props) {
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassOff = NONE_OFF, browse, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onNewShell, onCancel, onAgentChange, seed = null, leading }: Props) {
   // On another machine the chat is the agent started in a shell there: this computer's extra models, branches, files and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
   const targetLabel = target?.label ?? 'This computer'
   const [agent, setAgent] = useState<ChatAgent>(defaultAgent)
   useEffect(() => { onAgentChange?.(agent) }, [agent, onAgentChange])
-  // Full access in new chats starts Claude in Bypass permissions (only where Yolo mode allows it) and Codex in Full access.
-  const firstMode = (next: ChatAgent): string => (!fullAccess ? START_MODE[next] : next === 'codex' ? CODEX_FULL_MODE : next === 'claude' && bypassAllowed ? BYPASS_MODE : START_MODE[next])
+  const bypassOn = (which: ChatAgent) => !bypassOff.includes(which)
+  // Bypass Permissions starts Claude in Bypass permissions and Codex in Full access.
+  const firstMode = (next: ChatAgent): string => (!bypassOn(next) ? START_MODE[next] : next === 'codex' ? CODEX_FULL_MODE : next === 'claude' ? BYPASS_MODE : START_MODE[next])
   const [mode, setMode] = useState(() => firstMode(defaultAgent))
   const [choice, setChoice] = useState<AgentChoice>({ model: DEFAULT_PICK, reasoning: START_REASONING })
   const [picked, setFolder] = useState<string | null>(seed?.folder ?? null)
@@ -130,7 +133,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const [branchPick, setBranchPick] = useState<{ folder: string; pick: BranchChoice } | null>(null)
   const [workIn, setWorkIn] = useState<WorkIn>('auto')
   const [starting, setStarting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ExplainedError | null>(null)
   const background = useBackgroundStarts(onStart)
   // Branch names chats started from this page took, which the branch list may not show yet: the next suggestion avoids them.
   const [takenNames, setTakenNames] = useState<ReadonlySet<string>>(() => new Set())
@@ -199,8 +202,8 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     if (!modelsFor(next).some((option) => option.id === choice.model)) setChoice((now) => ({ ...now, model: DEFAULT_PICK }))
   }
   const modes = abilitiesOf(agent).permissionModes?.modes ?? []
-  // The Yolo setting already starts Codex with full access, and its flag cannot be combined with a mode's.
-  const forcedFull = abilitiesOf(agent).yoloExcludesMode && codexYolo
+  // Bypass Permissions already starts Codex with full access, and its flag cannot be combined with a mode's.
+  const forcedFull = abilitiesOf(agent).yoloExcludesMode && bypassOn(agent)
   const startMode = !forcedFull && modes.includes(mode) ? mode : 'default'
   // A branch or a worktree is made when the chat starts, so only a chat on the folder as it is can have its agent started ahead.
   const warmSpec = useMemo<WarmSpec | null>(
@@ -222,7 +225,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     onStart(request)
       // Another machine's branches are not read again, so the name it took is kept here and the next start gets another.
       .then(() => { const made = request.branch; if (remote && made !== null) setTakenNames((now) => new Set([...now, made.name])) })
-      .catch((failure: unknown) => { setError(errorMessage(failure, 'Could not start the chat')) })
+      .catch((failure: unknown) => { setError(explainError(failure, 'Could not start the chat')) })
       .finally(() => { setStarting(false); reloadBranches() })
   }
   // The box is emptied for the next chat and every other choice stays. A new branch's name is taken, so the next start
@@ -377,7 +380,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     { key: 'folder', label: 'This folder', sub: remote ? `Edits ${targetLabel}'s checkout directly.` : `Edits your checkout of ${onBranch ?? 'its branch'} directly.`, checked: !treeMode, onPick: () => { setWorkIn('folder') } },
     { key: 'tree', label: 'New worktree', sub: 'Its own copy on a new branch. Your checkout stays untouched.', checked: treeMode, onPick: () => { setWorkIn('tree') } },
   ]
-  const notes = <StartNotes error={error} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(errorMessage(failure, 'Could not open the setup page')) }) }} />
+  const notes = <StartNotes error={error} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(explainError(failure, 'Could not open the setup page')) }) }} />
   const busyLine = busyWith !== undefined && workIn !== 'folder' && onBranch !== null
     ? `${busyWith} is already working on ${onBranch} here, so this chat gets its own worktree. Your checkout stays untouched.`
     : null
@@ -455,10 +458,10 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
             <div className="mx-box-row">
               <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} onAgent={pickAgent} />
               {forcedFull ? (
-                <span className="mx-mode-button is-static is-danger" role="img" aria-label={`Permission mode: ${modeLabel(CODEX_FULL_MODE) ?? ''}`} title="Yolo mode is on for Codex (Settings, General), so it starts with full access. Turn the setting off to pick another mode."><Icon name="shield" size={13} /></span>
+                <span className="mx-mode-button is-static is-danger" role="img" aria-label={`Permission mode: ${modeLabel(CODEX_FULL_MODE) ?? ''}`} title="Bypass Permissions is on for Codex (Settings › Permissions), so it starts with no sandbox and no approvals. Turn it off there to pick another mode."><Icon name="shield" size={13} /></span>
               ) : modes.length > 0 ? (
                 <PermissionMenu agent={AGENT_LABEL[agent]} label="Starting permission mode" mode={mode} modes={modes} onPick={setMode}
-                  bypassOff={bypassAllowed ? undefined : { note: 'needs Yolo mode', why: 'Turn on Yolo mode for Claude in Settings, General, to start a chat in this mode.' }}>
+                  bypassOff={bypassOn('claude') ? undefined : { note: 'Bypass Permissions is off', why: 'Turn on Bypass Permissions for Claude in Settings › Permissions to start a chat in this mode.' }}>
                   <button type="button" className={`mx-mode-button${DANGER_MODES.includes(mode) ? ' is-danger' : ''}`} title={`Permissions: ${modeLabel(mode) ?? mode}`} aria-label={`Starting permission mode: ${modeLabel(mode) ?? mode}. Pick another.`}>
                     <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />
                   </button>
@@ -496,21 +499,17 @@ function ShellStart({ where, machineChoice, onOpen }: { where: string; machineCh
 }
 
 /** What went wrong with a start, under the box: the start's own failure, the background starts that failed, a missing agent. */
-function StartNotes({ error, background, onPutBack, agentMissing, onSetUp }: { error: string | null; background: ReturnType<typeof useBackgroundStarts>; onPutBack: (key: number) => void; agentMissing: ChatAgent | null; onSetUp: () => void }) {
+function StartNotes({ error, background, onPutBack, agentMissing, onSetUp }: { error: ExplainedError | null; background: ReturnType<typeof useBackgroundStarts>; onPutBack: (key: number) => void; agentMissing: ChatAgent | null; onSetUp: () => void }) {
   return (
     <>
-      {error !== null && <p role="alert" className="mx-composer-error">{error}</p>}
+      {error !== null && <ErrorNote error={error} />}
       {background.failed.map((failed) => (
-        <p key={failed.key} role="alert" className="mx-composer-error">
-          {`Could not start ${failedStartLabel(failed)}: ${failed.reason} `}
+        <ErrorNote key={failed.key} error={failed.error}>
           {failed.draft !== null && (
-            <>
-              <button type="button" className="mx-text-button" aria-label={`Put back ${failedStartLabel(failed)}`} onClick={() => { onPutBack(failed.key) }}>Put back</button>
-              {' · '}
-            </>
+            <button type="button" className="mx-text-button" aria-label={`Put back ${failedStartLabel(failed)}`} onClick={() => { onPutBack(failed.key) }}>Put back</button>
           )}
           <button type="button" className="mx-text-button" aria-label={`Dismiss ${failedStartLabel(failed)}`} onClick={() => { background.dismiss(failed.key) }}>Dismiss</button>
-        </p>
+        </ErrorNote>
       ))}
       {agentMissing !== null && (
         <p role="alert" className="mx-composer-error">

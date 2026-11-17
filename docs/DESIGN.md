@@ -153,7 +153,11 @@ instead of being cut: the title and the detail onto up to three lines, the previ
 up to two, the last line ending in `…` only past that; the box grows with the lines. A question waiting on you also has its
 two answers as buttons on the bottom border: a green `Answer` that goes to the session and a
 red `Later esc` that dismisses it. Always round corners. It slides in and fades out
-with motion on. See UI › *the frame* (Toast).
+with motion on. See UI › *the frame* (Toast). An error toast's title is what failed ("Could not …"), its detail
+the reason in plain words, and its button **Copy details** when the tool's own text says more
+(CODE-STANDARDS › error messages). A failure in place (under the new chat page's box) is an
+**error note**: a small card on `--m-raise` with a 3px `--danger` left edge, the bold red title, the reason in
+`--fg2`, then its actions as text buttons (Put back, Dismiss, Copy details).
 
 ## Status bar
 
@@ -478,8 +482,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Settings pages.** ESSENTIALS: **General** (start and export folders, each the folder shown with **Browse…**, which
   opens the system's folder picker, and a way back to the default; nothing is typed; the start folder reads as `cd <folder>`
   and says "Saved" for two seconds after a change; updates; sessions) and **Chat** (how a
-  chat starts and is drawn: default agent, the view each agent's sessions open in, width, text size, **Full access in new
-  chats**, which ticks Full access on a pane's "start a chat" offer at first (`fullAccessNewChats`, off by default), Yolo) and **Agents** (the account each
+  chat starts and is drawn: default agent, the view each agent's sessions open in, width, text size) and **Permissions** (first a
+  **Bypass Permissions** card, one switch per agent, all on, with a foot that says what it allows; then the account each
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). TERMINAL: **Terminal** (text,
   scrollback, and Panes: where an agent's terminals open), **Appearance** (look, surfaces, density and pane
@@ -724,7 +728,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   agent's mark and its branch line. Its pane has no terminal | chat switch; the pane is the chat. The approvals
   (y / a / n), user-input form, Stop and the daemon's queue are the chat's own.
 - **Chat body** (`features/chat/chat.css`). A 760px centred column, 20px in, rows 16px apart, under a 36px fade at its
-  top. The scroller is as wide as the column, so its scrollbar sits at the column's edge and not the pane's, and the jump-to-latest button is centred over the column; the wheel still scrolls the chat from the empty room beside it. Every card in the feed is the shared **Card** (a hairline, `--card`, no shadow; head 36px, body 10/12, foot 40px), every colour a token. Your messages are right-aligned bubbles (`--bubble`, a `--line` hairline, padding 9/13, 14/1.55, at most `min(560px, 85%)`), attachments above and a meta line under it (the time and the ⋯ menu); one still sending is at 60% with "Sending…".
+  top. The scroller is as wide as the column, so its scrollbar sits at the column's edge and not the pane's, and the jump-to-latest button is centred over the column; the wheel still scrolls the chat from the empty room beside it. A message you send moves to the top of the view, just under the fade, and the reply is drawn under it (see UI, *List*). Every card in the feed is the shared **Card** (a hairline, `--card`, no shadow; head 36px, body 10/12, foot 40px), every colour a token. Your messages are right-aligned bubbles (`--bubble`, a `--line` hairline, padding 9/13, 14/1.55, at most `min(560px, 85%)`), attachments above and a meta line under it (the time and the ⋯ menu); one still sending is at 60% with "Sending…".
   An agent's reply has no avatar: its lead sentence at 600 in `--fg`, the rest in `--fg2` at 14.5/1.65, 10px between
   blocks, as rich text (headings 22 / 18 / 16 / 14.5 / 13 / 12, lists indented 20 and 22 with 4px between items, a quote
   with a 2px `--line2` rule, inline code as a **CodeChip**, a link in `--link`, a file's name as a **file badge**). A code
@@ -821,7 +825,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   `--line2` ring), then 32px model rows (dim "default", an accent ✓), then a 44px foot in a grid: Effort in `--muted`,
   four bars 16px wide at 6, 9.3, 12.6 and 15.9px filled in `--accent` up to the level (`--line2` past it), and the
   level's name at the right in 12.5px semibold.
-- **New chat page on another machine.** The same page as on this computer, with the machine after the project (`app@Shipyard`) and the Machine switch on Remote machine: its projects, a pasted path, no Browse…, no branch or attach controls, a **Work in** crumb (this folder | new worktree; a new worktree is made on that machine on a new two-word branch, shown in the crumb), and a model button with the agent switch, the fixed models (Default, Opus, Sonnet, Haiku for Claude) and the effort. There is no New session dialog.
+- **New chat page on another machine.** The same page as on this computer, with the machine after the project (`app@Shipyard`) and the Machine switch on Remote machine: its projects, a pasted path, no Browse…, no branch or attach controls, a **Work in** crumb (this folder | new worktree; a new worktree is made on that machine on a new two-word branch, shown in the crumb), and a model button with the agent switch, the fixed models (Default, Fable, Opus, Sonnet, Haiku for Claude) and the effort. There is no New session dialog.
 - **Focus mode (⌘.).** Hides the sidebar; a pill at the bottom says where you are and
   how many sessions need you elsewhere. Esc or the pill's Exit leaves it.
 - **Broadcast (⌘⇧B).** Per layout. While on, every pane of the layout has a violet outline and a
@@ -965,8 +969,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   installed is a button, a sheen sweeping across it, a tile with an arrow falling into a tray, **Update** and the
   version in mono (**Restart to update** once downloaded); the download's percent and **Update failed** keep a tinted pill. Every card closes with an X in its corner; the download's card shows the bar, what has arrived of the whole (`34.9 MB of 102 MB`) and, on the right, the percent and the time left from the last ten seconds' speed (`about 12 min left`, `downloadEta.ts`). Settings shows the same bar and line under its update row while a download runs, with the percent on its button (`DownloadProgress`); a light passes along the bar, and with no size yet a short run slides across, so it never reads as stuck. The updater downloads first and installs only on
   **Restart now**, or by itself when the app is idle, so sessions keep running either way. Settings › General › Updates shows the state with
-  one fitting button and two switches: download automatically (on) and **Install updates when idle** (on, helper
-  "Never while an agent is working"). Idle means no agent working or waiting on an answer, no keyboard input
+  one fitting button and three switches: download automatically (on), **Install updates when idle** (on, helper
+  "Never while an agent is working") and **Update remote machines too** (on, shared with the terminal app's
+  General › Updates row). Idle means no agent working or waiting on an answer, no keyboard input
   for 5 minutes, and the window unfocused or minimized. After the relaunch a pill toast at bottom centre reads
   "Updated to X · What's new" for 9 s (dismissable), and What's new opens a 460 px dialog with the release's
   notes and "No session was interrupted."

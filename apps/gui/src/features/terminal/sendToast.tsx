@@ -1,6 +1,5 @@
 import { toast } from '@/lib/toast'
 import { cancelFileSend } from '@/api/fileSends'
-import { errorMessage } from '@/lib/error-message'
 import { SendProgress } from './SendProgress'
 
 /** What a send's toast says about it. */
@@ -37,7 +36,7 @@ export function showSendProgress(transfer: string, send: SendToastState, index: 
       onClick: (event) => {
         // The toast stays until the host says the send has stopped.
         event.preventDefault()
-        cancelFileSend(transfer).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not stop the send')) })
+        cancelFileSend(transfer).catch((error: unknown) => { toast.failure(error, 'Could not stop the send') })
       },
     },
   })

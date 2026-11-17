@@ -6,7 +6,6 @@ import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { toast } from '@/lib/toast'
-import { errorMessage } from '@/lib/error-message'
 import { linkOf, placeOf, useTicketLinks, type ProjectLink } from './model/ticketLinks'
 import { TicketSetup } from './TicketSetup'
 import { parseTicketLink } from './model/pastedLink'
@@ -192,7 +191,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
       queryFn: async () => { const told = await loadTicket(source, id); if (!told.ok) throw new Error(told.failure.kind); return told.value },
       staleTime: TICKETS_REFRESH_MS,
     }).then(setDialogTicket, (error: unknown) => {
-      toast.error(errorMessage(error, "Couldn't read the whole ticket"))
+      toast.failure(error, "Couldn't read the whole ticket")
       setStarting(null)
     })
   }
@@ -346,7 +345,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
           onGo={(choice) => {
             const ticket = dialogTicket
             stopStarting()
-            void host.onStart(ticket, choice).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not start the agent')) })
+            void host.onStart(ticket, choice).catch((error: unknown) => { toast.failure(error, 'Could not start the agent') })
           }}
         />
       )}

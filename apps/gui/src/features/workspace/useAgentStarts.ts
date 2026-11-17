@@ -6,7 +6,6 @@ import { LOCAL_MACHINE } from '@/api/machines'
 import { type AgentTerminals, withAgentTerminal } from '@/data/agentTerminals'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
-import { errorMessage } from '@/lib/error-message'
 import { remoteStartRefusal } from './model/machines'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
@@ -55,7 +54,7 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
     setSettingsSection(null)
     void runStart(async () => focusedSession?.cwd ?? resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => {
       movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
-      void sendTerminalInput({ id, generation: 0 }, `${program}\r`).catch((error: unknown) => { toast.error(errorMessage(error, `Could not start ${program}`)) })
+      void sendTerminalInput({ id, generation: 0 }, `${program}\r`).catch((error: unknown) => { toast.failure(error, `Could not start ${program}`) })
     })
   }, [focusedSession, setSettingsSection, runStart, preferences.startFolder, home, setLayout])
   return { addAgentTerminal, closeAgentTerminal, startAgent }

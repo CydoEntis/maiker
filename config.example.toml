@@ -169,6 +169,22 @@ pattern_rows = 12
 # enabled = false
 
 
+# Bypass Permissions: agents start without permission prompts (Claude
+# --dangerously-skip-permissions, Codex --dangerously-bypass-approvals-and-sandbox,
+# Gemini --yolo). On for every agent unless switched off here, or in Settings in
+# either app. Only sessions started afterwards change; a custom [[agents]] entry
+# can name its own `bypass_flag`.
+# [permissions.bypass]
+# claude = true
+# codex = false
+# gemini = true
+
+# Updates: after this computer updates, each [[machines]] entry that is behind
+# updates too, once no agent there is working or waiting. Off: click Update on
+# each machine yourself.
+# [updates]
+# machines = true
+
 # [[recipes]]
 # name = "feature"
 # worktree = true

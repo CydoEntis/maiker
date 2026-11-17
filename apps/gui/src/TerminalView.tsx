@@ -13,7 +13,6 @@ import { brightBlackGround, type Channels } from '@/features/terminal/brightBlac
 import { isPasteChord, listenForImagePaste } from '@/features/terminal/clipboardImage'
 import { COPY_TOAST_ID, COPY_TOAST_MS } from '@/features/terminal/copyToast'
 import { findPathLinks, findWebLinks } from '@/features/terminal/pathLinks'
-import { errorMessage } from '@/lib/error-message'
 import { appendToScreen, cachedScreen, replaceScreen, screenKey } from '@/features/terminal/screenCache'
 import { isWindowActive, useWindowActive } from '@/lib/window-activity'
 import { hasWebgl2 } from '@/lib/gpu'
@@ -396,7 +395,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
                 if (!event.metaKey && !event.ctrlKey) return
                 openLink(link.url).then(
                   () => { toast.message('Opened in your browser') },
-                  (error: unknown) => { toast.error(errorMessage(error, 'Could not open the link')) },
+                  (error: unknown) => { toast.failure(error, 'Could not open the link') },
                 )
               },
             }))

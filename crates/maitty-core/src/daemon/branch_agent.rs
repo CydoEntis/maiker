@@ -181,14 +181,17 @@ mod tests {
         assert_eq!(
             line,
             format!(
-                "claude {}",
+                "claude --dangerously-skip-permissions {}",
                 cfg.quote_for_shell("it's $(rm -rf ~) `x` \"y\"")
             )
         );
-        assert_eq!(start_line(&cfg, Some("codex"), None).unwrap(), "codex");
+        assert_eq!(
+            start_line(&cfg, Some("codex"), None).unwrap(),
+            "codex --dangerously-bypass-approvals-and-sandbox"
+        );
         assert_eq!(
             start_line(&cfg, Some("claude"), Some("  ")).unwrap(),
-            "claude"
+            "claude --dangerously-skip-permissions"
         );
         assert!(start_line(&cfg, Some("rm"), Some("x")).is_err());
         assert!(start_line(&cfg, Some("claude; rm -rf ~"), None).is_err());

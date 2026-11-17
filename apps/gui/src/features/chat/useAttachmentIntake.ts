@@ -3,7 +3,6 @@ import { toast } from '@/lib/toast'
 import { attachLocalFile, attachmentImage, chooseFilesToAttach, MOST_ATTACHMENTS } from '@/api/attachments'
 import { sendFilesToMachine } from '@/api/fileSends'
 import { oversizeMessage, saveImageLocally, sendImageToMachine } from '@/api/imagePaste'
-import { errorMessage } from '@/lib/error-message'
 import { kindOf } from './attachmentMessage'
 import { peekComposer, updateComposer, type DraftAttachment } from './composerStore'
 import { keepPicture, warmPicture } from './keptPictures'
@@ -149,7 +148,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
           updateComposer(target, (state) => ({ ...state, attachments: [...state.attachments, { id: newId(), ...kept, preview: null }] }))
         } catch (error) {
           failed += 1
-          toast.error(errorMessage(error, `Could not attach ${baseName(path)}`))
+          toast.failure(error, `Could not attach ${baseName(path)}`)
         }
       }
       if (failed === chosen.length) toast.dismiss(toastId)
@@ -184,7 +183,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
             keepLanded(target, landed, preview)
           },
         }),
-        (error: unknown) => { toast.error(errorMessage(error, 'Could not read the image')) },
+        (error: unknown) => { toast.failure(error, 'Could not read the image') },
       ).then(() => {
         // Nothing landed (refused, failed or cancelled): the thumbnail has no chip to belong to.
         if (preview !== null && !peekComposer(target).attachments.some((item) => item.preview === preview)) URL.revokeObjectURL(preview)
@@ -200,7 +199,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
         append({ id: newId(), path, name: 'Pasted image', size: image.size, kind: 'image', preview: previewOf(image) })
         toast.success('Attached the image', { id: toastId, duration: 2000 })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not attach the image'), { id: toastId }) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not attach the image', { id: toastId }) })
   }, [refusal, append, keepLanded])
 
   const pick = useCallback(() => {
@@ -211,7 +210,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
     }
     chooseFilesToAttach()
       .then((paths) => { if (paths !== null) addPaths(paths) })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the file picker')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not open the file picker') })
   }, [refusal, addPaths])
 
   const remove = useCallback((id: string) => {

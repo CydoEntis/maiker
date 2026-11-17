@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@/lib/toast'
 import { cancelFileSend } from '@/api/fileSends'
 import { getFileFromMachine, listenFileGets, newGetId, openPulledFolder, type GetEvent } from '@/api/fileGets'
-import { errorMessage } from '@/lib/error-message'
 import { SendProgress } from './SendProgress'
 import { PLAIN_TOAST } from './sendToast'
 
@@ -27,7 +26,7 @@ function showGetProgress(transfer: string, pull: Pull, percent: number | null): 
       onClick: (event) => {
         // The toast stays until the host says the pull has stopped.
         event.preventDefault()
-        cancelFileSend(transfer).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not stop the pull')) })
+        cancelFileSend(transfer).catch((error: unknown) => { toast.failure(error, 'Could not stop the pull') })
       },
     },
   })
@@ -65,7 +64,7 @@ export function useFileGets() {
             description: event.folder,
             action: {
               label: 'Open folder',
-              onClick: () => { openPulledFolder(event.folder).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the folder')) }) },
+              onClick: () => { openPulledFolder(event.folder).catch((error: unknown) => { toast.failure(error, 'Could not open the folder') }) },
             },
           })
           return
@@ -82,7 +81,7 @@ export function useFileGets() {
     listenFileGets(onEvent).then((unlisten) => {
       if (gone) unlisten()
       else stop = unlisten
-    }, (error: unknown) => { toast.error(errorMessage(error, 'Could not follow file pulls')) })
+    }, (error: unknown) => { toast.failure(error, 'Could not follow file pulls') })
     return () => {
       gone = true
       stop?.()
@@ -97,7 +96,7 @@ export function useFileGets() {
     showGetProgress(transfer, pull, null)
     getFileFromMachine(machine, path, transfer).catch((error: unknown) => {
       pulls.current.delete(transfer)
-      toast.error(errorMessage(error, `Could not get the file from ${machine}`), { ...PLAIN_TOAST, id: transfer })
+      toast.failure(error, `Could not get the file from ${machine}`, { ...PLAIN_TOAST, id: transfer })
     })
   }, [])
 

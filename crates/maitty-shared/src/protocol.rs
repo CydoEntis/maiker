@@ -11,7 +11,15 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 113;
+pub const PROTOCOL_VERSION: u32 = 114;
+
+/// The first version whose daemon keeps the bypass-permissions switches (`SettingKey::BypassOff`). An older
+/// daemon ignores `SharedSettings::bypass_off` and cannot read the key, so it is not sent there.
+pub const BYPASS_SETTING_SINCE: u32 = 114;
+
+/// The first version whose daemon keeps `[updates] machines` (`SettingKey::UpdateMachines`); an older one
+/// cannot read the key, so it is not sent there.
+pub const UPDATE_MACHINES_SINCE: u32 = 114;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -988,7 +996,8 @@ pub enum Command {
         prompt: Option<String>,
     },
     /// A worktree of `project` on `branch` (an existing local or remote branch, else a new one
-    /// from HEAD), made the way every other worktree is: named by the `worktree.dir` template,
+    /// from HEAD; a branch already checked out somewhere, which git cannot check out twice, gets a
+    /// new branch with a made-up name cut from it), made the way every other worktree is: named by the `worktree.dir` template,
     /// trusted like its repo, the repo's setup hook run, and listed with the checkouts the app
     /// made so the usual tidy-up offers it. Replies with the new folder as text. For a window
     /// that has no pane to ask from (the new chat page). `project` must be one the daemon has
@@ -2641,6 +2650,8 @@ impl ClientMsg {
     pub fn introduced_in(&self) -> u32 {
         match self {
             ClientMsg::Command(Command::Prewarm { .. } | Command::DropPrewarm) => PREWARM_SINCE,
+            ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::BypassOff, .. }) => BYPASS_SETTING_SINCE,
+            ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::UpdateMachines, .. }) => UPDATE_MACHINES_SINCE,
             ClientMsg::Command(Command::DropQueued { .. }) => DROP_QUEUED_SINCE,
             ClientMsg::Command(Command::BranchWorktree { .. }) => BRANCH_WORKTREE_SINCE,
             ClientMsg::Command(Command::WriteFile { .. }) => WRITE_FILE_SINCE,
@@ -3107,7 +3118,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 113);
+        assert_eq!(PROTOCOL_VERSION, 114);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3597,7 +3608,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 113);
+        assert_eq!(PROTOCOL_VERSION, 114);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -3829,7 +3840,59 @@ mod tests {
             start_dir: "C:\\Users\\me\\code".into(),
             reduce_motion: true,
             window_style: WindowStyle::Glass,
+            bypass_off: vec!["codex".into()],
+            update_machines: false,
         }
+    }
+
+    /// An older daemon's settings have no bypass switches: they read as all on, and the key is only sent
+    /// to a daemon that knows it.
+    #[test]
+    fn settings_from_before_the_bypass_switches_read_as_all_on() {
+        use crate::settings_view::*;
+        #[derive(Serialize)]
+        struct Old {
+            default_agent: String,
+            new_session_view: NewSessionView,
+            sidebar_side: SidebarSide,
+            theme_dark: String,
+            theme_light: String,
+            appearance: Appearance,
+            spinner: Vec<String>,
+            start_dir: String,
+            reduce_motion: bool,
+            window_style: WindowStyle,
+        }
+        let now = sample_settings();
+        let old = Old {
+            default_agent: now.default_agent.clone(),
+            new_session_view: now.new_session_view,
+            sidebar_side: now.sidebar_side,
+            theme_dark: now.theme_dark.clone(),
+            theme_light: now.theme_light.clone(),
+            appearance: now.appearance,
+            spinner: now.spinner.clone(),
+            start_dir: now.start_dir.clone(),
+            reduce_motion: now.reduce_motion,
+            window_style: now.window_style,
+        };
+        let read: SharedSettings = decode(&rmp_serde::to_vec_named(&old).unwrap()).unwrap();
+        assert_eq!(read, SharedSettings { bypass_off: Vec::new(), update_machines: true, ..now });
+        let machines = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::UpdateMachines,
+            value: SettingValue::Bool(false),
+        });
+        assert_eq!(machines.introduced_in(), UPDATE_MACHINES_SINCE);
+        let set = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::BypassOff,
+            value: SettingValue::List(vec!["codex".into()]),
+        });
+        assert_eq!(set.introduced_in(), BYPASS_SETTING_SINCE);
+        let other = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::ReduceMotion,
+            value: SettingValue::Bool(true),
+        });
+        assert_eq!(other.introduced_in(), COMPATIBLE_SINCE);
     }
 
     #[test]
@@ -3851,6 +3914,8 @@ mod tests {
             (SettingKey::ReduceMotion, SettingValue::Bool(true)),
             (SettingKey::Spinner, SettingValue::List(vec!["x".into()])),
             (SettingKey::StartDir, SettingValue::Text("~/code".into())),
+            (SettingKey::BypassOff, SettingValue::List(vec!["gemini".into()])),
+            (SettingKey::UpdateMachines, SettingValue::Bool(false)),
             (
                 SettingKey::WindowStyle,
                 SettingValue::WindowStyle(WindowStyle::Glass),

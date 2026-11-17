@@ -2,7 +2,6 @@ import { useCallback } from 'react'
 import { useLatest } from '@/lib/useLatest'
 import type { QueryClient } from '@tanstack/react-query'
 import { archiveSessionOnDaemon, snoozeSessionOnDaemon } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import { displayName, untilWord, type SessionView } from './model/session'
 
@@ -18,7 +17,7 @@ export function usePutAway({ queryClient, sessionMap }: { queryClient: QueryClie
     archiveSessionOnDaemon({ id: sessionId }, false)
       .then(() => (snoozed ? snoozeSessionOnDaemon({ id: sessionId }, null) : undefined))
       .then(() => queryClient.invalidateQueries({ queryKey: ['conversations'] }))
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not bring the session back')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not bring the session back') })
   }, [queryClient, sessionMap])
   const putAway = useCallback((sessionId: string) => {
     const session = sessionMap.get(sessionId)
@@ -27,12 +26,12 @@ export function usePutAway({ queryClient, sessionMap }: { queryClient: QueryClie
         toast(`Put away ${session ? displayName(session) : 'the session'}`, { duration: UNDO_PUT_AWAY_MS, action: { label: 'Undo', onClick: () => { bringBack(sessionId) } } })
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not put the session away')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not put the session away') })
   }, [queryClient, sessionMap, bringBack])
   const unsnooze = useCallback((sessionId: string) => {
     snoozeSessionOnDaemon({ id: sessionId }, null)
       .then(() => queryClient.invalidateQueries({ queryKey: ['conversations'] }))
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not unsnooze the session')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not unsnooze the session') })
   }, [queryClient])
   // Undo wakes the session only while it is still snoozed until the time this snooze set: another window may have changed it since.
   const undoSnooze = useLatest((sessionId: string, until: number) => {
@@ -50,7 +49,7 @@ export function usePutAway({ queryClient, sessionMap }: { queryClient: QueryClie
         toast(said, { duration: UNDO_PUT_AWAY_MS, action: { label: 'Undo', onClick: () => { undoSnooze(sessionId, until) } } })
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not snooze the session')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not snooze the session') })
   }, [queryClient, sessionMap, undoSnooze])
   return { putAway, bringBack, snooze, unsnooze }
 }

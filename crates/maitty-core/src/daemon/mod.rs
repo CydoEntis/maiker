@@ -28,6 +28,7 @@ mod helpers;
 mod identity;
 mod keychain;
 mod last_lines;
+mod machine_updates;
 mod pane_terminal;
 mod permission_ask;
 mod persist;
@@ -681,6 +682,7 @@ pub fn run(on_start: impl FnOnce()) -> Result<()> {
         if let Some(e) = err {
             tracing::warn!("config: {e}");
         }
+        machine_updates::start_after_update(&cfg, &crate::config::data_dir());
         let mut d = Daemon::new(cfg, tx, on_start);
         match approvals::Approvals::load(&d.approvals_file) {
             Ok(a) => d.approvals = a,

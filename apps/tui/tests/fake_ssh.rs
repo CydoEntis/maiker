@@ -1675,7 +1675,9 @@ mod custom_transport {
         let failed = failure(&via(&sandbox, "unreachable", &[], false));
         assert_eq!(
             failed.class,
-            FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into())
+            FailureClass::Unreachable(
+                "It refused the connection, so its ssh server may be off. Start ssh on it, then retry. (ssh: connect to host box port 22: Connection refused)".into()
+            )
         );
     }
 

@@ -320,6 +320,8 @@ only for these keys. Secrets, `[[machines]]` and `[keys]` are not reachable that
 | start folder | `ui.start_dir` | | a path or `~...`; at most 4096 bytes, no control characters |
 | reduce motion | `ui.motion` (inverted) | `ui.reduce_motion` | true when `motion = false`; `motion` wins if both are set |
 | window style | `ui.window_style` | | `flat` (default), `glass` |
+| Bypass Permissions | `permissions.bypass.<agent>` | | the agents switched off (`claude`, `codex`, `gemini`); each is written as `true` or `false`, and an agent not listed is on |
+| update remote machines | `updates.machines` | | `true` (default) or `false`: after this computer updates, each machine is updated once its agents are idle |
 
 A change edits the one key in place (comments and other keys stay), swaps the file in
 atomically, reloads, and sends `ServerMsg::SettingsChanged` to attached windows. A write

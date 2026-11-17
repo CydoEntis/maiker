@@ -745,6 +745,11 @@ gets `ServerMsg::SettingsChanged`. Keys, values and limits are in
 [ENVIRONMENT](ENVIRONMENT.md#project-specific-settings-both-apps-share). A value of the wrong kind or
 out of range answers `ServerMsg::Error` and leaves the file as it was. A peer that predates the
 variants cannot decode them (a test), and another machine's `SettingsChanged` is ignored.
+Protocol 114 adds `SharedSettings.bypass_off` (defaulted, so an older reply reads as every agent on; a
+test) and `SettingKey::BypassOff`, which a client sends only to a daemon at `BYPASS_SETTING_SINCE` or
+later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays. It also adds `SharedSettings.update_machines`
+(defaulted to true, the setting's default; a test) and `SettingKey::UpdateMachines`, sent only from
+`UPDATE_MACHINES_SINCE`.
 
 Protocol 76 adds `Provider::Gemini` (a conversation's provider on the wire). A Gemini CLI agent in a pane gets the same read-only, transcript-following conversation as Claude and Codex (`follow_transcript.rs`, `Format::Gemini`); the file is the one its hook's `transcript_path` names, and its name must start `session-` and end with the first 8 characters of the hook's session id. Gemini has no structured runtime: starting one is refused. A peer that predates the variant cannot decode it (a test decodes the old provider names).
 

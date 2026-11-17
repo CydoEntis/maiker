@@ -5,7 +5,6 @@ import { toast } from '@/lib/toast'
 import { archiveConversationOnDaemon, endConversation as endDaemonConversation, renameConversationOnDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
 import type { SettingsPreferences } from '@/features/settings/preferences'
-import { errorMessage } from '@/lib/error-message'
 
 /** What the sidebar does to a conversation: pin, rename, close, end. The daemon keeps each change; only the browser preview keeps it itself. */
 export function useConversationActions({ setSidebarPreferences, settingsPreferences, setSidebarCollapsed, setSettingsPreferences, desktop, queryClient, conversations, openTabIds, closeConversation, setEndTarget, endTarget }: {
@@ -116,7 +115,7 @@ export function useConversationActions({ setSidebarPreferences, settingsPreferen
         })
       })
       .catch((error: unknown) => {
-        toast.error(errorMessage(error, 'Could not end this session'))
+        toast.failure(error, 'Could not end this session')
       })
   }
 

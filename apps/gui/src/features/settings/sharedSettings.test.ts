@@ -15,14 +15,39 @@ const SHARED: SharedSettings = {
   start_dir: '/srv',
   reduce_motion: true,
   window_style: 'glass',
+  bypass_off: ['gemini'],
+  update_machines: false,
 }
 
 describe('the settings shared with the terminal app', () => {
+  it('reads a daemon from before the Bypass Permissions switches as every agent on', async () => {
+    const { SharedSettingsSchema } = await import('@/api/sharedSettings')
+    const older: Partial<SharedSettings> = { ...SHARED }
+    delete older.bypass_off
+    expect(SharedSettingsSchema.parse(older).bypass_off).toEqual([])
+  })
+
+  it('reads a daemon from before the remote update switch as updating machines, and sends the switch turned off', async () => {
+    const { SharedSettingsSchema } = await import('@/api/sharedSettings')
+    const older: Partial<SharedSettings> = { ...SHARED }
+    delete older.update_machines
+    expect(SharedSettingsSchema.parse(older).update_machines).toBe(true)
+    const before = readSettingsPreferences()
+    expect(changesToSend(before, { ...before, updateMachines: false }, { ...SHARED, update_machines: true })).toEqual([['update_machines', false]])
+  })
+
+  it('sends a Bypass Permissions switch turned off here, and nothing else', () => {
+    const before = readSettingsPreferences()
+    const after = { ...before, bypassOff: ['codex' as const] }
+    expect(changesToSend(before, after, { ...SHARED, bypass_off: [] })).toEqual([['bypass_off', ['codex']]])
+  })
+
   it('lays what the daemon says over the preferences', () => {
     const next = applyShared({ ...readSettingsPreferences(), themeMode: 'dark' }, SHARED)
     expect(next).toMatchObject({
       defaultAgent: 'codex', sidebarSide: 'right', darkTheme: 'Tokyo Night', lightTheme: 'Maitty Day',
-      themeMode: 'light', spinner: 'snake', startFolder: '/srv', reduceMotion: true,
+      themeMode: 'light', spinner: 'snake', startFolder: '/srv', reduceMotion: true, bypassOff: ['gemini'],
+      updateMachines: false,
     })
   })
 

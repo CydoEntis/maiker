@@ -3,7 +3,7 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, u
 import { ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ReducedMotionContext } from '@/features/workspace/components/motion'
-import { buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, visibleRange, type FollowState } from './windowing'
+import { buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, keptRoom, roomToPin, visibleRange, type FollowState } from './windowing'
 
 type Props<T> = {
   items: readonly T[]
@@ -17,9 +17,32 @@ type Props<T> = {
   overscan?: number
   /** Scrolls the row with this key to the top of the view; a new `nonce` scrolls again to the same row. */
   scrollTarget?: { key: string; nonce: number } | null
-  /** Each new value takes the view back to the newest row and follows it again (the person just sent something). */
+  /** Each new value takes the view back to the newest row and follows it again (the person just queued something). */
   toLatest?: number
+  /**
+   * Each new value puts the last row `isPinTarget` picks at the top of the view and holds it there while the rows under
+   * it come in (the person just sent something), until the reader scrolls. With no such row it is `toLatest`.
+   */
+  pinNewest?: number
+  isPinTarget?: (item: T) => boolean
 }
+
+function lastIndexWhere<T>(items: readonly T[], test: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (item !== undefined && test(item)) return index
+  }
+  return -1
+}
+
+/** The scroller's padding, top and bottom together; none where there is no style sheet (tests). */
+function paddingOf(element: HTMLElement): number {
+  const style = getComputedStyle(element)
+  return (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0)
+}
+
+/** A placed view within this many pixels of its row counts as there (a scaled screen gives fractions). */
+const PLACED_SLACK_PX = 1
 
 /** Used until the list has been laid out, and where there is no layout (tests). */
 const FALLBACK_VIEWPORT_PX = 600
@@ -35,9 +58,10 @@ const READER_SCROLL_MS = 1200
  * A scrolling list that draws only the rows near the view, so a conversation of thousands of items
  * costs what a screenful costs. Rows are placed with `transform` (no layout work per scroll), their
  * heights are measured as they are drawn, and the list follows its newest row until the reader
- * moves up; then it offers a way back to it.
+ * moves up; then it offers a way back to it. A message just sent is pinned to the top of the view
+ * instead, with the reply drawn under it, the way a chat page reads.
  */
-export function VirtualList<T>({ items, getKey, estimate, renderItem, label, overscan = DEFAULT_OVERSCAN, scrollTarget = null, toLatest = 0 }: Props<T>) {
+export function VirtualList<T>({ items, getKey, estimate, renderItem, label, overscan = DEFAULT_OVERSCAN, scrollTarget = null, toLatest = 0, pinNewest = 0, isPinTarget }: Props<T>) {
   const scroller = useRef<HTMLDivElement>(null)
   // Whether the list follows its newest row, and where it was last seen (`followAfterScroll`).
   const follow = useRef<FollowState>({ following: true, top: 0, total: 0 })
@@ -63,11 +87,50 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
   const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map())
   const [scrollTop, setScrollTop] = useState(0)
   const [viewport, setViewport] = useState(FALLBACK_VIEWPORT_PX)
+  const [padding, setPadding] = useState(0)
   const [following, setFollowing] = useState(true)
+  // Whether the message just sent is held at the top of the view (`pinNewest`); the ref is for event handlers.
+  const [pinned, setPinned] = useState(false)
+  const pinnedNow = useRef(false)
+  const unpin = useCallback(() => {
+    pinnedNow.current = false
+    setPinned(false)
+  }, [])
+  // The room left under the last row when the pin went, for `keptRoom` to shrink.
+  const [kept, setKept] = useState(0)
 
   const keys = useMemo(() => items.map(getKey), [items, getKey])
   const layout = useMemo(() => buildLayout(keys, heights, estimate), [keys, heights, estimate])
   const range = visibleRange(layout, scrollTop, viewport, overscan)
+  // The pinned row is found again each time: a message sent shows as an echo first and as the history's own row once
+  // the history has it, under another key.
+  const pinAt = pinned && isPinTarget !== undefined ? lastIndexWhere(items, isPinTarget) : -1
+  const pinOffset = pinAt === -1 ? null : (layout.offsets[pinAt] ?? null)
+  // Empty room under the last row: what a pinned message needs to sit at the top while its reply is short, and once
+  // nothing is pinned, only what is still on screen.
+  const room = pinOffset !== null ? roomToPin(pinOffset, viewport, padding, layout.total) : keptRoom(kept, scrollTop, viewport, padding, layout.total)
+  if (room !== kept) setKept(room)
+  // What the view scrolls over: the rows and the room under them.
+  const total = layout.total + room
+
+  // A message just sent is pinned when its row is there; without one, the effect below goes to the newest row instead.
+  const [seenPin, setSeenPin] = useState(pinNewest)
+  if (seenPin !== pinNewest) {
+    setSeenPin(pinNewest)
+    const target = isPinTarget !== undefined && lastIndexWhere(items, isPinTarget) !== -1
+    setPinned(target)
+    if (target) setFollowing(false)
+  }
+  // A link to a row lets go of the pinned message (the effect that follows the link moves the view).
+  const [seenTarget, setSeenTarget] = useState(scrollTarget?.nonce ?? null)
+  if ((scrollTarget?.nonce ?? null) !== seenTarget) {
+    setSeenTarget(scrollTarget?.nonce ?? null)
+    setPinned(false)
+  }
+  useLayoutEffect(() => {
+    pinnedNow.current = pinned
+    if (pinned) follow.current = { ...follow.current, following: false }
+  }, [pinned])
 
   // Measures are applied before the browser paints, so a row that has just come in is never drawn at its estimate for a
   // frame and then moved: the ref callbacks note heights while React commits and the layout effect below applies them;
@@ -86,7 +149,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     // Reading up, rows come into the drawn range above the view and their measured height replaces the estimate:
     // without moving the view by the difference, what is being read jumps.
     const top = scroller.current?.scrollTop ?? 0
-    if (!follow.current.following) {
+    if (!follow.current.following && !pinnedNow.current) {
       const { indexOf: index, layout: was, heights: measured } = laidOut.current
       for (const [key, height] of batch) {
         const at = index.get(key)
@@ -141,7 +204,10 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) return
-    const update = () => { setViewport(element.clientHeight || FALLBACK_VIEWPORT_PX) }
+    const update = () => {
+      setViewport(element.clientHeight || FALLBACK_VIEWPORT_PX)
+      setPadding(paddingOf(element))
+    }
     update()
     if (typeof ResizeObserver === 'undefined') return
     const watch = new ResizeObserver(update)
@@ -162,21 +228,29 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     const element = scroller.current
     const delta = anchor.current
     anchor.current = 0
-    if (!element || delta === 0 || follow.current.following) return
-    place(element, element.scrollTop + delta, layout.total)
-  }, [layout.total, place])
+    if (!element || delta === 0 || follow.current.following || pinnedNow.current) return
+    place(element, element.scrollTop + delta, total)
+  }, [total, place])
 
   // Keep the newest row in view while the list follows it.
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) return
-    if (!follow.current.following) {
-      follow.current = { ...follow.current, total: layout.total }
+    // With room left under the last row the newest row is still on screen (`keptRoom`): new rows fill the room first.
+    if (!follow.current.following || pinnedNow.current || room > 0) {
+      follow.current = { ...follow.current, total }
       return
     }
-    place(element, layout.total, layout.total)
+    place(element, total, total)
     // The view's own height is a dependency too: a message box that grows must not leave the newest row under it.
-  }, [layout.total, viewport, place])
+  }, [total, room, viewport, place])
+
+  // A pinned row stays at the top of the view: rows above it measured, or its echo replaced by the history's row, move it.
+  useLayoutEffect(() => {
+    const element = scroller.current
+    if (!element || pinOffset === null || Math.abs(element.scrollTop - pinOffset) <= PLACED_SLACK_PX) return
+    place(element, pinOffset, total)
+  }, [pinOffset, total, place])
 
   // A link to a row (an approval's step) moves the view there and stops following the newest row.
   const handled = useRef<number | null>(null)
@@ -187,9 +261,9 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     if (at === -1) return
     handled.current = scrollTarget.nonce
     follow.current = { ...follow.current, following: false }
-    place(element, layout.offsets[at] ?? 0, layout.total)
+    place(element, layout.offsets[at] ?? 0, total)
     setFollowing(false)
-  }, [scrollTarget, keys, layout, place])
+  }, [scrollTarget, keys, layout, total, place])
 
   const onScroll = () => {
     const element = scroller.current
@@ -198,17 +272,26 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     const ownWrite = wrote.current === element.scrollTop
     const byReader = held.current || performance.now() - touchedAt.current < READER_SCROLL_MS
     wrote.current = null
+    if (pinnedNow.current) {
+      // The reader scrolling lets go of the pinned message; a scroll nobody asked for is put back.
+      if (!byReader || ownWrite) {
+        if (!ownWrite && pinOffset !== null) place(element, pinOffset, total)
+        return
+      }
+      unpin()
+    }
     const height = element.clientHeight || FALLBACK_VIEWPORT_PX
-    follow.current = followAfterScroll(follow.current, { scrollTop: element.scrollTop, viewport: height, total: layout.total }, ownWrite || !byReader)
+    follow.current = followAfterScroll(follow.current, { scrollTop: element.scrollTop, viewport: height, total }, ownWrite || !byReader)
     setFollowing(follow.current.following)
     // A scroll nobody asked for that left a following list short of its newest row is put right.
-    if (!ownWrite && !byReader && follow.current.following && !isAtBottom(element.scrollTop, height, layout.total)) place(element, layout.total, layout.total)
+    if (!ownWrite && !byReader && room === 0 && follow.current.following && !isAtBottom(element.scrollTop, height, total)) place(element, total, total)
   }
 
   // A wheel move up arrives before the scroll it causes, and a streaming commit in between would undo it.
   const onWheel = (event: WheelEvent) => {
     touched()
     stopGlide()
+    if (pinnedNow.current) unpin()
     // The scrolling region is only as wide as the chat column; a wheel turn over the space beside it scrolls it too.
     const element = scroller.current
     if (element !== null && event.target instanceof Node && !element.contains(event.target)) element.scrollTop += event.deltaY
@@ -233,6 +316,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     const element = scroller.current
     if (!element) return
     stopGlide()
+    unpin()
     const arrive = () => {
       glide.current = null
       follow.current = { ...follow.current, following: true }
@@ -268,11 +352,21 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     jumpToLatest()
   })
 
+  // Sending is asking to see the answer, read from the top: the message just sent goes to the top of the view (pinned
+  // above), or with no row to pin, the view goes to the newest row.
+  const handledPin = useRef(pinNewest)
+  useLayoutEffect(() => {
+    if (handledPin.current === pinNewest) return
+    handledPin.current = pinNewest
+    if (pinned) stopGlide()
+    else jumpToLatest()
+  })
+
   const drawn = items.slice(range.start, range.end)
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" onWheel={onWheel}>
       <div ref={scroller} role="region" aria-label={label} tabIndex={0} className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto overscroll-contain" onScroll={onScroll} onPointerDown={() => { held.current = true; touched(); stopGlide() }} onKeyDown={() => { touched(); stopGlide() }} onTouchMove={() => { touched(); stopGlide() }}>
-        <div className="relative" style={{ height: layout.total }}>
+        <div className="relative" style={{ height: total }}>
           {drawn.map((item, index) => {
             const at = range.start + index
             const key = keys[at] ?? ''
@@ -284,7 +378,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
           })}
         </div>
       </div>
-      {!following && layout.total > viewport && (
+      {!following && (pinned ? scrollTop + viewport < layout.total + padding : layout.total > viewport) && (
         <Button type="button" variant="soft" size="icon" className="mx-chat-jump size-8 rounded-full bg-raise" aria-label="Jump to the latest message" onClick={jumpToLatest}>
           <ArrowDown className="size-4" aria-hidden="true" />
         </Button>

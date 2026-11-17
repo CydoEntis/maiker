@@ -189,7 +189,7 @@ async fn conversation_diff(
 }
 
 /// One model an agent offers, as its own cache of them lists it.
-#[derive(Debug, Default, PartialEq, serde::Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 struct AgentModel {
     id: String,
     label: String,
@@ -393,6 +393,28 @@ fn claude_rows(config: &str, settings: &str) -> Vec<AgentModel> {
     rows
 }
 
+/// Where the list Claude Code last gave is kept, in the app's cache folder, for when it cannot be asked.
+const CLAUDE_MODELS_FILE: &str = "claude-models.json";
+
+/// Keeps the list for next time; one that cannot be written only means asking again next time.
+fn remember_models(path: &std::path::Path, rows: &[AgentModel]) {
+    let written = path
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| serde_json::to_vec(rows).map_err(std::io::Error::other))
+        .and_then(|bytes| std::fs::write(path, bytes));
+    if let Err(error) = written {
+        tracing::warn!("could not keep Claude Code's model list in {}: {error}", path.display());
+    }
+}
+
+/// The list kept last time; none when there is no file or it cannot be read as one.
+fn remembered_models(path: &std::path::Path) -> Option<Vec<AgentModel>> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let rows: Vec<AgentModel> = serde_json::from_str(&text).ok()?;
+    (!rows.is_empty()).then_some(rows)
+}
+
 /// Claude Code's own list of its models (`maitty_agent_ask::claude::ask`), started in the home folder so no
 /// project's settings shape it.
 async fn ask_claude_for_models(home: &std::path::Path) -> Result<Vec<maitty_agent_ask::claude::Listed>, String> {
@@ -455,11 +477,24 @@ async fn agent_models(app: tauri::AppHandle, agent: String) -> Result<Vec<AgentM
         };
         let settings = std::fs::read_to_string(settings.join("settings.json")).unwrap_or_default();
         let home = app.path().home_dir().map_err(|error| error.to_string())?;
+        let remembered = app.path().app_cache_dir().map(|folder| folder.join(CLAUDE_MODELS_FILE));
         match ask_claude_for_models(&home).await {
-            Ok(listed) if !listed.is_empty() => return Ok(claude_rows_from_list(listed, &settings)),
-            Ok(_) => tracing::warn!("Claude Code listed no models; reading its files instead"),
-            Err(error) => tracing::warn!("{error}; reading Claude Code's files instead"),
+            Ok(listed) if !listed.is_empty() => {
+                let rows = claude_rows_from_list(listed, &settings);
+                if let Ok(path) = &remembered {
+                    remember_models(path, &rows);
+                }
+                return Ok(rows);
+            }
+            Ok(_) => tracing::warn!("Claude Code listed no models"),
+            Err(error) => tracing::warn!("{error}"),
         }
+        // Claude Code's files name only some of its models (Fable is often missing), so the list it last gave wins.
+        if let Some(rows) = remembered.ok().and_then(|path| remembered_models(&path)) {
+            tracing::warn!("using the models Claude Code listed last time");
+            return Ok(rows);
+        }
+        tracing::warn!("reading Claude Code's files for its models instead");
         return Ok(claude_rows(&config, &settings));
     }
     if agent != "codex" {
@@ -1866,6 +1901,21 @@ mod tests {
             resolved: resolved.into(),
             efforts: efforts.iter().map(|level| level.to_string()).collect(),
         }
+    }
+
+    #[test]
+    fn the_list_claude_code_gave_is_kept_for_when_it_cannot_be_asked() {
+        let folder = std::env::temp_dir().join(format!("maitty-gui-models-{}", std::process::id()));
+        let path = folder.join("cache").join(super::CLAUDE_MODELS_FILE);
+        assert_eq!(super::remembered_models(&path), None);
+
+        let rows = super::claude_rows_from_list(claude_list(), "{}");
+        super::remember_models(&path, &rows);
+
+        assert_eq!(super::remembered_models(&path), Some(rows));
+        std::fs::write(&path, "not a list").unwrap();
+        assert_eq!(super::remembered_models(&path), None);
+        std::fs::remove_dir_all(&folder).unwrap();
     }
 
     fn claude_list() -> Vec<maitty_agent_ask::claude::Listed> {

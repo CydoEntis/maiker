@@ -56,7 +56,7 @@ export function useConversationStarts({ desktop, setNewDialogOpen, daemonDisconn
         if (created) selectConversation(created.id)
       })
       .catch((error: unknown) => {
-        toast.error(errorMessage(error, 'Could not start a shell'))
+        toast.failure(error, 'Could not start a shell')
       })
       .finally(() => {
         conversationCreationPendingRef.current = false
@@ -78,7 +78,7 @@ export function useConversationStarts({ desktop, setNewDialogOpen, daemonDisconn
         else toast.error('Choose a project folder first')
       })
       .catch((error: unknown) => {
-        toast.error(errorMessage(error, 'Could not find your home folder'))
+        toast.failure(error, 'Could not find your home folder')
       })
   }
 

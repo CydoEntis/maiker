@@ -129,6 +129,44 @@ pub(super) fn recreate_worktree(
     Ok(())
 }
 
+/// A worktree of `project` for the new chat page's `branch`. Git checks a branch out in one place
+/// only, so a branch that is already checked out (`dev` in the main checkout, or another chat's
+/// worktree) gets a new branch cut from it under a made-up name: any number of chats can work off
+/// `dev` side by side. A branch checked out nowhere is checked out itself, and an unknown name is
+/// a new branch, as before.
+pub(super) fn branch_worktree(
+    project: &std::path::Path,
+    branch: &str,
+    template: &str,
+    from_default: bool,
+) -> Result<(PathBuf, String), String> {
+    let root = crate::gitfs::head(project).map_or_else(|| project.to_path_buf(), |h| h.main_root);
+    match base_for_busy_branch(&root, branch) {
+        Some(base) => {
+            let taken = git::branch_names_in_use(&root);
+            let new = made_up_branch(&taken, seconds_now());
+            create_trusted_worktree(project, &new, Some(&base), template, from_default)
+        }
+        None => create_trusted_worktree(project, branch, None, template, from_default),
+    }
+}
+
+/// What to start a new branch from when `branch` cannot be checked out again: the branch itself
+/// while a worktree has it checked out, else `None`. Only a local branch can be checked out twice
+/// over, so a remote-only one is never busy.
+pub(super) fn base_for_busy_branch(root: &std::path::Path, branch: &str) -> Option<String> {
+    let listed = git::git(root, &["worktree", "list", "--porcelain"]).ok()?;
+    let wanted = format!("branch refs/heads/{branch}");
+    listed.lines().any(|line| line == wanted).then(|| branch.to_string())
+}
+
+fn seconds_now() -> usize {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as usize)
+        .unwrap_or(0)
+}
+
 /// The first of `WT_NAMES`, counting on from `seed`, that is not in `taken`; with all of them
 /// taken, one with a number added.
 pub(super) fn made_up_branch(taken: &[String], seed: usize) -> String {
@@ -149,11 +187,7 @@ pub(super) fn agent_worktree(
 ) -> Result<PathBuf, String> {
     let head = crate::gitfs::head(dir).ok_or("not in a git repository")?;
     let taken = git::branch_names_in_use(&head.main_root);
-    let n = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as usize)
-        .unwrap_or(0);
-    let branch = made_up_branch(&taken, n);
+    let branch = made_up_branch(&taken, seconds_now());
     let (path, _) = create_trusted_worktree(&head.main_root, &branch, None, template, from_default)?;
     let sub = dir
         .strip_prefix(&head.top)

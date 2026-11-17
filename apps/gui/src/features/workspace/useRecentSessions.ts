@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import type { ClosedSession } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import type { NewChatRequest } from './components/NewChatPage'
 import { LOCAL_MACHINE } from '@/api/machines'
@@ -21,7 +20,7 @@ export function useRecentSessions(startNewChat: (request: NewChatRequest) => Pro
       return
     }
     close()
-    startNewChat(request).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not reopen the session')) })
+    startNewChat(request).catch((error: unknown) => { toast.failure(error, 'Could not reopen the session') })
   }, [startNewChat, starting])
   const reopenSession = useCallback((closed: ClosedSession) => {
     const request = reopenRequest(closed)

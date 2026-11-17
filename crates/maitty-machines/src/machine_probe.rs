@@ -296,7 +296,7 @@ mod tests {
                 "ssh: connect to host box port 22: Connection timed out\n"
             ),
             Probe::Failed(FailureClass::Unreachable(
-                "ssh: connect to host box port 22: Connection timed out".into()
+                "It did not answer in time. Check that it is on and reachable from this network. (ssh: connect to host box port 22: Connection timed out)".into()
             ))
         );
     }

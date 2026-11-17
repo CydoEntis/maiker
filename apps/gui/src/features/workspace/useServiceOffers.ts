@@ -1,14 +1,14 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { restartMismatchedDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
 import { serviceStateOf } from './model/serviceState'
 import { daemonConnectionError } from '@/lib/daemon-connection'
-import { errorMessage } from '@/lib/error-message'
 import { appBehindStep } from '@/features/updates/appBehind'
 import { useUpdater } from '@/features/updates/useUpdater'
 import type { AppBehindOffer, RestartOffer } from './components/states'
+import { serviceStep } from '@/features/updates/finishUpdate'
 
 /**
  * The desktop app: a terminal multiplexer window over sessions maittyd owns. Tabs and
@@ -24,7 +24,7 @@ function olderServiceNote(status: { canRestart: boolean; sessionCount: number; a
 }
 
 /** What the window offers when it and the service speak different protocols: restart the older service, or update the older app. */
-export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, online, failures, sessionsQuery }: {
+export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, online, failures, sessionsQuery, afterAppUpdate = false }: {
   mismatch: { daemonProtocol: number; guiProtocol: number } | null
   serviceNewer: boolean
   restartStatusQuery: UseQueryResult<{ daemonProtocol: number; guiProtocol: number; canRestart: boolean; sessionCount: number; activeTurnCount: number | null }>
@@ -34,8 +34,22 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
   online: boolean
   failures: number
   sessionsQuery: UseQueryResult<Conversation[]>
+  /** This launch is the app restarted into an update: an older service is restarted as part of it, once no agent works. */
+  afterAppUpdate?: boolean
 }) {
   const [restartPending, setRestartPending] = useState(false)
+  const status = restartStatusQuery.data
+  const unasked = mismatch !== null && !serviceNewer && afterAppUpdate && status !== undefined
+    && serviceStep({ afterAppUpdate, restartWhenIdle: false, canRestart: status.canRestart, activeTurnCount: status.activeTurnCount }) === 'restart'
+  // Tried once for each older service: a restart that failed leaves the card and its button.
+  const tried = useRef<number | null>(null)
+  useEffect(() => {
+    if (!unasked || tried.current === mismatch.daemonProtocol) return
+    tried.current = mismatch.daemonProtocol
+    void restartMismatchedDaemon(mismatch.daemonProtocol)
+      .then(() => refetchSessions())
+      .catch((error: unknown) => { toast.failure(error, 'Could not finish updating the Maitty service') })
+  }, [unasked, mismatch, refetchSessions])
   const restartOffer: RestartOffer | null = mismatch && !serviceNewer
     ? {
         label: restartStatusQuery.isPending ? 'Checking service…' : restartStatusQuery.isError ? 'Restart check failed' : restartStatusQuery.data.canRestart ? (restartStatusQuery.data.sessionCount > 0 ? `Restart and restore ${String(restartStatusQuery.data.sessionCount)} session${restartStatusQuery.data.sessionCount === 1 ? '' : 's'}` : 'Restart service') : 'Service in use',
@@ -52,7 +66,7 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
               await refetchSessions()
               toast.success(`Service restarted · ${String(restartStatusQuery.data?.sessionCount ?? 0)} sessions back`)
             })
-            .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not restart the Maitty service')) })
+            .catch((error: unknown) => { toast.failure(error, 'Could not restart the Maitty service') })
             .finally(() => { setRestartPending(false) })
         },
       }

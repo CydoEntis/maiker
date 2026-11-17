@@ -355,7 +355,7 @@ async fn a_chat_on_a_branch_starts_in_its_own_worktree_and_the_daemon_owns_it() 
         // A branch that is taken says so and starts nothing.
         let message = start_on(settings(&session), "chat/one");
         let again = exchange(&mut session, 412, message, None).await;
-        assert!(matches!(again, ServerMsg::Error(ref e) if e.contains("already exists") || e.contains("checked out")), "{again:?}");
+        assert!(matches!(again, ServerMsg::Error(ref e) if e.contains("is already there") || e.contains("checked out")), "{again:?}");
         assert_eq!(session.daemon.conversations.len(), 1);
 
         let read = exchange(

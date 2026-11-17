@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from '@/lib/toast'
 import { WorkingMark } from './WorkingMark'
 import { connectAgent, reloadAgentOnDaemon, sendWhenAgentReady } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { NO_EVENTS_HINT_AFTER_MS, noEventsHint, waitingInTerminalHint, type ChatAgent } from '@/features/workspace/model/chatView'
 import { keepComposerFocus } from '../keepComposerFocus'
 import { buildAttachmentMessage, parseAttachmentMessage } from '../attachmentMessage'
@@ -82,7 +81,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     connectAgent(agent)
       .then(() => reloadAgentOnDaemon({ id: sessionId }))
       .then(() => { toast.success(`${agent} is connected and restarted to load the hooks.`) })
-      .catch((failure: unknown) => { toast.error(errorMessage(failure, `Could not connect ${agent}`)) })
+      .catch((failure: unknown) => { toast.failure(failure, `Could not connect ${agent}`) })
       .finally(() => { setConnecting(false) })
   }
 

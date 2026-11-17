@@ -302,15 +302,14 @@ impl Machine {
         )?)
     }
 
-    /// The line that has the app installed at `program` there restart its daemon if idle, or
-    /// with `now` also when its sessions are saved.
-    pub fn restart_if_idle_argv(&self, program: &str, now: bool) -> Result<Vec<String>> {
+    /// The line that has the app installed at `program` there restart its daemon when `when` allows it.
+    pub fn restart_if_idle_argv(&self, program: &str, when: ssh_command::RestartWhen) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_restart_if_idle(
             &route.ssh,
             &route.target,
             program,
-            now,
+            when,
         )?)
     }
 

@@ -3,7 +3,6 @@ import { toast } from '@/lib/toast'
 import { openDaemonLog } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { daemonConnectionError } from '@/lib/daemon-connection'
-import { errorMessage } from '@/lib/error-message'
 import { SplitHandle } from './SplitHandle'
 import { FindBar } from '@/features/find/FindBar'
 import { RestoreBanner } from './RestoreBanner'
@@ -66,9 +65,7 @@ export function WorkspaceMain() {
                     busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}
                     viewDefaults={preferences.chatViewDefault}
                     defaultAgent={preferences.defaultAgent}
-                    bypassAllowed={preferences.yoloClaude}
-                    codexYolo={preferences.yoloCodex}
-                    fullAccess={preferences.fullAccessNewChats}
+                    bypassOff={preferences.bypassOff}
                     leading={sidebarMode === 'hidden' && !focusMode ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
                     browse={newChatBrowse}
                     clone={cloneRepo.open}
@@ -109,7 +106,7 @@ export function WorkspaceMain() {
                 {updater.state.status === 'ready' && updater.state.version !== updateLater && (
                   <UpdateReadyBanner version={updater.state.version} onRestart={restartNow} onLater={() => { if (updater.state.status === 'ready') setUpdateLater(updater.state.version) }} />
                 )}
-                <ServiceStatus online={online} failures={failures} mismatch={Boolean(mismatch)} retryAt={retryAt} detail={offlineDetail ?? (sessionsQuery.isError ? daemonConnectionError(sessionsQuery.error) : null)} restart={restartOffer} appBehind={appBehindOffer} sessions={sessions.length} onRetry={() => { void refetchSessions() }} onOpenLog={() => { openDaemonLog().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the log')) }) }} />
+                <ServiceStatus online={online} failures={failures} mismatch={Boolean(mismatch)} retryAt={retryAt} detail={offlineDetail ?? (sessionsQuery.isError ? daemonConnectionError(sessionsQuery.error) : null)} restart={restartOffer} appBehind={appBehindOffer} sessions={sessions.length} onRetry={() => { void refetchSessions() }} onOpenLog={() => { openDaemonLog().catch((error: unknown) => { toast.failure(error, 'Could not open the log') }) }} />
                 {tab ? (
                   <div className="mx-pane-stack">
                   {mountedTabs.map((tab) => {

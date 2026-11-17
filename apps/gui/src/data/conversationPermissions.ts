@@ -5,7 +5,7 @@ const STORAGE_KEY = 'maitty.gui.permissions.v1'
 export const PERMISSION_LABELS: Record<SessionPermissions, string> = {
   'read-only': 'Read only',
   'workspace-write': 'Workspace write',
-  'full-access': 'Full access',
+  'full-access': 'Bypass permissions',
 }
 
 function isPermissions(value: unknown): value is SessionPermissions {

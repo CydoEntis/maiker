@@ -24,7 +24,7 @@ vi.mock('@/api/fileSends', async (importOriginal) => ({
   cancelFileSend: host.cancel,
 }))
 
-const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn(), message: vi.fn() }))
+const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn(), failure: vi.fn(), message: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -77,7 +77,7 @@ describe('pulling a file from a machine', () => {
     await flush()
     result.current.getFile('devbox', '/x')
     await flush()
-    expect(toasts.error).toHaveBeenCalledWith('files are already being sent; wait for them or cancel', expect.anything())
+    expect(toasts.failure).toHaveBeenCalledWith(new Error('files are already being sent; wait for them or cancel'), expect.stringMatching(/^Could not/), expect.anything())
   })
 
   it('says a stopped pull was stopped, and ignores an event it did not start', async () => {

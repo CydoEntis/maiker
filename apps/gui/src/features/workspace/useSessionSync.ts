@@ -5,7 +5,6 @@ import { toast } from '@/lib/toast'
 import { z } from 'zod'
 import { conversationsFromSnapshot, listenSessionsChanged } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
-import { errorMessage } from '@/lib/error-message'
 import { type Layout, openArrangement, reconcileLayout } from './model/layout'
 import type { SessionView } from './model/session'
 import { markSeen, type SessionTrack, tracksEqual, trackSessions } from './model/tracking'
@@ -61,7 +60,7 @@ export function useSessionSync({ sessionsQuery, retryDelay, queryClient, setFail
         if (gone) unlisten()
         else stop = unlisten
       },
-      (error: unknown) => { toast.error(errorMessage(error, 'Could not follow the session list')) },
+      (error: unknown) => { toast.failure(error, 'Could not follow the session list') },
     )
     return () => {
       gone = true

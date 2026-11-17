@@ -642,6 +642,7 @@ maitty machine update build --yes       # an older version there: replace it
 maitty machine update build             # asks, when you are at a keyboard
 maitty machine update build --force     # a newer version there: put this one on instead (a downgrade)
 maitty machine update build --yes --restart  # also restart its daemon now, even with sessions open
+maitty machine update build --yes --agents-idle  # restart its daemon once no agent there is working or waiting
 maitty machine activity build           # how many sessions are open there and how many are busy (changes nothing)
 ```
 
@@ -673,6 +674,11 @@ build: maitty 0.60.0 installed to ~/.local/bin/maitty
   (the desktop app's Update button does, after asking) to restart it anyway: its sessions are saved, so the
   new daemon restores them and resumes their agents. A turn in progress is lost. A daemon whose sessions are
   not saved is never restarted.
+- **Machines follow this computer.** After maitty updates here, each machine with an older maitty is updated
+  the same way in the background (`--yes --agents-idle`): its daemon restarts once its sessions are saved and
+  no agent there is working or waiting, so nothing is lost. A machine with no maitty, one that needs a login,
+  and one behind a custom transport keep their Update button. Turn it off with `[updates] machines = false`
+  (Settings › General › Update remote machines too, in either app).
 - **Not supported: a Windows machine as the remote.** In v1 Windows is never the remote; the command says so
   and exits. Linux and macOS (x86_64 and aarch64) are supported.
 
@@ -1004,7 +1010,9 @@ Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in
 
 Branch and Work in are left out when the folder is not a git repository, and on another machine.
 **Model and effort** are on the model button in the message box, and the **permission mode** is the
-shield beside it. The agent is on the model button too. If an agent is not installed, the page says
+shield beside it. Agents start with **Bypass Permissions** on: they change files and run commands
+without asking. Turn it off per agent in Settings › Permissions (or `[permissions.bypass]` in
+`config.toml`); sessions started afterwards ask again. The agent is on the model button too. If an agent is not installed, the page says
 so and offers **set it up**.
 
 **Resume a saved chat.** In the command palette, **Resume a saved chat…** lists the conversations

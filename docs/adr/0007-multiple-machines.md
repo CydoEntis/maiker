@@ -38,6 +38,14 @@ People run agents on more than one computer and want one window over all of them
   daemon; with it (the window's Update button always passes it, after asking) it restarts a daemon
   whose sessions are saved. They come back on the new daemon with their agents resumed; a turn in
   progress is lost. A daemon whose sessions are not saved is left running and the update says so.
+- **After this computer updates, its machines follow without a click** (`[updates] machines`, on by
+  default; `daemon/machine_updates.rs`). The person already chose to update, and a version gap breaks the
+  link until someone acts. The first installed daemon of a new version runs `machine update <name> --yes
+  --agents-idle` once per `[[machines]]` entry over plain ssh: it replaces only an older copy (never
+  installs where there is none, never downgrades) and restarts the far daemon only once its sessions are
+  saved and no agent there is working or waiting, so nothing is lost. A machine it cannot reach, or one
+  that needs a login, keeps its Update button. A development build or a separately named service never
+  does this.
 - The machine list is local-only and never synced. A daemon id in the snapshot lets the client
   refuse an alias that now answers as a different machine.
 - **Remote chat.** A pane on another machine has a chat view and the new chat page, like one on

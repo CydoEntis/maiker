@@ -864,10 +864,15 @@ The agent runs with the user's permissions, so the window's start path is narrow
   default the daemon starts the provider with workspace write and approval on request (Claude `--permission-mode
   default` with the stdio permission prompt; Codex `workspace-write`, `on-request`). With `full_access` it starts
   the provider's own skip-permissions mode (ADR 0005: Claude `bypassPermissions` with
-  `--allow-dangerously-skip-permissions`; Codex `danger-full-access` with approval `never`). It is the user's
-  explicit choice per chat (a labelled checkbox with a warning; the Settings default is off), is never selected
-  silently, and is fixed for the session: Maitty never widens a running session, and a chat started with it shows
-  a visible Full access tag. In the default posture every tool use the provider does not allow by itself becomes an approval
+  `--allow-dangerously-skip-permissions`; Codex `danger-full-access` with approval `never`). The window always
+  sends the choice explicitly: a labelled checkbox with a warning, ticked at first because **Bypass Permissions** is on
+  by default (Settings › Permissions, one switch per agent, `[permissions.bypass]`), and unticked for one chat or for
+  good by turning the agent's switch off. It is fixed for the session: Maitty never widens a running session, and a
+  chat started with it shows a visible Bypass permissions tag. The same switch adds the agent's own flag
+  (`AgentDef.bypass_flag`) to every agent the daemon or either app starts in a terminal: new sessions, branch agents,
+  MCP `maitty_start`, CLI handoff and resume. A resume adds it only when the session started with it and the switch
+  is still on (`restore::keeping_bypass`); a flag that is not a plain `-`option is ignored. Typing an agent's name in
+  a shell yourself adds nothing. In the default posture every tool use the provider does not allow by itself becomes an approval
   that waits for a person's answer, and there is no auto-approve. There is no way to change a running session's
   posture, and no read-only-to-writable switch, in the window. Answers are human-only, bound to the current generation and the exact request id (unchanged
   from the structured runtime rules above).

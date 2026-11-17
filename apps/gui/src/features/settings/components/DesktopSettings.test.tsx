@@ -6,7 +6,7 @@ import type { SettingsPreferences } from '../preferences'
 import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, morePanelTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, morePanelTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -180,13 +180,22 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ defaultAgent: 'codex' }))
   })
 
-  it('has a yolo switch for each agent, all off, set from the settings screen', async () => {
+  it('has a switch to update remote machines after this computer, on by default', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('chat')
+    const { onChange } = renderSettings('general')
+    const remote = screen.getByRole('switch', { name: 'Update remote machines too' })
+    expect(remote).toBeChecked()
+    await user.click(remote)
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ updateMachines: false }))
+  })
 
-    for (const agent of ['Claude', 'Codex', 'Gemini']) expect(screen.getByRole('switch', { name: `Yolo mode for ${agent}` })).not.toBeChecked()
-    await user.click(screen.getByRole('switch', { name: 'Yolo mode for Codex' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ yoloCodex: true, yoloClaude: false, yoloGemini: false }))
+  it('has a Bypass Permissions switch for each agent on the Permissions page, all on, shared with the terminal app', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('permissions')
+
+    for (const agent of ['Claude', 'Codex', 'Gemini']) expect(screen.getByRole('switch', { name: `Bypass Permissions for ${agent}` })).toBeChecked()
+    await user.click(screen.getByRole('switch', { name: 'Bypass Permissions for Codex' }))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ bypassOff: ['codex'] }))
   })
 
   it('adds Files and History to the tools bar, off by default', async () => {

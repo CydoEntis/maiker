@@ -23,6 +23,7 @@ pub(crate) mod update;
 use crate::layout::Dir;
 use crate::protocol::*;
 use anyhow::{Context, Result, anyhow, bail};
+use maitty_machines::RestartWhen;
 use jsonc_parser::cst::{CstInputValue, CstObjectProp};
 use mcp_config::McpChange;
 use serde_json::{Value, json};
@@ -1209,7 +1210,7 @@ pub(crate) const LEFT_RUNNING: &str = "left running";
 /// `now` also when sessions are open but saved, because the next server restores them and
 /// resumes their agents (a turn in progress is lost). A server whose sessions are not saved is
 /// always left alone, and so is one that already runs this version.
-pub fn restart_if_idle(now: bool) -> Result<()> {
+pub fn restart_if_idle(when: RestartWhen) -> Result<()> {
     if !server_running() {
         println!("no server is running");
         return Ok(());
@@ -1219,13 +1220,20 @@ pub fn restart_if_idle(now: bool) -> Result<()> {
         println!("current: the server already runs {APP_VERSION}");
         return Ok(());
     }
-    let may_restart = if now {
-        crate::restart::may_restart_now(published.as_ref(), crate::restart::session_is_saved())
-    } else {
-        crate::restart::idle_enough_to_restart(published.as_ref())
+    let saved = || crate::restart::session_is_saved();
+    let may_restart = match when {
+        RestartWhen::Now => crate::restart::may_restart_now(published.as_ref(), saved()),
+        RestartWhen::AgentsIdle => {
+            crate::restart::may_restart_with_agents_idle(published.as_ref(), saved())
+        }
+        RestartWhen::NoSession => crate::restart::idle_enough_to_restart(published.as_ref()),
     };
     if !may_restart {
         match published {
+            Some(a) if when == RestartWhen::AgentsIdle && a.busy() > 0 => println!(
+                "{LEFT_RUNNING}: {} agent(s) working or waiting",
+                a.busy()
+            ),
             Some(a) => println!(
                 "{LEFT_RUNNING}: {} open session(s); it keeps them",
                 a.sessions
@@ -1237,10 +1245,10 @@ pub fn restart_if_idle(now: bool) -> Result<()> {
     kill_server(&Target::current(), false)?;
     println!(
         "{}",
-        if now {
-            "restarted: sessions were saved and come back with the new version"
-        } else {
-            "restarted: no session was open"
+        match published {
+            Some(a) if a.sessions > 0 =>
+                "restarted: sessions were saved and come back with the new version",
+            _ => "restarted: no session was open",
         }
     );
     Ok(())

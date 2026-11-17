@@ -9,7 +9,7 @@ vi.mock('@/api/imagePaste', async (importOriginal) => ({
   saveImageLocally: host.save,
 }))
 
-const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn() }))
+const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn(), failure: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -52,7 +52,7 @@ describe('pasting an image into a pane of this computer', () => {
     const { paste, typeInto } = setup()
     paste('t3', image)
     await flush()
-    expect(toasts.error).toHaveBeenCalledWith('the clipboard holds something that is not a PNG, JPEG, GIF or WebP image', expect.objectContaining({ id: 'image-paste' }))
+    expect(toasts.failure).toHaveBeenCalledWith(expect.anything(), 'Could not paste the image', expect.objectContaining({ id: 'image-paste' }))
     expect(typeInto).not.toHaveBeenCalled()
   })
 

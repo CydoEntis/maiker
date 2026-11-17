@@ -7,7 +7,7 @@ pub(in crate::client) fn np_models(app: &App, agent: &str) -> Vec<String> {
     let q = app.cfg.quick.agents.iter().find(|q| q.name == agent);
     let list: Vec<String> = match q {
         Some(q) if !q.models.is_empty() => q.models.clone(),
-        _ if agent == "claude" => ["opus", "sonnet", "haiku"].map(String::from).to_vec(),
+        _ if agent == "claude" => maitty_shared::conversation::CLAUDE_MODEL_ALIASES.map(String::from).to_vec(),
         _ => Vec::new(),
     };
     if list.is_empty() {
@@ -50,6 +50,8 @@ pub(in crate::client) fn np_command(
             .cfg
             .with_model(&cmd, q.map_or("", |q| q.model_flag.as_str()), m);
     }
+    // Without permission prompts while `[permissions.bypass]` has it on (ADR 0005).
+    let cmd = app.cfg.with_bypass(agent, &cmd);
     // An account runs through `<app> account`, which gives it its own sign-in.
     Some(app.cfg.as_account(agent, &cmd))
 }

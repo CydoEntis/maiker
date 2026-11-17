@@ -213,10 +213,10 @@ function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSi
   const saveLog = () => {
     exportDaemonLog().then(
       (path) => { toast.success('Log saved', { description: path }) },
-      (error: unknown) => { toast.error(errorMessage(error, 'Could not save the log')) },
+      (error: unknown) => { toast.failure(error, 'Could not save the log') },
     )
   }
-  const showLog = () => { openDaemonLog().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the log')) }) }
+  const showLog = () => { openDaemonLog().catch((error: unknown) => { toast.failure(error, 'Could not open the log') }) }
   return (
     <>
       <Card title="This computer"

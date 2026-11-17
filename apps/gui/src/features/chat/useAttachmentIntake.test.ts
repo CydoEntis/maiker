@@ -107,12 +107,12 @@ describe('attaching in a chat on another machine', () => {
   })
 
   it('adds nothing when the host refuses the send (a folder, too big, not connected)', async () => {
-    const error = vi.spyOn(toast, 'error')
+    const failure = vi.spyOn(toast, 'failure')
     sends.sendFilesToMachine.mockRejectedValue('docs is not a file; only files can be sent')
     const { result } = intake()
     result.current.addPaths(['/a/docs'])
     await settle()
-    expect(error).toHaveBeenCalledWith('docs is not a file; only files can be sent', expect.anything())
+    expect(failure).toHaveBeenCalledWith('docs is not a file; only files can be sent', 'Could not send to build-box', expect.anything())
     expect(peekComposer(7).attachments).toEqual([])
   })
 
