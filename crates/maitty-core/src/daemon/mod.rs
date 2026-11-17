@@ -56,11 +56,9 @@ mod tickets;
 mod tickets_github;
 mod tickets_linear;
 mod tickets_plane;
-mod tickets_write;
 mod usage;
 mod usage_store;
 mod warm;
-mod workflow;
 mod worktrees;
 
 use crate::brand::APP_COMMAND;
@@ -85,6 +83,9 @@ type ClientId = u64;
 /// What a client that fell too far behind is told as it is let go.
 const LAGGED_REASON: &str = "This window fell too far behind the service and was let go; it connects again for a fresh copy.";
 /// How often the daemon looks at its timers (statuses, saves and git).
+/// What a window from before tickets became read-only is told when it asks to change one.
+const TICKET_WRITE_RETIRED: &str = "Maitty no longer changes tickets; change it in the tracker";
+
 const TICK: Duration = Duration::from_millis(250);
 const INTEGRATION_STARTUP_GRACE: Duration = Duration::from_secs(3);
 /// How often each workspace's git state is read again.
@@ -2675,10 +2676,8 @@ impl Daemon {
             let allowed = match &msg {
                 ClientMsg::Query(_) => self.may(client, Grant::Read, None),
                 ClientMsg::Resize { .. } => self.may(client, Grant::Write, None),
-                ClientMsg::Hook { .. }
-                | ClientMsg::Usage { .. }
-                | ClientMsg::WorkflowReport { .. } => Err(anyhow::anyhow!(
-                    "Structured callers cannot report pane status, usage or workflows"
+                ClientMsg::Hook { .. } | ClientMsg::Usage { .. } => Err(anyhow::anyhow!(
+                    "Structured callers cannot report pane status or usage"
                 )),
                 _ => Ok(()),
             };
@@ -2794,22 +2793,6 @@ impl Daemon {
                     .is_some_and(|t| term::same_secret(&t.token, &token))
                 {
                     self.report_usage(term, usage, limits);
-                }
-            }
-            ClientMsg::WorkflowReport { term, token, run } => {
-                let Some(t) = self.terms.get_mut(&term) else {
-                    return;
-                };
-                if !term::same_secret(&t.token, &token) {
-                    tracing::info!("ignoring a workflow report for pane {term} without its secret");
-                    return;
-                }
-                match maitty_shared::workflow::checked(run) {
-                    Ok(run) => {
-                        workflow::record(&mut t.workflows, run, term::unix_now());
-                        self.dirty = true;
-                    }
-                    Err(reason) => tracing::info!("pane {term}: workflow report refused: {reason}"),
                 }
             }
             ClientMsg::Command(cmd) => {
@@ -3189,13 +3172,14 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can keep a ticket provider's key".into())
                     }
-                    Query::TicketWrite { .. }
-                        if self.clients.get(&client).is_some_and(|client| {
-                            client.from.is_some() || client.structured.is_some()
-                        }) =>
-                    {
-                        ServerMsg::Error("Only a human client can write to a ticket".into())
-                    }
+                    // Retired: Maitty only reads tickets. The request stays on the wire so a window from
+                    // before is told so, rather than losing its connection over an unknown message.
+                    Query::TicketWrite { tag, .. } => ServerMsg::Reply(Reply::TicketWrite {
+                        tag,
+                        answer: Err(maitty_shared::tickets::TicketError::Invalid(
+                            TICKET_WRITE_RETIRED.into(),
+                        )),
+                    }),
                     Query::Extensions { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
@@ -3224,15 +3208,6 @@ impl Daemon {
                         tokio::task::spawn_blocking(move || {
                             let answer = ticket_links::change(&ticket_links::LinkStore::real(), place, change, ticket_links::main_checkout, &ticket_links::RepoFiles::real());
                             let reply = Reply::TicketLinks { tag, answer };
-                            let _ = tx.blocking_send(Ev::Answered { client, reply });
-                        });
-                        return;
-                    }
-                    Query::TicketWrite { source, id, write, confirmed, tag } => {
-                        let tx = self.tx.clone();
-                        tokio::task::spawn_blocking(move || {
-                            let answer = tickets_write::perform(&source, &id, write, confirmed);
-                            let reply = Reply::TicketWrite { tag, answer };
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
@@ -3732,7 +3707,6 @@ impl Daemon {
                         queued: t.queue.iter().cloned().collect(),
                         own_turn_over: t.own_turn_over,
                         subagent_activity: t.subagent_activity.clone(),
-                        workflows: t.workflows.clone(),
                         session: t.session.clone(),
                     },
                 )

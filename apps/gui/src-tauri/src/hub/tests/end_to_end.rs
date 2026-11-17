@@ -91,7 +91,6 @@ impl Host {
                 | Reaction::GitHubOwners { .. }
                 | Reaction::Tickets { .. }
                 | Reaction::TicketKeys { .. }
-                | Reaction::TicketWrite { .. }
                 | Reaction::TicketLinks { .. }
                 | Reaction::Extensions { .. }
                 | Reaction::TicketSetup(_)

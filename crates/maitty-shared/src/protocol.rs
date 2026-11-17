@@ -4,7 +4,6 @@
 //! the workspace / tab / pane tree; clients render `Snapshot`s and send `Command`s.
 
 use crate::layout::{Dir, Node};
-use crate::workflow::WorkflowRun;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -12,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 111;
+pub const PROTOCOL_VERSION: u32 = 112;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -138,9 +137,6 @@ pub const CLOSED_SESSIONS_MAX: usize = 50;
 /// The first version whose daemon reopens a closed session (`Command::ReopenClosedSession`).
 pub const REOPEN_CLOSED_SINCE: u32 = 87;
 
-/// The first version whose daemon takes a workflow's progress (`ClientMsg::WorkflowReport`).
-pub const WORKFLOW_REPORT_SINCE: u32 = 95;
-
 /// The first version whose daemon reads a helper's own record (`Query::HelperRead`).
 pub const HELPER_READ_SINCE: u32 = 95;
 
@@ -194,8 +190,8 @@ pub const TICKETS_SINCE: u32 = 105;
 /// (`Query::TicketKeys`).
 pub const TICKET_KEYS_SINCE: u32 = 106;
 
-/// The first version whose daemon writes a confirmed comment or a close to a ticket
-/// (`Query::TicketWrite`).
+/// The first version whose daemon answered `Query::TicketWrite`. Since 112 the answer is always
+/// that tickets are read-only (ADR 0011).
 pub const TICKET_WRITE_SINCE: u32 = 107;
 
 /// The first version whose daemon keeps which ticket sources each project reads
@@ -654,13 +650,6 @@ pub enum ClientMsg {
         token: String,
         usage: Usage,
         limits: Vec<Limit>,
-    },
-    /// A workflow's progress, from a process in the pane, with the pane's secret (ADR 0010).
-    /// Display only: it never changes the pane's status.
-    WorkflowReport {
-        term: TermId,
-        token: String,
-        run: WorkflowRun,
     },
     Query(Query),
 }
@@ -1345,10 +1334,9 @@ pub enum Query {
         change: TicketKeyChange,
         tag: u64,
     },
-    /// Write one confirmed change to a ticket of `source` (as for `Tickets`) on this daemon's
-    /// computer (human clients only): add a comment to the ticket `id`, or close it. `confirmed`
-    /// says a person saw exactly what will be written and agreed; the daemon writes nothing when it
-    /// is false. The answer is `Reply::TicketWrite` with the same `tag`.
+    /// Retired (ADR 0011): Maitty only reads tickets. It stays on the wire so a window from
+    /// versions 107 to 111, which may still ask, gets `Reply::TicketWrite` with an error instead
+    /// of losing its connection. The daemon writes nothing; no client of this version asks.
     TicketWrite {
         source: String,
         id: String,
@@ -1678,7 +1666,7 @@ pub enum Reply {
         tag: u64,
         answer: Result<Vec<crate::tickets::TicketKeyState>, crate::tickets::TicketError>,
     },
-    /// What a `Query::TicketWrite` did, or why it did nothing.
+    /// The answer to a retired `Query::TicketWrite`: always an error, as nothing is written.
     TicketWrite {
         tag: u64,
         answer: Result<crate::tickets::TicketWritten, crate::tickets::TicketError>,
@@ -2226,9 +2214,6 @@ pub struct TermInfo {
     /// Persistent lifecycle records reported by the runtime.
     #[serde(default)]
     pub subagent_activity: Vec<SubagentActivity>,
-    /// The workflow runs reported from this pane, newest first (ADR 0010). Display only.
-    #[serde(default)]
-    pub workflows: Vec<WorkflowRun>,
     /// Provider conversation ID that owns these child records.
     #[serde(default)]
     pub session: Option<String>,
@@ -2660,7 +2645,6 @@ impl ClientMsg {
             ClientMsg::Query(Query::ClosedSessions) => CLOSED_SESSIONS_SINCE,
             ClientMsg::Query(Query::WorktreeStanding { .. }) => WORKTREE_STANDING_SINCE,
             ClientMsg::Command(Command::ReopenClosedSession { .. }) => REOPEN_CLOSED_SINCE,
-            ClientMsg::WorkflowReport { .. } => WORKFLOW_REPORT_SINCE,
             ClientMsg::Query(Query::HelperRead { .. }) => HELPER_READ_SINCE,
             ClientMsg::Query(Query::Specialists { .. }) => SPECIALISTS_SINCE,
             ClientMsg::Command(Command::SnoozePane { .. }) => SNOOZE_SINCE,
@@ -3101,7 +3085,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 111);
+        assert_eq!(PROTOCOL_VERSION, 112);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3591,7 +3575,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 111);
+        assert_eq!(PROTOCOL_VERSION, 112);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4033,47 +4017,7 @@ mod tests {
     }
 
     #[test]
-    fn a_pane_from_before_workflow_reports_reads_with_none_and_one_with_a_run_round_trips() {
-        use crate::workflow::{StepState, WorkflowRun, WorkflowStep, WorkflowTicket};
-        let mut term = pane_from(serde_json::json!({}));
-        assert!(term.workflows.is_empty(), "an older peer sends none");
-        term.workflows.push(WorkflowRun {
-            workflow: "factory".into(),
-            run: "001".into(),
-            ticket: Some(WorkflowTicket {
-                key: "MAITTY-42".into(),
-                title: None,
-                link: None,
-            }),
-            steps: vec![WorkflowStep {
-                name: "review".into(),
-                state: StepState::SentBack,
-                note: Some("two findings".into()),
-                helper: None,
-                choices: Vec::new(),
-            }],
-            reported_at: 5,
-        });
-        round_trips(&ServerMsg::State(Snapshot {
-            terms: [(3, term)].into(),
-            ..Default::default()
-        }));
-    }
-
-    #[test]
-    fn a_workflow_report_is_sent_only_to_a_daemon_that_reads_it() {
-        let report = ClientMsg::WorkflowReport {
-            term: 1,
-            token: String::new(),
-            run: crate::workflow::WorkflowRun {
-                workflow: "factory".into(),
-                run: "1".into(),
-                ticket: None,
-                steps: Vec::new(),
-                reported_at: 0,
-            },
-        };
-        assert_eq!(report.introduced_in(), WORKFLOW_REPORT_SINCE);
+    fn a_helper_read_and_specialists_are_asked_only_of_a_daemon_that_reads_them() {
         let ask = ClientMsg::Query(Query::HelperRead { term: 1, helper: "a1".into() });
         assert_eq!(ask.introduced_in(), HELPER_READ_SINCE);
         let answer = ServerMsg::Reply(Reply::HelperRead(HelperRecord {
@@ -4102,7 +4046,21 @@ mod tests {
         }));
         assert_eq!(listed.introduced_in(), SPECIALISTS_SINCE);
         round_trips(&listed);
-        const { assert!(WORKFLOW_REPORT_SINCE <= PROTOCOL_VERSION) };
+    }
+
+    /// Workflow reports are gone (ADR 0011). A pane from a daemon that still keeps runs reads
+    /// without them, and a report from an older `maitty workflow report` is not read as anything
+    /// else: that one-shot call is refused, never misread.
+    #[test]
+    fn a_pane_with_workflow_runs_reads_without_them_and_a_report_is_refused() {
+        let term = pane_from(serde_json::json!({ "workflows": [{ "workflow": "factory", "run": "1", "steps": [] }] }));
+        round_trips(&ServerMsg::State(Snapshot { terms: [(3, term)].into(), ..Default::default() }));
+        #[derive(Serialize)]
+        enum OldClientMsg {
+            WorkflowReport { term: TermId, token: String, run: serde_json::Value },
+        }
+        let old = OldClientMsg::WorkflowReport { term: 1, token: String::new(), run: serde_json::json!({}) };
+        assert!(decode::<ClientMsg>(&encode(&old).unwrap()).is_err());
     }
 
     #[test]

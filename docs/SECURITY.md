@@ -664,22 +664,8 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   anything but an http(s) link, and the reply says only what is linked and whether a key is saved), it cannot
   save a link, and only the pane itself may ask, for its own project, once per project every 5 seconds. The
   suggested link is drawn as text and never opened or saved on its own. An ask from another machine is ignored.
-- **Writing to a ticket** (`Query::TicketWrite`, `daemon/tickets_write.rs`) is the one place Maitty changes
-  a ticket, and it does two things only: add a comment, or close the ticket. It never edits a ticket's own
-  words and never deletes. Nothing is written unless the request carries `confirmed: true`, which the
-  desktop sets only after the person saw the provider, the ticket and the exact text and clicked to confirm;
-  the daemon refuses a pane or a structured runtime outright (human clients only) and answers an
-  unconfirmed request with a refusal before it reads a key, starts `gh` or sends a byte, so a refused
-  write leaves the ticket as it was. The comment is checked by `clean_comment` (not empty, at most 4,000
-  characters, no control, hidden or tab characters, `\n` line breaks) and is refused rather than quietly
-  changed, so the text confirmed is the text written. The ticket id must belong to the named source (a
-  GitHub issue of that repository, a Plane work item, a Linear issue). GitHub goes through the user's own
-  `gh`, with the text joined to its flag (`--body=<text>`); Plane's comment is a `POST` whose text is
-  HTML-escaped into paragraphs, and closing is a `PATCH` to a state of its `completed` group; Linear's
-  comment and `issueUpdate` take the text and ids as GraphQL variables, never as query text, to the
-  same fixed server. A write is sent once and never retried (a retry could comment twice). Failures are
-  the same fixed lines as the reads; no key, ticket text or server word is logged. Not yet checked against
-  a live Plane or Linear server.
+- **Tickets are never written** (ADR 0011). No request changes a ticket; a retired `Query::TicketWrite` from an
+  older window is answered with a refusal before any key is read or any command runs.
 - **Extensions** (`Query::Extensions`, `daemon/extensions/`, `maitty_shared::extensions`) install code that runs with
   the person's access: a plugin ships hooks and servers, an MCP server is a command (or a remote address that hears
   the person's prompts), and neither agent asks first (`plugin install --json` simply does it). So the daemon asks.
@@ -710,8 +696,7 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   or link-local address, a name with no dots or ending `.local`/`.lan`), with its workspace and every id
   restricted to letters, digits and dashes before it enters a path; Linear's one server,
   `https://api.linear.app/graphql`, a constant that the key file cannot change. Every request in these
-  two files is a read: Plane's calls are all `GET`, Linear's are all `query`. The only writes are in
-  `daemon/tickets_write.rs` (next item). *How:*
+  two files is a read: Plane's calls are all `GET`, Linear's are all `query`. *How:*
   the system `curl` (no new dependency), with the key on its standard input as a config, never on the
   command line where `ps` shows it; `--disable` so a user's `.curlrc` cannot change it; no redirect is
   followed, so a key is never forwarded; Plane may be spoken to over http or https, Linear over https
@@ -735,11 +720,6 @@ pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
 started the daemon. Status reports (`maitty hook`) are accepted only from a
 process inside the pane (traced through its process tree) or carrying that
 pane's `MAITTY_PANE_TOKEN`, a random secret set only in that pane's environment.
-Workflow reports (`maitty workflow report`, ADR 0010) need the same token, and structured callers
-may not send one. A report is checked at the boundary (`workflow::checked`): every string loses
-control and hidden characters, names and notes have length limits, a run has at most 32 steps, and a
-ticket link must be `http` or `https`. A report never changes status, so a process in the pane can
-only mislabel its own pane's workflow view.
 Listing specialist agents (`Query::Specialists`, ADR 0010) reads only the fixed agent folders of the
 pane's repository and the user's home, never a path a client names; it is for human clients with read
 access to the pane, writes nothing, and bounds the count and size of what it returns. Names,

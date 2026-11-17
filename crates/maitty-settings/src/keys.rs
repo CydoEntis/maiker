@@ -312,9 +312,6 @@ pub enum Action {
     OpenFolderOn,
     /// The Claude Code and Codex agent files of the pane's project and home, read-only.
     Specialists,
-    /// The workflow runs of the session you're on as a board: a column per reported step, then
-    /// those that need you and those done (ADR 0010).
-    WorkBoard,
     /// Why the status of the session you're on changed, newest first.
     StatusLog,
     /// Agent sessions that closed lately, each to reopen with its conversation.
@@ -423,7 +420,6 @@ impl Action {
             Action::CloneRepo => "Clone a repository…".into(),
             Action::OpenFolderOn => "Open a folder on a machine…".into(),
             Action::Specialists => "Specialist agents…".into(),
-            Action::WorkBoard => "Work board".into(),
             Action::StatusLog => "Status log".into(),
             Action::RecentSessions => "Recent sessions…".into(),
             Action::Broadcast => "Broadcast typing to this tab".into(),
@@ -530,7 +526,6 @@ impl Action {
             Action::CloneRepo => "clone-repo".into(),
             Action::OpenFolderOn => "open-folder-on".into(),
             Action::Specialists => "specialists".into(),
-            Action::WorkBoard => "work-board".into(),
             Action::StatusLog => "status-log".into(),
             Action::RecentSessions => "recent-sessions".into(),
             Action::Broadcast => "broadcast".into(),
@@ -660,14 +655,13 @@ impl FromStr for Action {
             "clone-repo" => Action::CloneRepo,
             "open-folder-on" => Action::OpenFolderOn,
             "specialists" => Action::Specialists,
-            "work-board" => Action::WorkBoard,
             "status-log" => Action::StatusLog,
             "recent-sessions" => Action::RecentSessions,
             "broadcast" => Action::Broadcast,
             "reset-widths" => Action::ResetWidths,
-            // The fleet and the why popover are gone; a binding written for one stays
-            // harmless, not a config error.
-            "none" | "unbind" | "start-fleet" | "why" => Action::None,
+            // The fleet, the why popover and the Work board are gone; a binding written for one
+            // stays harmless, not a config error.
+            "none" | "unbind" | "start-fleet" | "why" | "work-board" => Action::None,
             _ => bail!("unknown action `{s}`"),
         })
     }

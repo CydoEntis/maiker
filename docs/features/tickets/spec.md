@@ -1,10 +1,10 @@
 # Spec: tickets in the app
 
-Type: feature · Status: in progress. The model, the read-only GitHub provider (MAITTY-392) and the read-only Plane (MAITTY-395) and Linear (MAITTY-396) providers are built, with the shared `curl` sender and the daemon's key store: `maitty_shared::tickets`, `daemon/tickets_github.rs`, `tickets_plane.rs`, `tickets_linear.rs`, `ticket_keys.rs`, `Query::Tickets` (protocol 105) and `Query::TicketKeys` (protocol 106) and `Query::TicketWrite` (protocol 107, `daemon/tickets_write.rs`, MAITTY-398) and `Query::TicketLinks` (protocol 108, `daemon/ticket_links.rs`: which sources each project reads, kept by the daemon per repository so every client and worktree shows a project the same tickets); the desktop Tickets view and Settings › Tickets are built (UI › *Tickets view*); Plane and Linear are not yet checked against a live server · Decision from MAITTY-391 · Date: 2026-11-14
+Type: feature · Status: in progress. The model, the read-only GitHub provider (MAITTY-392) and the read-only Plane (MAITTY-395) and Linear (MAITTY-396) providers are built, with the shared `curl` sender and the daemon's key store: `maitty_shared::tickets`, `daemon/tickets_github.rs`, `tickets_plane.rs`, `tickets_linear.rs`, `ticket_keys.rs`, `Query::Tickets` (protocol 105) and `Query::TicketKeys` (protocol 106) and `Query::TicketLinks` (protocol 108, `daemon/ticket_links.rs`: which sources each project reads, kept by the daemon per repository so every client and worktree shows a project the same tickets); the desktop Tickets view and Settings › Tickets are built (UI › *Tickets view*); Plane and Linear are not yet checked against a live server · Decision from MAITTY-391 · Date: 2026-11-14
 
 Read your tickets from GitHub, Plane and Linear inside Maitty: browse by project or module,
-search and filter, open one with its comments, start an agent on it, and later hand a group to
-Kitchen. Read-only apart from two confirmed writes: a comment, or "done" (MAITTY-398, built). Tickets: Plane module "Tickets in the app" (MAITTY-391 to 398, plus the grouping
+search, pick one, read it whole and start an agent on it. Read-only: the confirmed writes (MAITTY-398) and
+handing tickets to Kitchen (MAITTY-397) were removed by [ADR 0011](../../adr/0011-maitty-reads-tickets-and-shows-no-workflow-runs.md). Tickets: Plane module "Tickets in the app" (MAITTY-391 to 398, plus the grouping
 ticket filed with this spec).
 
 ## Decision: what to reuse from `feat/project-crews`
@@ -38,8 +38,7 @@ One neutral shape the window and the daemon share (pure types in `maitty-shared`
 - **Ticket**: a summary plus the body, comments (capped), links and blocked-by ids.
 - **Filter**: group, state category, assignee, label and a search text; paged.
 
-The source is read-only: `groups()`, `list(filter, page)`, `get(id)`. The two writes are a
-separate request (`TicketWrite`, below), never part of a read.
+The source is read-only: `groups()`, `list(filter, page)`, `get(id)`.
 
 | Provider | Project and module map to | Reached through | Needs a key from the user |
 | --- | --- | --- | --- |
@@ -68,29 +67,8 @@ the same selection is what MAITTY-397 hands to Kitchen.
   typed error shown to the user (signed out, key refused, unreachable, rate-limited).
 - Windows, macOS and Linux must all work; `curl` ships on each, `gh` is the user's own.
 
-## Writes (MAITTY-398)
-
-Two, and only two: add a comment, and mark a ticket done (close it). Never an edit of a ticket's own
-words, never a delete.
-
-- **Confirmed by a person.** The desktop shows the provider, the ticket and the exact text, and a
-  click on a confirm button is what sends it; closing it, or a refusal, writes nothing. The request
-  carries `confirmed: true` and the daemon refuses without it, and refuses an agent's connection
-  outright, so no pane or agent can write a ticket.
-- **What is written is what was shown.** A comment is 1 to 4,000 characters with no control, hidden or
-  tab characters; one that is not is refused, not trimmed.
-- **Through each provider's own door.** GitHub: the user's `gh issue comment` and `gh issue close`.
-  Plane: the kept key, `POST` a comment, `PATCH` the work item to a state of its completed group.
-  Linear: the kept key, `commentCreate` and `issueUpdate` to a state of type completed.
-- **Where in the window.** The ticket page's Comment… and Mark done… open a dialog that shows the provider,
-  the ticket and the exact text; only its confirm button writes (UI › *Tickets view*).
-- **Sent once.** A write is never retried. A failure is a typed error the window shows; the ticket
-  is read again after a success.
-- Plane and Linear writes are not yet checked against a live server.
-
 ## Order
 
 MAITTY-391 (this decision) → land `feat/github-repos` → GitHub provider and the model
 (MAITTY-392) → list and page (393) → start an agent (394) → Plane (395) and Linear (396) in
-parallel → group, filter and search by project or module → hand to Kitchen (397) → confirmed
-writes (398).
+parallel → group, filter and search by project or module.

@@ -17,7 +17,7 @@ use maitty_machines::remote_snapshot::sanitize_snapshot;
 use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, SignInAgent, SignInState, Snapshot, Status, TermId};
 use maitty_shared::extensions::{ExtError, ExtReply};
 use maitty_shared::settings_view::SharedSettings;
-use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWritten, TicketsReply};
+use maitty_shared::tickets::{TicketError, TicketKeyState, TicketsReply};
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
@@ -144,12 +144,6 @@ pub enum Out {
         machine: MachineId,
         tag: u64,
         answer: Result<Vec<TicketKeyState>, TicketError>,
-    },
-    /// What a confirmed write to a ticket did, or why it did nothing.
-    TicketWrite {
-        machine: MachineId,
-        tag: u64,
-        answer: Result<TicketWritten, TicketError>,
     },
     /// What a request about the extensions of this computer did, or why it did nothing.
     Extensions {
@@ -297,9 +291,6 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::TicketKeys { tag, answer }) => {
                 out.push(Out::TicketKeys { machine, tag, answer });
-            }
-            ServerMsg::Reply(Reply::TicketWrite { tag, answer }) => {
-                out.push(Out::TicketWrite { machine, tag, answer });
             }
             ServerMsg::Reply(Reply::TicketLinks { tag, answer }) => {
                 out.push(Out::TicketLinks { machine, tag, answer });

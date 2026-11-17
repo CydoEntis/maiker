@@ -405,8 +405,6 @@ impl App {
             Mode::FindSessions(v) => self.on_session_find_key(*v, &k),
             Mode::Branch(v) => self.on_branch_key(*v, &k),
             Mode::Usage => self.on_usage_key(&k),
-            Mode::Run { term, board, .. } => self.on_run_key(term, board, &k),
-            Mode::Work { term, sel } => self.on_board_key(term, sel, &k),
             Mode::StatusLog { term, top } => self.on_status_log_key(term, top, &k),
             Mode::Approved(v) => self.on_approved_key(*v, &k),
             Mode::MachineInfo(v) => self.on_machine_info_key(*v, &k),

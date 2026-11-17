@@ -193,15 +193,10 @@ command is `add_branch_worktree` (`maitty_desktop_client::branch_worktree`); it 
 setup hook may take ten, and says the service is from an older release instead of asking a daemon that would never
 answer. It is this computer's daemon only. Structured runtimes may not ask for it.
 
-`ClientMsg::WorkflowReport { term, token, run }` is a workflow's progress from a process in the pane
-(`maitty workflow report`, which reads one run as JSON from stdin; ADR 0010). The daemon takes it
-only with the pane's token, checks it (`maitty_shared::workflow::checked`), stamps `reported_at`
-and keeps it in `TermInfo.workflows`, newest first: a report replaces the earlier one with the same
-workflow and run, and a pane keeps its latest 20 runs, saved with it. It is display only and never
-changes status. It came in protocol 95 (`WORKFLOW_REPORT_SINCE`, with its arm in
-`ClientMsg::introduced_in`); `COMPATIBLE_SINCE` stays 78, since the command checks the daemon's
-version and tells the person to restart an older one instead of sending. `TermInfo.workflows` is a
-defaulted field, empty from an older daemon.
+Protocol 112 removes `ClientMsg::WorkflowReport` and `TermInfo.workflows` (ADR 0011). An older
+`maitty workflow report` is a one-shot connection whose frame the daemon cannot read, so that call
+fails and nothing else does; an older window reading a pane without `workflows` defaults it to none.
+`COMPATIBLE_SINCE` stays 78.
 
 `Query::HelperRead { term, helper }` answers `Reply::HelperRead(HelperRecord)`: what one of the pane's
 helpers did, as history entries read from its own record (Claude's side-chain file, a Codex helper's
@@ -1027,19 +1022,10 @@ cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 se
 `work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
 inverse `blocks` relations.
 
-Protocol 107 adds `Query::TicketWrite { source, id, write, confirmed, tag }` with `Reply::TicketWrite { tag, answer }`
-(`TICKET_WRITE_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in`
-arm). `write` is a `TicketWrite`: `Comment { text }` or `Close`; `source` and `id` are as for `Tickets`.
-`answer` is `Ok(TicketWritten::Commented | Closed)` or a `TicketError`. These are the only two writes, and the
-only ones the feature will have: no edit, no delete. The daemon writes only when `confirmed` is true, which a
-client sets after showing the person the provider, the ticket and the exact text; an unconfirmed request is
-answered `Invalid("The write was not confirmed")` and nothing is sent anywhere. Human clients only: a pane or a
-structured runtime gets `ServerMsg::Error`. The comment is checked by `maitty_shared::tickets::clean_comment`
-(1 to 4,000 characters, no control, hidden or tab characters; a bad one is refused, never trimmed to fit).
-GitHub runs `gh issue comment` / `gh issue close` (30 seconds); Plane `POST`s `…/issues/<id>/comments/` or
-`PATCH`es the work item to the project's first `completed` state; Linear runs `commentCreate`, or finds its
-team's first `completed` state and runs `issueUpdate`. A write is never retried. Details and limits:
-[SECURITY](SECURITY.md).
+`Query::TicketWrite` and `Reply::TicketWrite` (protocol 107, `TICKET_WRITE_SINCE`) are retired: Maitty only
+reads tickets (ADR 0011). They stay on the wire so a window from 107 to 111 that still asks gets `Reply::TicketWrite`
+with `Err(Invalid)` ("Maitty no longer changes tickets; change it in the tracker") and keeps its connection. The
+daemon writes nothing, and no client of protocol 112 asks.
 
 Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
 (`TICKET_LINKS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm).

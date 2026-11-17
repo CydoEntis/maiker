@@ -85,7 +85,7 @@ fn tag_of(msgs: &[ClientMsg], want: impl Fn(&Query) -> bool) -> u64 {
     msgs.iter()
         .find_map(|m| match m {
             ClientMsg::Query(q) if want(q) => Some(match q {
-                Query::Tickets { tag, .. } | Query::TicketKeys { tag, .. } | Query::TicketWrite { tag, .. } | Query::TicketLinks { tag, .. } => *tag,
+                Query::Tickets { tag, .. } | Query::TicketKeys { tag, .. } | Query::TicketLinks { tag, .. } => *tag,
                 _ => 0,
             }),
             _ => None,
@@ -502,64 +502,16 @@ fn starting_an_agent_shows_what_is_sent_and_only_y_starts_it() {
 }
 
 #[test]
-fn sending_to_the_session_in_front_is_a_follow_up_after_its_review() {
+fn a_ticket_is_only_read_and_started_never_changed_or_sent_from_here() {
     let (mut app, mut rx) = on_ticket();
     sent(&mut rx);
-    key(&mut app, KeyCode::Char('t'));
-    assert!(frame(&mut app, "send").contains("Exactly what will be sent"));
-    key(&mut app, KeyCode::Char('y'));
-    assert!(sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Command(Command::QueueFollowUp { text, .. }) if text.contains("> Steps:"))));
-}
-
-#[test]
-fn a_comment_is_reviewed_and_written_only_on_y() {
-    let (mut app, mut rx) = on_ticket();
-    sent(&mut rx);
-    key(&mut app, KeyCode::Char('c'));
-    typed(&mut app, "Fixed in");
-    key(&mut app, KeyCode::Enter);
-    typed(&mut app, "#150");
-    frame(&mut app, "comment");
-    key(&mut app, KeyCode::Tab);
-    let shown = frame(&mut app, "review");
-    assert!(shown.contains("Post this comment to GitHub #142?") && shown.contains("Exactly what will be written"), "{shown}");
-    key(&mut app, KeyCode::Enter);
-    assert!(sent(&mut rx).is_empty(), "Enter writes nothing");
-    key(&mut app, KeyCode::Char('y'));
-    let msgs = sent(&mut rx);
-    let tag = tag_of(&msgs, |q| matches!(q, Query::TicketWrite { confirmed: true, write: TicketWrite::Comment { text }, .. } if text == "Fixed in\n#150"));
-    app.on_machine_server(MachineId::LOCAL, ServerMsg::Reply(Reply::TicketWrite { tag, answer: Err(TicketError::SignedOut) }));
-    let shown = frame(&mut app, "refused");
-    assert!(shown.contains("Not written.") && shown.contains("not signed in"), "{shown}");
-    key(&mut app, KeyCode::Char('y'));
-    let tag = tag_of(&sent(&mut rx), |q| matches!(q, Query::TicketWrite { .. }));
-    app.on_machine_server(MachineId::LOCAL, ServerMsg::Reply(Reply::TicketWrite { tag, answer: Ok(TicketWritten::Commented) }));
-    let msgs = sent(&mut rx);
-    assert!(msgs.iter().any(|m| matches!(m, ClientMsg::Query(Query::Tickets { request: TicketsRequest::Get { .. }, .. }))), "the ticket is read again");
-    assert!(frame(&mut app, "written").contains("commented on #142"));
-}
-
-#[test]
-fn an_empty_comment_is_refused_before_any_review() {
-    let (mut app, mut rx) = on_ticket();
-    sent(&mut rx);
-    key(&mut app, KeyCode::Char('c'));
-    key(&mut app, KeyCode::Tab);
-    assert!(frame(&mut app, "empty").contains("The comment is empty"));
-    assert!(sent(&mut rx).is_empty());
-}
-
-#[test]
-fn marking_done_goes_straight_to_its_review() {
-    let (mut app, mut rx) = on_ticket();
-    sent(&mut rx);
-    key(&mut app, KeyCode::Char('d'));
-    assert!(frame(&mut app, "done?").contains("Mark #142 done on GitHub?"));
-    key(&mut app, KeyCode::Esc);
-    assert!(sent(&mut rx).is_empty(), "Esc writes nothing");
-    key(&mut app, KeyCode::Char('d'));
-    key(&mut app, KeyCode::Char('y'));
-    assert!(sent(&mut rx).iter().any(|m| matches!(m, ClientMsg::Query(Query::TicketWrite { write: TicketWrite::Close, confirmed: true, .. }))));
+    let shown = frame(&mut app, "ticket");
+    assert!(!shown.contains("mark done") && !shown.contains("send to session"), "{shown}");
+    for gone in ['c', 'd', 't'] {
+        key(&mut app, KeyCode::Char(gone));
+        key(&mut app, KeyCode::Char('y'));
+        assert!(sent(&mut rx).is_empty(), "{gone} then y sends nothing");
+    }
 }
 
 #[test]

@@ -32,8 +32,7 @@ and you can use either one, or both at once:
   buttons, queue messages while it works, name files with `@`, review what each turn changed, and
   undo a turn's file changes with **Edit from here**. Its terminal is one click away.
 - **See its helpers work.** When an agent starts a subagent, such as a reviewer or a builder, it
-  shows under its session with its own steps, live. A workflow (a "software factory") can show
-  its steps and ticket too, with one command. See [Specialists and workflows](docs/workflows.md).
+  shows under its session with its own steps, live. See [Specialists and workflows](docs/workflows.md).
 - **Each agent in its own branch.** New agents get their own Git worktree, so they never edit the
   same files. Review the diff, commit, merge or open a pull request without leaving.
 - **A side panel for the code.** Files, Changes and the agent's terminals open beside your panes.
@@ -185,19 +184,9 @@ Each of these is optional. Open the one you need.
   The desktop app's session menu lists a project's under **Specialist agents…**.
 - **Subagents** show under their session, live, with their own steps. Nothing to set up beyond
   [connecting your agents](#connect-your-agents).
-- **Workflows** (any factory, or a pipeline of your own) show their steps and ticket by sending their
-  progress to one command, from anywhere inside the session:
-
-```sh
-echo '{ "workflow": "my-factory", "run": "job-42",
-        "steps": [ { "name": "build", "state": "working", "helper": "builder" },
-                   { "name": "review", "state": "waiting", "helper": "reviewer" } ] }' \
-  | maitty workflow report
-```
-
-Maitty never runs a workflow or reads its files; the workflow tells Maitty where it is. Every
-field, the step states, and how a step links to its subagent are in
-[Specialists and workflows](docs/workflows.md).
+- **Workflows** (any factory, or a pipeline of your own) run inside a session like any other work;
+  their helpers show as subagents. Maitty never runs a workflow, reads its files or shows its steps.
+  See [Specialists and workflows](docs/workflows.md).
 
 </details>
 
@@ -314,7 +303,6 @@ maitty ls --json                       # every session and its status
 maitty send -p 3 "run the tests"       # message a session
 maitty read 3                          # read its screen
 maitty handoff 3 --to codex            # hand a task to another agent
-maitty workflow report < run.json      # show a workflow's steps (docs/workflows.md)
 ```
 
 ## Configure
@@ -349,7 +337,7 @@ Every option is described in [`config.example.toml`](config.example.toml).
 ## Learn more
 
 - [Guide](docs/guide.md): sessions, panes, alerts, checks, worktrees, machines, the desktop chat and more.
-- [Specialists and workflows](docs/workflows.md): subagents, and showing any workflow's steps.
+- [Specialists and workflows](docs/workflows.md): specialists, subagents, and what Maitty shows of a workflow.
 - [Shortcuts](docs/shortcuts.md): every key, by screen.
 - [Agent status](docs/agent-status.md): how status is detected and what each integration adds.
 - [Features](docs/FEATURES.md): what Maitty has, and what it leaves out on purpose.

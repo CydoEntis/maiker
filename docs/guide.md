@@ -125,8 +125,7 @@ helpers_at_once` is set. The commander and `[team]` jobs are gone; an old `confi
 still has them loads, and they are ignored.
 
 Agents can also start their own subagents (Claude Code and Codex specialists). Those show under
-their session with their own steps, and a workflow can show its progress there too: see
-[Specialists and workflows](workflows.md).
+their session with their own steps: see [Specialists and workflows](workflows.md).
 
 ## Panes are real terminals
 
@@ -979,12 +978,6 @@ terminal it is the same session: switching between the Chat and Terminal tabs in
 Maitty's background service runs, see [Worktrees](#worktrees), has no terminal.) This part is about working in the chat and
 checking what the agent did. What the status marks mean is in [What a session's status
 means](#what-a-sessions-status-means).
-
-A session running a workflow that reports to Maitty (`maitty workflow report`) also gets **Work** in that switch, with
-the number of runs going and an amber square when one needs you. Work shows its runs as a board: one column per step,
-each ticket in the step it is on. Finished runs are hidden until you choose **Show**. Click a ticket to see its steps in
-a drawer, with **Open ticket**; click a step's helper to see what that helper was asked and is doing. Maitty only shows
-the runs; the workflow itself decides every step.
 
 ### Starting a chat
 

@@ -2122,22 +2122,19 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             "{told:?}"
         );
 
-        // A write needs a person: a pane is refused even when it says it was confirmed, and a person's
-        // client that did not confirm is answered with a refusal and nothing is written.
-        let close = |confirmed| Query::TicketWrite {
+        // Tickets are read-only (ADR 0011): a window from before that still asks for a write, even a
+        // confirmed one, is told so with its tag and keeps its connection.
+        let close = Query::TicketWrite {
             source: "me/widgets".into(),
             id: "github:me/widgets#1".into(),
             write: maitty_shared::tickets::TicketWrite::Close,
-            confirmed,
+            confirmed: true,
             tag: 9,
         };
-        let from = authenticated_pane(&mut session);
-        let refused = exchange(&mut session, 461, crate::protocol::ClientMsg::Query(close(true)), Some(from)).await;
-        assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
-        let unconfirmed = exchange(&mut session, 462, crate::protocol::ClientMsg::Query(close(false)), None).await;
+        let told = exchange(&mut session, 462, crate::protocol::ClientMsg::Query(close), None).await;
         assert!(
-            matches!(unconfirmed, ServerMsg::Reply(crate::protocol::Reply::TicketWrite { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(_)) })),
-            "{unconfirmed:?}"
+            matches!(told, ServerMsg::Reply(crate::protocol::Reply::TicketWrite { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(ref why)) }) if why.contains("no longer")),
+            "{told:?}"
         );
 
         // Installing code is a person's: a pane is refused, and a person's client with no preview token is

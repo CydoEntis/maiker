@@ -1,7 +1,6 @@
 //! Plane work items as tickets, read over Plane's REST API with the user's own key: the projects
 //! and modules, a page of a project's or module's work items, one work item with its comments.
-//! Read-only: no request here creates, edits, comments on or moves anything (the confirmed writes
-//! are `tickets_write`). The key and the server
+//! Read-only: no request here creates, edits, comments on or moves anything (ADR 0011). The key and the server
 //! come from `ticket_keys`; the request is sent by an `Http` (the system `curl`, with the key on its
 //! standard input), and the address has to pass `check_base_url` on every call.
 //!

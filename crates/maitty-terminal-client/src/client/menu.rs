@@ -108,8 +108,6 @@ pub enum Act {
     Resume(PathBuf, String, String),
     /// Start a closed session again with its conversation: (agent, the agent's id for it).
     Reopen(String, String),
-    /// The Work board of this session's workflow runs.
-    Board(ClientTerm),
     /// Why this session's status changed.
     StatusLog(ClientTerm),
     /// A row saying the list is on its way; picking it only closes the menu.
@@ -555,9 +553,6 @@ impl App {
         if let Some(check) = info.and_then(|t| t.check()) {
             items.extend(super::screen::check_menu_items(term, check));
         }
-        if info.is_some_and(|t| !t.workflows.is_empty()) {
-            items.push(("Work board".to_string(), Act::Board(term)));
-        }
         if info.is_some_and(|t| !t.timeline.is_empty()) {
             items.push(("Status log".to_string(), Act::StatusLog(term)));
         }
@@ -939,7 +934,6 @@ impl App {
             Act::MachineInfo(machine) => self.open_machine_info(machine),
             Act::Resume(dir, agent, id) => self.resume_saved(dir, &agent, &id),
             Act::Reopen(agent, session) => self.reopen_closed(agent, session),
-            Act::Board(term) => self.open_board_of(term),
             Act::StatusLog(term) => self.mode = Mode::StatusLog { term, top: 0 },
             Act::Waiting => {}
             // A terminal that belongs to a chat is named through the chat, so every client

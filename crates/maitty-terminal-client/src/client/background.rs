@@ -457,15 +457,12 @@ impl App {
             ServerMsg::Reply(Reply::Search(hits)) if machine == MachineId::LOCAL => {
                 self.pane_search_arrived(hits)
             }
-            // Tickets are read and written through this computer's daemon only.
+            // Tickets are read through this computer's daemon only.
             ServerMsg::Reply(Reply::Tickets { tag, answer }) if machine == MachineId::LOCAL => {
                 self.tickets_arrived(tag, answer)
             }
             ServerMsg::Reply(Reply::TicketKeys { tag, answer }) if machine == MachineId::LOCAL => {
                 self.ticket_keys_arrived(tag, answer)
-            }
-            ServerMsg::Reply(Reply::TicketWrite { tag, answer }) if machine == MachineId::LOCAL => {
-                self.ticket_write_arrived(tag, answer)
             }
             ServerMsg::Reply(Reply::TicketLinks { tag, answer }) if machine == MachineId::LOCAL => {
                 self.ticket_links_arrived(tag, answer)

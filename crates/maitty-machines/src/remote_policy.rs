@@ -478,36 +478,6 @@ mod tests {
     }
 
     #[test]
-    fn a_remote_step_offers_only_a_few_short_answers() {
-        use maitty_shared::protocol::TermInfo;
-        use maitty_shared::workflow::{CHOICE_MAX_CHARS, CHOICES_MAX};
-        let step = |state: &str| serde_json::json!({
-            "name": state, "state": state,
-            "choices": ["Approve", "x".repeat(CHOICE_MAX_CHARS + 9), "c", "d", "e", "f"],
-        });
-        let pane: TermInfo = serde_json::from_value(serde_json::json!({
-            "id": 3, "cols": 80, "rows": 24, "title": "", "process": "", "agent": "claude",
-            "status": "Working", "cwd": "/code", "summary": "", "name": "", "model": "", "said": "",
-            "branch": null, "linked": false, "subagents": [], "root": null, "top": null,
-            "since": 0, "asleep": false, "win32_input": false,
-            "workflows": [{ "workflow": "factory", "run": "1", "steps": [step("needs_you"), step("passed")] }],
-        }))
-        .expect("a pane");
-        let Some(ServerMsg::TermsChanged { changed, .. }) = vet(
-            &nothing_on(),
-            false,
-            "box",
-            ServerMsg::TermsChanged { changed: vec![pane], removed: Vec::new(), reasons: Default::default(), revision: 0 },
-        ) else {
-            panic!("a pane delta is applied");
-        };
-        let steps = &changed[0].workflows[0].steps;
-        assert_eq!(steps[0].choices.len(), CHOICES_MAX);
-        assert_eq!(steps[0].choices[1].chars().count(), CHOICE_MAX_CHARS);
-        assert!(steps[1].choices.is_empty(), "a step that does not wait on you offers nothing");
-    }
-
-    #[test]
     fn the_question_another_machines_agent_asks_is_cleaned_before_it_is_shown() {
         use maitty_shared::protocol::TermInfo;
         let pane: TermInfo = serde_json::from_value(serde_json::json!({
