@@ -328,6 +328,11 @@ jobs:
           - { os: macos-15, shell: sh }
           - { os: windows-latest, shell: pwsh }
           - { os: windows-latest, shell: powershell }
+    # A step's own `shell:` takes no expressions (GitHub rejects the whole file, and every push then shows a failed
+    # run with no jobs); a job's default shell does.
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -352,7 +357,6 @@ jobs:
           ~/.local/bin/$APP verify-release release-files/sha256sums.txt
       - name: install.ps1
         if: matrix.shell != 'sh'
-        shell: ${{ matrix.shell }}
         run: |
           ./install.ps1
           $exe = "$env:LOCALAPPDATA\Programs\$env:APP\$env:APP.exe"
