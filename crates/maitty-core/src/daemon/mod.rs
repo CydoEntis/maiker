@@ -4,6 +4,8 @@
 //! scanner, background git work and client connections talk to it through a single
 //! channel, so there is no locking around the model.
 
+mod agent_commands;
+mod agent_sign_in;
 mod approvals;
 mod branch_agent;
 mod check;
@@ -16,6 +18,7 @@ mod commit;
 mod commands;
 mod contain;
 mod conversation;
+mod extensions;
 mod folders;
 mod git;
 mod git_identity;
@@ -54,11 +57,9 @@ mod tickets;
 mod tickets_github;
 mod tickets_linear;
 mod tickets_plane;
-mod tickets_write;
 mod usage;
 mod usage_store;
 mod warm;
-mod workflow;
 mod worktrees;
 
 use crate::brand::APP_COMMAND;
@@ -80,7 +81,12 @@ use tokio::sync::mpsc;
 
 type ClientId = u64;
 
+/// What a client that fell too far behind is told as it is let go.
+const LAGGED_REASON: &str = "This window fell too far behind the service and was let go; it connects again for a fresh copy.";
 /// How often the daemon looks at its timers (statuses, saves and git).
+/// What a window from before tickets became read-only is told when it asks to change one.
+const TICKET_WRITE_RETIRED: &str = "Maitty no longer changes tickets; change it in the tracker";
+
 const TICK: Duration = Duration::from_millis(250);
 const INTEGRATION_STARTUP_GRACE: Duration = Duration::from_secs(3);
 /// How often each workspace's git state is read again.
@@ -213,7 +219,7 @@ pub enum Ev {
         limits: Option<Vec<Limit>>,
     },
     /// The effort each agent's own files say it runs at (`usage::poll_effort`).
-    AgentEffort(Vec<(TermId, Option<String>)>),
+    AgentEffort(Vec<(TermId, Option<String>, Option<String>)>),
     /// A worktree made for an agent started from a shell (`Command::AgentWorktree`).
     AgentWorktreeMade {
         client: ClientId,
@@ -462,6 +468,8 @@ struct Daemon {
     secrets: secrets::Secrets,
     /// When each project's ticket setup was last opened for an agent.
     ticket_setups: ticket_setup::Shown,
+    /// The agents' sign-ins this daemon runs on a window's request.
+    sign_ins: agent_sign_in::SignIns,
     prs: pr::Prs,
     last_secret_files: Instant,
     git_busy: bool,
@@ -776,9 +784,12 @@ async fn serve(
             let msg = for_client(msg, theirs);
             let bye = matches!(msg, ServerMsg::Bye);
             if ipc::send(&mut w, &msg).await.is_err() || bye {
-                break;
+                return;
             }
         }
+        // The daemon let go of it (`drop_lagging_clients`): its queue was full, so the reason
+        // can only go out here, after the backlog. Without it the window sees a bare drop.
+        let _ = ipc::send(&mut w, &ServerMsg::Error(LAGGED_REASON.into())).await;
     });
     loop {
         tokio::select! {
@@ -1329,6 +1340,7 @@ impl Daemon {
             questions: Vec::new(),
             secrets: secrets::Secrets::default(),
             ticket_setups: ticket_setup::Shown::default(),
+            sign_ins: agent_sign_in::SignIns::default(),
             prs: pr::Prs::default(),
             last_secret_files: Instant::now(),
             git_busy: false,
@@ -2665,10 +2677,8 @@ impl Daemon {
             let allowed = match &msg {
                 ClientMsg::Query(_) => self.may(client, Grant::Read, None),
                 ClientMsg::Resize { .. } => self.may(client, Grant::Write, None),
-                ClientMsg::Hook { .. }
-                | ClientMsg::Usage { .. }
-                | ClientMsg::WorkflowReport { .. } => Err(anyhow::anyhow!(
-                    "Structured callers cannot report pane status, usage or workflows"
+                ClientMsg::Hook { .. } | ClientMsg::Usage { .. } => Err(anyhow::anyhow!(
+                    "Structured callers cannot report pane status or usage"
                 )),
                 _ => Ok(()),
             };
@@ -2784,22 +2794,6 @@ impl Daemon {
                     .is_some_and(|t| term::same_secret(&t.token, &token))
                 {
                     self.report_usage(term, usage, limits);
-                }
-            }
-            ClientMsg::WorkflowReport { term, token, run } => {
-                let Some(t) = self.terms.get_mut(&term) else {
-                    return;
-                };
-                if !term::same_secret(&t.token, &token) {
-                    tracing::info!("ignoring a workflow report for pane {term} without its secret");
-                    return;
-                }
-                match maitty_shared::workflow::checked(run) {
-                    Ok(run) => {
-                        workflow::record(&mut t.workflows, run, term::unix_now());
-                        self.dirty = true;
-                    }
-                    Err(reason) => tracing::info!("pane {term}: workflow report refused: {reason}"),
                 }
             }
             ClientMsg::Command(cmd) => {
@@ -3151,12 +3145,35 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can clone a repository".into())
                     }
+                    Query::AgentSignIn { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can sign an agent in".into())
+                    }
                     Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
                         }) =>
                     {
                         ServerMsg::Error("Only a human client can ask about this machine's GitHub account".into())
+                    }
+                    Query::AgentCommands { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can list an agent's commands on this machine".into())
+                    }
+                    Query::AgentCommands { agent, folder, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::spawn(async move {
+                            let answer = agent_commands::answer(agent, folder).await;
+                            let reply = Reply::AgentCommands { tag, answer };
+                            let _ = tx.send(Ev::Answered { client, reply }).await;
+                        });
+                        return;
                     }
                     Query::Tickets { .. }
                         if self.clients.get(&client).is_some_and(|client| {
@@ -3172,12 +3189,29 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can keep a ticket provider's key".into())
                     }
-                    Query::TicketWrite { .. }
+                    // Retired: Maitty only reads tickets. The request stays on the wire so a window from
+                    // before is told so, rather than losing its connection over an unknown message.
+                    Query::TicketWrite { tag, .. } => ServerMsg::Reply(Reply::TicketWrite {
+                        tag,
+                        answer: Err(maitty_shared::tickets::TicketError::Invalid(
+                            TICKET_WRITE_RETIRED.into(),
+                        )),
+                    }),
+                    Query::Extensions { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
                         }) =>
                     {
-                        ServerMsg::Error("Only a human client can write to a ticket".into())
+                        ServerMsg::Error("Only a human client can change the extensions of this machine".into())
+                    }
+                    Query::Extensions { request, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = extensions::answer(request);
+                            let reply = Reply::Extensions { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
                     }
                     Query::TicketLinks { .. }
                         if self.clients.get(&client).is_some_and(|client| {
@@ -3191,15 +3225,6 @@ impl Daemon {
                         tokio::task::spawn_blocking(move || {
                             let answer = ticket_links::change(&ticket_links::LinkStore::real(), place, change, ticket_links::main_checkout, &ticket_links::RepoFiles::real());
                             let reply = Reply::TicketLinks { tag, answer };
-                            let _ = tx.blocking_send(Ev::Answered { client, reply });
-                        });
-                        return;
-                    }
-                    Query::TicketWrite { source, id, write, confirmed, tag } => {
-                        let tx = self.tx.clone();
-                        tokio::task::spawn_blocking(move || {
-                            let answer = tickets_write::perform(&source, &id, write, confirmed);
-                            let reply = Reply::TicketWrite { tag, answer };
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
@@ -3264,6 +3289,14 @@ impl Daemon {
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
+                    }
+                    Query::AgentSignIn { agent, request, tag } => {
+                        let state = match request {
+                            SignInRequest::Start => self.sign_ins.start(agent, agent_sign_in::cli_for(agent)),
+                            SignInRequest::Cancel => self.sign_ins.cancel(agent),
+                            SignInRequest::Read => self.sign_ins.read(agent),
+                        };
+                        ServerMsg::Reply(Reply::AgentSignIn { tag, agent, state })
                     }
                     Query::GitHubAccounts { tag } => {
                         let tx = self.tx.clone();
@@ -3691,7 +3724,6 @@ impl Daemon {
                         queued: t.queue.iter().cloned().collect(),
                         own_turn_over: t.own_turn_over,
                         subagent_activity: t.subagent_activity.clone(),
-                        workflows: t.workflows.clone(),
                         session: t.session.clone(),
                     },
                 )

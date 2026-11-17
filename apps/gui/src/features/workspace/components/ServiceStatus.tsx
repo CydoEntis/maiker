@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { RECONNECT_TRIES, serviceStateOf, tryNumber } from '../model/serviceState'
 import { OfflineBanner, type AppBehindOffer, type RestartOffer } from './states'
 
@@ -40,11 +40,33 @@ const POWER = <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke
 const RESTART = <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></svg>
 
 /** The veil over the main card, and the glass card centred on it. The chat behind stays faintly visible but cannot be used. */
-function ServiceLayer({ children }: { children: ReactNode }) {
+/**
+ * A card over a veil behaves as a modal one: Tab stays among its buttons and Esc is Later. `labelledBy` is its heading's id.
+ * It stays in the chat column rather than in the shared Dialog's window-wide portal, which would cover the sidebar too.
+ */
+function ServiceLayer({ children, labelledBy, onLater }: { children: ReactNode; labelledBy: string; onLater: () => void }) {
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onLater()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+    const [first, last] = [buttons[0], buttons[buttons.length - 1]]
+    if (first === undefined || last === undefined) return
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
   return (
     <>
       <div className="mx-service-veil" aria-hidden="true" />
-      <div className="mx-service-layer">{children}</div>
+      <section className="mx-service-layer" aria-labelledby={labelledBy} onKeyDown={onKeyDown}>{children}</section>
     </>
   )
 }
@@ -56,15 +78,14 @@ const plural = (count: number, one: string, many: string): string => `${String(c
  * because nothing is lost: it says so, and Restart service starts it again. Details holds the technical words and the log.
  */
 function ServiceDownBanner({ detail, onStart, onRetry, onOpenLog }: { detail: string | null; onStart: () => void; onRetry: () => void; onOpenLog: () => void }) {
+  // Not focused when it shows: it sits beside what you were typing in, and your next Enter must not restart the service.
   const [details, setDetails] = useState(false)
-  const first = useRef<HTMLButtonElement>(null)
-  useEffect(() => { first.current?.focus() }, [])
   return (
     <section className="mx-banner is-danger" aria-label="Maitty service stopped">
       <div className="mx-banner-row">
         <span className="mx-banner-icon" aria-hidden="true">{POWER}</span>
         <p className="mx-banner-text"><strong>Maitty service stopped.</strong> <span>Chats are paused and nothing is lost. Restart to pick up where they left off.</span></p>
-        <button ref={first} type="button" className="mx-banner-primary" onClick={onStart}>Restart service</button>
+        <button type="button" className="mx-banner-primary" onClick={onStart}>Restart service</button>
         <button type="button" className="mx-banner-ghost" aria-expanded={details} onClick={() => { setDetails(!details) }}>Details</button>
       </div>
       {details && (
@@ -111,8 +132,8 @@ function ServiceUpdateCard({ restart, onLater }: { restart: RestartOffer | null;
   useEffect(() => { first.current?.focus() }, [])
   const facts = restart ? restartFacts(restart) : []
   return (
-    <ServiceLayer>
-      <section className="mx-service-card" aria-labelledby="mx-service-update-title">
+    <ServiceLayer labelledBy="mx-service-update-title" onLater={onLater}>
+      <div className="mx-service-card">
         <div className="mx-service-head">
           <span className="mx-service-tile is-accent" aria-hidden="true">{RESTART}</span>
           <div className="mx-service-copy">
@@ -147,7 +168,7 @@ function ServiceUpdateCard({ restart, onLater }: { restart: RestartOffer | null;
           <button type="button" className="mx-svc-secondary" onClick={onLater}>Later</button>
           {restart && <span className="mx-service-versions mono">protocol {restart.from} → {restart.to}</span>}
         </div>
-      </section>
+      </div>
     </ServiceLayer>
   )
 }
@@ -157,8 +178,8 @@ function AppBehindCard({ offer, sessions, onLater }: { offer: AppBehindOffer; se
   const first = useRef<HTMLButtonElement>(null)
   useEffect(() => { first.current?.focus() }, [])
   return (
-    <ServiceLayer>
-      <section className="mx-service-card" aria-labelledby="mx-service-behind-title">
+    <ServiceLayer labelledBy="mx-service-behind-title" onLater={onLater}>
+      <div className="mx-service-card">
         <div className="mx-service-head">
           <span className="mx-service-tile is-accent" aria-hidden="true">{RESTART}</span>
           <div className="mx-service-copy">
@@ -171,7 +192,7 @@ function AppBehindCard({ offer, sessions, onLater }: { offer: AppBehindOffer; se
           <button type="button" className="mx-svc-secondary" onClick={onLater}>Later</button>
           <span className="mx-service-versions mono">protocol {offer.appProtocol} → {offer.serviceProtocol}</span>
         </div>
-      </section>
+      </div>
     </ServiceLayer>
   )
 }

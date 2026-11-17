@@ -345,12 +345,7 @@ mod tests {
         std::fs::create_dir_all(bin).unwrap();
         let program = bin.join("gh");
         let script = "#!/bin/sh\nuser=\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = --user ]; then user=\"$2\"; fi\n  shift\ndone\necho \"token-for-$user\"\n";
-        std::fs::write(&program, script).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
+        crate::test_support::write_program(&program, script);
     }
 
     #[test]

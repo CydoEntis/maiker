@@ -138,7 +138,7 @@ pub struct TicketPage {
     pub more: bool,
 }
 
-/// What a client asks of a ticket source to read. A write is `TicketWrite`, asked apart.
+/// What a client asks of a ticket source to read.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TicketsRequest {
     Groups,
@@ -153,50 +153,19 @@ pub enum TicketsReply {
     Ticket(Box<Ticket>),
 }
 
-/// The only two things that change a ticket, and only after a person confirmed them: never an edit
-/// of a ticket's own words, never a delete.
+/// What a window from versions 107 to 112 may still ask to change in a ticket. Retired (ADR 0011):
+/// the daemon refuses every one, so this only keeps that request readable.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TicketWrite {
-    /// Add a comment saying `text`, exactly as `clean_comment` leaves it.
     Comment { text: String },
-    /// Move the ticket to the provider's finished state.
     Close,
 }
 
-/// What a confirmed write did.
+/// What a retired write would have answered when it worked; kept so the reply's shape is unchanged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TicketWritten {
     Commented,
     Closed,
-}
-
-impl TicketWrite {
-    /// This write if it is fit to send: a comment is checked by `clean_comment` and put in its
-    /// clean form, so what a person confirmed on screen is what is sent.
-    pub fn checked(self) -> Result<TicketWrite, TicketError> {
-        match self {
-            TicketWrite::Comment { text } => Ok(TicketWrite::Comment { text: clean_comment(&text)? }),
-            TicketWrite::Close => Ok(TicketWrite::Close),
-        }
-    }
-}
-
-/// A comment as it will be sent: its line breaks are `\n` and its ends are trimmed. Refused, never
-/// quietly changed, when it is empty, over `TICKET_COMMENT_MAX_CHARS`, or holds a control or hidden
-/// character (a tab included), so the text a person confirmed is the text written.
-pub fn clean_comment(text: &str) -> Result<String, TicketError> {
-    let text = text.replace("\r\n", "\n");
-    let text = text.trim();
-    if text.is_empty() {
-        return Err(TicketError::Invalid("The comment is empty".into()));
-    }
-    if text.chars().count() > TICKET_COMMENT_MAX_CHARS {
-        return Err(TicketError::Invalid(format!("The comment is longer than {TICKET_COMMENT_MAX_CHARS} characters")));
-    }
-    if sanitize(text, true) != text {
-        return Err(TicketError::Invalid("The comment has a tab, control or hidden character".into()));
-    }
-    Ok(text.to_owned())
 }
 
 /// A provider that keeps tickets behind a key the user adds. GitHub is not one: it is read through
@@ -547,18 +516,5 @@ mod tests {
     fn an_error_line_is_one_clean_line() {
         let error = TicketError::Unreachable("no\u{1b}[0m\nway".into()).cleaned();
         assert_eq!(error, TicketError::Unreachable("no[0m way".into()));
-    }
-
-    #[test]
-    fn a_comment_is_trimmed_and_refused_when_empty_long_or_hiding_something() {
-        assert_eq!(clean_comment("  hello\r\nworld \n").unwrap(), "hello\nworld");
-        let long = "x".repeat(TICKET_COMMENT_MAX_CHARS);
-        assert_eq!(clean_comment(&long).unwrap().len(), TICKET_COMMENT_MAX_CHARS);
-        for bad in ["", " \n ", "tab\there", "esc\u{1b}[31m", "zero\u{200b}width", "bidi\u{202e}", &format!("{long}x")] {
-            assert!(matches!(clean_comment(bad), Err(TicketError::Invalid(_))), "{bad:?}");
-        }
-        assert_eq!(TicketWrite::Close.checked(), Ok(TicketWrite::Close));
-        assert!(TicketWrite::Comment { text: " ".into() }.checked().is_err());
-        assert_eq!(TicketWrite::Comment { text: " hi ".into() }.checked(), Ok(TicketWrite::Comment { text: "hi".into() }));
     }
 }

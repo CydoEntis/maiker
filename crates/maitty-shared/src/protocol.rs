@@ -4,7 +4,6 @@
 //! the workspace / tab / pane tree; clients render `Snapshot`s and send `Command`s.
 
 use crate::layout::{Dir, Node};
-use crate::workflow::WorkflowRun;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -12,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 109;
+pub const PROTOCOL_VERSION: u32 = 113;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -138,9 +137,6 @@ pub const CLOSED_SESSIONS_MAX: usize = 50;
 /// The first version whose daemon reopens a closed session (`Command::ReopenClosedSession`).
 pub const REOPEN_CLOSED_SINCE: u32 = 87;
 
-/// The first version whose daemon takes a workflow's progress (`ClientMsg::WorkflowReport`).
-pub const WORKFLOW_REPORT_SINCE: u32 = 95;
-
 /// The first version whose daemon reads a helper's own record (`Query::HelperRead`).
 pub const HELPER_READ_SINCE: u32 = 95;
 
@@ -187,6 +183,10 @@ pub struct ClosedSession {
 /// rule on request (`Query::GitIdentityRule`).
 pub const GIT_RULES_SINCE: u32 = 103;
 
+/// The first version whose daemon lists an agent's slash commands and skills on request
+/// (`Query::AgentCommands`). 110 and 111 belong to changes that landed beside it.
+pub const AGENT_COMMANDS_SINCE: u32 = 112;
+
 /// The first version whose daemon reads the tickets of a source on request (`Query::Tickets`).
 pub const TICKETS_SINCE: u32 = 105;
 
@@ -194,8 +194,8 @@ pub const TICKETS_SINCE: u32 = 105;
 /// (`Query::TicketKeys`).
 pub const TICKET_KEYS_SINCE: u32 = 106;
 
-/// The first version whose daemon writes a confirmed comment or a close to a ticket
-/// (`Query::TicketWrite`).
+/// The first version whose daemon answered `Query::TicketWrite`. Since 113 the answer is always
+/// that tickets are read-only (ADR 0011).
 pub const TICKET_WRITE_SINCE: u32 = 107;
 
 /// The first version whose daemon keeps which ticket sources each project reads
@@ -206,6 +206,10 @@ pub const TICKET_LINKS_SINCE: u32 = 108;
 /// windows (`Command::OpenTicketSetup`, `ServerMsg::TicketSetup`) and reads a repository's
 /// `.maitty/tickets.toml` (`TicketLinks::repo_file`).
 pub const TICKET_SETUP_SINCE: u32 = 109;
+
+/// The first version whose daemon lists, adds, switches and removes the skills, plugins, MCP
+/// servers and marketplaces of Claude Code and Codex on request (`Query::Extensions`).
+pub const EXTENSIONS_SINCE: u32 = 110;
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
@@ -336,6 +340,72 @@ pub const GITHUB_LIST_LIMIT_SECS: u64 = 30;
 /// GitHub's own sign-in, as a terminal session runs it: the person finishes it there and in their
 /// browser. Both clients start exactly this line; nothing a window sends is part of it.
 pub const GITHUB_SIGN_IN_COMMAND: &str = "gh auth login --web --git-protocol https";
+
+/// The first version whose daemon signs an agent in on request (`Query::AgentSignIn`).
+pub const AGENT_SIGN_IN_SINCE: u32 = 111;
+
+/// The longest sign-in link a reply carries, in bytes. A longer one is dropped, not cut.
+pub const SIGN_IN_LINK_MAX_BYTES: usize = 2048;
+
+/// The longest one-time code a reply carries, in characters.
+pub const SIGN_IN_CODE_MAX_CHARS: usize = 24;
+
+/// An agent whose account the daemon can sign in with the agent's own command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SignInAgent {
+    Claude,
+    Codex,
+    /// Named so the answer can say plainly that its command line has no sign-in to run.
+    Gemini,
+}
+
+/// What a client asks of an agent's sign-in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SignInRequest {
+    /// Run the agent's own login in the background. Asked while one is already running, it
+    /// answers with that one rather than starting a second.
+    Start,
+    /// Stop the login that is running. Nothing running is not an error.
+    Cancel,
+    /// Say where the sign-in stands, changing nothing.
+    Read,
+}
+
+/// Why a sign-in did not end signed in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SignInFailure {
+    /// The agent's command line is not on this computer.
+    NotInstalled,
+    /// The agent's command line has no sign-in a program can run.
+    Unsupported,
+    /// The command could not be started.
+    CouldNotStart,
+    /// Nobody finished it in time.
+    TimedOut,
+    /// The command ended, or the agent still says it is signed out afterwards.
+    Ended,
+}
+
+/// Where an agent's sign-in stands. Never a token: the link and the code are what the agent's
+/// command printed for the person to use, and nothing else it printed is kept.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SignInState {
+    /// Nothing has been started since the daemon did.
+    Idle,
+    /// The command runs, waiting for the person. `link` is an `https://` address from its
+    /// output and `code` the one-time code it asks to be entered there; each is absent until
+    /// the command has printed it, and absent for good when it never does.
+    Waiting {
+        link: Option<String>,
+        code: Option<String>,
+    },
+    /// The agent's own status command says it is signed in.
+    SignedIn,
+    Failed(SignInFailure),
+}
 
 /// The first version whose daemon says who is signed in to GitHub on its machine
 /// (`Query::GitHubAccounts`).
@@ -584,13 +654,6 @@ pub enum ClientMsg {
         token: String,
         usage: Usage,
         limits: Vec<Limit>,
-    },
-    /// A workflow's progress, from a process in the pane, with the pane's secret (ADR 0010).
-    /// Display only: it never changes the pane's status.
-    WorkflowReport {
-        term: TermId,
-        token: String,
-        run: WorkflowRun,
     },
     Query(Query),
 }
@@ -1233,6 +1296,13 @@ pub enum Query {
         parent: String,
         tag: u64,
     },
+    /// Start, stop or read an agent's sign-in on this daemon's computer (human clients only).
+    /// The answer is `Reply::AgentSignIn` with the same `tag`.
+    AgentSignIn {
+        agent: SignInAgent,
+        request: SignInRequest,
+        tag: u64,
+    },
     /// Who is signed in to GitHub on this daemon's computer, as its GitHub command line (`gh`)
     /// says (human clients only). The answer is `Reply::GitHubAccounts` with the same `tag`.
     GitHubAccounts {
@@ -1249,6 +1319,16 @@ pub enum Query {
     /// Whose repositories `GitHubRepos` can list: the signed-in account, then its organisations
     /// (human clients only). The answer is `Reply::GitHubOwners` with the same `tag`.
     GitHubOwners {
+        tag: u64,
+    },
+    /// The slash commands and skills `agent` takes in `folder` on this daemon's computer (human
+    /// clients only), asked of the agent's own program: its own, and the person's and the
+    /// project's. The folder is used only when it is an absolute path to a folder that exists; the
+    /// home folder otherwise. Only Claude and Codex have a list to ask for; Gemini answers an empty
+    /// one. The answer is `Reply::AgentCommands` with the same `tag`.
+    AgentCommands {
+        agent: crate::conversation::Provider,
+        folder: String,
         tag: u64,
     },
     /// Read tickets from `source` on this daemon's computer (human clients only): its groups, a
@@ -1268,15 +1348,22 @@ pub enum Query {
         change: TicketKeyChange,
         tag: u64,
     },
-    /// Write one confirmed change to a ticket of `source` (as for `Tickets`) on this daemon's
-    /// computer (human clients only): add a comment to the ticket `id`, or close it. `confirmed`
-    /// says a person saw exactly what will be written and agreed; the daemon writes nothing when it
-    /// is false. The answer is `Reply::TicketWrite` with the same `tag`.
+    /// Retired (ADR 0011): Maitty only reads tickets. It stays on the wire so a window from
+    /// versions 107 to 112, which may still ask, gets `Reply::TicketWrite` with an error instead
+    /// of losing its connection. The daemon writes nothing; no client of this version asks.
     TicketWrite {
         source: String,
         id: String,
         write: crate::tickets::TicketWrite,
         confirmed: bool,
+        tag: u64,
+    },
+    /// Read or change the skills, plugins, MCP servers and marketplaces of Claude Code and Codex on
+    /// this daemon's computer (human clients only). A list reads files and starts nothing. An add
+    /// runs only with the one-time token a `PreviewAdd` gave, so what it will run was shown first.
+    /// The answer is `Reply::Extensions` with the same `tag`.
+    Extensions {
+        request: crate::extensions::ExtRequest,
         tag: u64,
     },
     /// Say or change which ticket sources a project reads on this daemon's computer (human clients
@@ -1566,6 +1653,11 @@ pub enum Reply {
         tag: u64,
         outcome: Result<String, String>,
     },
+    AgentSignIn {
+        tag: u64,
+        agent: SignInAgent,
+        state: SignInState,
+    },
     GitHubAccounts {
         tag: u64,
         report: GitHubReport,
@@ -1578,6 +1670,12 @@ pub enum Reply {
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
     },
+    /// The commands a `Query::AgentCommands` found, or why the agent could not be asked (it is not
+    /// installed there, it did not answer in time).
+    AgentCommands {
+        tag: u64,
+        answer: Result<Vec<crate::agent_commands::AgentCommand>, String>,
+    },
     /// What a `Query::Tickets` found, or why it found nothing.
     Tickets {
         tag: u64,
@@ -1588,10 +1686,15 @@ pub enum Reply {
         tag: u64,
         answer: Result<Vec<crate::tickets::TicketKeyState>, crate::tickets::TicketError>,
     },
-    /// What a `Query::TicketWrite` did, or why it did nothing.
+    /// The answer to a retired `Query::TicketWrite`: always an error, as nothing is written.
     TicketWrite {
         tag: u64,
         answer: Result<crate::tickets::TicketWritten, crate::tickets::TicketError>,
+    },
+    /// What a `Query::Extensions` found or did, or why it did nothing.
+    Extensions {
+        tag: u64,
+        answer: Result<crate::extensions::ExtReply, crate::extensions::ExtError>,
     },
     /// The projects' ticket links after a `Query::TicketLinks`, or why the change was refused.
     TicketLinks {
@@ -1910,6 +2013,10 @@ pub struct PrInfo {
     pub checks: PrChecks,
     pub review: PrReview,
     pub conflicting: bool,
+    /// Commits on the branch after the merged pull request's last one: work goes on after the
+    /// merge, which a plain "merged" would hide. 0 when it is not merged or not known.
+    #[serde(default)]
+    pub commits_after_merge: u32,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PrTone {
@@ -1922,7 +2029,11 @@ impl PrInfo {
     pub fn headline(&self) -> String {
         let fails = self.checks.failed.len();
         let what = match self.state {
-            PrState::Merged => "merged".to_string(),
+            PrState::Merged => match self.commits_after_merge {
+                0 => "merged".to_string(),
+                1 => "merged · 1 new commit".to_string(),
+                n => format!("merged · {n} new commits"),
+            },
             PrState::Closed => "closed".to_string(),
             PrState::Open if fails > 0 => format!("{fails} failing"),
             PrState::Open if self.conflicting => "conflict".into(),
@@ -1947,6 +2058,7 @@ impl PrInfo {
     }
     pub fn tone(&self) -> PrTone {
         match self.state {
+            PrState::Merged if self.commits_after_merge > 0 => PrTone::Waiting,
             PrState::Merged => PrTone::Good,
             PrState::Closed => PrTone::Bad,
             PrState::Open
@@ -2122,9 +2234,6 @@ pub struct TermInfo {
     /// Persistent lifecycle records reported by the runtime.
     #[serde(default)]
     pub subagent_activity: Vec<SubagentActivity>,
-    /// The workflow runs reported from this pane, newest first (ADR 0010). Display only.
-    #[serde(default)]
-    pub workflows: Vec<WorkflowRun>,
     /// Provider conversation ID that owns these child records.
     #[serde(default)]
     pub session: Option<String>,
@@ -2513,10 +2622,13 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::Specialists(_)) => SPECIALISTS_SINCE,
             ServerMsg::Reply(Reply::WorktreeStanding(_)) => WORKTREE_STANDING_SINCE,
             ServerMsg::Reply(Reply::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
+            ServerMsg::Reply(Reply::AgentCommands { .. }) => AGENT_COMMANDS_SINCE,
+            ServerMsg::Reply(Reply::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
             ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
             ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ServerMsg::Reply(Reply::TicketWrite { .. }) => TICKET_WRITE_SINCE,
             ServerMsg::Reply(Reply::TicketLinks { .. }) => TICKET_LINKS_SINCE,
+            ServerMsg::Reply(Reply::Extensions { .. }) => EXTENSIONS_SINCE,
             ServerMsg::TicketSetup(_) => TICKET_SETUP_SINCE,
             _ => COMPATIBLE_SINCE,
         }
@@ -2536,12 +2648,15 @@ impl ClientMsg {
             ClientMsg::Command(Command::ConversationAllowAlways { .. }) => ALLOW_ALWAYS_SINCE,
             ClientMsg::Query(Query::AllowedCommands) | ClientMsg::Command(Command::ForgetAllowedCommand { .. }) => ALLOWED_COMMANDS_SINCE,
             ClientMsg::Query(Query::CloneRepo { .. }) => CLONE_SINCE,
+            ClientMsg::Query(Query::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
             ClientMsg::Query(Query::GitHubAccounts { .. }) => GITHUB_ACCOUNTS_SINCE,
             ClientMsg::Query(Query::GitHubRepos { .. } | Query::GitHubOwners { .. }) => GITHUB_REPOS_SINCE,
+            ClientMsg::Query(Query::AgentCommands { .. }) => AGENT_COMMANDS_SINCE,
             ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
             ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ClientMsg::Query(Query::TicketWrite { .. }) => TICKET_WRITE_SINCE,
             ClientMsg::Query(Query::TicketLinks { .. }) => TICKET_LINKS_SINCE,
+            ClientMsg::Query(Query::Extensions { .. }) => EXTENSIONS_SINCE,
             ClientMsg::Command(Command::OpenTicketSetup { .. }) => TICKET_SETUP_SINCE,
             ClientMsg::Query(Query::GitIdentities { .. }) => GIT_IDENTITIES_SINCE,
             ClientMsg::Query(Query::GitIdentityRule { .. }) => GIT_RULES_SINCE,
@@ -2552,7 +2667,6 @@ impl ClientMsg {
             ClientMsg::Query(Query::ClosedSessions) => CLOSED_SESSIONS_SINCE,
             ClientMsg::Query(Query::WorktreeStanding { .. }) => WORKTREE_STANDING_SINCE,
             ClientMsg::Command(Command::ReopenClosedSession { .. }) => REOPEN_CLOSED_SINCE,
-            ClientMsg::WorkflowReport { .. } => WORKFLOW_REPORT_SINCE,
             ClientMsg::Query(Query::HelperRead { .. }) => HELPER_READ_SINCE,
             ClientMsg::Query(Query::Specialists { .. }) => SPECIALISTS_SINCE,
             ClientMsg::Command(Command::SnoozePane { .. }) => SNOOZE_SINCE,
@@ -2993,7 +3107,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 109);
+        assert_eq!(PROTOCOL_VERSION, 113);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3483,7 +3597,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 109);
+        assert_eq!(PROTOCOL_VERSION, 113);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -3925,47 +4039,7 @@ mod tests {
     }
 
     #[test]
-    fn a_pane_from_before_workflow_reports_reads_with_none_and_one_with_a_run_round_trips() {
-        use crate::workflow::{StepState, WorkflowRun, WorkflowStep, WorkflowTicket};
-        let mut term = pane_from(serde_json::json!({}));
-        assert!(term.workflows.is_empty(), "an older peer sends none");
-        term.workflows.push(WorkflowRun {
-            workflow: "factory".into(),
-            run: "001".into(),
-            ticket: Some(WorkflowTicket {
-                key: "MAITTY-42".into(),
-                title: None,
-                link: None,
-            }),
-            steps: vec![WorkflowStep {
-                name: "review".into(),
-                state: StepState::SentBack,
-                note: Some("two findings".into()),
-                helper: None,
-                choices: Vec::new(),
-            }],
-            reported_at: 5,
-        });
-        round_trips(&ServerMsg::State(Snapshot {
-            terms: [(3, term)].into(),
-            ..Default::default()
-        }));
-    }
-
-    #[test]
-    fn a_workflow_report_is_sent_only_to_a_daemon_that_reads_it() {
-        let report = ClientMsg::WorkflowReport {
-            term: 1,
-            token: String::new(),
-            run: crate::workflow::WorkflowRun {
-                workflow: "factory".into(),
-                run: "1".into(),
-                ticket: None,
-                steps: Vec::new(),
-                reported_at: 0,
-            },
-        };
-        assert_eq!(report.introduced_in(), WORKFLOW_REPORT_SINCE);
+    fn a_helper_read_and_specialists_are_asked_only_of_a_daemon_that_reads_them() {
         let ask = ClientMsg::Query(Query::HelperRead { term: 1, helper: "a1".into() });
         assert_eq!(ask.introduced_in(), HELPER_READ_SINCE);
         let answer = ServerMsg::Reply(Reply::HelperRead(HelperRecord {
@@ -3994,7 +4068,21 @@ mod tests {
         }));
         assert_eq!(listed.introduced_in(), SPECIALISTS_SINCE);
         round_trips(&listed);
-        const { assert!(WORKFLOW_REPORT_SINCE <= PROTOCOL_VERSION) };
+    }
+
+    /// Workflow reports are gone (ADR 0011). A pane from a daemon that still keeps runs reads
+    /// without them, and a report from an older `maitty workflow report` is not read as anything
+    /// else: that one-shot call is refused, never misread.
+    #[test]
+    fn a_pane_with_workflow_runs_reads_without_them_and_a_report_is_refused() {
+        let term = pane_from(serde_json::json!({ "workflows": [{ "workflow": "factory", "run": "1", "steps": [] }] }));
+        round_trips(&ServerMsg::State(Snapshot { terms: [(3, term)].into(), ..Default::default() }));
+        #[derive(Serialize)]
+        enum OldClientMsg {
+            WorkflowReport { term: TermId, token: String, run: serde_json::Value },
+        }
+        let old = OldClientMsg::WorkflowReport { term: 1, token: String::new(), run: serde_json::json!({}) };
+        assert!(decode::<ClientMsg>(&encode(&old).unwrap()).is_err());
     }
 
     #[test]
@@ -4597,6 +4685,32 @@ mod tests {
         const { assert!(TICKET_WRITE_SINCE > TICKET_KEYS_SINCE && TICKET_WRITE_SINCE < PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_WRITE_SINCE) };
     }
 
+    /// The extensions page is a new request and a new reply: a daemon built before them is never
+    /// asked, a client built before them is never sent the answer, and nothing older changes.
+    #[test]
+    fn extensions_are_asked_only_of_a_daemon_that_knows_them_and_changes_nothing_older() {
+        use crate::extensions::{ExtAgent, ExtError, ExtReply, ExtRequest, ExtTarget, ExtKind, ExtScope};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            GitIdentities { tag: u64 },
+        }
+        let target = ExtTarget { agent: ExtAgent::Claude, kind: ExtKind::Plugin, id: "a@b".into(), scope: ExtScope::User, project: None };
+        let query = Query::Extensions { request: ExtRequest::Remove { target }, tag: 7 };
+        let bytes = encode(&query).unwrap();
+        assert!(decode::<OldQuery>(&bytes).is_err());
+        assert!(matches!(decode::<Query>(&bytes), Ok(Query::Extensions { tag: 7, request: ExtRequest::Remove { .. } })));
+        assert_eq!(ClientMsg::Query(query).introduced_in(), EXTENSIONS_SINCE);
+        for answer in [Ok(ExtReply::Done("x".into())), Err(ExtError::NeedsTerminal("claude mcp login x".into()))] {
+            let reply = ServerMsg::Reply(Reply::Extensions { tag: 7, answer });
+            assert_eq!(reply.introduced_in(), EXTENSIONS_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        // New messages only, so the window an older peer talks in stays where it was.
+        const { assert!(EXTENSIONS_SINCE > TICKET_SETUP_SINCE && EXTENSIONS_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < EXTENSIONS_SINCE) };
+    }
+
     /// A project's ticket links are a new request and a new reply: a daemon built before them is
     /// never asked, a client built before them is never sent the answer, and the window stays open.
     #[test]
@@ -4649,7 +4763,29 @@ mod tests {
         assert!(decode::<OldLinks>(&encode(&links).unwrap()).is_ok());
         let none: TicketLinks = decode(&encode(&OldLinks { projects: Vec::new() }).unwrap()).unwrap();
         assert_eq!(none.repo_file, None, "a 108 daemon's answer reads as no repository file");
-        const { assert!(TICKET_SETUP_SINCE == PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_SETUP_SINCE) };
+        const { assert!(TICKET_SETUP_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_SETUP_SINCE) };
+    }
+
+    /// Asking an agent for its commands is a new query and a new reply: a daemon built before it is
+    /// never asked, and a client built before it is never sent the reply.
+    #[test]
+    fn an_agent_commands_ask_passes_only_between_peers_that_know_it() {
+        use crate::agent_commands::AgentCommand;
+        use crate::conversation::Provider;
+        let ask = Query::AgentCommands { agent: Provider::Claude, folder: "/code".into(), tag: 5 };
+        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::AgentCommands { agent: Provider::Claude, tag: 5, .. })));
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), AGENT_COMMANDS_SINCE);
+        let found = ServerMsg::Reply(Reply::AgentCommands {
+            tag: 5,
+            answer: Ok(vec![AgentCommand { name: "compact".into(), description: "d".into(), hint: String::new(), aliases: Vec::new() }]),
+        });
+        let refused = ServerMsg::Reply(Reply::AgentCommands { tag: 6, answer: Err("Claude Code is not installed".into()) });
+        for reply in [found, refused] {
+            assert_eq!(reply.introduced_in(), AGENT_COMMANDS_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        const { assert!(AGENT_COMMANDS_SINCE > COMPATIBLE_SINCE && AGENT_COMMANDS_SINCE < PROTOCOL_VERSION) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never
@@ -4792,5 +4928,16 @@ mod tests {
         let read: ClosedSession = decode(&encode(&old).unwrap()).unwrap();
         assert_eq!((read.worktree, read.repo), (None, None));
         assert_eq!(read.branch.as_deref(), Some("feat"));
+    }
+    #[test]
+    fn an_agent_sign_in_is_a_new_message_older_peers_are_never_sent() {
+        use super::{SignInAgent, SignInFailure, SignInRequest, SignInState};
+        let ask = ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Codex, request: SignInRequest::Start, tag: 3 });
+        let answer = ServerMsg::Reply(Reply::AgentSignIn { tag: 3, agent: SignInAgent::Codex, state: SignInState::Failed(SignInFailure::TimedOut) });
+        assert_eq!((ask.introduced_in(), answer.introduced_in()), (AGENT_SIGN_IN_SINCE, AGENT_SIGN_IN_SINCE));
+        const { assert!(AGENT_SIGN_IN_SINCE > COMPATIBLE_SINCE && AGENT_SIGN_IN_SINCE <= PROTOCOL_VERSION) };
+        let waiting = SignInState::Waiting { link: Some("https://auth.example/device".into()), code: Some("AB-12".into()) };
+        let back: ServerMsg = decode(&encode(&ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state: waiting.clone() })).unwrap()).unwrap();
+        assert!(matches!(back, ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state }) if state == waiting));
     }
 }

@@ -2884,12 +2884,22 @@ dependencies = [
 
 [[package]]
 name = "maitty"
-version = "0.78.0"
+version = "0.79.0"
 dependencies = [
  "maitty-shared",
  "maitty-terminal-client",
  "maitty-test-support",
  "tokio",
+]
+
+[[package]]
+name = "maitty-agent-ask"
+version = "0.1.0"
+dependencies = [
+ "maitty-shared",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -2920,8 +2930,8 @@ dependencies = [
  "interprocess",
  "keyring-core",
  "libc",
+ "maitty-agent-ask",
  "maitty-agent-detection",
- "maitty-agent-integrations",
  "maitty-ipc-transport",
  "maitty-machines",
  "maitty-provider-claude",
@@ -2963,6 +2973,7 @@ dependencies = [
  "maitty-shared",
  "serde",
  "serde_json",
+ "sysinfo",
  "tokio",
  "tracing",
 ]
@@ -2973,6 +2984,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "getrandom 0.3.4",
+ "maitty-agent-ask",
  "maitty-desktop-client",
  "maitty-highlight",
  "maitty-ipc-transport",

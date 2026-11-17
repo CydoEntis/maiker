@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { canPutAway, canSnooze, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, SIDEBAR_GROUPINGS, splitPutAway, statusSections, type MachineGroup, type SidebarGrouping, type SidebarOrder } from '../model/sidebar'
+import { canPutAway, canSnooze, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, SIDEBAR_GROUPINGS, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder } from '../model/sidebar'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
 import { AppIcon, Icon, StatusBadge } from './glyphs'
@@ -12,6 +12,7 @@ import { useStatusFlash } from './useStatusFlash'
 import { snoozeChoices } from '../model/snooze'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
+import { SubagentRows } from './SubagentRows'
 import { RowHoverCard } from './RowHoverCard'
 import { HOVER_CARD_DELAY_MS, type Box } from '../model/hoverCard'
 
@@ -19,6 +20,8 @@ import { HOVER_CARD_DELAY_MS, type Box } from '../model/hoverCard'
 export type SidebarProps = {
   /** Every session of every machine. Each machine lists its own, in `order`. */
   sessions: readonly SessionView[]
+  /** The daemon has sent its first list; until then an empty list means "not known yet", not "none". */
+  listed: boolean
   /** The machine groups: this computer first, then the others. */
   machines: readonly MachineHead[]
   order: SidebarOrder
@@ -28,6 +31,8 @@ export type SidebarProps = {
   /** Opens the search over every session, project and action. */
   onSearch: () => void
   focusedId: string | null
+  /** The helper whose own chat a pane shows, marked in its session's rows. */
+  openSubagent: { sessionId: string; subagentId: string } | null
   mode: 'docked' | 'rail'
   online: boolean
   canStart: boolean
@@ -51,6 +56,8 @@ export type SidebarProps = {
   /** Installs or updates the app on a machine that needs it; the window asks first. */
   onUpdateMachine: (name: string, action: UpdateAction) => void
   onShowSession: (id: string) => void
+  /** Opens a helper's own chat in its session's pane. */
+  onShowSubagent: (sessionId: string, subagentId: string) => void
   onRenameSession: (id: string | null) => void
   onSetName: (id: string, name: string) => void
   /** Shows a session beside the pane that has focus. */
@@ -168,6 +175,13 @@ function Expanded(props: SidebarProps) {
   // A project whose last session closed is no longer a choice, so the list goes back to all of them.
   const project = projects.some((choice) => choice.name === pickedProject) ? pickedProject : null
   const { listed: sessions, putAway } = splitPutAway(inProject(props.sessions, project))
+  // The session on screen keeps the status section it was picked in until another is picked (`statusSections`).
+  const [hold, setHold] = useState<{ for: string | null; row: HeldRow | null }>({ for: null, row: null })
+  if (hold.for !== props.focusedId) {
+    const focused = props.focusedId === null ? undefined : props.sessions.find((session) => session.id === props.focusedId)
+    setHold({ for: props.focusedId, row: focused === undefined ? null : { id: focused.id, section: sectionOf(focused) } })
+  }
+  const held = hold.row
   const draft = props.draft ?? null
   const groups = machineGroups(sessions, props.machines, draft !== null, props.order)
   const groupingLabel = SIDEBAR_GROUPINGS.find(([grouping]) => grouping === props.grouping)?.[1] ?? ''
@@ -268,6 +282,15 @@ function Expanded(props: SidebarProps) {
         />
         {/* A sibling of the row, not inside it (a button cannot hold a button): it shows on hover and focus. */}
         <RowButton session={session} online={props.online} onBringBack={props.onBringBack} onUnsnooze={props.onUnsnooze} onEnd={props.onEndSession} />
+        {/* Kept mounted while it empties, so the last helper's row eases shut instead of the list jumping. */}
+        <Collapse open={session.subagents.length > 0}>
+          <SubagentRows
+            subagents={session.subagents}
+            openId={props.openSubagent?.sessionId === session.id ? props.openSubagent.subagentId : null}
+            onOpen={(id) => { props.onShowSubagent(session.id, id) }}
+            onShowSession={() => { props.onShowSession(session.id) }}
+          />
+        </Collapse>
       </div>
     )
   }
@@ -286,7 +309,7 @@ function Expanded(props: SidebarProps) {
         {props.grouping !== 'machine' && (
           <section aria-label="Agents" className="mx-sections">
             {draft !== null && <DraftRow process={draft.process} />}
-            {props.grouping === 'status' && statusSections(sessions).map((section) => (
+            {props.grouping === 'status' && statusSections(sessions, held).map((section) => (
               <ListSection key={section.key} id={`status:${section.key}`} tone={section.key} name={section.name} count={section.sessions.length} label={section.name} open={views.isOpen(`status:${section.key}`)} onToggle={() => { views.toggle(`status:${section.key}`) }}>
                 {section.sessions.map((session) => renderRow(session, true, true))}
               </ListSection>
@@ -296,7 +319,7 @@ function Expanded(props: SidebarProps) {
                 {section.sessions.map((session) => renderRow(session, false))}
               </ListSection>
             ))}
-            {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">Chats and shells you start appear here, sorted by what needs you.</div>}
+            {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Chats and shells you start appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
             <MachineNotes heads={props.machines} progress={props.updateProgress} onUpdate={props.onUpdateMachine} />
           </section>
         )}
@@ -320,7 +343,7 @@ function Expanded(props: SidebarProps) {
               renderRow={renderRow}
             />
           ))}
-          {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">Chats and shells you start appear here, sorted by what needs you.</div>}
+          {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Chats and shells you start appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
         </section>
         )}
         {putAway.length > 0 && (

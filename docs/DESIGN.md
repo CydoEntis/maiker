@@ -99,11 +99,7 @@ running for as long as it runs (after its parent's turn too), one finished in th
 few seconds; `└` and a mark each, or under the open session one row each with `├`/`└` and the name,
 and a quiet `└ 3 done · show` line that lists the finished ones (`· hide` folds them again). A subagent's row
 opens its own steps in a modal ("subagent name": what it was asked, `▸` what it ran, what it said, the newest that
-fit, asked again every 1.5 s while it works); Enter goes to its parent's pane. Another machine's opens the pane. Under the
-open session, after its subagents, the workflow runs it reported that are still going (ADR 0010), one line
-each: the step's mark (`·` waiting, the spinner working, `✓` passed, `✕` failed, `↺` sent back, `●` needs you
-in amber, `–` skipped), the ticket and the step (`├ ● MAITTY-43 spec`), then `└ 2 runs done`. A run's line
-opens its steps in a modal ("run MAITTY-42"): each step's mark, name, note and helper.
+fit, asked again every 1.5 s while it works); Enter goes to its parent's pane. Another machine's opens the pane.
 On the bottom border the release chip (` ↑ v0.15.0 ` when a release is out, else the version) and
 ` menu `, each opening a menu upward. See UI › *the sidebar*; the Machines dialog and its states
 are in UI › *Machines dialog*.
@@ -288,14 +284,16 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   `TitleBarView.tsx`). What the old Maitty menu started is in the command palette and the sidebar.
 - **Tools bar** (`ActivityBar.tsx`, `frame.css`; layout 2h). A 40px column at the window's edge opposite the sidebar,
   a card on `--main` with a `--line` hairline, 8px from the edges. Its 32px buttons are `--muted`; the open one is on a
-  faint wash with a 2px `--accent` line on its inner edge. Top to bottom: **Work** (always; with no runs it opens the
-  setup view, `WorkSetup`: a factory running elsewhere in the project, what a factory is (no factory named), and
-  Open Tickets; then a divider), **Changes** (a plain badge with the changed-file count), **Files**, **History**,
-  **Checks** (a red badge with the checks that want you), **Tickets** (the Tickets view over the chat area, UI ›
+  faint wash with a 2px `--accent` line on its inner edge. Top to bottom: **Changes** (a plain badge with the changed-file count), **Files** and **History** (only
+  while Settings › Appearance › **Files and History tools** is on, `morePanelTools`, off by default: the bar keeps to
+  reviewing what agents did; opening a file from a chat or terminal, and `/rewind`, still show those views),
+  **Checks** (a red badge with the checks that want you), **Tickets** (Start from a ticket, over the chat area, UI ›
   *Tickets view*), and at its foot **Terminal** (shows or hides the terminal dock with the focused session's
   terminals, adding the first when it has none; `toggleTerminal`). A view button opens the side panel on that view, or closes it when it is already showing it;
   with no session it says "Open a session first". Badges are 13px, mono 9px/700, at the button's top right: plain is
-  `--fg` on `--raise`, danger white on `--danger`, needs `--on-warn` on `--warn`.
+  `--fg` on `--raise`, danger `--on-danger` on `--danger`, needs `--on-warn` on `--warn`. `--on-danger` is chosen per
+  theme (white, or near-black on a dark theme's light coral, `onDanger`) so every filled danger label, badge and button
+  meets AA; the contrast audit checks it, `--on-accent` and `--on-warn` for every theme.
   There is no middle column and no tab bar: the window is the sidebar, the workspace, the side panel and the tools bar.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   60px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
@@ -413,7 +411,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   is named by the name you gave it, else a shell's folder, else its agent. **Rename**: double-click, F2 or the menu
   turns the name into a field; Enter or leaving saves, Esc cancels, empty clears. Project colours are five tokens
   (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name, never amber or red.
-  The sidebar lists no subagents: an agent's running subagents float over its pane (`RunningSubagents`, below).
+  **Helpers under a session** (`SubagentRows`): every session with helpers listed (working, needing you, or recently
+  stopped while it still works; one that finished has reported back and goes), selected or not, has a 26px row each on a
+  `--line2` guide line with a bend: its mark (a spinner in `--working`, an amber square for needs you, a `--dim` cross for
+  stopped) and its task's first line (12px, `--fg2`). At most four are named, then "+N more" (`--dim`), which shows the
+  session. A click opens the helper's own chat, read-only (it is marked while open): a helper cannot be written to,
+  only its session can. The rows ease shut as the last one goes.
   With nothing running the list says "Chats and shells you start appear here, sorted by what needs you."
   The foot holds the update slot (the version, or an accent chip **↑ vX** for an available update and **↻ Restart**
   for a downloaded one; or "Reconnecting to maittyd…") and the Settings gear; Recent sessions is in the command palette.
@@ -421,15 +424,18 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   sidebar** button. The rail's foot has a Recent sessions clock and the gear. The edge drags (208 to 440px;
   double-click resets). The **rail** of a narrow window is the starters, then one tile per session.
 - **Replies are typed in.** An agent's reply types toward the text that came in (`useTypedText`), so a chunk eases in instead
-  of flashing: a few whole words every 40ms at about 300 characters a second, faster while a lot is waiting, so a
-  long reply that arrives whole takes a few seconds and a short one a moment (`nextShown`). A reply that arrives after the history has loaded types from its first letter even when it arrives whole; what
+  of flashing: word by word on every screen frame at about 300 characters a second, easing faster while a lot is
+  waiting so a backlog clears in about a second and a half, so a long reply that arrives whole flows in over a few
+  seconds and a short one in a moment (`nextPosition`, `shownAt`). It should read as text coming in, neither a lag
+  nor a burst. A reply that arrives after the history has loaded types from its first letter even when it arrives whole; what
   the history already held shows at once (`knownRows.ts`), and Reduce motion shows everything at once. A helper agent reporting back (the harness's `<task-notification>` block, which the history keeps as a
   user message) is one quiet line, "Agent "name" finished · 11s · 50.5k tokens", never the markup; once it has reported,
   it clears from the running-subagents bar. One that still needs you stays.
 - **Running subagents** (`RunningSubagents`, the daemon's `subagent_activity`, `model/subagents.ts`). A 34px bar floats
   under the pane's header, as wide as the chat's column, on the menu surface (`--card`, a `--line2` edge, `--sh-pop`),
-  over the terminal only (a chat lists its helpers in its own agents card, whose running rows unfold to **Open its
-  chat**), only while one or more subagents run: the spinner, "N subagents running", the
+  over the chat and the terminal alike, only while one or more subagents run and the agent is not asking anything (a
+  question or an approval sits where the bar would cover it, so the bar steps aside until it is answered,
+  `runningBarShown`): the spinner, "N subagents running", the
   first one's task and what it is doing (plain text, `--dim`), "+N more" and a chevron. The whole bar is the toggle
   (named Show / Hide the subagents), and the chevron turns over while it is open. Opening extends it downward over the
   feed (at most `min(440px, 60vh)`, scrolling past that) without moving it; the feed fades behind it into `--main`
@@ -439,11 +445,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   takes a helper's own report that it finished as final, whatever second its other reports were stamped with, and only
   a start of its own brings a finished helper back, so one whose last news arrives late is not listed as running again
   and then as stopped (`apply_hook`).
-- **Panes change places with a glide.** Every change to which panes are shown (a split, a pane closed, a session opened in a
-  pane, a saved arrangement, maximize, a swap by drag) goes through a View Transition (`movePanes` in `paneTransition.ts`): only
+- **Panes change places with a glide.** Every change that moves panes (a split, a pane closed, a saved arrangement,
+  maximize, a swap by drag) goes through a View Transition (`movePanes` in `paneTransition.ts`): only
   the browser's pictures of the panes move, cropped and never stretched, so text never reflows on the way; a pane that leaves
   fades out and one that arrives fades in. Without View Transitions, with Reduce motion, or on the Linux web view (where a swap
-  by drag was reported to take the window down in 0.72.0), the change just happens.
+  by drag was reported to take the window down in 0.72.0), the change just happens. Picking a session to show (the sidebar, the palette, a
+  notice) is not a move: it shows at once, since it is the most frequent thing done in the window and a cross-fade on
+  each pick made switching feel slow.
 - **Toasts are cards.** The notification card is the one design; a plain toast (Sonner) is laid out the same way: icon tile,
   title and detail, the close at the top right and the action on its own row under the text, 96px below the top edge and 36px
   in from the side.
@@ -483,8 +491,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   messages. The text size draws the whole chat larger or smaller (`zoom` on `.mx-chat`), cards and message box included.
 - **Slash commands.** In a Claude chat, a slash as the first thing in the message box opens the agent's commands over
   it (`SlashPicker`, the shared `ResultsList`): its own, and the person's and the project's commands, skills and
-  plugins, as Claude Code itself lists them for the session's folder (`agent_commands`, asked as the chat opens and
-  again after five minutes), each with what it does and what it takes. Typing narrows them (the exact name, then names
+  plugins, as Claude Code itself lists them for the session's folder on the machine the chat runs on (`agent_commands`,
+  or `agent_commands_on` for another machine's daemon; asked as the chat opens and again after five minutes; a machine
+  that is offline or lacks the agent is named in the picker's note, never answered with this computer's list), each with what it does and what it takes. Typing narrows them (the exact name, then names
   that start with it, then a plugin's command by its own name, then names that hold it). The list is square, headed
   "Commands" with the number that match, with the keys at its foot (↑↓ choose, Tab complete, Enter run, Esc close);
   with none it says "No command by that name" and "Press Enter to send <typed> to the agent as a message.". ↑ ↓ move, **Tab** completes
@@ -494,7 +503,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   follows 400ms later (`typeMessage`, `COMMAND_SUBMIT_GAP_MS`): sent with the text, Claude Code takes the Enter for the
   path it is completing and leaves `/export /some/path` typed in its box, and Codex loses it. Claude Code leaves
   the commands that only its terminal runs out of that list (`/help`, `/permissions`, `/resume`, `/add-dir`…), so they
-  are written by hand in `terminalCommands.ts` (from Claude Code 2.1.322, each run in 2.1.325) and offered, tagged `terminal`, to an agent
+  are written by hand in `terminalCommands.ts` (`CLAUDE_COMMANDS_PINNED_FOR`, the version each was run in) and offered, tagged `terminal`, to an agent
   that has a terminal: running one types it there and shows the terminal, since its menu is the terminal's to draw,
   and it is refused with a toast while the agent works. One typed out with what it takes goes the same way, since
   Claude Code draws its answer only in the terminal.
@@ -516,8 +525,20 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   works; a failure is the card in the `err` tone with the daemon's reason. `/btw` alone puts `/btw ` in the box. One of
   the reporting commands typed with something after it (`/goal tests pass`, `/config editor=vim`) changes something,
   so it goes to Claude Code as typed. `/mobile`, `/privacy-settings` and `/artifacts`, which Claude Code shows as a
-  QR code or a browser page, are the same card with the web address to open. Side answers are for sessions on this
-  computer; another machine's card says so.
+  QR code or a browser page, are the same card with the web address to open. A chat on another machine is answered
+  by that machine.
+  **Answered from what the chat holds** (`commandCards.ts`, `windowCommands.ts`; the same card, with nothing asked of the
+  agent and nothing typed into it). For Claude and Codex alike, typed alone: `/status` is a card with the agent, model and
+  effort, permission mode, folder, what it is doing now, the context (0% before its first turn) and the plan limits it has
+  reported (a limit it never reported is left out, never a made-up figure); `/copy` puts the agent's last message on the clipboard; `/export` saves the conversation (what you
+  said and what the agent answered) as `conversation <day> <time>.md` in the export folder chosen in Settings; `/diff` opens
+  the side panel's Changes; `/resume` opens Recent sessions. Claude only: `/memory` is a card naming the `CLAUDE.md` files it
+  reads, the project's own opening in the file viewer, and `/plan` asks first (`Switch to plan mode?`, Cancel focused) and
+  only a yes moves the session to plan mode through the shield button's own control; a chat with no such control says so,
+  and nothing changes the mode without that yes (ADR 0005). Codex only: `/permissions` is a card saying what each mode does
+  with the current one marked; the pick stays the shield button's. With something after the name (`/export notes.md`,
+  `/plan fix the build`) the command goes to the agent as typed. Still terminal-only, each needing the agent's own screen or
+  a change the daemon would have to make: `/add-dir`, `/cd`, `/branch`, `/fork`, `/rename` for Codex, `/agents`, `/model`.
   **`/rename <name>`** names the Maitty session too (the sidebar's rename) and still goes to Claude Code, so both
   agree. A name Claude Code gives a session with a terminal, by `/rename` typed in the chat or the terminal, with a name
   or alone, renames the pane as well: the daemon reads the transcript's `custom-title` line (`follow.rs`; the names
@@ -539,12 +560,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
   under 50%, `--m-or` under 75%, `--m-hi` from there). They always show, and each opens Settings › Usage & cost. When
-  a limit starts over is in its tooltip. For Claude and Codex all three always show, in that order, 0% included; one
-  the agent has not reported yet is an empty ring and "–" in `--dim` ("not reported yet" in its tooltip), never a
-  made-up 0% (ADR 0009). Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
+  a limit starts over is in its tooltip. For Claude and Codex the context always shows, at 0% before the first turn
+  has reported one (a chat that has run nothing has used none of it). A plan limit shows only once the agent has
+  reported it, in the order context, 5-hour, weekly, then any other: a plan without a 5-hour window (an API key, some
+  Codex plans) never reports one, and a meter that only ever said "–" was noise. Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
-  list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from Codex CLI
-  0.167.0). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
+  list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from the Codex CLI
+  named by `CODEX_COMMANDS_PINNED_FOR`). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
   Codex's terminal, are tagged `terminal`, and run there with the terminal shown. Codex does list its **skills**
   (`agent_commands` asks its app server, `skills/list`), so those are offered too, tagged `skill` and written `$name`
   as Codex's own box takes them: beside the commands after a slash, alone after a `$`. Picking one leaves `$name ` in
@@ -563,8 +585,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   cannot be told apart and times out, and the message stays queued either way.
 - **Pane** (`components/PaneCard.tsx`, `pane.css`, `frame.css`). Agents and shells share one 44px header ruled off by
   a `--line` hairline: the 20px flat app icon with its status badge (named "Agent · Status" for screen readers), the
-  name (14px, 600; the folder and branch in its tooltip) and a pull request's state, then at the right the **Chat ·
-  Terminal · Work** tabs (agents with a chat, or with workflow runs; 12.5px 500 `--dim`, the chosen one `--fg` underlined 2px in `--accent`), ⋯ and
+  name (14px, 600; the folder and branch in its tooltip) and a pull request's state (`#45 merged` in `--ok`; once the
+  branch has commits after the merged one, `#45 merged · 3 new commits` in `--working`, since work goes on), then at the right the **Chat ·
+  Terminal** tabs (agents with a chat; 12.5px 500 `--dim`, the chosen one `--fg` underlined 2px in `--accent`), ⋯ and
   close. Split right, Split down, Maximize, Changes and files and Show or Hide the terminals are in ⋯ and on their
   keys; the tools bar does the side panel and the terminals. Under 360px the tabs go too
   (`model/paneHeader.ts`); Show chat or Show terminal stays in ⋯ and the title keeps its room. The main area is one
@@ -669,39 +692,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   too. A binding with `available: false` is registered but its key does nothing and the overlay
   hides it until the feature lands; none is off now (Undo close is on).
   Jump to the next session that needs you is ⌘J on macOS and Ctrl+Shift+J elsewhere: a bare Ctrl+J is a terminal key.
-- **Work tab** (`features/work/`, the daemon's `workflows`, ADR 0010, `model/workflows.ts`). A session that reported
-  workflow runs gets a **Work** tab, after Chat and Terminal, with the count of runs going (mono, `--dim`) and
-  a 7px `--needs` square while one needs you. Work covers the pane like the chat (the terminal stays mounted, paused)
-  until Chat or Terminal is chosen. Its 44px bar says **Runs** (13.5px, 600) and, in 12px `--muted`, "1 needs you ·
-  4 working · 3 done" or "Nothing running". The board (`WorkBoard`) is one column per step name the runs reported, in
-  their order (a name one run lacks goes in after the step before it, `model/board.ts`), first letter capital, then
-  **Needs human** (every run going with a step that needs you; its title `--needs` while it holds one) and **Done**
-  (every finished run): equal width, 168px at least, as tall as the pane, gap 8, scrolling sideways when they do not
-  fit. A column is a `--m-well` strip with an inset `--line`, a 36px head with its name (12.5px, 600, `--muted` when
-  empty) and mono count, and "Nothing here" when empty. A run going sits in its first step that has not passed (skipped
-  counts as passed). A run's card (`--main`, inset `--line`; `--fg2` while open; a 7% `--needs` wash with a 45% edge
-  when it needs you) holds the run's mark (needs, working, waiting, done or failed, `runState`), the ticket key in mono
-  12px 600 (else "factory 007"), at the right "done" in `--done` or "failed" in `--err` once over, the title in two
-  lines at most ("No ticket" muted without one), a **step bar** (`CardTrack`: one 4px segment per step, gap 3, `--line2`
-  while waiting, `--done` once passed, `--working` pulsing while in hand, `--needs` pulsing when it needs you, `--err`
-  failed, `--muted` sent back, named in its tooltip) so the card shows where the run is, the run's **review** steps (named "review …") as 20px mono chips once
-  its first step passed (the name without "review": passed `--done` on a 14% wash, working `--working` with a spinner
-  and a pulse, needs you `--needs` with "!", failed `--err` with ✕, sent back `--muted` with ↺, waiting dashed, skipped
-  struck through), and the step's note wrapped, or "a and b are working." when several steps are in hand. A click opens
-  the run in a drawer (`RunDrawer`, `min(480px, 60%)`, `--main`, a `--line2` edge, sliding 24px in .22s) over the board
-  dimmed to 18% black: a 44px head with **Work** (a button back to the board) › the key in mono, **Open ticket ↗** (a
-  web address only, opened in the browser) and close; the key in mono 13px 700 with the run's word in its colour
-  ("needs you", "working", "done"), the title (14px, 600) and "Updated 2m ago · This computer · project · ⑂ branch"
-  (11.5px `--dim`); a strip of 20px nodes, one per step, joined by lines that fill `--done` as steps pass, each named
-  underneath in its state's colour; then each step as a row ruled off by `--line`: its mark, name (600 while working or
-  needing you, `--muted` while waiting or skipped), the word in lower case in its state's colour, the note in `--fg2`,
-  and a step needing you on a 7% `--needs` wash. A step's helper label is a mono `--link` button under its note ("MAITTY-42
-  build ›") that opens a 300px read-only card: the label and the step's word, what the helper was asked, its latest
-  activity while it works on this computer, its result, **Open its chat**, and "Read-only. To change anything, ask in the
-  main chat." (on another machine: "Runs on devbox. Helpers on other machines show their task and result only. …").
-  Escape, the crumb, close or a click outside closes the drawer. The sidebar shows no runs, and a session with runs
-  shows no subagent bar: its helpers are on the board. Marks are StatusMark's, with ↺ for sent back, – for skipped and ? for a state added later.
-- **Chat · Terminal tabs.** An agent's pane header carries text tabs, Chat then Terminal; Work is on the activity bar, and while the Work board covers the pane neither tab is underlined. The
+- **Chat · Terminal tabs.** An agent's pane header carries text tabs, Chat then Terminal. The
   chat covers the pane body while the terminal stays mounted underneath, hidden by `visibility`, so it keeps streaming
   and keeps its size: switching sends nothing to the daemon, except that going to the terminal moves the text waiting
   in the chat box into the agent's prompt (one paste, no Enter; `model/draftCarry.ts`), under the message box's rule: only while
@@ -792,8 +783,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   stay where they are, greyed out with the reason as their tooltip, so the box never gains or loses a control. A chat that
   follows another agent (Codex, Gemini) draws its model label from the start, with just the agent's name until it says its
   model. The "agent has not reported" hint of a starting chat floats over the conversation and moves nothing. Placeholders: "Message the agent, or type / for commands" ("Reply to the plan…" in Plan mode), "Queue a
-  message for when claude finishes" while it works, "Answer the request above first" (and off) while a question
-  waits. **3. The bottom row** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar does. Queued messages are dashed bubbles above (`QueuedMessages`): each has an **×** in its top right corner (remove) and **Edit**, which takes it out of the queue and puts its words back in the box, ahead of anything typed there, with its files back as attachments. A queued message shows its files as the chips a sent message has, never as the lines that name them to the agent. Two or more sit as a **stack**: the first one sent in front, showing its first two lines and "first of N", with the edges of up to two more under it. A click on a message spreads them all out, oldest first, each with its own × and Edit; a click again stacks them, and a queue down to one message starts stacked the next time it grows.
+  message for when claude finishes" while it works, "Answer the request above first" (and off, with the focus on the question
+  when it takes keys, never on one answered only by a click) while a question waits, "The daemon is offline" (still typeable) while it is. **3. The bottom row** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar and the running bar do. Queued messages are dashed bubbles above (`QueuedMessages`): each has an **×** in its top right corner (remove) and **Edit**, which takes it out of the queue and puts its words back in the box, ahead of anything typed there, with its files back as attachments. A queued message shows its files as the chips a sent message has, never as the lines that name them to the agent. Two or more sit as a **stack**: the first one sent in front, showing its first two lines and "first of N", with the edges of up to two more under it. A click on a message spreads them all out, oldest first, each with its own × and Edit; a click again stacks them, and a queue down to one message starts stacked the next time it grows.
 - **Esc ladder.** Esc closes the topmost open layer and reaches the terminal only when none is
   open (`model/escLadder.ts`): What's new, palette, Settings, the sidebar drawer,
   Focus mode. A new dialog adds its id there.
@@ -830,7 +821,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   `--line2` ring), then 32px model rows (dim "default", an accent ✓), then a 44px foot in a grid: Effort in `--muted`,
   four bars 16px wide at 6, 9.3, 12.6 and 15.9px filled in `--accent` up to the level (`--line2` past it), and the
   level's name at the right in 12.5px semibold.
-- **New chat page on another machine.** The same page as on this computer, with the machine after the project (`app@Shipyard`) and the Machine switch on Remote machine: its projects, a pasted path, no Browse…, no branch, worktree or attach controls, and a model button with the agent switch, the fixed models (Default, Opus, Sonnet, Haiku for Claude) and the effort. There is no New session dialog.
+- **New chat page on another machine.** The same page as on this computer, with the machine after the project (`app@Shipyard`) and the Machine switch on Remote machine: its projects, a pasted path, no Browse…, no branch or attach controls, a **Work in** crumb (this folder | new worktree; a new worktree is made on that machine on a new two-word branch, shown in the crumb), and a model button with the agent switch, the fixed models (Default, Opus, Sonnet, Haiku for Claude) and the effort. There is no New session dialog.
 - **Focus mode (⌘.).** Hides the sidebar; a pill at the bottom says where you are and
   how many sessions need you elsewhere. Esc or the pill's Exit leaves it.
 - **Broadcast (⌘⇧B).** Per layout. While on, every pane of the layout has a violet outline and a

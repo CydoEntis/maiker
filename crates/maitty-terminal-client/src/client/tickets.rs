@@ -442,21 +442,6 @@ pub(super) fn read_failure(provider: Provider, e: &TicketError) -> String {
     }
 }
 
-/// What a write that did not happen says. Nothing was written.
-pub(super) fn write_failure(provider: Provider, e: &TicketError) -> String {
-    let name = provider.name();
-    match e {
-        TicketError::NotInstalled => format!("Add your {name} key first."),
-        TicketError::SignedOut if provider == Provider::Github => {
-            "GitHub is not signed in. Run gh auth login in a terminal.".into()
-        }
-        TicketError::SignedOut => format!("{name} refused the key, so nothing was written."),
-        TicketError::NotFound => format!("{name} has no such ticket, or this key cannot see it."),
-        TicketError::RateLimited => format!("{name} says too many requests. Try again in a minute."),
-        TicketError::Unreachable(line) | TicketError::Invalid(line) => shown(line, false),
-    }
-}
-
 /// Seconds since 1970 of a time a provider wrote (`2026-11-15T09:30:00Z`, with or without a
 /// fraction or an offset), or `None` when it is not one.
 pub(super) fn unix_of(when: &str) -> Option<u64> {

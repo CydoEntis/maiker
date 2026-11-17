@@ -330,7 +330,6 @@ pub(in crate::client) fn draw(app: &mut App, f: &mut Frame, area: Rect, t: &Them
         app.screen.sub_rows.clear();
         app.screen.done_rows.clear();
         app.screen.sub_ids.clear();
-        app.screen.run_rows.clear();
         side::draw_rail(app, f.buffer_mut(), g.side, &model, t);
     }
     if g.panes.width > 0 {

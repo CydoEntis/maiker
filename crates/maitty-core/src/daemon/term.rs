@@ -176,6 +176,9 @@ pub struct Term {
     pub session: Option<String>,
     /// The effort the agent's own files say it runs at (`usage::poll_effort`); not kept across a restart.
     pub effort: Option<String>,
+    /// The model and effort the agent last said it runs, kept across a restart so a resume comes back on them
+    /// (`Daemon::resume_cmd`). Unlike `effort`, a read that finds nothing leaves it as it was.
+    pub runs_with: crate::conversation::TurnChoice,
     pub cwd: PathBuf,
     /// The agent's last prompt, for its card.
     pub summary: String,
@@ -191,8 +194,6 @@ pub struct Term {
     pub subagent_hooks_seen: bool,
     /// Runtime-reported child lifecycle, retained after completion for inspection.
     pub subagent_activity: Vec<SubagentActivity>,
-    /// Workflow runs reported from this pane, newest first (ADR 0010). Never read for status.
-    pub workflows: Vec<maitty_shared::workflow::WorkflowRun>,
     /// The shell reports its directory itself (OSC 7 / 9;9); trust that over process scans.
     pub cwd_reported: bool,
     /// Stopped by an older the app version; resumes when focused.
@@ -1006,6 +1007,7 @@ impl Term {
                 .or(direct_label),
             session: None,
             effort: None,
+            runs_with: crate::conversation::TurnChoice::default(),
             cwd: spec.cwd.to_path_buf(),
             summary: String::new(),
             said: String::new(),
@@ -1014,7 +1016,6 @@ impl Term {
             subagents: Vec::new(),
             subagent_hooks_seen: false,
             subagent_activity: Vec::new(),
-            workflows: Vec::new(),
             cwd_reported: false,
             asleep: false,
             win32_input: false,
@@ -1704,10 +1705,8 @@ mod tests {
         let bin = tmp.join("bin");
         std::fs::create_dir_all(&bin).unwrap();
         let fake = |name: &str, body: &str| {
-            use std::os::unix::fs::PermissionsExt;
             let p = bin.join(name);
-            std::fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
-            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+            crate::test_support::write_program(&p, &format!("#!/bin/sh\n{body}\n"));
             p
         };
         let exe = fake(env!("APP_COMMAND"), &format!("echo {}", tmp.display()));

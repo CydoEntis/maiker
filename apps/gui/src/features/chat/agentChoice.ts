@@ -42,8 +42,13 @@ export const KNOWN_MODELS: Readonly<Record<ChatAgent, readonly ModelOption[]>> =
   codex: [
     { id: DEFAULT_PICK, label: 'Default', blurb: "Your account's model. Others are listed here once Codex has fetched them" },
   ],
+  // The aliases of Gemini CLI's reference (docs/cli/cli-reference.md: `--model` takes auto, pro, flash or flash-lite). Default
+  // sends nothing, which is `auto`. Read from that page, not from a running Gemini CLI.
   gemini: [
-    { id: DEFAULT_PICK, label: 'Default', blurb: "Gemini CLI's own model. Its chat is read from the terminal, so nothing is picked here" },
+    { id: DEFAULT_PICK, label: 'Default', blurb: "Gemini CLI's own choice (auto). Picked when the chat starts; to change it later, run /model, which opens the terminal" },
+    { id: 'pro', label: 'Pro', blurb: 'The most capable, for hard problems' },
+    { id: 'flash', label: 'Flash', blurb: 'Fast and capable for everyday work' },
+    { id: 'flash-lite', label: 'Flash Lite', blurb: 'The quickest, for small tasks' },
   ],
 }
 
@@ -150,7 +155,7 @@ const asked = new Set<ChatAgent>()
 /** Asks the host once per agent for the models it really offers; a failure leaves the fixed list. */
 export function useDiscoveredModels(agent: ChatAgent) {
   useEffect(() => {
-    // Gemini has no model list to read; its chat follows the terminal.
+    // Gemini CLI has no way to list its models; the fixed aliases stand.
     if (!hasAbility(agent, 'discoversModels') || asked.has(agent)) return
     asked.add(agent)
     loadAgentModels(agent).then((models) => { setDiscoveredModels(agent, models) }).catch((error: unknown) => { asked.delete(agent); console.warn(`Could not list ${agent}'s models`, error) })

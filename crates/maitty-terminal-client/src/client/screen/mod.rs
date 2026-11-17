@@ -220,8 +220,6 @@ pub(super) struct Screen {
     pub subs_opened: HashSet<ClientSession>,
     /// The session of each "N done" line drawn this frame (`ScreenHit::SubagentsDone`).
     pub done_rows: Vec<ClientSession>,
-    /// The pane and run of each workflow run line drawn this frame (`ScreenHit::Run`).
-    pub run_rows: Vec<(ClientTerm, String)>,
     /// The session you were last on in each fleet: what picking the fleet opens.
     pub fleet_active: HashMap<fleets::FleetId, ClientTerm>,
     /// What the sidebar cursor walks over, top to bottom.
@@ -670,7 +668,7 @@ pub(super) fn choices(parser: Option<&vt100::Parser>) -> Vec<String> {
             let t = l
                 .trim()
                 .trim_matches(|c: char| "│┃ ".contains(c))
-                .trim_start_matches(['❯', '>', ' '])
+                .trim_start_matches(['❯', '›', '>', ' '])
                 .trim();
             let mut chars = t.chars();
             let (Some(d), Some('.')) = (chars.next(), chars.next()) else {
@@ -1475,12 +1473,6 @@ pub(super) enum ScreenHit {
     /// A session's "N done" line under its subagents (its place in `Screen::done_rows`): lists or
     /// folds its finished subagents.
     SubagentsDone(usize),
-    /// A workflow run's line under the open session (its place in `Screen::run_rows`): its steps.
-    Run(usize),
-    /// A session's "N runs done" line: its Work board.
-    Board(ClientTerm),
-    /// A card of the Work board (its place in the board's walk).
-    BoardCard(usize),
     /// The release chip on the sidebar's foot: its menu, opening upward.
     ReleaseMenu,
     /// The `n new session` chip in a workspace with no pane open.
@@ -1712,8 +1704,6 @@ mod usage;
 pub(in crate::client) mod approved;
 pub(in crate::client) mod machine_info;
 mod tidy;
-mod workflow_runs;
-mod work_board;
 mod broadcast;
 mod even_widths;
 mod status_log;
@@ -1727,5 +1717,5 @@ pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
     popups::*, references_sheet::*, secret_ask::*, session_find::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
-    helper_view::*, tickets_view::*, workflow_runs::*, work_board::*, status_log::*, workspace::*,
+    helper_view::*, tickets_view::*, status_log::*, workspace::*,
 };

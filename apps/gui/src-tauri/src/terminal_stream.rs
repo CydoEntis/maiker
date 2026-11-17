@@ -23,9 +23,12 @@ use maitty_machines::link::Timing;
 use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
-use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, Snapshot, Status, TermId, TicketKeyChange};
+use maitty_shared::agent_commands::AgentCommand;
+use maitty_shared::conversation::Provider;
+use maitty_shared::extensions::{ExtError, ExtReply, ExtRequest};
+use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId, TicketKeyChange};
 use maitty_shared::ticket_links::{TicketLinkChange, TicketLinks, TicketPlace};
-use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWrite, TicketWritten, TicketsReply, TicketsRequest};
+use maitty_shared::tickets::{TicketError, TicketKeyState, TicketsReply, TicketsRequest};
 use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -64,11 +67,18 @@ const GITHUB_REPOS_EVENT: &str = "github-repos";
 const GITHUB_OWNERS_EVENT: &str = "github-owners";
 /// Longer than any owner or search the daemon takes.
 const MOST_GITHUB_WORD_BYTES: usize = 256;
+/// The slash commands and skills an agent takes on a machine: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
+const AGENT_COMMANDS_EVENT: &str = "agent-commands";
+/// Longer than any folder a daemon takes.
+const MOST_AGENT_FOLDER_BYTES: usize = 4096;
+/// Where an agent's sign-in stands on this computer: `{machine, tag, agent, state, link, code, failure}`.
+const AGENT_SIGN_IN_EVENT: &str = "agent-sign-in";
 /// What this computer's daemon read of a ticket source: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
 const TICKETS_EVENT: &str = "tickets";
 /// Where the ticket providers' keys stand: `{machine, tag, answer}`, never a key.
 const TICKET_KEYS_EVENT: &str = "ticket-keys";
-const TICKET_WRITE_EVENT: &str = "ticket-write";
+/// What a request about the extensions (skills, plugins, MCP servers, marketplaces) did: `{machine, tag, answer}`.
+const EXTENSIONS_EVENT: &str = "extensions";
 /// Which sources each project reads: `{machine, tag, answer}`, `answer` `{Ok}` (the asked project, every linked one, your names) or `{Err}`.
 const TICKET_LINKS_EVENT: &str = "ticket-links";
 /// A machine's home folder, as its daemon reads it.
@@ -263,6 +273,26 @@ impl Wire {
         self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_chat_reply)
     }
 
+    /// Where a side question (`/btw`) about a chat goes: `daemon`, taking only a side answer from
+    /// another machine.
+    pub fn side_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_side_answer)
+    }
+
+    /// Where a request for a branch's worktree goes: `daemon`, taking only the new folder, one
+    /// plain absolute path, from another machine.
+    pub fn worktree_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_worktree_reply)
+    }
+
     /// Where a question about a pane's repository goes. This computer's daemon answers any of
     /// them; another machine's is asked only what `remote_repo::may_ask` allows (what changed and
     /// its diff), and any other question is refused here in the words the window uses for a
@@ -325,17 +355,17 @@ impl Wire {
         }
         let id = machine_of(machine);
         let handle = self.handle()?;
-        if !handle.is_up(id) || handle.is_refused(id) {
+        if !handle.takes_requests(id) {
             return Err(refusal(handle, id));
         }
         let route = handle.route(id).ok_or_else(|| refusal(handle, id))?;
         let name = handle.name_of(id).ok_or_else(|| refusal(handle, id))?;
         Ok(Daemon::Remote(RemoteDaemon::new(
-            id.0,
+            handle.line_key(id),
             name,
             move || {
                 let route = route.clone();
-                Box::pin(async move { maitty_machines::open_remote(&route, crate::hub::dial()?).await })
+                Box::pin(async move { maitty_machines::open_remote(&route, crate::hub::request_dial()?).await })
             },
             vet,
         )))
@@ -461,6 +491,13 @@ impl Wire {
         )
     }
 
+    /// Ask this computer's daemon to start, stop or read an agent's sign-in. The answer comes back as an
+    /// `agent-sign-in` event carrying `tag`. The window sends only which agent and which of the three; the
+    /// daemon owns the command and what it prints.
+    pub fn agent_sign_in(&self, agent: SignInAgent, request: SignInRequest, tag: u64) -> Result<(), String> {
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::AgentSignIn { agent, request, tag }))
+    }
+
     /// Ask a machine's daemon (this computer's when none is named) who is signed in to GitHub there.
     /// The answer comes back as a `github-accounts` event carrying `tag`.
     pub fn github_accounts(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
@@ -484,6 +521,21 @@ impl Wire {
         self.send(machine_of(machine), ClientMsg::Query(Query::GitHubRepos { owner, search, tag }))
     }
 
+    /// Ask a machine's daemon for the slash commands and skills `agent` takes in `folder` there. The daemon
+    /// decides what folder it will start in; only what could not be a request is refused here. The answer
+    /// comes back as an `agent-commands` event carrying `tag`.
+    pub fn agent_commands(&self, machine: u16, agent: &str, folder: &str, tag: u64) -> Result<(), String> {
+        let agent = match agent {
+            "claude" => Provider::Claude,
+            "codex" => Provider::Codex,
+            _ => return Err("That agent has no list of commands to ask for".to_string()),
+        };
+        if folder.len() > MOST_AGENT_FOLDER_BYTES || folder.chars().any(char::is_control) {
+            return Err("That folder cannot be sent".to_string());
+        }
+        self.send(machine_of(Some(machine)), ClientMsg::Query(Query::AgentCommands { agent, folder: folder.to_owned(), tag }))
+    }
+
     /// Ask this computer's daemon to read a ticket source: `owner/name` for GitHub (its own `gh`), or `plane` or
     /// `linear` (the key it keeps). The daemon checks the source and the request and cleans the answer; only what
     /// could not be a source is refused here. The answer comes back as a `tickets` event carrying `tag`.
@@ -501,26 +553,16 @@ impl Wire {
         self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketKeys { change, tag }))
     }
 
-    /// Ask this computer's daemon to write one change to a ticket: a comment, or closing it. `confirmed` is the
-    /// person's click on the confirm step, passed on as it is; the daemon writes nothing without it and refuses
-    /// an agent's connection. The answer comes back as a `ticket-write` event carrying `tag`.
     /// Ask this computer's daemon which sources a project reads, or change them. The answer is a `ticket-links`
     /// event carrying `tag`.
     pub fn ticket_links(&self, place: Option<TicketPlace>, change: TicketLinkChange, tag: u64) -> Result<(), String> {
         self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketLinks { place, change, tag }))
     }
 
-    pub fn ticket_write(&self, source: &str, id: &str, write: TicketWrite, confirmed: bool, tag: u64) -> Result<(), String> {
-        let (source, id) = (source.trim(), id.trim());
-        for text in [source, id] {
-            if text.is_empty() || text.len() > MOST_TICKET_SOURCE_BYTES || text.chars().any(char::is_control) {
-                return Err("That ticket cannot be written to".to_string());
-            }
-        }
-        self.send(
-            MachineId::LOCAL,
-            ClientMsg::Query(Query::TicketWrite { source: source.to_owned(), id: id.to_owned(), write, confirmed, tag }),
-        )
+    /// Ask this computer's daemon to list, add, switch or remove an extension. The daemon checks the request, and an add
+    /// runs only with the token its preview gave. The answer comes back as an `extensions` event carrying `tag`.
+    pub fn extensions(&self, request: ExtRequest, tag: u64) -> Result<(), String> {
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::Extensions { request, tag }))
     }
 
     /// Ask a machine's daemon (this computer's when none is named) whose repositories it can list.
@@ -616,18 +658,11 @@ pub fn ticket_links(wire: tauri::State<'_, Wire>, place: Option<TicketPlace>, ch
     wire.ticket_links(place, change, tag)
 }
 
-/// Asks this computer's daemon to add a comment to a ticket or close it, after the person confirmed exactly what
-/// is shown. The answer arrives as a `ticket-write` event with the same `tag`.
+/// Asks this computer's daemon about the extensions of Claude Code and Codex. The answer arrives as an `extensions`
+/// event with the same `tag`.
 #[tauri::command]
-pub fn ticket_write(
-    wire: tauri::State<'_, Wire>,
-    source: String,
-    id: String,
-    write: TicketWrite,
-    confirmed: bool,
-    tag: u64,
-) -> Result<(), String> {
-    wire.ticket_write(&source, &id, write, confirmed, tag)
+pub fn extensions(wire: tauri::State<'_, Wire>, request: ExtRequest, tag: u64) -> Result<(), String> {
+    wire.extensions(request, tag)
 }
 
 /// Asks another machine for its whole list; it arrives as `machine-sessions-changed`.
@@ -648,6 +683,13 @@ pub fn clone_repository(
     tag: u64,
 ) -> Result<(), String> {
     wire.clone_repository(machine, &address, &parent, tag)
+}
+
+/// Starts, stops or reads an agent's sign-in on this computer. The answer arrives as an `agent-sign-in` event
+/// with the same `tag`.
+#[tauri::command]
+pub fn agent_sign_in(wire: tauri::State<'_, Wire>, agent: SignInAgent, request: SignInRequest, tag: u64) -> Result<(), String> {
+    wire.agent_sign_in(agent, request, tag)
 }
 
 /// Asks a machine (this computer when `machine` is left out) who is signed in to GitHub there. The
@@ -675,6 +717,14 @@ pub fn github_repos(
 #[tauri::command]
 pub fn github_owners(wire: tauri::State<'_, Wire>, machine: Option<u16>, tag: u64) -> Result<(), String> {
     wire.github_owners(machine, tag)
+}
+
+/// Asks another machine for the slash commands and skills an agent takes in a folder there. The
+/// answer arrives as an `agent-commands` event with the same `tag`; a machine that is offline is
+/// an error here, never an answer from this computer (this computer's own list is `agent_commands`).
+#[tauri::command]
+pub fn agent_commands_on(wire: tauri::State<'_, Wire>, machine: u16, agent: String, folder: String, tag: u64) -> Result<(), String> {
+    wire.agent_commands(machine, &agent, &folder, tag)
 }
 
 /// Asks the daemon for the shared settings; the answer arrives as a `shared-settings` event.
@@ -868,7 +918,8 @@ pub enum Reaction {
         status: Status,
     },
     /// A machine was taken out of the list.
-    Removed { machine: MachineId },
+    /// `lines` names the request lines kept for it, closed with it.
+    Removed { machine: MachineId, lines: maitty_desktop_client::RemoteKey },
     /// The shared settings of this computer's daemon.
     Settings(SharedSettings),
     /// A conversation of this computer's daemon changed.
@@ -884,6 +935,12 @@ pub enum Reaction {
         machine: MachineId,
         tag: u64,
         outcome: Result<String, String>,
+    },
+    /// Where this computer's agent sign-in stands, for the window that asked.
+    AgentSignIn {
+        tag: u64,
+        agent: SignInAgent,
+        state: SignInState,
     },
     /// Who a machine says is signed in to GitHub there, for the window that asked.
     GitHubAccounts {
@@ -903,6 +960,12 @@ pub enum Reaction {
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
     },
+    /// The slash commands and skills an agent takes on a machine, for the window that asked.
+    AgentCommands {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<Vec<AgentCommand>, String>,
+    },
     /// What a ticket source gave, for the window that asked.
     Tickets {
         machine: MachineId,
@@ -915,11 +978,11 @@ pub enum Reaction {
         tag: u64,
         answer: Result<Vec<TicketKeyState>, TicketError>,
     },
-    /// What a confirmed write to a ticket did, for the window that asked.
-    TicketWrite {
+    /// What a request about extensions did, for the window that asked.
+    Extensions {
         machine: MachineId,
         tag: u64,
-        answer: Result<TicketWritten, TicketError>,
+        answer: Result<ExtReply, ExtError>,
     },
     /// The projects' ticket links, for the window that asked.
     TicketLinks {
@@ -973,7 +1036,7 @@ pub fn react(
         }
         Update::Removed { machine } => {
             streams.forget(machine);
-            return vec![Reaction::Removed { machine }];
+            return vec![Reaction::Removed { machine, lines: handle.line_key(machine) }];
         }
         Update::LineUp { machine } => {
             // Panes a view was watching are asked for again; the replay that comes puts each
@@ -1015,13 +1078,15 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             }
             Out::Folders { machine, tag, listing } => Some(Reaction::Folders { machine, tag, listing }),
             Out::Cloned { machine, tag, outcome } => Some(Reaction::Cloned { machine, tag, outcome }),
+            Out::AgentSignIn { tag, agent, state } => Some(Reaction::AgentSignIn { tag, agent, state }),
             Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
             Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
             Out::GitHubOwners { machine, tag, answer } => Some(Reaction::GitHubOwners { machine, tag, answer }),
+            Out::AgentCommands { machine, tag, answer } => Some(Reaction::AgentCommands { machine, tag, answer }),
             Out::Tickets { machine, tag, answer } => Some(Reaction::Tickets { machine, tag, answer }),
             Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
-            Out::TicketWrite { machine, tag, answer } => Some(Reaction::TicketWrite { machine, tag, answer }),
             Out::TicketLinks { machine, tag, answer } => Some(Reaction::TicketLinks { machine, tag, answer }),
+            Out::Extensions { machine, tag, answer } => Some(Reaction::Extensions { machine, tag, answer }),
             Out::TicketSetup(ask) => Some(Reaction::TicketSetup(ask)),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
@@ -1080,6 +1145,40 @@ struct CloneAnswer {
     tag: u64,
     folder: Option<String>,
     refused: Option<String>,
+}
+
+/// An agent's sign-in as the window reads it. `state` is `idle`, `waiting`, `signed-in` or `failed`; `link` and
+/// `code` are set only for `waiting` (and only once the agent printed them), `failure` only for `failed`.
+#[derive(Clone, Serialize, Debug, PartialEq)]
+struct AgentSignInAnswer {
+    machine: u16,
+    tag: u64,
+    agent: SignInAgent,
+    state: &'static str,
+    link: Option<String>,
+    code: Option<String>,
+    failure: Option<&'static str>,
+}
+
+fn agent_sign_in_answer(tag: u64, agent: SignInAgent, state: SignInState) -> AgentSignInAnswer {
+    let (state, link, code, failure) = match state {
+        SignInState::Idle => ("idle", None, None, None),
+        SignInState::Waiting { link, code } => ("waiting", link, code, None),
+        SignInState::SignedIn => ("signed-in", None, None, None),
+        SignInState::Failed(why) => (
+            "failed",
+            None,
+            None,
+            Some(match why {
+                SignInFailure::NotInstalled => "not-installed",
+                SignInFailure::Unsupported => "unsupported",
+                SignInFailure::CouldNotStart => "could-not-start",
+                SignInFailure::TimedOut => "timed-out",
+                SignInFailure::Ended => "ended",
+            }),
+        ),
+    };
+    AgentSignInAnswer { machine: MachineId::LOCAL.0, tag, agent, state, link, code, failure }
 }
 
 #[derive(Clone, Serialize)]
@@ -1209,6 +1308,9 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
                     },
                 );
             }
+            Reaction::AgentSignIn { tag, agent, state } => {
+                let _ = app.emit(AGENT_SIGN_IN_EVENT, agent_sign_in_answer(tag, agent, state));
+            }
             Reaction::GitHubAccounts { machine, tag, report } => {
                 let _ = app.emit(
                     GITHUB_ACCOUNTS_EVENT,
@@ -1225,14 +1327,17 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::GitHubOwners { machine, tag, answer } => {
                 let _ = app.emit(GITHUB_OWNERS_EVENT, github_list_answer(machine, tag, answer));
             }
+            Reaction::AgentCommands { machine, tag, answer } => {
+                let _ = app.emit(AGENT_COMMANDS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
             Reaction::Tickets { machine, tag, answer } => {
                 let _ = app.emit(TICKETS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
             Reaction::TicketKeys { machine, tag, answer } => {
                 let _ = app.emit(TICKET_KEYS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
-            Reaction::TicketWrite { machine, tag, answer } => {
-                let _ = app.emit(TICKET_WRITE_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            Reaction::Extensions { machine, tag, answer } => {
+                let _ = app.emit(EXTENSIONS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
             Reaction::TicketLinks { machine, tag, answer } => {
                 let _ = app.emit(TICKET_LINKS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
@@ -1240,8 +1345,8 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::TicketSetup(ask) => {
                 let _ = app.emit(TICKET_SETUP_EVENT, ask);
             }
-            Reaction::Removed { machine } => {
-                maitty_desktop_client::forget_remote(machine.0);
+            Reaction::Removed { machine, lines } => {
+                maitty_desktop_client::forget_remote(lines);
                 if let Ok(mut states) = app.state::<MachineStates>().0.lock() {
                     states.remove(&machine.0);
                 }
@@ -1314,6 +1419,20 @@ mod tests {
     }
 
     #[test]
+    fn an_agent_sign_in_reaches_the_window_as_one_flat_answer_and_asks_by_name() {
+        let said = |state| serde_json::to_value(agent_sign_in_answer(5, SignInAgent::Codex, state)).unwrap();
+        assert_eq!(
+            said(SignInState::Waiting { link: Some("https://auth.example/d".into()), code: Some("AB-12".into()) }),
+            serde_json::json!({"machine": 0, "tag": 5, "agent": "codex", "state": "waiting", "link": "https://auth.example/d", "code": "AB-12", "failure": null})
+        );
+        assert_eq!(said(SignInState::SignedIn)["state"], "signed-in");
+        assert_eq!(said(SignInState::Failed(SignInFailure::TimedOut))["failure"], "timed-out");
+        let (agent, request): (SignInAgent, SignInRequest) = (serde_json::from_value("claude".into()).unwrap(), serde_json::from_value("cancel".into()).unwrap());
+        assert_eq!((agent, request), (SignInAgent::Claude, SignInRequest::Cancel));
+        assert!(serde_json::from_value::<SignInAgent>("rm".into()).is_err());
+    }
+
+    #[test]
     fn the_window_s_ticket_questions_and_answers_keep_their_shapes() {
         let list: TicketsRequest = serde_json::from_value(serde_json::json!({"List": {"group": "plane:p1", "state": null, "assignee": null, "label": null, "search": "cart", "page": 2}})).unwrap();
         assert!(matches!(list, TicketsRequest::List(_)));
@@ -1324,16 +1443,6 @@ mod tests {
         assert_eq!(serde_json::to_value(refused).unwrap(), serde_json::json!({"machine": 0, "tag": 4, "answer": {"Err": "SignedOut"}}));
         let none = TaggedAnswer { machine: 0, tag: 5, answer: Ok::<_, TicketError>(Vec::<TicketKeyState>::new()) };
         assert_eq!(serde_json::to_value(none).unwrap(), serde_json::json!({"machine": 0, "tag": 5, "answer": {"Ok": []}}));
-    }
-
-    #[test]
-    fn a_ticket_write_and_its_answer_keep_their_shapes() {
-        let comment: TicketWrite = serde_json::from_value(serde_json::json!({"Comment": {"text": "done"}})).unwrap();
-        assert_eq!(comment, TicketWrite::Comment { text: "done".into() });
-        assert_eq!(serde_json::from_value::<TicketWrite>(serde_json::json!("Close")).unwrap(), TicketWrite::Close);
-        assert!(serde_json::from_value::<TicketWrite>(serde_json::json!({"Delete": {}})).is_err());
-        let done = TaggedAnswer { machine: 0, tag: 6, answer: Ok::<_, TicketError>(TicketWritten::Commented) };
-        assert_eq!(serde_json::to_value(done).unwrap(), serde_json::json!({"machine": 0, "tag": 6, "answer": {"Ok": "Commented"}}));
     }
 
     #[test]

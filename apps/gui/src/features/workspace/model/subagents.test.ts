@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SubagentActivity } from '@/data/preview'
-import { durationWords, listedSubagents, subagentWord, toSubagentView } from './subagents'
+import { durationWords, listedSubagents, runningBarShown as barShown, subagentWord, toSubagentView } from './subagents'
 
 const activity = (extra: Partial<SubagentActivity> = {}): SubagentActivity => ({ id: 'a', name: 'Explore', state: 'Working', task: null, startedAt: 1000, updatedAt: 1100, latest: null, result: null, ...extra })
 
@@ -48,5 +48,13 @@ describe('a subagent as the window shows it', () => {
     expect(durationWords(48)).toBe('48s')
     expect(durationWords(263)).toBe('4m 23s')
     expect(durationWords(3900)).toBe('1h 05m')
+  })
+})
+
+describe('the running-helpers bar over a pane', () => {
+  it('floats over a chat or a terminal, and steps aside while the agent asks something', () => {
+    expect(barShown({ kept: false, asking: false })).toBe(true)
+    expect(barShown({ kept: false, asking: true })).toBe(false)
+    expect(barShown({ kept: true, asking: false })).toBe(false)
   })
 })

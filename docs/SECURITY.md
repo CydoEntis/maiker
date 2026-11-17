@@ -116,7 +116,9 @@ remain in the daemon and its authenticated IPC. `prewarm_agent_session`, which s
 chat's agent while its first message is written, takes what `start_agent_session` takes and
 checks it the same way (one of the known agent names, flags that are single plain words, a
 folder that exists), so it can start nothing a start could not; the daemon keeps one such
-agent, hidden, and stops it when it is not taken.
+agent, hidden, and stops it when it is not taken. The window's own permissions include setting its title and
+its icon's count (`core:window:allow-set-title`, `core:window:allow-set-badge-count`), which show how many sessions
+need you; they take a number the window counted, never text from a session.
 
 The native host may start only the bundled CLI sidecar with the fixed `daemon`
 argument. Resolve its path from the application bundle; never accept a program
@@ -170,7 +172,7 @@ Daemon › Service log). The webview supplies nothing: the log, the folder and t
 host's, and an existing file is never replaced (`export::save_in`). The log names folders,
 repositories and sessions, so the setting says to look before sharing it.
 
-`agent_commands` (the same module) asks the same way for the slash commands Claude Code takes, for
+`agent_commands` (`maitty-agent-ask`, started by the host for this computer and by a daemon for its own machine on `Query::AgentCommands`; another machine's answer is cleaned again in `remote_policy`) asks the same way for the slash commands Claude Code takes, for
 the chat's command picker. It differs in one input: the webview names the folder the program is
 started in, so the project's own commands and skills are listed. The host starts it only in a full
 path to a folder that exists, and in the home folder otherwise; a compromised webview could thereby
@@ -516,7 +518,7 @@ that is not this one (`remote_policy.rs`, `remote_snapshot.rs` in `maitty-machin
 | `Reply::ClosedSessions` | answer, cleaned | the closed sessions a window asked that machine for: at most 50, every field one clean line, cut short; the folder is a label for that machine and never touches this computer's disk |
 | `AskRemoveWorktree` | ignore | names a folder on this computer's disk to delete; remote worktree management is out of scope (ADR 0007) |
 | `Reply::SavedConversations` | ignore | saved conversations are listed for this computer's folders only; another machine's are out of scope |
-| `Reply::SideAnswer` | ignore | side answers are asked of this computer's daemon only; another machine's are out of scope |
+| `Reply::SideAnswer` | ignore on the attached line | a side answer is asked on a request line to the chat's machine and taken only there, through `remote_chat::vet_side_answer`: nothing but a side answer passes, every string is cleaned like a chat's and the text is cut at `SIDE_ANSWER_MAX_BYTES` |
 | `AutoWorkspace` | ignore | announces a workspace and arms this computer's undo |
 
 The opt-ins are read from the machine's `[[machines]]` entry by name; a machine no entry names
@@ -664,22 +666,29 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   anything but an http(s) link, and the reply says only what is linked and whether a key is saved), it cannot
   save a link, and only the pane itself may ask, for its own project, once per project every 5 seconds. The
   suggested link is drawn as text and never opened or saved on its own. An ask from another machine is ignored.
-- **Writing to a ticket** (`Query::TicketWrite`, `daemon/tickets_write.rs`) is the one place Maitty changes
-  a ticket, and it does two things only: add a comment, or close the ticket. It never edits a ticket's own
-  words and never deletes. Nothing is written unless the request carries `confirmed: true`, which the
-  desktop sets only after the person saw the provider, the ticket and the exact text and clicked to confirm;
-  the daemon refuses a pane or a structured runtime outright (human clients only) and answers an
-  unconfirmed request with a refusal before it reads a key, starts `gh` or sends a byte, so a refused
-  write leaves the ticket as it was. The comment is checked by `clean_comment` (not empty, at most 4,000
-  characters, no control, hidden or tab characters, `\n` line breaks) and is refused rather than quietly
-  changed, so the text confirmed is the text written. The ticket id must belong to the named source (a
-  GitHub issue of that repository, a Plane work item, a Linear issue). GitHub goes through the user's own
-  `gh`, with the text joined to its flag (`--body=<text>`); Plane's comment is a `POST` whose text is
-  HTML-escaped into paragraphs, and closing is a `PATCH` to a state of its `completed` group; Linear's
-  comment and `issueUpdate` take the text and ids as GraphQL variables, never as query text, to the
-  same fixed server. A write is sent once and never retried (a retry could comment twice). Failures are
-  the same fixed lines as the reads; no key, ticket text or server word is logged. Not yet checked against
-  a live Plane or Linear server.
+- **Tickets are never written** (ADR 0011). No request changes a ticket; a retired `Query::TicketWrite` from an
+  older window is answered with a refusal before any key is read or any command runs.
+- **Extensions** (`Query::Extensions`, `daemon/extensions/`, `maitty_shared::extensions`) install code that runs with
+  the person's access: a plugin ships hooks and servers, an MCP server is a command (or a remote address that hears
+  the person's prompts), and neither agent asks first (`plugin install --json` simply does it). So the daemon asks.
+  *Who:* human clients only; a pane or a structured runtime is refused. *Confirm:* an add runs only with the
+  one-time token a preview returned (random, 128 bits, single use, 10 minutes, at most 16 kept), so a client cannot
+  skip the preview; the window shows the source, the scope, exactly what will run (hook commands, server commands
+  and addresses, read from the plugin's own files as data with a 256 KiB limit and never executed) and "This runs
+  code on your computer with your access", with Cancel focused and no "trust always". A plugin that is fetched on
+  install says its commands cannot be listed first. *Commands:* an argument list, never a shell string (a `&`, quote
+  or space is one argument; a name cannot start with `-`, a path cannot leave its folder, a source has no control
+  characters), 60 seconds, 1 MiB of each stream, no terminal to ask anything of, the login PATH, run in the project
+  folder only for a project scope. A server address is `https://` (or `http://` for this computer) with no sign-in in it.
+  *Never listed by running:* a list reads files; `claude mcp list` is never called because it starts every server.
+  *Removals:* only an item the list shows; a skill is a folder under the agent's skills folder named by a plain name,
+  a link is removed and never what it points at, and Codex's `config.toml` is edited with `toml_edit` so its comments
+  and other keys stay (written beside and moved into place, with the old file's rights); Codex's removals are checked
+  against the listing because it exits 0 for what was never there. *Secrets:* none are taken yet. A server's keys,
+  headers and bearer tokens are not accepted by the page (`mcp add -e K=V` would put the value on a command line);
+  the page says to use the agent's own terminal. What an agent says is shown as one cleaned line with words that
+  look like a key (`key=…`, a bearer, a 32-character token) hidden; a typed error is the contract, not stderr.
+  *Not run on Windows or against a live plugin from the internet.*
 - **Reading Plane and Linear** (`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`, over
   `daemon/ticket_http.rs`) sends a stored key to a server, so what goes where is fixed. *Sent:* the key
   in one header (`X-API-Key` for Plane, `Authorization` for Linear), the request path, and for Linear a
@@ -689,8 +698,7 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   or link-local address, a name with no dots or ending `.local`/`.lan`), with its workspace and every id
   restricted to letters, digits and dashes before it enters a path; Linear's one server,
   `https://api.linear.app/graphql`, a constant that the key file cannot change. Every request in these
-  two files is a read: Plane's calls are all `GET`, Linear's are all `query`. The only writes are in
-  `daemon/tickets_write.rs` (next item). *How:*
+  two files is a read: Plane's calls are all `GET`, Linear's are all `query`. *How:*
   the system `curl` (no new dependency), with the key on its standard input as a config, never on the
   command line where `ps` shows it; `--disable` so a user's `.curlrc` cannot change it; no redirect is
   followed, so a key is never forwarded; Plane may be spoken to over http or https, Linear over https
@@ -714,11 +722,6 @@ pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
 started the daemon. Status reports (`maitty hook`) are accepted only from a
 process inside the pane (traced through its process tree) or carrying that
 pane's `MAITTY_PANE_TOKEN`, a random secret set only in that pane's environment.
-Workflow reports (`maitty workflow report`, ADR 0010) need the same token, and structured callers
-may not send one. A report is checked at the boundary (`workflow::checked`): every string loses
-control and hidden characters, names and notes have length limits, a run has at most 32 steps, and a
-ticket link must be `http` or `https`. A report never changes status, so a process in the pane can
-only mislabel its own pane's workflow view.
 Listing specialist agents (`Query::Specialists`, ADR 0010) reads only the fixed agent folders of the
 pane's repository and the user's home, never a path a client names; it is for human clients with read
 access to the pane, writes nothing, and bounds the count and size of what it returns. Names,
@@ -821,9 +824,11 @@ path, branch or command: the folder, branch and repository come from that entry,
 typed is the agent's own resume template with the entry's conversation id, which must start with a
 letter or digit and hold only letters, digits, `_` and `-`, at most 128. Making a worktree again
 follows DATABASE "closed sessions": nothing at the path is ever overwritten. Another machine: the
-command is a worktree command, so a window sends it to this computer's daemon only, as it does
-`BranchWorktree` (API_PATTERNS "client routing"; remote worktree management is out of scope, ADR
-0007). Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
+command is a worktree command, so a window sends it to this computer's daemon only (API_PATTERNS
+"client routing"; remote worktree management is out of scope, ADR 0007). `BranchWorktree` is the one
+exception: the desktop app asks another machine's daemon to make a new chat's worktree in its own
+checkout, and takes back only the folder, one plain absolute path (`remote_chat::vet_worktree_reply`),
+which becomes the folder a session starts in there. Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
 
 ## Project-specific: followed transcripts
 
@@ -896,6 +901,28 @@ off the UI thread, with the user's permissions. What was pasted never reaches gi
   is never written into.
 - Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses
   the credentials git already has. Maitty stores no GitHub token.
+
+## Project-specific: signing an agent in from the desktop
+
+`Query::AgentSignIn` makes the daemon run `claude auth login` or `codex login --device-auth` and show the
+person a link and a code (`daemon/agent_sign_in.rs`). What it may do:
+
+- The program is the agent's own, found on the login PATH. Every argument is a constant; the window sends
+  only which agent and `Start`, `Cancel` or `Read`, as enum values the daemon decodes. Nothing the command
+  prints is ever run, passed to a command or written anywhere.
+- Only a link and a code leave the process. The link must be `https://` with a host, no user name, no
+  whitespace or control character, at most 2 KiB; anything else is dropped, not repaired. The code is letters,
+  digits and dashes, at most 24 characters. The window shows the link's host beside Open link and opens it
+  through the same `open_link` path as every other address. The host is not on a list: the command's own
+  output is the source, so the check is the shape, and the person sees where it goes.
+- No credential passes through Maitty. The tokens a login obtains go to the agent's own files, as when it is
+  run in a terminal; the daemon reads none and logs none. The output is read up to 16 KiB, scanned once, and
+  dropped; the rest is read and discarded so the command never stalls. Status text is never logged.
+- One login per agent, a 15-minute limit, killed on cancel, on timeout and when the daemon drops it. Human
+  clients only: an agent's connection is refused, and a reply from another machine is ignored, so another
+  computer's output can never put a link in this window.
+- Claude's paste-a-code flow is not supported on purpose: a code typed into the window would be a credential
+  in a text box (ADR 0006).
 
 ## Project-specific: the message the daemon sends by itself
 

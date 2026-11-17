@@ -1,4 +1,5 @@
 import type { ChatEvent, CommandEvent, ItemFields, SubagentEvent, TodoItem } from './chatEvents'
+import { foundNothing } from './commandIntent'
 
 /**
  * Facts the step cards show, computed from the projection's events. Pure: the clock comes in as an
@@ -96,7 +97,7 @@ export function commandMeta(event: CommandEvent): string {
 
 /** How a finished command ended, in words: its exit code where the history kept one. */
 export function commandEnded(event: CommandEvent): string {
-  return event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : 'exit code not reported'
+  return foundNothing(event) ? 'no matches' : event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : 'exit code not reported'
 }
 
 /** How long a finished command took, or null where the history kept no time. */

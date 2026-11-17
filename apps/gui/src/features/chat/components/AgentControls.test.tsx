@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
@@ -148,6 +148,46 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
+  it('names what the agent says it runs, whether it was picked here or typed in the terminal', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const daemon = new FakeDaemonHistory()
+    daemon.meta = { mode: 'auto', model: 'claude-sonnet-5-5' }
+    fake.current = daemon
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const chat = (effort: string) => <ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }} agent="claude" online typeInto={typeInto} sessionId="s1" effort={effort} />
+    const { rerender } = render(chat('medium'))
+    await settle(IDLE_POLL_MS)
+    const button = () => screen.getByRole('button', { name: /^Agent, model and reasoning/ })
+    expect(button()).toHaveAccessibleName(/Sonnet 5.5 · Medium/)
+
+    // Picked here: shown at once, and the agent's files then say the same.
+    await user.click(button())
+    await user.click(screen.getByRole('radio', { name: 'High' }))
+    await settle(COMMAND_SUBMIT_GAP_MS)
+    expect(button()).toHaveAccessibleName(/· High/)
+    rerender(chat('high'))
+    expect(button()).toHaveAccessibleName(/· High/)
+
+    // Typed in the terminal: the chat follows.
+    rerender(chat('low'))
+    daemon.meta = { mode: 'auto', model: 'claude-opus-5-5' }
+    await settle(IDLE_POLL_MS)
+    expect(button()).toHaveAccessibleName(/Opus 5.5 · Low/)
+    // No pick of its own is kept, so nothing can later disagree with the terminal.
+    expect(window.localStorage.getItem('maitty.gui.agentChoice.v1')).toBeNull()
+  })
+
+  it('ignores a pick this window kept for an earlier chat of the same number', async () => {
+    // Numbers start again when the daemon restarts; the earlier chat's agent had said what this one says.
+    window.localStorage.setItem('maitty.gui.agentChoice.v1', JSON.stringify({ [String(FAKE_CONVERSATION)]: { model: 'claude-opus-5-5', reasoning: 'max', saidModel: 'claude-sonnet-5-5', saidEffort: 'medium' } }))
+    const daemon = new FakeDaemonHistory()
+    daemon.meta = { mode: 'auto', model: 'claude-sonnet-5-5' }
+    fake.current = daemon
+    render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }} agent="claude" online typeInto={vi.fn()} sessionId="s1" effort="medium" />)
+    await settle(IDLE_POLL_MS)
+    expect(screen.getByRole('button', { name: /^Agent, model and reasoning/ })).toHaveAccessibleName(/Sonnet 5.5 · Medium/)
+  })
+
   it('starts from what was picked on the new-chat page, before the agent has said anything', async () => {
     holdStartChoice('s1', { model: 'claude-opus-5-5', reasoning: 'high', mode: 'plan' })
     const daemon = new FakeDaemonHistory()
@@ -160,5 +200,37 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · Opus 5.5 · High/ })).toHaveTextContent('Opus 5.5')
     expect(screen.getByRole('button', { name: /^Permission mode: Plan/ })).toBeInTheDocument()
     expect(startChoiceOf('s1')).toBeNull()
+  })
+
+  it('opens Codex\'s own /model menu in the chat from the model label, and closes it with Esc', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const typeInto = open('codex')
+    await settle(IDLE_POLL_MS)
+
+    await user.click(screen.getByRole('button', { name: /^Model: .* Open its menu/ }))
+    await settle(COMMAND_SUBMIT_GAP_MS)
+    // The command first and its Enter after a pause, as every typed command goes; nothing is typed that the person did not ask for.
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model', '\r'])
+    const card = screen.getByRole('region', { name: 'Codex model menu' })
+    expect(within(card).getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
+
+    await user.click(within(card).getByRole('button', { name: 'Down' }))
+    expect(typeInto).toHaveBeenLastCalledWith('\x1b[B')
+    await user.click(within(card).getByRole('button', { name: 'Close' }))
+    expect(typeInto).toHaveBeenLastCalledWith('\x1b')
+    expect(screen.queryByRole('region', { name: 'Codex model menu' })).not.toBeInTheDocument()
+  })
+
+  it('does not open Codex\'s model menu while it works, and says why', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const typeInto = open('codex', 'Working')
+    await settle(IDLE_POLL_MS)
+
+    const label = screen.getByRole('button', { name: /^Model: .* Open its menu/ })
+    expect(label).toHaveAttribute('aria-disabled', 'true')
+    expect(label).toHaveAttribute('title', expect.stringMatching(/working/))
+    await user.click(label)
+    expect(typeInto).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region', { name: 'Codex model menu' })).not.toBeInTheDocument()
   })
 })

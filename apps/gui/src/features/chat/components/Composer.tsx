@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { recallStep, type Recalled } from '../promptRecall'
 import { toast } from '@/lib/toast'
 import { pasteFromHost, pickFromClipboard, unsupportedMessage } from '@/features/terminal/clipboardImage'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
@@ -22,6 +23,7 @@ import { asSkills, commandText, matchCommands, skillQuery, slashQuery, useSlashC
 import { CLAUDE_HIDDEN_COMMANDS, CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import { terminalOnlyNote, typedCommand, windowRouteOf, withWindowRoutes, type WindowRoute } from '../windowCommands'
 import { CODEX_COMMANDS } from '../codexCommands'
+import { GEMINI_COMMANDS, geminiRouteOf, withGeminiRoutes } from '../geminiCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
 import { usageItems, type SessionUsage } from '../usageStrip'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
@@ -46,6 +48,10 @@ export type ComposerFacts = {
   effort?: string | null | undefined
   /** For a chat that follows the agent's terminal and can type into it: send the agent one of its own commands (`/model x`). */
   onCommand?: ((text: string) => void) | undefined
+  /** For a chat whose agent has a model menu only its terminal draws (Codex): opens that menu here. Absent where the model is only said. */
+  onOpenModelMenu?: (() => void) | undefined
+  /** Why the model menu cannot open right now. */
+  modelMenuLocked?: string | null | undefined
   /** The same, for the permission mode: moves the agent to the picked mode (by its Shift+Tab). */
   onPickMode?: ((mode: string) => void) | undefined
   /** The modes the dropdown offers and whose they are; Claude's when not given. */
@@ -67,6 +73,8 @@ export type ComposerFacts = {
     /** Why the model and effort cannot be picked, when that differs from `locked`: a pick made while the agent works is held for the turn's end, so only the mode waits. */
     readonly pickerLocked?: string | null
     readonly start?: AgentChoice
+    /** The chat runs on another machine: this computer's model list says nothing of what it has. */
+    readonly remote?: boolean
   } | undefined
 }
 
@@ -79,6 +87,8 @@ type Props = {
   commandsFrom?: {
     readonly agent: string
     readonly folder: string
+    /** The machine the agent runs on, whose commands and skills these are; this computer when left out. */
+    readonly machine?: number | undefined
     /** For an agent with a terminal: types a command there and shows it. With it the box also offers the commands only the terminal runs. */
     readonly inTerminal?: ((command: string) => void) | undefined
     /** Answers the commands the window runs itself (`windowCommands.ts`) with the route and the text as typed. Without it they go to the agent. */
@@ -91,25 +101,36 @@ type Props = {
   waiting?: boolean
   /** Where an `@` looks for files; absent where the daemon cannot be asked (another machine, no pane). */
   files?: FileSearchPlace | undefined
+  /** The messages the person sent in this chat, oldest first, for ↑ to bring back (`promptRecall.ts`). */
+  sent?: readonly string[]
 }
 
 const NO_CHANGE = () => undefined
+const NO_MESSAGES: readonly string[] = []
 const PERCENT = 100
+
+/** What in the question tray takes the focus when it opens: its first field, else its first button. */
+// Only a question that takes keys gets the focus: a card answered only by a click (trusting a folder) must not be
+// answered by a stray Enter meant for the box.
+const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
 
 /**
  * The message box (layout 2h): the question tray when the agent asks, then one box: the text with attach at its top
  * right, and under it the model, the permission mode, the usage meters and send. Enter sends, Shift+Enter
  * adds a line, Esc interrupts the running turn. While the agent works, sending queues the message;
- * while a request waits for an answer, or the daemon is offline, the box is off and says why.
+ * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
+ * offline the box still takes typing but does not send.
  */
-export function Composer({ agent, composer, conversation, commandsFrom, question = null, facts, waiting = false, files }: Props) {
-  const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, error } = composer
+export function Composer({ agent, composer, conversation, commandsFrom, question = null, facts, waiting = false, files, sent = NO_MESSAGES }: Props) {
+  const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
   const draft = composer.draft ?? storedDraft
   const off = disabledReason !== null
   const box = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLTextAreaElement>(null)
+  // The sent message ↑ put in the box, while it is still there unedited.
+  const recalled = useRef<Recalled | null>(null)
   useKeepTyping(text, attachments.length)
   // A chat that opens takes the typing, as the terminal under it would, when nothing else on the page has it:
   // the new-chat page has just closed, or the starting chat's box was replaced by this one.
@@ -120,6 +141,18 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     if (pane?.classList.contains('is-card') === true && !pane.classList.contains('is-focused')) return
     text.current?.focus({ preventScroll: true })
   }, [])
+  // A question the agent asks takes the typing from the box, which goes off while it waits: its first control has the
+  // focus, so y / a / n (or Enter) answer it at once instead of going nowhere. Once it is answered the box has it back.
+  // Only when the typing was in this chat's box, or nowhere (the box going off dropped it), never from another pane.
+  const tray = useRef<HTMLDivElement>(null)
+  const asking = question !== null
+  useEffect(() => {
+    const active = document.activeElement
+    const ours = active === null || active === document.body || active === text.current || (tray.current?.contains(active) ?? false)
+    if (!ours) return
+    if (asking) tray.current?.querySelector<HTMLElement>(TRAY_FIRST_CONTROL)?.focus({ preventScroll: true })
+    else if (active === null || active === document.body) text.current?.focus({ preventScroll: true })
+  }, [asking])
   // The desktop shell takes file drops for itself, so the composer asks to be told of the ones that land on it.
   const { addPaths } = attach
   useEffect(() => {
@@ -162,12 +195,13 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     if (windowList) {
       const skills = asSkills(slash.commands)
       if (skillsOnly) return skills
-      return [...(inTerminal === undefined ? CODEX_COMMANDS.filter((command) => command.terminal !== true) : CODEX_COMMANDS), ...skills]
+      const own = agent === 'gemini' ? withGeminiRoutes(GEMINI_COMMANDS) : inWindow === undefined ? CODEX_COMMANDS : withWindowRoutes(CODEX_COMMANDS, 'codex')
+      return [...(inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own), ...skills]
     }
     const listed = withTerminalCommands(slash.commands, CLAUDE_TERMINAL_COMMANDS, CLAUDE_HIDDEN_COMMANDS)
     const own = inWindow === undefined ? listed : withWindowRoutes(listed)
     return inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own
-  }, [slash.commands, inTerminal, inWindow, windowList, skillsOnly])
+  }, [slash.commands, inTerminal, inWindow, windowList, skillsOnly, agent])
   const matches = useMemo(() => (query === null ? [] : matchCommands(offered, query)), [offered, query])
   // The keys start at the closest match each time the typed name changes.
   const [cursor, setCursor] = useState({ query: '', index: 0 })
@@ -180,12 +214,14 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   // for its question, the rest go to the session's chat. One that ends or empties the session is refused while the
   // agent works, as the terminal's are; a side answer may go then, as it leaves the conversation alone.
   const routeOf = (typed: string): WindowRoute | null => {
-    // The routes are Claude Code's commands by its names; another agent's are its own.
-    if (inWindow === undefined || agent !== 'claude' || windowList || attachments.length > 0) return null
+    // Each agent's routes are by its own names for its commands.
+    if (inWindow === undefined || attachments.length > 0) return null
     const parts = typedCommand(typed)
     if (parts === null) return null
-    const route = windowRouteOf(parts.name, parts.args)
-    if (route !== null || inTerminal !== undefined) return route
+    if (agent === 'gemini') return geminiRouteOf(parts.name, parts.args)
+    const route = windowRouteOf(parts.name, parts.args, agent)
+    // Only Claude's list names the commands that have no use without a terminal (Codex's are sent as typed).
+    if (route !== null || inTerminal !== undefined || agent !== 'claude') return route
     // With no terminal, a command only the terminal runs gets a card saying so instead of going nowhere.
     const terminalOnly = namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)
     return terminalOnly === undefined ? null : terminalOnlyNote(terminalOnly.name)
@@ -279,8 +315,21 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
       event.preventDefault()
       return
     }
+    if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      const area = event.currentTarget
+      const step = area.selectionStart === area.selectionEnd ? recallStep(sent, draft, recalled.current, area.selectionStart, event.key === 'ArrowUp' ? 'older' : 'newer') : null
+      if (step !== null) {
+        event.preventDefault()
+        recalled.current = step.recalled
+        setDraft(step.draft)
+        // The caret goes to the end, as in a shell, once React has put the text in.
+        window.requestAnimationFrame(() => { area.setSelectionRange(area.value.length, area.value.length) })
+        return
+      }
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
+      recalled.current = null
       send()
     } else if (event.key === 'Escape' && running) {
       event.preventDefault()
@@ -292,7 +341,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     <div ref={box} className="mx-composer">
       <div className="mx-composer-column">
         <QueuedMessages agent={agent} queue={queue} onRemove={removeQueued} onEdit={(id) => { editQueued(id); text.current?.focus() }} onSendNow={sendQueuedNow} sendingNow={sendingNow} />
-        {question}
+        <div ref={tray} className="mx-question-slot">{question}</div>
         <div className={`mx-box${off ? ' is-locked' : ''}`}>
           {picking && (
             <SlashPicker agent={agent} typed={draft.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={run} onHover={(index) => { setCursor({ query, index }) }} />
@@ -308,7 +357,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
             {...(mention.open && (mention.found?.paths.length ?? 0) > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-file-list', 'aria-activedescendant': `mx-file-${String(mention.active)}` } : {})}
             rows={2}
             value={draft}
-            disabled={off}
+            disabled={!draftable}
             placeholder={placeholder}
             className="mx-box-text"
             onChange={(event) => { setDraft(event.target.value); followCaret(event.target) }}
@@ -331,12 +380,12 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
           <div className="mx-box-row">
             {facts.agentChips !== undefined ? (
               conversation !== undefined
-                ? <ModelPicker agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={facts.agentChips.pickerLocked === undefined ? facts.agentChips.locked : facts.agentChips.pickerLocked} />
+                ? <ModelPicker remote={facts.agentChips.remote === true} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={facts.agentChips.pickerLocked === undefined ? facts.agentChips.locked : facts.agentChips.pickerLocked} />
                 : <AgentPicker agent={agent} choice={facts.agentChips.start ?? defaultChoice()} onChange={NO_CHANGE} locked={facts.agentChips.locked ?? undefined} />
             ) : (
               <>
-                {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={null} />}
-                {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} />}
+                {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={null} />}
+                {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} onOpenMenu={facts.onOpenModelMenu} locked={facts.modelMenuLocked ?? null} />}
               </>
             )}
             <ModeControl facts={facts} />
@@ -379,8 +428,8 @@ const METER_PATH = 'M6 1H11V11H1V1H6'
 /**
  * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
  * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. For an agent that
- * reports them (`always`) all three are drawn, one not reported yet as "–" (ADR 0009: never a made-up zero); for any
- * other only what it reported, and with nothing reported there is none. A click opens Usage & cost.
+ * reports its context (`always`) the context shows from the start, 0% before its first turn; a plan limit shows once
+ * the agent has reported it (`usageItems`). A click opens Usage & cost.
  */
 function UsageMeters({ usage, always, onOpen }: { usage: SessionUsage; always: boolean; onOpen: (() => void) | undefined }) {
   const items = usageItems(usage, nowSeconds(), always)
@@ -388,18 +437,15 @@ function UsageMeters({ usage, always, onOpen }: { usage: SessionUsage; always: b
   return (
     <span className="mx-usage" role="group" aria-label="Usage">
       {items.map((item) => {
-        const used = item.percent === null
-          ? `${item.label}: not reported yet`
-          : item.window === null ? `How much of this chat's memory is used: ${String(item.percent)}%` : item.resetsIn === null ? `${item.label}: ${String(item.percent)}% used` : `${item.label}: ${String(item.percent)}% used · resets in ${item.resetsIn}`
-        const percent = item.percent ?? 0
+        const used = item.window === null ? `How much of this chat's memory is used: ${String(item.percent)}%` : item.resetsIn === null ? `${item.label}: ${String(item.percent)}% used` : `${item.label}: ${String(item.percent)}% used · resets in ${item.resetsIn}`
         const meter = (
           <>
             <span className="mx-usage-name">{usageName(item)}</span>
-            <svg className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} {...(item.percent === null ? { 'aria-valuetext': 'not reported yet' } : { 'aria-valuenow': item.percent })} width="12" height="12" viewBox="0 0 12 12">
+            <svg className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={item.percent} width="12" height="12" viewBox="0 0 12 12">
               <path d={METER_PATH} className="mx-usage-track" />
-              <path d={METER_PATH} className="mx-usage-fill" pathLength={PERCENT} strokeDasharray={`${String(percent)} ${String(PERCENT)}`} />
+              <path d={METER_PATH} className="mx-usage-fill" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
             </svg>
-            <span className="mx-usage-figure">{item.percent === null ? '–' : `${String(item.percent)}%`}</span>
+            <span className="mx-usage-figure">{`${String(item.percent)}%`}</span>
           </>
         )
         return onOpen === undefined
@@ -448,18 +494,46 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
   )
 }
 
-/** The model a chat that follows a terminal agent runs; it is changed in the terminal, so it is only said. Drawn from the start, with just the agent's name until the agent says its model, so it is never added later. */
-function ModelLabel({ agent, model }: { agent: ChatAgent; model: string | null }) {
-  return (
-    <span className="mx-model-button is-static" title="The model, from the agent's own file. Change it in the terminal with /model.">
+/**
+ * The model a chat that follows a terminal agent runs. Where the agent's model menu is only drawn by its terminal it opens
+ * that menu in the chat; otherwise it is only said, and changed in the terminal. Drawn from the start, with just the agent's
+ * name until the agent says its model, so it is never added later.
+ */
+function ModelLabel({ agent, model, onOpenMenu, locked }: { agent: ChatAgent; model: string | null; onOpenMenu: (() => void) | undefined; locked: string | null }) {
+  const name = modelName(agent, undefined, model)
+  const face = (
+    <>
       <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>
-      <span className="mx-model-name">{modelName(agent, undefined, model)}</span>
-    </span>
+      <span className="mx-model-name">{name}</span>
+    </>
+  )
+  if (onOpenMenu === undefined) {
+    return <span className="mx-model-button is-static" title="The model, from the agent's own file. Change it in the terminal with /model.">{face}</span>
+  }
+  // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.
+  return (
+    <button
+      type="button"
+      className={`mx-model-button${locked === null ? '' : ' is-locked'}`}
+      aria-disabled={locked === null ? undefined : 'true'}
+      aria-label={`Model: ${name}. Open its menu.${locked === null ? '' : ` ${locked}`}`}
+      title={locked ?? `The model, from the agent's own file. Opens ${agent}'s /model menu here.`}
+      onClick={locked === null ? onOpenMenu : undefined}
+    >
+      {face}
+    </button>
   )
 }
 
 /** The model and reasoning the next message uses, from the agent picker. */
-function ModelPicker({ agent, conversation, model, effort, live, locked }: { agent: ChatAgent; conversation: number; model: string | null; effort: string | null; live?: ((command: string) => void) | undefined; locked: string | null }) {
-  const [choice, change] = useAgentChoice(conversation, agent)
-  return <AgentPicker agent={agent} choice={choice} onChange={change} currentModel={model} currentEffort={effort} locked={locked ?? undefined} {...(live ? { live } : {})} />
+function ModelPicker({ agent, conversation, model, effort, live, locked, remote }: { agent: ChatAgent; conversation: number; model: string | null; effort: string | null; live?: ((command: string) => void) | undefined; locked: string | null; remote: boolean }) {
+  const [stored, change] = useAgentChoice(conversation, agent)
+  // A chat that follows the agent's terminal keeps no pick of its own: a pick is typed in as the agent's command, and
+  // the button names what the agent says it runs, so it never disagrees with the terminal. A kept pick could, as one
+  // made in the terminal or before a restart would not reach it.
+  const choice = live === undefined ? stored : FOLLOWS_AGENT
+  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={live === undefined ? change : ignoreChange} currentModel={model} currentEffort={effort} locked={locked ?? undefined} {...(live ? { live } : {})} />
 }
+
+const FOLLOWS_AGENT: AgentChoice = defaultChoice()
+const ignoreChange = (): void => {}

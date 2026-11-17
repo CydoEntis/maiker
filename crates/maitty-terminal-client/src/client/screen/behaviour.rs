@@ -590,7 +590,7 @@ impl App {
             KeyCode::Backspace => {
                 self.screen.filter.pop();
             }
-            KeyCode::Char(c) if plain => self.screen.filter.push(c),
+            KeyCode::Char(c) if plain || crate::client::input::alt_gr(k) => self.screen.filter.push(c),
             _ => return false,
         }
         self.screen.side_scroll = 0;
@@ -1218,7 +1218,7 @@ impl App {
                 fd.q.pop();
                 fd.sel = 0;
             }
-            KeyCode::Char(c) if !ctrl => {
+            KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) => {
                 fd.q.push(if c == '/' || c == '\\' { sep } else { c });
                 fd.sel = 0;
             }
@@ -1607,7 +1607,7 @@ impl App {
                 self.mode = Mode::GoTo { query, sel };
                 return;
             }
-            KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) || crate::client::input::alt_gr(k) => {
                 query.push(c);
                 // Land on the first session that matches, when there is one.
                 let rows = goto_rows(&model, &query, heads_up(self).len());
@@ -1916,17 +1916,6 @@ impl App {
                     && !self.screen.subs_opened.remove(&key)
                 {
                     self.screen.subs_opened.insert(key);
-                }
-            }
-            ScreenHit::Run(i) => {
-                if let Some((term, key)) = self.screen.run_rows.get(i).cloned() {
-                    self.mode = Mode::Run { term, key, board: None };
-                }
-            }
-            ScreenHit::Board(term) => self.open_board_of(term),
-            ScreenHit::BoardCard(i) => {
-                if let Mode::Work { term, .. } = self.mode {
-                    self.open_board_card(term, i);
                 }
             }
             ScreenHit::ReleaseMenu => self.release_menu(),

@@ -301,6 +301,7 @@ fn pr_of(i: u32) -> PrInfo {
         },
         review: PrReview::Required,
         conflicting: false,
+        commits_after_merge: 0,
     }
 }
 
@@ -404,7 +405,6 @@ fn pane(i: u32) -> TermInfo {
             code: Some(1),
             at: NOW - 400,
         }),
-        workflows: Vec::new(),
     }
 }
 

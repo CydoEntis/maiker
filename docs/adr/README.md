@@ -34,4 +34,5 @@ holds the history; an ADR states only what is true now.
 | [0007](0007-multiple-machines.md) | One connection per machine, held by the client |
 | [0008](0008-windows-first-and-one-product-name.md) | Windows is first-class; the product name lives in one place |
 | [0009](0009-usage-is-provider-reported-never-estimated.md) | Usage is what the provider reported, never estimated |
-| [0010](0010-workflows-and-specialist-agents-stay-outside-maitty.md) | Workflows and specialist agents stay outside Maitty; Maitty shows them |
+| [0010](0010-workflows-and-specialist-agents-stay-outside-maitty.md) | Workflows and specialist agents stay outside Maitty; Maitty shows the specialists |
+| [0011](0011-maitty-reads-tickets-and-shows-no-workflow-runs.md) | Maitty only reads tickets and shows no workflow runs |

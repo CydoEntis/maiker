@@ -17,7 +17,6 @@ export const CATEGORY_LOOK: Readonly<Record<StateCategory, { glyph: string; word
   Started: { glyph: '◧', word: 'Started', color: 'var(--ansi-blue)' },
   Closed: { glyph: '✓', word: 'Closed', color: 'var(--dim)' },
 }
-export const CATEGORIES: readonly StateCategory[] = ['Open', 'Started', 'Closed']
 
 /** Colours a label's square may take; a label keeps the same one everywhere. */
 const LABEL_COLORS = ['var(--ansi-blue)', 'var(--ansi-mag)', 'var(--working)', 'var(--ok)', 'var(--dim)'] as const
@@ -34,7 +33,6 @@ const HOURS_PER_DAY = 24
 const DAYS_PER_WEEK = 7
 /** Up to two weeks an age is said in days, then in weeks. */
 const MOST_AGE_DAYS = 14
-const MOST_INITIALS = 2
 
 /** The colour of a label's square: red for trouble, else one picked from its name so it never changes. */
 export function labelColor(label: string): string {
@@ -76,53 +74,6 @@ export function shortAge(when: string, now: number): string {
   return days < MOST_AGE_DAYS ? `${String(days)}d` : `${String(Math.floor(days / DAYS_PER_WEEK))}w`
 }
 
-/** What the assignee box says: ME for you, a dash for nobody, else the name's initials (two at most). */
-export function initials(assignee: string | null, me: string | null): string {
-  if (assignee === null) return '–'
-  if (me !== null && assignee.toLowerCase() === me.toLowerCase()) return 'ME'
-  const words = assignee.split(/[\s._-]+/).filter((word) => word.length > 0)
-  const letters = words.length > 1 ? words.slice(0, MOST_INITIALS).map((word) => word.charAt(0)) : [assignee.slice(0, MOST_INITIALS)]
-  return letters.join('').toUpperCase()
-}
-
-/** Whether the ticket is yours, by the name you are known by at that provider. */
-export function isMine(ticket: Pick<TicketSummary, 'assignee'>, me: string | null): boolean {
-  return me !== null && me !== '' && ticket.assignee !== null && ticket.assignee.toLowerCase() === me.toLowerCase()
-}
-
-/** The assignee filter's value for every ticket, and for the tickets nobody has; names are never empty. */
-export const ANYONE = ''
-export const UNASSIGNED = '\u0000unassigned'
-
-/** One choice of the assignee filter: what it matches, what it says, and whether it is you. */
-export type AssigneeChoice = { value: string; label: string; you: boolean }
-
-/**
- * The assignee filter's choices: Anyone, then you (when the provider says who you are), then everyone else the read
- * tickets are assigned to by name, then Unassigned. People are matched ignoring case, as the providers do.
- */
-export function assigneeChoices(tickets: readonly Pick<TicketSummary, 'assignee'>[], me: string | null): AssigneeChoice[] {
-  const names = new Map<string, string>()
-  for (const { assignee } of tickets) {
-    if (assignee !== null && assignee !== '' && !names.has(assignee.toLowerCase())) names.set(assignee.toLowerCase(), assignee)
-  }
-  const you = me === null || me === '' ? null : me.toLowerCase()
-  const others = [...names.entries()].filter(([key]) => key !== you).map(([, name]) => name).sort((a, b) => a.localeCompare(b))
-  return [
-    { value: ANYONE, label: 'Anyone', you: false },
-    ...(you === null || me === null ? [] : [{ value: names.get(you) ?? me, label: names.get(you) ?? me, you: true }]),
-    ...others.map((name) => ({ value: name, label: name, you: false })),
-    { value: UNASSIGNED, label: 'Unassigned', you: false },
-  ]
-}
-
-/** Whether the ticket passes the assignee filter (`ANYONE`, `UNASSIGNED` or a name). */
-export function matchesAssignee(ticket: Pick<TicketSummary, 'assignee'>, choice: string): boolean {
-  if (choice === ANYONE) return true
-  if (choice === UNASSIGNED) return ticket.assignee === null || ticket.assignee === ''
-  return ticket.assignee !== null && ticket.assignee.toLowerCase() === choice.toLowerCase()
-}
-
 /** Whether the search text is in the ticket's key or title, ignoring case. */
 export function matchesSearch(ticket: Pick<TicketSummary, 'id' | 'url' | 'title'>, search: string): boolean {
   const words = search.trim().toLowerCase()
@@ -135,12 +86,6 @@ export function matchesSearch(ticket: Pick<TicketSummary, 'id' | 'url' | 'title'
  */
 export function openBlockers(ticket: Pick<TicketDetail, 'blockedBy'>, known: ReadonlyMap<string, TicketSummary>): string[] {
   return ticket.blockedBy.filter((id) => known.get(id)?.category !== 'Closed')
-}
-
-/** The key a blocker is shown by: its own when it was read, else what its id says. */
-export function blockerKey(id: string, known: ReadonlyMap<string, TicketSummary>): string {
-  const ticket = known.get(id)
-  return ticketKey(ticket ?? { id, url: '' })
 }
 
 /** What one group's kind is called in the scope menu and on its card. */
@@ -188,36 +133,4 @@ export function ticketMessage(ticket: TicketDetail, provider: Provider, blockers
   const quote = ticket.body.trim() === '' ? '(The ticket has no description.)' : ticket.body
   const quoted = quote.split('\n').map((line) => (line === '' ? '>' : `> ${line}`)).join('\n')
   return { lead, quote, text: `${lead}\n\n${quoted}` }
-}
-
-/**
- * What a factory is sent for a ticket: the generic `/factory run` with the key, and the link it reads the ticket from.
- * A factory is any workflow that answers this command and reports its runs (docs/workflows.md), not one in particular.
- */
-export function factoryCommand(ticket: Pick<TicketSummary, 'id' | 'url'>): string {
-  return ticket.url === '' ? `/factory run ${ticketKey(ticket)}` : `/factory run ${ticketKey(ticket)} (${ticket.url})`
-}
-
-/** A factory's run of a ticket, as some chat reports it: the chat, and the step it is on. */
-export type FactoryRun = { sessionId: string; step: string }
-
-type RunsOf = { id: string; workflows: ReadonlyArray<{ key: string; label: string; active: boolean; current: { name: string } | null }> }
-
-/** Whether a chat runs a factory: it has reported a run of any workflow, whatever that workflow is called. */
-export function isFactoryChat(session: RunsOf): boolean {
-  return session.workflows.length > 0
-}
-
-/** The run a chat reports for a ticket (by its key), the one still going first. One ticket, one run. */
-export function factoryRunOf(sessions: readonly RunsOf[], key: string): FactoryRun | null {
-  let found: FactoryRun | null = null
-  for (const session of sessions) {
-    for (const run of session.workflows) {
-      if (run.label !== key) continue
-      const here = { sessionId: session.id, step: run.current?.name ?? 'done' }
-      if (run.active) return here
-      found ??= here
-    }
-  }
-  return found
 }

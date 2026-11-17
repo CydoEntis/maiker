@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readConversationPage } from '@/api/daemon'
 import { listenConversationChanged } from '@/api/conversationNews'
 import type { ApprovalDecision, ChatProvider } from './chatEvents'
-import { afterFailure, createFeed, hasPendingApproval, syncFeed, type ChatFeed, type ReadPage } from './chatFeed'
+import { afterFailure, createFeed, hasPendingApproval, looksTheSame, syncFeed, type ChatFeed, type ReadPage } from './chatFeed'
 import { recordApprovalAnswer, selectChatEvents } from './projection'
 
 /** How often an open chat asks the daemon for news: quickly while the agent works or waits on a person, slowly otherwise. */
@@ -23,7 +23,9 @@ export const RETRY_READ_MS = 500
 const FAILURES_BEFORE_OFFLINE = 2
 
 /** The feeds the window has read, so reopening a chat shows its history at once and reads only what changed. */
-const CACHE_LIMIT = 8
+// Enough for a day's sessions: going back to a chat read earlier shows it whole at once, and a feed is small next to the
+// window's other state.
+const CACHE_LIMIT = 32
 const cache = new Map<number, ChatFeed>()
 
 function remember(feed: ChatFeed): void {
@@ -116,9 +118,10 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
       try {
         const next = await syncFeed(latest.current, read, Date.now)
         if (gone()) return
+        const unchanged = looksTheSame(latest.current, next)
         latest.current = next
         remember(next)
-        setFeed(next)
+        if (!unchanged) setFeed(next)
         if (unwatched) {
           unwatched = false
           setUnwatchedReads((count) => count + 1)
@@ -161,9 +164,13 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
       window.clearTimeout(timer)
       void tick()
     }
+    // A hidden window reads only every few seconds: shown again, it reads at once rather than show the old chat.
+    const onVisible = () => { if (!document.hidden) wake.current() }
+    document.addEventListener('visibilitychange', onVisible)
     void tick()
     return () => {
       life.stopped = true
+      document.removeEventListener('visibilitychange', onVisible)
       window.clearTimeout(timer)
       void listening.then((stop) => { stop() })
     }

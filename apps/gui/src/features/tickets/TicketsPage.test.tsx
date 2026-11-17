@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KeyedProvider, TicketDetail, TicketGroup, TicketKeyState, TicketsResult, TicketSummary, TicketWrite, TicketWritten } from '@/api/tickets'
+import type { KeyedProvider, TicketDetail, TicketGroup, TicketKeyState, TicketsResult, TicketSummary } from '@/api/tickets'
 import { resetTicketLinksForTest } from './model/ticketLinks'
 import { TicketsPage, type TicketsHost } from './TicketsPage'
 import type { SetupAsk } from './useTicketSetupAsks'
@@ -14,7 +14,6 @@ const api = vi.hoisted(() => ({
   loadTicket: vi.fn<(source: string, id: string) => Promise<TicketsResult<TicketDetail>>>(),
   saveTicketKey: vi.fn<(provider: KeyedProvider, address: string, workspace: string, key: string) => Promise<TicketsResult<TicketKeyState[]>>>(),
   githubRepoOf: vi.fn<(folder: string) => Promise<string | null>>(),
-  writeTicket: vi.fn<(source: string, id: string, write: TicketWrite, confirmed: true) => Promise<TicketsResult<TicketWritten>>>(),
 }))
 vi.mock('@/api/tickets', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/tickets')>(), ...api }))
 const fake = vi.hoisted(() => ({ links: null as ReturnType<typeof import('@/test/fakeTicketLinks').fakeTicketLinks> | null }))
@@ -35,8 +34,8 @@ const MARKUP = '**bold** <b>tags</b> [links](https://x.example)'
 
 function host(change: Partial<TicketsHost> = {}): TicketsHost {
   return {
-    container: document.body, defaultAgent: 'claude', githubLogin: 'cydo', factoryChats: [], runOf: () => null, canSendHere: true,
-    onClose: vi.fn(), onSettings: vi.fn(), onSignInGitHub: vi.fn(), onStart: vi.fn(() => Promise.resolve()), onSendHere: vi.fn(() => Promise.resolve()), onSendFactory: vi.fn(() => Promise.resolve()), onOpenWork: vi.fn(),
+    container: document.body, defaultAgent: 'claude',
+    onClose: vi.fn(), onSettings: vi.fn(), onSignInGitHub: vi.fn(), onStart: vi.fn(() => Promise.resolve()),
     ...change,
   }
 }
@@ -72,11 +71,31 @@ describe('the Tickets view', () => {
     expect(api.loadTicketGroups).toHaveBeenCalledWith('me/shop')
   })
 
-  it("opens a ticket and shows its words as plain text, never as markup", async () => {
+  it("picks a ticket, reads it whole and shows what the agent is sent as plain text, never as markup", async () => {
+    const page = show()
+    await userEvent.click(await screen.findByRole('button', { name: /Start an agent on #142: Fix the cart/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Start an agent on #142' })
+    expect(within(dialog).getByText(MARKUP)).toBeInTheDocument()
+    expect(dialog.querySelector('b')).toBeNull()
+    await userEvent.click(within(dialog).getByRole('button', { name: /Start Claude/ }))
+    expect(page.onStart).toHaveBeenCalledWith(expect.objectContaining({ id: CART.id }), expect.objectContaining({ agent: 'claude', worktree: true }))
+  })
+
+  it('starts the ticket picked with the arrow keys on Enter, and offers nothing that changes a ticket', async () => {
     show()
-    await userEvent.click(await screen.findByText('Fix the cart'))
-    expect(await screen.findByText(MARKUP)).toBeInTheDocument()
-    expect(document.querySelector('.mx-tk-drawer b')).toBeNull()
+    await screen.findByText('Fix the till')
+    const page = document.querySelector<HTMLElement>('.mx-tk')
+    page?.focus()
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{Enter}')
+    expect(await screen.findByRole('dialog', { name: 'Start an agent on #143' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Comment|Mark done|Factory/ })).toBeNull()
+  })
+
+  it('leaves closed tickets out: there is nothing to start on them', async () => {
+    api.loadTicketPage.mockResolvedValue({ ok: true, value: { tickets: [CART, { ...TILL, category: 'Closed', stateName: 'closed' }], more: false } })
+    show()
+    expect(await screen.findByText('Fix the cart')).toBeInTheDocument()
+    expect(screen.queryByText('Fix the till')).toBeNull()
   })
 
   it('shows placeholder rows, with no words, while the first page is on its way, then lists them', async () => {
@@ -88,33 +107,6 @@ describe('the Tickets view', () => {
     answer({ ok: true, value: { tickets: [CART], more: false } })
     expect(await screen.findByText('Fix the cart')).toBeInTheDocument()
     expect(screen.queryByRole('status', { name: 'Reading tickets from GitHub' })).toBeNull()
-  })
-
-  it('shows everyone at first and filters by who a ticket is assigned to, with List and Board as the only views', async () => {
-    show()
-    const list = await screen.findByRole('list', { name: 'Tickets' })
-    expect(await within(list).findByText('Fix the till')).toBeInTheDocument()
-    expect(screen.queryByRole('radio', { name: /Mine/ })).toBeNull()
-    expect(screen.getByRole('radio', { name: /List/ })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /Board/ })).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Assigned to: Anyone' }))
-    await userEvent.click(await screen.findByRole('menuitemradio', { name: /cydo/ }))
-    expect(within(list).queryByText('Fix the till')).toBeNull()
-    expect(within(list).getByText('Fix the cart')).toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Assigned to: cydo' }))
-    await userEvent.click(await screen.findByRole('menuitemradio', { name: 'Unassigned' }))
-    expect(within(list).queryByText('Fix the cart')).toBeNull()
-    expect(within(list).getByText('Fix the till')).toBeInTheDocument()
-  })
-
-  it('shows placeholders, not a blank box, while an opened ticket is read', async () => {
-    api.loadTicket.mockReturnValue(new Promise(() => undefined))
-    show()
-    await userEvent.click(await screen.findByText('Fix the cart'))
-    expect(await screen.findByRole('status', { name: 'Reading the ticket from GitHub' })).toBeInTheDocument()
-    expect(document.querySelector('.mx-tk-drawer .mx-tk-text-skel')).not.toBeNull()
   })
 
   it('says so when gh is signed out, and offers a terminal', async () => {
@@ -225,41 +217,3 @@ describe('setup an agent opened', () => {
     expect(links().projects).toEqual([])
   })
 })
-
-describe('changing a ticket', () => {
-  async function openCart() {
-    await userEvent.click(await screen.findByText('Fix the cart'))
-    return screen.findByRole('complementary', { name: /Fix the cart/ })
-  }
-
-  it('posts a comment only after the review is confirmed, then reads the ticket again', async () => {
-    api.writeTicket.mockResolvedValue({ ok: true, value: 'Commented' })
-    show()
-    const drawer = await openCart()
-    await userEvent.click(within(drawer).getByRole('button', { name: 'Comment…' }))
-    await userEvent.type(screen.getByRole('textbox', { name: 'Your comment' }), 'On it')
-    await userEvent.click(screen.getByRole('button', { name: 'Review' }))
-    expect(api.writeTicket).not.toHaveBeenCalled()
-    const reads = api.loadTicket.mock.calls.length
-    await userEvent.click(screen.getByRole('button', { name: 'Post comment to GitHub' }))
-    expect(api.writeTicket).toHaveBeenCalledExactlyOnceWith('me/shop', CART.id, { kind: 'comment', text: 'On it' }, true)
-    await vi.waitFor(() => { expect(screen.queryByRole('button', { name: 'Post comment to GitHub' })).toBeNull() })
-    await vi.waitFor(() => { expect(api.loadTicket.mock.calls.length).toBeGreaterThan(reads) })
-  })
-
-  it('leaves the ticket alone when the person backs out, and when the provider refuses', async () => {
-    show()
-    const drawer = await openCart()
-    await userEvent.click(within(drawer).getByRole('button', { name: 'Mark done…' }))
-    expect(screen.getByText('Exactly what will be written')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel (Esc)' }))
-    expect(api.writeTicket).not.toHaveBeenCalled()
-
-    api.writeTicket.mockResolvedValue({ ok: false, failure: { kind: 'signed-out' } })
-    await userEvent.click(within(drawer).getByRole('button', { name: 'Mark done…' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Mark done on GitHub' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Not written.')
-    expect(api.writeTicket).toHaveBeenCalledExactlyOnceWith('me/shop', CART.id, { kind: 'close' }, true)
-  })
-})
-

@@ -265,6 +265,7 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .mx-aside-body { max-height: 38vh; overflow-y: auto; font-size: 13px; }
 .mx-aside-question { margin: 0 0 6px; color: var(--fg2); font-style: italic; }
 .mx-aside-wait { margin: 0; color: var(--muted); }
+.mx-signin-code { font: 600 14px var(--mono); letter-spacing: .06em; padding: 1px 6px; border-radius: var(--r-badge); background: color-mix(in oklab, var(--link) 14%, transparent); user-select: all; }
 .mx-composer-error { margin: 6px 0 0; align-self: stretch; font-size: 12px; color: var(--danger); }
 .mx-queue-row { align-self: stretch; display: flex; justify-content: flex-end; align-items: flex-start; gap: 8px; margin: 0 0 8px; }
 .mx-queue { flex: 1; min-width: 0; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
@@ -431,6 +432,7 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-mm-check { width: 13px; height: 13px; flex: none; color: var(--accent-text); }
 /* The foot: the word, the four rising bars, and the level's name at the right. */
 .mx-mm-effort { display: grid; grid-template-columns: auto 1fr 9ch; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-top: 1px solid var(--line); }
+.mx-mm-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .mx-mm-effort-word { font-size: 12px; color: var(--muted); }
 .mx-mm-level { text-align: right; font-size: 12.5px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .mx-mm-bars { display: flex; align-items: flex-end; gap: 3px; height: 16px; }
@@ -488,7 +490,6 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-usage-item.is-mid { --usage-ink: var(--m-mid); }
 .mx-usage-item.is-high { --usage-ink: var(--m-or); }
 .mx-usage-item.is-max { --usage-ink: var(--m-hi); }
-.mx-usage-item.is-none { --usage-ink: transparent; color: var(--dim); }
 /* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
 .mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
 button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -531,6 +532,8 @@ button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-of
 .mx-composer-note-action { border: 0; padding: 0; background: none; font: inherit; color: var(--fg2); text-decoration: underline; cursor: pointer; }
 .mx-composer-note-action:hover { color: var(--fg); }
 
+/* The question tray's slot: no box of its own, so the tray lays out in the column as before; it is only there to find the tray's first control. */
+.mx-question-slot { display: contents; }
 /* The running subagents (`RunningSubagents`): a 34px bar floating under the pane's header, as wide as the chat's
    column, on the menu surface. Opening it extends it downward over the feed without moving it; the feed fades behind
    it, more while it is open. It floats over the terminal view the same way. */

@@ -30,10 +30,14 @@ change.**
 
 - **Request lines.** The host keeps, per machine, a small pool of request connections beside the
   hub's long one, opened through the same hardened ssh line, **attach only** (never starts a
-  daemon), with the same Hello. They carry the conversation queries and commands exactly as the
+  daemon), with the window's Hello but not attached (`hub::request_dial`): an attached line would be sent
+  every pane's output and a whole state, and could be picked for an agent's alert. They carry the conversation queries and commands exactly as the
   local short connection does, and are kept idle and reused the same way (the pool in
   `maitty-desktop-client` becomes keyed by machine; the local key is unchanged). A line that
-  fails is dropped and the request is retried once on a fresh one, as the local pool does.
+  fails is dropped and the request is retried once on a fresh one, as the local pool does; a
+  daemon's refusal (`ServerMsg::Error`) is an answer, and the line is kept. Requests go to a
+  machine whose daemon said who it is (`HubHandle::takes_requests`) and is not refused, including
+  while its long line is being made again, so a chat does not fail each time that line blinks.
 - **Why not the hub's line.** Its replies to `Query::Conversation*` carry no tag, so sharing it
   would need a tag on every conversation reply: a message-shape change, a `PROTOCOL_VERSION` bump
   and a daemon change on every machine. The extra connection costs one ssh session per idle
@@ -91,8 +95,9 @@ A remote daemon is untrusted (ADR 0007). Everything a remote conversation suppli
   machine's name starts answering as a different computer, the long connection notices and refuses
   it, and requests stop with it (a refused machine takes nothing); in the moment between, a request
   is told apart only by the conversation id and its generation, which the daemon checks.
-- A command (send, approve, answer, cancel) always opens a fresh line; only questions reuse one,
-  as on this computer, because a command asked twice could act twice.
+- A command (send, approve, answer, cancel) always opens a fresh line; only questions that change
+  nothing reuse one (`safe_to_ask_twice`: not a commit, push, pull request, clone, ticket write or
+  identity rule), as on this computer, because a command asked twice could act twice.
 
 ## Older and newer machines
 

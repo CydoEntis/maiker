@@ -1,5 +1,7 @@
-﻿pub mod clock;
+﻿pub mod agent_commands;
+pub mod clock;
 pub mod conversation;
+pub mod extensions;
 pub mod github;
 pub mod handoff;
 pub mod hidden;
@@ -15,4 +17,3 @@ pub mod ticket_links;
 pub mod ticket_paste;
 pub mod tickets;
 pub mod usage_report;
-pub mod workflow;

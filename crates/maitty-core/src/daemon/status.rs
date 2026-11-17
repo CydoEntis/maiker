@@ -53,9 +53,9 @@ pub(super) fn hook_thread(tx: mpsc::Sender<Ev>) -> std::sync::mpsc::Sender<HookJ
 pub(super) const QUESTION_GONE_AFTER: Duration = Duration::from_secs(2);
 /// How long a "needs you" with no question anywhere on screen lasts (you typed nothing).
 pub(super) const UNASKED_QUESTION_GONE_AFTER: Duration = Duration::from_secs(8);
-/// A numbered choice an agent offers ("❯ 1. Yes"): a question, whatever its wording.
+/// A numbered choice an agent offers ("❯ 1. Yes", Codex's "› 1. …"): a question, whatever its wording.
 static CHOICES: std::sync::LazyLock<regex::Regex> =
-    std::sync::LazyLock::new(|| regex::Regex::new(r"(?m)^[\s│┃]*[❯>]?\s*1\.\s+\S").unwrap());
+    std::sync::LazyLock::new(|| regex::Regex::new(r"(?m)^[\s│┃]*[❯›>]?\s*1\.\s+\S").unwrap());
 /// Codex can keep working while an asynchronous question waits in its composer.
 static CODEX_QUEUED_QUESTION: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
     regex::Regex::new(crate::config::CODEX_QUEUED_QUESTION_PATTERN).unwrap()
@@ -143,18 +143,47 @@ impl Daemon {
             }
             None => {}
         }
+        let session_id = session.as_ref().filter(|s| {
+            !s.is_empty()
+                && s.len() < 128
+                && s.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
+        });
+        // Another session reporting while the pane's own agent is mid-turn is an agent it ran (a
+        // headless `claude -p`) whose processes could not be read (`reports_from_nested_agent`):
+        // the pane's agent cannot change sessions inside a turn. Taken for the pane's, its end
+        // said the pane's agent was gone.
+        if subagent.is_none()
+            && let (Some(t), Some(id)) = (self.terms.get(&term), session_id)
+            && t.status == Status::Working
+            && !t.own_turn_over
+            && t.session.as_deref().is_some_and(|own| own != id)
+        {
+            tracing::debug!("pane {term}: ignoring {event} from session {id} inside its own agent's turn");
+            return;
+        }
         if let Some(t) = self.terms.get_mut(&term) {
             // A helper's first event can be the first reliable source of the parent ID.
             // Set the thread before recording its helper, or the later ID check clears it.
-            if let Some(id) = session.as_ref().filter(|s| {
-                !s.is_empty()
-                    && s.len() < 128
-                    && s.chars()
-                        .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
-            }) {
+            // Ids end up in a shell command on restore: `session_id` keeps them boring.
+            if let Some(id) = session_id {
+                // A new session (/clear, /resume) has none of the old one's helpers.
                 if t.session.as_deref() != Some(id) {
                     t.subagents.clear();
                     t.subagent_hooks_seen = false;
+                    t.helper_work.clear();
+                    let now = term::unix_now();
+                    for activity in &mut t.subagent_activity {
+                        if activity.state.active() {
+                            activity.state = SubagentState::ConnectionLost;
+                            activity.updated_at = now;
+                            activity.latest_activity = Some(
+                                "Parent session changed before child completion was reported"
+                                    .into(),
+                            );
+                            self.dirty = true;
+                        }
+                    }
                 }
                 t.session = Some(id.clone());
             }
@@ -374,31 +403,6 @@ impl Daemon {
             if let Some(n) = name {
                 t.name = n;
             }
-            // Ids end up in a shell command on restore: keep them boring.
-            if let Some(id) = session.filter(|s| {
-                !s.is_empty()
-                    && s.len() < 128
-                    && s.chars()
-                        .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c))
-            }) {
-                if t.session.as_deref() != Some(&id) {
-                    t.subagents.clear();
-                    t.helper_work.clear();
-                    let now = term::unix_now();
-                    for activity in &mut t.subagent_activity {
-                        if activity.state.active() {
-                            activity.state = SubagentState::ConnectionLost;
-                            activity.updated_at = now;
-                            activity.latest_activity = Some(
-                                "Parent session changed before child completion was reported"
-                                    .into(),
-                            );
-                            self.dirty = true;
-                        }
-                    }
-                }
-                t.session = Some(id);
-            }
             // An agent stays in the group of the folder it started in: only its first
             // report places it, so its row doesn't jump as it works in other folders.
             if let Some(c) = cwd.filter(|c| c.is_dir() && !(t.hooked && t.agent.is_some())) {
@@ -497,6 +501,11 @@ impl Daemon {
                     });
             }
         }
+        // Codex's notify runs as its own process and can arrive after the next turn has started.
+        // Where its own Stop hook already reported the end, the late notice would end that turn.
+        if agent == "codex" && event == "agent-turn-complete" && t.lifecycle_hooks {
+            return;
+        }
         let new = match status {
             HookStatus::Same => {
                 // A subagent finished: if the turn was waiting on it, it's done now.
@@ -534,7 +543,9 @@ impl Daemon {
                 return;
             }
             // After a restart, a session that was done and unseen comes back done.
-            HookStatus::Idle if std::mem::take(&mut t.restore_unseen) => Status::Done,
+            // Only the restored agent's own start says so: Codex reports none, and its first Idle
+            // is an Esc, which is no finish.
+            HookStatus::Idle if event == "SessionStart" && std::mem::take(&mut t.restore_unseen) => Status::Done,
             HookStatus::Gone => {
                 t.hooked = false;
                 t.lifecycle_hooks = false;
@@ -542,6 +553,12 @@ impl Daemon {
                 if t.conversation_id.is_none() {
                     t.agent = None;
                     t.session = None;
+                    // Its follow-ups were for it: an agent started here next must not get them.
+                    if !t.queue.is_empty() {
+                        tracing::info!("pane {}: dropped {} follow-up(s) queued for an agent that ended", t.id, t.queue.len());
+                        t.queue.clear();
+                        t.queue_sent = None;
+                    }
                     // A pane the desktop app started as this agent ends with it, unless an agent
                     // is back in a moment (`Daemon::close_ended_agents`).
                     if t.owner == Surface::Desktop && t.cmd.is_some() && !t.popup && !t.spare {
@@ -569,6 +586,8 @@ impl Daemon {
             HookStatus::Done => Status::Done,
         };
         t.hooked = true;
+        // The agent reports again: a restore's "done and unseen" is over.
+        t.restore_unseen = false;
         // An agent is reporting from the pane again: it did not end, it started over.
         t.agent_ended = None;
         // Any report after a typed message's Enter means the agent took it (or moved on).
@@ -1008,7 +1027,9 @@ impl Daemon {
             // and it is at its prompt: a message waiting for it goes in, as one typed there would.
             let at_prompt = matches!(t.status, Status::Idle | Status::Done)
                 || (t.status == Status::Working && t.own_turn_over && helpers_running(t));
-            let turn_over = at_prompt && t.agent.is_some() && !t.asleep;
+            // An agent the process scan just missed may have exited (Codex says nothing when it
+            // quits): the pane at rest could be its shell, which would run the message.
+            let turn_over = at_prompt && t.agent.is_some() && t.agent_missed == 0 && !t.asleep;
             let last_taken = t
                 .queue_sent
                 .is_none_or(|at| at.elapsed() > QUEUED_TURN_STARTS_WITHIN);
@@ -1081,9 +1102,19 @@ impl Daemon {
         let mut changes = Vec::new();
         let mut still_working = Vec::new();
         let mut screen_blocks = Vec::new();
-        // However a helper came to be recorded as stopped, it is no longer counted as running below.
+        // However a helper came to be recorded as stopped, it is no longer counted as running below,
+        // and a finish held for the last of them is said now, as its own stop report would have.
+        let mut released = Vec::new();
         for t in self.terms.values_mut() {
-            self.dirty |= t.drop_settled_subagents();
+            if t.drop_settled_subagents() {
+                self.dirty = true;
+                if t.subagents.is_empty() && !helpers_running(t) && t.done_held.take().is_some() {
+                    released.push(t.id);
+                }
+            }
+        }
+        for id in released {
+            self.set_status(id, Status::Done, "its last helper was recorded as stopped");
         }
         for t in self.terms.values() {
             let Some(name) = &t.agent else { continue };

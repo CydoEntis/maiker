@@ -7,10 +7,10 @@ import { InlineName } from './InlineName'
 import { BranchMenu, type BranchMenuSpec } from '@/features/chat/components/BranchMenu'
 import { AppIcon, Icon, StatusBadge } from './glyphs'
 import { beginPointerDrag } from './dragSession'
-import { PaneViewSwitch, type WorkCount } from './PaneViewSwitch'
+import { PaneViewSwitch } from './PaneViewSwitch'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { menuPoint } from './menuPoint'
-import { CHAT_AGENTS, type ChatAgent, type PaneShow, type PaneView } from '../model/chatView'
+import { CHAT_AGENTS, type ChatAgent, type PaneView } from '../model/chatView'
 import { agentName } from '../model/agentMessage'
 import { SecretAskBar } from './SecretAskBar'
 import { pullRequestHeadline, pullRequestTone } from '../model/pullRequest'
@@ -37,8 +37,6 @@ export type PaneCardProps = {
   onViewChange?: (view: PaneView) => void
   /** The chat that covers the terminal while `view` is `chat`. */
   chat?: ReactNode
-  /** Present when the session reported workflow runs: the board it shows while open (opened from the window's Work button). */
-  work?: WorkCount & { open: boolean; board: ReactNode; onOpen: () => void }
   /** What floats over the top of the body in either view: the agent's running subagents. */
   overlay?: ReactNode
   /** The side panel is open for this pane. */
@@ -98,14 +96,13 @@ export function PaneCard(props: PaneCardProps) {
   const shortcutText = useShortcutText()
   const [box, width] = useWidth()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
+  const menuWasOpen = useRef(false)
   const [naming, setNaming] = useState(false)
   const multi = paneCount > 1
   const full = paneCount >= MAX_PANES
   const ended = session.ended
   const view = props.view ?? 'terminal'
-  const work = props.work
-  // The Work board covers whichever view the pane was on; choosing that view again leaves it.
-  const shown: PaneShow = work?.open === true ? 'work' : view
+  const shown = view
   const fit = headerFit(width)
   const title = rowTitle(session)
   // One pane of several closes alone when its session has work in it (`useClosing`); otherwise closing ends the session.
@@ -177,16 +174,26 @@ export function PaneCard(props: PaneCardProps) {
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
         <span className="mx-pane-controls">
           {props.onViewChange !== undefined && fit.switcher && (
-            // While the Work board shows, neither view is underlined; choosing one leaves the board.
-            <PaneViewSwitch views={['chat', 'terminal']} view={shown} work={null} onChange={(next) => { if (next !== 'work') props.onViewChange?.(next) }} />
+            <PaneViewSwitch views={['chat', 'terminal']} view={shown} onChange={(next) => { props.onViewChange?.(next) }} />
           )}
-          <button type="button" className="mx-pane-control mx-pane-more" aria-label="More pane actions" title="More pane actions" aria-haspopup="menu" onMouseDown={stop} onClick={(event) => { setMenuAt(menuPoint(event, true)) }}>⋯</button>
+          <button
+            type="button"
+            className="mx-pane-control mx-pane-more"
+            aria-label="More pane actions"
+            title="More pane actions"
+            aria-haspopup="menu"
+            aria-expanded={menuAt !== null}
+            // The open menu closes itself on this press, before the click: the click must not open it again.
+            onPointerDown={() => { menuWasOpen.current = menuAt !== null }}
+            onMouseDown={stop}
+            onClick={(event) => { if (!menuWasOpen.current) setMenuAt(menuPoint(event, true)) }}
+          >⋯</button>
           {/* Kept on the only pane too: with the sidebar hidden, it is the one close in reach. */}
           <button type="button" className="mx-pane-control is-close" aria-label={closeLabel} title={closeLabel} onMouseDown={stop} onClick={() => { props.onClose(pane.id) }}><Icon name="close" /></button>
         </span>
       </div>
       <div
-        className={`mx-pane-body${shown === 'chat' ? ' is-chat' : shown === 'work' ? ' is-work' : ''}`}
+        className={`mx-pane-body${shown === 'chat' ? ' is-chat' : ''}`}
         onMouseDown={(event) => {
           // A click on the pane's padding still puts the cursor in its terminal.
           if (event.target !== event.currentTarget) return
@@ -196,8 +203,6 @@ export function PaneCard(props: PaneCardProps) {
       >
         {props.terminal}
         {shown === 'chat' && props.chat}
-        {/* Not under is-chat: that hides all but the chat layer, and hid the board with it. */}
-        {shown === 'work' && work?.board}
         {props.overlay}
       </div>
       {session.helperAsk.length > 0 && props.onAnswerHelpers && (

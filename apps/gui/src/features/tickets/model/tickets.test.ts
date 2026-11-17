@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { TicketDetail, TicketSummary } from '@/api/tickets'
-import { ANYONE, assigneeChoices, initials, isFactoryChat, isMine, factoryCommand, factoryRunOf, labelColor, matchesAssignee, matchesSearch, openBlockers, providerOf, shortAge, ticketBranch, ticketKey, ticketMessage, UNASSIGNED } from './tickets'
+import { labelColor, matchesSearch, openBlockers, providerOf, shortAge, ticketBranch, ticketKey, ticketMessage } from './tickets'
 
 function summary(change: Partial<TicketSummary> = {}): TicketSummary {
   return { id: 'github:me/shop#142', title: 'Fix the cart', stateName: 'open', category: 'Open', labels: [], assignee: null, url: 'https://github.com/me/shop/issues/142', groups: [], updatedAt: '', ...change }
@@ -38,19 +38,6 @@ describe('what a row shows', () => {
     expect(shortAge('not a time', NOW)).toBe('')
   })
 
-  it('gives initials, ME for you and a dash for nobody', () => {
-    expect(initials('Ada Lovelace', null)).toBe('AL')
-    expect(initials('cydo', null)).toBe('CY')
-    expect(initials('Cydo', 'cydo')).toBe('ME')
-    expect(initials(null, 'cydo')).toBe('–')
-  })
-
-  it('tells your tickets apart only when it knows who you are', () => {
-    expect(isMine({ assignee: 'Cydo' }, 'cydo')).toBe(true)
-    expect(isMine({ assignee: 'Cydo' }, '')).toBe(false)
-    expect(isMine({ assignee: null }, 'cydo')).toBe(false)
-  })
-
   it('finds a ticket by its key or its title', () => {
     expect(matchesSearch(summary(), '#142')).toBe(true)
     expect(matchesSearch(summary(), 'CART')).toBe(true)
@@ -63,23 +50,10 @@ describe('what a row shows', () => {
   })
 })
 
-describe('blockers and the assignee filter', () => {
+describe('blockers', () => {
   it('counts a blocker until it is known to be done', () => {
     const known = new Map([['github:me/shop#1', summary({ id: 'github:me/shop#1', category: 'Closed' })], ['github:me/shop#2', summary({ id: 'github:me/shop#2' })]])
     expect(openBlockers({ blockedBy: ['github:me/shop#1', 'github:me/shop#2', 'github:me/shop#3'] }, known)).toEqual(['github:me/shop#2', 'github:me/shop#3'])
-  })
-
-  it('offers Anyone, you, the others by name and Unassigned, and filters by each', () => {
-    const tickets = [summary({ id: 'a', assignee: 'Cydo' }), summary({ id: 'b', assignee: 'ada' }), summary({ id: 'c', assignee: 'cydo' }), summary({ id: 'd' })]
-    expect(assigneeChoices(tickets, 'cydo')).toEqual([
-      { value: ANYONE, label: 'Anyone', you: false },
-      { value: 'Cydo', label: 'Cydo', you: true },
-      { value: 'ada', label: 'ada', you: false },
-      { value: UNASSIGNED, label: 'Unassigned', you: false },
-    ])
-    expect(tickets.filter((ticket) => matchesAssignee(ticket, 'Cydo')).map((ticket) => ticket.id)).toEqual(['a', 'c'])
-    expect(tickets.filter((ticket) => matchesAssignee(ticket, UNASSIGNED)).map((ticket) => ticket.id)).toEqual(['d'])
-    expect(tickets.filter((ticket) => matchesAssignee(ticket, ANYONE))).toHaveLength(4)
   })
 })
 
@@ -105,28 +79,5 @@ describe('what is sent about a ticket', () => {
     const message = ticketMessage(detail({ body: '  ' }), 'plane', ['ACME-30'])
     expect(message.lead).toContain('Note: it is blocked by ACME-30, which is not done yet.')
     expect(message.quote).toBe('(The ticket has no description.)')
-  })
-
-  it("hands a factory the generic run command with the key and the link", () => {
-    expect(factoryCommand(summary())).toBe('/factory run #142 (https://github.com/me/shop/issues/142)')
-    expect(factoryCommand(summary({ url: '' }))).toBe('/factory run #142')
-  })
-})
-
-describe('factory runs', () => {
-  const run = (label: string, active: boolean, step: string | null, workflow = 'factory') => ({ key: `${workflow}:run`, label, active, current: step === null ? null : { name: step } })
-
-  it('knows a chat that runs a factory, whatever its workflow is called', () => {
-    expect(isFactoryChat({ id: 's', workflows: [run('#1', true, 'spec')] })).toBe(true)
-    expect(isFactoryChat({ id: 's', workflows: [run('#1', true, 'spec', 'my-pipeline')] })).toBe(true)
-    expect(isFactoryChat({ id: 's', workflows: [] })).toBe(false)
-  })
-
-  it('finds the run of a ticket, the one still going first', () => {
-    const sessions = [{ id: 'old', workflows: [run('#142', false, null)] }, { id: 'now', workflows: [run('#142', true, 'build')] }]
-    expect(factoryRunOf(sessions, '#142')).toEqual({ sessionId: 'now', step: 'build' })
-    expect(factoryRunOf(sessions.slice(0, 1), '#142')).toEqual({ sessionId: 'old', step: 'done' })
-    expect(factoryRunOf(sessions, '#9')).toBeNull()
-    expect(factoryRunOf([{ id: 'other', workflows: [run('#7', true, 'review', 'my-pipeline')] }], '#7')).toEqual({ sessionId: 'other', step: 'review' })
   })
 })

@@ -3,6 +3,7 @@ members = [
     "apps/tui",
     "apps/gui/src-tauri",
     "crates/maitty-shared",
+    "crates/maitty-agent-ask",
     "crates/maitty-agent-detection",
     "crates/maitty-agent-integrations",
     "crates/maitty-ipc-transport",

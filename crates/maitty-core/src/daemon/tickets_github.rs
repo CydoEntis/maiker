@@ -1,6 +1,5 @@
 //! GitHub issues as tickets, read through this machine's own GitHub command line (`gh`): the
-//! repository's milestones, a page of its issues, one issue with its comments. Read-only here (the
-//! confirmed writes are `tickets_write`). No token
+//! repository's milestones, a page of its issues, one issue with its comments. Read-only (ADR 0011). No token
 //! is asked for, kept, logged or sent: signing in and the credentials stay `gh`'s own.
 //!
 //! What `gh` prints is other people's writing. Every string is cleaned and cut and every list is
@@ -336,13 +335,9 @@ mod tests {
     }
 
     fn make_runnable(program: &Path) {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(program, std::fs::Permissions::from_mode(0o755)).unwrap();
-        }
-        #[cfg(not(unix))]
-        let _ = program;
+        let script = std::fs::read_to_string(program).unwrap();
+        std::fs::remove_file(program).unwrap();
+        crate::test_support::write_program(program, &script);
     }
 
     /// Every question the pretend `gh` was asked, one a line.

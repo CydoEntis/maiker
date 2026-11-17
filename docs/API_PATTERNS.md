@@ -179,7 +179,9 @@ commands are `prewarm_agent_session` (the agent names and flag rules of `start_a
 daemon running is older) and `drop_prewarmed_agent`.
 
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
-app's new chat page, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
+app's new chat page and ticket starts, on this computer or another machine, whose own daemon makes it in its checkout
+over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
+absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
 does, requires `project` to be one the app shows (or, from a person's own window, any folder the person picked:
 `may_name_checkout`; a pane's agent, a structured runtime or a rejected client is held to the shown ones) and a git repository, then makes the checkout with
@@ -191,15 +193,10 @@ command is `add_branch_worktree` (`maitty_desktop_client::branch_worktree`); it 
 setup hook may take ten, and says the service is from an older release instead of asking a daemon that would never
 answer. It is this computer's daemon only. Structured runtimes may not ask for it.
 
-`ClientMsg::WorkflowReport { term, token, run }` is a workflow's progress from a process in the pane
-(`maitty workflow report`, which reads one run as JSON from stdin; ADR 0010). The daemon takes it
-only with the pane's token, checks it (`maitty_shared::workflow::checked`), stamps `reported_at`
-and keeps it in `TermInfo.workflows`, newest first: a report replaces the earlier one with the same
-workflow and run, and a pane keeps its latest 20 runs, saved with it. It is display only and never
-changes status. It came in protocol 95 (`WORKFLOW_REPORT_SINCE`, with its arm in
-`ClientMsg::introduced_in`); `COMPATIBLE_SINCE` stays 78, since the command checks the daemon's
-version and tells the person to restart an older one instead of sending. `TermInfo.workflows` is a
-defaulted field, empty from an older daemon.
+Protocol 113 removes `ClientMsg::WorkflowReport` and `TermInfo.workflows` (ADR 0011). An older
+`maitty workflow report` is a one-shot connection whose frame the daemon cannot read, so that call
+fails and nothing else does; an older window reading a pane without `workflows` defaults it to none.
+`COMPATIBLE_SINCE` stays 78.
 
 `Query::HelperRead { term, helper }` answers `Reply::HelperRead(HelperRecord)`: what one of the pane's
 helpers did, as history entries read from its own record (Claude's side-chain file, a Codex helper's
@@ -219,6 +216,12 @@ A pane's effort (`TermInfo.effort`, an optional field: no `PROTOCOL_VERSION` bum
 daemon from the agent's own files every five seconds off the loop (`usage::poll_effort`): for Claude the level in the newest request
 line of its transcript, present only when a level was set; for Codex the level its thread settings name, else its model's default
 from Codex's `models_cache.json`. Nothing is guessed: a pane whose files say none has none, and the window then says "agent's own".
+The same read keeps what a Claude pane last ran (`Term.runs_with`, saved as `SavedPane.runs_with`): the newest level said, and
+the model of the newest main-thread request (`querySource` `repl_main_thread` or `sdk`; a side request may run another model) or
+the alias (`opus`, `sonnet`, `haiku`) of a `/model` typed after it. A read that finds neither keeps the last. Its resume (a
+restart, a wake, a reload, a move) adds them as `--model` and `--effort` (`Daemon::running_as`), quoted for the shell, only for
+Claude and only when they pass `TurnChoice::validate`: Claude starts a resumed session on the account's default model, which a
+`/model` in any other session changes, and an effort set for the session only is gone.
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
 into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
@@ -227,7 +230,9 @@ background helpers keep the session working: the agent is back at its prompt. Th
 waits for the turn that one starts (`UserPromptSubmit`), not a minute. Nothing the daemon types for a pane
 (`Term::pending_input`: a queued message's Enter, a moved session's note, a wake) goes in while the pane is Blocked,
 whatever its deadline: the Enter a beat after a message's text would answer a helper's question asked in between. A queue belongs to the agent it was made for:
-a pane whose agent ends or changes (the process scan) drops it. The Enter after a queued command (`/resume`) is
+a pane whose agent ends (its own `SessionEnd`) or changes (the process scan) drops it, and nothing goes in while
+the scan has just missed the agent (`agent_missed`), since the pane at rest may be its shell. Claude's `SessionEnd`
+for `/clear` is not an end: the next session starts in the same agent. A report from another session while the pane's agent is mid-turn is an agent it ran (a headless `claude -p`) and is ignored whole, even when the process scan could not tell (`apply_hook`): an agent does not change sessions inside a turn. The Enter after a queued command (`/resume`) is
 not pressed again when no prompt is reported: such a command opens a menu that a second Enter would answer. `Command::QueueFollowUp { term, text, first }` adds one (`first`,
 a defaulted field, puts it ahead of the ones waiting, for an agent's own command picked while it works),
 `Command::ClearQueue` drops them all, and `Command::DropQueued { term, index, text }` drops one: the one at `index`, and
@@ -908,7 +913,9 @@ clients only, read grant. `ask` is `Question(text)` (1 to `SIDE_QUESTION_MAX_CHA
 `advisor`, `config`, `mcp`). The client names nothing else: for a followed pane the daemon takes the session id the
 hook gave, the pane's folder, the model the transcript last named and the `claude` on the login PATH, and answers only
 the app the pane is shown in; for a structured chat it takes the binding's session, folder, program and config folder.
-A session id that is not a UUID, another agent, or an unknown conversation is answered at once (`Failed`,
+The desktop app asks the daemon of the machine the chat is on (a request line for another machine, never asked
+twice); another machine's reply passes `remote_chat::vet_side_answer`. A session id that is not a UUID, another agent,
+or an unknown conversation is answered at once (`Failed`,
 `NotSupported`); otherwise the reply comes when Claude Code is done, from a background task. `answer` is
 `Answered { text }` (control characters removed, cut at `SIDE_ANSWER_MAX_BYTES`), `NotSupported`, or
 `Failed { reason }` in the daemon's words, never Claude Code's output. The desktop client waits 100 seconds.
@@ -956,6 +963,20 @@ another machine keeps only logins GitHub could have given out and one clean `pro
 (`remote_policy::vet`). A program run with a time limit goes through `proc::run_within`. The desktop
 host sends it through `github_accounts(machine, tag)` and raises a `github-accounts` event with the tag
 and the report (`apps/gui/src/api/githubAccounts.ts` waits on it for 20 seconds).
+
+Protocol 111 adds `Query::AgentSignIn { agent, request, tag }` and `Reply::AgentSignIn { tag, agent,
+state }` (`AGENT_SIGN_IN_SINCE`; `COMPATIBLE_SINCE` stays, since both messages are new and have their own
+`introduced_in` arm). `agent` is `Claude`, `Codex` or `Gemini` (always `Failed(Unsupported)`); `request` is
+`Start` (run the agent's own login in the background; one already running is answered, not doubled),
+`Cancel` or `Read`. `state` is `Idle`, `Waiting { link, code }`, `SignedIn` or `Failed(NotInstalled |
+Unsupported | CouldNotStart | TimedOut | Ended)`. The daemon (`daemon/agent_sign_in.rs`) keeps the first
+`https://` address and the one-time code from the login's output, at most `SIGN_IN_LINK_MAX_BYTES` and
+`SIGN_IN_CODE_MAX_CHARS`, and says `SignedIn` only when the agent's own status command does. Human clients
+only; an answer from another machine is ignored (`remote_policy::allow`). The desktop host sends it through
+`agent_sign_in(agent, request, tag)` and raises an `agent-sign-in` event with a flat `{machine, tag, agent,
+state, link, code, failure}` (`apps/gui/src/api/agentSignIn.ts` re-checks the link is a plain `https`
+address). Asking twice changes nothing, so it may go on a kept line. The spike and the behaviour:
+[chat-sign-in spec](features/chat-sign-in/spec.md).
 
 Protocol 105 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets { tag, answer }`
 (`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
@@ -1007,19 +1028,10 @@ cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 se
 `work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
 inverse `blocks` relations.
 
-Protocol 107 adds `Query::TicketWrite { source, id, write, confirmed, tag }` with `Reply::TicketWrite { tag, answer }`
-(`TICKET_WRITE_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in`
-arm). `write` is a `TicketWrite`: `Comment { text }` or `Close`; `source` and `id` are as for `Tickets`.
-`answer` is `Ok(TicketWritten::Commented | Closed)` or a `TicketError`. These are the only two writes, and the
-only ones the feature will have: no edit, no delete. The daemon writes only when `confirmed` is true, which a
-client sets after showing the person the provider, the ticket and the exact text; an unconfirmed request is
-answered `Invalid("The write was not confirmed")` and nothing is sent anywhere. Human clients only: a pane or a
-structured runtime gets `ServerMsg::Error`. The comment is checked by `maitty_shared::tickets::clean_comment`
-(1 to 4,000 characters, no control, hidden or tab characters; a bad one is refused, never trimmed to fit).
-GitHub runs `gh issue comment` / `gh issue close` (30 seconds); Plane `POST`s `…/issues/<id>/comments/` or
-`PATCH`es the work item to the project's first `completed` state; Linear runs `commentCreate`, or finds its
-team's first `completed` state and runs `issueUpdate`. A write is never retried. Details and limits:
-[SECURITY](SECURITY.md).
+`Query::TicketWrite` and `Reply::TicketWrite` (protocol 107, `TICKET_WRITE_SINCE`) are retired: Maitty only
+reads tickets (ADR 0011). They stay on the wire so a window from 107 to 112 that still asks gets `Reply::TicketWrite`
+with `Err(Invalid)` ("Maitty no longer changes tickets; change it in the tracker") and keeps its connection. The
+daemon writes nothing, and no client of protocol 113 asks.
 
 Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
 (`TICKET_LINKS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm).
@@ -1052,6 +1064,39 @@ Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two mess
   what is set up, in words: never a key or where it is sent. `link` is one cleaned word (`clean_suggested_link`,
   512 characters), shown as text. Nothing is saved; the person finishes the setup in the window. Another machine's
   `TicketSetup` is ignored (`remote_policy`).
+
+Protocol 110 adds `Query::Extensions { request, tag }` with `Reply::Extensions { tag, answer }` (`EXTENSIONS_SINCE`;
+`COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm). It reads and changes the
+skills, plugins, MCP servers and marketplaces of Claude Code and Codex on the daemon's computer (design:
+[the spec](features/chat-extensions/spec.md); code: `maitty_shared::extensions`, `daemon/extensions/`). `request` is an
+`ExtRequest`: `List { project }` (files only, never an agent; a project is an absolute folder that exists),
+`PreviewAdd { add }`, `Add { token }`, `SetEnabled { target, enabled }` (plugins only) and `Remove { target }`.
+`answer` is `Ok(ExtReply)` (`List`, `Preview` or `Done(line)`) or `Err(ExtError)`: `CliMissing(agent)`, `CliTooOld(agent)`
+(the program does not know the command), `NotFound`, `AlreadyInstalled`, `NeedsConfirmation`, `NeedsTerminal(command)`,
+`Invalid(why)` and `Failed(line)`. An add is two requests: `PreviewAdd` reads what would run from files, keeps the add
+under a random 128-bit token and returns it; `Add` takes the add that token was given for, once, within 10 minutes (at
+most 16 are kept). No other path installs, so a client cannot skip the confirmation. A change names only an item the
+daemon lists (`NotFound` otherwise), and a name is plain characters (`is_ext_name`), never a path or a flag. Human
+clients only: a pane or a structured runtime gets `ServerMsg::Error`. The desktop host sends it through
+`extensions(request, tag)` and raises an `extensions` event `{ machine, tag, answer }`; the window waits 95 seconds
+(a command gets 60). `NeedsTerminal` is not produced yet: signing in to an MCP server stays terminal-only and the
+window says so with the exact command.
+
+Protocol 112 (`AGENT_COMMANDS_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
+`introduced_in` arm; 110 and 111 belong to changes that landed beside it) adds
+`Query::AgentCommands { agent, folder, tag }` with `Reply::AgentCommands { tag, answer }`, where `answer` is
+`Ok(Vec<AgentCommand { name, description, hint, aliases }>)` or `Err(one line)`. The daemon asks the agent's own
+program on its machine (`maitty-agent-ask`: Claude Code's `initialize` reply for its commands and skills, Codex's
+`skills/list` for its skills; Gemini answers an empty list), started in `folder` when that is an absolute path to a
+folder that exists and in the home folder otherwise, off the event loop and within the asker's own limit (20
+seconds for Claude Code, 15 for Codex). The program is the one on the daemon's login PATH; one that is not there
+is `Err("<agent> is not installed on this machine")`, never an empty list. Human clients only. The commands belong
+to the machine that runs the chat: the window asks this computer in place (`agent_commands`) and another machine's
+daemon through `agent_commands_on(machine, agent, folder, tag)`, whose answer is an `agent-commands` event
+`{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/agentCommands.ts`). A machine
+that is offline (a daemon older than the window is one that needs its update, ADR 0007) is refused by name by the host
+and shown in the picker; nothing falls back to this computer's list. Names and lines from another machine are cleaned and capped again
+(`remote_policy::vet`, `maitty_shared::agent_commands`).
 
 The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
 `ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
@@ -1183,8 +1228,9 @@ Protocol 67 adds, for the desktop app's Inspect panel, find, quick-look links an
   mid-turn when the daemon restarted, with the command that resumes it), `timeline` (the latest
   turn events, oldest first, from status reports and the shell's OSC 133 prompt marks, 60 kept in
   memory) and `usage.tokens` (what the provider reported, never an estimate). The daemon never
-  resumes an `interrupted` agent: a pane saved mid-turn comes back as a plain shell, whichever app
-  owns it, and the window offers the command.
+  resumes an `interrupted` agent: a pane saved mid-turn, or asking a question, comes back as a plain
+  shell, whichever app owns it, and the window offers the command. The offer is saved with the shell
+  (`SavedPane::interrupted`), so a second restart before anyone resumes it still offers it.
 - `Query::PaneSearch { query }` and `Reply::Search`: where a word appears in what the app's own
   panes printed recently, case-insensitively, at most 100 hits and 20 from one pane. Human clients
   only, over the panes the client may use. The text is the pane's replay with escape sequences
@@ -1366,8 +1412,10 @@ dials at once. A machine's agents stay in the sidebar model through every state 
 is kept, not cleared), and the next `State` replaces it.
 
 **Backoff** (`Backoff::DEFAULT`): no wait before the first dial and before the redial of a line
-that was up; after `n` failures in a row, 250 ms doubled `n - 1` times, never more than 30 s
-(250, 500, 1000, ..., 16000, 30000, 30000). A success resets it.
+that held; after `n` failures in a row, 250 ms doubled `n - 1` times, never more than 30 s
+(250, 500, 1000, ..., 16000, 30000, 30000). A line that held for 30 s (`STEADY_LINE`) resets it; one
+that ends sooner counts as a failure, so a line turned away as soon as it is made is not redialled
+as fast as it ends.
 
 **Failure classes** come from `link_failure::classify`, from structured signals: the error's
 type (`OtherVersion` is `NeedsUpdate`), ssh's exit status, and whether the far side ever sent

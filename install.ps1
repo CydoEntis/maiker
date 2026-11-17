@@ -8,6 +8,8 @@
 #   <APP>_INSTALL_DIR  where <app>.exe goes (default: %LOCALAPPDATA%\Programs\<app>)
 #   <APP>_NO_PATH      set to 1 to leave your PATH alone
 #   <APP>_NO_INTEGRATE set to 1 to leave your agents' config alone (no `<app> integrate`)
+#   <APP>_FROM         a folder holding a release's files, used in place of downloading them (the
+#                      release workflow tries a release this way before publishing it)
 $ErrorActionPreference = 'Stop'
 
 # The app's command and where it is released: the only place this script names it (ADR 0008).
@@ -17,6 +19,7 @@ $repo = 'CydoEntis/maitty'
 $envPrefix = $app.ToUpper().Replace('-', '_')
 function Setting($name) { [Environment]::GetEnvironmentVariable("$($envPrefix)_$name") }
 $version = Setting 'VERSION'
+$from = Setting 'FROM'
 $dir = if (Setting 'INSTALL_DIR') { Setting 'INSTALL_DIR' } else { Join-Path $env:LOCALAPPDATA "Programs\$app" }
 $exe = "$app.exe"
 # Windows on ARM runs the x64 build.
@@ -26,9 +29,17 @@ $tmp = Join-Path ([IO.Path]::GetTempPath()) ("$app-install-" + [guid]::NewGuid()
 New-Item -ItemType Directory -Force $tmp | Out-Null
 
 function Fetch($name) {
+    if ($from) {
+        $source = Join-Path $from $name
+        if (-not (Test-Path $source)) { throw "no $name in $from" }
+        Copy-Item $source (Join-Path $tmp $name)
+        return
+    }
     $gh = Get-Command gh -ErrorAction SilentlyContinue
     $signedIn = $false
-    if ($gh) { gh auth status *> $null; $signedIn = ($LASTEXITCODE -eq 0) }
+    # Windows PowerShell 5.1 turns a native program's redirected error output into an error, which
+    # 'Stop' would throw: a GitHub CLI that is not signed in must only mean "download directly".
+    if ($gh) { & { $ErrorActionPreference = 'Continue'; gh auth status *> $null }; $signedIn = ($LASTEXITCODE -eq 0) }
     if ($signedIn) {
         # A private repo: the GitHub CLI brings your sign-in. A call that fails (an expired
         # sign-in, one that cannot see this repo) falls back to the direct download.
@@ -74,9 +85,16 @@ try {
         throw
     }
 
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    if ((Setting 'NO_PATH') -ne '1' -and -not (($userPath -split ';') -contains $dir)) {
-        [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ";$dir"), 'User')
+    # The user's PATH as stored, %VARIABLES% unexpanded (a user may have none at all), written back
+    # as an expandable string so those entries keep working.
+    $envKey = Get-Item 'HKCU:\Environment'
+    $userPath = [string]$envKey.GetValue('Path', '', 'DoNotExpandEnvironmentNames')
+    $entries = @($userPath -split ';' | Where-Object { $_ -ne '' })
+    if ((Setting 'NO_PATH') -ne '1' -and -not ($entries -contains $dir)) {
+        Set-ItemProperty -Path 'HKCU:\Environment' -Name 'Path' -Type ExpandString -Value (($entries + $dir) -join ';')
+        # Tell running programs (Explorer, new terminals) the environment changed.
+        [Environment]::SetEnvironmentVariable("$($envPrefix)_PATH_CHANGED", '1', 'User')
+        [Environment]::SetEnvironmentVariable("$($envPrefix)_PATH_CHANGED", $null, 'User')
         Write-Host "Added $dir to your PATH (new terminals pick it up)."
     }
     if (-not (($env:Path -split ';') -contains $dir)) { $env:Path = "$env:Path;$dir" }

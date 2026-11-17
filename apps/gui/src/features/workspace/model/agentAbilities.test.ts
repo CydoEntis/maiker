@@ -26,6 +26,7 @@ describe('abilitiesOf', () => {
       midTurnCommands: ['btw'],
       readModelsAreExtras: true,
       maxEffortNeedsListing: false,
+      takesEffort: true,
       yoloExcludesMode: false,
     })
   })
@@ -47,13 +48,14 @@ describe('abilitiesOf', () => {
       midTurnCommands: [],
       readModelsAreExtras: false,
       maxEffortNeedsListing: true,
+      takesEffort: true,
       yoloExcludesMode: true,
     })
   })
 
-  it('gives Gemini only `!` lines, and the sidebar\'s bare letters', () => {
+  it('gives Gemini the window\'s commands run in its terminal, `!` lines and the sidebar\'s bare letters, and no keys, modes, effort or mid-turn commands', () => {
     expect(abilitiesOf('gemini')).toEqual({
-      slashCommands: null,
+      slashCommands: { list: 'window', skillsAfterDollar: false, enterAfterPause: true },
       permissionModes: null,
       structuredChat: false,
       moveToWorktree: false,
@@ -68,13 +70,14 @@ describe('abilitiesOf', () => {
       midTurnCommands: [],
       readModelsAreExtras: false,
       maxEffortNeedsListing: false,
+      takesEffort: false,
       yoloExcludesMode: false,
     })
   })
 
-  it('treats another agent, a plain shell and a differently spelled name as Gemini is treated, without its `!` lines', () => {
+  it('treats another agent, a plain shell and a differently spelled name as Gemini is treated, without its commands and `!` lines', () => {
     for (const name of ['opencode', 'Claude', ' codex', null, undefined, 'toString']) {
-      expect(abilitiesOf(name)).toEqual({ ...abilitiesOf('gemini'), bangToTerminal: false })
+      expect(abilitiesOf(name)).toEqual({ ...abilitiesOf('gemini'), slashCommands: null, bangToTerminal: false })
     }
   })
 

@@ -1,13 +1,17 @@
 /**
  * What the list shows while the history is first read: the shape of a conversation, so the window
  * does not look empty or stuck. Static on purpose: an animation that never stops costs a repaint
- * every frame (docs/PERFORMANCE.md), and the wait is short.
+ * every frame (docs/PERFORMANCE.md), and the wait is short. It holds its place but stays blank for the first moment
+ * (`useAppearsAfter`), so a quick read never flashes it.
  */
+import { useAppearsAfter } from '@/lib/useAppearsAfter'
+
 const BLOCK = 'rounded-md bg-(--line2)'
 
 export function ChatSkeleton() {
+  const shown = useAppearsAfter()
   return (
-    <div role="status" aria-label="Reading the conversation" aria-busy="true" className="mx-auto flex w-full max-w-[760px] flex-1 flex-col gap-5 px-4 py-6">
+    <div role="status" aria-label="Reading the conversation" aria-busy="true" className={`${shown ? '' : 'invisible '}mx-auto flex w-full max-w-[760px] flex-1 flex-col gap-5 px-4 py-6`}>
       <div className={`${BLOCK} ml-auto h-10 w-[42%] rounded-[16px_16px_5px_16px]`} />
       <div className="flex gap-3">
         <div className={`${BLOCK} size-6 shrink-0`} />

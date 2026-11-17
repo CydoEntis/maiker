@@ -33,9 +33,10 @@ export function SlashPicker({ agent, typed, matches, active, loading, error, onP
   }, [active])
   const shown = matches.slice(0, MAX_SHOWN)
   const none = matches.length === 0 && !loading && error === null
-  const note = matches.length > 0 || none ? null
-    : loading ? `Asking ${agent} for its commands…`
-    : `Could not list ${agent}'s commands: ${String(error)}`
+  // A list that could not be asked for says why even beside the commands that are known without asking.
+  const note = loading ? (matches.length > 0 ? null : `Asking ${agent} for its commands…`)
+    : error === null ? null
+    : `Could not list ${agent}'s commands: ${error}`
   return (
     <div className="mx-slash" role="presentation" onMouseDown={(event) => { event.preventDefault() }}>
       <p className="mx-slash-head"><span>Commands</span><span className="mx-spacer" /><span className="mx-slash-count">{matches.length}</span></p>

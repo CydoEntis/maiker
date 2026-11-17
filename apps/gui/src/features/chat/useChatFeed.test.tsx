@@ -51,6 +51,21 @@ afterEach(() => {
   fake.history = null
 })
 
+describe('a chat in a window that was hidden', () => {
+  it('reads as soon as the window shows again, not at its next slow poll', async () => {
+    const history = working()
+    open()
+    await settle()
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
+    await settle(ACTIVE_POLL_MS)
+    const before = history.reads.length
+    hidden.mockReturnValue(false)
+    await act(async () => { document.dispatchEvent(new Event('visibilitychange')); await vi.advanceTimersByTimeAsync(0) })
+    expect(history.reads.length).toBe(before + 1)
+    hidden.mockRestore()
+  })
+})
+
 describe('a chat the daemon tells of changes', () => {
   it('reads when the daemon says its conversation changed, without waiting for the next poll', async () => {
     const history = working()

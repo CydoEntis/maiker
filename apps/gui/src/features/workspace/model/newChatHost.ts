@@ -16,7 +16,7 @@ const CODEX_MODE_FLAGS: Readonly<Record<string, readonly string[]>> = {
 /**
  * The flags that put a picked permission mode, model and effort on an agent's launch line (the text after its name,
  * with a leading space, or nothing). Claude: `--model`, `--effort`. Codex: `-m`, and the effort as
- * the `model_reasoning_effort` setting. A name that is not plain model-id
+ * the `model_reasoning_effort` setting. Gemini: `-m` only. A name that is not plain model-id
  * characters is dropped rather than typed into a shell, and so is any level the agent lacks.
  */
 export function launchFlags(agent: ChatAgent, model: string, effort: ReasoningPick, mode = 'default'): string {
@@ -30,6 +30,10 @@ export function launchFlags(agent: ChatAgent, model: string, effort: ReasoningPi
     flags.push(...(CODEX_MODE_FLAGS[mode] ?? []))
     if (named) flags.push('-m', model)
     if (CODEX_EFFORT.has(effort)) flags.push('-c', `model_reasoning_effort=${effort}`)
+  } else if (named) {
+    // Gemini CLI: `-m`/`--model` takes an alias or a model name. It documents no effort setting and a mode would need
+    // `--approval-mode`, whose only wider choices are not offered (docs/adr/0005).
+    flags.push('-m', model)
   }
   return flags.length === 0 ? '' : ` ${flags.join(' ')}`
 }

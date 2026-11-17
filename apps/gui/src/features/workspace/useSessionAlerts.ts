@@ -31,7 +31,8 @@ type SessionAlerts = {
 
 /**
  * Tells you about a session that started needing you, finished or failed while you were not looking at it: a card
- * in the window, the system's notice away from it, and a sound when the daemon says so.
+ * in the window, the system's notice away from it, and a sound: the daemon's say for a terminal session, this window's
+ * for a chat session.
  */
 export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, online, focusedId, preferences, showSessionById, answerSession }: SessionAlerts): void {
   const { notifyNeedsYou, notifyFinished, notifyError, notificationSound } = preferences
@@ -86,8 +87,10 @@ export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, on
       // Away from the window, a terminal session's system notice is the daemon's; raising it here too would say it twice.
       if (target !== undefined && !isChatSession(target.conversation) && !document.hasFocus()) continue
       raiseNotice(notice)
+      // The daemon rings only for a terminal session; a chat session that needs you or finished rings here, the same tone.
+      if (notificationSound && target !== undefined && isChatSession(target.conversation)) playNotificationSound()
     }
-  }, [sessions, online, focusedId, notifyNeedsYou, notifyFinished, notifyError, machines, raiseNotice])
+  }, [sessions, online, focusedId, notifyNeedsYou, notifyFinished, notifyError, notificationSound, machines, raiseNotice])
 
   // A terminal session the daemon says needs you, or finished. Kept in a ref so the one listener below always
   // reads the latest sessions and settings.

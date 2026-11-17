@@ -27,7 +27,7 @@ const terminal = vi.hoisted(() => ({
 
 const remoteTerm = {
   id: 7, cols: 80, rows: 24, title: 't', process: 'bash', agent: null, status: 'Idle', cwd: '/srv/app', summary: '', name: 'job',
-  label: '', pinned: false, archived: false, model: '', said: '', branch: null, linked: false, helperAsk: [], subagents: [], workflows: [],
+  label: '', pinned: false, archived: false, model: '', said: '', branch: null, linked: false, helperAsk: [], subagents: [],
   conversation_id: null, popup: false, remote: null, root: '/srv/app', top: null, since: 0, asleep: false, win32_input: false,
 }
 
@@ -99,12 +99,17 @@ describe('a pane of another machine and the features that need its files', () =>
     daemon.suggestProjectFolders.mockResolvedValue([])
   })
 
-  it('shows the tools bar for the session in front', async () => {
+  it('shows the tools bar for the session in front, with Files and History only once Settings adds them', async () => {
     await openRemotePane()
-    expect(screen.getByRole('navigation', { name: 'Tools' })).toBeInTheDocument()
+    const tools = within(screen.getByRole('navigation', { name: 'Tools' }))
+    expect(tools.getByRole('button', { name: 'Changes' })).toBeInTheDocument()
+    expect(tools.getByRole('button', { name: 'Checks' })).toBeInTheDocument()
+    expect(tools.queryByRole('button', { name: 'Files' })).toBeNull()
+    expect(tools.queryByRole('button', { name: 'History' })).toBeNull()
   })
 
   it('opens the side panel on the machine\'s changes, and its views that read files say they are local-only', async () => {
+    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ morePanelTools: true }))
     const user = await openRemotePane()
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
     await user.click(await screen.findByRole('menuitem', { name: /^Changes/ }))

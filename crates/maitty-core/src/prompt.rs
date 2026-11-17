@@ -5,6 +5,8 @@ const QUESTION_LINES: usize = 6;
 const ASKING_LINES: usize = 12;
 const BOX_CHARS: &str = "│┃ ";
 const BORDER_CHARS: &str = "─━╭╮╰╯┌┐└┘";
+/// The marks an agent puts on the choice under its cursor: Claude's `❯`, Codex's `›`, plain `>`.
+const CURSORS: [char; 3] = ['❯', '›', '>'];
 
 /// The numbered choices on a screen and the question above them.
 pub fn prompt_on(screen: &str) -> (String, Vec<(u32, String)>) {
@@ -84,11 +86,11 @@ fn cursor_menu_in(lines: &[&str]) -> Option<CursorMenu> {
     if rows.len() < 2 {
         return None;
     }
-    let picked = rows.iter().position(|row| clean(row).starts_with('❯')).unwrap_or(0);
+    let picked = rows.iter().position(|row| clean(row).starts_with(CURSORS)).unwrap_or(0);
     let opts = rows
         .iter()
         .enumerate()
-        .map(|(i, row)| (i as u32 + 1, clean(row).trim_start_matches('❯').trim().to_string()))
+        .map(|(i, row)| (i as u32 + 1, clean(row).trim_start_matches(CURSORS).trim().to_string()))
         .collect();
     Some((opts, start, picked))
 }
@@ -100,7 +102,7 @@ fn options_in(lines: &[&str]) -> (Vec<(u32, String)>, usize) {
         let t = l
             .trim()
             .trim_matches(|c: char| BOX_CHARS.contains(c))
-            .trim_start_matches(['❯', '>', ' '])
+            .trim_start_matches(|c: char| c == ' ' || CURSORS.contains(&c))
             .trim();
         let mut ch = t.chars();
         if let (Some(d), Some('.')) = (ch.next(), ch.next())
@@ -140,6 +142,12 @@ mod tests {
     }
 
     #[test]
+    fn codex_choices_under_its_cursor_are_read() {
+        let (_, options) = prompt_on("Which environment?\n\u{203a} 1. Staging\n  2. Production\n");
+        assert_eq!(options, [(1, "Staging".to_string()), (2, "Production".to_string())]);
+    }
+
+    #[test]
     fn asking_keeps_the_exact_command_and_the_choices_without_the_box() {
         let text = asking(CLAUDE_BASH_PROMPT);
         assert!(text.contains("rm -rf target/debug"), "{text}");
@@ -160,5 +168,16 @@ mod tests {
         assert!(text.contains("\n2. Yes, I trust this folder"), "{text}");
         assert!(text.starts_with("Accessing workspace:"), "{text}");
         assert_eq!(asking("just some output\nno menu here"), "");
+    }
+
+    /// Codex's wording is from its source, not a capture: the chat card only recognises exact words, so
+    /// a different real screen just leaves the generic menu card.
+    #[test]
+    fn codex_trust_menu_is_read_with_the_folder_above_its_choices() {
+        let screen = "> You are in /home/vox/app\n\n  Do you trust the contents of this directory? Working with untrusted contents comes with higher risk of prompt injection.\n\n\u{203a} 1. Yes, continue\n  2. No, quit\n\n  Press enter to continue";
+        let text = asking(screen);
+        assert!(text.starts_with("> You are in /home/vox/app"), "{text}");
+        assert!(text.contains("\n1. Yes, continue"), "{text}");
+        assert!(text.ends_with("\n2. No, quit"), "{text}");
     }
 }

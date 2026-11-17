@@ -776,6 +776,16 @@ async fn a_file_that_cannot_be_read_is_said_not_shown_empty_as_if_complete() {
     ));
 }
 
+#[test]
+fn a_working_or_asking_agent_is_read_four_times_as_often_as_one_at_rest() {
+    assert_eq!(follow_gap(Status::Working), FOLLOW_EVERY_ACTIVE);
+    assert_eq!(follow_gap(Status::Blocked), FOLLOW_EVERY_ACTIVE);
+    for resting in [Status::None, Status::Idle, Status::Done] {
+        assert_eq!(follow_gap(resting), FOLLOW_EVERY);
+    }
+    assert_eq!(FOLLOW_EVERY.as_millis(), 4 * FOLLOW_EVERY_ACTIVE.as_millis());
+}
+
 fn claude_thought(n: usize, text: &str) -> String {
     format!(
         "{}\n",

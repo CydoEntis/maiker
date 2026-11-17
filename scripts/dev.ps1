@@ -2,6 +2,8 @@
 #   .\scripts\dev.ps1 tui    build the terminal app and run it from target\debug (nothing is installed)
 #   .\scripts\dev.ps1 gui    start the desktop app (Vite and the Rust host rebuild from this folder)
 # Both print the commit and when the binary was built first; compare it with what you expect.
+# The terminal app runs its own service (MAITTY_SOCKET=dev-<folder> unless you set one), so a debug
+# build never takes over the service your installed app and its agents use.
 param([Parameter(Mandatory = $true)][ValidateSet('tui', 'gui')][string]$App)
 
 $ErrorActionPreference = 'Stop'
@@ -22,11 +24,19 @@ if ($running) {
 
 if ($App -eq 'tui') {
     cargo build -p maitty
+    # A failed build leaves the last good binary in place: running it would show old code.
+    if ($LASTEXITCODE -ne 0) { Write-Host 'The build failed; nothing was started.' -ForegroundColor Red; exit $LASTEXITCODE }
+    if (-not $env:MAITTY_SOCKET) { $env:MAITTY_SOCKET = 'dev-' + (Split-Path -Leaf $root) }
+    Write-Host "service: $env:MAITTY_SOCKET" -ForegroundColor Cyan
     $exe = Join-Path $root 'target\debug\maitty.exe'
     Write-Host "running $exe (built $((Get-Item $exe).LastWriteTime))" -ForegroundColor Cyan
     & $exe
 } else {
     Set-Location (Join-Path $root 'apps\gui')
-    if (-not (Test-Path node_modules)) { pnpm install --frozen-lockfile --config.node-linker=hoisted }
+    if (-not (Test-Path node_modules)) {
+        pnpm install --frozen-lockfile --config.node-linker=hoisted
+        if ($LASTEXITCODE -ne 0) { Write-Host 'Installing the packages failed; nothing was started.' -ForegroundColor Red; exit $LASTEXITCODE }
+    }
     pnpm desktop:dev
+    exit $LASTEXITCODE
 }

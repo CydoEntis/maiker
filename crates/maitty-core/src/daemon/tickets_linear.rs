@@ -1,6 +1,6 @@
 //! Linear issues as tickets, read over Linear's GraphQL API with the user's own personal API key:
 //! the teams, projects and cycles, a page of issues, one issue with its comments. Read-only: every
-//! request here is a `query`, never a `mutation` (the confirmed writes are `tickets_write`). The one server is `api.linear.app` over `https`,
+//! request here is a `query`, never a `mutation` (Maitty only reads tickets, ADR 0011). The one server is `api.linear.app` over `https`,
 //! fixed in this file and never read from the key file, so the key can go nowhere else; it travels
 //! in the `Authorization` header, which `curl_http` hands curl on its standard input.
 //!
@@ -315,12 +315,6 @@ fn why_refused(errors: &[Value], status: u16) -> TicketError {
     } else {
         invalid("Linear did not accept the request")
     }
-}
-
-/// One GraphQL call with `saved`'s key, for `tickets_write`'s mutations: the same one server, header
-/// and fixed error lines as every read here. Returns the answer's `data`.
-pub(super) fn graphql(http: &dyn Http, saved: &Saved, query: &str, variables: Value) -> Result<Value, TicketError> {
-    Linear { http, saved }.query(query, variables)
 }
 
 /// What a client asked of Linear's tickets, read with `saved`'s key. Blocks while Linear answers.

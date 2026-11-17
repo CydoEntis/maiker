@@ -20,7 +20,6 @@ pub(crate) mod secret_run;
 pub(crate) mod target;
 pub(crate) mod uninstall;
 pub(crate) mod update;
-pub(crate) mod workflow;
 use crate::layout::Dir;
 use crate::protocol::*;
 use anyhow::{Context, Result, anyhow, bail};
@@ -330,12 +329,38 @@ pub fn agent_launch(cmd: &[String]) -> i32 {
     {
         run.current_dir(dir);
     }
-    match run.status() {
-        Ok(status) => status.code().unwrap_or(1),
+    let mut child = match run.spawn() {
+        Ok(child) => child,
         Err(e) => {
             eprintln!("{APP_COMMAND}: could not start {agent}: {e}");
+            return 1;
+        }
+    };
+    // Ctrl+C on the console reaches every process on it. The agent handles its own; this
+    // launcher must outlive it, or the shell gets its prompt back ("Terminate batch job?")
+    // while the agent still runs and both read the keys.
+    #[cfg(windows)]
+    ignore_console_interrupts();
+    match child.wait() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            eprintln!("{APP_COMMAND}: lost {agent}: {e}");
             1
         }
+    }
+}
+
+/// Take Ctrl+C and Ctrl+Break as handled in this process only. A handler of our own, unlike
+/// ignoring them outright, is not inherited, so the agent started before it keeps its own.
+#[cfg(windows)]
+fn ignore_console_interrupts() {
+    use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, CTRL_C_EVENT, SetConsoleCtrlHandler};
+    unsafe extern "system" fn handled(event: u32) -> windows_sys::core::BOOL {
+        i32::from(event == CTRL_C_EVENT || event == CTRL_BREAK_EVENT)
+    }
+    // SAFETY: registers a plain function that touches nothing; it lives for the whole process.
+    if unsafe { SetConsoleCtrlHandler(Some(handled), 1) } == 0 {
+        tracing::debug!("could not take Ctrl+C in the launcher: {}", std::io::Error::last_os_error());
     }
 }
 
@@ -1271,8 +1296,7 @@ fn stop_server_process() -> Result<u32> {
 }
 
 /// Whether `pid` is a `<app> daemon` process, so a stale pid file can't point a stop at
-/// something else that took the number. Where the process list can't be read, the pid
-/// file's word stands.
+/// something else that took the number.
 fn is_app_daemon(pid: u32) -> bool {
     #[cfg(target_os = "linux")]
     {
@@ -1286,8 +1310,20 @@ fn is_app_daemon(pid: u32) -> bool {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = pid;
-        true
+        use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+        let pid = Pid::from_u32(pid);
+        let mut system = System::new();
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
+        );
+        system.process(pid).is_some_and(|process| {
+            let command = process.cmd();
+            let program = command.first().map(std::path::Path::new).and_then(|p| p.file_stem());
+            program.is_some_and(|stem| stem.eq_ignore_ascii_case(crate::brand::APP_COMMAND))
+                && command.get(1).is_some_and(|argument| argument == "daemon")
+        })
     }
 }
 
@@ -2088,15 +2124,10 @@ pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<
     let status = match status {
         Some(s) => parse_status(s).ok_or_else(|| anyhow!("unknown status {s}"))?,
         None => {
-            let raw = match payload {
-                Some(p) => p.to_string(),
-                None => {
-                    let mut s = String::new();
-                    std::io::stdin().take(1 << 20).read_to_string(&mut s)?;
-                    s
-                }
+            payload_json = match payload {
+                Some(p) => serde_json::from_str(p).unwrap_or(Value::Null),
+                None => read_hook_payload(std::io::stdin().lock(), HOOK_PAYLOAD_MAX)?,
             };
-            payload_json = serde_json::from_str(&raw).unwrap_or(Value::Null);
             match status_from_hook(&payload_json) {
                 Some(s) => s,
                 None => return Ok(()),
@@ -2727,6 +2758,39 @@ fn back_up_once(path: &std::path::Path, ext: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The most of a hook's input kept. A tool's whole output comes with it, and can be far larger.
+const HOOK_PAYLOAD_MAX: usize = 4 << 20;
+
+/// The top-level text fields a hook's report is made of, read off the start of an input too large
+/// to keep whole: the agent writes them before the tool's input and output.
+const HOOK_HEAD_FIELDS: [&str; 8] = [
+    "session_id", "transcript_path", "cwd", "hook_event_name", "tool_name", "notification_type", "agent_id", "agent_type",
+];
+
+/// A hook's JSON input, all of it read so the agent never blocks writing it. Past `max` bytes the
+/// rest is dropped and the report is made of the fields at its start (`HOOK_HEAD_FIELDS`); cut JSON
+/// does not parse, and a hook that reports nothing left the pane's status stuck.
+fn read_hook_payload(mut input: impl std::io::Read, max: usize) -> Result<Value> {
+    let mut kept = Vec::new();
+    (&mut input).take(max as u64).read_to_end(&mut kept)?;
+    let dropped = std::io::copy(&mut input, &mut std::io::sink())?;
+    if dropped == 0 {
+        return Ok(serde_json::from_slice(&kept).unwrap_or(Value::Null));
+    }
+    let head = String::from_utf8_lossy(&kept);
+    let mut fields = serde_json::Map::new();
+    for name in HOOK_HEAD_FIELDS {
+        let field = regex::Regex::new(&format!(r#""{name}"\s*:\s*("(?:[^"\\]|\\.)*")"#))?;
+        if let Some(text) = field
+            .captures(&head)
+            .and_then(|found| serde_json::from_str::<String>(&found[1]).ok())
+        {
+            fields.insert(name.to_string(), Value::String(text));
+        }
+    }
+    Ok(if fields.is_empty() { Value::Null } else { Value::Object(fields) })
+}
+
 /// The daemon the desktop app bundles: the same program under another name.
 const BUNDLED_DAEMON: &str = concat!(env!("APP_COMMAND"), "-gui-daemon");
 
@@ -2769,9 +2833,30 @@ fn keep_copy(running: &std::path::Path, folder: &std::path::Path) -> Result<Path
     let partial = folder.join(format!("{name}.partial"));
     std::fs::copy(running, &partial)
         .with_context(|| format!("copying {} to {}", running.display(), partial.display()))?;
-    std::fs::rename(&partial, &target)
-        .with_context(|| format!("replacing {}", target.display()))?;
+    replace_file(&partial, &target).with_context(|| format!("replacing {}", target.display()))?;
     Ok(target)
+}
+
+/// `from` renamed over `to`. Windows refuses to replace a program that is running (a hook in
+/// flight), but lets it be renamed: the old copy is moved aside first and removed once nothing
+/// runs it, at the next replacement if not now.
+fn replace_file(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    let Err(refused) = std::fs::rename(from, to) else {
+        return Ok(());
+    };
+    if !cfg!(windows) || !to.exists() {
+        return Err(refused);
+    }
+    let aside = to.with_extension("old");
+    if aside.exists() {
+        std::fs::remove_file(&aside)?;
+    }
+    std::fs::rename(to, &aside)?;
+    std::fs::rename(from, to)?;
+    if let Err(e) = std::fs::remove_file(&aside) {
+        tracing::debug!("{} is still running; removed next time: {e}", aside.display());
+    }
+    Ok(())
 }
 
 /// The copy has the running file's size and is not older than it.
@@ -3581,6 +3666,40 @@ pub fn allow(dir: Option<std::path::PathBuf>) -> Result<()> {
     }
     println!("(if the commands change, they won't run until you allow them again)");
     Ok(())
+}
+
+#[cfg(test)]
+mod hook_payload_tests {
+    use super::read_hook_payload;
+    use serde_json::json;
+
+    #[test]
+    fn a_hook_input_is_read_whole_when_it_fits() {
+        let input = json!({ "hook_event_name": "Stop", "session_id": "s1" }).to_string();
+        let read = read_hook_payload(input.as_bytes(), 1 << 10).unwrap();
+        assert_eq!(read, json!({ "hook_event_name": "Stop", "session_id": "s1" }));
+    }
+
+    /// A tool printed more than is kept: the report still says which event it was, so the
+    /// pane's status moves on.
+    #[test]
+    fn a_hook_input_too_large_to_keep_still_reports_its_event() {
+        let input = json!({
+            "session_id": "s1",
+            "cwd": "C:\\work\\\"quoted\"",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": { "cwd": "elsewhere" },
+            "tool_response": "x".repeat(4096),
+        })
+        .to_string();
+        let read = read_hook_payload(input.as_bytes(), 1024).unwrap();
+        assert_eq!(read["hook_event_name"], "PostToolUse");
+        assert_eq!(read["tool_name"], "Bash");
+        assert_eq!(read["session_id"], "s1");
+        assert_eq!(read["cwd"], "C:\\work\\\"quoted\"");
+        assert!(read.get("tool_response").is_none());
+    }
 }
 
 #[cfg(test)]

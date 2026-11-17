@@ -6,11 +6,20 @@ import type { SettingsPreferences } from '../preferences'
 import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, morePanelTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
   signOutAgent: vi.fn<(agent: string) => Promise<void>>(),
+}))
+
+const signIn = vi.hoisted(() => ({
+  agentSignIn: vi.fn<(agent: string, request: string) => Promise<{ kind: string; link?: string | null; code?: string | null; failure?: string }>>(),
+}))
+
+vi.mock('@/api/agentSignIn', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/agentSignIn')>()),
+  agentSignIn: signIn.agentSignIn,
 }))
 
 vi.mock('@/api/daemon', async (importOriginal) => ({
@@ -51,17 +60,39 @@ describe('the agents page', () => {
     await waitFor(() => { expect(accounts.loadAgentAuth.mock.calls.filter(([agent]) => agent === 'claude')).toHaveLength(2) })
   })
 
-  it('opens the agent\'s own sign-in for one that is not signed in, and offers nothing for one that is not installed', async () => {
+  it('signs an agent in from a card that shows its link and code, and offers nothing for one that is not installed', async () => {
     const user = userEvent.setup()
-    const onSignInAgent = vi.fn()
     accounts.loadAgentAuth.mockReset().mockImplementation((agent) => Promise.resolve(agent === 'claude'
       ? { installed: false, signedIn: null, account: '', plan: '' }
       : { installed: true, signedIn: false, account: '', plan: '' }))
-    renderSettings('permissions', { onSignInAgent })
+    signIn.agentSignIn.mockReset().mockResolvedValue({ kind: 'waiting', link: 'https://auth.example/device', code: 'AB12-CD34' })
+    renderSettings('permissions')
 
     expect(await screen.findByText('Not installed on this computer.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sign in to Claude' })).not.toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Sign in to Codex' }))
+
+    expect(signIn.agentSignIn).toHaveBeenCalledWith('codex', 'start')
+    const card = await screen.findByRole('region', { name: 'Sign in to Codex' })
+    expect(within(card).getByLabelText('One-time code')).toHaveTextContent('AB12-CD34')
+    expect(within(card).getByRole('button', { name: 'Open link' })).toBeInTheDocument()
+
+    signIn.agentSignIn.mockResolvedValue({ kind: 'idle' })
+    await user.click(within(card).getByRole('button', { name: 'Cancel' }))
+    expect(signIn.agentSignIn).toHaveBeenCalledWith('codex', 'cancel')
+    expect(screen.queryByRole('region', { name: 'Sign in to Codex' })).not.toBeInTheDocument()
+  })
+
+  it('says why a sign-in failed and then offers the agent\'s own sign-in in a terminal', async () => {
+    const user = userEvent.setup()
+    const onSignInAgent = vi.fn()
+    accounts.loadAgentAuth.mockReset().mockResolvedValue({ installed: true, signedIn: false, account: '', plan: '' })
+    signIn.agentSignIn.mockReset().mockResolvedValue({ kind: 'failed', failure: 'timed-out' })
+    renderSettings('permissions', { onSignInAgent })
+
+    await user.click(await screen.findByRole('button', { name: 'Sign in to Codex' }))
+    expect(await screen.findByText('Nobody finished the Codex sign-in in time.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Sign in to Codex in a terminal' }))
 
     expect(onSignInAgent).toHaveBeenCalledExactlyOnceWith('codex')
   })
@@ -78,7 +109,7 @@ describe('desktop settings', () => {
   it('groups the sections the way the design does', () => {
     renderSettings('general')
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(nav).toHaveTextContent('APPGeneralGAppearanceANotificationsNHotkeys?AGENTSChatCPermissionsETerminalTMACHINESRemote machinesMTicketsI')
+    expect(nav).toHaveTextContent('APPGeneralGAppearanceANotificationsNHotkeys?AGENTSChatCPermissionsETerminalTExtensionsXMACHINESRemote machinesMTicketsI')
     expect(within(nav).getByRole('button', { name: /General/ })).toHaveAttribute('aria-current', 'page')
   })
 
@@ -156,6 +187,15 @@ describe('desktop settings', () => {
     for (const agent of ['Claude', 'Codex', 'Gemini']) expect(screen.getByRole('switch', { name: `Yolo mode for ${agent}` })).not.toBeChecked()
     await user.click(screen.getByRole('switch', { name: 'Yolo mode for Codex' }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ yoloCodex: true, yoloClaude: false, yoloGemini: false }))
+  })
+
+  it('adds Files and History to the tools bar, off by default', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('appearance')
+
+    expect(screen.getByRole('switch', { name: 'Files and History tools' })).not.toBeChecked()
+    await user.click(screen.getByRole('switch', { name: 'Files and History tools' }))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ morePanelTools: true }))
   })
 
   it('turns on hiding successful tool calls, off by default', async () => {

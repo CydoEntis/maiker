@@ -90,6 +90,16 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         // Another person's words about a repository this window asked that machine for; cleaned
         // in `vet` and only while the question is out.
         ServerMsg::Reply(Reply::Tickets { .. } | Reply::TicketKeys { .. }) => Verdict::Answer,
+        ServerMsg::Reply(Reply::TicketWrite { .. }) => {
+            Verdict::Ignore("ticket writes are asked of this computer only")
+        }
+        ServerMsg::Reply(Reply::Extensions { .. }) => {
+            Verdict::Ignore("extensions are changed on this computer only")
+        }
+        // A link and a code from another machine's output would be shown as if this window had asked for them.
+        ServerMsg::Reply(Reply::AgentSignIn { .. }) => {
+            Verdict::Ignore("agents are signed in on this computer only")
+        }
         ServerMsg::Error(_) | ServerMsg::Reply(_) => Verdict::Answer,
         ServerMsg::AskRemoveWorktree { .. } => {
             Verdict::Ignore("a worktree prompt names a folder on this computer")
@@ -219,6 +229,11 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
                 owners.retain(|owner| is_login(owner));
                 owners
             }),
+        }),
+        // Another machine's agent's words: names and lines cleaned, the list capped.
+        ServerMsg::Reply(Reply::AgentCommands { tag, answer }) => ServerMsg::Reply(Reply::AgentCommands {
+            tag,
+            answer: maitty_shared::agent_commands::cleaned_answer(answer),
         }),
         ServerMsg::Reply(Reply::Tickets { tag, answer }) => ServerMsg::Reply(Reply::Tickets {
             tag,
@@ -468,36 +483,6 @@ mod tests {
     }
 
     #[test]
-    fn a_remote_step_offers_only_a_few_short_answers() {
-        use maitty_shared::protocol::TermInfo;
-        use maitty_shared::workflow::{CHOICE_MAX_CHARS, CHOICES_MAX};
-        let step = |state: &str| serde_json::json!({
-            "name": state, "state": state,
-            "choices": ["Approve", "x".repeat(CHOICE_MAX_CHARS + 9), "c", "d", "e", "f"],
-        });
-        let pane: TermInfo = serde_json::from_value(serde_json::json!({
-            "id": 3, "cols": 80, "rows": 24, "title": "", "process": "", "agent": "claude",
-            "status": "Working", "cwd": "/code", "summary": "", "name": "", "model": "", "said": "",
-            "branch": null, "linked": false, "subagents": [], "root": null, "top": null,
-            "since": 0, "asleep": false, "win32_input": false,
-            "workflows": [{ "workflow": "factory", "run": "1", "steps": [step("needs_you"), step("passed")] }],
-        }))
-        .expect("a pane");
-        let Some(ServerMsg::TermsChanged { changed, .. }) = vet(
-            &nothing_on(),
-            false,
-            "box",
-            ServerMsg::TermsChanged { changed: vec![pane], removed: Vec::new(), reasons: Default::default(), revision: 0 },
-        ) else {
-            panic!("a pane delta is applied");
-        };
-        let steps = &changed[0].workflows[0].steps;
-        assert_eq!(steps[0].choices.len(), CHOICES_MAX);
-        assert_eq!(steps[0].choices[1].chars().count(), CHOICE_MAX_CHARS);
-        assert!(steps[1].choices.is_empty(), "a step that does not wait on you offers nothing");
-    }
-
-    #[test]
     fn the_question_another_machines_agent_asks_is_cleaned_before_it_is_shown() {
         use maitty_shared::protocol::TermInfo;
         let pane: TermInfo = serde_json::from_value(serde_json::json!({
@@ -652,6 +637,17 @@ mod tests {
     }
 
     #[test]
+    fn another_machines_sign_in_link_is_never_shown_even_when_asked_for() {
+        use maitty_shared::protocol::{SignInAgent, SignInState};
+        let link = ServerMsg::Reply(Reply::AgentSignIn {
+            tag: 1,
+            agent: SignInAgent::Codex,
+            state: SignInState::Waiting { link: Some("https://evil.example/".into()), code: Some("AB-12".into()) },
+        });
+        assert!(vet(&nothing_on(), true, "box", link).is_none());
+    }
+
+    #[test]
     fn a_github_report_from_another_machine_keeps_only_real_logins_and_one_clean_line() {
         use maitty_shared::protocol::{GitHubAccount, GitHubReport};
         let account = |login: &str| GitHubAccount { login: login.into(), active: false };
@@ -760,6 +756,24 @@ mod tests {
         assert_eq!(states.len(), TicketProvider::ALL.len());
         assert_eq!((states[0].address.as_str(), states[0].workspace.as_str()), ("https://p[0m.example", "w"));
         assert_eq!(states[0].stored_in, maitty_shared::tickets::KeyStorage::Keychain, "where the key is kept comes through");
+    }
+
+    #[test]
+    fn commands_from_another_machine_are_cleaned_and_only_while_asked() {
+        use maitty_shared::agent_commands::AgentCommand;
+        let command = |name: &str, description: &str| AgentCommand { name: name.into(), description: description.into(), hint: String::new(), aliases: Vec::new() };
+        let sent = || ServerMsg::Reply(Reply::AgentCommands { tag: 4, answer: Ok(vec![command("pdf", "Reads\u{1b}[2J PDFs"), command("two words", "x")]) });
+        let Some(ServerMsg::Reply(Reply::AgentCommands { answer: Ok(commands), .. })) = vet(&nothing_on(), true, "box", sent()) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(commands.len(), 1, "a name that cannot be typed is dropped");
+        assert!(!commands[0].description.chars().any(char::is_control));
+        assert!(vet(&nothing_on(), false, "box", sent()).is_none(), "an answer to nothing is dropped");
+        let failed = ServerMsg::Reply(Reply::AgentCommands { tag: 4, answer: Err("Claude Code is not installed\u{1b}[31m".into()) });
+        let Some(ServerMsg::Reply(Reply::AgentCommands { answer: Err(why), .. })) = vet(&nothing_on(), true, "box", failed) else {
+            panic!("a refusal is kept");
+        };
+        assert!(!why.contains('\u{1b}'));
     }
 
     #[test]

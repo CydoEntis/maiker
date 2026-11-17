@@ -3,9 +3,8 @@
 //! Every read goes through this computer's daemon (`Query::Tickets`), tagged, and the answer comes
 //! back as a message. Which sources a project reads is the daemon's too (`Query::TicketLinks`): a
 //! link is kept per project (its repository, so every worktree and session in it), keys once per
-//! computer, and a source not set up yet is set up from its own tab. The only writes are a comment and marking a ticket done, each shown exactly
-//! as it will be written and sent only on `y` or a click on the confirm button (`TicketWrite`,
-//! `confirmed: true`); Enter alone never writes. Ticket text is other people's: drawn as plain text,
+//! computer, and a source not set up yet is set up from its own tab. Tickets are only read
+//! (ADR 0011): a ticket is opened, read whole and started on; it is changed in its tracker. Ticket text is other people's: drawn as plain text,
 //! cleaned of control and hidden characters, never read as Markdown or HTML.
 
 use super::*;
@@ -16,9 +15,8 @@ use maitty_shared::protocol::TICKET_LINKS_SINCE;
 use maitty_shared::ticket_links::{LinkedProject, REPO_TICKETS_FILE, RepoTicketFile, TicketLinkChange, TicketLinks, TicketPlace, TicketSetupAsk, TicketSetupSource};
 use maitty_shared::ticket_paste::{PastedLink, parse_ticket_link};
 use maitty_shared::tickets::{
-    Group, KeyStorage, StateCategory, TICKET_COMMENT_MAX_CHARS, TICKET_NAME_MAX_CHARS, TICKETS_PAGE_MAX, Ticket, TicketError,
-    TicketKeyState, TicketProvider, TicketSummary, TicketWrite, TicketWritten, TicketsReply,
-    TicketsRequest,
+    Group, KeyStorage, StateCategory, TICKET_NAME_MAX_CHARS, TICKETS_PAGE_MAX, Ticket, TicketError,
+    TicketKeyState, TicketProvider, TicketSummary, TicketsReply, TicketsRequest,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -44,7 +42,7 @@ fn saved_for(name: &str) -> String {
 }
 
 /// The project Tickets reads for: its name, where the daemon keeps its links, its folder, the
-/// machine it is on, and the session in front (where Send goes).
+/// machine it is on, and the session in front.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct TicketsProject {
     pub name: String,
@@ -67,15 +65,6 @@ enum Asked {
     Groups { source: String },
     List { source: String, page: u32 },
     Ticket { id: String },
-    Write { id: String },
-}
-
-/// One kind of write, as reviewed.
-#[derive(Debug, Clone, PartialEq)]
-enum WriteState {
-    Ready,
-    Sending,
-    Refused(String),
 }
 
 /// What the panel shows.
@@ -85,13 +74,9 @@ enum Page {
     Ticket { id: String, scroll: usize },
     /// Narrow the list to a milestone, module or cycle.
     Scope { sel: usize },
-    Sources(Sources),
+    Sources(Box<Sources>),
     /// Start an agent on the ticket in a new worktree: what will be sent, before it is.
     Start { id: String, agent: usize, scroll: usize },
-    /// Send the ticket to the session in front.
-    Send { id: String, scroll: usize },
-    Comment { id: String, text: String, problem: Option<String> },
-    Review { id: String, write: TicketWrite, state: WriteState, scroll: usize },
 }
 
 /// Settings › Tickets, as a page of the panel: the accounts (keys and your names, once for every
@@ -391,7 +376,6 @@ impl TicketsView {
     pub(in crate::client) fn typing(&self) -> bool {
         match &self.page {
             Page::List => self.typing,
-            Page::Comment { .. } => true,
             Page::Sources(s) => s.paste.is_some() || s.edit.is_some() || s.form.as_ref().is_some_and(|f| !f.sending),
             _ => false,
         }
@@ -424,7 +408,7 @@ impl TicketsView {
                 ("Esc", "close"),
             ),
             Page::Ticket { .. } => (
-                &[("s", "start agent"), ("t", "send to session"), ("c", "comment"), ("d", "mark done"), ("o", "open link")],
+                &[("s", "start agent"), ("o", "open link")],
                 ("Esc", "back"),
             ),
             Page::Scope { .. } => (&[("↑↓", "choose"), ("Enter", "pick")], ("Esc", "back")),
@@ -434,10 +418,6 @@ impl TicketsView {
             Page::Sources(s) if s.pick.is_some() => (&[("↑↓", "choose"), ("Enter", "pick")], ("Esc", "back")),
             Page::Sources(_) => (&[("Enter", "change"), ("x", "turn off / remove / unlink")], ("Esc", "back")),
             Page::Start { .. } => (&[("y", "start"), ("←→", "agent"), ("↑↓", "read")], ("Esc", "cancel")),
-            Page::Send { .. } => (&[("y", "send"), ("↑↓", "read")], ("Esc", "cancel")),
-            Page::Comment { .. } => (&[("", "type"), ("Tab", "review")], ("Esc", "cancel")),
-            Page::Review { write: TicketWrite::Comment { .. }, .. } => (&[("y", "post"), ("e", "edit")], ("Esc", "cancel")),
-            Page::Review { .. } => (&[("y", "mark done")], ("Esc", "cancel")),
         }
     }
 }
@@ -779,7 +759,7 @@ impl App {
                 (Asked::Groups { source }, Err(e)) => {
                     v.groups.insert(source, Err(e));
                 }
-                (Asked::Keys | Asked::Links { .. } | Asked::Write { .. }, _) => {}
+                (Asked::Keys | Asked::Links { .. }, _) => {}
             }
             let _ = app;
         });
@@ -877,35 +857,6 @@ impl App {
         });
     }
 
-    /// A `Reply::TicketWrite`: the write was done, or why it was not.
-    pub(in crate::client) fn ticket_write_arrived(&mut self, tag: u64, answer: Result<TicketWritten, TicketError>) {
-        let answer = answer.map_err(TicketError::cleaned);
-        self.with_tickets(|app, v| {
-            let Some(Asked::Write { id }) = v.asked.remove(&tag) else { return };
-            let provider = Provider::of_id(&id).unwrap_or(v.provider);
-            let key = v.key_of(&id);
-            match answer {
-                Ok(done) => {
-                    let said = match done {
-                        TicketWritten::Commented => format!("commented on {key} in {}", provider.name()),
-                        TicketWritten::Closed => format!("marked {key} done in {}", provider.name()),
-                    };
-                    app.notify(said, false);
-                    v.page = Page::Ticket { id: id.clone(), scroll: 0 };
-                    app.ask_ticket(v, &id, true);
-                    app.tickets_reload(v);
-                }
-                Err(e) => {
-                    if let Page::Review { id: shown, state, .. } = &mut v.page
-                        && *shown == id
-                    {
-                        *state = WriteState::Refused(tk::write_failure(provider, &e));
-                    }
-                }
-            }
-        });
-    }
-
     /// A paste while Tickets types into a field: the text goes into it, a line at a time for a
     /// one-line field. Never repeated in a toast: it may be a key.
     pub(in crate::client) fn paste_into_tickets(&mut self, text: &str) -> bool {
@@ -920,7 +871,7 @@ impl App {
         if matches!(v.page, Page::List) && !v.typing && v.setup_ready() && !v.source(&v.link(), v.provider).linked() {
             v.suggest_link(&one_line());
             if v.setup_ready() && !v.source(&v.link(), v.provider).linked() {
-                v.page = Page::Sources(Sources { setup: true, paste: v.suggested_link.take(), ..Sources::default() });
+                v.page = Page::Sources(Box::new(Sources { setup: true, paste: v.suggested_link.take(), ..Sources::default() }));
             }
             self.dirty = true;
             return true;
@@ -930,10 +881,6 @@ impl App {
         }
         match &mut v.page {
             Page::List => push_capped(&mut v.search, &one_line()),
-            Page::Comment { text: typed, problem, .. } => {
-                *problem = None;
-                push_text(typed, text, TICKET_COMMENT_MAX_CHARS + 1);
-            }
             Page::Sources(s) => {
                 if let Some(f) = &mut s.form {
                     push_capped(f.text_mut(), &one_line());
@@ -961,11 +908,8 @@ impl App {
             Page::List => (self.on_tickets_list_key(v, k), true),
             Page::Ticket { id, scroll } => self.on_ticket_page_key(v, k, id, scroll),
             Page::Scope { sel } => (self.on_scope_key(v, k, sel), true),
-            Page::Sources(s) => (self.on_sources_key(v, k, s), true),
+            Page::Sources(s) => (self.on_sources_key(v, k, *s), true),
             Page::Start { id, agent, scroll } => (self.on_start_key(v, k, id, agent, scroll), true),
-            Page::Send { id, scroll } => (self.on_send_key(v, k, id, scroll), true),
-            Page::Comment { id, text, problem } => (self.on_comment_key(v, k, id, text, problem), true),
-            Page::Review { id, write, state, scroll } => (self.on_review_key(v, k, id, write, state, scroll), true),
         };
         if let Some(page) = page {
             v.page = page;
@@ -1041,17 +985,6 @@ fn push_capped(field: &mut String, more: &str) {
     }
 }
 
-/// `more` added to a comment, line breaks kept, up to `max` characters (one past the limit, so
-/// the review can say it is too long rather than cut it quietly).
-fn push_text(field: &mut String, more: &str, max: usize) {
-    for c in more.replace("\r\n", "\n").chars().filter(|c| *c == '\n' || !c.is_control()) {
-        if field.chars().count() >= max {
-            break;
-        }
-        field.push(c);
-    }
-}
-
 /// A list's selection moved by the arrows, j / k, Home / End and the page keys.
 fn moved(sel: usize, n: usize, k: &KeyEvent) -> usize {
     let last = n.saturating_sub(1);
@@ -1120,11 +1053,11 @@ impl App {
             }
             KeyCode::Char('m') => {
                 if me.is_empty() {
-                    return Some(Page::Sources(Sources {
+                    return Some(Page::Sources(Box::new(Sources {
                         sel: v.source_rows().iter().position(|r| *r == SourceRow::name_of(v.provider)).unwrap_or(0),
                         note: Some((format!("Type your {} name for Mine", v.provider.name()), false)),
                         ..Sources::default()
-                    }));
+                    })));
                 }
                 v.mine = !v.mine;
                 v.sel = 0;
@@ -1134,7 +1067,7 @@ impl App {
                 v.sel = 0;
             }
             KeyCode::Char('r') => self.tickets_reload(v),
-            KeyCode::Char(',') => return Some(Page::Sources(Sources::default())),
+            KeyCode::Char(',') => return Some(Page::Sources(Box::default())),
             KeyCode::Char('t') if matches!(v.list.error, Some(TicketError::SignedOut)) && v.provider == Provider::Github => {
                 self.sign_in_github(v);
             }
@@ -1171,7 +1104,7 @@ impl App {
     /// The setup of the list's source for the project in front: GitHub asks for a repository,
     /// Plane and Linear for a key (once, for every project) and then the project or team.
     fn start_setup(&mut self, v: &mut TicketsView) -> Page {
-        Page::Sources(Sources { setup: true, paste: Some(v.suggested_link.take().unwrap_or_default()), ..Sources::default() })
+        Page::Sources(Box::new(Sources { setup: true, paste: Some(v.suggested_link.take().unwrap_or_default()), ..Sources::default() }))
     }
 
     /// The setup's steps after the paste step, with what `pasted` filled in: GitHub's repository
@@ -1183,7 +1116,7 @@ impl App {
             let name = v.project.as_ref().map_or_else(String::new, |p| p.name.clone());
             if !self.set_ticket_link(v, |l| l.github = Some(repo.clone())) {
                 s.paste = Some(String::new());
-                return Some(Page::Sources(s));
+                return Some(Page::Sources(Box::new(s)));
             }
             self.notify(format!("GitHub reads {repo} for {name}"), false);
             self.tickets_reload(v);
@@ -1211,7 +1144,7 @@ impl App {
                 s.pick = Some((v.provider, 0));
             }
         }
-        v.page = Page::Sources(s);
+        v.page = Page::Sources(Box::new(s));
         aim_pick(v);
         Some(std::mem::replace(&mut v.page, Page::List))
     }
@@ -1224,25 +1157,9 @@ impl App {
 
     fn on_ticket_page_key(&mut self, v: &mut TicketsView, k: &KeyEvent, id: String, scroll: usize) -> (Option<Page>, bool) {
         let page = |scroll| Some(Page::Ticket { id: id.clone(), scroll });
-        let closed = v.detail(&id).map(|t| t.summary.state.category) == Some(StateCategory::Closed)
-            || v.summary(&id).map(|t| t.state.category) == Some(StateCategory::Closed);
         let out = match k.code {
             KeyCode::Esc => Some(Page::List),
             KeyCode::Char('s') => Some(Page::Start { id: id.clone(), agent: 0, scroll: 0 }),
-            KeyCode::Char('t') => {
-                if v.project.as_ref().is_some_and(|p| p.agent) {
-                    Some(Page::Send { id: id.clone(), scroll: 0 })
-                } else {
-                    self.notify("the session in front runs no agent to send the ticket to".into(), true);
-                    page(scroll)
-                }
-            }
-            KeyCode::Char('c') => Some(Page::Comment { id: id.clone(), text: String::new(), problem: None }),
-            KeyCode::Char('d') if closed => {
-                self.notify("that ticket is already done".into(), false);
-                page(scroll)
-            }
-            KeyCode::Char('d') => Some(Page::Review { id: id.clone(), write: TicketWrite::Close, state: WriteState::Ready, scroll: 0 }),
             KeyCode::Char('o') | KeyCode::Char('y') => {
                 let url = v.detail(&id).map(|t| t.summary.url.clone()).or_else(|| v.summary(&id).map(|s| s.url.clone())).unwrap_or_default();
                 if url.is_empty() {
@@ -1303,7 +1220,7 @@ impl App {
             return false;
         };
         if !p.git {
-            self.notify(format!("{} is not a git repository, so there is no worktree to start in; t sends the ticket to the session in front", p.name), true);
+            self.notify(format!("{} is not a git repository, so there is no worktree to start in", p.name), true);
             return false;
         }
         if !self.guard_local(p.machine, crate::client::routing::Feature::Worktrees) {
@@ -1342,81 +1259,10 @@ impl App {
         true
     }
 
-    fn on_send_key(&mut self, v: &mut TicketsView, k: &KeyEvent, id: String, scroll: usize) -> Option<Page> {
-        match k.code {
-            KeyCode::Esc => Some(Page::Ticket { id, scroll: 0 }),
-            KeyCode::Char('y') => {
-                let (Some(p), Some(t)) = (v.project.clone(), v.detail(&id)) else {
-                    self.notify("the ticket is still being read".into(), false);
-                    return Some(Page::Send { id, scroll });
-                };
-                let Some(term) = p.term.filter(|_| p.agent) else { return Some(Page::Ticket { id, scroll: 0 }) };
-                let text = tk::ticket_message(t, &v.open_blockers(&id));
-                let key = v.key_of(&id);
-                self.cmd_on(term.machine, Command::QueueFollowUp { term: term.term, text, first: false, operation: None });
-                self.notify(format!("sent {key} to {}", p.session), false);
-                Some(Page::Ticket { id, scroll: 0 })
-            }
-            _ => Some(Page::Send { id, scroll: scroll_moved(scroll, k) }),
-        }
-    }
-
-    fn on_comment_key(&mut self, _v: &mut TicketsView, k: &KeyEvent, id: String, mut text: String, mut problem: Option<String>) -> Option<Page> {
-        match k.code {
-            KeyCode::Esc => return Some(Page::Ticket { id, scroll: 0 }),
-            KeyCode::Tab => {
-                return match maitty_shared::tickets::clean_comment(&text) {
-                    Ok(clean) => Some(Page::Review { id, write: TicketWrite::Comment { text: clean }, state: WriteState::Ready, scroll: 0 }),
-                    Err(e) => Some(Page::Comment { id, text, problem: Some(tk::write_failure(Provider::Github, &e)) }),
-                };
-            }
-            KeyCode::Enter => push_text(&mut text, "\n", TICKET_COMMENT_MAX_CHARS + 1),
-            KeyCode::Backspace => {
-                text.pop();
-            }
-            KeyCode::Char(c) if !k.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
-                push_text(&mut text, &c.to_string(), TICKET_COMMENT_MAX_CHARS + 1);
-            }
-            _ => return Some(Page::Comment { id, text, problem }),
-        }
-        problem = None;
-        Some(Page::Comment { id, text, problem })
-    }
-
-    fn on_review_key(&mut self, v: &mut TicketsView, k: &KeyEvent, id: String, write: TicketWrite, state: WriteState, scroll: usize) -> Option<Page> {
-        if state == WriteState::Sending {
-            // Nothing changes while the write is out; Esc leaves it to finish behind the page.
-            return Some(if k.code == KeyCode::Esc { Page::Ticket { id, scroll: 0 } } else { Page::Review { id, write, state, scroll } });
-        }
-        match k.code {
-            KeyCode::Esc => Some(Page::Ticket { id, scroll: 0 }),
-            KeyCode::Char('e') if matches!(write, TicketWrite::Comment { .. }) => {
-                let TicketWrite::Comment { text } = write else { return None };
-                Some(Page::Comment { id, text, problem: None })
-            }
-            // `y` (or a click on the confirm button) and nothing else writes.
-            KeyCode::Char('y') => {
-                let Some((source, _)) = v.list.of.clone() else { return Some(Page::Review { id, write, state, scroll }) };
-                let sent = write.clone();
-                let ticket = id.clone();
-                let asked = self.ask_tickets(v, Asked::Write { id: id.clone() }, |tag| Query::TicketWrite {
-                    source,
-                    id: ticket,
-                    write: sent,
-                    confirmed: true,
-                    tag,
-                });
-                let state = if asked { WriteState::Sending } else { WriteState::Refused("Restart the Maitty service to write to tickets.".into()) };
-                Some(Page::Review { id, write, state, scroll })
-            }
-            _ => Some(Page::Review { id, write, state, scroll: scroll_moved(scroll, k) }),
-        }
-    }
-
     fn on_sources_key(&mut self, v: &mut TicketsView, k: &KeyEvent, mut s: Sources) -> Option<Page> {
         let Some(p) = v.project.clone() else { return Some(Page::List) };
         // Setting up goes back to the list whenever it is left or done.
-        let back = |s: Sources| Some(if s.setup { Page::List } else { Page::Sources(s) });
+        let back = |s: Sources| Some(if s.setup { Page::List } else { Page::Sources(Box::new(s)) });
         if let Some(mut typed) = s.paste.take() {
             match k.code {
                 KeyCode::Esc => return back(s),
@@ -1442,12 +1288,12 @@ impl App {
                 _ => {}
             }
             s.paste = Some(typed);
-            return Some(Page::Sources(s));
+            return Some(Page::Sources(Box::new(s)));
         }
         if let Some(mut f) = s.form.take() {
             if f.sending {
                 s.form = Some(f);
-                return Some(Page::Sources(s));
+                return Some(Page::Sources(Box::new(s)));
             }
             match k.code {
                 KeyCode::Esc => return back(s),
@@ -1480,14 +1326,14 @@ impl App {
                 _ => {}
             }
             s.form = Some(f);
-            return Some(Page::Sources(s));
+            return Some(Page::Sources(Box::new(s)));
         }
         if let Some(provider) = s.remove.take() {
             if k.code == KeyCode::Char('y') {
                 self.ask_ticket_keys(v, TicketKeyChange::Remove { provider });
                 s.note = Some((format!("{} key removed from this computer", capital(provider.name())), false));
             }
-            return Some(Page::Sources(s));
+            return Some(Page::Sources(Box::new(s)));
         }
         if let Some((provider, sel)) = s.pick.take() {
             let source = provider.keyed().map_or("", TicketProvider::name).to_string();
@@ -1519,7 +1365,7 @@ impl App {
                 }
                 _ => s.pick = Some((provider, moved(sel, tops.len(), k))),
             }
-            return Some(Page::Sources(s));
+            return Some(Page::Sources(Box::new(s)));
         }
         if let Some((row, mut typed)) = s.edit.take() {
             match k.code {
@@ -1530,17 +1376,17 @@ impl App {
                         if !typed.trim().is_empty() && repo.is_none() {
                             s.note = Some(("A GitHub repo is owner/name".into(), true));
                             s.edit = Some((row, typed));
-                            return Some(Page::Sources(s));
+                            return Some(Page::Sources(Box::new(s)));
                         }
                         if s.setup && repo.is_none() {
                             s.note = Some(("Type the repository as owner/name".into(), true));
                             s.edit = Some((row, typed));
-                            return Some(Page::Sources(s));
+                            return Some(Page::Sources(Box::new(s)));
                         }
                         let said = repo.clone().map_or_else(|| "GitHub follows the folder's origin".to_string(), |r| format!("GitHub reads {r} for {}", p.name));
                         if !self.set_ticket_link(v, |l| l.github = repo) {
                             s.edit = Some((row, typed));
-                            return Some(Page::Sources(s));
+                            return Some(Page::Sources(Box::new(s)));
                         }
                         s.note = Some((said.clone(), false));
                         if v.provider == Provider::Github {
@@ -1565,7 +1411,7 @@ impl App {
                 }
                 _ => s.edit = Some((row, typed)),
             }
-            return Some(Page::Sources(s));
+            return Some(Page::Sources(Box::new(s)));
         }
         let rows = v.source_rows();
         let row = rows[s.sel.min(rows.len() - 1)];
@@ -1631,7 +1477,7 @@ impl App {
             },
             _ => s.sel = moved(s.sel, rows.len(), k),
         }
-        Some(Page::Sources(s))
+        Some(Page::Sources(Box::new(s)))
     }
 }
 
@@ -1731,15 +1577,6 @@ pub(in crate::client) fn draw_tickets(app: &mut App, buf: &mut Buffer, body: Rec
         Page::Start { id, agent, scroll } => {
             let s = draw_start(app, buf, inner, c, t, v, &p, &id, agent, scroll);
             v.page = Page::Start { id, agent, scroll: s };
-        }
-        Page::Send { id, scroll } => {
-            let s = draw_send(app, buf, inner, c, t, v, &p, &id, scroll);
-            v.page = Page::Send { id, scroll: s };
-        }
-        Page::Comment { id, text, problem } => draw_comment(app, buf, inner, c, t, v, &id, &text, problem.as_deref()),
-        Page::Review { id, write, state, scroll } => {
-            let s = draw_review(app, buf, inner, c, t, v, &id, &write, &state, scroll);
-            v.page = Page::Review { id, write, state, scroll: s };
         }
     }
 }
@@ -2403,79 +2240,6 @@ fn draw_start(app: &mut App, buf: &mut Buffer, inner: Rect, c: Style, t: &Theme,
     head.push(vec![seg("Exactly what will be sent:", c.fg(t.muted))]);
     let sent = message_lines(v, id, inner.width, c, t);
     draw_review_page(app, buf, inner, c, t, head, sent, Vec::new(), scroll, &[('y', "y", "Start", BtnKind::Primary), ('\x1b', "Esc", "Cancel", BtnKind::Ghost)])
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw_send(app: &mut App, buf: &mut Buffer, inner: Rect, c: Style, t: &Theme, v: &TicketsView, p: &TicketsProject, id: &str, scroll: usize) -> usize {
-    let key = v.key_of(id);
-    let head = vec![
-        vec![seg(format!("Send {key} to {}", p.session), c.fg(t.strong).add_modifier(Modifier::BOLD))],
-        vec![seg("It is typed in when the agent's turn is over.", c.fg(t.muted))],
-        vec![],
-        vec![seg("Exactly what will be sent:", c.fg(t.muted))],
-    ];
-    let sent = message_lines(v, id, inner.width, c, t);
-    draw_review_page(app, buf, inner, c, t, head, sent, Vec::new(), scroll, &[('y', "y", "Send", BtnKind::Primary), ('\x1b', "Esc", "Cancel", BtnKind::Ghost)])
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw_comment(app: &mut App, buf: &mut Buffer, inner: Rect, c: Style, t: &Theme, v: &TicketsView, id: &str, text: &str, problem: Option<&str>) {
-    let provider = Provider::of_id(id).unwrap_or(v.provider);
-    let key = v.key_of(id);
-    put(buf, inner.x, inner.y, &[seg(format!("Comment on {key} · {}", provider.name()), c.fg(t.strong).add_modifier(Modifier::BOLD))], inner.right());
-    let count = text.trim().chars().count();
-    let count_fg = if count > TICKET_COMMENT_MAX_CHARS { t.err } else { t.muted };
-    put(buf, inner.x, inner.y + 1, &[seg(format!("{count} / {TICKET_COMMENT_MAX_CHARS} · Enter starts a new line · Tab reviews it"), c.fg(count_fg))], inner.right());
-    let area = Rect { y: inner.y + 3, height: inner.height.saturating_sub(5), ..inner };
-    let mut lines = boxed(&tk::shown(text, true), area.width, c.fg(t.strong), c.fg(t.accent));
-    if let Some(last) = lines.last_mut() {
-        last.push(seg("▏", c.fg(t.accent)));
-    }
-    // The end of what is typed stays in sight.
-    let scroll = lines.len().saturating_sub(area.height as usize);
-    draw_lines(buf, area, &lines, scroll);
-    if let Some(problem) = problem {
-        put(buf, inner.x, inner.bottom().saturating_sub(2), &[seg(problem.to_string(), c.fg(t.err))], inner.right());
-    }
-    buttons(app, buf, inner.x, inner.bottom().saturating_sub(1), inner.right(), t, &[('\t', "Tab", "Review", BtnKind::Primary), ('\x1b', "Esc", "Cancel", BtnKind::Ghost)]);
-}
-
-#[allow(clippy::too_many_arguments)]
-fn draw_review(app: &mut App, buf: &mut Buffer, inner: Rect, c: Style, t: &Theme, v: &TicketsView, id: &str, write: &TicketWrite, state: &WriteState, scroll: usize) -> usize {
-    let provider = Provider::of_id(id).unwrap_or(v.provider);
-    let key = v.key_of(id);
-    let name = provider.name();
-    let (title, sent, confirm) = match write {
-        TicketWrite::Comment { text } => (
-            format!("Post this comment to {name} {key}?"),
-            boxed(text, inner.width, c.fg(t.text), c.fg(t.line)),
-            format!("Post comment to {name}"),
-        ),
-        TicketWrite::Close => (
-            format!("Mark {key} done on {name}?"),
-            wrapped(&format!("{key} moves to {name}'s finished state. Its words and comments stay as they are."), inner.width, c.fg(t.text)),
-            format!("Mark done on {name}"),
-        ),
-    };
-    let head = vec![
-        vec![seg(title, c.fg(t.strong).add_modifier(Modifier::BOLD))],
-        vec![],
-        vec![seg("Exactly what will be written:", c.fg(t.muted))],
-    ];
-    let after = match state {
-        WriteState::Ready => Vec::new(),
-        WriteState::Sending => vec![vec![seg("writing…", c.fg(t.muted).add_modifier(Modifier::ITALIC))]],
-        WriteState::Refused(why) => wrapped(&format!("Not written. {why}"), inner.width, c.fg(t.err)),
-    };
-    let mut items: Vec<(char, &str, &str, BtnKind)> = Vec::new();
-    if *state != WriteState::Sending {
-        items.push(('y', "y", &confirm, BtnKind::Primary));
-        if matches!(write, TicketWrite::Comment { .. }) {
-            items.push(('e', "e", "Edit", BtnKind::Ghost));
-        }
-    }
-    items.push(('\x1b', "Esc", "Cancel", BtnKind::Ghost));
-    draw_review_page(app, buf, inner, c, t, head, Some(sent), after, scroll, &items)
 }
 
 #[cfg(test)]

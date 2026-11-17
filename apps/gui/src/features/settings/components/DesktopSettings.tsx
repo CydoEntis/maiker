@@ -17,6 +17,7 @@ import type { GitHubSignIn } from './GitHubSection'
 import { MachinesPage } from './MachinesPage'
 import { UpdateBox } from './UpdateBox'
 import { TicketsSection } from '@/features/tickets/TicketsSettings'
+import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { TicketsProject } from '@/features/tickets/model/ticketProjects'
 import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
 import { CHAT_AGENTS } from '@/features/workspace/model/chatView'
@@ -25,6 +26,8 @@ import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { errorMessage } from '@/lib/error-message'
 import { loadAgentAuth, signOutAgent, type AgentAuth } from '@/api/daemon'
+import { SignInCard } from '@/features/signin/SignInCard'
+import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { BUNDLED_FONT_NAME, fontStackFor, installedMonospaceFamilies, WEIGHT_BOLD, WEIGHT_EXTRA_BOLD, WEIGHT_LIGHT, WEIGHT_MEDIUM, WEIGHT_REGULAR, WEIGHT_SEMIBOLD, type TerminalFontWeight } from '@/lib/terminalFont'
 import type { Added, Grant, HostChoice, MachineActivity } from '@/api/machines'
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
@@ -32,7 +35,7 @@ import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
 import { CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
 
-export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'machines' | 'tickets' | 'usage' | 'performance'
+export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'tickets' | 'usage' | 'performance'
 
 /** The other machines, for the Machines page: what the window knows of each, and what it can ask of the host. */
 export type MachinesInfo = {
@@ -150,6 +153,7 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
       { id: 'chat', label: 'Chat', key: 'C', tint: 'var(--ok)', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
       { id: 'permissions', label: 'Permissions', key: 'E', tint: 'var(--ansi-mag)', path: 'M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z' },
       { id: 'terminal', label: 'Terminal', key: 'T', tint: 'var(--ansi-blue)', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
+      { id: 'extensions', label: 'Extensions', key: 'X', tint: 'var(--warn)', path: 'M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3M7 6h10v12H7z' },
     ],
   },
   {
@@ -169,13 +173,14 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   chat: ['Chat', 'How a chat starts, and how wide and large it is drawn.'],
   permissions: ['Permissions', 'Who your agents are signed in as, and what they may run without asking.'],
   terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
+  extensions: ['Extensions', 'Skills, plugins and MCP servers for Claude Code and Codex, for you and for a project.'],
   machines: ['Remote machines', 'Other computers whose sessions show up in your sidebar.'],
   tickets: ['Tickets', 'Where Maitty reads tickets from. It only reads them.'],
   usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
   performance: ['Performance', 'What the window is spending its time on, measured live.'],
 }
 
-const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', m: 'machines', i: 'tickets' }
+const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', x: 'extensions', m: 'machines', i: 'tickets' }
 
 /** Esc ends an open theme list, or a running add-machine, first; Settings stays. A part that handles Esc itself is marked `data-owns-escape`. */
 const keepForOpenList = (event: globalThis.KeyboardEvent) => {
@@ -270,6 +275,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
       case 'usage': return <UsageSection usage={props.usage} />
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <MachinesPage daemon={props.daemon} machines={props.machines} github={props.github} appVersion={props.appVersion} />
+      case 'extensions': return <ExtensionsSection projects={props.ticketProjects ?? []} />
       case 'tickets': return <TicketsSection projects={props.ticketProjects ?? []} signIn={props.github} />
       case 'keys': return <HotkeysSection platform={props.platform} overrides={preferences.keyOverrides} onOverrides={(next) => { update('keyOverrides', next) }} />
       case 'performance': return <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />
@@ -601,6 +607,9 @@ function AppearanceSection({ preferences, update, systemReducedMotion, systemDar
         <Row label="Icons" detail="Agent and folder icons in their own colours, or neutral gray tiles.">
           <SegmentedChoice label="Icons" value={preferences.iconColor} options={ICON_COLOR_OPTIONS} onChange={(value) => { update('iconColor', value) }} />
         </Row>
+        <Row label="Files and History tools" detail="Adds Files and History to the tools bar on the right, beside Changes and Checks. Opening a file from a chat, or /rewind, still shows them.">
+          <Switch aria-label="Files and History tools" checked={preferences.morePanelTools} onCheckedChange={(value) => { update('morePanelTools', value) }} />
+        </Row>
       </Card>
       <Card title="Interface size">
         <Row label="Density" detail="How much room the sidebar rows, pane headers and gaps get.">
@@ -679,8 +688,9 @@ function accountWords(state: AccountState): string {
 
 /**
  * The accounts the agents are signed in to, as each agent's own command says, with sign in and sign out. Signing in
- * is the agent's own interactive command, opened in a terminal; signing out runs its command here. The window keeps
- * no credentials: it only asks the agent and tells it.
+ * runs the agent's own login in the daemon and shows its link and code in a card here; where that cannot be done, the
+ * agent's own sign-in can still be opened in a terminal. Signing out runs its command here. The window keeps no
+ * credentials: it only asks the agent and tells it.
  */
 function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void) | undefined }) {
   const [states, setStates] = useState<Readonly<Record<AccountAgent, AccountState>>>({ claude: { status: 'loading' }, codex: { status: 'loading' } })
@@ -696,6 +706,8 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
     return () => { current = false }
   }, [asked])
   const again = () => { setAsked((count) => count + 1) }
+  const signIn = useAgentSignIn(again)
+  const shown = signIn.view
   const signOut = (agent: AccountAgent, label: string) => {
     signOutAgent(agent).then(
       () => { toast.success(`${label} signed out`, { description: 'Sessions already running keep their sign-in until they are restarted.' }); again() },
@@ -703,9 +715,11 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
     )
   }
   return (
+    <>
+    {shown !== null && <SignInCard view={shown} onCancel={() => { signIn.cancel(shown.agent) }} onClose={signIn.close} onRetry={() => { signIn.begin(shown.agent) }} />}
     <Card title="Accounts"
       meta={<button type="button" className="mx-scard-meta-button" onClick={again}>Check again</button>}
-      foot="Sign in opens the agent's own sign-in in a terminal: finish it there, then check again. Maitty keeps no passwords or keys."
+      foot="Sign in runs the agent's own sign-in and shows its link and code here. Maitty keeps no passwords or keys."
     >
       {ACCOUNT_AGENTS.map(([agent, label]) => {
         const state = states[agent]
@@ -713,13 +727,15 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
         return (
           <Row key={agent} label={label} detail={accountWords(state)}>
             <span style={{ display: 'flex', gap: 8 }}>
-              {auth?.installed === true && auth.signedIn !== true && onSignIn !== undefined && <button type="button" className="mx-scard-button is-primary" aria-label={`Sign in to ${label}`} onClick={() => { onSignIn(agent) }}>Sign in</button>}
+              {auth?.installed === true && auth.signedIn !== true && <button type="button" className="mx-scard-button is-primary" aria-label={`Sign in to ${label}`} onClick={() => { signIn.begin(agent) }}>Sign in</button>}
+              {auth?.installed === true && auth.signedIn !== true && onSignIn !== undefined && shown?.agent === agent && (shown.problem !== null || shown.state.kind === 'failed') && <button type="button" className="mx-scard-button" aria-label={`Sign in to ${label} in a terminal`} onClick={() => { onSignIn(agent) }}>Use a terminal</button>}
               {auth?.signedIn === true && <button type="button" className="mx-scard-button" aria-label={`Sign out of ${label}`} onClick={() => { signOut(agent, label) }}>Sign out</button>}
             </span>
           </Row>
         )
       })}
     </Card>
+    </>
   )
 }
 

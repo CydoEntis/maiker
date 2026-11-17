@@ -185,3 +185,19 @@
 .mx-section-key { flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--dim); }
 .mx-row.is-offline { opacity: .5; }
 .mx-row.is-offline .mx-row-word, .mx-row.is-limited .mx-row-word { color: var(--muted); }
+
+/* Helpers under each session that has any running: a guide line and one short row each (`SubagentRows`). */
+.mx-sub-list { position: relative; display: flex; flex-direction: column; margin: 0 0 4px; }
+.mx-sub-guide { position: absolute; left: 19px; top: 0; bottom: 14px; width: 1px; background: var(--line2); }
+.mx-sub-row { position: relative; display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px 0 36px; border-radius: 7px; text-align: left; color: var(--fg2); }
+.mx-sub-row:hover { background: rgba(var(--hl), calc(.05 * var(--hk))); }
+.mx-sub-row.is-open { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
+.mx-sub-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mx-sub-bend { position: absolute; left: 19px; top: 6px; width: 11px; height: 7px; border-left: 1px solid var(--line2); border-bottom: 1px solid var(--line2); border-bottom-left-radius: 5px; }
+.mx-sub-mark { flex: none; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; }
+.mx-sub-mark.is-working { color: var(--working); font-family: var(--mono); }
+.mx-sub-mark.is-working .mx-spin { font-size: 10px; line-height: 1; }
+.mx-sub-mark.is-needs::before { content: ''; width: 8px; height: 8px; border-radius: 2.5px; background: var(--warn); }
+.mx-sub-mark.is-stopped { color: var(--dim); }
+.mx-sub-name { flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-sub-row.is-more .mx-sub-name { color: var(--dim); }

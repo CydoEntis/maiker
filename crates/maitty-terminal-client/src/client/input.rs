@@ -43,8 +43,7 @@ pub(super) fn paste_from_burst(events: &[Event], letters_are_commands: bool) -> 
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         let alt = k.modifiers.contains(KeyModifiers::ALT);
         match k.code {
-            // AltGr arrives as Ctrl+Alt; it types a character.
-            KeyCode::Char(c) if !(ctrl || alt) || (ctrl && alt && !c.is_ascii_alphabetic()) => {
+            KeyCode::Char(c) if !(ctrl || alt) || alt_gr(k) => {
                 broken_line |= text.ends_with('\n');
                 text.push(c);
             }
@@ -406,8 +405,6 @@ impl App {
             Mode::FindSessions(v) => self.on_session_find_key(*v, &k),
             Mode::Branch(v) => self.on_branch_key(*v, &k),
             Mode::Usage => self.on_usage_key(&k),
-            Mode::Run { term, board, .. } => self.on_run_key(term, board, &k),
-            Mode::Work { term, sel } => self.on_board_key(term, sel, &k),
             Mode::StatusLog { term, top } => self.on_status_log_key(term, top, &k),
             Mode::Approved(v) => self.on_approved_key(*v, &k),
             Mode::MachineInfo(v) => self.on_machine_info_key(*v, &k),
@@ -1456,10 +1453,28 @@ impl App {
     }
 }
 
+/// A key that types a character with AltGr (`@ \\ { } [ ] | ~ €` on German, French or Polish
+/// layouts). Terminals report AltGr as Ctrl+Alt, so a text field that refuses every Ctrl key
+/// would refuse these too; a letter with Ctrl+Alt is still a shortcut.
+pub(crate) fn alt_gr(k: &KeyEvent) -> bool {
+    matches!(k.code, KeyCode::Char(c) if !c.is_ascii_alphabetic())
+        && k.modifiers.contains(KeyModifiers::CONTROL | KeyModifiers::ALT)
+}
+
 #[cfg(test)]
 mod tests {
     use super::paste_from_burst;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+
+    #[test]
+    fn altgr_types_a_character_but_ctrl_alt_with_a_letter_stays_a_shortcut() {
+        let altgr = |c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::CONTROL | KeyModifiers::ALT);
+        for c in ['@', '\\', '{', '}', '[', ']', '|', '~', '€', 'ł'] {
+            assert!(super::alt_gr(&altgr(c)), "{c}");
+        }
+        assert!(!super::alt_gr(&altgr('q')));
+        assert!(!super::alt_gr(&KeyEvent::new(KeyCode::Char('@'), KeyModifiers::CONTROL)));
+    }
 
     fn keys(s: &str) -> Vec<Event> {
         s.chars()

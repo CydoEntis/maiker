@@ -18,11 +18,14 @@ struct Kept {
     name: String,
     first_prompt: String,
     model: String,
+    runs_with: crate::conversation::TurnChoice,
     grants: Option<Vec<String>>,
     started_by: Option<TermId>,
     tab_of: Option<TermId>,
     queue: std::collections::VecDeque<String>,
     held_message: Option<String>,
+    /// Its helpers' records: the history of the same conversation.
+    subagent_activity: Vec<SubagentActivity>,
 }
 
 impl Kept {
@@ -39,11 +42,13 @@ impl Kept {
             name: t.name.clone(),
             first_prompt: t.first_prompt.clone(),
             model: t.model.clone(),
+            runs_with: t.runs_with.clone(),
             grants: t.grants.clone(),
             started_by: t.started_by,
             tab_of: t.tab_of,
             queue: t.queue.clone(),
             held_message: t.held_message.as_ref().map(|held| held.text.clone()),
+            subagent_activity: t.subagent_activity.clone(),
         }
     }
 
@@ -52,10 +57,12 @@ impl Kept {
         (t.label, t.name, t.first_prompt) = (self.label, self.name, self.first_prompt);
         (t.pinned, t.archived, t.snoozed_until) = (self.pinned, self.archived, self.snoozed_until);
         t.put_away_for = self.put_away_for;
+        t.runs_with = self.runs_with;
         (t.model, t.grants, t.started_by, t.tab_of) =
             (self.model, self.grants, self.started_by, self.tab_of);
         t.queue = self.queue;
         t.held_message = self.held_message.as_deref().map(term::HeldMessage::new);
+        t.subagent_activity = self.subagent_activity;
     }
 }
 
@@ -278,13 +285,17 @@ impl Daemon {
             agent: term.agent.clone(),
             session: term.agent.as_ref().and(term.session.clone()),
             unseen: term.status == Status::Done,
-            was_working: term.status == Status::Working,
+            // A question left unanswered is a turn cut short too: resumed silently, the agent
+            // would sit at its prompt as if it had been answered.
+            was_working: matches!(term.status, Status::Working | Status::Blocked),
+            interrupted: term.interrupted.clone().filter(|_| term.agent.is_none()),
             name: if term.name.is_empty() {
                 term.first_prompt.clone()
             } else {
                 term.name.clone()
             },
             model: term.model.clone(),
+            runs_with: term.runs_with.clone(),
             label: term.label.clone(),
             pinned: term.pinned,
             archived: term.archived,
@@ -297,7 +308,6 @@ impl Daemon {
             held_message: term.held_message.as_ref().map(|held| held.text.clone()),
             account: term.account.clone(),
             subagent_activity: term.subagent_activity.clone(),
-            workflows: term.workflows.clone(),
             checks: term.checks.infos(),
             checks_overridden: term
                 .checks
@@ -405,7 +415,7 @@ impl Daemon {
         if p.conversation_id.is_some() {
             return None;
         }
-        self.agent_resume_cmd(p).or_else(|| self.saved_cmd(p))
+        self.agent_resume_cmd(p, Some(&p.runs_with)).or_else(|| self.saved_cmd(p))
     }
 
     /// `restore_cmd` for one pane of a restore that brings back several. A conversation comes
@@ -422,11 +432,12 @@ impl Daemon {
         if p.conversation_id.is_some() {
             return None;
         }
-        let Some(resume) = self.agent_resume_cmd(p) else {
+        // Two panes on one conversation are one resume, whatever each last ran.
+        let Some(resume) = self.agent_resume_cmd(p, None) else {
             return self.saved_cmd(p);
         };
-        if resuming.insert((cwd.to_path_buf(), resume.clone())) {
-            return Some(resume);
+        if resuming.insert((cwd.to_path_buf(), resume)) {
+            return self.agent_resume_cmd(p, Some(&p.runs_with));
         }
         tracing::warn!(
             "restore: another pane in {} already resumes this conversation; this one is a shell",
@@ -436,7 +447,11 @@ impl Daemon {
         None
     }
 
-    fn agent_resume_cmd(&self, p: &persist::SavedPane) -> Option<String> {
+    fn agent_resume_cmd(
+        &self,
+        p: &persist::SavedPane,
+        runs: Option<&crate::conversation::TurnChoice>,
+    ) -> Option<String> {
         if self.cfg.restore.agents
             && let Some(def) = p
                 .agent
@@ -444,6 +459,10 @@ impl Daemon {
                 .and_then(|n| self.agents.iter().find(|a| &a.name == n))
         {
             let as_account = |cmd: String| {
+                let cmd = match runs {
+                    Some(runs) => self.running_as(cmd, &def.name, runs),
+                    None => cmd,
+                };
                 p.account
                     .as_deref()
                     .map(|a| self.cfg.as_account(a, &cmd))
@@ -577,7 +596,8 @@ impl Daemon {
                         .was_working
                         .then(|| pane.agent.clone().zip(cmd.clone()))
                         .flatten()
-                        .map(|(agent, resume)| Interrupted { agent, resume });
+                        .map(|(agent, resume)| Interrupted { agent, resume })
+                        .or_else(|| pane.interrupted.clone());
                     let cmd = cmd.filter(|_| interrupted.is_none());
                     match self.spawn(cmd.as_deref(), &cwd, 120, 32) {
                         Ok(new) => {
@@ -597,6 +617,7 @@ impl Daemon {
                                 t.restore_unseen = pane.unseen;
                                 t.first_prompt = pane.name.clone();
                                 t.model = pane.model.clone();
+                                t.runs_with = pane.runs_with.clone();
                                 t.label = pane.label.clone();
                                 (t.pinned, t.archived, t.snoozed_until) =
                                     (pane.pinned, pane.archived, pane.snoozed_until);
@@ -607,7 +628,6 @@ impl Daemon {
                                     pane.held_message.as_deref().map(term::HeldMessage::new);
                                 t.restore_checks(&check_dir, old, &pane);
                                 let now = term::unix_now();
-                                t.workflows = pane.workflows;
                                 t.subagent_activity = pane.subagent_activity.into_iter().map(|mut activity| {
                                     if activity.state.active() {
                                         activity.state = SubagentState::ConnectionLost;
@@ -691,6 +711,29 @@ impl Daemon {
         true
     }
 
+    /// A Claude resume, on the model and effort the session last ran. Claude starts a resumed session on the
+    /// account's default model, which its `/model` in any other session changes, and an effort set for the session
+    /// only is gone; without these the agent comes back on something other than what its chat showed. Nothing that
+    /// would not pass as a picked model and effort is added.
+    pub(super) fn running_as(
+        &self,
+        cmd: String,
+        agent: &str,
+        runs: &crate::conversation::TurnChoice,
+    ) -> String {
+        if agent != "claude" || runs.validate().is_err() {
+            return cmd;
+        }
+        let cmd = match &runs.effort {
+            Some(effort) => self.cfg.with_model(&cmd, "--effort", effort),
+            None => cmd,
+        };
+        match &runs.model {
+            Some(model) => self.cfg.with_model(&cmd, "--model", model),
+            None => cmd,
+        }
+    }
+
     /// The command that resumes an agent's conversation, if its kind supports it.
     pub(super) fn resume_cmd(&self, t: &Term) -> Option<String> {
         let def = t
@@ -702,7 +745,7 @@ impl Daemon {
             _ => def.resume_last.clone(),
         };
         // Under the account it was started as: its conversation is in that account's folder.
-        resume.map(|cmd| {
+        resume.map(|cmd| self.running_as(cmd, &def.name, &t.runs_with)).map(|cmd| {
             t.account
                 .as_deref()
                 .map(|a| self.cfg.as_account(a, &cmd))

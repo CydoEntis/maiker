@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from '@/lib/toast'
 import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen } from '@/api/daemon'
-import { machineNameOf, terminalOf } from '@/api/machines'
+import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
 import { readConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
@@ -15,8 +15,9 @@ import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
 import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } from '../useChatComposer'
 import { countUserMessages } from '../workPhase'
+import { sentTexts } from '../promptRecall'
 import { startedWithYolo } from '../yoloSessions'
-import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel } from '../chatMeta'
+import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
 import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
@@ -29,7 +30,7 @@ import { keepComposerFocus } from '../keepComposerFocus'
 import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
-import { noteAgentSaid, writeChoice } from '../agentChoice'
+import { DEFAULT_PICK, noteAgentSaid, writeChoice } from '../agentChoice'
 import { Composer } from './Composer'
 import { ChatItem, type ChatItemContext } from './ChatItems'
 import { KnownRowsContext } from '../knownRows'
@@ -37,6 +38,7 @@ import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
+import { CommandMenuTray } from './CommandMenuTray'
 import { ProblemBanner } from './ProblemBanner'
 import { summaryOf } from '../summary'
 import type { ChatProblem } from '../problem'
@@ -50,6 +52,11 @@ import type { ConfirmAsk, WindowRoute } from '../windowCommands'
 import { namedCommand } from '../slashCommands'
 import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import { useAside } from '../useAside'
+import { lastReply, permissionsCard, statusCard, transcriptMarkdown } from '../commandCards'
+import { copyBlock, saveBlock } from '../saveBlock'
+import { nowSeconds } from '@/features/workspace/model/newChatHost'
+import { SignInCard } from '@/features/signin/SignInCard'
+import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { AsideCard } from './AsideCard'
 import type { RewindPlace } from '../editFromHere'
 import type { FileSearchPlace } from '../fileMention'
@@ -185,7 +192,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }, [working, refresh])
   // The transcript has no entry for a terminal agent's prompt until it is answered, so the chat shows it from the hook's report.
   const stoppedOnPrompt = link.readOnly === true && feed.status === 'Blocked'
-  const answersPrompt = stoppedOnPrompt && typeInto !== undefined && (ask?.answerable === true || (ask?.choices?.length ?? 0) > 0 || formQuestions(ask).length > 0)
   const promptKeys = abilitiesOf(agent).answerKeys
   const answerPrompt = typeInto === undefined || promptKeys === null ? undefined : (choice: AskChoice) => typeInto(promptKeys[choice]).then(refresh)
   // A menu the chat has no buttons for is answered with the keys a person would press, in the agent's own terminal.
@@ -204,26 +210,49 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const answerOwn = typeKeys === undefined ? undefined : (text: string) => typeKeys(ownAnswerKeys(ask?.choices?.length ?? 0, text))
   // A chat that follows the agent's own terminal changes its mode, model and reasoning the way its user would: by typing the agent's commands
   // (Shift+Tab, /model, /effort). Offered for Claude, and not while it works, when the keys would land in its turn.
-  // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model), until the agent's own file says it.
+  // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model, effort), until the agent's own file says it.
+  // The agent's files are the one record of what it runs, so a terminal command and a pick here always show the same.
   const [liveMode, setLiveMode] = useState<{ base: string | null; value: string } | null>(null)
   const [liveModel, setLiveModel] = useState<{ base: string | null; value: string } | null>(null)
+  const [liveEffort, setLiveEffort] = useState<{ base: string | null; value: string } | null>(null)
   const metaMode = feed.meta?.mode ?? null
   const metaModel = feed.meta?.model ?? null
   // What the chat was started with, until the agent's own file says it: the chips the starting chat drew stay as they were.
   const [started] = useState(() => startChoiceOf(sessionId))
   const shownMode = (liveMode !== null && liveMode.base === metaMode ? liveMode.value : metaMode) ?? started?.mode ?? null
-  const shownModel = liveModel !== null && liveModel.base === metaModel ? liveModel.value : metaModel
+  const startedModel = started === null || started.model === DEFAULT_PICK ? null : started.model
+  const startedEffort = started === null || started.reasoning === DEFAULT_PICK ? null : started.reasoning
+  const shownModel = (liveModel !== null && liveModel.base === metaModel ? liveModel.value : metaModel) ?? startedModel
+  const shownEffort = (liveEffort !== null && liveEffort.base === effort ? liveEffort.value : effort) ?? startedEffort
   const abilities = abilitiesOf(agent)
   const canChangeAgent = typeInto !== undefined && abilities.changeAgent && link.readOnly === true
-  const canPickCodexMode = typeInto !== undefined && abilities.permissionModes?.switchBy === 'command' && link.readOnly === true
+  // Another machine's chat: its screen cannot be read from here, so a mode that must be checked on screen is not picked
+  // from here, and its commands and models are that machine's, not this computer's.
+  const remote = sessionId !== undefined && machineNameOf(sessionId) !== null
+  // Whose commands the box lists: the machine the chat runs on. A machine this window has not been told of has none.
+  const commandsMachine = sessionId !== undefined && remote ? (parseSessionId(sessionId)?.machine ?? null) : LOCAL_MACHINE
+  const canPickCodexMode = typeInto !== undefined && abilities.permissionModes?.switchBy === 'command' && link.readOnly === true && !remote
   // The chips stay drawn while their keys would land in a turn or nowhere; they are only greyed out, so the box does not rearrange.
   const pickerLocked = !online ? 'The daemon is offline' : stoppedOnPrompt ? `${agent} is asking something. Answer it first.` : null
   const chipsLocked = !online ? 'The daemon is offline' : working ? `${agent} is working. Change this when it finishes.` : null
   // Picked commands are typed one after another: each waits for its Enter, so a model and an effort picked together do not interleave.
   const commandChain = useRef<Promise<void>>(Promise.resolve())
+  // A menu the agent's own command opened (Codex's /model), drawn in the chat until it is closed.
+  const [menuOpen, setMenuOpen] = useState(false)
   const agentControls = useMemo(() => {
     if (canPickCodexMode) {
       return {
+        // Codex has no model flag a chat can set on a running session: its /model menu is typed and shown here, and the person picks in it.
+        onOpenModelMenu: () => {
+          if (pickerLocked !== null || chipsLocked !== null) return
+          setMenuOpen(true)
+          const typed = commandChain.current.then(() => typeMessage(typeInto, agent, '/model')).then(refresh)
+          commandChain.current = typed.catch((error: unknown) => {
+            setMenuOpen(false)
+            toast.error(errorMessage(error, 'Could not open the model menu'))
+          })
+        },
+        modelMenuLocked: pickerLocked ?? chipsLocked,
         modes: CODEX_START_MODES,
         modeAgent: 'Codex',
         onPickMode: (target: string) => {
@@ -247,7 +276,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
             }
             refresh()
           }
-          void step().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not change the permission mode')) })
+          void step().catch((error: unknown) => {
+            setLiveMode(before === null ? null : { base: metaMode, value: before })
+            toast.error(errorMessage(error, 'Could not change the permission mode'))
+          })
         },
       }
     }
@@ -256,18 +288,25 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       // The model and the effort can be picked while the agent works: the pick is typed in at once, as it would be in
       // the terminal, and the agent takes it as soon as it can. Only a question it is asking holds the picker, since
       // typed text would answer the question.
-      agentChips: { locked: chipsLocked, pickerLocked },
+      agentChips: { locked: chipsLocked, pickerLocked, remote },
       onCommand: (text: string) => {
         if (pickerLocked !== null) return
         const model = /^\/model (\S+)/.exec(text)?.[1]
         if (model !== undefined) setLiveModel({ base: metaModel, value: model })
+        const level = /^\/effort (\S+)/.exec(text)?.[1]
+        if (level !== undefined) setLiveEffort({ base: effort, value: level })
         // Through typeMessage, so Claude Code gets its Enter after a pause: sent with the command, the Enter is taken
         // for the completion it is showing and the command never runs.
         const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(refresh)
-        commandChain.current = typed.catch((error: unknown) => { toast.error(errorMessage(error, 'Could not type the command')) })
+        commandChain.current = typed.catch((error: unknown) => {
+          if (model !== undefined) setLiveModel(null)
+          if (level !== undefined) setLiveEffort(null)
+          toast.error(errorMessage(error, 'Could not type the command'))
+        })
       },
-      onPickMode: (target: string) => {
+      ...(remote ? {} : { onPickMode: (target: string) => {
         if (sessionId === undefined || chipsLocked !== null) return
+        const before = shownMode
         // Shift+Tab only cycles, so press it until the screen shows the picked mode; a mode that never comes up is not allowed in this session.
         // The chip shows the pick at once and the presses happen behind it; the screen has the last word when they end.
         setLiveMode({ base: metaMode, value: target })
@@ -287,11 +326,14 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           toast.error(`${modeLabel(target) ?? target} is not available in this session. Claude has to be started allowing it.`)
           refresh()
         }
-        void step().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not change the permission mode')) })
-      },
+        void step().catch((error: unknown) => {
+          setLiveMode(before === null ? null : { base: metaMode, value: before })
+          toast.error(errorMessage(error, 'Could not change the permission mode'))
+        })
+      } }),
     }
-  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, shownMode, pickerLocked])
-  const composer = useChatComposer({ link, agent, feed, online, refresh, answersPrompt, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
+  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, effort, shownMode, pickerLocked, remote])
+  const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
@@ -300,25 +342,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
-  const [confirming, setConfirming] = useState<{ ask: ConfirmAsk; typed: string } | null>(null)
+  // `then` is what a yes does when it is not the command itself: moving the session to plan mode.
+  const [confirming, setConfirming] = useState<{ ask: ConfirmAsk; typed: string; then?: () => void } | null>(null)
   const aside = useAside(link.conversation)
+  const signIn = useAgentSignIn(undefined)
+  const signInView = signIn.view
   // Once confirmed it runs where Claude Code runs it: one only the terminal answers is typed there and shown, the rest are sent.
   const runConfirmed = (typed: string) => {
     if (runInTerminal !== undefined && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) runInTerminal(typed)
     else void sendText(typed)
-  }
-  const runInWindow = windowActions === undefined ? undefined : (route: WindowRoute, typed: string) => {
-    switch (route.kind) {
-      case 'settings': windowActions.openSettings(route.section); return
-      case 'panel': windowActions.openPanel(route.view); return
-      case 'recent': windowActions.openRecent(); return
-      case 'confirm': setConfirming({ ask: route.ask, typed }); return
-      case 'aside': aside.ask(route.title, route.ask); return
-      case 'note': aside.show(route.title, route.text); return
-      case 'rename': windowActions.renameSession(route.name); void sendText(typed); return
-      case 'commands':
-      case 'complete': return
-    }
   }
   // A message just sent shows at once, with the agent taken to be at work on it, until the history has it.
   // A first message typed while the agent started is held, and shows exactly as the starting chat showed it (the bubble, then the
@@ -331,6 +363,45 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // What the history says without the working line or hidden runs: whether the agent has answered what was last asked,
   // and the summary a new chat starts from, which reads the last reply as it was said.
   const bareRows = useMemo(() => buildRows(events, false, root, echoText, false), [events, root, echoText])
+  // A command the window answers from what the chat holds, or by a control it already has. Nothing here changes a permission
+  // mode without a click: /plan asks first, and /permissions only says what the modes are.
+  const pickMode = 'onPickMode' in agentControls ? agentControls.onPickMode : undefined
+  const runInWindow = windowActions === undefined ? undefined : (route: WindowRoute, typed: string) => {
+    switch (route.kind) {
+      case 'settings': windowActions.openSettings(route.section); return
+      case 'panel': windowActions.openPanel(route.view); return
+      case 'recent': windowActions.openRecent(); return
+      case 'confirm': setConfirming({ ask: route.ask, typed }); return
+      case 'aside': aside.ask(route.title, route.ask); return
+      case 'note': aside.show(route.title, route.text); return
+      case 'signIn': signIn.begin(route.agent); return
+      case 'rename': windowActions.renameSession(route.name); void sendText(typed); return
+      case 'card':
+        if (route.card === 'status') aside.show('Status', statusCard({ agent, model: shownModel, effort, mode: shownMode, folder: root, usage, now: nowSeconds(), working, online }))
+        else aside.show('Permissions', permissionsCard(agent, shownMode, agent === 'codex' ? CODEX_START_MODES : PICKABLE_MODES))
+        return
+      case 'copy': {
+        const reply = lastReply(bareRows)
+        if (reply === null) toast.message(`${agent} has not said anything yet.`)
+        else copyBlock(reply, 'Could not copy the reply')
+        return
+      }
+      case 'export': {
+        const text = transcriptMarkdown(bareRows, agent)
+        if (text === null) toast.message('There is nothing to export yet.')
+        else saveBlock('conversation', 'md', text)
+        return
+      }
+      case 'plan':
+        if (shownMode === PLAN_MODE) aside.show('Plan mode', `${agent} is already in plan mode. It reads and plans, and changes nothing until you approve the plan.`)
+        else if (pickMode === undefined) aside.show('Plan mode', 'This chat cannot change its permission mode from here.')
+        else if (chipsLocked !== null) toast.message(chipsLocked)
+        else setConfirming({ ask: { title: 'Switch to plan mode?', body: `${agent} will read and plan and change nothing until you approve the plan. You can pick another mode with the shield button.`, confirmLabel: 'Plan mode' }, typed, then: () => { pickMode(PLAN_MODE) } })
+        return
+      case 'commands':
+      case 'complete': return
+    }
+  }
   const lastKind = bareRows.at(-1)?.kind
   const replied = lastKind !== undefined && lastKind !== 'user' && lastKind !== 'echo'
   useEffect(() => { repliedRef.current = replied })
@@ -338,6 +409,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const freePhrase = agentFree ? `free · ${String(helpersOnly)} ${helpersOnly === 1 ? 'helper' : 'helpers'} working` : null
   const allRows = useMemo(() => buildRows(events, working || holdWorking || agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase), [events, working, holdWorking, agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase])
   const rows = useMemo(() => allRows.filter((row) => !isPendingApproval(row)), [allRows])
+  // What ↑ in the box brings back: the messages sent in this chat, each once in a row, the newest last.
+  const sentMessages = useMemo(() => sentTexts(events), [events])
   // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
   // the chat opened (until then it shows what this window remembered, which may be behind) and one after the window was
   // hidden. Only a reply that comes while the chat is being looked at is typed in.
@@ -391,14 +464,16 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }
   const pending = useMemo(() => allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event ?? null, [allRows])
   // The model and effort picked on the new-chat page are this conversation's choice from its first frame, so the picker shows them.
+  // A chat that follows the terminal keeps no choice of its own: what its agent says it runs is the choice.
+  const followsTerminal = link.readOnly === true
   useLayoutEffect(() => {
     if (sessionId === undefined) return
-    if (started !== null) writeChoice(link.conversation, { model: started.model, reasoning: started.reasoning })
+    if (started !== null && !followsTerminal) writeChoice(link.conversation, { model: started.model, reasoning: started.reasoning })
     releaseStartChoice(sessionId)
-  }, [sessionId, started, link.conversation])
-  // Once the agent says it runs another model or effort than it last said (a /model typed in the terminal), that is
-  // what the message box shows and what the next message keeps. After the start choice above, so it is not undone.
-  useEffect(() => { noteAgentSaid(link.conversation, { model: metaModel, effort }) }, [link.conversation, metaModel, effort])
+  }, [sessionId, started, link.conversation, followsTerminal])
+  // Once the agent says it runs another model or effort than it last said, that is what the message box shows and
+  // what the next message keeps. After the start choice above, so it is not undone.
+  useEffect(() => { if (!followsTerminal) noteAgentSaid(link.conversation, { model: metaModel, effort }) }, [link.conversation, metaModel, effort, followsTerminal])
   // The session's unsent text comes along when its chat was given a new conversation number.
   useEffect(() => {
     if (sessionId !== undefined) followComposer(sessionId, link.conversation)
@@ -535,9 +610,14 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const canOpenFile = onOpenFile !== null
   const openFile = useMemo<OpenFile | null>(() => (canOpenFile ? (path, line) => { openFileRef.current?.(path, line) } : null), [canOpenFile])
 
+  // The menu's keys would answer a question or land in a turn, so it goes when the agent asks or works.
+  if (menuOpen && (stoppedOnPrompt || working)) setMenuOpen(false)
+  // Keyed by the question: a new one starts with nothing typed, and its answers sized for its own questions.
+  const askKey = `${ask?.tool ?? ''}:${ask?.detail ?? ''}:${JSON.stringify(ask?.questions ?? ask?.choices ?? [])}`
   const question = pending !== null
-    ? <ApprovalTray event={pending} actions={approval} agent={agent} />
-    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
+    ? <ApprovalTray key={pending.requestId} event={pending} actions={approval} agent={agent} />
+    : menuOpen && sendKeys !== undefined && online ? <CommandMenuTray agent="Codex" topic="model" readScreen={readScreen} sendKeys={sendKeys} onClose={() => { setMenuOpen(false) }} />
+    : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
     feed.error,
@@ -546,7 +626,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   return (
     <FilesHereContext.Provider value={sessionId === undefined || machineNameOf(sessionId) === null}>
     <div ref={chat} className="mx-chat" onKeyDown={onKeyDown} onClick={keepComposerFocus} onMouseUp={(event) => { const next = pickedText(event); if (next !== undefined) setPicked(next) }}>
-      {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed } = confirming; setConfirming(null); runConfirmed(typed) }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
+      {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={() => { if (chat.current !== null) quotePicked(chat.current) }} />}
       {(notices.length > 0 || fullAccess) && (
@@ -574,17 +654,19 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       ) : (
         <ChatSkeleton />
       )}
-      {aside.aside !== null && <AsideCard aside={aside.aside} onClose={aside.close} onAskInConversation={(question) => { aside.close(); void sendText(question) }} />}
+      {signInView !== null && <SignInCard view={signInView} onCancel={() => { signIn.cancel(signInView.agent) }} onClose={signIn.close} onRetry={() => { signIn.begin(signInView.agent) }} />}
+      {aside.aside !== null && <OpenFileContext.Provider value={openFile}><AsideCard aside={aside.aside} onClose={aside.close} onAskInConversation={(question) => { aside.close(); void sendText(question) }} /></OpenFileContext.Provider>}
       <Composer
         agent={agent}
         composer={composer}
         conversation={link.conversation}
-        // Claude says which commands it takes, in its folder; Codex's are a list the window keeps. Gemini has none yet.
-        {...(abilities.slashCommands !== null && root !== null ? { commandsFrom: { agent, folder: root, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
+        // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet.
+        {...(abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
         question={question}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
+        sent={sentMessages}
       />
     </div>
     </FilesHereContext.Provider>

@@ -68,11 +68,22 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
       return
     }
     // A chat and a terminal both get the undo window: the daemon hides the session now and ends it when the window passes.
-    const terminals = running
-    void Promise.all(terminals.map((session) => closeSessionWithUndo(session.conversation)))
-      .then(async () => {
+    // Each close stands alone: one that fails keeps its pane and its row, and the others still close with their Undo.
+    void Promise.allSettled(running.map((session) => closeSessionWithUndo(session.conversation)))
+      .then(async (results) => {
+        const terminals = running.filter((_, index) => results[index]?.status === 'fulfilled')
+        const failed = running.filter((_, index) => results[index]?.status !== 'fulfilled')
+        if (failed.length > 0) {
+          unmarkClosed(failed.map((session) => session.id))
+          const reason: unknown = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')?.reason
+          toast.error(errorMessage(reason, failed.length === 1 && failed[0] ? `Could not end ${displayName(failed[0])}` : `Could not end ${String(failed.length)} sessions`))
+        }
+        if (terminals.length === 0) return
+        const closed = new Set(terminals.map((session) => session.id))
+        // An ended session whose pane had nothing to stop goes too.
+        const removing = new Set([...gone].filter((id) => closed.has(id) || !running.some((session) => session.id === id)))
         const before = layoutNow()
-        const after = removeSessions(before, gone)
+        const after = removeSessions(before, removing)
         movePanes(() => { setLayout(after) })
         // Named for what was asked to close: an agent's terminals went with it, they are not further sessions.
         const named = terminals.filter((session) => asked.has(session.id))

@@ -34,7 +34,7 @@ pub fn draw(app: &mut App, f: &mut Frame) {
         && !cfg!(test)
     {
         use std::io::Write;
-        let _ = write!(std::io::stdout(), "]11;#{r:02x}{g:02x}{b:02x}");
+        let _ = write!(std::io::stdout(), "\x1b]11;#{r:02x}{g:02x}{b:02x}\x07");
         app.osc_bg = Some(t.bg);
     } else if (terminal_bg || !matches!(t.bg, Color::Rgb(..)))
         && app.osc_bg.is_some()
@@ -223,14 +223,6 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
         Mode::Specialists(v) => {
             let v = (**v).clone();
             super::screen::draw_specialists(app, f, area, &t, &v);
-        }
-        Mode::Run { term, key, .. } => {
-            let (term, key) = (*term, key.clone());
-            super::screen::draw_run(app, f, area, &t, term, &key);
-        }
-        Mode::Work { term, sel } => {
-            let (term, sel) = (*term, *sel);
-            super::screen::draw_board(app, f, area, &t, term, sel);
         }
         Mode::StatusLog { term, top } => {
             let (term, top) = (*term, *top);

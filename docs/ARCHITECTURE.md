@@ -211,6 +211,9 @@ The terminal `maitty` binary runs as a daemon or as a client:
   name). Owns every pane: spawns shells and agents in pseudo-terminals
   (ConPTY on Windows), parses their output with `vt100`, detects agent status,
   manages worktrees, persists sessions, and restores them after a restart.
+  It starts detached from whoever started it: its own session on unix (`setsid`); on Windows a new
+  process group with no console window, out of the starter's job (`CREATE_BREAKAWAY_FROM_JOB`) when
+  the job allows it, since closing a job ends everything in it.
 - **Client (UI):** the full-screen TUI. Connects over a local socket (named pipe
   on Windows, Unix socket elsewhere), receives snapshots and pane output, sends
   commands and keystrokes. Many clients can attach; any can detach.
@@ -319,6 +322,7 @@ crates/
   maitty-shared/                  wire protocol and shared contracts, including `tickets.rs`: the read-only, provider-neutral ticket model (groups, summaries, tickets, filter, typed error) and the pure rules that clean and cap it, with no I/O
   maitty-settings/                preference schemas, key actions and themes
   maitty-ipc-transport/           shared IPC framing and handshake
+  maitty-agent-ask/               asking an agent's own program what it offers (Claude Code's models and slash commands, Codex's skills) and checking the pinned command lists against the installed agent (`pinned`); the host asks for this computer and a daemon for its machine, so the questions live once. Never depends on `maitty-core`
   maitty-machines/                the `[[machines]]` definition and its checks and edits, the ssh line, failure classes, dial, connection registry and link supervisors, the cleaning and policy for what another machine sends, the daemon-id store, the `~/.ssh/config` parser, the reader of this computer's machine list (`local_machines`: `config.local.toml`, as both apps read it), and the atomic state-file helpers (`write_atomic`, `read_state`, which `maitty-core` re-exports), shared by both apps
   maitty-highlight/               syntax highlighting for file previews, shared by both apps (STACK: syntect)
   maitty-test-support/            test-only helpers shared across crates: building and locating the fake-ssh shim, running a command with a time limit

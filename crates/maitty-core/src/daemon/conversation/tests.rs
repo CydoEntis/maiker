@@ -2087,6 +2087,8 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             Query::GitHubAccounts { tag: 9 },
             Query::GitHubRepos { owner: None, search: None, tag: 9 },
             Query::GitHubOwners { tag: 9 },
+            Query::AgentCommands { agent: crate::conversation::Provider::Claude, folder: "/code".into(), tag: 9 },
+            Query::AgentSignIn { agent: crate::protocol::SignInAgent::Codex, request: crate::protocol::SignInRequest::Start, tag: 9 },
             Query::Tickets { source: "me/widgets".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 },
             Query::TicketKeys {
                 change: crate::protocol::TicketKeyChange::Set {
@@ -2113,22 +2115,40 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             "{answered:?}"
         );
 
-        // A write needs a person: a pane is refused even when it says it was confirmed, and a person's
-        // client that did not confirm is answered with a refusal and nothing is written.
-        let close = |confirmed| Query::TicketWrite {
+        // A person's client is told plainly that Gemini has no sign-in to run, and nothing is started.
+        let gemini = Query::AgentSignIn { agent: crate::protocol::SignInAgent::Gemini, request: crate::protocol::SignInRequest::Start, tag: 4 };
+        let told = exchange(&mut session, 470, crate::protocol::ClientMsg::Query(gemini), None).await;
+        assert!(
+            matches!(told, ServerMsg::Reply(crate::protocol::Reply::AgentSignIn { tag: 4, state: crate::protocol::SignInState::Failed(crate::protocol::SignInFailure::Unsupported), .. })),
+            "{told:?}"
+        );
+
+        // Tickets are read-only (ADR 0011): a window from before that still asks for a write, even a
+        // confirmed one, is told so with its tag and keeps its connection.
+        let close = Query::TicketWrite {
             source: "me/widgets".into(),
             id: "github:me/widgets#1".into(),
             write: maitty_shared::tickets::TicketWrite::Close,
-            confirmed,
+            confirmed: true,
             tag: 9,
         };
-        let from = authenticated_pane(&mut session);
-        let refused = exchange(&mut session, 461, crate::protocol::ClientMsg::Query(close(true)), Some(from)).await;
-        assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
-        let unconfirmed = exchange(&mut session, 462, crate::protocol::ClientMsg::Query(close(false)), None).await;
+        let told = exchange(&mut session, 462, crate::protocol::ClientMsg::Query(close), None).await;
         assert!(
-            matches!(unconfirmed, ServerMsg::Reply(crate::protocol::Reply::TicketWrite { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(_)) })),
-            "{unconfirmed:?}"
+            matches!(told, ServerMsg::Reply(crate::protocol::Reply::TicketWrite { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(ref why)) }) if why.contains("no longer")),
+            "{told:?}"
+        );
+
+        // Installing code is a person's: a pane is refused, and a person's client with no preview token is
+        // answered with a refusal and nothing runs.
+        let ask = |request| Query::Extensions { request, tag: 9 };
+        let from = authenticated_pane(&mut session);
+        let add = maitty_shared::extensions::ExtRequest::Add { token: "0".repeat(32) };
+        let refused = exchange(&mut session, 463, crate::protocol::ClientMsg::Query(ask(add.clone())), Some(from)).await;
+        assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
+        let untokened = exchange(&mut session, 464, crate::protocol::ClientMsg::Query(ask(add)), None).await;
+        assert!(
+            matches!(untokened, ServerMsg::Reply(crate::protocol::Reply::Extensions { tag: 9, answer: Err(maitty_shared::extensions::ExtError::NeedsConfirmation) })),
+            "{untokened:?}"
         );
 
         let from = authenticated_pane(&mut session);

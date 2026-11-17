@@ -431,6 +431,108 @@ fn a_session_keeps_its_account_through_sleep_and_restart() {
     close(&mut d, &[t, plain]);
 }
 
+/// The agent runs `claude -p` as a command and its processes cannot be read: the headless one's
+/// own session starts, works and ends inside the pane agent's turn. None of it is the pane's.
+#[test]
+fn another_session_ending_inside_the_agents_turn_leaves_the_pane_agent_alone() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let in_session = |status, event, session: &str| {
+        let mut m = from(t, status, event, None);
+        if let ClientMsg::Hook { session: s, .. } = &mut m {
+            *s = Some(session.into());
+        }
+        m
+    };
+    d.apply_hook(in_session(HookStatus::Working, "UserPromptSubmit", "pane-session"), None, Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Working);
+    for (status, event) in [(HookStatus::Idle, "SessionStart"), (HookStatus::Done, "Stop"), (HookStatus::Gone, "SessionEnd")] {
+        d.apply_hook(in_session(status, event, "headless-session"), None, Vec::new());
+    }
+    let pane = &d.terms[&t];
+    assert_eq!(pane.session.as_deref(), Some("pane-session"));
+    assert_eq!(pane.status, Status::Working, "the pane's agent is still at work");
+    assert_eq!(pane.agent.as_deref(), Some("claude"));
+    // Once its own turn is over, a new session is the pane's own (/clear, /resume).
+    d.apply_hook(in_session(HookStatus::Done, "Stop", "pane-session"), None, Vec::new());
+    d.apply_hook(in_session(HookStatus::Idle, "SessionStart", "after-clear"), None, Vec::new());
+    assert_eq!(d.terms[&t].session.as_deref(), Some("after-clear"));
+    close(&mut d, &[t]);
+}
+
+/// /clear or /resume while a helper's end was never reported: the new session starts with none of
+/// the old one's helpers, and the old one's is shown as cut off, not still running.
+#[test]
+fn a_new_session_drops_the_old_sessions_helpers() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let in_session = |status, event, helper, session: &str| {
+        let mut m = from(t, status, event, helper);
+        if let ClientMsg::Hook { session: s, .. } = &mut m {
+            *s = Some(session.into());
+        }
+        m
+    };
+    d.apply_hook(in_session(HookStatus::Working, "UserPromptSubmit", None, "first"), Some(true), Vec::new());
+    d.apply_hook(in_session(HookStatus::Working, "SubagentStart", Some(true), "first"), Some(true), Vec::new());
+    assert!(!d.terms[&t].subagents.is_empty());
+    d.apply_hook(in_session(HookStatus::Done, "Stop", None, "first"), Some(true), Vec::new());
+    d.apply_hook(in_session(HookStatus::Idle, "SessionStart", None, "second"), Some(true), Vec::new());
+    let pane = &d.terms[&t];
+    assert!(pane.subagents.is_empty());
+    assert!(pane.helper_work.is_empty());
+    assert!(pane.subagent_activity.iter().all(|a| !a.state.active()), "{:?}", pane.subagent_activity);
+    close(&mut d, &[t]);
+}
+
+/// The turn ended while a helper ran, so its finish was held; the helper's stop then came only as
+/// its record (a transcript, a session file), not a report. The finish is said then, not an hour on.
+#[test]
+fn a_finish_held_for_a_helper_is_said_when_its_record_says_it_stopped() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Working, "SubagentStart", Some(true)), Some(true), Vec::new());
+    d.apply_hook(from(t, HookStatus::Done, "Stop", None), Some(true), Vec::new());
+    assert!(d.terms[&t].done_held.is_some(), "held for the helper");
+    for record in &mut d.terms.get_mut(&t).unwrap().subagent_activity {
+        record.state = SubagentState::Completed;
+    }
+    d.update_statuses();
+    assert!(d.terms[&t].done_held.is_none());
+    assert_eq!(d.terms[&t].status, Status::Done);
+    close(&mut d, &[t]);
+}
+
+#[test]
+fn an_agent_that_ends_takes_its_queue_with_it() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.command(0, Command::QueueFollowUp { term: t, text: "for claude".into(), first: false, operation: None }).unwrap();
+    d.apply_hook(from(t, HookStatus::Gone, "SessionEnd", None), Some(true), Vec::new());
+    assert!(d.snapshot().terms[&t].queued.is_empty(), "not kept for the next agent started here");
+    close(&mut d, &[t]);
+}
+
+#[test]
+fn a_queued_message_waits_while_the_agent_may_have_exited() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.hooked, p.status) = (Some("codex".into()), true, Status::Idle);
+        p.agent_missed = 1;
+    }
+    d.command(0, Command::QueueFollowUp { term: t, text: "ls".into(), first: false, operation: None }).unwrap();
+    d.update_statuses();
+    assert_eq!(d.snapshot().terms[&t].queued, ["ls"], "not typed into what may be the shell");
+    d.terms.get_mut(&t).unwrap().agent_missed = 0;
+    d.update_statuses();
+    assert!(d.snapshot().terms[&t].queued.is_empty(), "seen again, so it goes");
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn a_queued_follow_up_goes_in_when_the_turn_is_over() {
     let (mut d, _rx) = daemon();
@@ -1945,10 +2047,24 @@ fn a_replaced_session_keeps_its_place_among_its_helpers() {
         Some(woken),
         "and its helper is still its own"
     );
-    // Moved into a worktree: the same again.
+    // Moved into a worktree: the same again, with its helpers' records.
+    d.terms.get_mut(&woken).unwrap().subagent_activity.push(SubagentActivity {
+        id: "reviewer-1".into(),
+        name: "reviewer".into(),
+        parent: None,
+        state: SubagentState::Completed,
+        task: None,
+        model: None,
+        effort: None,
+        started_at: Some(1),
+        updated_at: 2,
+        latest_activity: None,
+        result: Some("looks fine".into()),
+    });
     d.relocate(woken, &std::env::temp_dir());
     let moved = d.workspaces[1].tabs[0].focus;
     assert!(moved != woken, "a new process in the new folder");
+    assert_eq!(d.terms[&moved].subagent_activity.len(), 1, "its helpers' history moved with it");
     assert_eq!(d.terms[&moved].started_by, Some(lead));
     assert_eq!(d.terms[&helper].started_by, Some(moved));
     close(&mut d, &[lead, moved, helper]);
@@ -2708,6 +2824,12 @@ fn an_agent_stopped_by_a_limit_is_told_to_continue_when_it_resets() {
     d.auto_continue();
     assert!(d.terms[&t].pending_input.is_none(), "not before");
     d.terms.get_mut(&t).unwrap().resume_at = Some(now - 1);
+    // An Enter still waiting to go in is not replaced: "continue" waits for it.
+    d.terms.get_mut(&t).unwrap().pending_input = Some((b"\r".to_vec(), Instant::now()));
+    d.auto_continue();
+    assert_eq!(d.terms[&t].pending_input.as_ref().map(|(b, _)| b.as_slice()), Some(&b"\r"[..]));
+    assert!(d.terms[&t].resume_at.is_some(), "still to come");
+    d.terms.get_mut(&t).unwrap().pending_input = None;
     d.auto_continue();
     assert_eq!(
         d.terms[&t]
@@ -4317,6 +4439,35 @@ fn codex_detects_work_with_background_terminals_and_wrapped_footers() {
     );
 }
 
+/// Codex's own Stop already ended the turn; its notify arrives after the next one started.
+#[test]
+fn a_late_codex_notify_does_not_end_the_next_turn() {
+    let (mut d, _rx) = daemon();
+    let id = pane(&mut d);
+    d.terms.get_mut(&id).unwrap().agent = Some("codex".into());
+    d.hook(id, "codex".into(), HookStatus::Working, "UserPromptSubmit", &[]);
+    assert!(d.terms[&id].lifecycle_hooks);
+    d.hook(id, "codex".into(), HookStatus::Done, "Stop", &[]);
+    d.hook(id, "codex".into(), HookStatus::Working, "UserPromptSubmit", &[]);
+    d.hook(id, "codex".into(), HookStatus::Done, "agent-turn-complete", &[]);
+    assert_eq!(d.terms[&id].status, Status::Working);
+    close(&mut d, &[id]);
+}
+
+/// A Codex pane restored done and unseen: Esc on its next turn is a quiet stop, not a finish.
+#[test]
+fn a_restored_codex_panes_esc_is_not_a_finish() {
+    let (mut d, _rx) = daemon();
+    let id = pane(&mut d);
+    d.terms.get_mut(&id).unwrap().agent = Some("codex".into());
+    d.terms.get_mut(&id).unwrap().restore_unseen = true;
+    d.hook(id, "codex".into(), HookStatus::Working, "UserPromptSubmit", &[]);
+    d.hook(id, "codex".into(), HookStatus::Idle, "Interrupt", &[]);
+    assert_eq!(d.terms[&id].status, Status::Idle);
+    assert!(!d.terms[&id].restore_unseen);
+    close(&mut d, &[id]);
+}
+
 #[test]
 fn codex_can_start_its_next_turn_without_waiting_for_the_wall_clock() {
     let (mut d, _rx) = daemon();
@@ -4519,7 +4670,7 @@ fn a_codex_pane_with_lifecycle_hooks_ignores_a_question_shown_on_screen() {
     t.hooked = true;
     t.lifecycle_hooks = true;
     t.status = Status::Working;
-    t.parser.process(b"[2J[H");
+    t.parser.process(b"\x1b[2J\x1b[H");
     t.parser.process(
         &b"
 "
@@ -7990,6 +8141,52 @@ fn an_agent_saved_mid_turn_comes_back_as_a_resume_of_its_conversation() {
 }
 
 #[test]
+fn a_resumed_claude_runs_the_model_and_effort_it_last_said() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.session) = (Some("claude".into()), Some("abc123".into()));
+    }
+    // Before it has said anything, a resume is the plain one.
+    let plain = d.resume_cmd(&d.terms[&t]).expect("claude can be resumed");
+    assert!(!plain.contains("--model") && !plain.contains("--effort"), "{plain}");
+
+    // Its transcript says a model and an effort: a sleep, a move or a reload brings it back on them.
+    d.agent_effort(vec![(t, Some("max".into()), Some("claude-opus-5-5[1m]".into()))]);
+    let resume = d.resume_cmd(&d.terms[&t]).expect("claude can be resumed");
+    assert!(resume.contains("abc123") && resume.contains("--effort max"), "{resume}");
+    assert!(resume.contains("--model 'claude-opus-5-5[1m]'") || resume.contains("--model \"claude-opus-5-5[1m]\""), "quoted for the shell: {resume}");
+
+    // A read that finds no request keeps them; the shown effort says nothing then.
+    d.agent_effort(vec![(t, None, None)]);
+    assert_eq!(d.terms[&t].effort, None);
+    assert_eq!(d.resume_cmd(&d.terms[&t]), Some(resume.clone()));
+
+    // And after the server restarts, from what was saved.
+    let saved = d.saved();
+    let pane = persist::SavedPane {
+        agent: Some("claude".into()),
+        session: Some("abc123".into()),
+        runs_with: d.terms[&t].runs_with.clone(),
+        ..Default::default()
+    };
+    assert!(serde_json::to_string(&saved).is_ok());
+    assert_eq!(d.restore_cmd(&pane), Some(resume));
+
+    // Only Claude takes these, and nothing that would not pass as a pick is added.
+    let codex = persist::SavedPane { agent: Some("codex".into()), session: Some("s1".into()), runs_with: pane.runs_with.clone(), ..Default::default() };
+    let codex_resume = d.restore_cmd(&codex).expect("codex resumes");
+    assert!(!codex_resume.contains("--model") && !codex_resume.contains("--effort"), "{codex_resume}");
+    let odd = persist::SavedPane {
+        runs_with: crate::conversation::TurnChoice { model: Some("a;rm -rf ~".into()), effort: Some("max".into()) },
+        ..pane.clone()
+    };
+    assert_eq!(d.restore_cmd(&odd), Some(plain));
+    close(&mut d, &[t]);
+}
+
+#[test]
 fn a_conversation_comes_back_in_one_pane_only() {
     let (d, _rx) = daemon();
     let folder = std::env::temp_dir();
@@ -8905,6 +9102,80 @@ fn an_agent_that_died_mid_turn_comes_back_as_a_shell_that_offers_the_resume() {
 }
 
 #[test]
+fn a_resume_nobody_took_is_still_offered_after_a_second_restart() {
+    let (mut d, _rx) = daemon();
+    let dir = std::env::temp_dir();
+    let one = |pane: persist::SavedPane| persist::Saved {
+        workspaces: vec![persist::SavedWs {
+            name: String::new(),
+            cwd: dir.clone(),
+            worktree: false,
+            color: None,
+            group: None,
+            tabs: vec![persist::SavedTab {
+                name: String::new(),
+                layout: Node::Leaf(1),
+                focus: 1,
+                panes: [(1, pane)].into(),
+            }],
+            active_tab: 0,
+        }],
+        ..Default::default()
+    };
+    d.restore(one(persist::SavedPane {
+        cwd: Some(dir.clone()),
+        cmd: Some("codex".into()),
+        agent: Some("codex".into()),
+        was_working: true,
+        ..Default::default()
+    }));
+    let first = d.workspaces[0].tabs[0].focus;
+    let offered = d.snapshot().terms[&first].interrupted.clone().expect("offered once");
+
+    // Restarted again before anyone resumed it: the shell's save still carries the offer.
+    let saved = d.saved();
+    let pane = saved.workspaces[0].tabs[0].panes.values().next().unwrap().clone();
+    close(&mut d, &[first]);
+    let (mut d, _rx) = daemon();
+    d.restore(one(pane));
+    let second = d.workspaces[0].tabs[0].focus;
+    assert_eq!(d.snapshot().terms[&second].interrupted, Some(offered));
+    close(&mut d, &[second]);
+}
+
+#[test]
+fn a_pane_asking_a_question_at_a_restart_is_offered_as_cut_short() {
+    let (mut d, _rx) = daemon();
+    let dir = std::env::temp_dir();
+    d.restore(persist::Saved {
+        workspaces: vec![persist::SavedWs {
+            name: String::new(),
+            cwd: dir.clone(),
+            worktree: false,
+            color: None,
+            group: None,
+            tabs: vec![persist::SavedTab {
+                name: String::new(),
+                layout: Node::Leaf(1),
+                focus: 1,
+                panes: [(1, persist::SavedPane { cwd: Some(dir.clone()), ..Default::default() })].into(),
+            }],
+            active_tab: 0,
+        }],
+        ..Default::default()
+    });
+    let t = d.workspaces[0].tabs[0].focus;
+    let term = d.terms.get_mut(&t).unwrap();
+    term.agent = Some("codex".into());
+    term.status = Status::Blocked;
+
+    let saved = d.saved();
+    let pane = saved.workspaces[0].tabs[0].panes.values().next().expect("the pane");
+    assert!(pane.was_working, "not resumed as if its question had been answered");
+    close(&mut d, &[t]);
+}
+
+#[test]
 fn the_timeline_records_status_changes_and_the_shells_prompt_marks() {
     let (mut d, _rx) = daemon();
     let t = pane(&mut d);
@@ -9098,7 +9369,7 @@ fn a_snooze_ends_when_the_pane_needs_you() {
     d.set_status(t, Status::Idle, "hook: Stop");
     snooze(&mut d);
     let pane = d.terms.get_mut(&t).unwrap();
-    pane.output(b"]133;C]133;D;1");
+    pane.output(b"\x1b]133;C\x07\x1b]133;D;1\x07");
     pane.take_marks();
     assert_eq!(snoozed_until(&d, t), None, "a failed exit wakes it");
     close(&mut d, &[t]);
@@ -9264,7 +9535,7 @@ fn pr_merged_for(d: &mut Daemon, t: TermId) {
     d.link_pr(t, Some(MERGED_PR_URL)).unwrap();
     d.prs_read(vec![(
         pr::Place::Link(MERGED_PR_URL.into()),
-        pr::Read::Found(MERGED_PR.into()),
+        pr::Read::Found(MERGED_PR.into(), 0),
     )]);
 }
 
@@ -9710,7 +9981,7 @@ fn a_desktop_replay_is_the_end_of_the_ring_and_then_the_screen() {
     let tail = term.replay_tail(4);
     let full = term.replay();
 
-    assert!(tail.starts_with(b"6789[0m[2J[H"), "{tail:?}");
+    assert!(tail.starts_with(b"6789\x1b[0m\x1b[2J\x1b[H"), "{tail:?}");
     assert_eq!(term.replay_tail(usize::MAX), full);
     assert!(full.len() > tail.len());
     close(&mut d, &[t]);
@@ -9805,6 +10076,25 @@ fn codex_narrow_menu(title: &str) -> String {
 
 fn codex_ask(d: &mut Daemon, t: TermId, detail: &str) {
     d.apply_hook(permission_report(t, HookStatus::Blocked, "PermissionRequest", "codex", "Bash", detail), None, vec![]);
+}
+
+/// Codex marks the choice under its cursor with `›`. A question whose first choice is not "Yes"
+/// was not seen on screen, so after a while the pane went back to Working while it still asked.
+#[test]
+fn a_codex_question_with_its_own_choices_keeps_needing_you() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.terms.get_mut(&t).unwrap().agent = Some("codex".into());
+    d.apply_hook(from(t, HookStatus::Working, "UserPromptSubmit", None), Some(true), Vec::new());
+    d.apply_hook(permission_report(t, HookStatus::Blocked, "PermissionRequest", "codex", "Bash", "deploy"), None, vec![]);
+    assert_eq!(d.terms[&t].status, Status::Blocked);
+    let screen = format!("\x1b[2J\x1b[H{}Which environment?\r\n\u{203a} 1. Staging\r\n  2. Production\r\n", "\r\n".repeat(30));
+    let pane = d.terms.get_mut(&t).unwrap();
+    pane.parser.process(screen.as_bytes());
+    pane.blocked_at = Some(Instant::now() - super::status::UNASKED_QUESTION_GONE_AFTER - Duration::from_secs(1));
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Blocked, "its choices are still on screen");
+    close(&mut d, &[t]);
 }
 
 #[test]
@@ -10580,60 +10870,15 @@ fn a_conversation_terminal_its_hooks_never_named_is_remembered_by_its_conversati
 }
 
 #[test]
-fn a_workflow_report_is_shown_on_its_pane_and_never_changes_its_status() {
-    use maitty_shared::workflow::{StepState, WorkflowRun, WorkflowStep};
-    let (mut d, _rx) = daemon();
-    let t = pane(&mut d);
-    let token = d.terms[&t].token.clone();
-    {
-        let p = d.terms.get_mut(&t).unwrap();
-        (p.agent, p.hooked, p.status) = (Some("claude".into()), true, Status::Working);
-    }
-    let run = |state: StepState| WorkflowRun {
-        workflow: "factory".into(),
-        run: "001".into(),
-        ticket: None,
-        steps: vec![WorkflowStep {
-            name: "review".into(),
-            state,
-            note: None,
-            helper: None,
-            choices: Vec::new(),
-        }],
-        reported_at: 0,
-    };
-    let send = |d: &mut Daemon, token: &str, run: WorkflowRun| {
-        d.handle(Ev::Msg(
-            1,
-            ClientMsg::WorkflowReport {
-                term: t,
-                token: token.into(),
-                run,
-            },
-        ));
-    };
-    send(&mut d, "wrong", run(StepState::Working));
-    assert!(d.snapshot().terms[&t].workflows.is_empty(), "only with the pane's secret");
-    let mut nameless = run(StepState::Working);
-    nameless.steps.clear();
-    send(&mut d, &token, nameless);
-    assert!(d.snapshot().terms[&t].workflows.is_empty(), "a run that fails its checks is refused");
-    send(&mut d, &token, run(StepState::NeedsYou));
-    let snap = d.snapshot();
-    let shown = &snap.terms[&t].workflows;
-    assert_eq!(shown.len(), 1);
-    assert_eq!(shown[0].steps[0].state, StepState::NeedsYou);
-    assert!(shown[0].reported_at > 0, "the daemon stamps the time");
-    assert_eq!(snap.terms[&t].status, Status::Working, "a workflow never sets status");
-    close(&mut d, &[t]);
-}
-
-#[test]
-fn a_pane_saved_before_workflow_reports_restores_with_none() {
-    let old: persist::SavedPane =
-        serde_json::from_str(r#"{"cwd":null,"cmd":null,"agent":"claude","session":"abc123","aside":0}"#)
-            .unwrap();
-    assert!(old.workflows.is_empty());
+fn a_pane_saved_with_workflow_runs_still_restores() {
+    // Saved by a version that kept workflow runs (ADR 0011 dropped them): the runs are ignored,
+    // the session is not.
+    let old: persist::SavedPane = serde_json::from_str(
+        r#"{"cwd":null,"cmd":null,"agent":"claude","session":"abc123","aside":0,
+            "workflows":[{"workflow":"factory","run":"1","steps":[]}]}"#,
+    )
+    .unwrap();
+    assert_eq!(old.session.as_deref(), Some("abc123"));
 }
 
 #[test]

@@ -135,31 +135,43 @@ impl Daemon {
         tokio::task::spawn_blocking(move || {
             let mut found = Vec::new();
             for (term, agent, session, transcript) in panes {
-                let effort = match agent.as_deref() {
-                    Some("claude") => transcript
-                        .map(|file| claude_effort(&read_tail(&file, EFFORT_TAIL))),
+                let said = match agent.as_deref() {
+                    Some("claude") => transcript.map(|file| {
+                        let tail = read_tail(&file, EFFORT_TAIL);
+                        (claude_effort(&tail), claude_model(&tail))
+                    }),
                     Some("codex") => session.and_then(|id| codex_file_for(&id)).map(|file| {
                         let tail = read_tail(&file, CODEX_TAIL);
                         let text = if tail.contains(SETTINGS_EVENT) { tail } else { read_head(&file, CODEX_HEAD_FOR_EFFORT) };
-                        codex_effort(&text, &codex_models_cache())
+                        (codex_effort(&text, &codex_models_cache()), None)
                     }),
                     _ => None,
                 };
                 // A file that could not be found leaves what was known alone.
-                if let Some(effort) = effort {
-                    found.push((term, effort));
+                if let Some((effort, model)) = said {
+                    found.push((term, effort, model));
                 }
             }
             let _ = tx.blocking_send(Ev::AgentEffort(found));
         });
     }
 
-    pub(super) fn agent_effort(&mut self, found: Vec<(TermId, Option<String>)>) {
+    pub(super) fn agent_effort(&mut self, found: Vec<(TermId, Option<String>, Option<String>)>) {
         self.effort_busy = false;
-        for (term, effort) in found {
-            if let Some(t) = self.terms.get_mut(&term)
-                && t.effort != effort
-            {
+        for (term, effort, model) in found {
+            let Some(t) = self.terms.get_mut(&term) else {
+                continue;
+            };
+            // What a resume runs keeps the last level and model said: a tail that holds no request says neither.
+            if effort.is_some() && t.runs_with.effort != effort {
+                t.runs_with.effort.clone_from(&effort);
+                self.dirty = true;
+            }
+            if model.is_some() && t.runs_with.model != model {
+                t.runs_with.model = model;
+                self.dirty = true;
+            }
+            if t.effort != effort {
                 t.effort = effort;
                 self.dirty = true;
             }
@@ -301,7 +313,9 @@ impl Daemon {
                 continue;
             }
             if let Some(at) = t.resume_at {
-                if now >= at {
+                // Something still waits to go in (a queued message's Enter): "continue" waits its
+                // turn rather than replacing it.
+                if now >= at && t.pending_input.is_none() {
                     t.resume_at = None;
                     t.continued = Some(Instant::now());
                     t.pending_input = Some((b"continue\r".to_vec(), Instant::now()));
@@ -602,6 +616,48 @@ fn claude_effort(tail: &str) -> Option<String> {
         })
         .flatten()
         .filter(|level| plain_level(level))
+}
+
+/// How Claude Code's `/model` says the model it switched to: "Set model to `Opus 5.5` and saved as your default…".
+const MODEL_SET_PREFIX: &str = "<local-command-stdout>Set model to ";
+
+/// The aliases `claude --model` takes, which name the newest model of their family as `/model` names it.
+const CLAUDE_MODEL_ALIASES: [&str; 3] = ["opus", "sonnet", "haiku"];
+
+/// Where a Claude request comes from when it is the session's own turn; other sources (a side question, a title)
+/// may run another model.
+const MAIN_THREAD_SOURCES: [&str; 2] = ["repl_main_thread", "sdk"];
+
+/// The model Claude's transcript says the session runs, as `claude --model` takes it: the newest main request's
+/// model id, or the alias of the family an `/model` typed after it switched to. Nothing when the newest of those
+/// names no model the command line takes (`/model default`, a family with no alias) or is not a plain name.
+fn claude_model(tail: &str) -> Option<String> {
+    tail.lines()
+        .rev()
+        .filter(|line| line.contains("\"type\":\"api-request\"") || line.contains("Set model to "))
+        .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+        .find_map(|value| {
+            if value["type"] == "api-request" {
+                let source = value["querySource"].as_str();
+                if source.is_some_and(|source| !MAIN_THREAD_SOURCES.contains(&source)) {
+                    return None;
+                }
+                return Some(value["params"]["model"].as_str().map(str::to_owned));
+            }
+            let said = value.pointer("/message/content").or_else(|| value.get("content"))?.as_str()?;
+            let family: String = said
+                .strip_prefix(MODEL_SET_PREFIX)?
+                .trim_start_matches('`')
+                .chars()
+                .take_while(char::is_ascii_alphabetic)
+                .collect::<String>()
+                .to_ascii_lowercase();
+            Some(CLAUDE_MODEL_ALIASES.contains(&family.as_str()).then_some(family))
+        })
+        .flatten()
+        .filter(|model| {
+            crate::conversation::TurnChoice { model: Some(model.clone()), effort: None }.validate().is_ok()
+        })
 }
 
 /// The effort a Codex thread runs at: the level its settings name, else the default of its model from Codex's
@@ -996,6 +1052,32 @@ mod tests {
         let configured = r#"{"type":"api-request","params":{"model":"claude-opus-5-5","output_config":{"effort":"medium"}}}"#;
         assert_eq!(claude_effort(configured).as_deref(), Some("medium"));
         assert_eq!(claude_effort(&format!("{configured}\n{plain}")), None);
+    }
+
+    #[test]
+    fn claude_model_is_the_latest_main_request_or_the_family_a_later_model_command_names() {
+        let opus = r#"{"type":"api-request","querySource":"repl_main_thread","params":{"model":"claude-opus-5-5"}}"#;
+        let older = r#"{"type":"api-request","params":{"model":"claude-sonnet-5-5"}}"#;
+        let side = r#"{"type":"api-request","querySource":"side_question","params":{"model":"claude-haiku-5-5"}}"#;
+        assert_eq!(claude_model(&format!("{older}\n{opus}")).as_deref(), Some("claude-opus-5-5"));
+        assert_eq!(claude_model(older).as_deref(), Some("claude-sonnet-5-5"));
+        // A request the session's turn did not make says nothing about its model.
+        assert_eq!(claude_model(&format!("{opus}\n{side}")).as_deref(), Some("claude-opus-5-5"));
+        // A /model typed after the last request counts at once, by the alias the command line takes.
+        let typed = r#"{"type":"user","message":{"content":"<local-command-stdout>Set model to `Haiku 5.5` and saved as your default for new sessions</local-command-stdout>"}}"#;
+        let plain = r#"{"type":"system","content":"<local-command-stdout>Set model to Sonnet 5.5 and saved</local-command-stdout>"}"#;
+        assert_eq!(claude_model(&format!("{opus}\n{typed}")).as_deref(), Some("haiku"));
+        assert_eq!(claude_model(&format!("{opus}\n{plain}")).as_deref(), Some("sonnet"));
+        assert_eq!(claude_model(&format!("{typed}\n{opus}")).as_deref(), Some("claude-opus-5-5"));
+        // A model the command line has no alias for, or a default, is not guessed from an older request.
+        let unaliased = r#"{"type":"user","message":{"content":"<local-command-stdout>Set model to Default (Opus 5.5)</local-command-stdout>"}}"#;
+        assert_eq!(claude_model(&format!("{opus}\n{unaliased}")), None);
+        // Words that only quote the command, and a name that could read as an option, are not a model.
+        let quoted = r#"{"type":"user","message":{"content":"why does it say Set model to Haiku?"}}"#;
+        assert_eq!(claude_model(&format!("{opus}\n{quoted}")).as_deref(), Some("claude-opus-5-5"));
+        let odd = r#"{"type":"api-request","params":{"model":"--dangerously-skip-permissions"}}"#;
+        assert_eq!(claude_model(odd), None);
+        assert_eq!(claude_model("not a transcript"), None);
     }
 
     #[test]

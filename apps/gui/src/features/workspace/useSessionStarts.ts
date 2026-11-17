@@ -283,7 +283,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   }, [online, starting, startAgentSession, preferences.chatViewDefault])
 
   // Starts a shell on another machine and opens it once the machine lists it; resolves to its id.
-  const startOnMachine = useCallback(async (target: { machine: number; name: string }, folder: string, launch?: () => Promise<void>): Promise<string | null> => {
+  const startOnMachine = useCallback(async (target: { machine: number; name: string }, folder: string, launch?: () => Promise<void>, open = true): Promise<string | null> => {
     const known = new Set((machinesRef.current.get(target.machine)?.conversations ?? []).map((item) => item.id))
     await (launch ?? (() => startSessionOnMachine(target.machine, folder)))()
     // The machine tells its new session in its next list; its layout opens when it does.
@@ -291,7 +291,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     while (Date.now() < deadline) {
       const fresh = machinesRef.current.get(target.machine)?.conversations.find((item) => item.kind === 'terminal' && !known.has(item.id))
       if (fresh) {
-        movePanes(() => { setLayout((current) => openArrangement(current, fresh.id, makeId)) })
+        if (open) movePanes(() => { setLayout((current) => openArrangement(current, fresh.id, makeId)) })
         return fresh.id
       }
       await new Promise((resolve) => { setTimeout(resolve, REMOTE_START_POLL_MS) })
@@ -303,9 +303,13 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // A chat on another machine is its daemon's terminal session with the agent typed into the shell, shown as its chat once the
   // agent reports a conversation. The line is built from the closed set `launchFlags` allows (the agent, a permission mode from
   // the fixed list, a model the agent takes by name everywhere, an effort level), so no free text reaches the remote shell;
-  // the first message waits until the agent takes input. A worktree is that daemon's own setting.
-  const startRemoteChat = useCallback(async (request: NewChatRequest): Promise<void> => {
-    const id = await startOnMachine({ machine: request.machine, name: request.machineName }, request.folder)
+  // the first message waits until the agent takes input. A new worktree is made by that machine's daemon in its own
+  // checkout, as on this computer, and the agent starts in it; switching that checkout's branch is not done from here
+  // (ADR 0007), so asking for it is refused rather than left to edit the checkout.
+  const startRemoteChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
+    if (request.branch?.worktree === false) throw new Error(`A branch is switched only on this computer. Start it in a new worktree, or in ${request.machineName}'s folder as it is.`)
+    const folder = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine) : request.folder
+    const id = await startOnMachine({ machine: request.machine, name: request.machineName }, folder, undefined, !background)
     if (id === null) throw new Error(`${request.machineName} did not report the new session`)
     if (request.message !== '') {
       holdFirstMessage(id, request.message)
@@ -316,7 +320,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     paneViews.choose(id, request.view ?? 'chat')
     if (request.name !== undefined) void renameConversationOnDaemon({ id }, request.name).catch((error: unknown) => { console.warn('Could not name the new session', error) })
     await sendTerminalInput({ id, generation: 0 }, `${request.agent}${launchFlags(request.agent, everywhereModel(request.agent, request.model), request.reasoning, request.mode)}\r`)
-    setNewChatOpen(false)
+    if (!background) setNewChatOpen(false)
+    onPlaced?.(id)
   }, [startOnMachine, setExpectedAgents, paneViews, setNewChatOpen])
 
   // The new chat is the agent in a terminal the daemon owns, shown as its chat: one session whose view
@@ -324,7 +329,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // other; one in the `background` is not opened and leaves the page open for the next.
   const startNewChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (!online) throw new Error('The daemon is not reachable')
-    if (request.machine !== LOCAL_MACHINE) return startRemoteChat(request)
+    if (request.machine !== LOCAL_MACHINE) return startRemoteChat(request, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     const resume = request.resume === null ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
     if (resume === null) throw new Error('This saved conversation cannot be resumed from here')
     // The branch is settled before the agent starts, and a failure stays on the page with its words.

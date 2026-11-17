@@ -25,9 +25,9 @@ const child = (id: string, task: string, state: SubagentActivity['state']): Suba
 function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   const none = vi.fn()
   const props: SidebarProps = {
-    sessions, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, mode: 'docked', online: true, canStart: true, renamingId: null, portalContainer: null,
+    sessions, listed: true, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, openSubagent: null, mode: 'docked', online: true, canStart: true, renamingId: null, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, grouping: 'machine', onGrouping: none, onSearch: none,
-    onNewAgentChat: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
+    onNewAgentChat: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onShowSubagent: none, onRenameSession: none,
     onSetName: none, onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onPutAway: none, onBringBack: none, onSnooze: none, onUnsnooze: none, onGetFile: none,
     onEndSession: none, onOpenSettings: none, onRecentSessions: none, updateSlot: null, railUpdateSlot: null,
     ...more,
@@ -185,10 +185,36 @@ describe('a machine that needs maitty installed or updated', () => {
 })
 
 describe('subagents', () => {
-  it('lists none under a session: its running subagents float over its pane instead', () => {
-    show([session(1, { agent: 'claude', named: true, title: 'Growth', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: [child('b', 'Write drafts tests', 'Working')] } })], { focusedId: 't1' })
-    expect(screen.queryByRole('group', { name: 'Subagents' })).toBeNull()
-    expect(screen.queryByText('Write drafts tests')).toBeNull()
+  it('lists running helpers under every session, selected or not, and opens one on a click', () => {
+    const onShowSubagent = vi.fn()
+    const helpers = [child('a', 'Read the parser', 'Working'), child('b', 'Write drafts tests', 'WaitingForInput'), child('c', 'Old one', 'Completed')]
+    show([
+      session(1, { agent: 'claude', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: helpers } }),
+      session(2, { agent: 'claude', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: [child('d', 'Check the docs', 'Working')] } }),
+    ], { focusedId: 't2', onShowSubagent })
+
+    const groups = screen.getAllByRole('group', { name: 'Subagents' })
+    expect(groups).toHaveLength(2)
+    // One that finished has reported back, so it is not listed.
+    expect(screen.queryByRole('button', { name: /Old one/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Write drafts tests, needs you' }))
+    expect(onShowSubagent).toHaveBeenCalledExactlyOnceWith('t1', 'b')
+    expect(screen.getByRole('button', { name: 'Check the docs, working' })).toBeTruthy()
+  })
+
+  it('names a few helpers and counts the rest, which open the session', () => {
+    const onShowSession = vi.fn()
+    const many = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => child(id, `Task ${id}`, 'Working'))
+    show([session(1, { agent: 'claude', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: many } })], { onShowSession })
+
+    expect(screen.getAllByRole('button', { name: /^Task ., working$/ })).toHaveLength(4)
+    fireEvent.click(screen.getByRole('button', { name: '+2 more' }))
+    expect(onShowSession).toHaveBeenCalledWith('t1')
+  })
+
+  it('marks the helper whose chat is open', () => {
+    show([session(1, { agent: 'claude', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: [child('a', 'Read the parser', 'Working')] } })], { openSubagent: { sessionId: 't1', subagentId: 'a' } })
+    expect(screen.getByRole('button', { name: 'Read the parser, working' }).getAttribute('aria-current')).toBe('page')
   })
 })
 
@@ -465,6 +491,12 @@ describe('with nothing running', () => {
     show([])
     expect(screen.getByText('Chats and shells you start appear here, sorted by what needs you.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^This computer/ })).toBeNull()
+  })
+
+  it('says nothing is running only once the daemon has listed its sessions', () => {
+    show([], { listed: false })
+    expect(screen.queryByText('No agents running. New chat starts one.')).toBeNull()
+    expect(screen.getByText('Looking for your sessions…')).toBeTruthy()
   })
 })
 
