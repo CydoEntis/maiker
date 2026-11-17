@@ -5,6 +5,7 @@ import { errorMessage } from '@/lib/error-message'
 import type { AskedQuestion, PermissionAsk } from '@/data/preview'
 import type { ApprovalDecision, ApprovalEvent } from '../chatEvents'
 import { ANSWER_KEY, formQuestions, ownAnswerText, type AskChoice, type FormAnswer } from '../permissionAsk'
+import { alwaysAllowChoices } from '../alwaysAllow'
 import type { AskedPlan } from '../planApproval'
 import { PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { KEY_ESCAPE } from '../terminalKeys'
@@ -356,6 +357,8 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
   const isQuestion = ask?.tool === QUESTION_TOOL
   const label = `${agent} needs your permission`
   const mirror = sendKeys !== undefined && online ? sendKeys : undefined
+  // Claude's own "don't ask again" choices, read off its menu; never offered for a question or from another agent.
+  const always = canAnswer && pick !== undefined && agent === 'claude' && !isQuestion ? alwaysAllowChoices(asking) : []
 
   if (ask?.tool === PLAN_TOOL) return <PlanTray label={label} plan={plan} asking={asking} send={mirror} readScreen={readScreen} />
 
@@ -405,6 +408,12 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
         <>
           <AnswerButton decision="Accept" busy={busy} onAnswer={() => { run(() => answer('approve')) }} />
           <AnswerButton decision="Decline" busy={busy} onAnswer={() => { run(() => answer('deny')) }} />
+          {pick !== undefined && always.length > 0 && <span className="mx-spacer" />}
+          {pick !== undefined && always.map((choice) => (
+            <Button key={choice.index} variant="ghost" size="sm" disabled={busy} title="Claude's own choice, in its words. Claude keeps it; Maitty adds no rule." onClick={() => { run(() => pick(choice.index)) }}>
+              {choice.label}
+            </Button>
+          ))}
         </>
       ) : <span className="mx-waiting-note">Answer in the terminal.</span>}
     >
