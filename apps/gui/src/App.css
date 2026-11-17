@@ -1,3 +1,8 @@
+/* Every menu, picker, popover and tooltip opens on this layer, over the window's panels, drawers and dialogs (the
+   narrow window's drawer is 54, centred dialogs 61): one at the old 50 opened from inside one of them was drawn behind
+   it. Only the pointer's hint, the right-click menu and the restart veil sit higher. */
+:root { --layer-pop: 88; }
+
 .app-shell {
   display: flex;
   flex-direction: column;

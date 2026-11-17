@@ -1252,7 +1252,10 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   started in that chat) with **Copy**, which copies with the same toast, and **Quote**, which adds the text to the
   message box as a Markdown quote under what is already written and puts the caret after it. The bar goes when the
   selection does, on Esc, and when the chat scrolls. It is drawn in the window root over everything, like a menu, and
-  kept inside the window, never under a code block or cut off at the chat's edge. A program that handles the mouse itself (a full-screen agent) copies what was
+  kept inside the window, never under a code block or cut off at the chat's edge.
+- **What opens on top.** Every menu, picker, popover and tooltip (the shared ones in `components/ui`) and the chat's
+  selection bar open on one layer, `--layer-pop` (`App.css`), above the window's panels, drawers and dialogs, so one
+  opened from inside a drawer or dialog is never drawn behind it. Give a new floating thing that layer, not a number. A program that handles the mouse itself (a full-screen agent) copies what was
   selected in it with OSC 52; the daemon passes that on as `Clipboard` and the window puts it on the clipboard with the
   same toast (`useMachines.ts`), for this computer and for a machine that was allowed to.
 - **A program's "bright black" background** is drawn as the hovered row's ground (`terminalSlab`), not the palette's
