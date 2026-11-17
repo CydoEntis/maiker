@@ -17,8 +17,20 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-/// How often a followed file is looked at for new lines.
+/// How often a followed file is looked at for new lines while its agent is at rest.
 const FOLLOW_EVERY: Duration = Duration::from_secs(1);
+/// How often while its agent works or asks something: a reply read once a second reaches an
+/// open chat up to a second late and in large lumps, which reads as a lagging app. A read is a
+/// seek past what was already read, so a quarter second (the daemon's tick) costs little.
+const FOLLOW_EVERY_ACTIVE: Duration = Duration::from_millis(250);
+
+/// How long a followed file rests between reads, from its pane's trusted status.
+fn follow_gap(status: Status) -> Duration {
+    match status {
+        Status::Working | Status::Blocked => FOLLOW_EVERY_ACTIVE,
+        Status::None | Status::Idle | Status::Done => FOLLOW_EVERY,
+    }
+}
 /// The most one poll reads.
 const MAX_CHUNK_BYTES: u64 = 4 * 1024 * 1024;
 /// How much of the end of a long file is read the first time; the chat then says the start is
@@ -264,12 +276,14 @@ impl Daemon {
     }
 
     fn follow_reads(&mut self) {
+        let terms = &self.terms;
         for follower in &mut self.followed {
-            if follower.in_flight
-                || follower
-                    .last_read
-                    .is_some_and(|at| at.elapsed() < FOLLOW_EVERY)
-            {
+            let gap = follow_gap(
+                terms
+                    .get(&follower.term)
+                    .map_or(Status::None, |term| term.status),
+            );
+            if follower.in_flight || follower.last_read.is_some_and(|at| at.elapsed() < gap) {
                 continue;
             }
             let Some(parser) = follower.parser.take() else {
