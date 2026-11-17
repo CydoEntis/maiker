@@ -61,7 +61,7 @@ export function parseTrustPrompt(agent: string, menu: ScreenMenu): TrustPrompt |
   const trust = menu.options.indexOf(shape.trust)
   const decline = menu.options.indexOf(shape.decline)
   if (trust < 0 || decline < 0) return null
-  const folder = shape.folderLine.exec(menu.question)?.[FOLDER_GROUP].trim() ?? ''
+  const folder = (shape.folderLine.exec(menu.question)?.at(FOLDER_GROUP) ?? '').trim()
   // With the folder missing, the line that follows the heading is the question itself.
   if (folder === '' || shape.question.test(folder) || folder.length > MAX_FOLDER_CHARS || hasControl(folder)) return null
   return { folder, trustKeys: keysToPick(menu, trust), declineKeys: keysToPick(menu, decline) }
