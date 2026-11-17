@@ -29,7 +29,7 @@ import { keepComposerFocus } from '../keepComposerFocus'
 import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
-import { noteAgentSaid, writeChoice } from '../agentChoice'
+import { DEFAULT_PICK, noteAgentSaid, writeChoice } from '../agentChoice'
 import { Composer } from './Composer'
 import { ChatItem, type ChatItemContext } from './ChatItems'
 import { KnownRowsContext } from '../knownRows'
@@ -204,15 +204,20 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const answerOwn = typeKeys === undefined ? undefined : (text: string) => typeKeys(ownAnswerKeys(ask?.choices?.length ?? 0, text))
   // A chat that follows the agent's own terminal changes its mode, model and reasoning the way its user would: by typing the agent's commands
   // (Shift+Tab, /model, /effort). Offered for Claude, and not while it works, when the keys would land in its turn.
-  // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model), until the agent's own file says it.
+  // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model, effort), until the agent's own file says it.
+  // The agent's files are the one record of what it runs, so a terminal command and a pick here always show the same.
   const [liveMode, setLiveMode] = useState<{ base: string | null; value: string } | null>(null)
   const [liveModel, setLiveModel] = useState<{ base: string | null; value: string } | null>(null)
+  const [liveEffort, setLiveEffort] = useState<{ base: string | null; value: string } | null>(null)
   const metaMode = feed.meta?.mode ?? null
   const metaModel = feed.meta?.model ?? null
   // What the chat was started with, until the agent's own file says it: the chips the starting chat drew stay as they were.
   const [started] = useState(() => startChoiceOf(sessionId))
   const shownMode = (liveMode !== null && liveMode.base === metaMode ? liveMode.value : metaMode) ?? started?.mode ?? null
-  const shownModel = liveModel !== null && liveModel.base === metaModel ? liveModel.value : metaModel
+  const startedModel = started === null || started.model === DEFAULT_PICK ? null : started.model
+  const startedEffort = started === null || started.reasoning === DEFAULT_PICK ? null : started.reasoning
+  const shownModel = (liveModel !== null && liveModel.base === metaModel ? liveModel.value : metaModel) ?? startedModel
+  const shownEffort = (liveEffort !== null && liveEffort.base === effort ? liveEffort.value : effort) ?? startedEffort
   const abilities = abilitiesOf(agent)
   const canChangeAgent = typeInto !== undefined && abilities.changeAgent && link.readOnly === true
   // Another machine's chat: its screen cannot be read from here, so a mode that must be checked on screen is not picked
@@ -267,11 +272,14 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         if (pickerLocked !== null) return
         const model = /^\/model (\S+)/.exec(text)?.[1]
         if (model !== undefined) setLiveModel({ base: metaModel, value: model })
+        const level = /^\/effort (\S+)/.exec(text)?.[1]
+        if (level !== undefined) setLiveEffort({ base: effort, value: level })
         // Through typeMessage, so Claude Code gets its Enter after a pause: sent with the command, the Enter is taken
         // for the completion it is showing and the command never runs.
         const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(refresh)
         commandChain.current = typed.catch((error: unknown) => {
           if (model !== undefined) setLiveModel(null)
+          if (level !== undefined) setLiveEffort(null)
           toast.error(errorMessage(error, 'Could not type the command'))
         })
       },
@@ -303,7 +311,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         })
       } }),
     }
-  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, shownMode, pickerLocked, remote])
+  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, effort, shownMode, pickerLocked, remote])
   const composer = useChatComposer({ link, agent, feed, online, refresh, answersPrompt, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
@@ -404,14 +412,16 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }
   const pending = useMemo(() => allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event ?? null, [allRows])
   // The model and effort picked on the new-chat page are this conversation's choice from its first frame, so the picker shows them.
+  // A chat that follows the terminal keeps no choice of its own: what its agent says it runs is the choice.
+  const followsTerminal = link.readOnly === true
   useLayoutEffect(() => {
     if (sessionId === undefined) return
-    if (started !== null) writeChoice(link.conversation, { model: started.model, reasoning: started.reasoning })
+    if (started !== null && !followsTerminal) writeChoice(link.conversation, { model: started.model, reasoning: started.reasoning })
     releaseStartChoice(sessionId)
-  }, [sessionId, started, link.conversation])
-  // Once the agent says it runs another model or effort than it last said (a /model typed in the terminal), that is
-  // what the message box shows and what the next message keeps. After the start choice above, so it is not undone.
-  useEffect(() => { noteAgentSaid(link.conversation, { model: metaModel, effort }) }, [link.conversation, metaModel, effort])
+  }, [sessionId, started, link.conversation, followsTerminal])
+  // Once the agent says it runs another model or effort than it last said, that is what the message box shows and
+  // what the next message keeps. After the start choice above, so it is not undone.
+  useEffect(() => { if (!followsTerminal) noteAgentSaid(link.conversation, { model: metaModel, effort }) }, [link.conversation, metaModel, effort, followsTerminal])
   // The session's unsent text comes along when its chat was given a new conversation number.
   useEffect(() => {
     if (sessionId !== undefined) followComposer(sessionId, link.conversation)
@@ -599,7 +609,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         question={question}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
       />
     </div>
     </FilesHereContext.Provider>

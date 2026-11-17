@@ -462,6 +462,13 @@ function ModelLabel({ agent, model }: { agent: ChatAgent; model: string | null }
 
 /** The model and reasoning the next message uses, from the agent picker. */
 function ModelPicker({ agent, conversation, model, effort, live, locked, remote }: { agent: ChatAgent; conversation: number; model: string | null; effort: string | null; live?: ((command: string) => void) | undefined; locked: string | null; remote: boolean }) {
-  const [choice, change] = useAgentChoice(conversation, agent)
-  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={change} currentModel={model} currentEffort={effort} locked={locked ?? undefined} {...(live ? { live } : {})} />
+  const [stored, change] = useAgentChoice(conversation, agent)
+  // A chat that follows the agent's terminal keeps no pick of its own: a pick is typed in as the agent's command, and
+  // the button names what the agent says it runs, so it never disagrees with the terminal. A kept pick could, as one
+  // made in the terminal or before a restart would not reach it.
+  const choice = live === undefined ? stored : FOLLOWS_AGENT
+  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={live === undefined ? change : ignoreChange} currentModel={model} currentEffort={effort} locked={locked ?? undefined} {...(live ? { live } : {})} />
 }
+
+const FOLLOWS_AGENT: AgentChoice = defaultChoice()
+const ignoreChange = (): void => {}
