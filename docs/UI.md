@@ -448,6 +448,15 @@ Only the area with the keyboard is lit: the focused pane's whole border, or the 
   setting everywhere. Never a bare `seg` on a button colour.
 - Copy is plain words ("Focus the sidebar", not "browse-tree").
 
+## Project-specific: sign-in card
+
+`SignInCard` (`features/signin/`) is the one surface for signing an agent in. In a Claude chat `/login` opens it
+above the message box, in the place of the aside card (`windowCommands.ts`, route `signIn`); in Settings it sits
+above the Accounts card, started by Sign in. It shows the link's host, Open link, the code in a monospace box
+that selects whole, Copy code and Cancel while waiting; "Signed in" or the reason when it ends. Escape cancels
+a waiting sign-in and closes an ended one. A failed one in Settings also offers "Use a terminal", the older
+path. The card never shows a token. Behaviour and limits: [chat-sign-in spec](features/chat-sign-in/spec.md).
+
 ## Project-specific: theme browser
 
 Dark and light are two remembered slots and a switch. Appearance has three rows:
