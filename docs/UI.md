@@ -1443,6 +1443,16 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
 - **Read-only chat.** For a link with `readOnly` the composer is off with "Read-only: talk to the agent in the
   terminal" as its placeholder, and offers no Stop or queue wording; the daemon refuses send, approve and cancel
   for such a conversation. The history and status still follow the agent.
+- **Trust this folder.** A new folder makes the agent ask "do you trust this folder?" before it reports in, so the question is
+  in the starting chat (`StartingChat`), read from the daemon's `asking` text (`parseTrustPrompt`, `trustPrompt.ts`). The card
+  (`TrustFolderTray`) names the exact folder the screen shows, says in plain words what trusting allows (read and change files,
+  run commands, hooks and tools the folder asks for), and has two buttons, **Don't trust** first and **Trust this folder**; both
+  are soft, neither is the Enter default, the card takes no Enter, and nothing is ever sent before a click. Each answer is
+  found by its exact words (Claude: "Yes, I trust this folder" / "No, exit"; Codex: "Yes, continue" / "No, quit") and sent as
+  the cursor's arrow keys and Enter. A screen with other words, a third choice, no folder, or a folder with control characters
+  is not this card: it stays the generic menu card (`ScreenMenuTray`). Claude's wording is the screen in the daemon's
+  `prompt.rs` test; Codex's is from its source and not yet checked against a capture. No protocol change: the keys go through
+  the same pane write as every other answer, which the daemon already gates.
 - **Approvals.** A pending request is the message box's waiting card (`QuestionTray.tsx` on `WaitingCard`), not a row of the list; only the oldest shows, and it
   answers through `approve_conversation` by request id, and the request then folds into one line in the list ("Allowed", "Allowed for this session", "Denied"),
   with the buttons gone. While it is pending, `y` (once), `a` (this session) and `n` (no) answer it from anywhere in the
