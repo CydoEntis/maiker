@@ -490,7 +490,6 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-usage-item.is-mid { --usage-ink: var(--m-mid); }
 .mx-usage-item.is-high { --usage-ink: var(--m-or); }
 .mx-usage-item.is-max { --usage-ink: var(--m-hi); }
-.mx-usage-item.is-none { --usage-ink: transparent; color: var(--dim); }
 /* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
 .mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
 button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

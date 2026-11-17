@@ -533,8 +533,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   by that machine.
   **Answered from what the chat holds** (`commandCards.ts`, `windowCommands.ts`; the same card, with nothing asked of the
   agent and nothing typed into it). For Claude and Codex alike, typed alone: `/status` is a card with the agent, model and
-  effort, permission mode, folder, what it is doing now, and the context and plan limits it reported (`not reported yet`,
-  never a made-up figure); `/copy` puts the agent's last message on the clipboard; `/export` saves the conversation (what you
+  effort, permission mode, folder, what it is doing now, the context (0% before its first turn) and the plan limits it has
+  reported (a limit it never reported is left out, never a made-up figure); `/copy` puts the agent's last message on the clipboard; `/export` saves the conversation (what you
   said and what the agent answered) as `conversation <day> <time>.md` in the export folder chosen in Settings; `/diff` opens
   the side panel's Changes; `/resume` opens Recent sessions. Claude only: `/memory` is a card naming the `CLAUDE.md` files it
   reads, the project's own opening in the file viewer, and `/plan` asks first (`Switch to plan mode?`, Cancel focused) and
@@ -564,9 +564,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
   under 50%, `--m-or` under 75%, `--m-hi` from there). They always show, and each opens Settings › Usage & cost. When
-  a limit starts over is in its tooltip. For Claude and Codex all three always show, in that order, 0% included; one
-  the agent has not reported yet is an empty ring and "–" in `--dim` ("not reported yet" in its tooltip), never a
-  made-up 0% (ADR 0009). Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
+  a limit starts over is in its tooltip. For Claude and Codex the context always shows, at 0% before the first turn
+  has reported one (a chat that has run nothing has used none of it). A plan limit shows only once the agent has
+  reported it, in the order context, 5-hour, weekly, then any other: a plan without a 5-hour window (an API key, some
+  Codex plans) never reports one, and a meter that only ever said "–" was noise. Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
   list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from the Codex CLI
   named by `CODEX_COMMANDS_PINNED_FOR`). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
