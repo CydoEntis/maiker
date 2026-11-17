@@ -243,7 +243,7 @@ describe('the agent\'s commands in the message box', () => {
     await user.type(box, '/c')
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent("Could not list claude's commands: kingdom is not connected")
+    expect(screen.getByText("Could not list claude's commands: kingdom is not connected")).toBeInTheDocument()
   })
 
   it('asks nothing of a machine this window has not been told of', async () => {
