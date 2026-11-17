@@ -3,11 +3,18 @@ import type { SlashCommand } from './slashCommands'
 const only = (name: string, description: string, hint = '', aliases: readonly string[] = []): SlashCommand => ({ name, description, hint, aliases, terminal: true })
 
 /**
+ * The Claude Code version `CLAUDE_TERMINAL_COMMANDS` was last checked against: every command below was run in it. It is
+ * named here and nowhere else; `cargo test -p maitty-agent-ask -- --ignored` reads it, and fails naming each command the
+ * installed Claude Code no longer takes (docs/TESTING.md, *Agent command lists*).
+ */
+export const CLAUDE_COMMANDS_PINNED_FOR = '2.1.325'
+
+/**
  * Claude Code's commands that only its terminal runs. Asked what it takes (`agent_commands`), Claude Code lists the
  * commands that work without a screen and leaves these out, since each opens a menu or a page of its own. They are
- * written here, by hand, from the definitions in Claude Code 2.1.322 and checked by running each in 2.1.325, so a command it adds later is missing until
- * this list is brought up to date, and one it drops is answered by Claude Code itself ("unknown command"). The chat
- * offers them only for an agent with a terminal, and shows that terminal when one is run.
+ * written here, by hand, so a command Claude Code adds later is missing until this list is brought up to date (the
+ * check above cannot find it: Claude Code does not list it), and one it drops is found by that check and answered
+ * by Claude Code itself. The chat offers them only for an agent with a terminal, and shows that terminal when one is run.
  */
 export const CLAUDE_TERMINAL_COMMANDS: readonly SlashCommand[] = [
   only('add-dir', 'Add a new working directory', '<path>'),
