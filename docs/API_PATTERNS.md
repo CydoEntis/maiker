@@ -221,6 +221,12 @@ A pane's effort (`TermInfo.effort`, an optional field: no `PROTOCOL_VERSION` bum
 daemon from the agent's own files every five seconds off the loop (`usage::poll_effort`): for Claude the level in the newest request
 line of its transcript, present only when a level was set; for Codex the level its thread settings name, else its model's default
 from Codex's `models_cache.json`. Nothing is guessed: a pane whose files say none has none, and the window then says "agent's own".
+The same read keeps what a Claude pane last ran (`Term.runs_with`, saved as `SavedPane.runs_with`): the newest level said, and
+the model of the newest main-thread request (`querySource` `repl_main_thread` or `sdk`; a side request may run another model) or
+the alias (`opus`, `sonnet`, `haiku`) of a `/model` typed after it. A read that finds neither keeps the last. Its resume (a
+restart, a wake, a reload, a move) adds them as `--model` and `--effort` (`Daemon::running_as`), quoted for the shell, only for
+Claude and only when they pass `TurnChoice::validate`: Claude starts a resumed session on the account's default model, which a
+`/model` in any other session changes, and an effort set for the session only is gone.
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
 into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
@@ -1072,6 +1078,23 @@ Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two mess
   what is set up, in words: never a key or where it is sent. `link` is one cleaned word (`clean_suggested_link`,
   512 characters), shown as text. Nothing is saved; the person finishes the setup in the window. Another machine's
   `TicketSetup` is ignored (`remote_policy`).
+
+Protocol 110 adds `Query::Extensions { request, tag }` with `Reply::Extensions { tag, answer }` (`EXTENSIONS_SINCE`;
+`COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm). It reads and changes the
+skills, plugins, MCP servers and marketplaces of Claude Code and Codex on the daemon's computer (design:
+[the spec](features/chat-extensions/spec.md); code: `maitty_shared::extensions`, `daemon/extensions/`). `request` is an
+`ExtRequest`: `List { project }` (files only, never an agent; a project is an absolute folder that exists),
+`PreviewAdd { add }`, `Add { token }`, `SetEnabled { target, enabled }` (plugins only) and `Remove { target }`.
+`answer` is `Ok(ExtReply)` (`List`, `Preview` or `Done(line)`) or `Err(ExtError)`: `CliMissing(agent)`, `CliTooOld(agent)`
+(the program does not know the command), `NotFound`, `AlreadyInstalled`, `NeedsConfirmation`, `NeedsTerminal(command)`,
+`Invalid(why)` and `Failed(line)`. An add is two requests: `PreviewAdd` reads what would run from files, keeps the add
+under a random 128-bit token and returns it; `Add` takes the add that token was given for, once, within 10 minutes (at
+most 16 are kept). No other path installs, so a client cannot skip the confirmation. A change names only an item the
+daemon lists (`NotFound` otherwise), and a name is plain characters (`is_ext_name`), never a path or a flag. Human
+clients only: a pane or a structured runtime gets `ServerMsg::Error`. The desktop host sends it through
+`extensions(request, tag)` and raises an `extensions` event `{ machine, tag, answer }`; the window waits 95 seconds
+(a command gets 60). `NeedsTerminal` is not produced yet: signing in to an MCP server stays terminal-only and the
+window says so with the exact command.
 
 The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
 `ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:

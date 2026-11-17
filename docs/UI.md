@@ -1064,6 +1064,30 @@ apart from two confirmed writes (below) ([spec](features/tickets/spec.md), the [
   asked source and shows "Your agent suggests <link>" in the setup (`TicketSetup`'s `suggestedLink`, text only),
   with a toast; nothing is saved until you finish it. Closing Tickets drops the suggestion.
 
+## Project-specific: Extensions page (desktop)
+
+Settings › Extensions (`apps/gui/src/features/extensions/`, nav key X; data from `apps/gui/src/api/extensions.ts`) lists,
+switches, removes and adds the skills, plugins, MCP servers and marketplaces of Claude Code and Codex, so none of them
+needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin`, `/plugins`, `/marketplace`, `/skills`,
+`/hooks` and `/mcp`, typed alone, open it (`windowCommands.ts`); with an argument they still go to Claude Code. Rules:
+
+- **Where it looks.** A **Project** picker ("Just mine", then this computer's open projects) decides whether a project's
+  own plugins, servers and skills show with the user's; another machine's projects are not offered, because the daemon
+  changes its own computer's agents. One card per agent lists Plugins, MCP servers, Skills and Marketplaces with what is
+  installed, "None installed." when nothing is, and a file that exists but could not be read as a line saying so.
+- **Changing.** A plugin has a switch; every item has Remove. Remove asks first ("Remove X?", Cancel focused; a skill's
+  words say its folder and the files in it are deleted). Both go through the agent's own command, so the list is read again
+  afterwards; a refusal is a typed line, never the agent's raw words. "A change shows up in the next chat you start."
+- **Adding.** Three cards (marketplace, plugin, MCP server) only ask for a **Review**. The dialog then shows the agent,
+  where it applies, where it comes from, exactly what it will run, the host that hears the person's prompts, and **This
+  runs code on your computer with your access.** Cancel is focused and Enter does not confirm; only the confirm button
+  sends the token the review returned (`confirmAdd` is called from nowhere else). No "trust always". A server's keys and
+  headers are not taken here.
+- **Needs a terminal.** A card says so in plain words with the exact commands: `claude mcp login <name>` and
+  `codex mcp login <name>` for a server that signs in through a browser, and that a project's `.mcp.json` servers wait for
+  the person's approval inside Claude Code itself.
+- **Not seen on screen yet:** the page was written against the existing Settings cards and tests only.
+
 ## Project-specific: Tickets view (TUI)
 
 The TUI's Tickets is a side-panel tool like References (`client/screen/tickets_view.rs`, the words
@@ -1228,7 +1252,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   another machine. The choice is kept per conversation in this window's storage
   (`agentChoice.ts`) and goes to the daemon with every message (`send_conversation`'s `model` and `effort`); what was
   not picked sends nothing, so the chat keeps what it started with and the button never claims a model the chat is not
-  using.
+  using. A chat that follows the agent's terminal keeps no choice of its own: a pick is typed in as the agent's
+  `/model` or `/effort`, the button shows it at once, and from then on names what the agent's own files say it runs
+  (`TermInfo.effort`, the chat's model), so a change typed in the terminal shows here and one made here shows there.
+  A kept pick could disagree with the terminal: one made in the terminal, or a number reused after a daemon restart.
+  A resumed Claude comes back on the model and effort it last ran (`Daemon::running_as`, API_PATTERNS).
   Claude offers Sonnet, Opus and Haiku (`KNOWN_MODELS`, a fixed list because the daemon does not report models);
   Codex offers only its account default, because its models depend on the account and version. The agent never changes.
 - **A chat that fails to draw** shows "This chat hit a problem" in its pane only (`PaneErrorBoundary`), with **Try

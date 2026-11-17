@@ -78,7 +78,11 @@ pub fn answer_window(msg: &ClientMsg) -> Option<Duration> {
         ClientMsg::Query(
             maitty_shared::protocol::Query::GitHubRepos { .. } | maitty_shared::protocol::Query::GitHubOwners { .. },
         ) => Some(GITHUB_LIST_ANSWER_WINDOW),
-        ClientMsg::Query(maitty_shared::protocol::Query::Tickets { .. } | maitty_shared::protocol::Query::TicketWrite { .. }) => {
+        ClientMsg::Query(
+            maitty_shared::protocol::Query::Tickets { .. }
+            | maitty_shared::protocol::Query::TicketWrite { .. }
+            | maitty_shared::protocol::Query::Extensions { .. },
+        ) => {
             Some(TICKETS_ANSWER_WINDOW)
         }
         ClientMsg::Command(_) | ClientMsg::Query(_) => Some(ANSWER_WINDOW),

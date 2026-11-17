@@ -1,6 +1,6 @@
 # Spec: skills, plugins, MCP servers and marketplaces in the app
 
-Type: feature · Status: proposed · Decision from MAITTY-414 (spike) · Date: 2026-11-16
+Type: feature · Status: in progress (MAITTY-415: list, switch, remove, add and the chat commands are built; see *Built so far*) · Decision from MAITTY-414 (spike) · Date: 2026-11-16
 
 Can the desktop app list, add, enable, disable and remove skills, plugins, MCP servers and
 marketplaces for Claude Code and Codex without a terminal? Yes for almost all of it. The app runs
@@ -162,6 +162,30 @@ agent process and file work live in `crates/maitty-core/src/daemon/`, and the GU
   `plugin` commands are newer than its `mcp` commands.
 - The GUI gets a Settings view per agent with tabs for skills, plugins, MCP servers and
   marketplaces; the TUI can reuse the same queries later.
+
+## Built so far (MAITTY-415)
+
+Protocol 110, `Query::Extensions` ([API_PATTERNS](../../API_PATTERNS.md), [SECURITY](../../SECURITY.md),
+[UI](../../UI.md#project-specific-extensions-page-desktop)). One query carries every action (an `ExtRequest`) instead
+of one query each, so there is one `introduced_in` arm. Differences from the proposal above:
+
+- **Listing reads files only**, for both agents; it does not call `plugin list --json`, so it never starts an agent
+  (the plugin's `enabled` comes from the scope's `settings.json`, Codex's from `config.toml`). The samples the tests
+  decode were recorded from claude 2.1.326 and codex 0.166.0 in an isolated config
+  (`daemon/extensions/samples/`); `projects.<path>.mcpServers` (Claude's local scope) and the Codex project skills
+  folder are from this spec, not recorded.
+- **No version gate.** The agent's version is not read; a command it does not know is `CliTooOld`, found from its
+  error text (`unknown command`, `unrecognized subcommand`).
+- **Built:** list (plugins, marketplaces, MCP servers, skills; user and project), switch a plugin (Claude by command,
+  Codex by a comment-preserving `config.toml` edit), remove (plugins, marketplaces, servers, skills), add a plugin, a
+  marketplace or an MCP server (command or address) behind the preview token, and `/plugin`, `/plugins`,
+  `/marketplace`, `/skills`, `/hooks`, `/mcp` opening the page.
+- **Not built:** a server's environment values, headers and bearer tokens (so no secret reaches a command line); MCP
+  OAuth login and a project's `.mcp.json` approval (terminal-only, said on the page with the command); enabling or
+  disabling a server or a skill; updating a plugin; `plugin validate` before a skill is copied; adding a skill by
+  copying a folder; Codex project MCP (`.codex/config.toml`); `--accept-command` for a marketplace install command;
+  the TUI; another machine's extensions. Windows (`.cmd` shims, a path with a space, `CREATE_NO_WINDOW`) is covered by
+  argument-list tests only and has not been run.
 
 ## Open risks
 

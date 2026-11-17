@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "plugins": {
+    "hello@local-mk": [
+      {
+        "scope": "user",
+        "installPath": "/home/me/sample/cfg/plugins/cache/local-mk/hello/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-11-17T02:58:38.079Z",
+        "lastUpdated": "2026-11-17T02:58:38.079Z"
+      },
+      {
+        "scope": "project",
+        "projectPath": "/home/me/sample/proj",
+        "installPath": "/home/me/sample/cfg/plugins/cache/local-mk/hello/1.0.0",
+        "version": "1.0.0",
+        "installedAt": "2026-11-17T02:58:29.172Z",
+        "lastUpdated": "2026-11-17T02:58:29.172Z"
+      }
+    ]
+  }
+}

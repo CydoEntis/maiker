@@ -682,6 +682,27 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   same fixed server. A write is sent once and never retried (a retry could comment twice). Failures are
   the same fixed lines as the reads; no key, ticket text or server word is logged. Not yet checked against
   a live Plane or Linear server.
+- **Extensions** (`Query::Extensions`, `daemon/extensions/`, `maitty_shared::extensions`) install code that runs with
+  the person's access: a plugin ships hooks and servers, an MCP server is a command (or a remote address that hears
+  the person's prompts), and neither agent asks first (`plugin install --json` simply does it). So the daemon asks.
+  *Who:* human clients only; a pane or a structured runtime is refused. *Confirm:* an add runs only with the
+  one-time token a preview returned (random, 128 bits, single use, 10 minutes, at most 16 kept), so a client cannot
+  skip the preview; the window shows the source, the scope, exactly what will run (hook commands, server commands
+  and addresses, read from the plugin's own files as data with a 256 KiB limit and never executed) and "This runs
+  code on your computer with your access", with Cancel focused and no "trust always". A plugin that is fetched on
+  install says its commands cannot be listed first. *Commands:* an argument list, never a shell string (a `&`, quote
+  or space is one argument; a name cannot start with `-`, a path cannot leave its folder, a source has no control
+  characters), 60 seconds, 1 MiB of each stream, no terminal to ask anything of, the login PATH, run in the project
+  folder only for a project scope. A server address is `https://` (or `http://` for this computer) with no sign-in in it.
+  *Never listed by running:* a list reads files; `claude mcp list` is never called because it starts every server.
+  *Removals:* only an item the list shows; a skill is a folder under the agent's skills folder named by a plain name,
+  a link is removed and never what it points at, and Codex's `config.toml` is edited with `toml_edit` so its comments
+  and other keys stay (written beside and moved into place, with the old file's rights); Codex's removals are checked
+  against the listing because it exits 0 for what was never there. *Secrets:* none are taken yet. A server's keys,
+  headers and bearer tokens are not accepted by the page (`mcp add -e K=V` would put the value on a command line);
+  the page says to use the agent's own terminal. What an agent says is shown as one cleaned line with words that
+  look like a key (`key=…`, a bearer, a 32-character token) hidden; a typed error is the contract, not stderr.
+  *Not run on Windows or against a live plugin from the internet.*
 - **Reading Plane and Linear** (`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`, over
   `daemon/ticket_http.rs`) sends a stored key to a server, so what goes where is fixed. *Sent:* the key
   in one header (`X-API-Key` for Plane, `Authorization` for Linear), the request path, and for Linear a

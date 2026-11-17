@@ -1,0 +1,13 @@
+{
+  "enabledPlugins": {
+    "hello@local-mk": false
+  },
+  "extraKnownMarketplaces": {
+    "local-mk": {
+      "source": {
+        "source": "directory",
+        "path": "/home/me/sample/mk"
+      }
+    }
+  }
+}

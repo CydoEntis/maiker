@@ -148,6 +148,46 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
+  it('names what the agent says it runs, whether it was picked here or typed in the terminal', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const daemon = new FakeDaemonHistory()
+    daemon.meta = { mode: 'auto', model: 'claude-sonnet-5-5' }
+    fake.current = daemon
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const chat = (effort: string) => <ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }} agent="claude" online typeInto={typeInto} sessionId="s1" effort={effort} />
+    const { rerender } = render(chat('medium'))
+    await settle(IDLE_POLL_MS)
+    const button = () => screen.getByRole('button', { name: /^Agent, model and reasoning/ })
+    expect(button()).toHaveAccessibleName(/Sonnet 5.5 · Medium/)
+
+    // Picked here: shown at once, and the agent's files then say the same.
+    await user.click(button())
+    await user.click(screen.getByRole('radio', { name: 'High' }))
+    await settle(COMMAND_SUBMIT_GAP_MS)
+    expect(button()).toHaveAccessibleName(/· High/)
+    rerender(chat('high'))
+    expect(button()).toHaveAccessibleName(/· High/)
+
+    // Typed in the terminal: the chat follows.
+    rerender(chat('low'))
+    daemon.meta = { mode: 'auto', model: 'claude-opus-5-5' }
+    await settle(IDLE_POLL_MS)
+    expect(button()).toHaveAccessibleName(/Opus 5.5 · Low/)
+    // No pick of its own is kept, so nothing can later disagree with the terminal.
+    expect(window.localStorage.getItem('maitty.gui.agentChoice.v1')).toBeNull()
+  })
+
+  it('ignores a pick this window kept for an earlier chat of the same number', async () => {
+    // Numbers start again when the daemon restarts; the earlier chat's agent had said what this one says.
+    window.localStorage.setItem('maitty.gui.agentChoice.v1', JSON.stringify({ [String(FAKE_CONVERSATION)]: { model: 'claude-opus-5-5', reasoning: 'max', saidModel: 'claude-sonnet-5-5', saidEffort: 'medium' } }))
+    const daemon = new FakeDaemonHistory()
+    daemon.meta = { mode: 'auto', model: 'claude-sonnet-5-5' }
+    fake.current = daemon
+    render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }} agent="claude" online typeInto={vi.fn()} sessionId="s1" effort="medium" />)
+    await settle(IDLE_POLL_MS)
+    expect(screen.getByRole('button', { name: /^Agent, model and reasoning/ })).toHaveAccessibleName(/Sonnet 5.5 · Medium/)
+  })
+
   it('starts from what was picked on the new-chat page, before the agent has said anything', async () => {
     holdStartChoice('s1', { model: 'claude-opus-5-5', reasoning: 'high', mode: 'plan' })
     const daemon = new FakeDaemonHistory()
