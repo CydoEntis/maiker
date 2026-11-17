@@ -23,7 +23,6 @@ export const READ_ONLY_NOTE = 'Read-only: talk to the agent in the terminal'
 export const OFFLINE_NOTE = 'The daemon is offline'
 /** Why a chat that types into the agent's terminal is off while the agent is busy or asking. */
 export const TYPING_BUSY_NOTE = 'The agent is working. Stop it to send something else'
-export const TYPING_ASKING_NOTE = 'The agent is asking something in the terminal. Answer it there first'
 /** Sent to the terminal around a message, so a multi-line message is one paste and not several Enters. */
 export const PASTE_START = '\x1b[200~'
 export const PASTE_END = '\x1b[201~'
@@ -140,8 +139,6 @@ type Input = {
   typeInto?: (text: string) => Promise<void>
   /** What the pane's daemon holds for its working agent: a message sent while the agent works joins it. */
   paneQueue?: PaneQueue
-  /** The chat shows the prompt the agent is stopped on with buttons that answer it, so the composer points there. */
-  answersPrompt?: boolean
   /** The pane itself says its agent is working, which is known before the conversation's next read says so. */
   paneWorking?: boolean
 }
@@ -215,7 +212,7 @@ export function messageIntoDraft(text: string): (state: ComposerState) => Compos
  * not this window stays open; what it holds comes back with every read (`feed.queued`) and is shown
  * until it is sent. While an approval waits, nothing is sent.
  */
-export function useChatComposer({ link, agent, feed, online, refresh, typeInto, paneQueue, answersPrompt = false, paneWorking = false }: Input): ChatComposer {
+export function useChatComposer({ link, agent, feed, online, refresh, typeInto, paneQueue, paneWorking = false }: Input): ChatComposer {
   const attachments = useComposerSlice(link.conversation, (state) => state.attachments)
   const paneQueued = paneQueue?.queued ?? NO_QUEUED
   const [sending, setSending] = useState(false)
@@ -243,7 +240,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   // types it in once the turn is over, so nothing reaches a prompt the agent might be showing meanwhile and nobody waits to type.
   const holding = typing && paneQueue !== undefined && (busy || !waitingForMessage)
   const disabledReason = typing
-    ? (!online ? OFFLINE_NOTE : awaitingAnswer || feed.status === 'Blocked' ? (answersPrompt ? PENDING_APPROVAL_NOTE : TYPING_ASKING_NOTE) : null)
+    ? (!online ? OFFLINE_NOTE : awaitingAnswer || feed.status === 'Blocked' ? PENDING_APPROVAL_NOTE : null)
     : readOnly ? READ_ONLY_NOTE : !online ? OFFLINE_NOTE : awaitingAnswer ? PENDING_APPROVAL_NOTE : null
   const conversation = link.conversation
   const attach = useAttachmentIntake({ conversation, blocked: disabledReason, machine: link.machine ?? null })

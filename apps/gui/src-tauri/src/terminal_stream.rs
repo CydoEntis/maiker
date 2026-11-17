@@ -23,7 +23,7 @@ use maitty_machines::link::Timing;
 use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
-use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, Snapshot, Status, TermId, TicketKeyChange};
+use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId, TicketKeyChange};
 use maitty_shared::ticket_links::{TicketLinkChange, TicketLinks, TicketPlace};
 use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWrite, TicketWritten, TicketsReply, TicketsRequest};
 use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
@@ -64,6 +64,8 @@ const GITHUB_REPOS_EVENT: &str = "github-repos";
 const GITHUB_OWNERS_EVENT: &str = "github-owners";
 /// Longer than any owner or search the daemon takes.
 const MOST_GITHUB_WORD_BYTES: usize = 256;
+/// Where an agent's sign-in stands on this computer: `{machine, tag, agent, state, link, code, failure}`.
+const AGENT_SIGN_IN_EVENT: &str = "agent-sign-in";
 /// What this computer's daemon read of a ticket source: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
 const TICKETS_EVENT: &str = "tickets";
 /// Where the ticket providers' keys stand: `{machine, tag, answer}`, never a key.
@@ -481,6 +483,13 @@ impl Wire {
         )
     }
 
+    /// Ask this computer's daemon to start, stop or read an agent's sign-in. The answer comes back as an
+    /// `agent-sign-in` event carrying `tag`. The window sends only which agent and which of the three; the
+    /// daemon owns the command and what it prints.
+    pub fn agent_sign_in(&self, agent: SignInAgent, request: SignInRequest, tag: u64) -> Result<(), String> {
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::AgentSignIn { agent, request, tag }))
+    }
+
     /// Ask a machine's daemon (this computer's when none is named) who is signed in to GitHub there.
     /// The answer comes back as a `github-accounts` event carrying `tag`.
     pub fn github_accounts(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
@@ -668,6 +677,13 @@ pub fn clone_repository(
     tag: u64,
 ) -> Result<(), String> {
     wire.clone_repository(machine, &address, &parent, tag)
+}
+
+/// Starts, stops or reads an agent's sign-in on this computer. The answer arrives as an `agent-sign-in` event
+/// with the same `tag`.
+#[tauri::command]
+pub fn agent_sign_in(wire: tauri::State<'_, Wire>, agent: SignInAgent, request: SignInRequest, tag: u64) -> Result<(), String> {
+    wire.agent_sign_in(agent, request, tag)
 }
 
 /// Asks a machine (this computer when `machine` is left out) who is signed in to GitHub there. The
@@ -906,6 +922,12 @@ pub enum Reaction {
         tag: u64,
         outcome: Result<String, String>,
     },
+    /// Where this computer's agent sign-in stands, for the window that asked.
+    AgentSignIn {
+        tag: u64,
+        agent: SignInAgent,
+        state: SignInState,
+    },
     /// Who a machine says is signed in to GitHub there, for the window that asked.
     GitHubAccounts {
         machine: MachineId,
@@ -1036,6 +1058,7 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             }
             Out::Folders { machine, tag, listing } => Some(Reaction::Folders { machine, tag, listing }),
             Out::Cloned { machine, tag, outcome } => Some(Reaction::Cloned { machine, tag, outcome }),
+            Out::AgentSignIn { tag, agent, state } => Some(Reaction::AgentSignIn { tag, agent, state }),
             Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
             Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
             Out::GitHubOwners { machine, tag, answer } => Some(Reaction::GitHubOwners { machine, tag, answer }),
@@ -1101,6 +1124,40 @@ struct CloneAnswer {
     tag: u64,
     folder: Option<String>,
     refused: Option<String>,
+}
+
+/// An agent's sign-in as the window reads it. `state` is `idle`, `waiting`, `signed-in` or `failed`; `link` and
+/// `code` are set only for `waiting` (and only once the agent printed them), `failure` only for `failed`.
+#[derive(Clone, Serialize, Debug, PartialEq)]
+struct AgentSignInAnswer {
+    machine: u16,
+    tag: u64,
+    agent: SignInAgent,
+    state: &'static str,
+    link: Option<String>,
+    code: Option<String>,
+    failure: Option<&'static str>,
+}
+
+fn agent_sign_in_answer(tag: u64, agent: SignInAgent, state: SignInState) -> AgentSignInAnswer {
+    let (state, link, code, failure) = match state {
+        SignInState::Idle => ("idle", None, None, None),
+        SignInState::Waiting { link, code } => ("waiting", link, code, None),
+        SignInState::SignedIn => ("signed-in", None, None, None),
+        SignInState::Failed(why) => (
+            "failed",
+            None,
+            None,
+            Some(match why {
+                SignInFailure::NotInstalled => "not-installed",
+                SignInFailure::Unsupported => "unsupported",
+                SignInFailure::CouldNotStart => "could-not-start",
+                SignInFailure::TimedOut => "timed-out",
+                SignInFailure::Ended => "ended",
+            }),
+        ),
+    };
+    AgentSignInAnswer { machine: MachineId::LOCAL.0, tag, agent, state, link, code, failure }
 }
 
 #[derive(Clone, Serialize)]
@@ -1230,6 +1287,9 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
                     },
                 );
             }
+            Reaction::AgentSignIn { tag, agent, state } => {
+                let _ = app.emit(AGENT_SIGN_IN_EVENT, agent_sign_in_answer(tag, agent, state));
+            }
             Reaction::GitHubAccounts { machine, tag, report } => {
                 let _ = app.emit(
                     GITHUB_ACCOUNTS_EVENT,
@@ -1332,6 +1392,20 @@ mod tests {
         assert_eq!(said(GitHubAnswer::NotSignedIn)["state"], "not-signed-in");
         let failed = said(GitHubAnswer::Failed("rate limited".into()));
         assert_eq!((failed["state"].as_str(), failed["why"].as_str()), (Some("failed"), Some("rate limited")));
+    }
+
+    #[test]
+    fn an_agent_sign_in_reaches_the_window_as_one_flat_answer_and_asks_by_name() {
+        let said = |state| serde_json::to_value(agent_sign_in_answer(5, SignInAgent::Codex, state)).unwrap();
+        assert_eq!(
+            said(SignInState::Waiting { link: Some("https://auth.example/d".into()), code: Some("AB-12".into()) }),
+            serde_json::json!({"machine": 0, "tag": 5, "agent": "codex", "state": "waiting", "link": "https://auth.example/d", "code": "AB-12", "failure": null})
+        );
+        assert_eq!(said(SignInState::SignedIn)["state"], "signed-in");
+        assert_eq!(said(SignInState::Failed(SignInFailure::TimedOut))["failure"], "timed-out");
+        let (agent, request): (SignInAgent, SignInRequest) = (serde_json::from_value("claude".into()).unwrap(), serde_json::from_value("cancel".into()).unwrap());
+        assert_eq!((agent, request), (SignInAgent::Claude, SignInRequest::Cancel));
+        assert!(serde_json::from_value::<SignInAgent>("rm".into()).is_err());
     }
 
     #[test]

@@ -1736,6 +1736,7 @@ pub fn run() {
             terminal_stream::list_folders,
             terminal_stream::ask_machine_list,
             terminal_stream::clone_repository,
+            terminal_stream::agent_sign_in,
             terminal_stream::github_accounts,
             terminal_stream::github_repos,
             terminal_stream::github_owners,

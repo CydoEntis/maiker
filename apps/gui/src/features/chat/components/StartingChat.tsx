@@ -17,8 +17,9 @@ import { AGENT_LABEL } from '../modelName'
 import type { SessionStatus } from '@/features/workspace/model/session'
 import type { ChatComposer } from '../useChatComposer'
 import { Composer } from './Composer'
-import { ScreenMenuTray } from './QuestionTray'
+import { ScreenMenuTray, TrustFolderTray } from './QuestionTray'
 import { parseScreenMenu } from '../screenMenu'
+import { parseTrustPrompt } from '../trustPrompt'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
 
 type StartingChatProps = {
@@ -55,6 +56,7 @@ function echoed(message: string) {
 export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, asking = '', typeInto }: StartingChatProps) {
   const waiting = paneStatus === 'needs'
   const menu = waiting && typeInto !== undefined ? parseScreenMenu(asking) : null
+  const trust = menu === null ? null : parseTrustPrompt(agent, menu)
   const sendKeys = async (keys: string[]) => {
     for (const key of keys) await typeInto?.(key)
   }
@@ -144,7 +146,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
         agent={agent}
         composer={composer}
         waiting={held !== null}
-        question={menu === null ? null : <ScreenMenuTray agent={agent} menu={menu} send={sendKeys} />}
+        question={menu === null ? null : trust === null ? <ScreenMenuTray agent={agent} menu={menu} send={sendKeys} /> : <TrustFolderTray agent={agent} trust={trust} send={sendKeys} />}
         facts={{
           mode: modeLabel(started?.mode ?? null),
           modeDanger: started?.mode === BYPASS_MODE,

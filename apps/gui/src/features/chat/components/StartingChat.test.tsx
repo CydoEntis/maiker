@@ -115,6 +115,31 @@ describe('the chat of a session that is still starting', () => {
     expect(typeInto.mock.calls.map(([keys]) => keys)).toEqual([String.fromCharCode(27) + '[B', String.fromCharCode(13)])
   })
 
+  it('answers a trust question with a card that names the folder and trusts only on a click', async () => {
+    const user = userEvent.setup()
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const asking = 'Accessing workspace:\n\n/home/vox/app\n\nQuick safety check: do you trust this folder?\n\n❯ 1. No, exit\n2. Yes, I trust this folder'
+    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onBackToTerminal={noop} />)
+    const card = screen.getByRole('region', { name: 'Trust this folder?' })
+    expect(card).toHaveTextContent('/home/vox/app')
+    expect(card).toHaveTextContent(/run commands/)
+    expect(card).not.toHaveAttribute('tabindex')
+    expect(typeInto).not.toHaveBeenCalled()
+    await user.keyboard('{Enter}')
+    expect(typeInto).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Trust this folder' }))
+    expect(typeInto.mock.calls.map(([keys]) => keys)).toEqual([String.fromCharCode(27) + '[B', String.fromCharCode(13)])
+  })
+
+  it('declines a trust question with the other answer', async () => {
+    const user = userEvent.setup()
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const asking = '> You are in /home/vox/app\n\nDo you trust the contents of this directory?\n\n1. Yes, continue\n2. No, quit'
+    render(<StartingChat agent="codex" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onBackToTerminal={noop} />)
+    await user.click(screen.getByRole('button', { name: 'Don’t trust' }))
+    expect(typeInto.mock.calls.map(([keys]) => keys)).toEqual([String.fromCharCode(27) + '[B', String.fromCharCode(13)])
+  })
+
   it('floats the hooks hint over the conversation, so it moves nothing when it comes or goes', () => {
     vi.useFakeTimers()
     open()
