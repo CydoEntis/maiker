@@ -661,11 +661,18 @@ async fn repo_query(
 }
 
 /// A worktree of the project at `folder` on `branch`, made by the daemon (trusted like its repo, the repo's
-/// setup run, tracked for tidy-up). Answers its folder. This computer's daemon only: the new chat page is
-/// this computer's, and the web view names no executable or machine.
+/// setup run, tracked for tidy-up). Answers its folder. The daemon of `machine` makes it (this computer's when
+/// absent); the web view names no executable.
 #[tauri::command]
-async fn add_branch_worktree(folder: PathBuf, branch: String) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::branch_worktree(folder, branch)
+async fn add_branch_worktree(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    folder: PathBuf,
+    branch: String,
+) -> Result<serde_json::Value, String> {
+    // The project's own machine makes it, in its own checkout; another machine answers only with the new folder.
+    maitty_desktop_client::branch_worktree(folder, branch, wire.worktree_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -683,8 +690,15 @@ async fn saved_conversations(agent: String, folder: String) -> Result<serde_json
 /// resumes a copy of the session that is never saved. The webview names the conversation and the ask, one of a
 /// fixed set of commands or a question; the daemon checks both and finds the session, the folder and the program.
 #[tauri::command]
-async fn side_answer(id: u64, ask: maitty_shared::protocol::SideAsk) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::side_answer(id, ask)
+async fn side_answer(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    id: u64,
+    ask: maitty_shared::protocol::SideAsk,
+) -> Result<serde_json::Value, String> {
+    // The chat's own machine answers: Claude Code resumes a copy of the session where the session is.
+    maitty_desktop_client::side_answer(id, ask, wire.side_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1380,11 +1394,14 @@ async fn forget_allowed_command(app: tauri::AppHandle, project: String, command_
 #[tauri::command]
 async fn allow_conversation_always(
     app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
     id: u64,
     generation: u64,
     request_id: maitty_shared::conversation::ProviderRequestId,
 ) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::allow_conversation_always(id, generation, request_id, daemon_executable(&app)?)
+    // The chat's own machine remembers the approval: the command runs in its project there.
+    maitty_desktop_client::allow_conversation_always(id, generation, request_id, wire.daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }

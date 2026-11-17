@@ -10,6 +10,7 @@ import { byUrgency, isShell, rowTitle } from './model/sidebar'
 import { outputSnippet, type PaletteItem } from './model/palette'
 import type { SearchHit } from '@/features/find/api'
 import { THEMES } from './theme/themes'
+import { isChatSession } from './model/chatSession'
 
 /** The command palette's list: sessions, their projects, actions and themes. */
 export function usePaletteItems({ paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen }: {
@@ -85,7 +86,7 @@ export function usePaletteItems({ paletteOpen, platform, layout, sessions, proje
       action('usage', 'Open usage and cost', () => { setSettingsSection('usage') }, keys('usage')),
       action('jump-needs', 'Jump to the next session that needs you', () => { runShortcut('jump-needs') }, keys('jump-needs')),
       action('inspect', 'Inspect the repository', () => { if (inspectRefusal !== null) toast.message(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
-      ...(focusedSession ? [action('new-worktree', 'New worktree', () => { runShortcut('new-worktree') }, keys('new-worktree'))] : []),
+      ...(focusedSession && !isChatSession(focusedSession.conversation) ? [action('new-worktree', 'New worktree', () => { runShortcut('new-worktree') }, keys('new-worktree'))] : []),
       action('find', 'Find in the pane or every session', () => { setFindOpen(true) }, keys('find')),
       action('broadcast', showing?.broadcast ? 'Stop broadcasting' : 'Broadcast typing to this tab', () => { runShortcut('broadcast') }, keys('broadcast')),
       action('focus', 'Focus mode', () => { setFocusMode(true) }, keys('focus-mode')),

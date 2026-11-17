@@ -12,11 +12,20 @@ export function agentName(process: string): string {
 }
 
 /**
+ * Whether an agent runs in the session to take a message from outside its box. A shell or another
+ * program would run the text as a command: a ticket's text comes from GitHub, Plane or Linear.
+ */
+export function takesAgentMessages(session: Pick<SessionView, 'conversation' | 'ended'>): boolean {
+  return Boolean(session.conversation.agent) && !session.ended
+}
+
+/**
  * Sends the session's agent a message from outside its message box (a comment on a diff line). A chat
  * session takes it as its next message; an agent in a terminal has it pasted in and entered, as the
  * message box does. An agent that is asking something is not typed into: the text would answer its question.
  */
 export async function sendAgentMessage(session: SessionView, text: string): Promise<void> {
+  if (!takesAgentMessages(session)) throw new Error('No agent runs here to send this to.')
   if (session.status === 'needs') throw new Error(`${agentName(session.process)} is asking something. Answer it first.`)
   const chat = session.conversation.chat
   if (isChatSession(session.conversation) && chat !== undefined) {

@@ -1,5 +1,6 @@
 import { machineLabel } from '@/data/machineNicknames'
 import { displayName, type SessionStatus, type SessionView } from '@/features/workspace/model/session'
+import { isShell } from '@/features/workspace/model/sidebar'
 
 export type NotifySwitches = { needs: boolean; finished: boolean; error: boolean }
 export type Notice = { sessionId: string; title: string; body: string }
@@ -43,6 +44,8 @@ export function noticesFor(before: ReadonlyMap<string, SessionStatus> | null, se
     if (previous === undefined || previous === 'unknown' || previous === session.status) continue
     if (previous === 'limited' && session.status === 'done') continue
     if (session.status !== 'needs' && session.status !== 'done' && session.status !== 'error') continue
+    // A shell whose last command failed (`false`, a grep with no match) is still running: nothing exited.
+    if (session.status === 'error' && isShell(session) && !session.ended) continue
     if (!switches[WANTED[session.status]] || session.id === attending) continue
     if (finishedForNow(session, queued)) continue
     const title = TITLES[session.status]?.(nameFor(session))

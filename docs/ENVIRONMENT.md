@@ -243,7 +243,8 @@ through `.profile` or `.zprofile` would otherwise be missing. The client never r
 
 `sessions.put_away_merged` (default `false`) lets the daemon put away a session (the same flag as
 `Command::ArchivePane`) whose status is done or idle once the pull request watcher reads its pull
-request as merged. It is checked after each watcher pass (every 2 minutes), so a session that
+request as merged and its branch has no commits after the merged one (work going on after a merge keeps the session).
+It is checked after each watcher pass (every 2 minutes), so a session that
 finishes after the merge goes at the next pass. The session keeps running; it is never closed.
 Each session remembers the merged pull request it was put away for, in the session file beside
 its put-away flag, so one brought back is not put away again for that merge, across restarts too. This holds

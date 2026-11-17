@@ -25,6 +25,20 @@ impl Timing {
     };
 }
 
+/// How long a line must stay up to count as working. One that drops sooner (the daemon turned it
+/// away, a proxy that dies on start) counts as a failed dial, so its redials back off instead of
+/// starting an ssh process, and a whole state, as fast as they end.
+const STEADY_LINE: Duration = Duration::from_secs(30);
+
+/// The failures counted after a line that was up for `lasted` ended.
+fn failures_after_line(failures: u32, lasted: Duration) -> u32 {
+    if lasted >= STEADY_LINE {
+        0
+    } else {
+        failures.saturating_add(1)
+    }
+}
+
 /// What a supervisor does between dials.
 enum Pause {
     Elapsed,
@@ -96,17 +110,19 @@ pub(super) async fn supervise(
         .await
         {
             Ok(halves) => {
-                failures = 0;
                 if link.events.send(LinkEvent::Line(id, halves)).is_err() {
                     return;
                 }
                 link.apply(Event::ConnectOk);
+                let up_since = Instant::now();
                 match line_end(&mut commands).await {
                     Some(End::Stalled) => {
+                        failures = failures_after_line(failures, up_since.elapsed());
                         may_start.line_ended();
                         link.apply(Event::WatchdogFired);
                     }
                     Some(End::Closed) => {
+                        failures = failures_after_line(failures, up_since.elapsed());
                         may_start.line_ended();
                         link.apply(Event::LineDropped);
                     }
@@ -220,6 +236,17 @@ async fn held_until_retry(commands: &mut mpsc::UnboundedReceiver<Command>) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_line_that_drops_at_once_backs_off_like_a_failed_dial_and_a_steady_one_starts_over() {
+        let quick = Duration::from_millis(200);
+        let mut failures = 0;
+        for expected in 1..=3 {
+            failures = failures_after_line(failures, quick);
+            assert_eq!(failures, expected, "each quick drop waits longer");
+        }
+        assert_eq!(failures_after_line(failures, STEADY_LINE), 0, "a line that held is a fresh start");
+    }
 
     fn attached() -> Machine {
         Machine::ssh("box", vec!["ssh".into()], "maitty").attach_only()

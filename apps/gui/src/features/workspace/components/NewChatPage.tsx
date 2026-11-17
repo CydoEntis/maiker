@@ -173,11 +173,12 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const busyHere = busyBranches.get(folder)
   const busyWith = onBranch === null ? undefined : busyHere?.get(onBranch)
   // Auto works in the folder unless another chat is on that branch, which would then be edited by two at once.
-  const treeMode = workIn === 'tree' || (workIn === 'auto' && busyWith !== undefined)
+  // On another machine its branches are not read from here, so only an asked-for worktree is made there.
+  const treeMode = workIn === 'tree' || (!remote && workIn === 'auto' && busyWith !== undefined)
   const takenBranches = useMemo(() => new Set([...(branches?.branches ?? []).map((entry) => entry.name), ...takenNames]), [branches, takenNames])
   // In a worktree of its own with no branch chosen, the chat gets a new branch with a two-word name. It is rolled once
   // per list of names in use and never copies the message, which is no name for a branch.
-  const suggested = useMemo(() => (treeMode && branches !== null ? suggestBranchName(takenBranches) : null), [treeMode, branches, takenBranches])
+  const suggested = useMemo(() => (treeMode && (remote || branches !== null) ? suggestBranchName(takenBranches) : null), [treeMode, remote, branches, takenBranches])
   const branch = useMemo<BranchChoice | null>(() => {
     if (explicit !== null) return { ...explicit, worktree: treeMode }
     return treeMode && suggested !== null ? { name: suggested, create: true, worktree: true } : null
@@ -211,13 +212,16 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const typedName = name.trim()
   const requestFor = (task: string): NewChatRequest => ({
     folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments),
-    branch: remote ? null : branch, machine, machineName: targetLabel, resume: null, view: opensAs, ...(typedName === '' ? {} : { name: typedName }),
+    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetLabel, resume: null, view: opensAs, ...(typedName === '' ? {} : { name: typedName }),
   })
   const start = (task: string = message) => {
     if (starting || folder === '' || agentMissing) return
     setStarting(true)
     setError(null)
-    onStart(requestFor(task))
+    const request = requestFor(task)
+    onStart(request)
+      // Another machine's branches are not read again, so the name it took is kept here and the next start gets another.
+      .then(() => { const made = request.branch; if (remote && made !== null) setTakenNames((now) => new Set([...now, made.name])) })
       .catch((failure: unknown) => { setError(errorMessage(failure, 'Could not start the chat')) })
       .finally(() => { setStarting(false); reloadBranches() })
   }
@@ -370,7 +374,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   }
   const branchLabel = branch?.create === true ? branch.name : onBranch ?? 'detached'
   const workRows: ChipItem[] = [
-    { key: 'folder', label: 'This folder', sub: `Edits your checkout of ${onBranch ?? 'its branch'} directly.`, checked: !treeMode, onPick: () => { setWorkIn('folder') } },
+    { key: 'folder', label: 'This folder', sub: remote ? `Edits ${targetLabel}'s checkout directly.` : `Edits your checkout of ${onBranch ?? 'its branch'} directly.`, checked: !treeMode, onPick: () => { setWorkIn('folder') } },
     { key: 'tree', label: 'New worktree', sub: 'Its own copy on a new branch. Your checkout stays untouched.', checked: treeMode, onPick: () => { setWorkIn('tree') } },
   ]
   const notes = <StartNotes error={error} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(errorMessage(failure, 'Could not open the setup page')) }) }} />
@@ -410,6 +414,15 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
               <ChipMenu variant="crumb" side="bottom" width={MENU_WIDTH} title="Work in" summary={treeMode ? 'New worktree' : 'This folder'} heading="Work in"
                 label={<span className={treeMode ? 'mx-nc-worktree' : 'mx-nc-here'}>{treeMode ? 'new worktree' : 'this folder'}</span>}
                 sections={[{ heading: 'Work in', items: workRows }]} below={busyLine === null ? undefined : <p className="mx-chip-note">{busyLine}</p>} />
+            </>
+          )}
+          {/* Another machine's branches are not read from here: only where it works, made there when it starts. */}
+          {remote && folder !== '' && (
+            <>
+              <span className="mx-crumb-sep" aria-hidden="true">·</span>
+              <ChipMenu variant="crumb" side="bottom" width={MENU_WIDTH} title="Work in" summary={treeMode ? `New worktree on ${branch?.name ?? 'a new branch'}` : 'This folder'} heading={`Work in, on ${targetLabel}`}
+                label={<span className={treeMode ? 'mx-nc-worktree' : 'mx-nc-here'}>{treeMode ? `new worktree · ${branch?.name ?? ''}` : 'this folder'}</span>}
+                sections={[{ heading: 'Work in', items: workRows }]} />
             </>
           )}
         </span>

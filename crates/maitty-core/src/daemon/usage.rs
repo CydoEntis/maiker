@@ -301,7 +301,9 @@ impl Daemon {
                 continue;
             }
             if let Some(at) = t.resume_at {
-                if now >= at {
+                // Something still waits to go in (a queued message's Enter): "continue" waits its
+                // turn rather than replacing it.
+                if now >= at && t.pending_input.is_none() {
                     t.resume_at = None;
                     t.continued = Some(Instant::now());
                     t.pending_input = Some((b"continue\r".to_vec(), Instant::now()));

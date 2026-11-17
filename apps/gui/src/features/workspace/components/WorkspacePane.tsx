@@ -22,7 +22,7 @@ import { NoTerminalNote } from '@/features/chat/components/NoTerminalNote'
 import { type Arrangement, focusPane, type PaneSlot, toggleMaximize } from '../model/layout'
 import { folderNameOf } from '../model/session'
 import { LOCAL_HEAD, machineTitle } from '../model/machines'
-import { toSubagentView } from '../model/subagents'
+import { runningBarShown, toSubagentView } from '../model/subagents'
 import { isShell } from '../model/sidebar'
 import { moveRefusal } from '../model/moveToWorktree'
 import { guardLocal } from '@/lib/localOnly'
@@ -117,7 +117,6 @@ export function WorkspacePane({ shown, pane, kept }: {
   const branchMenu = chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? undefined : { folder: session.cwd, onNewWorktree: () => { void moveToWorktree(session) }, ...(moveRefusal(session) === null ? {} : { newWorktreeBlocked: moveRefusal(session) ?? '' }) }
   // The panel has something for this pane: its repository. A pane of another machine keeps the button, which says why not.
   const hasPanel = session.machine !== LOCAL_MACHINE || repoPaneOf(session) !== null
-  const chatShown = chat.view === 'chat' && !kept && !workOpen && hasChat(chat.availability)
   const openHelperChat: OpenSubagent = (title, asked) => {
     const found = subagentNamed(session.subagents, title, asked)
     return found === null ? null : () => { showSubagent(session.id, found.id) }
@@ -174,8 +173,7 @@ export function WorkspacePane({ shown, pane, kept }: {
         />
         </OpenSubagentContext.Provider>
       ) : undefined}
-      // The chat shows its helpers in its own agents card, so the bar floats over the terminal only.
-      overlay={kept || session.workflows.length > 0 || chatShown ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
+      overlay={!runningBarShown({ kept, hasWorkflows: session.workflows.length > 0, asking: session.status === 'needs' }) ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
       panelOpen={inspectOpen && focused}
       {...(hasPanel ? { onPanel: () => { togglePanel(pane.id, session.id) } } : {})}
       changed={{ added: session.diffAdded, removed: session.diffRemoved }}

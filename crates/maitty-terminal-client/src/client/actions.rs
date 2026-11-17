@@ -712,16 +712,12 @@ impl App {
             .file_stem()
             .map(|s| s.to_string_lossy().to_lowercase())
             .unwrap_or_default();
-        let q = files::quote_path(path);
+        let q = files::shell_word(path);
+        let at_line = |l: u32| files::shell_word(std::path::Path::new(&format!("{}:{l}", path.display())));
         let line = match (at, name.as_str()) {
             (None, _) => format!("{ed} {q}"),
-            (Some(l), "code" | "code-insiders" | "cursor" | "windsurf") => {
-                format!(
-                    "{ed} -g {}",
-                    files::quote_path(std::path::Path::new(&format!("{}:{l}", path.display())))
-                )
-            }
-            (Some(l), "hx" | "helix" | "zed") => format!("{ed} {}:{l}", q),
+            (Some(l), "code" | "code-insiders" | "cursor" | "windsurf") => format!("{ed} -g {}", at_line(l)),
+            (Some(l), "hx" | "helix" | "zed") => format!("{ed} {}", at_line(l)),
             (Some(l), _) => format!("{ed} +{l} {q}"),
         };
         let dir = path
@@ -737,11 +733,17 @@ impl App {
             self.view = None;
             return;
         }
-        let mut cmd = if cfg!(windows) {
+        #[cfg(windows)]
+        let mut cmd = {
+            use std::os::windows::process::CommandExt;
+            // Passed as typed: Rust's own quoting of an argument is not cmd's, and would break the
+            // quotes around the path. /S takes the outer quotes off and runs the rest unchanged.
             let mut c = std::process::Command::new("cmd");
-            c.args(["/C", &line]);
+            c.args(["/D", "/S", "/C"]).raw_arg(format!("\"{line}\""));
             c
-        } else {
+        };
+        #[cfg(not(windows))]
+        let mut cmd = {
             let mut c = std::process::Command::new("sh");
             c.args(["-c", &line]);
             c

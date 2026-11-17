@@ -179,7 +179,9 @@ commands are `prewarm_agent_session` (the agent names and flag rules of `start_a
 daemon running is older) and `drop_prewarmed_agent`.
 
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
-app's new chat page, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
+app's new chat page and ticket starts, on this computer or another machine, whose own daemon makes it in its checkout
+over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
+absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
 does, requires `project` to be one the app shows (or, from a person's own window, any folder the person picked:
 `may_name_checkout`; a pane's agent, a structured runtime or a rejected client is held to the shown ones) and a git repository, then makes the checkout with
@@ -227,7 +229,9 @@ background helpers keep the session working: the agent is back at its prompt. Th
 waits for the turn that one starts (`UserPromptSubmit`), not a minute. Nothing the daemon types for a pane
 (`Term::pending_input`: a queued message's Enter, a moved session's note, a wake) goes in while the pane is Blocked,
 whatever its deadline: the Enter a beat after a message's text would answer a helper's question asked in between. A queue belongs to the agent it was made for:
-a pane whose agent ends or changes (the process scan) drops it. The Enter after a queued command (`/resume`) is
+a pane whose agent ends (its own `SessionEnd`) or changes (the process scan) drops it, and nothing goes in while
+the scan has just missed the agent (`agent_missed`), since the pane at rest may be its shell. Claude's `SessionEnd`
+for `/clear` is not an end: the next session starts in the same agent. A report from another session while the pane's agent is mid-turn is an agent it ran (a headless `claude -p`) and is ignored whole, even when the process scan could not tell (`apply_hook`): an agent does not change sessions inside a turn. The Enter after a queued command (`/resume`) is
 not pressed again when no prompt is reported: such a command opens a menu that a second Enter would answer. `Command::QueueFollowUp { term, text, first }` adds one (`first`,
 a defaulted field, puts it ahead of the ones waiting, for an agent's own command picked while it works),
 `Command::ClearQueue` drops them all, and `Command::DropQueued { term, index, text }` drops one: the one at `index`, and
@@ -908,7 +912,9 @@ clients only, read grant. `ask` is `Question(text)` (1 to `SIDE_QUESTION_MAX_CHA
 `advisor`, `config`, `mcp`). The client names nothing else: for a followed pane the daemon takes the session id the
 hook gave, the pane's folder, the model the transcript last named and the `claude` on the login PATH, and answers only
 the app the pane is shown in; for a structured chat it takes the binding's session, folder, program and config folder.
-A session id that is not a UUID, another agent, or an unknown conversation is answered at once (`Failed`,
+The desktop app asks the daemon of the machine the chat is on (a request line for another machine, never asked
+twice); another machine's reply passes `remote_chat::vet_side_answer`. A session id that is not a UUID, another agent,
+or an unknown conversation is answered at once (`Failed`,
 `NotSupported`); otherwise the reply comes when Claude Code is done, from a background task. `answer` is
 `Answered { text }` (control characters removed, cut at `SIDE_ANSWER_MAX_BYTES`), `NotSupported`, or
 `Failed { reason }` in the daemon's words, never Claude Code's output. The desktop client waits 100 seconds.
@@ -1183,8 +1189,9 @@ Protocol 67 adds, for the desktop app's Inspect panel, find, quick-look links an
   mid-turn when the daemon restarted, with the command that resumes it), `timeline` (the latest
   turn events, oldest first, from status reports and the shell's OSC 133 prompt marks, 60 kept in
   memory) and `usage.tokens` (what the provider reported, never an estimate). The daemon never
-  resumes an `interrupted` agent: a pane saved mid-turn comes back as a plain shell, whichever app
-  owns it, and the window offers the command.
+  resumes an `interrupted` agent: a pane saved mid-turn, or asking a question, comes back as a plain
+  shell, whichever app owns it, and the window offers the command. The offer is saved with the shell
+  (`SavedPane::interrupted`), so a second restart before anyone resumes it still offers it.
 - `Query::PaneSearch { query }` and `Reply::Search`: where a word appears in what the app's own
   panes printed recently, case-insensitively, at most 100 hits and 20 from one pane. Human clients
   only, over the panes the client may use. The text is the pane's replay with escape sequences
@@ -1366,8 +1373,10 @@ dials at once. A machine's agents stay in the sidebar model through every state 
 is kept, not cleared), and the next `State` replaces it.
 
 **Backoff** (`Backoff::DEFAULT`): no wait before the first dial and before the redial of a line
-that was up; after `n` failures in a row, 250 ms doubled `n - 1` times, never more than 30 s
-(250, 500, 1000, ..., 16000, 30000, 30000). A success resets it.
+that held; after `n` failures in a row, 250 ms doubled `n - 1` times, never more than 30 s
+(250, 500, 1000, ..., 16000, 30000, 30000). A line that held for 30 s (`STEADY_LINE`) resets it; one
+that ends sooner counts as a failure, so a line turned away as soon as it is made is not redialled
+as fast as it ends.
 
 **Failure classes** come from `link_failure::classify`, from structured signals: the error's
 type (`OtherVersion` is `NeedsUpdate`), ssh's exit status, and whether the far side ever sent

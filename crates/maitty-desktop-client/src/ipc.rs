@@ -179,11 +179,29 @@ pub async fn open_or_spawn_for_user(
 }
 
 fn spawn_daemon(executable: &std::path::Path) -> Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+        const ERROR_ACCESS_DENIED: i32 = 5;
+        // Out of the app's job, so whatever ends the app's process tree leaves every pane running.
+        // A job that does not allow it refuses with access denied; then it starts in it.
+        let mut away = daemon_command(executable);
+        away.creation_flags(CREATE_NO_WINDOW | CREATE_BREAKAWAY_FROM_JOB);
+        match away.spawn() {
+            Ok(_) => return Ok(()),
+            Err(e) if e.raw_os_error() == Some(ERROR_ACCESS_DENIED) => {}
+            Err(e) => return Err(e).context("starting the daemon"),
+        }
+    }
     daemon_command(executable)
         .spawn()
         .context("starting the daemon")?;
     Ok(())
 }
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 fn daemon_command(executable: &std::path::Path) -> std::process::Command {
     // The daemon's environment is every session's, so it must be the user's and not the app bundle's.
@@ -196,7 +214,7 @@ fn daemon_command(executable: &std::path::Path) -> std::process::Command {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000);
+        command.creation_flags(CREATE_NO_WINDOW);
     }
     for key in [
         format!("{APP_ENV}_CONVERSATION_ID"),

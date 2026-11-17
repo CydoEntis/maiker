@@ -301,9 +301,21 @@ function frostOf(main: string): Record<string, string> {
   return { '--g-hi': strength('hi'), '--g-lo': strength('lo'), '--g-edge': strength('edge') }
 }
 
+/** The two inks a filled danger button's label may take: whichever reads better on the theme's danger colour. */
+const DANGER_INKS = ['#FFFFFF', '#14110F'] as const
+
+/**
+ * The label colour for a button filled with the danger colour. Dark themes use a light coral that white text
+ * fails on (about 2.6:1), so the ink is chosen per theme rather than fixed.
+ */
+export function onDanger(tokens: Pick<ThemeTokens, 'danger'>): string {
+  const [light, dark] = DANGER_INKS
+  return contrastRatio(light, tokens.danger) >= contrastRatio(dark, tokens.danger) ? light : dark
+}
+
 /** The theme as CSS custom properties, for the app root's style. */
 export function themeStyle(theme: ThemeEntry): Record<string, string> {
-  const style: Record<string, string> = { '--card-ring': theme.cardRing, colorScheme: theme.light ? 'light' : 'dark', '--branch': theme.light ? BRANCH_LIGHT : BRANCH_DARK, ...(theme.light ? LIGHT_GLASS : DARK_GLASS) }
+  const style: Record<string, string> = { '--card-ring': theme.cardRing, colorScheme: theme.light ? 'light' : 'dark', '--branch': theme.light ? BRANCH_LIGHT : BRANCH_DARK, '--on-danger': onDanger(theme.tokens), ...(theme.light ? LIGHT_GLASS : DARK_GLASS) }
   for (const [key, variable] of Object.entries(CSS_VARIABLES)) style[variable] = theme.tokens[key as keyof ThemeTokens]
   if (!theme.light) Object.assign(style, frostOf(theme.tokens.main))
   const { look, shading } = theme

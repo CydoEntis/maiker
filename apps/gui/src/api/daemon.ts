@@ -101,7 +101,8 @@ const TerminalSessionSchema = z.object({
     checks: z.object({ passed: z.number().int().default(0), pending: z.number().int().default(0), failed: z.array(z.string()).default([]) }).default({ passed: 0, pending: 0, failed: [] }),
     review: z.enum(['None', 'Required', 'Approved', 'ChangesRequested']).default('None'),
     conflicting: z.boolean().default(false),
-  }).nullable().default(null),
+    commits_after_merge: z.number().int().nonnegative().default(0),
+  }).transform(({ commits_after_merge: commitsAfterMerge, ...pr }) => ({ ...pr, commitsAfterMerge })).nullable().default(null),
   // The follow-ups its daemon holds for the working agent, oldest first (`TermInfo.queued`).
   queued: z.array(z.string()).default([]),
   // The agent's own turn is over though helpers may keep the pane working (`TermInfo.own_turn_over`); false from an older daemon.
@@ -1032,7 +1033,8 @@ export async function forgetAllowedCommand(item: Pick<AllowedCommand, 'project' 
 /** Approves a command request and has the daemon remember it for the conversation's project: the same command is then allowed without asking. */
 export async function allowAlways(conversation: Pick<Conversation, 'id' | 'generation'>, requestId: number | string): Promise<void> {
   await invokeParsed('allow_conversation_always', NullSchema, {
-    id: Number(conversation.id),
+    id: splitConversationKey(Number(conversation.id)).id,
+    ...machineArgOfKey(Number(conversation.id)),
     generation: conversation.generation,
     requestId,
   })
@@ -1273,14 +1275,13 @@ const SideAnswerSchema = z.union([
 
 /**
  * Claude Code's answer beside a chat's conversation, which it never adds to: the daemon resumes a copy of the session
- * that is not saved. On this computer only, where the daemon holds the session.
+ * that is not saved. The chat's own machine answers, where its daemon holds the session.
  */
 export async function sideAnswer(conversation: number, ask: SideAsk): Promise<SideReply> {
   if (!isDesktop()) throw new Error('Side answers need the desktop app')
-  const { machine, id } = splitConversationKey(conversation)
-  if (machine !== LOCAL_MACHINE) return { ok: false, reason: 'Side answers work for sessions on this computer for now.' }
+  const { id } = splitConversationKey(conversation)
   const wire = 'question' in ask ? { Question: ask.question } : { Command: ask.command }
-  const answer = await invokeParsed('side_answer', SideAnswerSchema, { id, ask: wire })
+  const answer = await invokeParsed('side_answer', SideAnswerSchema, { id, ...machineArgOfKey(conversation), ask: wire })
   if (answer === 'NotSupported') return { ok: false, reason: 'Only Claude answers beside a conversation.' }
   return 'Answered' in answer ? { ok: true, text: answer.Answered.text } : { ok: false, reason: answer.Failed.reason }
 }
@@ -1343,11 +1344,11 @@ export async function switchBranch(folder: string, branch: string, create: boole
 }
 
 /**
- * A worktree of the folder's project on a branch (an existing one, else a new one), made by the daemon the way every
- * other is: trusted like its repo, the repo's setup run, tracked for tidy-up. Resolves to its folder.
+ * A worktree of the folder's project on a branch (an existing one, else a new one), made by the daemon of the folder's
+ * machine the way every other is: trusted like its repo, the repo's setup run, tracked for tidy-up. Resolves to its folder.
  */
-export async function addWorktree(folder: string, branch: string): Promise<string> {
-  return invokeParsed('add_branch_worktree', z.string(), { folder, branch })
+export async function addWorktree(folder: string, branch: string, machine: number = LOCAL_MACHINE): Promise<string> {
+  return invokeParsed('add_branch_worktree', z.string(), { folder, branch, ...(machine === LOCAL_MACHINE ? {} : { machine }) })
 }
 
 /** Opens an agent's official setup page in the browser. */

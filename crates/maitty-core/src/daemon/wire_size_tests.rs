@@ -301,6 +301,7 @@ fn pr_of(i: u32) -> PrInfo {
         },
         review: PrReview::Required,
         conflicting: false,
+        commits_after_merge: 0,
     }
 }
 

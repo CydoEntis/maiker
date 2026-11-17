@@ -42,6 +42,8 @@ type StartProps = {
   defaultAgent: ChatAgent
   folder: string
   project: string
+  /** The name of the other machine the project is on; null on this computer. A worktree is made only here. */
+  machineName?: string | null
   onCancel: () => void
   onGo: (choice: StartChoice) => void
 }
@@ -51,8 +53,9 @@ type StartProps = {
  * Maitty's words, then the ticket's words as a separate, tinted quote. A blocked ticket warns in red; starting is
  * still allowed. Nothing starts without the button or Enter.
  */
-export function StartTicketDialog({ container, provider, ticket, blockers, blockerState, here, defaultAgent, folder, project, onCancel, onGo }: StartProps) {
+export function StartTicketDialog({ container, provider, ticket, blockers, blockerState, here, defaultAgent, folder, project, machineName = null, onCancel, onGo }: StartProps) {
   const [agent, setAgent] = useState<ChatAgent>(defaultAgent)
+  const remote = machineName !== null
   const [worktree, setWorktree] = useState(true)
   const key = ticketKey(ticket)
   const message = ticketMessage(ticket, provider, blockers)
@@ -76,7 +79,7 @@ export function StartTicketDialog({ container, provider, ticket, blockers, block
               <span className="mx-tk-dim">Work in</span>
               <Segments label="Work in" value={worktree ? 'tree' : 'folder'} items={[{ value: 'tree', label: 'New worktree' }, { value: 'folder', label: 'This folder' }]} onChange={(value) => { setWorktree(value === 'tree') }} />
               <span />
-              <span className="mx-tk-note">{worktree ? `Own copy on branch ${branch}. Your checkout stays as it is.` : 'Edits your checkout directly.'}</span>
+              <span className="mx-tk-note">{worktree ? `Own copy on branch ${branch}${remote ? `, made on ${machineName}` : ''}. ${remote ? 'Its' : 'Your'} checkout stays as it is.` : remote ? `Edits ${machineName}'s checkout directly.` : 'Edits your checkout directly.'}</span>
             </div>
           )}
           <div className="mx-tk-sent">

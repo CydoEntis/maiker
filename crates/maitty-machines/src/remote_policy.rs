@@ -90,6 +90,9 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         // Another person's words about a repository this window asked that machine for; cleaned
         // in `vet` and only while the question is out.
         ServerMsg::Reply(Reply::Tickets { .. } | Reply::TicketKeys { .. }) => Verdict::Answer,
+        ServerMsg::Reply(Reply::TicketWrite { .. }) => {
+            Verdict::Ignore("ticket writes are asked of this computer only")
+        }
         ServerMsg::Error(_) | ServerMsg::Reply(_) => Verdict::Answer,
         ServerMsg::AskRemoveWorktree { .. } => {
             Verdict::Ignore("a worktree prompt names a folder on this computer")

@@ -265,11 +265,16 @@ describe('labels that stay put', () => {
   const root = `${HOME}/maitty`
   const shown = toSessionView(repo(1, root, root, { branch: 'dev' }), HOME)
 
-  it('keeps the branch and title while a pull blanks or switches the branch', () => {
+  it('keeps the branch and title while a pull blanks it or a rebase passes a bare commit', () => {
     const during = toSessionView(repo(1, root, root, { branch: 'working tree' }), HOME)
     expect(keepLabels(during, shown)).toMatchObject({ title: 'dev', branch: 'dev', repoName: 'maitty' })
+    const rebasing = toSessionView(repo(1, root, root, { branch: '4ad0632' }), HOME)
+    expect(keepLabels(rebasing, shown)).toMatchObject({ title: 'dev', branch: 'dev' })
+  })
+
+  it('follows a switch to another branch in the same folder', () => {
     const switched = toSessionView(repo(1, root, root, { branch: 'other' }), HOME)
-    expect(keepLabels(switched, shown)).toMatchObject({ title: 'dev', branch: 'dev' })
+    expect(keepLabels(switched, shown)).toMatchObject({ title: 'other', branch: 'other' })
   })
 
   it('follows the session into another folder', () => {

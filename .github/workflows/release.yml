@@ -304,11 +304,83 @@ jobs:
           tar -xzf "dist/$APP-x86_64-unknown-linux-musl.tar.gz" -C "$RUNNER_TEMP"
           "$RUNNER_TEMP/$APP-x86_64-unknown-linux-musl/$APP" verify-release dist/sha256sums.txt
 
+      # Handed on, unpublished: the installers are tried on these files before anyone can download them.
+      - name: Keep the release files
+        run: cp notes.md dist/notes.md
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-files
+          path: dist/*
+
+  # Each installer, on its own OS, installs from the files about to be published and runs the
+  # result. A broken installer or build stops the release here, before it is public. Windows runs
+  # the built-in Windows PowerShell (5.1) as well as PowerShell 7.
+  try-install:
+    needs: release
+    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    name: try install on ${{ matrix.os }} (${{ matrix.shell }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, shell: sh }
+          - { os: macos-15, shell: sh }
+          - { os: windows-latest, shell: pwsh }
+          - { os: windows-latest, shell: powershell }
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-files
+          path: release-files
+      - name: App name
+        shell: bash
+        run: |
+          app=$(sed -n 's/^name = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
+          prefix=$(echo "$app" | tr 'a-z-' 'A-Z_')
+          echo "APP=$app" >> "$GITHUB_ENV"
+          echo "${prefix}_FROM=$GITHUB_WORKSPACE/release-files" >> "$GITHUB_ENV"
+          echo "${prefix}_NO_INTEGRATE=1" >> "$GITHUB_ENV"
+      - name: install.sh
+        if: matrix.shell == 'sh'
+        run: |
+          sh ./install.sh
+          ~/.local/bin/$APP --version
+          ~/.local/bin/$APP verify-release release-files/sha256sums.txt
+      - name: install.ps1
+        if: matrix.shell != 'sh'
+        shell: ${{ matrix.shell }}
+        run: |
+          ./install.ps1
+          $exe = "$env:LOCALAPPDATA\Programs\$env:APP\$env:APP.exe"
+          & $exe --version
+          if ($LASTEXITCODE -ne 0) { throw "the installed program did not run" }
+          & $exe verify-release release-files\sha256sums.txt
+          if ($LASTEXITCODE -ne 0) { throw "the installed program refused the release" }
+
+  publish:
+    needs: [release, try-install]
+    if: ${{ !cancelled() && needs.try-install.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+      - name: App name
+        run: echo "APP=$(sed -n 's/^name = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-files
+          path: dist
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
+          mv dist/notes.md notes.md
           if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber -R "$GITHUB_REPOSITORY"
           else
@@ -317,9 +389,8 @@ jobs:
 
   # Install the release just published, the way users do, and run it.
   verify:
-    needs: release
-    # Without a condition of its own this is skipped whenever build-gui was, two jobs back.
-    if: ${{ !cancelled() && needs.release.result == 'success' }}
+    needs: publish
+    if: ${{ !cancelled() && needs.publish.result == 'success' }}
     name: install on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:

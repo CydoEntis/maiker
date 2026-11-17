@@ -307,9 +307,31 @@ fn is_app_daemon(pid: u32) -> bool {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = pid;
-        true
+        // Another program that took the number when the daemon died must never be stopped.
+        let (program, first) = process_command(pid);
+        is_daemon_invocation(&program, first.as_deref())
     }
+}
+
+/// A process's program and first argument, as bytes; empty when it cannot be read.
+#[cfg(not(target_os = "linux"))]
+fn process_command(pid: u32) -> (Vec<u8>, Option<Vec<u8>>) {
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    let pid = Pid::from_u32(pid);
+    let mut system = System::new();
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid]),
+        true,
+        ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
+    );
+    let Some(process) = system.process(pid) else {
+        return (Vec::new(), None);
+    };
+    let command = process.cmd();
+    (
+        command.first().map(|program| program.as_encoded_bytes().to_vec()).unwrap_or_default(),
+        command.get(1).map(|argument| argument.as_encoded_bytes().to_vec()),
+    )
 }
 
 /// Whether a process's NUL-separated command line is this product's daemon: the terminal app's
@@ -1263,27 +1285,34 @@ fn standing_shown(standing: Option<maitty_shared::protocol::WorktreeStanding>) -
 /// before the daemon answers (it may take ten minutes), so the usual request limit is too short.
 const BRANCH_WORKTREE_TIMEOUT: Duration = Duration::from_secs(11 * 60);
 
-/// A worktree of `project` on `branch`, made by the daemon the way every other one is: trusted
-/// like its repo, the repo's setup run, tracked for tidy-up. The answer is its folder, the place
-/// to start an agent. A daemon built before the command is told so in words, since it would never
-/// answer.
-pub async fn branch_worktree(project: PathBuf, branch: String) -> Result<Value> {
+/// A worktree of `project` on `branch`, made by the daemon of the machine the project is on, the
+/// way every other one is: trusted like its repo, the repo's setup run, tracked for tidy-up. The
+/// answer is its folder there, the place to start an agent. This computer's daemon built before the
+/// command is told so in words, since it would never answer; another machine's is on this version
+/// or not used.
+pub async fn branch_worktree(project: PathBuf, branch: String, daemon: impl Into<Daemon>) -> Result<Value> {
     let message = ClientMsg::Command(Command::BranchWorktree { project, branch });
-    answered_within(BRANCH_WORKTREE_TIMEOUT, async {
-        let (mut connection, version) = ipc::open_for_user_knowing_version()
-            .await
-            .context("connecting to the local daemon")?;
-        if !daemon_reads(&message, version) {
-            bail!(
-                "the Maitty service running is older than this app and cannot make a worktree yet: restart it (Settings › Daemon), then try again"
-            );
+    let reply = match daemon.into() {
+        Daemon::Local(_) => {
+            answered_within(BRANCH_WORKTREE_TIMEOUT, async {
+                let (mut connection, version) = ipc::open_for_user_knowing_version()
+                    .await
+                    .context("connecting to the local daemon")?;
+                if !daemon_reads(&message, version) {
+                    bail!(
+                        "the Maitty service running is older than this app and cannot make a worktree yet: restart it (Settings › Daemon), then try again"
+                    );
+                }
+                ask(&mut connection, &message).await
+            })
+            .await?
         }
-        match ask(&mut connection, &message).await? {
-            Reply::Text(folder) => Ok(Value::String(folder)),
-            _ => bail!("daemon returned an unexpected worktree reply"),
-        }
-    })
-    .await
+        remote => request_within(message, remote, BRANCH_WORKTREE_TIMEOUT).await?,
+    };
+    match reply {
+        Reply::Text(folder) => Ok(Value::String(folder)),
+        _ => bail!("daemon returned an unexpected worktree reply"),
+    }
 }
 
 /// Where `query` appears in what the app's terminal sessions printed recently.
@@ -1758,7 +1787,7 @@ pub async fn allow_conversation_always(
     id: u64,
     generation: u64,
     request_id: maitty_shared::conversation::ProviderRequestId,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationAllowAlways {
@@ -1766,7 +1795,7 @@ pub async fn allow_conversation_always(
             generation,
             request_id,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1837,25 +1866,32 @@ pub async fn saved_conversations(agent: String, folder: String) -> Result<Value>
 /// How long a side answer may take: the daemon's own limit, with a margin for the connection.
 const SIDE_ANSWER_TIMEOUT: Duration = Duration::from_secs(100);
 
-/// Claude Code's answer beside conversation `id` on this computer, as the daemon's `SideAnswer`, without adding to
-/// the conversation. Refused in words when the daemon running is older than the question.
-pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk) -> Result<Value> {
+/// Claude Code's answer beside conversation `id`, from the daemon of the machine the chat is on, as its `SideAnswer`,
+/// without adding to the conversation. Refused in words when this computer's daemon is older than the question.
+pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk, daemon: impl Into<Daemon>) -> Result<Value> {
     let message = ClientMsg::Query(Query::SideAnswer {
         id: maitty_shared::conversation::ConversationId(id),
         ask: side,
         tag: 0,
     });
-    answered_within(SIDE_ANSWER_TIMEOUT, async {
-        let (mut connection, version) = ipc::open_for_user_knowing_version()
-            .await
-            .context("connecting to the local daemon")?;
-        refuse_unless_daemon_reads(&message, version)?;
-        match ask(&mut connection, &message).await? {
-            Reply::SideAnswer { answer, .. } => Ok(serde_json::to_value(answer)?),
-            _ => bail!("daemon returned an unexpected side answer reply"),
+    let reply = match daemon.into() {
+        // This computer's daemon may be older than the app; another machine's is on this version or not used (`dial`).
+        Daemon::Local(_) => {
+            answered_within(SIDE_ANSWER_TIMEOUT, async {
+                let (mut connection, version) = ipc::open_for_user_knowing_version()
+                    .await
+                    .context("connecting to the local daemon")?;
+                refuse_unless_daemon_reads(&message, version)?;
+                ask(&mut connection, &message).await
+            })
+            .await?
         }
-    })
-    .await
+        remote => request_within(message, remote, SIDE_ANSWER_TIMEOUT).await?,
+    };
+    match reply {
+        Reply::SideAnswer { answer, .. } => Ok(serde_json::to_value(answer)?),
+        _ => bail!("daemon returned an unexpected side answer reply"),
+    }
 }
 
 /// The agent sessions this computer's daemon recorded as closed, newest first, each with `folder_present`: whether its
@@ -2371,8 +2407,8 @@ type Opening = Pin<Box<dyn Future<Output = Result<Connection>> + Send>>;
 /// ssh and trusts nothing a remote says: every reply goes through `vet` before anything reads it.
 #[derive(Clone)]
 pub struct RemoteDaemon {
-    /// The machine's number for this run, which never names another machine.
-    key: u16,
+    /// Whose list it is in and the machine's number there, which never names another machine.
+    key: RemoteKey,
     name: String,
     open: Arc<dyn Fn() -> Opening + Send + Sync>,
     vet: Arc<dyn Fn(Reply) -> Result<Reply, String> + Send + Sync>,
@@ -2380,7 +2416,7 @@ pub struct RemoteDaemon {
 
 impl RemoteDaemon {
     pub fn new(
-        key: u16,
+        key: RemoteKey,
         name: String,
         open: impl Fn() -> Opening + Send + Sync + 'static,
         vet: impl Fn(Reply) -> Result<Reply, String> + Send + Sync + 'static,
@@ -2412,16 +2448,20 @@ impl RemoteDaemon {
 
 /// The lines kept for each machine, by its number for this run. A machine's number is never
 /// reused (ADR 0007), so one machine's lines cannot serve another.
-static REMOTE_IDLE: std::sync::Mutex<BTreeMap<u16, Arc<IdleConnections>>> =
+static REMOTE_IDLE: std::sync::Mutex<BTreeMap<RemoteKey, Arc<IdleConnections>>> =
     std::sync::Mutex::new(BTreeMap::new());
 
-fn remote_idle(key: u16) -> Arc<IdleConnections> {
+/// A machine as the kept lines know it: the list it is in (each machines hub numbers its own from
+/// 1) and its number there.
+pub type RemoteKey = (u64, u16);
+
+fn remote_idle(key: RemoteKey) -> Arc<IdleConnections> {
     let mut all = REMOTE_IDLE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     all.entry(key).or_default().clone()
 }
 
 /// Close the lines kept for a machine that was taken out of the list.
-pub fn forget_remote(key: u16) {
+pub fn forget_remote(key: RemoteKey) {
     REMOTE_IDLE
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
@@ -2523,18 +2563,20 @@ where
     } else {
         None
     };
+    // The daemon refusing a question is an answer on a line that works: the line is kept and the
+    // refusal returned, not asked again on a new one (on another machine, a new ssh process).
     if let Some(mut kept) = kept
-        && let Ok(Ok(reply)) = tokio::time::timeout(kept_wait, ask(&mut kept, message)).await
+        && let Ok(Ok(answer)) = tokio::time::timeout(kept_wait, ask_answer(&mut kept, message)).await
     {
         keep(kept);
-        return Ok(reply);
+        return answer.map_err(|refused| anyhow::anyhow!(refused));
     }
     let mut fresh = open().await?;
-    let reply = ask(&mut fresh, message).await?;
+    let answer = ask_answer(&mut fresh, message).await?;
     if reusable {
         keep(fresh);
     }
-    Ok(reply)
+    answer.map_err(|refused| anyhow::anyhow!(refused))
 }
 
 async fn request(message: ClientMsg, daemon: impl Into<Daemon>) -> Result<Reply> {
@@ -2630,7 +2672,7 @@ mod kept_connection_tests {
     fn remote(key: u16, opened: &Arc<AtomicUsize>, vet_ok: bool) -> RemoteDaemon {
         let opened = opened.clone();
         RemoteDaemon::new(
-            key,
+            (0, key),
             "box".into(),
             move || {
                 opened.fetch_add(1, Ordering::SeqCst);
@@ -2650,11 +2692,11 @@ mod kept_connection_tests {
         assert_eq!(first.load(Ordering::SeqCst), 1);
         assert_eq!(second.load(Ordering::SeqCst), 1, "a line kept for one machine never serves another");
 
-        forget_remote(60_001);
+        forget_remote((0, 60_001));
         request(question(), Daemon::Remote(remote(60_001, &first, true))).await.unwrap();
         assert_eq!(first.load(Ordering::SeqCst), 2, "a machine taken out of the list keeps no lines");
-        forget_remote(60_001);
-        forget_remote(60_002);
+        forget_remote((0, 60_001));
+        forget_remote((0, 60_002));
     }
 
     #[tokio::test]
@@ -2664,7 +2706,7 @@ mod kept_connection_tests {
             .await
             .unwrap_err();
         assert!(format!("{failure:#}").contains("refused"), "{failure:#}");
-        forget_remote(60_003);
+        forget_remote((0, 60_003));
     }
 
     /// A line whose far end takes questions and never answers, like an ssh line that died quietly.
@@ -2706,6 +2748,40 @@ mod kept_connection_tests {
 
         assert!(matches!(reply, Ok(Reply::Ok)));
         assert_eq!(opened.load(Ordering::SeqCst), 1);
+    }
+
+    /// A daemon that refuses every question with an error, and keeps the line.
+    fn daemon_refusing() -> Connection {
+        let (ours, theirs) = tokio::io::duplex(64 * 1024);
+        let (their_read, their_write) = tokio::io::split(theirs);
+        let (mut reader, mut writer) = maitty_ipc_transport::framed_parts(their_read, their_write);
+        tokio::spawn(async move {
+            while let Ok(Some(_)) = maitty_ipc_transport::receive::<ClientMsg>(&mut reader).await {
+                let refused = ServerMsg::Error("no such conversation".into());
+                if maitty_ipc_transport::send(&mut writer, &refused).await.is_err() {
+                    return;
+                }
+            }
+        });
+        let (our_read, our_write) = tokio::io::split(ours);
+        maitty_ipc_transport::framed_parts(our_read, our_write)
+    }
+
+    #[tokio::test]
+    async fn a_refusal_on_a_kept_line_is_the_answer_and_opens_no_new_line() {
+        let idle = IdleConnections::default();
+        idle.lock().unwrap().push((daemon_refusing(), std::time::Instant::now()));
+        let opened = Arc::new(AtomicUsize::new(0));
+        for _ in 0..3 {
+            let counted = opened.clone();
+            let reply = ask_reusing(&idle, MAX_IDLE_CONNECTIONS, &question(), || async move {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Ok(daemon_refusing())
+            })
+            .await;
+            assert_eq!(reply.unwrap_err().to_string(), "no such conversation");
+        }
+        assert_eq!(opened.load(Ordering::SeqCst), 0, "the one line answered every time");
     }
 
     #[tokio::test]
@@ -2769,6 +2845,20 @@ mod request_timeout_tests {
         let answer = answered_within(Duration::from_secs(5), async { Ok(7) }).await;
 
         assert_eq!(answer.unwrap(), 7);
+    }
+}
+
+/// Ask `message` and tell the daemon's refusal (the inner `Err`, the line still good) from a line
+/// that failed (the outer one).
+async fn ask_answer(connection: &mut Connection, message: &ClientMsg) -> Result<std::result::Result<Reply, String>> {
+    ipc::send_message(&mut connection.1, message).await?;
+    loop {
+        match ipc::receive_server(&mut connection.0).await? {
+            Some(ServerMsg::Reply(reply)) => return Ok(Ok(reply)),
+            Some(ServerMsg::Error(error)) => return Ok(Err(error)),
+            Some(ServerMsg::Bye) | None => bail!("local daemon closed the connection"),
+            Some(_) => continue,
+        }
     }
 }
 

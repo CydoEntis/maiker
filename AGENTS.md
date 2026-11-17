@@ -156,15 +156,16 @@ runs a nested server with `MAITTY_SOCKET=<name> maitty`. What to look at is the
 - **Plan:** Plane, project `MAITTY` (see *Project-specific: planning (Plane)*). The shipped, declined and deferred feature lists are in [`docs/FEATURES.md`](docs/FEATURES.md). `docs/ROADMAP.md` is the legacy phase history, to be removed once the sessions editing it have landed; don't add new planned work to either. The current design is [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Branches:** work lands on `dev` at https://github.com/CydoEntis/maitty; one
   commit per logical change, pushed after the gate passes.
-- **Run the current worktree:** `.\scripts\dev.ps1 tui` or `gui` builds and runs this folder's code, never an old install. The TUI's sidebar foot shows `v<version> <commit>[*] <age>` for any build that is not a clean release tag (`*` = uncommitted changes), so a stale build is visible at a glance.
+- **Run the current worktree:** `.\scripts\dev.ps1 tui` or `gui` builds and runs this folder's code, never an old install, and stops if the build fails; the TUI runs on its own service (`MAITTY_SOCKET=dev-<folder>` unless set), apart from your installed one. The TUI's sidebar foot shows `v<version> <commit>[*] <age>` for any build that is not a clean release tag (`*` = uncommitted changes), so a stale build is visible at a glance.
 - **Install locally:** `cargo install --path apps/tui` (stop a running `maitty` first on
   Windows, or the binary is locked).
 - **Releases:** run `scripts/release.sh X.Y.Z` (`--dry-run` prints what it would do). It refuses
   unless `dev`'s head passed CI, then sets the version in `apps/tui/Cargo.toml` and
   `apps/gui/src-tauri/tauri.conf.json`, brings `main` up to `dev`, tags `vX.Y.Z` on `main` and
   pushes the three together. `.github/workflows/release.yml` builds Windows, macOS
-  (Apple Silicon and Intel) and Linux (x64, ARM; static musl) archives with checksums and
-  publishes the GitHub Release that `install.sh` / `install.ps1` download from. While
+  (Apple Silicon and Intel) and Linux (x64, ARM; static musl) archives with checksums, tries
+  `install.sh` / `install.ps1` on those files on each OS (Windows PowerShell 5.1 too, through
+  `<APP>_FROM`), and only then publishes the GitHub Release they download from. While
   `apps/gui/RELEASE-HOLD` exists a release leaves the desktop app out; see
   [`docs/stack/tauri-updater.md`](docs/stack/tauri-updater.md#project-specific-updater).
 - **Tickets:** Plane work items `MAITTY-N` (see the next section). Older GitHub issues on CydoEntis/maitty (labelled `phase-5`, …) are history; don't file new planned work there.

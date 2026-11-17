@@ -12,6 +12,7 @@ import { useStatusFlash } from './useStatusFlash'
 import { snoozeChoices } from '../model/snooze'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
+import { SubagentRows } from './SubagentRows'
 import { RowHoverCard } from './RowHoverCard'
 import { HOVER_CARD_DELAY_MS, type Box } from '../model/hoverCard'
 
@@ -28,6 +29,8 @@ export type SidebarProps = {
   /** Opens the search over every session, project and action. */
   onSearch: () => void
   focusedId: string | null
+  /** The helper whose own chat a pane shows, marked in its session's rows. */
+  openSubagent: { sessionId: string; subagentId: string } | null
   mode: 'docked' | 'rail'
   online: boolean
   canStart: boolean
@@ -51,6 +54,8 @@ export type SidebarProps = {
   /** Installs or updates the app on a machine that needs it; the window asks first. */
   onUpdateMachine: (name: string, action: UpdateAction) => void
   onShowSession: (id: string) => void
+  /** Opens a helper's own chat in its session's pane. */
+  onShowSubagent: (sessionId: string, subagentId: string) => void
   onRenameSession: (id: string | null) => void
   onSetName: (id: string, name: string) => void
   /** Shows a session beside the pane that has focus. */
@@ -268,6 +273,15 @@ function Expanded(props: SidebarProps) {
         />
         {/* A sibling of the row, not inside it (a button cannot hold a button): it shows on hover and focus. */}
         <RowButton session={session} online={props.online} onBringBack={props.onBringBack} onUnsnooze={props.onUnsnooze} onEnd={props.onEndSession} />
+        {/* Kept mounted while it empties, so the last helper's row eases shut instead of the list jumping. */}
+        <Collapse open={session.subagents.length > 0}>
+          <SubagentRows
+            subagents={session.subagents}
+            openId={props.openSubagent?.sessionId === session.id ? props.openSubagent.subagentId : null}
+            onOpen={(id) => { props.onShowSubagent(session.id, id) }}
+            onShowSession={() => { props.onShowSession(session.id) }}
+          />
+        </Collapse>
       </div>
     )
   }

@@ -2921,7 +2921,6 @@ dependencies = [
  "keyring-core",
  "libc",
  "maitty-agent-detection",
- "maitty-agent-integrations",
  "maitty-ipc-transport",
  "maitty-machines",
  "maitty-provider-claude",
@@ -2963,6 +2962,7 @@ dependencies = [
  "maitty-shared",
  "serde",
  "serde_json",
+ "sysinfo",
  "tokio",
  "tracing",
 ]

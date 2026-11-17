@@ -67,9 +67,13 @@ pub struct SavedPane {
     /// Finished and not looked at yet.
     #[serde(default)]
     pub unseen: bool,
-    /// It was in the middle of a turn when this was saved.
+    /// It was in the middle of a turn, or asking a question, when this was saved.
     #[serde(default)]
     pub was_working: bool,
+    /// The resume it was still offering, an agent cut mid-turn by an earlier restart that nobody
+    /// resumed yet: kept, or a second restart would leave a plain shell and lose the session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupted: Option<crate::protocol::Interrupted>,
     /// What it was called (its /rename, else its first prompt) and its model.
     #[serde(default)]
     pub name: String,

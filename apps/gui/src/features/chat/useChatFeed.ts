@@ -161,9 +161,13 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
       window.clearTimeout(timer)
       void tick()
     }
+    // A hidden window reads only every few seconds: shown again, it reads at once rather than show the old chat.
+    const onVisible = () => { if (!document.hidden) wake.current() }
+    document.addEventListener('visibilitychange', onVisible)
     void tick()
     return () => {
       life.stopped = true
+      document.removeEventListener('visibilitychange', onVisible)
       window.clearTimeout(timer)
       void listening.then((stop) => { stop() })
     }

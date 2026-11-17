@@ -23,6 +23,9 @@ struct Kept {
     tab_of: Option<TermId>,
     queue: std::collections::VecDeque<String>,
     held_message: Option<String>,
+    /// Its helpers' records and workflow runs: the history of the same conversation.
+    subagent_activity: Vec<SubagentActivity>,
+    workflows: Vec<maitty_shared::workflow::WorkflowRun>,
 }
 
 impl Kept {
@@ -44,6 +47,8 @@ impl Kept {
             tab_of: t.tab_of,
             queue: t.queue.clone(),
             held_message: t.held_message.as_ref().map(|held| held.text.clone()),
+            subagent_activity: t.subagent_activity.clone(),
+            workflows: t.workflows.clone(),
         }
     }
 
@@ -56,6 +61,7 @@ impl Kept {
             (self.model, self.grants, self.started_by, self.tab_of);
         t.queue = self.queue;
         t.held_message = self.held_message.as_deref().map(term::HeldMessage::new);
+        (t.subagent_activity, t.workflows) = (self.subagent_activity, self.workflows);
     }
 }
 
@@ -278,7 +284,10 @@ impl Daemon {
             agent: term.agent.clone(),
             session: term.agent.as_ref().and(term.session.clone()),
             unseen: term.status == Status::Done,
-            was_working: term.status == Status::Working,
+            // A question left unanswered is a turn cut short too: resumed silently, the agent
+            // would sit at its prompt as if it had been answered.
+            was_working: matches!(term.status, Status::Working | Status::Blocked),
+            interrupted: term.interrupted.clone().filter(|_| term.agent.is_none()),
             name: if term.name.is_empty() {
                 term.first_prompt.clone()
             } else {
@@ -577,7 +586,8 @@ impl Daemon {
                         .was_working
                         .then(|| pane.agent.clone().zip(cmd.clone()))
                         .flatten()
-                        .map(|(agent, resume)| Interrupted { agent, resume });
+                        .map(|(agent, resume)| Interrupted { agent, resume })
+                        .or_else(|| pane.interrupted.clone());
                     let cmd = cmd.filter(|_| interrupted.is_none());
                     match self.spawn(cmd.as_deref(), &cwd, 120, 32) {
                         Ok(new) => {

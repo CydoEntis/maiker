@@ -246,13 +246,18 @@ export function tildePath(path: string, home: string): string {
   return clean
 }
 
+/** A detached checkout is named by a short commit (a rebase or a bisect passing through), never a branch. */
+const COMMIT_NAME = /^[0-9a-f]{7,40}$/
+
 /**
  * A row's repository, branch and title once a session has shown them, kept while it stays in the same
- * folder. A `git pull` or rebase makes the branch blank or switch for a moment, and a row that follows
- * it jumps; the labels change only when the session moves to another folder.
+ * folder. A `git pull` or rebase makes the branch blank or a bare commit for a moment, and a row that
+ * follows it jumps; a switch to another branch is real and is followed at once (two chats must not
+ * look free to take the same branch).
  */
 export function keepLabels(view: SessionView, before: SessionView | undefined): SessionView {
   if (before === undefined || before.repoName === null || before.branch === null || before.cwd !== view.cwd) return view
+  if (view.branch !== null && !COMMIT_NAME.test(view.branch)) return view
   return { ...view, repoName: before.repoName, branch: before.branch, title: before.title, promptPath: before.promptPath }
 }
 

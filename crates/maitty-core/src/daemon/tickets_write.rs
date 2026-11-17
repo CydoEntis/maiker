@@ -217,12 +217,7 @@ mod tests {
             program
         } else {
             let program = root.join("gh");
-            std::fs::write(&program, "#!/bin/sh\necho \"$@\" >> \"$(dirname \"$0\")/args.txt\"\n").unwrap();
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-            }
+            crate::test_support::write_program(&program, "#!/bin/sh\necho \"$@\" >> \"$(dirname \"$0\")/args.txt\"\n");
             program
         }
     }

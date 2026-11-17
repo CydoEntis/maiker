@@ -215,7 +215,7 @@
 .mx-banner-text { flex: 1; min-width: 0; margin: 0; color: var(--muted); line-height: 1.45; }
 .mx-banner-text strong { color: var(--fg); font-weight: 600; }
 .mx-banner-primary { flex: none; height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); white-space: nowrap; }
-.mx-banner.is-danger .mx-banner-primary { color: #fff; background: var(--danger); }
+.mx-banner.is-danger .mx-banner-primary { color: var(--on-danger); background: var(--danger); }
 .mx-banner-primary:hover { filter: brightness(1.08); }
 .mx-banner-ghost { flex: none; height: 28px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); white-space: nowrap; }
 .mx-banner-ghost:hover { background: var(--m-hover); color: var(--fg); }
@@ -645,7 +645,7 @@
 .mx-confirm-button { height: 32px; padding: 0 14px; border-radius: 9px; font-size: 13px; color: var(--fg2); background: rgba(var(--hl), calc(.05 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); cursor: pointer; transition: background-color .14s ease, transform .12s ease; }
 .mx-confirm-button:hover { background: rgba(var(--hl), calc(.09 * var(--hk))); color: var(--fg); }
 .mx-confirm-button:active { transform: scale(.96); }
-.mx-confirm-button.is-danger { background: var(--danger); color: #fff; box-shadow: none; font-weight: 600; }
+.mx-confirm-button.is-danger { background: var(--danger); color: var(--on-danger); box-shadow: none; font-weight: 600; }
 .mx-confirm-button.is-danger:hover { background: color-mix(in srgb, var(--danger) 85%, #fff); }
 
 /* Finish: the surfaces' fills, lines and shadows are material.css. What is left here is the rest of Flat: no glow, no resting rings and smaller radii. Accent and warn rings (the

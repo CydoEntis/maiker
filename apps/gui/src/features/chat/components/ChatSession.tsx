@@ -215,7 +215,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const shownModel = liveModel !== null && liveModel.base === metaModel ? liveModel.value : metaModel
   const abilities = abilitiesOf(agent)
   const canChangeAgent = typeInto !== undefined && abilities.changeAgent && link.readOnly === true
-  const canPickCodexMode = typeInto !== undefined && abilities.permissionModes?.switchBy === 'command' && link.readOnly === true
+  // Another machine's chat: its screen cannot be read from here, so a mode that must be checked on screen is not picked
+  // from here, and its commands and models are that machine's, not this computer's.
+  const remote = sessionId !== undefined && machineNameOf(sessionId) !== null
+  const canPickCodexMode = typeInto !== undefined && abilities.permissionModes?.switchBy === 'command' && link.readOnly === true && !remote
   // The chips stay drawn while their keys would land in a turn or nowhere; they are only greyed out, so the box does not rearrange.
   const pickerLocked = !online ? 'The daemon is offline' : stoppedOnPrompt ? `${agent} is asking something. Answer it first.` : null
   const chipsLocked = !online ? 'The daemon is offline' : working ? `${agent} is working. Change this when it finishes.` : null
@@ -247,7 +250,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
             }
             refresh()
           }
-          void step().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not change the permission mode')) })
+          void step().catch((error: unknown) => {
+            setLiveMode(before === null ? null : { base: metaMode, value: before })
+            toast.error(errorMessage(error, 'Could not change the permission mode'))
+          })
         },
       }
     }
@@ -256,7 +262,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       // The model and the effort can be picked while the agent works: the pick is typed in at once, as it would be in
       // the terminal, and the agent takes it as soon as it can. Only a question it is asking holds the picker, since
       // typed text would answer the question.
-      agentChips: { locked: chipsLocked, pickerLocked },
+      agentChips: { locked: chipsLocked, pickerLocked, remote },
       onCommand: (text: string) => {
         if (pickerLocked !== null) return
         const model = /^\/model (\S+)/.exec(text)?.[1]
@@ -264,10 +270,14 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         // Through typeMessage, so Claude Code gets its Enter after a pause: sent with the command, the Enter is taken
         // for the completion it is showing and the command never runs.
         const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(refresh)
-        commandChain.current = typed.catch((error: unknown) => { toast.error(errorMessage(error, 'Could not type the command')) })
+        commandChain.current = typed.catch((error: unknown) => {
+          if (model !== undefined) setLiveModel(null)
+          toast.error(errorMessage(error, 'Could not type the command'))
+        })
       },
-      onPickMode: (target: string) => {
+      ...(remote ? {} : { onPickMode: (target: string) => {
         if (sessionId === undefined || chipsLocked !== null) return
+        const before = shownMode
         // Shift+Tab only cycles, so press it until the screen shows the picked mode; a mode that never comes up is not allowed in this session.
         // The chip shows the pick at once and the presses happen behind it; the screen has the last word when they end.
         setLiveMode({ base: metaMode, value: target })
@@ -287,10 +297,13 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           toast.error(`${modeLabel(target) ?? target} is not available in this session. Claude has to be started allowing it.`)
           refresh()
         }
-        void step().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not change the permission mode')) })
-      },
+        void step().catch((error: unknown) => {
+          setLiveMode(before === null ? null : { base: metaMode, value: before })
+          toast.error(errorMessage(error, 'Could not change the permission mode'))
+        })
+      } }),
     }
-  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, shownMode, pickerLocked])
+  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, shownMode, pickerLocked, remote])
   const composer = useChatComposer({ link, agent, feed, online, refresh, answersPrompt, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
@@ -535,9 +548,11 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const canOpenFile = onOpenFile !== null
   const openFile = useMemo<OpenFile | null>(() => (canOpenFile ? (path, line) => { openFileRef.current?.(path, line) } : null), [canOpenFile])
 
+  // Keyed by the question: a new one starts with nothing typed, and its answers sized for its own questions.
+  const askKey = `${ask?.tool ?? ''}:${ask?.detail ?? ''}:${JSON.stringify(ask?.questions ?? ask?.choices ?? [])}`
   const question = pending !== null
-    ? <ApprovalTray event={pending} actions={approval} agent={agent} />
-    : stoppedOnPrompt ? <PromptTray agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
+    ? <ApprovalTray key={pending.requestId} event={pending} actions={approval} agent={agent} />
+    : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
     feed.error,
@@ -580,7 +595,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         composer={composer}
         conversation={link.conversation}
         // Claude says which commands it takes, in its folder; Codex's are a list the window keeps. Gemini has none yet.
-        {...(abilities.slashCommands !== null && root !== null ? { commandsFrom: { agent, folder: root, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
+        {...(abilities.slashCommands !== null && root !== null && !remote ? { commandsFrom: { agent, folder: root, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
         question={question}
         waiting={held !== null}
         files={fileSearch}

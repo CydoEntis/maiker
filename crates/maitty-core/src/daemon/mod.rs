@@ -80,6 +80,8 @@ use tokio::sync::mpsc;
 
 type ClientId = u64;
 
+/// What a client that fell too far behind is told as it is let go.
+const LAGGED_REASON: &str = "This window fell too far behind the service and was let go; it connects again for a fresh copy.";
 /// How often the daemon looks at its timers (statuses, saves and git).
 const TICK: Duration = Duration::from_millis(250);
 const INTEGRATION_STARTUP_GRACE: Duration = Duration::from_secs(3);
@@ -776,9 +778,12 @@ async fn serve(
             let msg = for_client(msg, theirs);
             let bye = matches!(msg, ServerMsg::Bye);
             if ipc::send(&mut w, &msg).await.is_err() || bye {
-                break;
+                return;
             }
         }
+        // The daemon let go of it (`drop_lagging_clients`): its queue was full, so the reason
+        // can only go out here, after the backlog. Without it the window sees a bare drop.
+        let _ = ipc::send(&mut w, &ServerMsg::Error(LAGGED_REASON.into())).await;
     });
     loop {
         tokio::select! {

@@ -274,7 +274,7 @@ impl App {
                         ed.insert(' ');
                     }
                 }
-                KeyCode::Char(c) if !ctrl => {
+                KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) => {
                     ed.warned = false;
                     ed.insert(c);
                 }
@@ -293,7 +293,7 @@ impl App {
                 KeyCode::Backspace => {
                     v.filter.pop();
                 }
-                KeyCode::Char(c) if !ctrl => v.filter.push(c),
+                KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) => v.filter.push(c),
                 KeyCode::Down | KeyCode::Up => {
                     let n = v.visible().len();
                     Self::list_move(&mut v.sel, n, k);

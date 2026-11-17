@@ -1910,6 +1910,10 @@ pub struct PrInfo {
     pub checks: PrChecks,
     pub review: PrReview,
     pub conflicting: bool,
+    /// Commits on the branch after the merged pull request's last one: work goes on after the
+    /// merge, which a plain "merged" would hide. 0 when it is not merged or not known.
+    #[serde(default)]
+    pub commits_after_merge: u32,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PrTone {
@@ -1922,7 +1926,11 @@ impl PrInfo {
     pub fn headline(&self) -> String {
         let fails = self.checks.failed.len();
         let what = match self.state {
-            PrState::Merged => "merged".to_string(),
+            PrState::Merged => match self.commits_after_merge {
+                0 => "merged".to_string(),
+                1 => "merged · 1 new commit".to_string(),
+                n => format!("merged · {n} new commits"),
+            },
             PrState::Closed => "closed".to_string(),
             PrState::Open if fails > 0 => format!("{fails} failing"),
             PrState::Open if self.conflicting => "conflict".into(),
@@ -1947,6 +1955,7 @@ impl PrInfo {
     }
     pub fn tone(&self) -> PrTone {
         match self.state {
+            PrState::Merged if self.commits_after_merge > 0 => PrTone::Waiting,
             PrState::Merged => PrTone::Good,
             PrState::Closed => PrTone::Bad,
             PrState::Open

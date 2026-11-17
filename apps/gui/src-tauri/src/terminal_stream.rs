@@ -263,6 +263,26 @@ impl Wire {
         self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_chat_reply)
     }
 
+    /// Where a side question (`/btw`) about a chat goes: `daemon`, taking only a side answer from
+    /// another machine.
+    pub fn side_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_side_answer)
+    }
+
+    /// Where a request for a branch's worktree goes: `daemon`, taking only the new folder, one
+    /// plain absolute path, from another machine.
+    pub fn worktree_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_worktree_reply)
+    }
+
     /// Where a question about a pane's repository goes. This computer's daemon answers any of
     /// them; another machine's is asked only what `remote_repo::may_ask` allows (what changed and
     /// its diff), and any other question is refused here in the words the window uses for a
@@ -325,17 +345,17 @@ impl Wire {
         }
         let id = machine_of(machine);
         let handle = self.handle()?;
-        if !handle.is_up(id) || handle.is_refused(id) {
+        if !handle.takes_requests(id) {
             return Err(refusal(handle, id));
         }
         let route = handle.route(id).ok_or_else(|| refusal(handle, id))?;
         let name = handle.name_of(id).ok_or_else(|| refusal(handle, id))?;
         Ok(Daemon::Remote(RemoteDaemon::new(
-            id.0,
+            handle.line_key(id),
             name,
             move || {
                 let route = route.clone();
-                Box::pin(async move { maitty_machines::open_remote(&route, crate::hub::dial()?).await })
+                Box::pin(async move { maitty_machines::open_remote(&route, crate::hub::request_dial()?).await })
             },
             vet,
         )))
@@ -868,7 +888,8 @@ pub enum Reaction {
         status: Status,
     },
     /// A machine was taken out of the list.
-    Removed { machine: MachineId },
+    /// `lines` names the request lines kept for it, closed with it.
+    Removed { machine: MachineId, lines: maitty_desktop_client::RemoteKey },
     /// The shared settings of this computer's daemon.
     Settings(SharedSettings),
     /// A conversation of this computer's daemon changed.
@@ -973,7 +994,7 @@ pub fn react(
         }
         Update::Removed { machine } => {
             streams.forget(machine);
-            return vec![Reaction::Removed { machine }];
+            return vec![Reaction::Removed { machine, lines: handle.line_key(machine) }];
         }
         Update::LineUp { machine } => {
             // Panes a view was watching are asked for again; the replay that comes puts each
@@ -1240,8 +1261,8 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::TicketSetup(ask) => {
                 let _ = app.emit(TICKET_SETUP_EVENT, ask);
             }
-            Reaction::Removed { machine } => {
-                maitty_desktop_client::forget_remote(machine.0);
+            Reaction::Removed { machine, lines } => {
+                maitty_desktop_client::forget_remote(lines);
                 if let Ok(mut states) = app.state::<MachineStates>().0.lock() {
                     states.remove(&machine.0);
                 }

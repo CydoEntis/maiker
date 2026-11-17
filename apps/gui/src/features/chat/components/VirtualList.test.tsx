@@ -55,6 +55,26 @@ describe('a conversation list that follows its newest row', () => {
     expect(latest()).not.toBeNull()
   })
 
+  it('keeps the row being read in place while rows coming in above it are measured taller than their estimate', () => {
+    const tall = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      const index = Number(this.dataset.key?.replace('row-', '') ?? Number.NaN)
+      return Number.isNaN(index) ? 0 : index >= 19 && index <= 21 ? ROW + 30 : ROW
+    })
+    // The first draw (from the top) and the follow to the newest row both skip rows 19 to 21.
+    const { rerender } = render(list(40))
+    const element = scroller()
+    rerender(list(40))
+    const reading = 25 * ROW
+
+    fireEvent.pointerDown(element)
+    act(() => { element.scrollTop = reading })
+    fireEvent.scroll(element)
+
+    // Rows 19 to 21 came into the drawn range above the view, each 30px taller than estimated.
+    expect(element.scrollTop).toBe(reading + 3 * 30)
+    tall.mockRestore()
+  })
+
   it('keeps following through a scroll the reader did not make, and comes back to the newest row', () => {
     const { rerender } = render(list(20))
     const element = scroller()

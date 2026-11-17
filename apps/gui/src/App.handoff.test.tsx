@@ -538,7 +538,14 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`), term(3, `${HOME}/b`)])
-    await user.click(screen.getByRole('button', { name: 'More pane actions' }))
+    // The ⋯ button toggles its menu: a second press closes it rather than opening it again.
+    const more = screen.getByRole('button', { name: 'More pane actions' })
+    await user.click(more)
+    await screen.findByRole('menuitem', { name: /^Split down/ })
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    await user.click(more)
+    await waitFor(() => { expect(screen.queryByRole('menuitem', { name: /^Split down/ })).toBeNull() })
+    await user.click(more)
     await user.click(await screen.findByRole('menuitem', { name: /^Split down/ }))
     await screen.findByRole('region', { name: 'Shell in ~/b' })
 

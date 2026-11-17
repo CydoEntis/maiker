@@ -397,6 +397,23 @@ describe('the new chat page on another machine', () => {
     expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, machineName: 'Shipyard', folder: '/srv/app', message: 'hello', branch: null }))
   })
 
+  it('can start in a new worktree made on that machine, on a new branch, and never the same name twice', async () => {
+    const onStart = vi.fn<(request: { branch: unknown }) => Promise<void>>(() => Promise.resolve())
+    remotePage(onStart)
+    await pickProject('app on Shipyard')
+    await workIn('New worktree')
+    await userEvent.keyboard('{Escape}')
+    await userEvent.type(box(), 'hello')
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    await waitFor(() => { expect(onStart).toHaveBeenCalledTimes(1) })
+    expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, folder: '/srv/app', branch: { name: expect.stringMatching(TWO_WORDS) as unknown, create: true, worktree: true } }))
+    await userEvent.type(box(), 'again')
+    await userEvent.click(screen.getByRole('button', { name: 'Send message' }))
+    await waitFor(() => { expect(onStart).toHaveBeenCalledTimes(2) })
+    const names = onStart.mock.calls.map(([request]) => (request.branch as { name: string }).name)
+    expect(names[0]).not.toBe(names[1])
+  })
+
   it('offers the model and effort on the model button, and starts with what was picked', async () => {
     const onStart = vi.fn(() => Promise.resolve())
     remotePage(onStart)

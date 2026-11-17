@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { forgetMachines, registerMachine } from './machines'
 import { conversationKey } from './conversationKey'
-import { startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, createConversation, loadClaudeExecutablePath, loadCodexExecutablePath, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, resumeConversation } from './daemon'
+import { startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, createConversation, loadClaudeExecutablePath, loadCodexExecutablePath, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, resumeConversation, allowAlways, sideAnswer } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -236,6 +236,17 @@ describe('the chat of a session on another machine', () => {
     expect(shown?.chat).toEqual({ conversation: key, generation: 4, readOnly: true, machine: 'build' })
     expect(key).not.toBe(5)
     expect(conversationsFromSnapshot(snapshot)[0]?.chat).toEqual({ conversation: 5, generation: 4, readOnly: true })
+  })
+
+  it('has "always in this project" remembered by its own machine, under its own number', async () => {
+    await allowAlways({ id: String(key), generation: 4 }, 'req-1')
+    expect(invoke).toHaveBeenCalledWith('allow_conversation_always', { id: 5, machine: 3, generation: 4, requestId: 'req-1' })
+  })
+
+  it('has a side question answered by its own machine, under its own number', async () => {
+    vi.mocked(invoke).mockResolvedValueOnce({ Answered: { text: 'on track' } })
+    await expect(sideAnswer(key, { question: 'where are we?' })).resolves.toEqual({ ok: true, text: 'on track' })
+    expect(invoke).toHaveBeenCalledWith('side_answer', { id: 5, machine: 3, ask: { Question: 'where are we?' } })
   })
 
   it('is read, sent to and stopped on its own machine under its own number', async () => {

@@ -211,6 +211,9 @@ The terminal `maitty` binary runs as a daemon or as a client:
   name). Owns every pane: spawns shells and agents in pseudo-terminals
   (ConPTY on Windows), parses their output with `vt100`, detects agent status,
   manages worktrees, persists sessions, and restores them after a restart.
+  It starts detached from whoever started it: its own session on unix (`setsid`); on Windows a new
+  process group with no console window, out of the starter's job (`CREATE_BREAKAWAY_FROM_JOB`) when
+  the job allows it, since closing a job ends everything in it.
 - **Client (UI):** the full-screen TUI. Connects over a local socket (named pipe
   on Windows, Unix socket elsewhere), receives snapshots and pane output, sends
   commands and keystrokes. Many clients can attach; any can detach.
