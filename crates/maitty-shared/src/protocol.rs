@@ -183,6 +183,10 @@ pub struct ClosedSession {
 /// rule on request (`Query::GitIdentityRule`).
 pub const GIT_RULES_SINCE: u32 = 103;
 
+/// The first version whose daemon lists an agent's slash commands and skills on request
+/// (`Query::AgentCommands`). 110 and 111 belong to changes that landed beside it.
+pub const AGENT_COMMANDS_SINCE: u32 = 112;
+
 /// The first version whose daemon reads the tickets of a source on request (`Query::Tickets`).
 pub const TICKETS_SINCE: u32 = 105;
 
@@ -1317,6 +1321,16 @@ pub enum Query {
     GitHubOwners {
         tag: u64,
     },
+    /// The slash commands and skills `agent` takes in `folder` on this daemon's computer (human
+    /// clients only), asked of the agent's own program: its own, and the person's and the
+    /// project's. The folder is used only when it is an absolute path to a folder that exists; the
+    /// home folder otherwise. Only Claude and Codex have a list to ask for; Gemini answers an empty
+    /// one. The answer is `Reply::AgentCommands` with the same `tag`.
+    AgentCommands {
+        agent: crate::conversation::Provider,
+        folder: String,
+        tag: u64,
+    },
     /// Read tickets from `source` on this daemon's computer (human clients only): its groups, a
     /// page of its tickets or one ticket. `source` is a GitHub repository, `owner/name`, read
     /// with the machine's own `gh`, or `plane` or `linear`, read with the key the daemon kept
@@ -1655,6 +1669,12 @@ pub enum Reply {
     GitHubOwners {
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
+    },
+    /// The commands a `Query::AgentCommands` found, or why the agent could not be asked (it is not
+    /// installed there, it did not answer in time).
+    AgentCommands {
+        tag: u64,
+        answer: Result<Vec<crate::agent_commands::AgentCommand>, String>,
     },
     /// What a `Query::Tickets` found, or why it found nothing.
     Tickets {
@@ -2602,6 +2622,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::Specialists(_)) => SPECIALISTS_SINCE,
             ServerMsg::Reply(Reply::WorktreeStanding(_)) => WORKTREE_STANDING_SINCE,
             ServerMsg::Reply(Reply::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
+            ServerMsg::Reply(Reply::AgentCommands { .. }) => AGENT_COMMANDS_SINCE,
             ServerMsg::Reply(Reply::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
             ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
             ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
@@ -2630,6 +2651,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
             ClientMsg::Query(Query::GitHubAccounts { .. }) => GITHUB_ACCOUNTS_SINCE,
             ClientMsg::Query(Query::GitHubRepos { .. } | Query::GitHubOwners { .. }) => GITHUB_REPOS_SINCE,
+            ClientMsg::Query(Query::AgentCommands { .. }) => AGENT_COMMANDS_SINCE,
             ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
             ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ClientMsg::Query(Query::TicketWrite { .. }) => TICKET_WRITE_SINCE,
@@ -4742,6 +4764,28 @@ mod tests {
         let none: TicketLinks = decode(&encode(&OldLinks { projects: Vec::new() }).unwrap()).unwrap();
         assert_eq!(none.repo_file, None, "a 108 daemon's answer reads as no repository file");
         const { assert!(TICKET_SETUP_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_SETUP_SINCE) };
+    }
+
+    /// Asking an agent for its commands is a new query and a new reply: a daemon built before it is
+    /// never asked, and a client built before it is never sent the reply.
+    #[test]
+    fn an_agent_commands_ask_passes_only_between_peers_that_know_it() {
+        use crate::agent_commands::AgentCommand;
+        use crate::conversation::Provider;
+        let ask = Query::AgentCommands { agent: Provider::Claude, folder: "/code".into(), tag: 5 };
+        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::AgentCommands { agent: Provider::Claude, tag: 5, .. })));
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), AGENT_COMMANDS_SINCE);
+        let found = ServerMsg::Reply(Reply::AgentCommands {
+            tag: 5,
+            answer: Ok(vec![AgentCommand { name: "compact".into(), description: "d".into(), hint: String::new(), aliases: Vec::new() }]),
+        });
+        let refused = ServerMsg::Reply(Reply::AgentCommands { tag: 6, answer: Err("Claude Code is not installed".into()) });
+        for reply in [found, refused] {
+            assert_eq!(reply.introduced_in(), AGENT_COMMANDS_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        const { assert!(AGENT_COMMANDS_SINCE > COMPATIBLE_SINCE && AGENT_COMMANDS_SINCE == PROTOCOL_VERSION) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never

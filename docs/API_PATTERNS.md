@@ -216,6 +216,12 @@ A pane's effort (`TermInfo.effort`, an optional field: no `PROTOCOL_VERSION` bum
 daemon from the agent's own files every five seconds off the loop (`usage::poll_effort`): for Claude the level in the newest request
 line of its transcript, present only when a level was set; for Codex the level its thread settings name, else its model's default
 from Codex's `models_cache.json`. Nothing is guessed: a pane whose files say none has none, and the window then says "agent's own".
+The same read keeps what a Claude pane last ran (`Term.runs_with`, saved as `SavedPane.runs_with`): the newest level said, and
+the model of the newest main-thread request (`querySource` `repl_main_thread` or `sdk`; a side request may run another model) or
+the alias (`opus`, `sonnet`, `haiku`) of a `/model` typed after it. A read that finds neither keeps the last. Its resume (a
+restart, a wake, a reload, a move) adds them as `--model` and `--effort` (`Daemon::running_as`), quoted for the shell, only for
+Claude and only when they pass `TurnChoice::validate`: Claude starts a resumed session on the account's default model, which a
+`/model` in any other session changes, and an effort set for the session only is gone.
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
 into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
@@ -1075,6 +1081,22 @@ clients only: a pane or a structured runtime gets `ServerMsg::Error`. The deskto
 `extensions(request, tag)` and raises an `extensions` event `{ machine, tag, answer }`; the window waits 95 seconds
 (a command gets 60). `NeedsTerminal` is not produced yet: signing in to an MCP server stays terminal-only and the
 window says so with the exact command.
+
+Protocol 112 (`AGENT_COMMANDS_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
+`introduced_in` arm; 110 and 111 belong to changes that landed beside it) adds
+`Query::AgentCommands { agent, folder, tag }` with `Reply::AgentCommands { tag, answer }`, where `answer` is
+`Ok(Vec<AgentCommand { name, description, hint, aliases }>)` or `Err(one line)`. The daemon asks the agent's own
+program on its machine (`maitty-agent-ask`: Claude Code's `initialize` reply for its commands and skills, Codex's
+`skills/list` for its skills; Gemini answers an empty list), started in `folder` when that is an absolute path to a
+folder that exists and in the home folder otherwise, off the event loop and within the asker's own limit (20
+seconds for Claude Code, 15 for Codex). The program is the one on the daemon's login PATH; one that is not there
+is `Err("<agent> is not installed on this machine")`, never an empty list. Human clients only. The commands belong
+to the machine that runs the chat: the window asks this computer in place (`agent_commands`) and another machine's
+daemon through `agent_commands_on(machine, agent, folder, tag)`, whose answer is an `agent-commands` event
+`{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/agentCommands.ts`). A machine
+that is offline (a daemon older than the window is one that needs its update, ADR 0007) is refused by name by the host
+and shown in the picker; nothing falls back to this computer's list. Names and lines from another machine are cleaned and capped again
+(`remote_policy::vet`, `maitty_shared::agent_commands`).
 
 The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
 `ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:

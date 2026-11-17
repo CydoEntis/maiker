@@ -265,7 +265,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   // The agent's commands, offered while a slash and a name are typed: picking one writes it into the first message.
   const query = slashQuery(message)
   const [closedFor, setClosedFor] = useState<string | null>(null)
-  const commandsFrom = abilitiesOf(agent).slashCommands === null || remote || folder === '' ? null : { agent, folder }
+  const commandsFrom = abilitiesOf(agent).slashCommands === null || folder === '' ? null : { agent, folder, machine }
   const picking = query !== null && closedFor !== message && commandsFrom !== null
   const slash = useSlashCommands(commandsFrom, picking)
   const matches = useMemo(() => (query === null ? [] : matchCommands(slash.commands, query)), [slash.commands, query])

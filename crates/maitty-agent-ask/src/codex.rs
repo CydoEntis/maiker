@@ -5,7 +5,7 @@
 //! through a shell), says hello, asks that one question, reads the answer and stops it. No message
 //! is sent, so it uses none of the account's allowance.
 
-use crate::claude_models::{Command, command_name, one_line};
+use maitty_shared::agent_commands::{AGENT_COMMANDS_MAX, AgentCommand, DESCRIPTION_MAX_CHARS, command_name, one_line};
 use serde_json::Value;
 use std::path::Path;
 use std::process::Stdio;
@@ -15,8 +15,6 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 const ASK_TIMEOUT: Duration = Duration::from_secs(15);
 /// A few hundred skills with their descriptions; anything past this is not that answer.
 const MAX_REPLY_BYTES: usize = 8 * 1024 * 1024;
-const MAX_SKILLS: usize = 2000;
-const MAX_DESCRIPTION_CHARS: usize = 240;
 const HELLO_ID: u64 = 1;
 const SKILLS_ID: u64 = 2;
 #[cfg(windows)]
@@ -24,7 +22,7 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// The skills in the answer to `skills/list` that are switched on, each once, cleaned for the
 /// window as Claude Code's commands are.
-fn skills(answer: &Value) -> Vec<Command> {
+fn skills(answer: &Value) -> Vec<AgentCommand> {
     let mut seen = std::collections::HashSet::new();
     answer
         .get("data")
@@ -38,14 +36,14 @@ fn skills(answer: &Value) -> Vec<Command> {
             let text = |key: &str| skill.get(key).and_then(Value::as_str).unwrap_or_default();
             let name = command_name(text("name"))?;
             let said = if text("shortDescription").is_empty() { text("description") } else { text("shortDescription") };
-            seen.insert(name.clone()).then(|| Command {
+            seen.insert(name.clone()).then(|| AgentCommand {
                 name,
-                description: one_line(said, MAX_DESCRIPTION_CHARS),
+                description: one_line(said, DESCRIPTION_MAX_CHARS),
                 hint: String::new(),
                 aliases: Vec::new(),
             })
         })
-        .take(MAX_SKILLS)
+        .take(AGENT_COMMANDS_MAX)
         .collect()
 }
 
@@ -60,13 +58,13 @@ fn answer_to(line: &str, id: u64) -> Option<Result<Value, String>> {
         Some(result) => Ok(result.clone()),
         None => Err(format!(
             "Codex would not list its skills: {}",
-            one_line(message.pointer("/error/message").and_then(Value::as_str).unwrap_or("no reason given"), MAX_DESCRIPTION_CHARS)
+            one_line(message.pointer("/error/message").and_then(Value::as_str).unwrap_or("no reason given"), DESCRIPTION_MAX_CHARS)
         )),
     })
 }
 
 /// Asks the Codex at `executable` for the skills it has in `folder`.
-pub async fn ask_skills(executable: &Path, folder: &Path) -> Result<Vec<Command>, String> {
+pub async fn ask_skills(executable: &Path, folder: &Path) -> Result<Vec<AgentCommand>, String> {
     let mut command = tokio::process::Command::new(executable);
     command
         .arg("app-server")

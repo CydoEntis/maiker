@@ -4,6 +4,7 @@
 //! scanner, background git work and client connections talk to it through a single
 //! channel, so there is no locking around the model.
 
+mod agent_commands;
 mod agent_sign_in;
 mod approvals;
 mod branch_agent;
@@ -218,7 +219,7 @@ pub enum Ev {
         limits: Option<Vec<Limit>>,
     },
     /// The effort each agent's own files say it runs at (`usage::poll_effort`).
-    AgentEffort(Vec<(TermId, Option<String>)>),
+    AgentEffort(Vec<(TermId, Option<String>, Option<String>)>),
     /// A worktree made for an agent started from a shell (`Command::AgentWorktree`).
     AgentWorktreeMade {
         client: ClientId,
@@ -3157,6 +3158,22 @@ impl Daemon {
                         }) =>
                     {
                         ServerMsg::Error("Only a human client can ask about this machine's GitHub account".into())
+                    }
+                    Query::AgentCommands { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can list an agent's commands on this machine".into())
+                    }
+                    Query::AgentCommands { agent, folder, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::spawn(async move {
+                            let answer = agent_commands::answer(agent, folder).await;
+                            let reply = Reply::AgentCommands { tag, answer };
+                            let _ = tx.send(Ev::Answered { client, reply }).await;
+                        });
+                        return;
                     }
                     Query::Tickets { .. }
                         if self.clients.get(&client).is_some_and(|client| {

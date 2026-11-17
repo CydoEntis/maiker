@@ -81,6 +81,24 @@ ratatui's `TestBackend` and assert on the text and cell styles;
 `MAITTY_SHOW=1 cargo test <name> -- --nocapture` prints the frames. One test:
 `cargo test <name>`.
 
+### Agent command lists
+
+The window pins the commands an agent will not list (`terminalCommands.ts`, `codexCommands.ts`, `geminiCommands.ts`), and each file names
+the version it was checked against (`CLAUDE_COMMANDS_PINNED_FOR`, `CODEX_COMMANDS_PINNED_FOR`,
+`GEMINI_COMMANDS_PINNED_FOR`). Whether they still
+match the agent installed on this computer is checked by three ignored tests in `maitty-agent-ask`:
+
+```sh
+cargo test -p maitty-agent-ask -- --ignored
+```
+
+Claude Code: each pinned command is run as `claude -p "/<name>"` in an empty folder with its own empty
+`CLAUDE_CONFIG_DIR` (so no real configuration or account is touched; no model is asked), and the test fails naming
+every command Claude Code no longer takes. Codex lists its commands only inside its terminal, so its test fails when the
+installed Codex is newer than the pinned version, and so does the Gemini CLI one. A command an agent adds cannot be found this way; run the check when
+an agent updates, and bring the list and its pinned version up to date. Each test says it was skipped when its agent is
+not installed.
+
 ## Project-specific: layout and fixtures
 
 Tests live next to the code they test. Client UI tests build a fake snapshot

@@ -22,6 +22,7 @@ import { asSkills, commandText, matchCommands, skillQuery, slashQuery, useSlashC
 import { CLAUDE_HIDDEN_COMMANDS, CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import { terminalOnlyNote, typedCommand, windowRouteOf, withWindowRoutes, type WindowRoute } from '../windowCommands'
 import { CODEX_COMMANDS } from '../codexCommands'
+import { GEMINI_COMMANDS, geminiRouteOf, withGeminiRoutes } from '../geminiCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
 import { usageItems, type SessionUsage } from '../usageStrip'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
@@ -85,6 +86,8 @@ type Props = {
   commandsFrom?: {
     readonly agent: string
     readonly folder: string
+    /** The machine the agent runs on, whose commands and skills these are; this computer when left out. */
+    readonly machine?: number | undefined
     /** For an agent with a terminal: types a command there and shows it. With it the box also offers the commands only the terminal runs. */
     readonly inTerminal?: ((command: string) => void) | undefined
     /** Answers the commands the window runs itself (`windowCommands.ts`) with the route and the text as typed. Without it they go to the agent. */
@@ -168,12 +171,13 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     if (windowList) {
       const skills = asSkills(slash.commands)
       if (skillsOnly) return skills
-      return [...(inTerminal === undefined ? CODEX_COMMANDS.filter((command) => command.terminal !== true) : CODEX_COMMANDS), ...skills]
+      const own = agent === 'gemini' ? withGeminiRoutes(GEMINI_COMMANDS) : inWindow === undefined ? CODEX_COMMANDS : withWindowRoutes(CODEX_COMMANDS, 'codex')
+      return [...(inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own), ...skills]
     }
     const listed = withTerminalCommands(slash.commands, CLAUDE_TERMINAL_COMMANDS, CLAUDE_HIDDEN_COMMANDS)
     const own = inWindow === undefined ? listed : withWindowRoutes(listed)
     return inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own
-  }, [slash.commands, inTerminal, inWindow, windowList, skillsOnly])
+  }, [slash.commands, inTerminal, inWindow, windowList, skillsOnly, agent])
   const matches = useMemo(() => (query === null ? [] : matchCommands(offered, query)), [offered, query])
   // The keys start at the closest match each time the typed name changes.
   const [cursor, setCursor] = useState({ query: '', index: 0 })
@@ -186,12 +190,14 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   // for its question, the rest go to the session's chat. One that ends or empties the session is refused while the
   // agent works, as the terminal's are; a side answer may go then, as it leaves the conversation alone.
   const routeOf = (typed: string): WindowRoute | null => {
-    // The routes are Claude Code's commands by its names; another agent's are its own.
-    if (inWindow === undefined || agent !== 'claude' || windowList || attachments.length > 0) return null
+    // Each agent's routes are by its own names for its commands.
+    if (inWindow === undefined || attachments.length > 0) return null
     const parts = typedCommand(typed)
     if (parts === null) return null
-    const route = windowRouteOf(parts.name, parts.args)
-    if (route !== null || inTerminal !== undefined) return route
+    if (agent === 'gemini') return geminiRouteOf(parts.name, parts.args)
+    const route = windowRouteOf(parts.name, parts.args, agent)
+    // Only Claude's list names the commands that have no use without a terminal (Codex's are sent as typed).
+    if (route !== null || inTerminal !== undefined || agent !== 'claude') return route
     // With no terminal, a command only the terminal runs gets a card saying so instead of going nowhere.
     const terminalOnly = namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)
     return terminalOnly === undefined ? null : terminalOnlyNote(terminalOnly.name)
@@ -487,6 +493,13 @@ function ModelLabel({ agent, model, onOpenMenu, locked }: { agent: ChatAgent; mo
 
 /** The model and reasoning the next message uses, from the agent picker. */
 function ModelPicker({ agent, conversation, model, effort, live, locked, remote }: { agent: ChatAgent; conversation: number; model: string | null; effort: string | null; live?: ((command: string) => void) | undefined; locked: string | null; remote: boolean }) {
-  const [choice, change] = useAgentChoice(conversation, agent)
-  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={change} currentModel={model} currentEffort={effort} locked={locked ?? undefined} {...(live ? { live } : {})} />
+  const [stored, change] = useAgentChoice(conversation, agent)
+  // A chat that follows the agent's terminal keeps no pick of its own: a pick is typed in as the agent's command, and
+  // the button names what the agent says it runs, so it never disagrees with the terminal. A kept pick could, as one
+  // made in the terminal or before a restart would not reach it.
+  const choice = live === undefined ? stored : FOLLOWS_AGENT
+  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={live === undefined ? change : ignoreChange} currentModel={model} currentEffort={effort} locked={locked ?? undefined} {...(live ? { live } : {})} />
 }
+
+const FOLLOWS_AGENT: AgentChoice = defaultChoice()
+const ignoreChange = (): void => {}
