@@ -1237,7 +1237,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   another machine. The choice is kept per conversation in this window's storage
   (`agentChoice.ts`) and goes to the daemon with every message (`send_conversation`'s `model` and `effort`); what was
   not picked sends nothing, so the chat keeps what it started with and the button never claims a model the chat is not
-  using.
+  using. A chat that follows the agent's terminal keeps no choice of its own: a pick is typed in as the agent's
+  `/model` or `/effort`, the button shows it at once, and from then on names what the agent's own files say it runs
+  (`TermInfo.effort`, the chat's model), so a change typed in the terminal shows here and one made here shows there.
+  A kept pick could disagree with the terminal: one made in the terminal, or a number reused after a daemon restart.
+  A resumed Claude comes back on the model and effort it last ran (`Daemon::running_as`, API_PATTERNS).
   Claude offers Sonnet, Opus and Haiku (`KNOWN_MODELS`, a fixed list because the daemon does not report models);
   Codex offers only its account default, because its models depend on the account and version. The agent never changes.
 - **Switching changes the window, not the session.** The choice is per session (`usePaneViews`), the terminal stays

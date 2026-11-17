@@ -217,7 +217,7 @@ pub enum Ev {
         limits: Option<Vec<Limit>>,
     },
     /// The effort each agent's own files say it runs at (`usage::poll_effort`).
-    AgentEffort(Vec<(TermId, Option<String>)>),
+    AgentEffort(Vec<(TermId, Option<String>, Option<String>)>),
     /// A worktree made for an agent started from a shell (`Command::AgentWorktree`).
     AgentWorktreeMade {
         client: ClientId,
