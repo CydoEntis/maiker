@@ -6,6 +6,8 @@ import { AGENTS, SCOPE_WORDS, scopesFor } from './model'
 
 /** Longest name, source or command line the fields take; the daemon checks them again. */
 const MOST_FIELD_CHARS = 500
+/** Longest server name the daemon takes. */
+const MOST_NAME_CHARS = 64
 
 const REVIEW_FOOT = 'Review shows what it would run, read from its files. Nothing is installed until you confirm.'
 
@@ -116,7 +118,7 @@ function McpCard({ folder, onPreview }: { folder: string | null; onPreview: (pre
       <form onSubmit={(event) => { event.preventDefault(); submit() }}>
         <Row label="Agent" detail="Which agent gets it."><AgentSelect value={agent} onChange={setAgent} /></Row>
         <Row label="Name" detail="Letters, digits, dots, dashes and underscores.">
-          <input className="mx-scard-input" aria-label="Server name" value={name} maxLength={64} spellCheck={false} autoComplete="off" onChange={(event) => { setName(event.target.value) }} />
+          <input className="mx-scard-input" aria-label="Server name" value={name} maxLength={MOST_NAME_CHARS} spellCheck={false} autoComplete="off" onChange={(event) => { setName(event.target.value) }} />
         </Row>
         <Row label="How it runs" detail={how === 'command' ? 'A program the agent starts, as you.' : 'A server somewhere else. https:// only (http:// for this computer), with no sign-in in the address.'}>
           <select className="mx-scard-input" aria-label="How the server runs" value={how} onChange={(event) => { setHow(event.target.value === 'address' ? 'address' : 'command') }}>
