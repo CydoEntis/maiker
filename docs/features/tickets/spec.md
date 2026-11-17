@@ -7,19 +7,11 @@ search, pick one, read it whole and start an agent on it. Read-only: the confirm
 handing tickets to Kitchen (MAITTY-397) were removed by [ADR 0011](../../adr/0011-maitty-reads-tickets-and-shows-no-workflow-runs.md). Tickets: Plane module "Tickets in the app" (MAITTY-391 to 398, plus the grouping
 ticket filed with this spec).
 
-## Decision: what to reuse from `feat/project-crews`
+## Decision: what was reused
 
-The crews branch (local only, 24 commits, 182 files) holds a tracker for a different feature:
-a captain that writes and moves tickets for crewmates. Plane marks MAITTY-247 and 248 Done, but
-none of it is on `dev`. Do not merge the branch; the crew screens are unmounted and superseded
-by the redesign ([FEATURES](../../FEATURES.md)).
-
-| Piece on the branch | Decision | Why |
-| --- | --- | --- |
-| `maitty-core/src/curl_http.rs` (the system `curl`, token on stdin, no redirects, 20 s, 4 MiB cap) | **Cherry-pick** | Adds no HTTP dependency; its security rules are already written. Needed by Plane and Linear. |
-| In `maitty-tracker-plane`: `Http`, `Secret`, `check_base_url`, `text.rs` cleaning, paging, rate-limit wait, fake-`Http` tests | **Reuse as a pattern** (copy what fits) | The Plane REST details (state ids, paging, 429 wait, the blocked-by relations endpoint) are already worked out. |
-| `maitty-shared/src/tracker.rs` (`Ticket`, `TicketState`, `NewTicket`, `Tracker`) | **Rewrite** | Its states are crew states (`SaysDone`, `Verified`), an assignee is a crewmate, and it creates and moves tickets. We need a read-only, provider-neutral model with groups and comments. |
-| `local_tracker.rs`, crew UI | **Leave** | Not part of this feature. |
+`maitty-core/src/curl_http.rs` (the system `curl`, token on stdin, no redirects, 20 s, 4 MiB cap)
+and the Plane REST details came from the dropped project-crews work; its tracker, crew states and
+screens did not ([ADR 0011](../../adr/0011-maitty-reads-tickets-and-shows-no-workflow-runs.md)).
 
 GitHub needs none of this. The unmerged `feat/github-repos` branch (MAITTY-326 to 340, also
 marked Done and not on `dev`) already reads GitHub through the user's own `gh`: no token is

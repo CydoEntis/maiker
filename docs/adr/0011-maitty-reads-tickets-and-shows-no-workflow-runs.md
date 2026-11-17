@@ -21,7 +21,9 @@ of them helps tell which agent needs you. The app was losing focus.
 2. **Maitty shows no workflow runs.** There is no `maitty workflow report`, no Work board and no
    run rows. A workflow (a factory, Kitchen, a script) runs inside an agent session like any other
    work; its helpers still show live as subagents ([0010](0010-workflows-and-specialist-agents-stay-outside-maitty.md)).
-3. **Nothing sends work to a factory.** A factory is a separate tool; Maitty does not start one.
+3. **Nothing sends work to a factory, and Maitty is not one.** A factory is a separate tool; Maitty
+   does not start one. Project crews (a captain agent that drafts tickets and directs crewmates in
+   their own worktrees) are a factory built in, so they are not built either.
 4. **Old peers are refused, never misread.** `Query::TicketWrite` and `Reply::TicketWrite` stay on
    the wire so a window from protocol 107 to 112 that still asks is answered with an error and keeps
    its connection. `ClientMsg::WorkflowReport` is gone: an older `maitty workflow report` is a
