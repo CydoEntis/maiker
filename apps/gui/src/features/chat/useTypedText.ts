@@ -1,48 +1,58 @@
 import { useEffect, useRef, useState } from 'react'
 
-/** How often the shown text moves on toward what has arrived: a few words at a time, not letter by letter. */
-export const TICK_MS = 40
-/** The steady pace: this many characters a tick, about 300 a second, a little faster than anyone reads. */
-const PACE_CHARS = 12
-/** A backlog larger than the steady pace clears in a second or two goes faster: each tick shows this share of it, so a long reply does not take a minute. */
-const CATCH_UP_DIVISOR = 45
-/** A step ends on a whole word when the word's end is within this many characters, so words appear, not halves of them. */
+/** How often the shown text moves on: every screen frame, so words arrive in a steady stream rather than in bursts. */
+export const TICK_MS = 16
+/** The steady pace in characters a second: quick enough that the window never seems to lag, slow enough to watch the words come in. */
+const PACE_PER_SECOND = 300
+/** A backlog is shown within about this many seconds: the pace eases up while a lot is waiting and settles back as it clears. */
+const CATCH_UP_SECONDS = 1.5
+const MS_PER_SECOND = 1000
+/** A stop falls back to the last space when one is within this many characters, so words appear whole, not halves of them. */
 const WORD_REACH = 24
 
 /**
- * How much of `text` shows after one more tick, from `shown` characters. It moves at a steady pace, faster while a
- * lot is waiting, and stops at the end of a word. A reply read from an agent's file arrives whole or in large
- * pieces, and shown by share alone most of it appeared within a quarter of a second, which read as a flash.
+ * Where the reveal of `text` is one tick after `position`, in characters (a fraction carries over to the next
+ * tick). It moves at a steady pace, faster while a lot is waiting, so a long reply read whole from an agent's file
+ * eases in over a couple of seconds instead of appearing in a flash or crawling for a minute.
  */
-export function nextShown(text: string, shown: number): number {
-  const left = text.length - shown
+export function nextPosition(text: string, position: number): number {
+  const left = text.length - position
   if (left <= 0) return text.length
-  const reach = Math.min(text.length, shown + Math.max(PACE_CHARS, Math.ceil(left / CATCH_UP_DIVISOR)))
-  const wordEnd = text.slice(reach, reach + WORD_REACH).search(/\s/)
-  return wordEnd === -1 ? Math.min(text.length, reach) : reach + wordEnd
+  const perSecond = Math.max(PACE_PER_SECOND, left / CATCH_UP_SECONDS)
+  return Math.min(text.length, position + (perSecond * TICK_MS) / MS_PER_SECOND)
+}
+
+/** How many characters show at `position`: up to the last whole word, so a word appears in one piece. */
+export function shownAt(text: string, position: number): number {
+  if (position >= text.length) return text.length
+  const at = Math.floor(position)
+  for (let index = at; index > at - WORD_REACH && index > 0; index -= 1) {
+    if (/\s/.test(text.charAt(index))) return index
+  }
+  return at
 }
 
 /**
- * The text as if it were being typed. A reply arrives in chunks (the history is read every second or so), and
+ * The text as if it were being typed. A reply arrives in chunks (the history is read a few times a second while the agent works), and
  * showing each chunk whole makes the text flash in. This shows only what was on screen when the row first
  * appeared, then types toward whatever arrives after it; a row that mounts already full (an old message, a
  * session you switched to) shows all of it at once, unless `fromStart` says it arrived live, which types it from its
  * first letter. With `enabled` off everything shows at once.
  */
 export function useTypedText(target: string, enabled: boolean, fromStart = false): string {
-  const [shown, setShown] = useState(fromStart ? 0 : target.length)
+  const [position, setPosition] = useState(fromStart ? 0 : target.length)
   const latest = useRef(target)
   useEffect(() => { latest.current = target })
   // The timer runs only while text is waiting to be shown: every agent message on screen has one of these, and a
   // conversation at rest should wake nothing.
-  const behind = enabled && shown < target.length
+  const behind = enabled && position < target.length
   useEffect(() => {
     if (!behind) return
     const timer = window.setInterval(() => {
-      setShown((now) => nextShown(latest.current, now))
+      setPosition((now) => nextPosition(latest.current, now))
     }, TICK_MS)
     return () => { window.clearInterval(timer) }
   }, [behind])
   if (!enabled) return target
-  return target.slice(0, Math.min(shown, target.length))
+  return target.slice(0, shownAt(target, position))
 }

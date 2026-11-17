@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { readConversationPage } from '@/api/daemon'
 import { listenConversationChanged } from '@/api/conversationNews'
 import type { ApprovalDecision, ChatProvider } from './chatEvents'
-import { afterFailure, createFeed, hasPendingApproval, syncFeed, type ChatFeed, type ReadPage } from './chatFeed'
+import { afterFailure, createFeed, hasPendingApproval, looksTheSame, syncFeed, type ChatFeed, type ReadPage } from './chatFeed'
 import { recordApprovalAnswer, selectChatEvents } from './projection'
 
 /** How often an open chat asks the daemon for news: quickly while the agent works or waits on a person, slowly otherwise. */
@@ -17,7 +17,9 @@ export const TOLD_ACTIVE_POLL_MS = 1000
 export const NEWS_READ_GAP_MS = 100
 
 /** The feeds the window has read, so reopening a chat shows its history at once and reads only what changed. */
-const CACHE_LIMIT = 8
+// Enough for a day's sessions: going back to a chat read earlier shows it whole at once, and a feed is small next to the
+// window's other state.
+const CACHE_LIMIT = 32
 const cache = new Map<number, ChatFeed>()
 
 function remember(feed: ChatFeed): void {
@@ -109,9 +111,10 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
       try {
         const next = await syncFeed(latest.current, read, Date.now)
         if (gone()) return
+        const unchanged = looksTheSame(latest.current, next)
         latest.current = next
         remember(next)
-        setFeed(next)
+        if (!unchanged) setFeed(next)
         if (unwatched) {
           unwatched = false
           setUnwatchedReads((count) => count + 1)

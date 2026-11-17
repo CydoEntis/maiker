@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { afterFailure, createFeed, syncFeed } from './chatFeed'
+import { afterFailure, createFeed, looksTheSame, syncFeed } from './chatFeed'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from './fakeDaemonHistory'
 import { selectChatEvents } from './projection'
 import { conversationKey } from '@/api/conversationKey'
@@ -255,5 +255,15 @@ describe('losing and regaining the daemon', () => {
     // Read again: the unreadable entry is not counted a second time.
     const second = await syncFeed(first, daemon.read, now)
     expect(second.projection.rejectedInputs).toBe(1)
+  })
+})
+
+describe('looksTheSame', () => {
+  it('ignores the cursor and skip list, and notices any shown change', () => {
+    const shown = createFeed('claude', 7)
+    expect(looksTheSame(shown, { ...shown, resume: null, seen: new Map([['a', 'b']]) })).toBe(true)
+    expect(looksTheSame(shown, { ...shown, status: 'Working' })).toBe(false)
+    expect(looksTheSame(shown, { ...shown, queued: [...shown.queued] })).toBe(true)
+    expect(looksTheSame(shown, { ...shown, projection: { ...shown.projection } })).toBe(false)
   })
 })
