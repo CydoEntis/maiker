@@ -1,11 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import type { AttachmentKind } from '@/api/attachments'
+import { readComposerDrafts, writeComposerDrafts, type SavedDraft } from '@/data/composerDrafts'
 import { forgetOperations } from './sendOperation'
 
 /**
  * What a conversation's composer holds between views: the unsent text and the files attached to it. It lives here, not in the
  * component, so switching to the terminal and back (which closes and reopens the chat) loses
- * nothing. Messages sent while an agent works are not kept here: its daemon holds them, for a chat-run agent
+ * nothing. The text is also kept in the window's storage (`data/composerDrafts.ts`), so a restart loses nothing either.
+ * Messages sent while an agent works are not kept here: its daemon holds them, for a chat-run agent
  * and for one in a terminal alike, so they go in whether or not this window is open.
  */
 
@@ -32,6 +34,28 @@ const NO_ATTACHMENTS: readonly DraftAttachment[] = []
 const EMPTY: ComposerState = { draft: '', attachments: NO_ATTACHMENTS, note: null }
 const stored = new Map<number, ComposerState>()
 const listeners = new Set<() => void>()
+/** When each box's text last changed, so the oldest drafts are the ones dropped from storage. */
+const touched = new Map<number, number>()
+/** Writes wait this long after the last letter, so typing does not write storage on every key. */
+const SAVE_AFTER_MS = 300
+let saveTimer: number | null = null
+
+for (const [conversation, saved] of readComposerDrafts(Date.now())) {
+  stored.set(conversation, { draft: saved.text, attachments: NO_ATTACHMENTS, note: null })
+  touched.set(conversation, saved.at)
+}
+
+function saveSoon(): void {
+  if (saveTimer !== null) window.clearTimeout(saveTimer)
+  saveTimer = window.setTimeout(() => {
+    saveTimer = null
+    const drafts = new Map<number, SavedDraft>()
+    for (const [conversation, state] of stored) {
+      if (state.draft.trim() !== '') drafts.set(conversation, { text: state.draft, at: touched.get(conversation) ?? Date.now() })
+    }
+    writeComposerDrafts(drafts)
+  }, SAVE_AFTER_MS)
+}
 
 /** The state now, outside React, for code that must see the latest. */
 export function peekComposer(conversation: number): ComposerState {
@@ -49,6 +73,10 @@ export function updateComposer(conversation: number, change: (state: ComposerSta
   const after = isEmptied(before, changed) ? { ...changed, note: null } : changed
   if (after.draft === '' && after.attachments.length === 0 && after.note === null) stored.delete(conversation)
   else stored.set(conversation, after)
+  if (after.draft !== before.draft) {
+    touched.set(conversation, Date.now())
+    saveSoon()
+  }
   for (const listener of listeners) listener()
 }
 
@@ -97,12 +125,17 @@ export function followComposer(sessionId: string, conversation: number): void {
   if (state === undefined || stored.has(conversation)) return
   stored.delete(before)
   stored.set(conversation, state)
+  touched.set(conversation, Date.now())
+  saveSoon()
   for (const listener of listeners) listener()
 }
 
 /** For tests: the store belongs to the window's lifetime. */
 export function forgetComposers(): void {
   stored.clear()
+  touched.clear()
+  if (saveTimer !== null) window.clearTimeout(saveTimer)
+  saveTimer = null
   lastConversation.clear()
   forgetOperations()
 }

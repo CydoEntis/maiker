@@ -103,6 +103,22 @@ export function applyPage(feed: ChatFeed, page: ChatPage, nowMs: number): ChatFe
   }
 }
 
+/**
+ * Whether a chat drawn from `next` would look the same as one drawn from `shown`: the same projection and the same
+ * page facts. Only the read cursor and the skip list may differ. A working agent is read several times a second and
+ * most reads bring nothing new; redrawing the chat for each of them is work for nothing.
+ */
+export function looksTheSame(shown: ChatFeed, next: ChatFeed): boolean {
+  return shown.projection === next.projection
+    && shown.conversation === next.conversation
+    && shown.generation === next.generation
+    && shown.status === next.status
+    && shown.error === next.error
+    && shown.cancelling === next.cancelling
+    && shown.loaded === next.loaded
+    && JSON.stringify([shown.completeness, shown.receipt, shown.queued, shown.meta]) === JSON.stringify([next.completeness, next.receipt, next.queued, next.meta])
+}
+
 /** What the feed keeps after a failed read: everything, but the next read starts from the beginning. */
 export function afterFailure(feed: ChatFeed): ChatFeed {
   return feed.resume === null ? feed : { ...feed, resume: null }

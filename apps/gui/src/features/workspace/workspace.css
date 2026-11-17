@@ -888,3 +888,10 @@
 .mx-hotkey-row:hover .mx-hotkey-actions .mx-text-button, .mx-hotkey-row:focus-within .mx-hotkey-actions .mx-text-button { opacity: 1; }
 .mx-mach-hostlist { display: flex; flex-direction: column; gap: 4px; }
 .mx-resume-pick { display: flex; align-items: center; gap: 8px; }
+
+
+/* A pane whose view failed to draw (`PaneErrorBoundary`): said in the pane, on its own ground, with the way out. */
+.mx-pane-fault { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; color: var(--fg2); }
+.mx-pane-fault-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--fg); }
+.mx-pane-fault-detail { margin: 0; max-width: 46ch; font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }
+.mx-pane-fault-actions { display: flex; gap: 8px; margin-top: 4px; }

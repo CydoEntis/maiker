@@ -85,14 +85,14 @@ describe('the usage strip', () => {
     expect(within(strip).getByRole('meter', { name: '5-hour limit' }).parentElement).toHaveAttribute('title', '5-hour limit: 12% used · resets in 3h')
   })
 
-  it('always shows context, 5-hour and weekly for Claude, one not reported yet as a dash rather than a zero', async () => {
+  it('shows Claude’s context at 0% before it reports one, and no 5-hour meter for a plan that has none', async () => {
     fake.current = new FakeDaemonHistory()
     render(<ChatSession link={LINK} agent="claude" online usage={{ context: null, limits: [{ name: 'week', used: 0, resetsAt: 0 }] }} />)
     await settle()
 
     const meters = within(screen.getByRole('group', { name: 'Usage' }))
-    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context', '5-hour limit', 'Weekly limit'])
-    expect(meters.getByRole('meter', { name: '5-hour limit' })).toHaveAttribute('aria-valuetext', 'not reported yet')
+    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context', 'Weekly limit'])
+    expect(meters.getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '0')
     expect(meters.getByRole('meter', { name: 'Weekly limit' })).toHaveAttribute('aria-valuenow', '0')
   })
 
@@ -174,11 +174,14 @@ describe('sending', () => {
     expect(box).toHaveValue('first\n\nsecond')
   })
 
-  it('is off, with the reason, while the daemon is offline', async () => {
-    const { box } = await open(() => undefined, false)
+  it('takes typing but sends nothing, with the reason, while the daemon is offline', async () => {
+    const { user, box } = await open(() => undefined, false)
 
-    expect(box).toBeDisabled()
+    expect(box).toBeEnabled()
     expect(box).toHaveAttribute('placeholder', 'The daemon is offline')
+    await user.type(box, 'for later{Enter}')
+    expect(box).toHaveValue('for later')
+    expect(fake.submitMessage).not.toHaveBeenCalled()
   })
 })
 
@@ -191,6 +194,17 @@ describe('while a request waits for an answer', () => {
     expect(box).toBeDisabled()
     expect(box).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
     expect(screen.getByRole('region', { name: /Approval/ })).toHaveTextContent('rm -rf build')
+  })
+
+  it('gives the request the focus, so y answers it at once', async () => {
+    const { user } = await open((setup) => { setup.status = 'Blocked'; setup.approvals = pending })
+
+    const tray = screen.getByRole('region', { name: /Approval/ })
+    expect(tray).toContainElement(document.activeElement as HTMLElement)
+    await user.keyboard('y')
+
+    await settle()
+    expect(fake.approveRequest).toHaveBeenCalledWith(TARGET, 9, 'Accept')
   })
 
   it('answers through the daemon by request id, then shows the choice and turns the composer back on', async () => {

@@ -116,7 +116,9 @@ remain in the daemon and its authenticated IPC. `prewarm_agent_session`, which s
 chat's agent while its first message is written, takes what `start_agent_session` takes and
 checks it the same way (one of the known agent names, flags that are single plain words, a
 folder that exists), so it can start nothing a start could not; the daemon keeps one such
-agent, hidden, and stops it when it is not taken.
+agent, hidden, and stops it when it is not taken. The window's own permissions include setting its title and
+its icon's count (`core:window:allow-set-title`, `core:window:allow-set-badge-count`), which show how many sessions
+need you; they take a number the window counted, never text from a session.
 
 The native host may start only the bundled CLI sidecar with the fixed `daemon`
 argument. Resolve its path from the application bundle; never accept a program

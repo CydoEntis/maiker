@@ -92,6 +92,13 @@ describe('approvals', () => {
     expect(approval).toMatchObject({ kind: 'approval', stepId: 'turn-1:toolu_1' })
   })
 
+  it('that did not change keep the same projection, so a read that brought nothing redraws nothing', () => {
+    const pending = applyApprovals(createChatProjection('claude'), [request('req-1')])
+    expect(applyApprovals(pending, [request('req-1')])).toBe(pending)
+    const empty = createChatProjection('claude')
+    expect(applyApprovals(empty, [])).toBe(empty)
+  })
+
   it('has no step when the provider named no item', () => {
     const [approval] = project('claude', [], [request('req-1', { item_id: null })])
 

@@ -25,7 +25,7 @@ const child = (id: string, task: string, state: SubagentActivity['state']): Suba
 function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   const none = vi.fn()
   const props: SidebarProps = {
-    sessions, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, openSubagent: null, mode: 'docked', online: true, canStart: true, renamingId: null, portalContainer: null,
+    sessions, listed: true, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, openSubagent: null, mode: 'docked', online: true, canStart: true, renamingId: null, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, grouping: 'machine', onGrouping: none, onSearch: none,
     onNewAgentChat: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onShowSubagent: none, onRenameSession: none,
     onSetName: none, onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onPutAway: none, onBringBack: none, onSnooze: none, onUnsnooze: none, onGetFile: none,
@@ -491,6 +491,12 @@ describe('with nothing running', () => {
     show([])
     expect(screen.getByText('Chats and shells you start appear here, sorted by what needs you.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^This computer/ })).toBeNull()
+  })
+
+  it('says nothing is running only once the daemon has listed its sessions', () => {
+    show([], { listed: false })
+    expect(screen.queryByText('No agents running. New chat starts one.')).toBeNull()
+    expect(screen.getByText('Looking for your sessions…')).toBeTruthy()
   })
 })
 

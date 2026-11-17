@@ -11,6 +11,7 @@ import { errorMessage } from '@/lib/error-message'
 import { isChatSession } from '../model/chatSession'
 import { carryDraftToTerminal } from '../model/draftCarry'
 import { PaneCard } from './PaneCard'
+import { PaneErrorBoundary } from '@/components/PaneErrorBoundary'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { TurnSpan } from '@/features/inspect/turnRange'
 import { COMMAND_SUBMIT_GAP_MS } from '@/features/chat/useChatComposer'
@@ -111,6 +112,7 @@ export function WorkspacePane({ shown, pane, kept }: {
       view={chat.view}
       {...(chatOnly || !hasChat(chat.availability) ? {} : { onViewChange: (view: PaneView) => { if (view === 'terminal') showTerminal(); else paneViews.choose(session.id, view) } })}
       chat={chat.view === 'chat' && !kept ? (
+        <PaneErrorBoundary key={session.id} what="This chat" fallback={chatOnly ? null : { label: 'Show the terminal', run: showTerminal }}>
         <OpenSubagentContext.Provider value={openHelperChat}>
         <ChatPane
           availability={chat.availability}
@@ -145,6 +147,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           fullAccessDefault={preferences.fullAccessNewChats}
         />
         </OpenSubagentContext.Provider>
+        </PaneErrorBoundary>
       ) : undefined}
       overlay={!runningBarShown({ kept, asking: session.status === 'needs' }) ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
       panelOpen={inspectOpen && focused}

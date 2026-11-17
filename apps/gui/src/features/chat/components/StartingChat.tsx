@@ -112,6 +112,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     running: false,
     sending: false,
     disabledReason: null,
+    draftable: true,
     ready: false,
     error: null,
     sendText: () => Promise.resolve(false),

@@ -15,6 +15,7 @@ import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
 import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } from '../useChatComposer'
 import { countUserMessages } from '../workPhase'
+import { sentTexts } from '../promptRecall'
 import { startedWithYolo } from '../yoloSessions'
 import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
@@ -408,6 +409,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const freePhrase = agentFree ? `free · ${String(helpersOnly)} ${helpersOnly === 1 ? 'helper' : 'helpers'} working` : null
   const allRows = useMemo(() => buildRows(events, working || holdWorking || agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase), [events, working, holdWorking, agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase])
   const rows = useMemo(() => allRows.filter((row) => !isPendingApproval(row)), [allRows])
+  // What ↑ in the box brings back: the messages sent in this chat, each once in a row, the newest last.
+  const sentMessages = useMemo(() => sentTexts(events), [events])
   // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
   // the chat opened (until then it shows what this window remembered, which may be behind) and one after the window was
   // hidden. Only a reply that comes while the chat is being looked at is typed in.
@@ -663,6 +666,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         waiting={held !== null}
         files={fileSearch}
         facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
+        sent={sentMessages}
       />
     </div>
     </FilesHereContext.Provider>

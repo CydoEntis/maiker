@@ -424,8 +424,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   sidebar** button. The rail's foot has a Recent sessions clock and the gear. The edge drags (208 to 440px;
   double-click resets). The **rail** of a narrow window is the starters, then one tile per session.
 - **Replies are typed in.** An agent's reply types toward the text that came in (`useTypedText`), so a chunk eases in instead
-  of flashing: a few whole words every 40ms at about 300 characters a second, faster while a lot is waiting, so a
-  long reply that arrives whole takes a few seconds and a short one a moment (`nextShown`). A reply that arrives after the history has loaded types from its first letter even when it arrives whole; what
+  of flashing: word by word on every screen frame at about 300 characters a second, easing faster while a lot is
+  waiting so a backlog clears in about a second and a half, so a long reply that arrives whole flows in over a few
+  seconds and a short one in a moment (`nextPosition`, `shownAt`). It should read as text coming in, neither a lag
+  nor a burst. A reply that arrives after the history has loaded types from its first letter even when it arrives whole; what
   the history already held shows at once (`knownRows.ts`), and Reduce motion shows everything at once. A helper agent reporting back (the harness's `<task-notification>` block, which the history keeps as a
   user message) is one quiet line, "Agent "name" finished · 11s · 50.5k tokens", never the markup; once it has reported,
   it clears from the running-subagents bar. One that still needs you stays.
@@ -443,11 +445,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   takes a helper's own report that it finished as final, whatever second its other reports were stamped with, and only
   a start of its own brings a finished helper back, so one whose last news arrives late is not listed as running again
   and then as stopped (`apply_hook`).
-- **Panes change places with a glide.** Every change to which panes are shown (a split, a pane closed, a session opened in a
-  pane, a saved arrangement, maximize, a swap by drag) goes through a View Transition (`movePanes` in `paneTransition.ts`): only
+- **Panes change places with a glide.** Every change that moves panes (a split, a pane closed, a saved arrangement,
+  maximize, a swap by drag) goes through a View Transition (`movePanes` in `paneTransition.ts`): only
   the browser's pictures of the panes move, cropped and never stretched, so text never reflows on the way; a pane that leaves
   fades out and one that arrives fades in. Without View Transitions, with Reduce motion, or on the Linux web view (where a swap
-  by drag was reported to take the window down in 0.72.0), the change just happens.
+  by drag was reported to take the window down in 0.72.0), the change just happens. Picking a session to show (the sidebar, the palette, a
+  notice) is not a move: it shows at once, since it is the most frequent thing done in the window and a cross-fade on
+  each pick made switching feel slow.
 - **Toasts are cards.** The notification card is the one design; a plain toast (Sonner) is laid out the same way: icon tile,
   title and detail, the close at the top right and the action on its own row under the text, 96px below the top edge and 36px
   in from the side.
@@ -525,8 +529,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   by that machine.
   **Answered from what the chat holds** (`commandCards.ts`, `windowCommands.ts`; the same card, with nothing asked of the
   agent and nothing typed into it). For Claude and Codex alike, typed alone: `/status` is a card with the agent, model and
-  effort, permission mode, folder, what it is doing now, and the context and plan limits it reported (`not reported yet`,
-  never a made-up figure); `/copy` puts the agent's last message on the clipboard; `/export` saves the conversation (what you
+  effort, permission mode, folder, what it is doing now, the context (0% before its first turn) and the plan limits it has
+  reported (a limit it never reported is left out, never a made-up figure); `/copy` puts the agent's last message on the clipboard; `/export` saves the conversation (what you
   said and what the agent answered) as `conversation <day> <time>.md` in the export folder chosen in Settings; `/diff` opens
   the side panel's Changes; `/resume` opens Recent sessions. Claude only: `/memory` is a card naming the `CLAUDE.md` files it
   reads, the project's own opening in the file viewer, and `/plan` asks first (`Switch to plan mode?`, Cancel focused) and
@@ -556,9 +560,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
   under 50%, `--m-or` under 75%, `--m-hi` from there). They always show, and each opens Settings › Usage & cost. When
-  a limit starts over is in its tooltip. For Claude and Codex all three always show, in that order, 0% included; one
-  the agent has not reported yet is an empty ring and "–" in `--dim` ("not reported yet" in its tooltip), never a
-  made-up 0% (ADR 0009). Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
+  a limit starts over is in its tooltip. For Claude and Codex the context always shows, at 0% before the first turn
+  has reported one (a chat that has run nothing has used none of it). A plan limit shows only once the agent has
+  reported it, in the order context, 5-hour, weekly, then any other: a plan without a 5-hour window (an API key, some
+  Codex plans) never reports one, and a meter that only ever said "–" was noise. Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
   list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from the Codex CLI
   named by `CODEX_COMMANDS_PINNED_FOR`). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
@@ -778,8 +783,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   stay where they are, greyed out with the reason as their tooltip, so the box never gains or loses a control. A chat that
   follows another agent (Codex, Gemini) draws its model label from the start, with just the agent's name until it says its
   model. The "agent has not reported" hint of a starting chat floats over the conversation and moves nothing. Placeholders: "Message the agent, or type / for commands" ("Reply to the plan…" in Plan mode), "Queue a
-  message for when claude finishes" while it works, "Answer the request above first" (and off) while a question
-  waits. **3. The bottom row** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar and the running bar do. Queued messages are dashed bubbles above (`QueuedMessages`): each has an **×** in its top right corner (remove) and **Edit**, which takes it out of the queue and puts its words back in the box, ahead of anything typed there, with its files back as attachments. A queued message shows its files as the chips a sent message has, never as the lines that name them to the agent. Two or more sit as a **stack**: the first one sent in front, showing its first two lines and "first of N", with the edges of up to two more under it. A click on a message spreads them all out, oldest first, each with its own × and Edit; a click again stacks them, and a queue down to one message starts stacked the next time it grows.
+  message for when claude finishes" while it works, "Answer the request above first" (and off, with the focus on the question
+  when it takes keys, never on one answered only by a click) while a question waits, "The daemon is offline" (still typeable) while it is. **3. The bottom row** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar and the running bar do. Queued messages are dashed bubbles above (`QueuedMessages`): each has an **×** in its top right corner (remove) and **Edit**, which takes it out of the queue and puts its words back in the box, ahead of anything typed there, with its files back as attachments. A queued message shows its files as the chips a sent message has, never as the lines that name them to the agent. Two or more sit as a **stack**: the first one sent in front, showing its first two lines and "first of N", with the edges of up to two more under it. A click on a message spreads them all out, oldest first, each with its own × and Edit; a click again stacks them, and a queue down to one message starts stacked the next time it grows.
 - **Esc ladder.** Esc closes the topmost open layer and reaches the terminal only when none is
   open (`model/escLadder.ts`): What's new, palette, Settings, the sidebar drawer,
   Focus mode. A new dialog adds its id there.

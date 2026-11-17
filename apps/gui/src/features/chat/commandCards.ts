@@ -43,7 +43,7 @@ export function statusCard(facts: StatusFacts): string {
   ]
   if (facts.usage !== undefined) {
     for (const item of usageItems(facts.usage, facts.now, true)) {
-      const used = item.percent === null ? NOT_REPORTED : `${String(item.percent)}% used${item.resetsIn === null ? '' : `, starts over in ${item.resetsIn}`}`
+      const used = `${String(item.percent)}% used${item.resetsIn === null ? '' : `, starts over in ${item.resetsIn}`}`
       lines.push(`- **${item.label}:** ${used}`)
     }
   }

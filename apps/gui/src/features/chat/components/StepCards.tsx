@@ -6,6 +6,7 @@ import { ElapsedSince } from '@/features/workspace/components/times'
 import type { CommandEvent, EditEvent, ToolEvent } from '../chatEvents'
 import { isOmitted, redactionNote } from '../redaction'
 import { commandEnded, commandMeta, commandTook, relativePath } from '../stepInfo'
+import { commandIntent, shownCommandStatus } from '../commandIntent'
 import { toolFacts, type ToolFacts } from '../toolFacts'
 import type { WorkStep } from '../workSummary'
 import { documentOf } from '../writtenDocument'
@@ -143,10 +144,13 @@ function CommandOutput({ event }: { event: CommandEvent }) {
  */
 export function CommandStep({ event, alone = false, waiting = false }: CommandStepProps) {
   const [open, toggle] = useOpen()
+  // A search that found nothing exits 1 but did not fail; how it shows is the one place that decides it.
+  const status = shownCommandStatus(event)
+  const intent = commandIntent(event.command)
   const typed = event.command.split('\n')
   const first = typed[0] ?? ''
-  const running = event.status === 'running'
-  const failed = event.status === 'failed'
+  const running = status === 'running'
+  const failed = status === 'failed'
   const meta = running ? <ElapsedSince since={event.timing.startedAtMs ?? event.observed.firstSeenAtMs} /> : commandMeta(event)
   const metaTone = running ? 'working' : failed ? 'danger' : 'dim'
   const took = commandTook(event)
@@ -156,10 +160,10 @@ export function CommandStep({ event, alone = false, waiting = false }: CommandSt
       <Card role="group" aria-label={`Command ${first}`} tone={failed ? 'err' : 'none'} className={`mx-step-alone${waiting ? ' is-waiting' : ''}`}>
         <CardHead className="mx-step-cardhead">
           <button type="button" className="mx-step-cardtoggle" aria-expanded={open} onClick={toggle}>
-            <StepGlyph status={event.status} waiting={waiting} />
+            <StepGlyph status={status} waiting={waiting} />
             <span className="mx-step-prompt" aria-hidden="true">$</span>
             {open ? <span className="mx-step-command">{event.command}</span> : <code className="mx-step-command is-short">{short}</code>}
-            <span className="sr-only">{failed ? FAILED_WORD : event.status === 'interrupted' ? STOPPED_WORD : running ? 'Running' : 'Done'}</span>
+            <span className="sr-only">{failed ? FAILED_WORD : status === 'interrupted' ? STOPPED_WORD : running ? 'Running' : 'Done'}</span>
           </button>
           {!running && <Tag tone={failed ? 'err' : event.exitCode === 0 ? 'done' : 'neutral'}>{commandEnded(event)}</Tag>}
           {waiting ? <span className="mx-step-meta is-warn">waiting for you ↓</span> : (running || took !== null) && <span className={`mx-step-meta is-${metaTone}`}>{running ? meta : took}</span>}
@@ -172,10 +176,12 @@ export function CommandStep({ event, alone = false, waiting = false }: CommandSt
   return (
     <div role="group" aria-label={`Command ${first}`} className="mx-step">
       <StepRow
-        status={event.status}
-        verb="Run"
+        status={status}
+        verb={intent?.verb ?? 'Run'}
         tool="run"
-        target={<code className="mx-code-chip">{short}</code>}
+        target={intent !== null
+          ? (intent.target === null ? undefined : <code className="mx-code-chip">{intent.target}</code>)
+          : <code className="mx-code-chip">{short}</code>}
         meta={meta}
         metaTone={metaTone}
         open={open}

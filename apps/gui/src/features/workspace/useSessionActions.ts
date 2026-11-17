@@ -43,10 +43,12 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
       .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not rename the session')) })
   }, [queryClient, setRenameId])
 
-  // Showing a session shows its own chat: a subagent's chat is left by picking any session, its parent too.
+  // Showing a session shows its own chat: a subagent's chat is left by picking any session, its parent too. It shows
+  // at once, with no glide: picking a session is the most frequent thing done in the window, and a cross-fade on every
+  // pick made switching feel slow. Panes that move (a split, a swap, a close) still glide (`movePanes`).
   const showSessionById = useCallback((sessionId: string) => {
     setOpenSubagent(null)
-    movePanes(() => { setLayout((current) => showSession(current, sessionId, makeId)) })
+    setLayout((current) => showSession(current, sessionId, makeId))
   }, [setLayout, setOpenSubagent])
 
   // "Open in split": the session joins the layout beside the pane that has focus. One already in it just takes the focus.
@@ -81,7 +83,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
 
   // A subagent's own chat shows in its session's pane, in the chat view.
   const showSubagent = useCallback((sessionId: string, subagentId: string) => {
-    movePanes(() => { setLayout((current) => showSession(current, sessionId, makeId)) })
+    setLayout((current) => showSession(current, sessionId, makeId))
     paneViews.choose(sessionId, 'chat')
     setOpenSubagent({ sessionId, subagentId })
   }, [paneViews, setLayout, setOpenSubagent])
