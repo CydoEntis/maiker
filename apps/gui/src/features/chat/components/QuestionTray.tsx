@@ -9,6 +9,7 @@ import type { AskedPlan } from '../planApproval'
 import { PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { KEY_ESCAPE } from '../terminalKeys'
 import { keysToPick, type ScreenMenu } from '../screenMenu'
+import type { TrustPrompt } from '../trustPrompt'
 import type { ApprovalActions } from './ApprovalCard'
 import { FileBadge } from './cardParts'
 import { Markdown } from './Markdown'
@@ -63,6 +64,34 @@ export function ScreenMenuTray({ agent, menu, send }: { agent: string; menu: Scr
       ))}
     >
       {menu.question !== '' && <p className="mx-waiting-text is-pre">{menu.question}</p>}
+    </WaitingCard>
+  )
+}
+
+/**
+ * An agent asking whether to trust the folder it was started in. It says which folder and what trusting allows, in plain
+ * words, and answers only on a click: neither button is the card's Enter default, neither is marked as the one to press,
+ * and "Don't trust" comes first so that the habitual press cannot trust.
+ */
+export function TrustFolderTray({ agent, trust, send }: { agent: string; trust: TrustPrompt; send: (keys: string[]) => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  return (
+    <WaitingCard
+      label="Trust this folder?"
+      title="Trust this folder?"
+      aside={agent}
+      foot={(
+        <>
+          <Button variant="soft" disabled={busy} onClick={() => { RUN(() => send(trust.declineKeys), setBusy) }}>Don’t trust</Button>
+          <Button variant="soft" disabled={busy} onClick={() => { RUN(() => send(trust.trustKeys), setBusy) }}>Trust this folder</Button>
+        </>
+      )}
+    >
+      <p className="mx-waiting-text">{agent} was started in a folder it has not seen before:</p>
+      <pre className="mx-waiting-command">{trust.folder}</pre>
+      <p className="mx-waiting-text">
+        Trusting it lets {agent} read and change the files there, and run commands, hooks and tools that the folder asks for. Trust it only if you know where it came from. Don’t trust closes {agent} without opening the folder.
+      </p>
     </WaitingCard>
   )
 }
