@@ -4703,7 +4703,7 @@ mod tests {
         assert!(decode::<OldLinks>(&encode(&links).unwrap()).is_ok());
         let none: TicketLinks = decode(&encode(&OldLinks { projects: Vec::new() }).unwrap()).unwrap();
         assert_eq!(none.repo_file, None, "a 108 daemon's answer reads as no repository file");
-        const { assert!(TICKET_SETUP_SINCE == PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_SETUP_SINCE) };
+        const { assert!(TICKET_SETUP_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_SETUP_SINCE) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never
