@@ -79,6 +79,9 @@ pub struct SavedPane {
     pub name: String,
     #[serde(default)]
     pub model: String,
+    /// The model and effort its agent last ran, for its resume.
+    #[serde(default)]
+    pub runs_with: crate::conversation::TurnChoice,
     /// The name you gave it (rename), which wins over everything else.
     #[serde(default)]
     pub label: String,

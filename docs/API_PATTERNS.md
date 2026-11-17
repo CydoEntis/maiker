@@ -221,6 +221,12 @@ A pane's effort (`TermInfo.effort`, an optional field: no `PROTOCOL_VERSION` bum
 daemon from the agent's own files every five seconds off the loop (`usage::poll_effort`): for Claude the level in the newest request
 line of its transcript, present only when a level was set; for Codex the level its thread settings name, else its model's default
 from Codex's `models_cache.json`. Nothing is guessed: a pane whose files say none has none, and the window then says "agent's own".
+The same read keeps what a Claude pane last ran (`Term.runs_with`, saved as `SavedPane.runs_with`): the newest level said, and
+the model of the newest main-thread request (`querySource` `repl_main_thread` or `sdk`; a side request may run another model) or
+the alias (`opus`, `sonnet`, `haiku`) of a `/model` typed after it. A read that finds neither keeps the last. Its resume (a
+restart, a wake, a reload, a move) adds them as `--model` and `--effort` (`Daemon::running_as`), quoted for the shell, only for
+Claude and only when they pass `TurnChoice::validate`: Claude starts a resumed session on the account's default model, which a
+`/model` in any other session changes, and an effort set for the session only is gone.
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
 into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
