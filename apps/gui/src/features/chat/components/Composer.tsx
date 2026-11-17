@@ -171,7 +171,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     if (windowList) {
       const skills = asSkills(slash.commands)
       if (skillsOnly) return skills
-      const own = agent === 'gemini' ? withGeminiRoutes(GEMINI_COMMANDS) : CODEX_COMMANDS
+      const own = agent === 'gemini' ? withGeminiRoutes(GEMINI_COMMANDS) : inWindow === undefined ? CODEX_COMMANDS : withWindowRoutes(CODEX_COMMANDS, 'codex')
       return [...(inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own), ...skills]
     }
     const listed = withTerminalCommands(slash.commands, CLAUDE_TERMINAL_COMMANDS, CLAUDE_HIDDEN_COMMANDS)
@@ -190,14 +190,14 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   // for its question, the rest go to the session's chat. One that ends or empties the session is refused while the
   // agent works, as the terminal's are; a side answer may go then, as it leaves the conversation alone.
   const routeOf = (typed: string): WindowRoute | null => {
-    // The routes are Claude Code's commands by its names; another agent's are its own.
+    // Each agent's routes are by its own names for its commands.
     if (inWindow === undefined || attachments.length > 0) return null
     const parts = typedCommand(typed)
     if (parts === null) return null
     if (agent === 'gemini') return geminiRouteOf(parts.name, parts.args)
-    if (agent !== 'claude' || windowList) return null
-    const route = windowRouteOf(parts.name, parts.args)
-    if (route !== null || inTerminal !== undefined) return route
+    const route = windowRouteOf(parts.name, parts.args, agent)
+    // Only Claude's list names the commands that have no use without a terminal (Codex's are sent as typed).
+    if (route !== null || inTerminal !== undefined || agent !== 'claude') return route
     // With no terminal, a command only the terminal runs gets a card saying so instead of going nowhere.
     const terminalOnly = namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)
     return terminalOnly === undefined ? null : terminalOnlyNote(terminalOnly.name)

@@ -527,6 +527,18 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   so it goes to Claude Code as typed. `/mobile`, `/privacy-settings` and `/artifacts`, which Claude Code shows as a
   QR code or a browser page, are the same card with the web address to open. A chat on another machine is answered
   by that machine.
+  **Answered from what the chat holds** (`commandCards.ts`, `windowCommands.ts`; the same card, with nothing asked of the
+  agent and nothing typed into it). For Claude and Codex alike, typed alone: `/status` is a card with the agent, model and
+  effort, permission mode, folder, what it is doing now, and the context and plan limits it reported (`not reported yet`,
+  never a made-up figure); `/copy` puts the agent's last message on the clipboard; `/export` saves the conversation (what you
+  said and what the agent answered) as `conversation <day> <time>.md` in the export folder chosen in Settings; `/diff` opens
+  the side panel's Changes; `/resume` opens Recent sessions. Claude only: `/memory` is a card naming the `CLAUDE.md` files it
+  reads, the project's own opening in the file viewer, and `/plan` asks first (`Switch to plan mode?`, Cancel focused) and
+  only a yes moves the session to plan mode through the shield button's own control; a chat with no such control says so,
+  and nothing changes the mode without that yes (ADR 0005). Codex only: `/permissions` is a card saying what each mode does
+  with the current one marked; the pick stays the shield button's. With something after the name (`/export notes.md`,
+  `/plan fix the build`) the command goes to the agent as typed. Still terminal-only, each needing the agent's own screen or
+  a change the daemon would have to make: `/add-dir`, `/cd`, `/branch`, `/fork`, `/rename` for Codex, `/agents`, `/model`.
   **`/rename <name>`** names the Maitty session too (the sidebar's rename) and still goes to Claude Code, so both
   agree. A name Claude Code gives a session with a terminal, by `/rename` typed in the chat or the terminal, with a name
   or alone, renames the pane as well: the daemon reads the transcript's `custom-title` line (`follow.rs`; the names
