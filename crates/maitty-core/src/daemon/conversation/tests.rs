@@ -2087,6 +2087,7 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             Query::GitHubAccounts { tag: 9 },
             Query::GitHubRepos { owner: None, search: None, tag: 9 },
             Query::GitHubOwners { tag: 9 },
+            Query::AgentCommands { agent: crate::conversation::Provider::Claude, folder: "/code".into(), tag: 9 },
             Query::Tickets { source: "me/widgets".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 },
             Query::TicketKeys {
                 change: crate::protocol::TicketKeyChange::Set {

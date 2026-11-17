@@ -1,4 +1,5 @@
-﻿pub mod clock;
+﻿pub mod agent_commands;
+pub mod clock;
 pub mod conversation;
 pub mod github;
 pub mod handoff;

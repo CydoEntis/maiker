@@ -2893,6 +2893,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "maitty-agent-ask"
+version = "0.1.0"
+dependencies = [
+ "maitty-shared",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "maitty-agent-detection"
 version = "0.1.0"
 dependencies = [
@@ -2920,6 +2930,7 @@ dependencies = [
  "interprocess",
  "keyring-core",
  "libc",
+ "maitty-agent-ask",
  "maitty-agent-detection",
  "maitty-ipc-transport",
  "maitty-machines",
@@ -2973,6 +2984,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "getrandom 0.3.4",
+ "maitty-agent-ask",
  "maitty-desktop-client",
  "maitty-highlight",
  "maitty-ipc-transport",

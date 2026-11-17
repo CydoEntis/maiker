@@ -223,6 +223,11 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
                 owners
             }),
         }),
+        // Another machine's agent's words: names and lines cleaned, the list capped.
+        ServerMsg::Reply(Reply::AgentCommands { tag, answer }) => ServerMsg::Reply(Reply::AgentCommands {
+            tag,
+            answer: maitty_shared::agent_commands::cleaned_answer(answer),
+        }),
         ServerMsg::Reply(Reply::Tickets { tag, answer }) => ServerMsg::Reply(Reply::Tickets {
             tag,
             answer: match answer {
@@ -763,6 +768,24 @@ mod tests {
         assert_eq!(states.len(), TicketProvider::ALL.len());
         assert_eq!((states[0].address.as_str(), states[0].workspace.as_str()), ("https://p[0m.example", "w"));
         assert_eq!(states[0].stored_in, maitty_shared::tickets::KeyStorage::Keychain, "where the key is kept comes through");
+    }
+
+    #[test]
+    fn commands_from_another_machine_are_cleaned_and_only_while_asked() {
+        use maitty_shared::agent_commands::AgentCommand;
+        let command = |name: &str, description: &str| AgentCommand { name: name.into(), description: description.into(), hint: String::new(), aliases: Vec::new() };
+        let sent = || ServerMsg::Reply(Reply::AgentCommands { tag: 4, answer: Ok(vec![command("pdf", "Reads\u{1b}[2J PDFs"), command("two words", "x")]) });
+        let Some(ServerMsg::Reply(Reply::AgentCommands { answer: Ok(commands), .. })) = vet(&nothing_on(), true, "box", sent()) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(commands.len(), 1, "a name that cannot be typed is dropped");
+        assert!(!commands[0].description.chars().any(char::is_control));
+        assert!(vet(&nothing_on(), false, "box", sent()).is_none(), "an answer to nothing is dropped");
+        let failed = ServerMsg::Reply(Reply::AgentCommands { tag: 4, answer: Err("Claude Code is not installed\u{1b}[31m".into()) });
+        let Some(ServerMsg::Reply(Reply::AgentCommands { answer: Err(why), .. })) = vet(&nothing_on(), true, "box", failed) else {
+            panic!("a refusal is kept");
+        };
+        assert!(!why.contains('\u{1b}'));
     }
 
     #[test]

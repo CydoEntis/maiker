@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from '@/lib/toast'
 import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen } from '@/api/daemon'
-import { machineNameOf, terminalOf } from '@/api/machines'
+import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
 import { readConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
@@ -218,6 +218,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // Another machine's chat: its screen cannot be read from here, so a mode that must be checked on screen is not picked
   // from here, and its commands and models are that machine's, not this computer's.
   const remote = sessionId !== undefined && machineNameOf(sessionId) !== null
+  // Whose commands the box lists: the machine the chat runs on. A machine this window has not been told of has none.
+  const commandsMachine = sessionId !== undefined && remote ? (parseSessionId(sessionId)?.machine ?? null) : LOCAL_MACHINE
   const canPickCodexMode = typeInto !== undefined && abilities.permissionModes?.switchBy === 'command' && link.readOnly === true && !remote
   // The chips stay drawn while their keys would land in a turn or nowhere; they are only greyed out, so the box does not rearrange.
   const pickerLocked = !online ? 'The daemon is offline' : stoppedOnPrompt ? `${agent} is asking something. Answer it first.` : null
@@ -594,8 +596,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         agent={agent}
         composer={composer}
         conversation={link.conversation}
-        // Claude says which commands it takes, in its folder; Codex's are a list the window keeps. Gemini has none yet.
-        {...(abilities.slashCommands !== null && root !== null && !remote ? { commandsFrom: { agent, folder: root, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
+        // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet.
+        {...(abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
         question={question}
         waiting={held !== null}
         files={fileSearch}

@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { loadAgentCommands } from '@/api/daemon'
+import { LOCAL_MACHINE } from '@/api/machines'
 
 /** One command an agent takes after a slash, as the agent itself lists it. */
 export type SlashCommand = {
@@ -126,11 +127,11 @@ export function forgetSlashCommands(): void {
 }
 
 /** Asks the agent for its commands unless it is being asked, or its answer is recent; a failed ask is tried again. */
-function refresh(key: string, agent: string, folder: string): void {
+function refresh(key: string, agent: string, folder: string, machine: number): void {
   const known = listed.get(key) ?? NOT_ASKED
   if (known.loading || (known.at > 0 && known.error === null && Date.now() - known.at < STALE_MS)) return
   put(key, { ...known, loading: true, error: null })
-  loadAgentCommands(agent, folder).then(
+  (machine === LOCAL_MACHINE ? loadAgentCommands(agent, folder) : loadAgentCommands(agent, folder, machine)).then(
     (commands) => { put(key, { at: Date.now(), commands, loading: false, error: null }) },
     (failure: unknown) => {
       console.warn("Could not list the agent's commands", failure)
@@ -143,14 +144,16 @@ function refresh(key: string, agent: string, folder: string): void {
 /**
  * The commands an agent takes in a folder, for the message box's picker. The agent is asked once the box is there
  * (it takes a few seconds), so the list is ready by the time a slash is typed; the last list shows meanwhile and is
- * asked for again when `wanted` (a slash was typed) finds it old. Null `from` asks for nothing.
+ * asked for again when `wanted` (a slash was typed) finds it old. Null `from` asks for nothing. The commands belong to
+ * the machine the agent runs on (`machine`, this computer when left out), so two machines never share a list.
  */
-export function useSlashCommands(from: { readonly agent: string; readonly folder: string } | null, wanted: boolean): SlashCommands {
+export function useSlashCommands(from: { readonly agent: string; readonly folder: string; readonly machine?: number | undefined } | null, wanted: boolean): SlashCommands {
   const agent = from?.agent
   const folder = from?.folder
-  const key = agent === undefined || folder === undefined ? null : `${agent}\n${folder}`
+  const machine = from?.machine ?? LOCAL_MACHINE
+  const key = agent === undefined || folder === undefined ? null : `${String(machine)}\n${agent}\n${folder}`
   useEffect(() => {
-    if (key !== null && agent !== undefined && folder !== undefined) refresh(key, agent, folder)
-  }, [key, agent, folder, wanted])
+    if (key !== null && agent !== undefined && folder !== undefined) refresh(key, agent, folder, machine)
+  }, [key, agent, folder, machine, wanted])
   return useSyncExternalStore(subscribe, () => (key === null ? NOT_ASKED : listed.get(key) ?? NOT_ASKED))
 }

@@ -11,6 +11,7 @@ doctest = false
 
 [dependencies]
 maitty-shared = { path = "../maitty-shared" }
+maitty-agent-ask = { path = "../maitty-agent-ask" }
 maitty-agent-detection = { path = "../maitty-agent-detection" }
 maitty-ipc-transport = { path = "../maitty-ipc-transport" }
 maitty-machines = { path = "../maitty-machines" }

@@ -1059,6 +1059,22 @@ Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two mess
   512 characters), shown as text. Nothing is saved; the person finishes the setup in the window. Another machine's
   `TicketSetup` is ignored (`remote_policy`).
 
+Protocol 112 (`AGENT_COMMANDS_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
+`introduced_in` arm; 110 and 111 belong to changes that landed beside it) adds
+`Query::AgentCommands { agent, folder, tag }` with `Reply::AgentCommands { tag, answer }`, where `answer` is
+`Ok(Vec<AgentCommand { name, description, hint, aliases }>)` or `Err(one line)`. The daemon asks the agent's own
+program on its machine (`maitty-agent-ask`: Claude Code's `initialize` reply for its commands and skills, Codex's
+`skills/list` for its skills; Gemini answers an empty list), started in `folder` when that is an absolute path to a
+folder that exists and in the home folder otherwise, off the event loop and within the asker's own limit (20
+seconds for Claude Code, 15 for Codex). The program is the one on the daemon's login PATH; one that is not there
+is `Err("<agent> is not installed on this machine")`, never an empty list. Human clients only. The commands belong
+to the machine that runs the chat: the window asks this computer in place (`agent_commands`) and another machine's
+daemon through `agent_commands_on(machine, agent, folder, tag)`, whose answer is an `agent-commands` event
+`{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/agentCommands.ts`). A machine
+that is offline (a daemon older than the window is one that needs its update, ADR 0007) is refused by name by the host
+and shown in the picker; nothing falls back to this computer's list. Names and lines from another machine are cleaned and capped again
+(`remote_policy::vet`, `maitty_shared::agent_commands`).
+
 The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
 `ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
 `{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them

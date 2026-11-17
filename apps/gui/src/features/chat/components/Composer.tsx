@@ -81,6 +81,8 @@ type Props = {
   commandsFrom?: {
     readonly agent: string
     readonly folder: string
+    /** The machine the agent runs on, whose commands and skills these are; this computer when left out. */
+    readonly machine?: number | undefined
     /** For an agent with a terminal: types a command there and shows it. With it the box also offers the commands only the terminal runs. */
     readonly inTerminal?: ((command: string) => void) | undefined
     /** Answers the commands the window runs itself (`windowCommands.ts`) with the route and the text as typed. Without it they go to the agent. */

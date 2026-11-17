@@ -2495,6 +2495,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::GitHubAccounts { .. }
         | Query::GitHubRepos { .. }
         | Query::GitHubOwners { .. }
+        | Query::AgentCommands { .. }
         | Query::Tickets { .. }
         | Query::TicketKeys { .. }
         | Query::TicketLinks { .. }

@@ -15,8 +15,6 @@ mod machine_update;
 mod machines;
 mod changes;
 mod clone;
-mod claude_models;
-mod codex_skills;
 mod new_chat;
 mod open_link;
 mod output_socket;
@@ -331,7 +329,7 @@ const CLAUDE_DEFAULT_ENTRY: &str = "default";
 /// Claude's rows from the list Claude Code itself gave: every model with the efforts it takes, the
 /// newest first and the earlier ones marked `more`. The default is the model the settings name, else
 /// the one Claude Code's own "default" entry stands for; it leads the list.
-fn claude_rows_from_list(listed: Vec<claude_models::Listed>, settings: &str) -> Vec<AgentModel> {
+fn claude_rows_from_list(listed: Vec<maitty_agent_ask::claude::Listed>, settings: &str) -> Vec<AgentModel> {
     let settings = serde_json::from_str::<serde_json::Value>(settings).unwrap_or_default();
     let named = claude_default_model(&settings);
     let own_pick = listed.iter().find(|model| model.id == CLAUDE_DEFAULT_ENTRY).map(|model| model.resolved.clone());
@@ -340,7 +338,7 @@ fn claude_rows_from_list(listed: Vec<claude_models::Listed>, settings: &str) -> 
         Some(name) => format!("Claude Code's own choice: {name}"),
         None => "Whatever Claude Code picks for your account".to_string(),
     };
-    let models: Vec<&claude_models::Listed> =
+    let models: Vec<&maitty_agent_ask::claude::Listed> =
         listed.iter().filter(|model| model.id != CLAUDE_DEFAULT_ENTRY && is_model_name(&model.id)).collect();
     // An alias is preferred to the full id it stands for, so the default follows new releases.
     let default_id = default.as_ref().and_then(|name| {
@@ -395,10 +393,10 @@ fn claude_rows(config: &str, settings: &str) -> Vec<AgentModel> {
     rows
 }
 
-/// Claude Code's own list of its models (`claude_models::ask`), started in the home folder so no
+/// Claude Code's own list of its models (`maitty_agent_ask::claude::ask`), started in the home folder so no
 /// project's settings shape it.
-async fn ask_claude_for_models(home: &std::path::Path) -> Result<Vec<claude_models::Listed>, String> {
-    claude_models::ask(&find_claude().await?, home).await
+async fn ask_claude_for_models(home: &std::path::Path) -> Result<Vec<maitty_agent_ask::claude::Listed>, String> {
+    maitty_agent_ask::claude::ask(&find_claude().await?, home).await
 }
 
 /// Where Claude Code is on this computer. The search reads the disk, so it runs off the async threads.
@@ -410,13 +408,14 @@ async fn find_claude() -> Result<PathBuf, String> {
 }
 
 /// The slash commands an agent takes in `folder`, for the chat's command picker. Claude Code is asked
-/// for its own list (`claude_models::ask_commands`), started in the session's folder so the project's
-/// commands and skills are among them. Codex is asked for its skills (`codex_skills::ask_skills`), which
-/// are all it lists. The other agents have no list to ask for yet. The window names
+/// for its own list (`maitty_agent_ask::claude::ask_commands`), started in the session's folder so the project's
+/// commands and skills are among them. Codex is asked for its skills (`maitty_agent_ask::codex::ask_skills`), which
+/// are all it lists. The other agents have no list to ask for yet. This is this computer's list; another
+/// machine's is asked of its own daemon (`terminal_stream::agent_commands_on`). The window names
 /// the folder, so only a full path to a folder that exists is started in, and the home folder
 /// otherwise. That folder is one an agent of the person's already runs in.
 #[tauri::command]
-async fn agent_commands(app: tauri::AppHandle, agent: String, folder: String) -> Result<Vec<claude_models::Command>, String> {
+async fn agent_commands(app: tauri::AppHandle, agent: String, folder: String) -> Result<Vec<maitty_shared::agent_commands::AgentCommand>, String> {
     if agent != "claude" && agent != "codex" {
         return Ok(Vec::new());
     }
@@ -433,9 +432,9 @@ async fn agent_commands(app: tauri::AppHandle, agent: String, folder: String) ->
             .await
             .map_err(|error| format!("the search for Codex stopped: {error}"))?
             .map_err(|error| format!("{error:#}"))?;
-        return codex_skills::ask_skills(&codex, &start).await;
+        return maitty_agent_ask::codex::ask_skills(&codex, &start).await;
     }
-    claude_models::ask_commands(&find_claude().await?, &start).await
+    maitty_agent_ask::claude::ask_commands(&find_claude().await?, &start).await
 }
 
 /// The models an agent offers on this computer. Claude Code is asked for its own list
@@ -1739,6 +1738,7 @@ pub fn run() {
             terminal_stream::github_accounts,
             terminal_stream::github_repos,
             terminal_stream::github_owners,
+            terminal_stream::agent_commands_on,
             terminal_stream::tickets,
             github_repo_of,
             terminal_stream::ticket_keys,
@@ -1857,8 +1857,8 @@ mod tests {
         assert!(defaults("model = \"not listed\"").is_empty());
     }
 
-    fn listed(id: &str, resolved: &str, efforts: &[&str]) -> super::claude_models::Listed {
-        super::claude_models::Listed {
+    fn listed(id: &str, resolved: &str, efforts: &[&str]) -> super::maitty_agent_ask::claude::Listed {
+        super::maitty_agent_ask::claude::Listed {
             id: id.into(),
             label: id.to_uppercase(),
             blurb: String::new(),
@@ -1867,7 +1867,7 @@ mod tests {
         }
     }
 
-    fn claude_list() -> Vec<super::claude_models::Listed> {
+    fn claude_list() -> Vec<super::maitty_agent_ask::claude::Listed> {
         vec![
             listed("default", "claude-fable-5-2", &["low"]),
             listed("opus", "claude-opus-5-5", &["low", "max"]),
