@@ -2493,6 +2493,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::PaneSearch { .. }
         | Query::UsageReport { .. }
         | Query::ListFolders { .. }
+        | Query::AgentSignIn { .. }
         | Query::GitHubAccounts { .. }
         | Query::GitHubRepos { .. }
         | Query::GitHubOwners { .. }

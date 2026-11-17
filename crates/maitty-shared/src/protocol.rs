@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 110;
+pub const PROTOCOL_VERSION: u32 = 111;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -340,6 +340,72 @@ pub const GITHUB_LIST_LIMIT_SECS: u64 = 30;
 /// GitHub's own sign-in, as a terminal session runs it: the person finishes it there and in their
 /// browser. Both clients start exactly this line; nothing a window sends is part of it.
 pub const GITHUB_SIGN_IN_COMMAND: &str = "gh auth login --web --git-protocol https";
+
+/// The first version whose daemon signs an agent in on request (`Query::AgentSignIn`).
+pub const AGENT_SIGN_IN_SINCE: u32 = 111;
+
+/// The longest sign-in link a reply carries, in bytes. A longer one is dropped, not cut.
+pub const SIGN_IN_LINK_MAX_BYTES: usize = 2048;
+
+/// The longest one-time code a reply carries, in characters.
+pub const SIGN_IN_CODE_MAX_CHARS: usize = 24;
+
+/// An agent whose account the daemon can sign in with the agent's own command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SignInAgent {
+    Claude,
+    Codex,
+    /// Named so the answer can say plainly that its command line has no sign-in to run.
+    Gemini,
+}
+
+/// What a client asks of an agent's sign-in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SignInRequest {
+    /// Run the agent's own login in the background. Asked while one is already running, it
+    /// answers with that one rather than starting a second.
+    Start,
+    /// Stop the login that is running. Nothing running is not an error.
+    Cancel,
+    /// Say where the sign-in stands, changing nothing.
+    Read,
+}
+
+/// Why a sign-in did not end signed in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SignInFailure {
+    /// The agent's command line is not on this computer.
+    NotInstalled,
+    /// The agent's command line has no sign-in a program can run.
+    Unsupported,
+    /// The command could not be started.
+    CouldNotStart,
+    /// Nobody finished it in time.
+    TimedOut,
+    /// The command ended, or the agent still says it is signed out afterwards.
+    Ended,
+}
+
+/// Where an agent's sign-in stands. Never a token: the link and the code are what the agent's
+/// command printed for the person to use, and nothing else it printed is kept.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SignInState {
+    /// Nothing has been started since the daemon did.
+    Idle,
+    /// The command runs, waiting for the person. `link` is an `https://` address from its
+    /// output and `code` the one-time code it asks to be entered there; each is absent until
+    /// the command has printed it, and absent for good when it never does.
+    Waiting {
+        link: Option<String>,
+        code: Option<String>,
+    },
+    /// The agent's own status command says it is signed in.
+    SignedIn,
+    Failed(SignInFailure),
+}
 
 /// The first version whose daemon says who is signed in to GitHub on its machine
 /// (`Query::GitHubAccounts`).
@@ -1237,6 +1303,13 @@ pub enum Query {
         parent: String,
         tag: u64,
     },
+    /// Start, stop or read an agent's sign-in on this daemon's computer (human clients only).
+    /// The answer is `Reply::AgentSignIn` with the same `tag`.
+    AgentSignIn {
+        agent: SignInAgent,
+        request: SignInRequest,
+        tag: u64,
+    },
     /// Who is signed in to GitHub on this daemon's computer, as its GitHub command line (`gh`)
     /// says (human clients only). The answer is `Reply::GitHubAccounts` with the same `tag`.
     GitHubAccounts {
@@ -1577,6 +1650,11 @@ pub enum Reply {
     Cloned {
         tag: u64,
         outcome: Result<String, String>,
+    },
+    AgentSignIn {
+        tag: u64,
+        agent: SignInAgent,
+        state: SignInState,
     },
     GitHubAccounts {
         tag: u64,
@@ -2539,6 +2617,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::Specialists(_)) => SPECIALISTS_SINCE,
             ServerMsg::Reply(Reply::WorktreeStanding(_)) => WORKTREE_STANDING_SINCE,
             ServerMsg::Reply(Reply::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
+            ServerMsg::Reply(Reply::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
             ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
             ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ServerMsg::Reply(Reply::TicketWrite { .. }) => TICKET_WRITE_SINCE,
@@ -2563,6 +2642,7 @@ impl ClientMsg {
             ClientMsg::Command(Command::ConversationAllowAlways { .. }) => ALLOW_ALWAYS_SINCE,
             ClientMsg::Query(Query::AllowedCommands) | ClientMsg::Command(Command::ForgetAllowedCommand { .. }) => ALLOWED_COMMANDS_SINCE,
             ClientMsg::Query(Query::CloneRepo { .. }) => CLONE_SINCE,
+            ClientMsg::Query(Query::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
             ClientMsg::Query(Query::GitHubAccounts { .. }) => GITHUB_ACCOUNTS_SINCE,
             ClientMsg::Query(Query::GitHubRepos { .. } | Query::GitHubOwners { .. }) => GITHUB_REPOS_SINCE,
             ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
@@ -3021,7 +3101,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 110);
+        assert_eq!(PROTOCOL_VERSION, 111);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3511,7 +3591,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 110);
+        assert_eq!(PROTOCOL_VERSION, 111);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4846,5 +4926,16 @@ mod tests {
         let read: ClosedSession = decode(&encode(&old).unwrap()).unwrap();
         assert_eq!((read.worktree, read.repo), (None, None));
         assert_eq!(read.branch.as_deref(), Some("feat"));
+    }
+    #[test]
+    fn an_agent_sign_in_is_a_new_message_older_peers_are_never_sent() {
+        use super::{SignInAgent, SignInFailure, SignInRequest, SignInState};
+        let ask = ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Codex, request: SignInRequest::Start, tag: 3 });
+        let answer = ServerMsg::Reply(Reply::AgentSignIn { tag: 3, agent: SignInAgent::Codex, state: SignInState::Failed(SignInFailure::TimedOut) });
+        assert_eq!((ask.introduced_in(), answer.introduced_in()), (AGENT_SIGN_IN_SINCE, AGENT_SIGN_IN_SINCE));
+        const { assert!(AGENT_SIGN_IN_SINCE > COMPATIBLE_SINCE && AGENT_SIGN_IN_SINCE <= PROTOCOL_VERSION) };
+        let waiting = SignInState::Waiting { link: Some("https://auth.example/device".into()), code: Some("AB-12".into()) };
+        let back: ServerMsg = decode(&encode(&ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state: waiting.clone() })).unwrap()).unwrap();
+        assert!(matches!(back, ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state }) if state == waiting));
     }
 }

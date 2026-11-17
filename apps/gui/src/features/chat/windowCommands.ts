@@ -1,3 +1,4 @@
+import type { SignInAgent } from '@/api/agentSignIn'
 import type { SideAsk, SideCommand } from '@/api/daemon'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
@@ -15,6 +16,7 @@ import type { SlashCommand } from './slashCommands'
  *   conversation is not added to (`sideAnswer`).
  * - `note`: a card above the box that says where the thing is, for a command that only shows a web page's address.
  * - `complete`: the box is filled in, for a command that is nothing without what follows it.
+ * - `signIn`: a card above the box runs the agent's own sign-in and shows its link and code.
  * - `rename`: the Maitty session takes the name too, and the command still goes to Claude Code, so both agree.
  */
 export type WindowRoute =
@@ -26,6 +28,7 @@ export type WindowRoute =
   | { readonly kind: 'aside'; readonly title: string; readonly ask: SideAsk }
   | { readonly kind: 'note'; readonly title: string; readonly text: string }
   | { readonly kind: 'complete'; readonly text: string }
+  | { readonly kind: 'signIn'; readonly agent: SignInAgent }
   | { readonly kind: 'rename'; readonly name: string }
 
 export type ConfirmAsk = { readonly title: string; readonly body: string; readonly confirmLabel: string }
@@ -77,6 +80,7 @@ const ROUTES: Readonly<Record<string, { readonly route: WindowRoute; readonly op
   bg: { route: BACKGROUND, opens: ASKS_FIRST },
   clear: { route: CLEAR, opens: ASKS_FIRST },
   [SIDE_QUESTION]: { route: { kind: 'complete', text: `/${SIDE_QUESTION} ` }, opens: ANSWERED_HERE },
+  login: { route: { kind: 'signIn', agent: 'claude' }, opens: ANSWERED_HERE },
   context: { route: aside('context', 'Context'), opens: ANSWERED_HERE },
   usage: { route: aside('usage', 'Usage'), opens: ANSWERED_HERE },
   'skill-doctor': { route: aside('skill-doctor', 'Skills'), opens: ANSWERED_HERE },

@@ -85,6 +85,7 @@ impl Host {
                 | Reaction::Notice { .. }
                 | Reaction::Attention { .. }
                 | Reaction::Clipboard { .. }
+                | Reaction::AgentSignIn { .. }
                 | Reaction::GitHubAccounts { .. }
                 | Reaction::GitHubRepos { .. }
                 | Reaction::GitHubOwners { .. }

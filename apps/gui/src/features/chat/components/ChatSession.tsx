@@ -50,6 +50,8 @@ import type { ConfirmAsk, WindowRoute } from '../windowCommands'
 import { namedCommand } from '../slashCommands'
 import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import { useAside } from '../useAside'
+import { SignInCard } from '@/features/signin/SignInCard'
+import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { AsideCard } from './AsideCard'
 import type { RewindPlace } from '../editFromHere'
 import type { FileSearchPlace } from '../fileMention'
@@ -315,6 +317,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
   const [confirming, setConfirming] = useState<{ ask: ConfirmAsk; typed: string } | null>(null)
   const aside = useAside(link.conversation)
+  const signIn = useAgentSignIn(undefined)
+  const signInView = signIn.view
   // Once confirmed it runs where Claude Code runs it: one only the terminal answers is typed there and shown, the rest are sent.
   const runConfirmed = (typed: string) => {
     if (runInTerminal !== undefined && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) runInTerminal(typed)
@@ -328,6 +332,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       case 'confirm': setConfirming({ ask: route.ask, typed }); return
       case 'aside': aside.ask(route.title, route.ask); return
       case 'note': aside.show(route.title, route.text); return
+      case 'signIn': signIn.begin(route.agent); return
       case 'rename': windowActions.renameSession(route.name); void sendText(typed); return
       case 'commands':
       case 'complete': return
@@ -589,6 +594,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       ) : (
         <ChatSkeleton />
       )}
+      {signInView !== null && <SignInCard view={signInView} onCancel={() => { signIn.cancel(signInView.agent) }} onClose={signIn.close} onRetry={() => { signIn.begin(signInView.agent) }} />}
       {aside.aside !== null && <AsideCard aside={aside.aside} onClose={aside.close} onAskInConversation={(question) => { aside.close(); void sendText(question) }} />}
       <Composer
         agent={agent}

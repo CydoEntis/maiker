@@ -2087,6 +2087,7 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             Query::GitHubAccounts { tag: 9 },
             Query::GitHubRepos { owner: None, search: None, tag: 9 },
             Query::GitHubOwners { tag: 9 },
+            Query::AgentSignIn { agent: crate::protocol::SignInAgent::Codex, request: crate::protocol::SignInRequest::Start, tag: 9 },
             Query::Tickets { source: "me/widgets".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 },
             Query::TicketKeys {
                 change: crate::protocol::TicketKeyChange::Set {
@@ -2111,6 +2112,14 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
         assert!(
             matches!(answered, ServerMsg::Reply(crate::protocol::Reply::Tickets { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(_)) })),
             "{answered:?}"
+        );
+
+        // A person's client is told plainly that Gemini has no sign-in to run, and nothing is started.
+        let gemini = Query::AgentSignIn { agent: crate::protocol::SignInAgent::Gemini, request: crate::protocol::SignInRequest::Start, tag: 4 };
+        let told = exchange(&mut session, 470, crate::protocol::ClientMsg::Query(gemini), None).await;
+        assert!(
+            matches!(told, ServerMsg::Reply(crate::protocol::Reply::AgentSignIn { tag: 4, state: crate::protocol::SignInState::Failed(crate::protocol::SignInFailure::Unsupported), .. })),
+            "{told:?}"
         );
 
         // A write needs a person: a pane is refused even when it says it was confirmed, and a person's

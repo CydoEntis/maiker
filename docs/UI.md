@@ -448,6 +448,15 @@ Only the area with the keyboard is lit: the focused pane's whole border, or the 
   setting everywhere. Never a bare `seg` on a button colour.
 - Copy is plain words ("Focus the sidebar", not "browse-tree").
 
+## Project-specific: sign-in card
+
+`SignInCard` (`features/signin/`) is the one surface for signing an agent in. In a Claude chat `/login` opens it
+above the message box, in the place of the aside card (`windowCommands.ts`, route `signIn`); in Settings it sits
+above the Accounts card, started by Sign in. It shows the link's host, Open link, the code in a monospace box
+that selects whole, Copy code and Cancel while waiting; "Signed in" or the reason when it ends. Escape cancels
+a waiting sign-in and closes an ended one. A failed one in Settings also offers "Use a terminal", the older
+path. The card never shows a token. Behaviour and limits: [chat-sign-in spec](features/chat-sign-in/spec.md).
+
 ## Project-specific: theme browser
 
 Dark and light are two remembered slots and a switch. Appearance has three rows:
@@ -1175,7 +1184,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   numbered 1, which must run 1, 2, 3… to the end, because the daemon's reading also takes in the plan's numbered
   steps), one button each in Claude's words that sends its number, and **Keep planning** (`n`, Esc). The menu
   differs between Claude versions and sessions, so it is never assumed: where it cannot be read the card shows the
-  terminal's question and keys (`TerminalPrompt`) and `y`, Enter and the numbers send nothing. A question Claude asks (`AskUserQuestion`) with one answer has a button
+  terminal's question and keys (`TerminalPrompt`) and `y`, Enter and the numbers send nothing. On a Claude permission card, a choice Claude's own menu offers beside Yes and No is a ghost button in Claude's own words that sends its number (`alwaysAllowChoices`, `alwaysAllow.ts`), only on a click: nothing is pre-selected, no key or Enter picks it, and Maitty writes no rule of its own (Claude keeps what it is told, and its words say what and where). Read off the daemon's `asking` text, it is offered only when the menu is "1. Yes", then choices numbered in order, then a "No", and the choice starts "Yes, and don't ask again" (the wording of the checked fixture; "allow all edits during this session" and other wording is unverified and so not offered). Any other menu keeps the two buttons. A question Claude asks (`AskUserQuestion`) with one answer has a button
   for each choice, which sends its number. A prompt of several such questions (`PermissionAsk.questions`) shows them
   one at a time: a tab for each (its number, ✓ once answered), the question with its choices, **Back** and **Next**,
   and on the last one **Send answers**, off until every question has an answer;
@@ -1467,6 +1476,16 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
 - **Read-only chat.** For a link with `readOnly` the composer is off with "Read-only: talk to the agent in the
   terminal" as its placeholder, and offers no Stop or queue wording; the daemon refuses send, approve and cancel
   for such a conversation. The history and status still follow the agent.
+- **Trust this folder.** A new folder makes the agent ask "do you trust this folder?" before it reports in, so the question is
+  in the starting chat (`StartingChat`), read from the daemon's `asking` text (`parseTrustPrompt`, `trustPrompt.ts`). The card
+  (`TrustFolderTray`) names the exact folder the screen shows, says in plain words what trusting allows (read and change files,
+  run commands, hooks and tools the folder asks for), and has two buttons, **Don't trust** first and **Trust this folder**; both
+  are soft, neither is the Enter default, the card takes no Enter, and nothing is ever sent before a click. Each answer is
+  found by its exact words (Claude: "Yes, I trust this folder" / "No, exit"; Codex: "Yes, continue" / "No, quit") and sent as
+  the cursor's arrow keys and Enter. A screen with other words, a third choice, no folder, or a folder with control characters
+  is not this card: it stays the generic menu card (`ScreenMenuTray`). Claude's wording is the screen in the daemon's
+  `prompt.rs` test; Codex's is from its source and not yet checked against a capture. No protocol change: the keys go through
+  the same pane write as every other answer, which the daemon already gates.
 - **Approvals.** A pending request is the message box's waiting card (`QuestionTray.tsx` on `WaitingCard`), not a row of the list; only the oldest shows, and it
   answers through `approve_conversation` by request id, and the request then folds into one line in the list ("Allowed", "Allowed for this session", "Denied"),
   with the buttons gone. While it is pending, `y` (once), `a` (this session) and `n` (no) answer it from anywhere in the

@@ -963,6 +963,20 @@ another machine keeps only logins GitHub could have given out and one clean `pro
 host sends it through `github_accounts(machine, tag)` and raises a `github-accounts` event with the tag
 and the report (`apps/gui/src/api/githubAccounts.ts` waits on it for 20 seconds).
 
+Protocol 111 adds `Query::AgentSignIn { agent, request, tag }` and `Reply::AgentSignIn { tag, agent,
+state }` (`AGENT_SIGN_IN_SINCE`; `COMPATIBLE_SINCE` stays, since both messages are new and have their own
+`introduced_in` arm). `agent` is `Claude`, `Codex` or `Gemini` (always `Failed(Unsupported)`); `request` is
+`Start` (run the agent's own login in the background; one already running is answered, not doubled),
+`Cancel` or `Read`. `state` is `Idle`, `Waiting { link, code }`, `SignedIn` or `Failed(NotInstalled |
+Unsupported | CouldNotStart | TimedOut | Ended)`. The daemon (`daemon/agent_sign_in.rs`) keeps the first
+`https://` address and the one-time code from the login's output, at most `SIGN_IN_LINK_MAX_BYTES` and
+`SIGN_IN_CODE_MAX_CHARS`, and says `SignedIn` only when the agent's own status command does. Human clients
+only; an answer from another machine is ignored (`remote_policy::allow`). The desktop host sends it through
+`agent_sign_in(agent, request, tag)` and raises an `agent-sign-in` event with a flat `{machine, tag, agent,
+state, link, code, failure}` (`apps/gui/src/api/agentSignIn.ts` re-checks the link is a plain `https`
+address). Asking twice changes nothing, so it may go on a kept line. The spike and the behaviour:
+[chat-sign-in spec](features/chat-sign-in/spec.md).
+
 Protocol 105 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets { tag, answer }`
 (`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
 arm, and nothing an older peer sends or reads changed). It reads tickets, read-only; there is no
