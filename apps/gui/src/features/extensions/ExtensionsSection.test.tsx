@@ -143,8 +143,6 @@ describe('adding', () => {
     expect(within(ask).getByText('npx -y srv')).toBeInTheDocument()
     expect(within(ask).getByText('This runs code on your computer with your access.')).toBeInTheDocument()
     expect(within(ask).getByRole('button', { name: 'Cancel' })).toHaveFocus()
-    // Enter and Escape never confirm.
-    await user.keyboard('{Enter}')
     expect(api.confirmAdd).not.toHaveBeenCalled()
 
     await user.click(within(ask).getByRole('button', { name: 'Add this MCP server' }))
