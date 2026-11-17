@@ -47,6 +47,10 @@ export type ComposerFacts = {
   effort?: string | null | undefined
   /** For a chat that follows the agent's terminal and can type into it: send the agent one of its own commands (`/model x`). */
   onCommand?: ((text: string) => void) | undefined
+  /** For a chat whose agent has a model menu only its terminal draws (Codex): opens that menu here. Absent where the model is only said. */
+  onOpenModelMenu?: (() => void) | undefined
+  /** Why the model menu cannot open right now. */
+  modelMenuLocked?: string | null | undefined
   /** The same, for the permission mode: moves the agent to the picked mode (by its Shift+Tab). */
   onPickMode?: ((mode: string) => void) | undefined
   /** The modes the dropdown offers and whose they are; Claude's when not given. */
@@ -344,7 +348,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
             ) : (
               <>
                 {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={null} />}
-                {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} />}
+                {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} onOpenMenu={facts.onOpenModelMenu} locked={facts.modelMenuLocked ?? null} />}
               </>
             )}
             <ModeControl facts={facts} />
@@ -456,18 +460,46 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
   )
 }
 
-/** The model a chat that follows a terminal agent runs; it is changed in the terminal, so it is only said. Drawn from the start, with just the agent's name until the agent says its model, so it is never added later. */
-function ModelLabel({ agent, model }: { agent: ChatAgent; model: string | null }) {
-  return (
-    <span className="mx-model-button is-static" title="The model, from the agent's own file. Change it in the terminal with /model.">
+/**
+ * The model a chat that follows a terminal agent runs. Where the agent's model menu is only drawn by its terminal it opens
+ * that menu in the chat; otherwise it is only said, and changed in the terminal. Drawn from the start, with just the agent's
+ * name until the agent says its model, so it is never added later.
+ */
+function ModelLabel({ agent, model, onOpenMenu, locked }: { agent: ChatAgent; model: string | null; onOpenMenu: (() => void) | undefined; locked: string | null }) {
+  const name = modelName(agent, undefined, model)
+  const face = (
+    <>
       <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>
-      <span className="mx-model-name">{modelName(agent, undefined, model)}</span>
-    </span>
+      <span className="mx-model-name">{name}</span>
+    </>
+  )
+  if (onOpenMenu === undefined) {
+    return <span className="mx-model-button is-static" title="The model, from the agent's own file. Change it in the terminal with /model.">{face}</span>
+  }
+  // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.
+  return (
+    <button
+      type="button"
+      className={`mx-model-button${locked === null ? '' : ' is-locked'}`}
+      aria-disabled={locked === null ? undefined : 'true'}
+      aria-label={`Model: ${name}. Open its menu.${locked === null ? '' : ` ${locked}`}`}
+      title={locked ?? `The model, from the agent's own file. Opens ${agent}'s /model menu here.`}
+      onClick={locked === null ? onOpenMenu : undefined}
+    >
+      {face}
+    </button>
   )
 }
 
 /** The model and reasoning the next message uses, from the agent picker. */
 function ModelPicker({ agent, conversation, model, effort, live, locked, remote }: { agent: ChatAgent; conversation: number; model: string | null; effort: string | null; live?: ((command: string) => void) | undefined; locked: string | null; remote: boolean }) {
-  const [choice, change] = useAgentChoice(conversation, agent)
-  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={change} currentModel={model} currentEffort={effort} locked={locked ?? undefined} {...(live ? { live } : {})} />
+  const [stored, change] = useAgentChoice(conversation, agent)
+  // A chat that follows the agent's terminal keeps no pick of its own: a pick is typed in as the agent's command, and
+  // the button names what the agent says it runs, so it never disagrees with the terminal. A kept pick could, as one
+  // made in the terminal or before a restart would not reach it.
+  const choice = live === undefined ? stored : FOLLOWS_AGENT
+  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={live === undefined ? change : ignoreChange} currentModel={model} currentEffort={effort} locked={locked ?? undefined} {...(live ? { live } : {})} />
 }
+
+const FOLLOWS_AGENT: AgentChoice = defaultChoice()
+const ignoreChange = (): void => {}

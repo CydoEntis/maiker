@@ -5,7 +5,7 @@ import type { PermissionAsk } from '@/data/preview'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetComposers } from '../composerStore'
 import { ANSWER_KEYS } from '../permissionAsk'
-import { PENDING_APPROVAL_NOTE, TYPING_ASKING_NOTE } from '../useChatComposer'
+import { PENDING_APPROVAL_NOTE } from '../useChatComposer'
 import { forgetChatFeeds } from '../useChatFeed'
 import { ChatSession } from './ChatSession'
 
@@ -284,7 +284,9 @@ describe('the chat of an agent stopped on a permission prompt', () => {
 
     expect(screen.getByText('claude is waiting for you')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', TYPING_ASKING_NOTE)
+    // The card above carries the terminal's keys, so the box points at it and never sends the person to the terminal.
+    expect(screen.getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
   })
 
   it('shows no card while the agent is not stopped on a prompt', async () => {
@@ -292,5 +294,54 @@ describe('the chat of an agent stopped on a permission prompt', () => {
 
     expect(screen.queryByText('Wants to use Write')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
+  })
+})
+
+describe("Claude's own \"don't ask again\" choice", () => {
+  const MENU = "Bash command\ncargo test\nDo you want to proceed?\n❯ 1. Yes\n2. Yes, and don't ask again\n3. No, and tell Claude what to do"
+  const BASH_ASK: PermissionAsk = { tool: 'Bash', detail: 'cargo test', answerable: true }
+
+  async function openWith(ask: PermissionAsk, asking: string, agent: 'claude' | 'codex' = 'claude') {
+    const daemon = new FakeDaemonHistory()
+    daemon.upsert(daemon.message('t1', 'u', 'User', 'earlier'))
+    daemon.status = 'Blocked'
+    fake.current = daemon
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
+    render(<ChatSession link={LINK} agent={agent} online typeInto={typeInto} ask={ask} asking={asking} />)
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    return { typeInto, user }
+  }
+
+  it("offers the choice in Claude's words and sends its number, only on a click", async () => {
+    const { typeInto, user } = await openWith(BASH_ASK, MENU)
+
+    expect(typeInto).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: "Yes, and don't ask again" }))
+    expect(typeInto).toHaveBeenCalledExactlyOnceWith('2')
+  })
+
+  it('is not picked by its number, and Enter still means only the first choice, Yes once', async () => {
+    const { typeInto } = await openWith(BASH_ASK, MENU)
+    const card = screen.getByRole('region', { name: 'claude needs your permission' })
+
+    fireEvent.keyDown(card, { key: '2' })
+    expect(typeInto).not.toHaveBeenCalled()
+    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(typeInto).toHaveBeenCalledExactlyOnceWith(ANSWER_KEYS.approve)
+  })
+
+  it('offers it for no menu it cannot read, for another agent or for a question', async () => {
+    await openWith(BASH_ASK, '')
+    expect(screen.queryByRole('button', { name: /don't ask again/ })).not.toBeInTheDocument()
+    cleanup()
+
+    await openWith(BASH_ASK, MENU, 'codex')
+    expect(screen.queryByRole('button', { name: /don't ask again/ })).not.toBeInTheDocument()
+    cleanup()
+
+    await openWith(BASH_ASK, MENU.replace('Yes, and don\'t ask again', 'Yes, allow all edits during this session'))
+    expect(screen.queryByRole('button', { name: /during this session/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Yes once/ })).toBeInTheDocument()
   })
 })

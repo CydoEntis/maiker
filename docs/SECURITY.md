@@ -680,6 +680,27 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   same fixed server. A write is sent once and never retried (a retry could comment twice). Failures are
   the same fixed lines as the reads; no key, ticket text or server word is logged. Not yet checked against
   a live Plane or Linear server.
+- **Extensions** (`Query::Extensions`, `daemon/extensions/`, `maitty_shared::extensions`) install code that runs with
+  the person's access: a plugin ships hooks and servers, an MCP server is a command (or a remote address that hears
+  the person's prompts), and neither agent asks first (`plugin install --json` simply does it). So the daemon asks.
+  *Who:* human clients only; a pane or a structured runtime is refused. *Confirm:* an add runs only with the
+  one-time token a preview returned (random, 128 bits, single use, 10 minutes, at most 16 kept), so a client cannot
+  skip the preview; the window shows the source, the scope, exactly what will run (hook commands, server commands
+  and addresses, read from the plugin's own files as data with a 256 KiB limit and never executed) and "This runs
+  code on your computer with your access", with Cancel focused and no "trust always". A plugin that is fetched on
+  install says its commands cannot be listed first. *Commands:* an argument list, never a shell string (a `&`, quote
+  or space is one argument; a name cannot start with `-`, a path cannot leave its folder, a source has no control
+  characters), 60 seconds, 1 MiB of each stream, no terminal to ask anything of, the login PATH, run in the project
+  folder only for a project scope. A server address is `https://` (or `http://` for this computer) with no sign-in in it.
+  *Never listed by running:* a list reads files; `claude mcp list` is never called because it starts every server.
+  *Removals:* only an item the list shows; a skill is a folder under the agent's skills folder named by a plain name,
+  a link is removed and never what it points at, and Codex's `config.toml` is edited with `toml_edit` so its comments
+  and other keys stay (written beside and moved into place, with the old file's rights); Codex's removals are checked
+  against the listing because it exits 0 for what was never there. *Secrets:* none are taken yet. A server's keys,
+  headers and bearer tokens are not accepted by the page (`mcp add -e K=V` would put the value on a command line);
+  the page says to use the agent's own terminal. What an agent says is shown as one cleaned line with words that
+  look like a key (`key=…`, a bearer, a 32-character token) hidden; a typed error is the contract, not stderr.
+  *Not run on Windows or against a live plugin from the internet.*
 - **Reading Plane and Linear** (`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`, over
   `daemon/ticket_http.rs`) sends a stored key to a server, so what goes where is fixed. *Sent:* the key
   in one header (`X-API-Key` for Plane, `Authorization` for Linear), the request path, and for Linear a
@@ -898,6 +919,28 @@ off the UI thread, with the user's permissions. What was pasted never reaches gi
   is never written into.
 - Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses
   the credentials git already has. Maitty stores no GitHub token.
+
+## Project-specific: signing an agent in from the desktop
+
+`Query::AgentSignIn` makes the daemon run `claude auth login` or `codex login --device-auth` and show the
+person a link and a code (`daemon/agent_sign_in.rs`). What it may do:
+
+- The program is the agent's own, found on the login PATH. Every argument is a constant; the window sends
+  only which agent and `Start`, `Cancel` or `Read`, as enum values the daemon decodes. Nothing the command
+  prints is ever run, passed to a command or written anywhere.
+- Only a link and a code leave the process. The link must be `https://` with a host, no user name, no
+  whitespace or control character, at most 2 KiB; anything else is dropped, not repaired. The code is letters,
+  digits and dashes, at most 24 characters. The window shows the link's host beside Open link and opens it
+  through the same `open_link` path as every other address. The host is not on a list: the command's own
+  output is the source, so the check is the shape, and the person sees where it goes.
+- No credential passes through Maitty. The tokens a login obtains go to the agent's own files, as when it is
+  run in a terminal; the daemon reads none and logs none. The output is read up to 16 KiB, scanned once, and
+  dropped; the rest is read and discarded so the command never stalls. Status text is never logged.
+- One login per agent, a 15-minute limit, killed on cancel, on timeout and when the daemon drops it. Human
+  clients only: an agent's connection is refused, and a reply from another machine is ignored, so another
+  computer's output can never put a link in this window.
+- Claude's paste-a-code flow is not supported on purpose: a code typed into the window would be a credential
+  in a text box (ADR 0006).
 
 ## Project-specific: the message the daemon sends by itself
 

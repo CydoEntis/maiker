@@ -176,6 +176,9 @@ pub struct Term {
     pub session: Option<String>,
     /// The effort the agent's own files say it runs at (`usage::poll_effort`); not kept across a restart.
     pub effort: Option<String>,
+    /// The model and effort the agent last said it runs, kept across a restart so a resume comes back on them
+    /// (`Daemon::resume_cmd`). Unlike `effort`, a read that finds nothing leaves it as it was.
+    pub runs_with: crate::conversation::TurnChoice,
     pub cwd: PathBuf,
     /// The agent's last prompt, for its card.
     pub summary: String,
@@ -1006,6 +1009,7 @@ impl Term {
                 .or(direct_label),
             session: None,
             effort: None,
+            runs_with: crate::conversation::TurnChoice::default(),
             cwd: spec.cwd.to_path_buf(),
             summary: String::new(),
             said: String::new(),

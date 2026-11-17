@@ -470,6 +470,16 @@ fn a_machines_github_report_is_given_with_its_machine_and_tag() {
 }
 
 #[test]
+fn only_this_computers_sign_in_is_given() {
+    use maitty_shared::protocol::{SignInAgent, SignInState};
+    let mut streams = Streams::default();
+    let answer = || ServerMsg::Reply(Reply::AgentSignIn { tag: 2, agent: SignInAgent::Claude, state: SignInState::SignedIn });
+    let said = streams.on_message(MachineId::LOCAL, answer(), Instant::now());
+    assert!(matches!(&said[..], [Out::AgentSignIn { tag: 2, agent: SignInAgent::Claude, state: SignInState::SignedIn }]));
+    assert!(streams.on_message(BOX, answer(), Instant::now()).is_empty());
+}
+
+#[test]
 fn what_another_machine_says_went_wrong_is_given_and_this_computers_is_not() {
     let mut streams = Streams::default();
     let now = Instant::now();
