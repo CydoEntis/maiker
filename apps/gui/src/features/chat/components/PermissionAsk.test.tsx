@@ -294,3 +294,51 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
   })
 })
+
+describe("Claude's own \"don't ask again\" choice", () => {
+  const MENU = "Bash command\ncargo test\nDo you want to proceed?\n❯ 1. Yes\n2. Yes, and don't ask again\n3. No, and tell Claude what to do"
+  const BASH_ASK: PermissionAsk = { tool: 'Bash', detail: 'cargo test', answerable: true }
+
+  async function openWith(ask: PermissionAsk, asking: string, agent: 'claude' | 'codex' = 'claude') {
+    const daemon = new FakeDaemonHistory()
+    daemon.upsert(daemon.message('t1', 'u', 'User', 'earlier'))
+    daemon.status = 'Blocked'
+    fake.current = daemon
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
+    render(<ChatSession link={LINK} agent={agent} online typeInto={typeInto} ask={ask} asking={asking} />)
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    return { typeInto, user }
+  }
+
+  it("offers the choice in Claude's words and sends its number, only on a click", async () => {
+    const { typeInto, user } = await openWith(BASH_ASK, MENU)
+
+    expect(typeInto).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: "Yes, and don't ask again" }))
+    expect(typeInto).toHaveBeenCalledExactlyOnceWith('2')
+  })
+
+  it('answers no key by itself: Enter and the number do nothing', async () => {
+    const { typeInto } = await openWith(BASH_ASK, MENU)
+    const card = screen.getByRole('region', { name: 'claude needs your permission' })
+
+    fireEvent.keyDown(card, { key: '2' })
+    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(typeInto).not.toHaveBeenCalled()
+  })
+
+  it('offers it for no menu it cannot read, for another agent or for a question', async () => {
+    await openWith(BASH_ASK, '')
+    expect(screen.queryByRole('button', { name: /don't ask again/ })).not.toBeInTheDocument()
+    cleanup()
+
+    await openWith(BASH_ASK, MENU, 'codex')
+    expect(screen.queryByRole('button', { name: /don't ask again/ })).not.toBeInTheDocument()
+    cleanup()
+
+    await openWith(BASH_ASK, MENU.replace('Yes, and don\'t ask again', 'Yes, allow all edits during this session'))
+    expect(screen.queryByRole('button', { name: /during this session/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Yes once/ })).toBeInTheDocument()
+  })
+})

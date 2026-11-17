@@ -1151,7 +1151,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   numbered 1, which must run 1, 2, 3… to the end, because the daemon's reading also takes in the plan's numbered
   steps), one button each in Claude's words that sends its number, and **Keep planning** (`n`, Esc). The menu
   differs between Claude versions and sessions, so it is never assumed: where it cannot be read the card shows the
-  terminal's question and keys (`TerminalPrompt`) and `y`, Enter and the numbers send nothing. A question Claude asks (`AskUserQuestion`) with one answer has a button
+  terminal's question and keys (`TerminalPrompt`) and `y`, Enter and the numbers send nothing. On a Claude permission card, a choice Claude's own menu offers beside Yes and No is a ghost button in Claude's own words that sends its number (`alwaysAllowChoices`, `alwaysAllow.ts`), only on a click: nothing is pre-selected, no key or Enter picks it, and Maitty writes no rule of its own (Claude keeps what it is told, and its words say what and where). Read off the daemon's `asking` text, it is offered only when the menu is "1. Yes", then choices numbered in order, then a "No", and the choice starts "Yes, and don't ask again" (the wording of the checked fixture; "allow all edits during this session" and other wording is unverified and so not offered). Any other menu keeps the two buttons. A question Claude asks (`AskUserQuestion`) with one answer has a button
   for each choice, which sends its number. A prompt of several such questions (`PermissionAsk.questions`) shows them
   one at a time: a tab for each (its number, ✓ once answered), the question with its choices, **Back** and **Next**,
   and on the last one **Send answers**, off until every question has an answer;
