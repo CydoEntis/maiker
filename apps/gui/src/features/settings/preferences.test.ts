@@ -20,7 +20,7 @@ const DEFAULTS: SettingsPreferences = {
   startFolder: '',
   exportFolder: '',
   themeMode: 'system',
-  darkTheme: 'Maitty Night',
+  darkTheme: 'Maitty Dark',
   lightTheme: 'Maitty Day',
   cursorStyle: 'block',
   scrollback: 10000, scrollSpeed: 1,
@@ -192,7 +192,7 @@ describe('settings preferences', () => {
   it('carries over the theme chosen before the theme browser', () => {
     localStorage.setItem('maitty.gui.theme.v1', 'day')
 
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Maitty Day', darkTheme: 'Maitty Night' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Maitty Day', darkTheme: 'Maitty Dark' })
   })
 
   it('moves a single saved theme into its dark or light slot and keeps using it', () => {
@@ -200,12 +200,12 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Tokyo Night', lightTheme: 'Maitty Day' })
 
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ theme: 'Gruvbox Light' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Gruvbox Light', darkTheme: 'Maitty Night' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Gruvbox Light', darkTheme: 'Maitty Dark' })
   })
 
   it('keeps each slot to its own kind of theme and the mode to its three values', () => {
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'dark', darkTheme: 'Maitty Day', lightTheme: 'Tokyo Night' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Day' })
 
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'auto', darkTheme: 'Maitty Dark' }))
     expect(readSettingsPreferences()).toMatchObject({ themeMode: 'system', darkTheme: 'Maitty Dark' })

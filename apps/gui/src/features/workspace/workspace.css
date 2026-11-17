@@ -326,7 +326,7 @@
 .mx-settings-nav-item.is-current { background: var(--m-raise); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
 /* The nav icon: a plain glyph in its section's tint, with no tile behind it. */
 .mx-settings-nav-text { flex: 1; white-space: nowrap; }
-.mx-settings-nav-icon { flex: none; }
+.mx-settings-nav-icon { flex: none; color: var(--fg2); }
 .mx-settings-nav-spacer { flex: 1; min-height: 12px; }
 /* The update box sits at the foot of the nav, pinned while the nav scrolls. */
 .mx-settings-update { position: sticky; bottom: -18px; z-index: 1; display: flex; flex-direction: column; gap: 8px; margin: 0 -10px -18px; padding: 12px 14px 16px; background: var(--m-well); border-top: 1px solid var(--line); }
@@ -403,7 +403,6 @@
 .mx-picker-button:hover, .mx-picker-button.is-open { box-shadow: inset 0 0 0 1px var(--muted); }
 .mx-picker-button .mx-swatch { width: 28px; height: 28px; }
 .mx-picker-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mx-picker-pill { flex: none; height: 18px; display: inline-flex; align-items: center; padding: 0 6px; border-radius: var(--r-badge); font-size: 10.5px; font-weight: 600; color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent-line); }
 .mx-picker-chevron { flex: none; color: var(--dim); transition: transform .18s var(--ease-out); }
 .mx-picker-button.is-open .mx-picker-chevron { transform: rotate(180deg); }
 .mx-picker-menu { width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 12px; background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 16px 44px rgba(0, 0, 0, .5); animation: v7fade .14s ease-out; }

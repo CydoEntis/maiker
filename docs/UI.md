@@ -470,7 +470,7 @@ path. The card never shows a token. Behaviour and limits: [chat-sign-in spec](fe
 
 Dark and light are two remembered slots and a switch. Appearance has three rows:
 **Appearance** (`appearance`: `dark` or `light`, which slot shows), **Dark theme**
-(`theme_dark`, `night` by default, shown as Maitty Night) and **Light theme** (`theme_light`, `day` by default, shown as Maitty Day). Maitty Dark (`maitty-dark`) and Maitty Light (`maitty-light`) are the neutral black and white pair.
+(`theme_dark`; the desktop app defaults to Maitty Dark and does not list Maitty Night, which only the terminal app ships and starts on) and **Light theme** (`theme_light`, `day` by default, shown as Maitty Day). Maitty Dark (`maitty-dark`) and Maitty Light (`maitty-light`) are the neutral black and white pair.
 `theme` stays "the theme showing now": `Config::settle_theme` sets it from the slot
 `appearance` picks, so once a file has slots a `theme` written by hand is overwritten.
 A file with only an older `theme` is not rewritten: its theme fills the slot its ground
@@ -710,7 +710,7 @@ has one (macOS, Linux launchers with a count; Windows has none). The count is th
 you. A chat session that starts needing you or finishes rings the same tone a terminal session does (the daemon rings
 for those; the window rings for a chat session), when **Notification sound** is on.
 
-The window opens on its theme's ground: the page and the native window start on Maitty Night's ground, and
+The window opens on its theme's ground: the page and the native window start on the default dark theme's ground, and
 `public/boot-ground.js` paints the ground of the theme last shown before the app's code loads (`data/bootGround.ts`
 keeps it), so starting never flashes white or another theme's colour.
 

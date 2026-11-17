@@ -1065,11 +1065,11 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     const app = renderDesktopApp()
     await screen.findByRole('heading', { name: 'No sessions running' })
     const root = () => document.querySelector<HTMLElement>('.mx-app')
-    expect(root()?.style.getPropertyValue('--bg')).toBe('#071318')
+    expect(root()?.style.getPropertyValue('--bg')).toBe('#0c0d0f')
 
     await user.keyboard('{Control>},{/Control}')
     await user.keyboard('a')
-    await user.click(screen.getByRole('button', { name: 'Dark theme: Maitty Night' }))
+    await user.click(screen.getByRole('button', { name: 'Dark theme: Maitty Dark' }))
     await user.type(screen.getByRole('textbox', { name: 'Search dark themes' }), 'tokyo')
     const listbox = await screen.findByRole('radiogroup', { name: 'Dark themes' })
     expect(within(listbox).getAllByRole('radio')).toHaveLength(1)

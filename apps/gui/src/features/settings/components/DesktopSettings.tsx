@@ -4,7 +4,6 @@ import type { UpdaterState } from '@/features/updates/useUpdater'
 import type { Transfer } from '@/features/updates/downloadEta'
 import { Fragment, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { GroupShowsAll, matchesQuery, SettingsSearch } from '../settingsSearch'
-import { THEMES } from '@/features/workspace/theme/themes'
 import { ThemePicker } from './ThemePicker'
 import { CORNERS, CORNER_NAMES } from '@/features/workspace/theme/corners'
 import { Panel } from '@/components/ui/panel'
@@ -133,7 +132,7 @@ type DesktopSettingsProps = {
 /** The ticket of the title bar's Tickets toggle. */
 const TICKET_PATH = 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6zM10 5v14'
 
-type NavItem = { id: DesktopSettingsSection; label: string; key: string; tint: string; path: string }
+type NavItem = { id: DesktopSettingsSection; label: string; key: string; path: string }
 
 /** The nav (the whole-app mock): what the window does, how agents run, and which computers. Usage & cost and Performance
     have no item: they open from their own keys, the palette and the usage meters, and leave the nav with none current. */
@@ -141,26 +140,26 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'APP',
     items: [
-      { id: 'general', label: 'General', key: 'G', tint: 'var(--accent)', path: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4' },
-      { id: 'appearance', label: 'Appearance', key: 'A', tint: 'var(--ansi-mag)', path: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-.9-.8-1.3-.8-2.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.4-4-7.6-9-7.6zM7.5 11.5h.01M10.5 7.5h.01M15.5 8.5h.01' },
-      { id: 'notifications', label: 'Notifications', key: 'N', tint: 'var(--warn)', path: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' },
-      { id: 'keys', label: 'Hotkeys', key: '?', tint: 'var(--ansi-blue)', path: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8' },
+      { id: 'general', label: 'General', key: 'G', path: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4' },
+      { id: 'appearance', label: 'Appearance', key: 'A', path: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-.9-.8-1.3-.8-2.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.4-4-7.6-9-7.6zM7.5 11.5h.01M10.5 7.5h.01M15.5 8.5h.01' },
+      { id: 'notifications', label: 'Notifications', key: 'N', path: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' },
+      { id: 'keys', label: 'Hotkeys', key: '?', path: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8' },
     ],
   },
   {
     label: 'AGENTS',
     items: [
-      { id: 'chat', label: 'Chat', key: 'C', tint: 'var(--ok)', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
-      { id: 'permissions', label: 'Permissions', key: 'E', tint: 'var(--ansi-mag)', path: 'M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z' },
-      { id: 'terminal', label: 'Terminal', key: 'T', tint: 'var(--ansi-blue)', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
-      { id: 'extensions', label: 'Extensions', key: 'X', tint: 'var(--warn)', path: 'M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3M7 6h10v12H7z' },
+      { id: 'chat', label: 'Chat', key: 'C', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
+      { id: 'permissions', label: 'Permissions', key: 'E', path: 'M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z' },
+      { id: 'terminal', label: 'Terminal', key: 'T', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
+      { id: 'extensions', label: 'Extensions', key: 'X', path: 'M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3M7 6h10v12H7z' },
     ],
   },
   {
     label: 'MACHINES',
     items: [
-      { id: 'machines', label: 'Remote machines', key: 'M', tint: 'var(--ok)', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01M17 7h.01M17 17h.01' },
-      { id: 'tickets', label: 'Tickets', key: 'I', tint: 'var(--ansi-mag)', path: TICKET_PATH },
+      { id: 'machines', label: 'Remote machines', key: 'M', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01M17 7h.01M17 17h.01' },
+      { id: 'tickets', label: 'Tickets', key: 'I', path: TICKET_PATH },
     ],
   },
 ]
@@ -299,7 +298,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
               <span className="mx-settings-nav-label">{group.label}</span>
               {group.items.map((item) => (
                 <button key={item.id} type="button" className={`mx-settings-nav-item${!searching && section === item.id ? ' is-current' : ''}`} aria-current={!searching && section === item.id ? 'page' : undefined} onClick={() => { openPage(item.id) }}>
-                  <svg className="mx-settings-nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={item.tint} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={item.path} /></svg>
+                  <svg className="mx-settings-nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={item.path} /></svg>
                   <span className="mx-settings-nav-text">{item.label}</span>
                   <span className="mx-settings-nav-key" aria-hidden="true">{item.key}</span>
                 </button>
@@ -585,7 +584,7 @@ function AppearanceSection({ preferences, update, systemDark, onPreviewTheme }: 
   const darkInUse = preferences.themeMode === 'dark' || (preferences.themeMode === 'system' && systemDark)
   return (
     <>
-      <Card title="Look" meta={<span className="mx-scard-meta">{THEMES.length} themes installed</span>}>
+      <Card title="Look">
         <Row label="Appearance" detail="Follows your system when set to System.">
           <SegmentedChoice label="Appearance" value={preferences.themeMode} options={MODE_OPTIONS} onChange={(value) => { update('themeMode', value) }} />
         </Row>
