@@ -3021,7 +3021,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 109);
+        assert_eq!(PROTOCOL_VERSION, 110);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3511,7 +3511,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 109);
+        assert_eq!(PROTOCOL_VERSION, 110);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
