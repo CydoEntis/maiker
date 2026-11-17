@@ -124,6 +124,13 @@ older daemon cannot read, set `REPORTS_READ_SINCE` to the new version in the sam
 test `todays_reports_are_read_by_the_oldest_daemon_they_are_sent_to` holds the shapes. The CLI subcommands and the MCP server (`maitty mcp`, JSON-RPC over stdio)
 are thin wrappers that send the same commands.
 
+Protocol 115 removed the in-app tickets (ADR 0013): `Query::Tickets`, `TicketKeys`, `TicketWrite` and `TicketLinks`, their
+replies, `Command::OpenTicketSetup` and `ServerMsg::TicketSetup`. A peer from 105 to 114 sent or waited for them, so
+`COMPATIBLE_SINCE` moved to 115 (the window is one version) and every older peer is refused. That made each earlier
+message's `*_SINCE` gate and `introduced_in` arm dead, and they were removed; `ServerMsg::introduced_in` and
+`ClientMsg::introduced_in` stay, answering `COMPATIBLE_SINCE`, for the next message added inside a window. Below, the
+"came in protocol N" and "`COMPATIBLE_SINCE` stays 78" lines record when each message appeared, not a live gate.
+
 A conversation that changed is announced to the desktop app's attached clients as
 `ServerMsg::ConversationChanged { id, generation }` (`daemon/conversation/news.rs`): after each
 batch of events the daemon compares a stamp of what a `ConversationRead` would answer (history
@@ -179,7 +186,7 @@ commands are `prewarm_agent_session` (the agent names and flag rules of `start_a
 daemon running is older) and `drop_prewarmed_agent`.
 
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
-app's New session dialog and ticket starts, on this computer or another machine, whose own daemon makes it in its checkout
+app's New session dialog, on this computer or another machine, whose own daemon makes it in its checkout
 over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
 absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
@@ -982,93 +989,6 @@ state, link, code, failure}` (`apps/gui/src/api/agentSignIn.ts` re-checks the li
 address). Asking twice changes nothing, so it may go on a kept line. The spike and the behaviour:
 [chat-sign-in spec](features/chat-sign-in/spec.md).
 
-Protocol 105 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets { tag, answer }`
-(`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
-arm, and nothing an older peer sends or reads changed). It reads tickets, read-only; there is no
-request that writes. `source` is a GitHub repository, `owner/name`, read with the machine's own
-`gh` (`daemon/tickets_github.rs`), or `plane` or `linear`, read with the key the daemon kept
-(`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`; below). A repository name has a slash and the
-providers' do not, so the one message carries all three and an older daemon answers `Invalid`. `request` is a `TicketsRequest`: `Groups` (the repository as a
-`Project` group and its milestones as `Milestone` groups with their ticket count), `List(Filter)`
-(`group`, `state` category, `assignee`, `label`, `search`, `page`; `TICKETS_PAGE_SIZE` (30) a page,
-page 0 to `TICKETS_PAGE_MAX`; `gh` pages only by size, so it is asked for everything up to one past
-the page; GitHub has no `Started` state, so that filter lists nothing) or `Get { id }`. `answer` is
-`Ok(TicketsReply)` (`Groups`, `List(TicketPage)` or `Ticket`) or `Err(TicketError)`: `NotInstalled`,
-`SignedOut`, `NotFound`, `RateLimited`, or `Unreachable(line)` and `Invalid(line)`, whose lines are
-fixed words, never `gh`'s own. Ids are `provider:key`: `github:owner/name#12` for an issue,
-`github:owner/name!3` for a milestone, `github:owner/name` for the repository; an address is built
-from the checked repository and number, never copied. A ticket carries its body, at most
-`TICKET_COMMENTS_MAX` (50, the oldest first, `comments_more` says there were more), the pull
-requests that close it as `links`, and `blocked_by` ids (`gh api …/dependencies/blocked_by`; a GitHub
-that does not know it gives none). Every string is cleaned and cut and every list capped by the pure
-rules in `crates/maitty-shared/src/tickets.rs` (`TicketsReply::cleaned`), by the daemon and again
-for an answer from another machine (`remote_policy::vet`; the verdict is *answer*). Human clients
-only: a pane or a structured runtime gets `ServerMsg::Error`. `gh` runs off the event loop, at most
-twice (30 seconds each), and `gh`'s output is read only up to 4 MiB.
-
-Protocol 106 adds `Query::TicketKeys { change, tag }` with `Reply::TicketKeys { tag, answer }`
-(`TICKET_KEYS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own
-`introduced_in` arm, and no field or variant an older peer reads changed). It keeps the key a keyed
-ticket provider needs. `change` is a `TicketKeyChange`: `Status`, `Set { provider, address, workspace,
-key }` (the key is a `SecretText`, which prints as hidden) or `Remove { provider }`; `provider` is
-`Plane` or `Linear`. `answer` is the state after the change, one `TicketKeyState { provider, set, address,
-workspace, stored_in }` per provider (`stored_in` is `Keychain` or `File`, `#[serde(default)]` to `File`:
-an older daemon sends none and keeps every key in a file, and an older client passes over it, so it
-needs no protocol version), or an `Invalid(line)`; it never holds a key. Plane takes a server address
-(`check_base_url`: https anywhere, http only to your own network) and a workspace; Linear takes a key
-alone, because its one server is fixed in the code. Human clients only: a pane or a structured runtime
-gets `ServerMsg::Error`. A request for a provider with no key answers `TicketError::NotInstalled` (the
-client shows "add your key"); a key the provider refuses is `SignedOut`. The files are written off the
-event loop. Where the key lives: [SECURITY](SECURITY.md) and [DATABASE](DATABASE.md#project-specific-ticket-keys).
-
-Plane and Linear ids follow `provider:key` with `.`, `!` and `#` as separators: Plane `plane:<project>`
-(a project), `plane:<project>!<module>` (a module), `plane:<project>#<work item>`; Linear
-`linear:team.<id>` (a `Project` group), `linear:project.<id>` (a `Module`), `linear:cycle.<id>` (a
-`Cycle`) and `linear:issue.<id>`. A Plane list needs a `group` (a project or module); a Linear list may
-have none. Plane filters nothing server-side, so a page is cut from at most five pages of 100 work items
-read in Plane's order; Linear is asked for the state, assignee, label, title text and group, and read a
-cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 seconds each) before
-`RateLimited`; Linear's is reported at once. A Plane `blocked_by` comes from
-`work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
-inverse `blocks` relations.
-
-`Query::TicketWrite` and `Reply::TicketWrite` (protocol 107, `TICKET_WRITE_SINCE`) are retired: Maitty only
-reads tickets (ADR 0011). They stay on the wire so a window from 107 to 112 that still asks gets `Reply::TicketWrite`
-with `Err(Invalid)` ("Maitty no longer changes tickets; change it in the tracker") and keeps its connection. The
-daemon writes nothing, and no client of protocol 113 asks.
-
-Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
-(`TICKET_LINKS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm).
-The daemon keeps which sources each project reads (`maitty_shared::ticket_links`, `daemon/ticket_links.rs`,
-`<data folder>/ticket-links.json`), so every client of a computer shows a project the same tickets. A provider's key is
-set once for all projects (`TicketKeys`); a link is per project: `github` (`Origin`, the default; `Repo("owner/name")`;
-`Off`), a Plane project and a Linear team (`TicketPick { id, name }`). A project is a `TicketPlace { machine, folder }`:
-`machine` is `None` for this computer, whose folder the daemon takes to its repository's main checkout (the parent of
-`git rev-parse --git-common-dir`), so every worktree of a repository shares one link; another machine's folder (by its
-`[[machines]]` name) is kept as the client gave it. `place` is the folder in front, answered back resolved in
-`answer.project` (with an empty link when it has none); `change` is `Read`, `Set { place, link }`, `Unlink { place }`,
-`SetMe { provider, name }` (your name in Plane or Linear, for Mine) or `Import { projects, me }` (links a client kept
-before protocol 108: each added only when its project has none, a name only when unset). `answer` is
-`Ok(TicketLinks { project, projects, me })`, every linked project sorted by machine and folder, or `Invalid` for a
-folder that is not absolute, a repository not written `owner/name`, or a pick whose id is not a ticket id; nothing
-refused is written. At most 500 projects. Human clients only. A damaged file is logged and read as no links.
-
-Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
-`introduced_in` arm, and the new field is `#[serde(default)]`, which an older peer skips) adds:
-
-- `TicketLinks::repo_file: Option<RepoTicketFile { github, plane, linear, notes }>`. For a place on this computer,
-  `answer.project`'s link is what you linked here with the repository's `.maitty/tickets.toml` filling each source
-  you did not (`daemon/ticket_repo_file.rs`); the flags say which parts came from the file and `notes` (at most 4,
-  160 characters each) why any part was not used. `projects` lists only what was linked here, never the file.
-- `Command::OpenTicketSetup { term, folder, source, link }`, from a pane's agent (`<app>_tickets_setup` in
-  `maitty mcp`). Allowed only for the pane's own client (`client.from == Some(term)`), for its own project
-  (`folder`, when given, must be in it). The daemon reads the project's links and key states off the loop, then
-  broadcasts `ServerMsg::TicketSetup(TicketSetupAsk { term, folder, source, link })` to attached human clients
-  (not panes, not structured runtimes), at most once per project every 5 seconds, and replies `Reply::Text` with
-  what is set up, in words: never a key or where it is sent. `link` is one cleaned word (`clean_suggested_link`,
-  512 characters), shown as text. Nothing is saved; the person finishes the setup in the window. Another machine's
-  `TicketSetup` is ignored (`remote_policy`).
-
 Protocol 110 adds `Query::Extensions { request, tag }` with `Reply::Extensions { tag, answer }` (`EXTENSIONS_SINCE`;
 `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm). It reads and changes the
 skills, plugins, MCP servers and marketplaces of Claude Code and Codex on the daemon's computer (design:
@@ -1121,14 +1041,6 @@ or a search ran out of time. Human clients only. The desktop host asks through `
 answer for the search limit plus the clone margin (`routing::REPOSITORIES_ANSWER_WINDOW`). Another machine's list is
 cleaned and capped again (`remote_policy::vet`, `RepositoryIndex::cleaned`). A daemon from before 114 never answers, so
 the window's wait ends with its own words.
-
-The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
-`ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
-`{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them
-with zod). A source longer than 256 bytes is refused in the host. Ticket answers are expected for 60 seconds plus
-the clone margin (`routing::TICKETS_ANSWER_WINDOW`); the window waits 95 seconds. `github_repo_of(folder)` answers
-the `owner/name` a folder of this computer pushes to (`git remote get-url origin`, read by
-`maitty_shared::github::repo_of_remote`), or null.
 
 Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
 (`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`

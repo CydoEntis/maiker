@@ -281,6 +281,30 @@ a hidden bold twin of its label (`.mx-tk-tab-name`). Panels that open (a drawer,
 is what they are for. `src/revealSpace.test.ts` fails on a hover, focus or selection rule that sets `display: none` or
 `width: 0`, and on a close-button rule that sets `width: 0`; the few deliberate cases are listed in it with the reason.
 
+**A hover, focus or press changes colour and opacity, nothing else, and does it at once.**
+
+- *No delay.* A part that a pointer or the keys reveal (a close ×, a row action, a copy button, a hover reply) is there
+  within one `--t-fast` fade. Only a tooltip (`HoverTips`) and the sidebar's hover card (`HoverController`: 450ms the
+  first time, a 250ms warm window) wait, and they wait in code, never with a CSS `transition-delay`.
+- *No jump.* A state never changes a control's size, place, border width, padding, line height, weight or what it says:
+  no `translate` or `scale` lift or press, no bold on pick (a picked item is a colour, a fill or a mark; a tab that must be
+  bold keeps its width with a hidden bold twin of its label), no `filter`. Hover on a filled button is a flat tint
+  (`color-mix` toward white), press a deeper one toward `--bg`. A ring that must not shift the box is an inset `box-shadow`
+  or a border that is always there in `transparent`.
+- *No abrupt flip.* Every interactive element fades `background-color`, `color`, `border-color` and `opacity` over the one
+  fast token (`--t-fast`, `--ease`). `workspace.css` gives that to every button, link and role by default through a
+  zero-weight `:where()` rule, so a control needs no transition of its own; a new class that is not a button or role
+  is added to that list. Rules that name their own transition use the tokens too (`--t-fast`, `--t-base` for a turn or a
+  slide, `--t-slow` for a theme fade), never a raw time. Only `opacity`, `transform`, `background-color`, `color` and
+  `border-color` animate on a state; a width, height, shadow or filter does not ([PERFORMANCE](PERFORMANCE.md)).
+- *Reduce motion.* The tokens go to 0, so all of it is instant with no per-rule work.
+
+`src/hoverMotion.test.ts` fails on a transition delay, a raw transition time, a font weight, a `translate`/`scale`, a
+`filter` or a `will-change` in a hover, focus, press or selected rule, and on a part that starts at `opacity: 0` with no
+fade; the few deliberate cases (a switch's knob, the skip link, the plan's current step) are listed in it with the reason.
+To see a change on the real web view, hover the element and compare its box and its siblings' before and after
+(`getBoundingClientRect`, see [PERFORMANCE](PERFORMANCE.md#hover-popovers-and-every-animation-on-webkitgtk-2026-11-17)).
+
 **The terminal is edge to edge.** A terminal (the dock, a pane's Terminal view) sits on one opaque `--term` ground that
 fills its card, with a text inset from a token and no frame, ring or card of its own inside the card that holds it. The
 card carries the focus; the terminal never draws a second box (see [DESIGN](DESIGN.md#desktop-app), the terminal dock).
@@ -1001,72 +1025,6 @@ when at least three screen corners use one explicit background color. Preserve
 the pane insets; isolated colored panels keep their existing theme treatment.
 Preserve colors applications paint explicitly.
 
-## Project-specific: Tickets view (desktop)
-
-Tickets is **Start from a ticket**: the open tickets of the project the chat in front works in, from GitHub, Plane and
-Linear, to pick one and start an agent on it. It only reads (ADR 0011): a ticket is changed in its tracker ([spec](features/tickets/spec.md), the [2h handoff](features/chat-gui/design-handoff/2h/README.md)). Code:
-`apps/gui/src/features/tickets/`, data from `apps/gui/src/api/tickets.ts`. Rules:
-
-- **Where it is.** The pane's ⋯ menu **Tickets** entry and the command palette's **Tickets for this project** open it over the chat area (`TicketsOverlay` in `.mx-main`) and
-  close the side panel; ✕ closes it (DESIGN › *No tools bar*).
-- **The picker.** A tab per source, then search, the scope (all of the source, or one milestone, module, cycle or
-  Linear project) and Refresh over one list of the open tickets (closed ones are left out: there is nothing to start).
-  A row is a button, "Start an agent on <key>: <title>": a click (or ↑↓ then Enter) reads the ticket whole and opens
-  the start dialog. There is no board, ticket page, assignee filter, selection or sort.
-- **Accounts once, links per project.** A Plane or Linear key is set once on this computer and serves every project
-  (`TicketKeys`). Which sources a project reads (a GitHub repo, a Plane project, a Linear team) is its **link**, kept by
-  this computer's daemon (`Query::TicketLinks`, `api/ticketLinks.ts`, `model/ticketLinks.ts`; nothing secret), so the
-  desktop app and the TUI show a project the same tickets. A project is a repository's main checkout (the daemon takes a
-  worktree's folder there), else the folder, on its machine (`model/ticketProjects.ts`, kept under the machine's name):
-  every session and worktree of it shows the same tickets. GitHub follows the folder's `origin` (`github_repo_of`)
-  with no setup until a repo is typed or GitHub is turned off. Links the window kept in `localStorage` before protocol
-  108 are handed to the daemon once (this computer's only; the daemon keeps any it already has) and then dropped.
-  Every read goes through this computer's daemon.
-- **Setting up in place.** A source a project has not set up shows its setup where its tickets would be
-  (`TicketSetup.tsx`), as numbered steps that each say whether they are for every project or this one. Every source
-  starts from **a pasted link** to the project (any page of it; `parseTicketLink`, mirrored in Rust as
-  `maitty_shared::ticket_paste` for the terminal app), read only when Use link is pressed (or on paste) and never
-  opened: a GitHub link (`https://github.com/o/r/…` or `git@github.com:o/r.git`) saves the repository at once; a Plane
-  link (`<address>/<workspace>/projects/<id>/…`, the address keeping any port or path prefix) fills the key form's
-  address and workspace, so only the key is typed, and after connecting offers **Link <project>** for the project
-  whose id it names; a Linear team or issue link names the team key, matched to a team whose name reads the same
-  (the daemon's team list carries no keys), else it says no team matches and the list stays to pick from. A link for
-  another source says which tab it goes on; a Plane link for another Plane or workspace than the saved key says to
-  replace the key. **Enter the details instead** folds out the typed fields (`owner/name`; Plane's address and
-  workspace). Plane and Linear then show Connect (the key form, "used for every project", never shown again; the key
-  box is the only place a key goes) and Pick the project or team for this project from the provider's list ("Saved
-  for <project> and every worktree of it"). A pick saves at once and the list shows. Settings › Tickets › Accounts'
-  Plane card has a Link row that fills its address and workspace the same way. `TicketSetup`, `TicketsPage` and
-  `TicketsOverlay` take `suggestedLink`, which only fills the paste box (its source's tab opens first). In the
-  terminal app the setup's first step is the same link line (Enter uses it, Tab types the details instead), a link
-  pasted on a source's setup screen opens it, the key form starts on the key with the address and workspace filled,
-  and the pick's cursor lands on the project or team the link names (Enter links it); `TicketsView::suggest_link`
-  fills the next setup's link line.
-- **Ticket text is text.** Titles, bodies, comments and labels are drawn as React text, never as Markdown or HTML;
-  links show as text with ↗ and open in the browser only on a click (`openLink`, http and https only).
-- **What is sent.** The start dialog (`StartTicketDialog`) shows **exactly what will be sent** before anything goes:
-  Maitty's lines (the title kept to one line) and the ticket's words, every line quoted with `> ` (`ticketMessage`).
-  A blocked ticket warns in red and can still be started. Nothing starts without its button or Enter.
-- **States.** Loading ("Reading tickets from <source>…" with a spinner over skeleton rows, also while the links and
-  the origin are read; a picked ticket's row is busy while it is read whole), no matches (Clear filters), not
-  set up (the setup above), gh signed out (Open terminal), key refused (red, Replace key), offline (last good copy
-  with Retry), rate-limited (no button). Banners are never amber.
-- **Keys.** `/` search, ↑↓ move, Enter starts on the ticket under the cursor, Esc empties the search.
-- **Settings › Tickets** (`TicketsSettings.tsx`, nav key K) has two parts. **Accounts** ("set up once on this
-  computer, for every project"): the gh login with Check again (Open terminal when signed out); Plane's address,
-  workspace and key, Linear's key (`type=password`, `autocomplete=off`), Connect, then "Connected · <address>/<workspace>
-  · Key kept in your system keychain" (or "Key kept in a file: no keychain on this machine", from the service's
-  `stored_in`) with Replace key and Remove, and "Key refused" when the provider refused it. A saved key is never shown.
-  Keys are kept by the Maitty service, in the system keychain where the machine has one. **Linked projects**: every project the daemon keeps
-  a link for (its folder, its machine, what it reads in one line), with Change (its repo, Plane project and Linear
-  team) and Unlink, then each open project not set up yet with Set up; then your names for Mine.
-- **A repository's file and an agent's ask.** A part of the link that came from the repository's
-  `.maitty/tickets.toml` shows "from the repo's .maitty/tickets.toml" under its project in Settings › Tickets,
-  with the file's notes (why a part was not used) as text. When an agent of this computer asks for its project's
-  setup (`ticket-setup` event, `useTicketSetupAsks.ts`), the window shows that session, opens Tickets on the
-  asked source and shows "Your agent suggests <link>" in the setup (`TicketSetup`'s `suggestedLink`, text only),
-  with a toast; nothing is saved until you finish it. Closing Tickets drops the suggestion.
-
 ## Project-specific: Extensions page (desktop)
 
 Settings › Extensions (`apps/gui/src/features/extensions/`, nav key X; data from `apps/gui/src/api/extensions.ts`) lists,
@@ -1090,67 +1048,6 @@ needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin
   `codex mcp login <name>` for a server that signs in through a browser, and that a project's `.mcp.json` servers wait for
   the person's approval inside Claude Code itself.
 - **Not seen on screen yet:** the page was written against the existing Settings cards and tests only.
-
-## Project-specific: Tickets view (TUI)
-
-The TUI's Tickets is a side-panel tool like References (`client/screen/tickets_view.rs`, the words
-and rules in `client/tickets.rs`): leader `p` (`Action::Tickets`, `tickets`), the Menu's TOOLS row,
-the Project menu, Search commands, and a tab of the panel after References. It reads the same
-daemon requests as the desktop app (*Tickets view (desktop)* above) and follows its rules:
-
-- **Project scope.** The project of the session in front: its repository's main checkout, else its
-  folder, on its machine. Its links (a GitHub repo, a Plane project, a Linear team) and your Plane
-  and Linear names for Mine are the daemon's, the same ones the desktop app shows
-  (`Query::TicketLinks` with the folder in front as its place; the daemon resolves a worktree to its
-  repository, so every worktree and session of a project reads the same tickets). Only your GitHub
-  name stays in the saved UI state (`Saved::ticket_me`). Nothing is read until the links are known.
-  Links an older build kept in `Saved::ticket_links` go to the daemon once, with the first question
-  (`Import`, which adds only what it has not got), and are emptied from `maitty-ui.json` once it
-  answers. GitHub follows the folder's `origin` (read off the UI thread, this computer's folders only)
-  until a repo is typed; `x` on the repo row turns GitHub off. Every read goes to this
-  computer's daemon (`Query::Tickets`, `TicketKeys`, `TicketLinks`, tagged); a daemon
-  older than tickets is not asked and the panel says to restart it, and one older than links still
-  reads GitHub from the origin and says to restart it to link anything else.
-- **Setting up in place.** A tab whose source is not set up shows its setup instead of tickets, as
-  numbered steps, each saying whether it is once for every project or for this one. GitHub: ✓ it uses
-  your gh login (no key), then the repository when the folder has no GitHub origin (or GitHub is
-  off). Plane and Linear: connect the key (once on this computer, for every project), then pick the
-  project or team for this project. Enter runs the next step on its own page (the key form, the
-  provider's list, the repo field) and goes back to the list when done; a connected key goes straight
-  on to the pick. Each step says the link is saved for the project and every worktree of it.
-- **Ticket text is text.** Every answer is cleaned again on arrival (`TicketsReply::cleaned`) and
-  every string drawn goes through `tickets::shown`, so no control or escape sequence from a ticket
-  reaches the terminal. Nothing is read as Markdown or HTML; a link opens only on `o` (web links
-  only, `open_link`).
-- **What is sent.** Start an agent (`s`, on a ticket's page) shows exactly what
-  will be sent (`tickets::ticket_message`: Maitty's lines, the title on one line, the ticket's words
-  quoted with `> `, cut to the daemon's 8,000-character first prompt with a note saying so) and send
-  only on `y` or the button. Start makes a new worktree on `agent/<key>-<title words>` through
-  `Command::NewWorktree` with `agent` and `prompt`, so the daemon checks and quotes the prompt; a
-  folder outside git, or a project on another machine, is refused (Worktrees is local-only). A
-  blocked ticket warns in red and can still be started.
-- **Read only** (ADR 0011). Nothing here comments on, closes or sends a ticket anywhere; `o` opens it
-  in its tracker and `y` copies its link.
-- **States.** Reading (skeleton rows), no matches (Esc clears the search), not set up (the setup
-  above), gh signed out (`t` opens a shell running
-  `gh auth login`), key refused (red; `,` to replace it), offline (the last list read stays with a
-  red line under it, `r` retries), rate-limited (no key offered). The panel's states are never amber.
-- **Sources** (`,`): two parts. *Accounts*, once on this computer for every project: GitHub (your
-  gh login, no key) and your name, each Plane and Linear key and your name there. *Linked
-  projects*: the project in front's GitHub repo, Plane project and Linear team, then every other
-  project the daemon keeps a link for (its machine, folder and what it reads; `x` unlinks it,
-  changing it needs a session in it). A key is typed
-  into a form (Plane: address, workspace, key; Linear: key), held as `SecretText`, drawn as a fixed
-  row of bullets (never its length), dropped from memory as soon as it is sent, never toasted (a
-  paste into the form is not repeated anywhere); the answer says only "connected" and where the
-  service keeps it ("key kept in your system keychain", or "key kept in a file: no keychain on this
-  machine"), which the key's row shows too. Removing a key asks first. A Plane project or Linear team is picked from what the provider lists.
-  Each part that came from the repository's `.maitty/tickets.toml` says `(from .maitty/tickets.toml)`,
-  and the file's notes show under the project's heading.
-- **An agent's ask** (`ServerMsg::TicketSetup`, this computer's only): Tickets opens on the asking
-  pane's project and source and the setup shows `Your agent suggests <link>` (`TicketsView::suggested_link`,
-  drawn through `tickets::shown`) with a toast. While another view is open, or Tickets shows another
-  project or is being typed in, it only toasts. Nothing is saved on an agent's word.
 
 ## Project-specific: desktop chat view
 

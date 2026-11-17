@@ -105,7 +105,7 @@ describe('a pane of another machine and the features that need its files', () =>
     expect(screen.getByRole('button', { name: 'Changes' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Files' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    for (const name of ['Changes', 'Files', 'History', 'Checks', 'Tickets']) expect(await screen.findByRole('menuitem', { name: new RegExp(`^${name}`) })).toBeInTheDocument()
+    for (const name of ['Changes', 'Files', 'History', 'Checks']) expect(await screen.findByRole('menuitem', { name: new RegExp(`^${name}`) })).toBeInTheDocument()
   })
 
   it('opens the side panel on the machine\'s changes, and its views that read files say they are local-only', async () => {

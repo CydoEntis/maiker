@@ -21,8 +21,6 @@ pub(in crate::client) enum SheetKind {
     Branch,
     /// The project's reference images and design files.
     References,
-    /// The project's tickets.
-    Tickets,
 }
 
 /// Its width beside the panes, before you size it (Changes takes half the screen).
@@ -59,7 +57,6 @@ impl SheetKind {
             SheetKind::Files => "files",
             SheetKind::Branch => "branch",
             SheetKind::References => "references",
-            SheetKind::Tickets => "tickets",
         }
     }
 
@@ -128,7 +125,7 @@ pub(in crate::client) fn drawer_cap(kind: SheetKind, col: Rect) -> u16 {
 /// The side panel's tabs, in Tab's order: the view, its name, its name where room is short and
 /// the action that opens it.
 /// The Inbox and the check sheets are not among them.
-pub(super) const DRAWER_TABS: [(SheetKind, &str, &str, Action); 5] = [
+pub(super) const DRAWER_TABS: [(SheetKind, &str, &str, Action); 4] = [
     (SheetKind::Files, "Files", "Files", Action::Files),
     (SheetKind::Changes, "Changes", "Chg", Action::Changes),
     (SheetKind::Branch, "Branch", "Br", Action::Branches),
@@ -138,7 +135,6 @@ pub(super) const DRAWER_TABS: [(SheetKind, &str, &str, Action); 5] = [
         "Refs",
         Action::References,
     ),
-    (SheetKind::Tickets, "Tickets", "Tix", Action::Tickets),
 ];
 
 /// Where `kind` sits in the tab strip, if it has a tab.
@@ -242,8 +238,6 @@ pub(in crate::client) fn open_sheet(app: &App) -> Option<SheetKind> {
         Some(SheetKind::Branch)
     } else if matches!(app.view, Some(crate::client::View::References(_))) {
         Some(SheetKind::References)
-    } else if matches!(app.view, Some(crate::client::View::Tickets(_))) {
-        Some(SheetKind::Tickets)
     } else {
         None
     }
@@ -336,8 +330,7 @@ pub(in crate::client) fn draw_sheet(
         SheetKind::Changes
         | SheetKind::Files
         | SheetKind::Branch
-        | SheetKind::References
-        | SheetKind::Tickets => (String::new(), String::new(), ScreenHit::ViewClose),
+        | SheetKind::References => (String::new(), String::new(), ScreenHit::ViewClose),
         SheetKind::Check => ("CHECK".to_string(), check_title(app), ScreenHit::ViewClose),
     };
     // Lit while it has the keys; a click into a pane sets it aside, unlit, still open.
@@ -375,8 +368,7 @@ pub(in crate::client) fn draw_sheet(
         SheetKind::Changes
         | SheetKind::Files
         | SheetKind::Branch
-        | SheetKind::References
-        | SheetKind::Tickets => {}
+        | SheetKind::References => {}
     }
 }
 
@@ -402,7 +394,6 @@ fn draw_panel_frame(app: &mut App, buf: &mut Buffer, r: Rect, kind: SheetKind, t
         },
         SheetKind::Files => "files".into(),
         SheetKind::Branch => "branch".into(),
-        SheetKind::Tickets => "tickets".into(),
         _ => "references".into(),
     };
     let lit = sheet_has_keys(app);
@@ -440,10 +431,6 @@ fn draw_panel_body(app: &mut App, buf: &mut Buffer, body: Rect, kind: SheetKind,
         (SheetKind::References, Some(crate::client::View::References(mut v))) => {
             draw_references(app, buf, body, ground, t, &mut v);
             app.view = Some(crate::client::View::References(v));
-        }
-        (SheetKind::Tickets, Some(crate::client::View::Tickets(mut v))) => {
-            draw_tickets(app, buf, body, ground, t, &mut v);
-            app.view = Some(crate::client::View::Tickets(v));
         }
         (_, view) => app.view = view,
     }

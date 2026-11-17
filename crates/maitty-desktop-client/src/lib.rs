@@ -682,16 +682,6 @@ fn run_git(dir: &std::path::Path, args: &[&str]) -> std::result::Result<String, 
     }
 }
 
-/// The GitHub repository (`owner/name`) a folder's `origin` remote points at, or `None` when it has no such remote.
-/// Git runs off the caller's thread with fixed arguments; a folder git cannot read has none.
-pub async fn github_repo_of(folder: PathBuf) -> Result<Option<String>> {
-    tokio::task::spawn_blocking(move || {
-        run_git(&folder, &["remote", "get-url", "origin"]).ok().and_then(|address| maitty_shared::github::repo_of_remote(&address))
-    })
-    .await
-    .context("reading the folder's remote")
-}
-
 /// The files that more than one of these checkouts (name, folder) changed since their branches parted. Git runs
 /// off the caller's thread; a checkout git cannot read is left out.
 pub async fn checkout_overlaps(checkouts: Vec<(String, PathBuf)>) -> Result<Vec<maitty_shared::overlap::Overlap>> {
@@ -2483,7 +2473,6 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         Query::Git { .. }
         | Query::GitIdentityRule { .. }
         | Query::CloneRepo { .. }
-        | Query::TicketWrite { .. }
         | Query::Extensions { .. }
         | Query::SideAnswer { .. } => false,
         Query::Settings
@@ -2506,9 +2495,6 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::GitHubOwners { .. }
         | Query::AgentCommands { .. }
         | Query::Repositories { .. }
-        | Query::Tickets { .. }
-        | Query::TicketKeys { .. }
-        | Query::TicketLinks { .. }
         | Query::GitIdentities { .. }
         | Query::SavedConversations { .. }
         | Query::List
@@ -3162,7 +3148,7 @@ mod agent_command_tests {
     #[test]
     fn a_message_queued_for_a_working_agent_is_checked_and_one_is_dropped_only_by_a_daemon_that_can() {
         use super::{ClientMsg, Command, PaneCommand, daemon_reads, queued_message};
-        use maitty_shared::protocol::{DROP_QUEUED_SINCE, PROTOCOL_VERSION};
+        use maitty_shared::protocol::PROTOCOL_VERSION;
         assert!(queued_message("  ".into(), false).is_err());
         assert!(queued_message("x".repeat(super::MAX_HELD_MESSAGE_BYTES + 1), false).is_err());
         assert!(matches!(
@@ -3179,86 +3165,34 @@ mod agent_command_tests {
             ClientMsg::Command(Command::DropQueued { term: 4, index: 1, text }) if text == "then test"
         ));
         assert!(daemon_reads(&drop, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&drop, DROP_QUEUED_SINCE - 1));
     }
 
-    #[test]
-    fn sending_a_queued_chat_message_now_is_asked_only_of_a_daemon_that_reads_it() {
-        use super::{ClientMsg, Command, daemon_reads, refuse_unless_daemon_reads};
-        use maitty_shared::conversation::ConversationId;
-        use maitty_shared::protocol::{PROTOCOL_VERSION, SEND_NOW_SINCE};
-        let now = ClientMsg::Command(Command::ConversationSendNow {
-            id: ConversationId(3),
-            generation: 2,
-            operation: 5,
-        });
-        assert!(daemon_reads(&now, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&now, SEND_NOW_SINCE - 1));
-        assert!(refuse_unless_daemon_reads(&now, SEND_NOW_SINCE - 1).is_err());
-    }
 
     #[test]
     fn a_terminal_send_carries_its_operation_only_to_a_daemon_that_honours_it() {
         use super::{ClientMsg, Command, held_message, named_send, queued_message};
-        use maitty_shared::protocol::TERMINAL_SEND_OPERATIONS_SINCE;
+        use maitty_shared::protocol::PROTOCOL_VERSION;
         // The window draws operations within a JavaScript number's exact integers; the largest arrives whole.
         const LARGEST: u64 = (1 << 53) - 1;
         assert_eq!(serde_json::from_str::<u64>("9007199254740991").unwrap(), LARGEST);
         let held = held_message("fix it".into()).unwrap().message(3);
         let queued = queued_message("next".into(), false).unwrap().message(3);
         assert!(matches!(
-            named_send(held.clone(), LARGEST, TERMINAL_SEND_OPERATIONS_SINCE),
+            named_send(held.clone(), LARGEST, PROTOCOL_VERSION),
             ClientMsg::Command(Command::SendWhenReady { term: 3, operation: Some(LARGEST), .. })
         ));
         assert!(matches!(
-            named_send(queued.clone(), 9, TERMINAL_SEND_OPERATIONS_SINCE),
+            named_send(queued.clone(), 9, PROTOCOL_VERSION),
             ClientMsg::Command(Command::QueueFollowUp { term: 3, operation: Some(9), .. })
         ));
-        assert!(matches!(
-            named_send(held, 9, TERMINAL_SEND_OPERATIONS_SINCE - 1),
-            ClientMsg::Command(Command::SendWhenReady { operation: None, .. })
-        ));
-        assert!(matches!(
-            named_send(queued, 9, TERMINAL_SEND_OPERATIONS_SINCE - 1),
-            ClientMsg::Command(Command::QueueFollowUp { operation: None, .. })
-        ));
     }
 
-    #[test]
-    fn a_repository_question_newer_than_every_daemon_is_refused_in_words_by_an_older_one() {
-        use super::{ClientMsg, Query, refuse_unless_daemon_reads, repo_question_needs_version};
-        use maitty_shared::protocol::{FIND_FILES_SINCE, PROTOCOL_VERSION};
-        use maitty_shared::repo::RepoRequest;
-        let repo = |request| ClientMsg::Query(Query::Repo { term: 3, tag: 0, request });
-        let find = repo(RepoRequest::FindFiles { query: "main".into(), limit: 50 });
 
-        assert!(repo_question_needs_version(&find));
-        let refused = refuse_unless_daemon_reads(&find, FIND_FILES_SINCE - 1).unwrap_err();
-        assert!(refused.to_string().contains("older than this app"), "{refused}");
-        assert!(refuse_unless_daemon_reads(&find, PROTOCOL_VERSION).is_ok());
-        assert!(!repo_question_needs_version(&repo(RepoRequest::Status)));
-    }
 
     #[test]
-    fn a_daemon_from_before_saved_conversations_is_not_asked_for_them() {
-        use super::{ClientMsg, Query, daemon_reads};
-        use maitty_shared::protocol::{PROTOCOL_VERSION, SAVED_CONVERSATIONS_SINCE};
-        let ask = ClientMsg::Query(Query::SavedConversations {
-            agent: "claude".into(),
-            folder: "~/app".into(),
-            tag: 0,
-        });
-        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&ask, SAVED_CONVERSATIONS_SINCE - 1));
-    }
-
-    #[test]
-    fn a_worktree_standing_reaches_the_app_with_missing_said_and_an_old_daemon_is_not_asked() {
-        use super::{ClientMsg, Query, daemon_reads, standing_shown};
-        use maitty_shared::protocol::{PROTOCOL_VERSION, WORKTREE_STANDING_SINCE, WorktreeStanding};
-        let ask = ClientMsg::Query(Query::WorktreeStanding { repo: "/code/app".into(), folder: "/code/task".into() });
-        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&ask, WORKTREE_STANDING_SINCE - 1));
+    fn a_worktree_standing_reaches_the_app_with_missing_said() {
+        use super::standing_shown;
+        use maitty_shared::protocol::WorktreeStanding;
         let stale = WorktreeStanding {
             dirty: 0,
             branch: Some("task".into()),
@@ -3274,23 +3208,7 @@ mod agent_command_tests {
         assert_eq!((gone["missing"].as_bool(), gone["inactive_days"].is_null()), (Some(true), true));
     }
 
-    #[test]
-    fn a_daemon_from_before_closed_sessions_is_not_asked_for_them() {
-        use super::{ClientMsg, Query, daemon_reads};
-        use maitty_shared::protocol::{CLOSED_SESSIONS_SINCE, PROTOCOL_VERSION};
-        let ask = ClientMsg::Query(Query::ClosedSessions);
-        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&ask, CLOSED_SESSIONS_SINCE - 1));
-    }
 
-    #[test]
-    fn a_daemon_from_before_reopening_closed_sessions_is_not_asked_to() {
-        use super::{daemon_reads, reopen_closed_message};
-        use maitty_shared::protocol::{PROTOCOL_VERSION, REOPEN_CLOSED_SINCE};
-        let reopen = reopen_closed_message("claude".into(), "abc-123".into());
-        assert!(daemon_reads(&reopen, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&reopen, REOPEN_CLOSED_SINCE - 1));
-    }
 
     fn closed_in(cwd: std::path::PathBuf) -> maitty_shared::protocol::ClosedSession {
         maitty_shared::protocol::ClosedSession {
@@ -3340,15 +3258,6 @@ mod agent_command_tests {
         assert_eq!(rows[2]["folder_present"], true);
     }
 
-    #[test]
-    fn a_daemon_from_before_warm_agents_is_not_asked_for_one() {
-        use super::{ClientMsg, Command, daemon_reads};
-        use maitty_shared::protocol::{PREWARM_SINCE, PROTOCOL_VERSION};
-        let drop = ClientMsg::Command(Command::DropPrewarm);
-        assert!(daemon_reads(&drop, PROTOCOL_VERSION));
-        assert!(daemon_reads(&drop, PREWARM_SINCE));
-        assert!(!daemon_reads(&drop, PREWARM_SINCE - 1));
-    }
 }
 
 #[cfg(test)]

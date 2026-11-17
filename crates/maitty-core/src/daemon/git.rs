@@ -72,13 +72,6 @@ pub fn status(dir: &Path) -> Option<GitInfo> {
     })
 }
 
-/// The main checkout of the repository `dir` is in (`None` outside git): what every worktree of
-/// one repository shares.
-pub(super) fn main_checkout(dir: &Path) -> Option<PathBuf> {
-    let common = abs(dir, git(dir, &["rev-parse", "--git-common-dir"]).ok()?.trim());
-    repo_root_of_common(&common).map(crate::daemon::clean_path)
-}
-
 /// The main checkout's root: the parent of the common `.git` directory.
 fn repo_root_of_common(common: &Path) -> Option<PathBuf> {
     let c = common.canonicalize().ok()?;

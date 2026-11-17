@@ -55,7 +55,6 @@ const ICON_DRAWINGS = {
     <Svg size={13} strokeWidth={1.75}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.1z" /></Svg>
   ),
   chart: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></Svg>,
-  ticket: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z" /><path d="M10 5v14" strokeDasharray="2 2" /></Svg>,
   list: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 6h16M4 12h16M4 18h16" /></Svg>,
   person: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0" /></Svg>,
   board: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M3 4h5v16H3zM9.5 4h5v11h-5zM16 4h5v7h-5z" /></Svg>,

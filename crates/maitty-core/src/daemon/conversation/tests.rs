@@ -2089,17 +2089,6 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             Query::GitHubOwners { tag: 9 },
             Query::AgentCommands { agent: crate::conversation::Provider::Claude, folder: "/code".into(), tag: 9 },
             Query::AgentSignIn { agent: crate::protocol::SignInAgent::Codex, request: crate::protocol::SignInRequest::Start, tag: 9 },
-            Query::Tickets { source: "me/widgets".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 },
-            Query::TicketKeys {
-                change: crate::protocol::TicketKeyChange::Set {
-                    provider: maitty_shared::tickets::TicketProvider::Plane,
-                    address: "https://plane.example.com".into(),
-                    workspace: "w".into(),
-                    key: crate::protocol::SecretText("plane_api_SECRETVALUE0123".into()),
-                },
-                tag: 9,
-            },
-            Query::TicketKeys { change: crate::protocol::TicketKeyChange::Remove { provider: maitty_shared::tickets::TicketProvider::Linear }, tag: 9 },
         ];
         for (client, query) in (442..).zip(about_github) {
             let from = authenticated_pane(&mut session);
@@ -2107,34 +2096,11 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
         }
 
-        // A person's client is answered, here with a refusal that needs no `gh`.
-        let nowhere = Query::Tickets { source: "not a repository".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 };
-        let answered = exchange(&mut session, 460, crate::protocol::ClientMsg::Query(nowhere), None).await;
-        assert!(
-            matches!(answered, ServerMsg::Reply(crate::protocol::Reply::Tickets { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(_)) })),
-            "{answered:?}"
-        );
-
         // A person's client is told plainly that Gemini has no sign-in to run, and nothing is started.
         let gemini = Query::AgentSignIn { agent: crate::protocol::SignInAgent::Gemini, request: crate::protocol::SignInRequest::Start, tag: 4 };
         let told = exchange(&mut session, 470, crate::protocol::ClientMsg::Query(gemini), None).await;
         assert!(
             matches!(told, ServerMsg::Reply(crate::protocol::Reply::AgentSignIn { tag: 4, state: crate::protocol::SignInState::Failed(crate::protocol::SignInFailure::Unsupported), .. })),
-            "{told:?}"
-        );
-
-        // Tickets are read-only (ADR 0011): a window from before that still asks for a write, even a
-        // confirmed one, is told so with its tag and keeps its connection.
-        let close = Query::TicketWrite {
-            source: "me/widgets".into(),
-            id: "github:me/widgets#1".into(),
-            write: maitty_shared::tickets::TicketWrite::Close,
-            confirmed: true,
-            tag: 9,
-        };
-        let told = exchange(&mut session, 462, crate::protocol::ClientMsg::Query(close), None).await;
-        assert!(
-            matches!(told, ServerMsg::Reply(crate::protocol::Reply::TicketWrite { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(ref why)) }) if why.contains("no longer")),
             "{told:?}"
         );
 

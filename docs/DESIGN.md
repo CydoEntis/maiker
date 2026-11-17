@@ -238,7 +238,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   needs colour), spacing `--s1`..`--s9` (2, 4, 6, 8, 12, 16, 20, 24, 32px), the type scale (`--text-h1` 22px down to
   `--text-tag` 10.5px mono, `--text-reply` 14.5/1.65, `--text-code` 12.5/1.65), the corner radii (`--r-control`,
   `--r-panel`, `--r-badge`) and motion (`--t-fast` 120ms, `--t-base` 180ms, `--t-slow` 260ms, `--t-spin` 900ms, one
-  `--ease` of `cubic-bezier(.2,.8,.2,1)`; Reduce motion zeroes the three durations). A panel that opens from a side (the side panel, the sidebar's width and its narrow-window overlay, the terminal dock, Tickets and its ticket page) moves 28px and fades: in over `--panel-in` (0.28s, `cubic-bezier(.22,.9,.24,1)`), out over `--panel-out` (0.22s, `cubic-bezier(.4,0,.7,.2)`; the ticket page 0.19s), and stays on screen, unclickable, until it has gone (`usePresence`); with motion reduced it comes and goes at once (the 2h handoff, §1). The usage meters read `--m-ok`,
+  `--ease` of `cubic-bezier(.2,.8,.2,1)`; Reduce motion zeroes the three durations). A panel that opens from a side (the side panel, the sidebar's width and its narrow-window overlay, the terminal dock) moves 28px and fades: in over `--panel-in` (0.28s, `cubic-bezier(.22,.9,.24,1)`), out over `--panel-out` (0.22s, `cubic-bezier(.4,0,.7,.2)`), and stays on screen, unclickable, until it has gone (`usePresence`); with motion reduced it comes and goes at once (the 2h handoff, §1). The usage meters read `--m-ok`,
   `--m-mid`, `--m-or` and `--m-hi`, which every theme sets. `--card`, `--done` and `--sh-pop` are set in `index.css`
   and `workspace.css`.
 - **Primitives (`apps/gui/src/components/ui/`).** The chat handoff's shared pieces, each on the tokens above and named
@@ -302,7 +302,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   Windows draws them, close hovering `#c42b1c`; `TitleBarView.tsx`). What the old menu started is in the command palette and the sidebar.
 - **No tools bar.** The right-hand tools column is gone; its jobs live in the session header (Changes and Files buttons,
   the ⋯ menu) and the terminal dock. The ⋯ menu lists **Changes**, **Files**, **History**, **Checks** (with `N failed` beside it
-  while checks fail), **Tickets** (Start from a ticket, UI › *Tickets view*; also in the command palette) and **Terminal**
+  while checks fail) and **Terminal**
   (shows or hides the dock, adding the first terminal when the session has none; `toggleTerminal`), then the pane's own entries.
   A view button opens the side panel on that view, or closes it when it already shows it. There is no middle column and no tab bar: the window is the sidebar, the workspace and the side panel.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
@@ -312,8 +312,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   **400px** (`--chat-min`): the side panel beside it shrinks first, down to its 300px, and under **900px**
   (`inspect.css`) the side panel lies over the chat instead of beside it.
 - **Settings dialog** (⌘,). A nav on `--m-well` at the left, in three groups under dim caps: **APP** (General,
-  Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal) and **MACHINES** (Remote machines, M;
-  Tickets, I). Each item is 32px with a plain 15px glyph stroked in its section's colour and its jump key at the right;
+  Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal) and **MACHINES** (Remote machines, M). Each item is 32px with a plain 15px glyph stroked in its section's colour and its jump key at the right;
   the current one is on `--m-raise` with an inset `--line`. The nav's foot is the **update box** (`UpdateBox.tsx`): a
   dot in the state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Up to date", "Update
   failed"), the running version at its right, a dim note when there is one, the download bar while it downloads, and
@@ -823,7 +822,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   chat with a worktree of its own, a plain one otherwise), the project in `--muted`, `/`, the branch in mono `--branch` as a button
   with a chevron that opens "Branch in <project>", and, for a session on another machine, `· machine`. A plain shell has one line, `zsh · <cwd>`, and nothing else until an agent starts in it.
   The header is a size container: under 700px the project goes, under 560px the branch's name and the machine. Right: the **Chat | Terminal** toggle (a data-fold segmented frame, a 13px mark and the word in each), the
-  **Changes** button (two joined branches) with a count badge of the changed files, a **Files** button and the **⋯** menu (Changes, Files, History, Checks, Tickets, Terminal, then split, rename and the pane's other entries). There is no PR chip (the pull
+  **Changes** button (two joined branches) with a count badge of the changed files, a **Files** button and the **⋯** menu (Changes, Files, History, Checks, Terminal, then split, rename and the pane's other entries). There is no PR chip (the pull
   request is in the row's hover card and Checks), no replay control and no model name.
 - **New session dialog.** 620px, `--main` with a `--line2` edge, the dialog shadow and a 14px corner (Folded: bevel and flaps), over a 50% black scrim. A 44px header band on `--well` holds the Machine, Project and Branch tokens (28px, 13px text, a 9px chevron, `/` between them; each opens a 320px list with a 34px head that names the token, a 32px search and 32px rows; a footer row for **Add a machine…**, **Open a folder…**, **Clone from GitHub…**), then the **Own worktree** switch with its 12px label and ×. A one-line note under it (12px `--muted`) says what a worktree is, or which chat holds the branch. The message box is 4 rows (14px on 1.5) with no border of its own; the foot is a 50px row: agent switch, model button (28px), **Opens as** Chat | Terminal and **Start** (28px, `--fg` on the page colour, `Ctrl ↵` in 11px mono). Focus is the 2px accent underline on every control, except the message box, which has none (the dialog's border does not change either). The foot wraps instead of clipping: the model button is compact (model and a dim effort, no agent name, mark or meter), unselected agents show their mark alone, agent marks are bare glyphs with no tile, and the Branch token gives up width before Project and Machine. Token lists sit above the dialog (z-index 95). Terminal mode drops the worktree switch and Start reads **Open terminal**.
 - **Open a folder picker.** 580px, the same float. A 46px head ("Open a folder on" and the machine dropdown, 14px 600), 32px tabs (Repositories | Browse; the picked one has the accent underline), a 40px find field, then a 300px list: 30px rows for folders (name, a mono branch, an enter chevron on the picked row), 40px rows for repositories (name, `~/code/` path in mono, "Used <ago>"). The foot is 50px: the index note and Rescan at the left, Cancel and **Open <name> ↵** at the right. The M loader shows while a machine is read for more than 160 ms; an asleep machine shows an amber dot and a sentence instead of a list.

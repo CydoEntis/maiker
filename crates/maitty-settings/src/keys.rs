@@ -265,8 +265,6 @@ pub enum Action {
     Branches,
     /// The project's reference images and design files, in the side panel.
     References,
-    /// The project's tickets (GitHub, Plane, Linear), in the side panel.
-    Tickets,
     /// A shell in the folder of the session you're on, straight away.
     ShellHere,
     /// Scroll to the command before (or after) the one at the top of the view.
@@ -391,7 +389,6 @@ impl Action {
             Action::ReloadAgents => "Reload agents that missed their hooks".into(),
             Action::Branches => "Branch".into(),
             Action::References => "References".into(),
-            Action::Tickets => "Tickets".into(),
             Action::ShellHere => "New shell here".into(),
             Action::PrevPrompt => "Previous command in history".into(),
             Action::NextPrompt => "Next command in history".into(),
@@ -494,7 +491,6 @@ impl Action {
             Action::ReloadAgents => "reload-agents".into(),
             Action::Branches => "branch".into(),
             Action::References => "references".into(),
-            Action::Tickets => "tickets".into(),
             Action::ShellHere => "shell-here".into(),
             Action::PrevPrompt => "prev-prompt".into(),
             Action::NextPrompt => "next-prompt".into(),
@@ -623,7 +619,8 @@ impl FromStr for Action {
             "reload-agents" => Action::ReloadAgents,
             "branch" | "switch-branch" => Action::Branches,
             "references" => Action::References,
-            "tickets" => Action::Tickets,
+            // The tickets view is gone (ADR 0013); a saved binding stays loadable and does nothing.
+            "tickets" => Action::None,
             "shell-here" => Action::ShellHere,
             "prev-prompt" => Action::PrevPrompt,
             "next-prompt" => Action::NextPrompt,
@@ -726,7 +723,6 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
     ("g", "branch"),
     ("h", "history"),
     ("e", "references"),
-    ("p", "tickets"),
     ("o", "find-file"),
     ("l", "worktrees"),
     ("y", "copy-mode"),

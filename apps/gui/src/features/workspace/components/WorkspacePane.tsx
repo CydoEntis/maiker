@@ -46,7 +46,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, inspectView, diffStat, setTicketsOpen, setInspectOpen, terminalShown, canDock, toggleTerminal } = useWorkspace()
+  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, inspectView, diffStat, terminalShown, canDock, toggleTerminal } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -152,10 +152,9 @@ export function WorkspacePane({ shown, pane, kept }: {
         </PaneErrorBoundary>
       ) : undefined}
       panelView={inspectOpen && focused ? inspectView : null}
-      {...(hasPanel ? { onPanel: (view: InspectView) => { setTicketsOpen(false); togglePanel(pane.id, session.id, view) } } : {})}
+      {...(hasPanel ? { onPanel: (view: InspectView) => { togglePanel(pane.id, session.id, view) } } : {})}
       changedFiles={focused ? (diffStat.data?.files ?? 0) : 0}
       failingChecks={checksNeedingYou(session.checks)}
-      onTickets={() => { setInspectOpen(false); setTicketsOpen(true) }}
       {...(canDock && focused ? { onToggleTerminal: toggleTerminal } : {})}
       terminalShown={terminalShown}
       {...(terminals && !shell ? { onNewTerminal: () => { addAgentTerminal(session.id) } } : {})}

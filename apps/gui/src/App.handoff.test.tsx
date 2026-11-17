@@ -330,7 +330,7 @@ describe('desktop terminal multiplexer', () => {
     fireEvent.contextMenu(pane)
 
     const menu = await screen.findByRole('menu', { name: 'a' })
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.querySelector('.mx-ctx-label')?.textContent)).toEqual(['Changes', 'Files', 'History', 'Checks', 'Tickets', 'Terminal', 'Split right', 'Split down', 'Rename…', 'Maximize pane', 'Clear', 'Copy folder path', 'Close pane · ends its session'])
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.querySelector('.mx-ctx-label')?.textContent)).toEqual(['Changes', 'Files', 'History', 'Checks', 'Terminal', 'Split right', 'Split down', 'Rename…', 'Maximize pane', 'Clear', 'Copy folder path', 'Close pane · ends its session'])
     daemon.startShellSession.mockResolvedValue(undefined)
     await user.click(within(menu).getByRole('menuitem', { name: /^Split right/ }))
     // A split opens a new shell beside this one.

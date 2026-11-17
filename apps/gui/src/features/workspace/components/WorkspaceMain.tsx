@@ -21,7 +21,6 @@ import { displayName } from '../model/session'
 import { rowTitle } from '../model/sidebar'
 import { resolveStartFolder } from '../model/startFolder'
 import { WorkspacePane } from './WorkspacePane'
-import { TicketsOverlay, TICKETS_EXIT_MS } from '@/features/tickets/TicketsOverlay'
 import { usePresence } from '@/lib/usePresence'
 import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
@@ -29,11 +28,10 @@ import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
 /** The middle of the window: the New session dialog, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow, terminalShown, setDockFocused, sessionMap, newTerminal } = useWorkspace()
+  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, newTerminal } = useWorkspace()
   // The version whose Update ready banner Later put away; the sidebar's chip still offers the restart.
   const [updateLater, setUpdateLater] = useState<string | null>(null)
   const reduced = useReducedMotion()
-  const tickets = usePresence(ticketsOpen, TICKETS_EXIT_MS, reduced)
   const terminal = usePresence(terminalShown, TERMINAL_DOCK_EXIT_MS, reduced)
   // The dock shows the focused session's terminals; while it slides out it keeps the session it was showing.
   const [dockAgentId, setDockAgentId] = useState(focusedSession?.id)
@@ -156,7 +154,6 @@ export function WorkspaceMain() {
                     onChangeStartFolder={() => { setSettingsSection('general') }}
                   />
                 )}
-                {tickets.shown && !newChatOpen && <TicketsOverlay leaving={tickets.leaving} />}
               </main>
               {dock !== null && dockAgent !== undefined && <TerminalDock agent={dockAgent} leaving={terminal.leaving} />}
               </div>

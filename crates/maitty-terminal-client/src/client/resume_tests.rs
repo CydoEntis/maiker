@@ -255,7 +255,7 @@ fn an_error_from_the_daemon_closes_the_waiting_list_and_says_why() {
 #[test]
 fn a_daemon_too_old_to_list_them_is_not_asked_and_the_toast_says_why() {
     let (mut app, mut rx) = app_with_outbox();
-    app.local_protocol = crate::protocol::SAVED_CONVERSATIONS_SINCE - 1;
+    app.local_protocol = crate::protocol::COMPATIBLE_SINCE - 1;
     sent(&mut rx);
     app.act(Action::ResumeConversation);
     assert!(sent(&mut rx).is_empty(), "nothing is asked of it");

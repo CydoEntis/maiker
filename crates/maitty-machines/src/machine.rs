@@ -1119,18 +1119,6 @@ mod tests {
     }
 
     #[test]
-    fn a_link_that_wants_the_newest_refuses_an_older_daemon_it_could_still_talk_to() {
-        use super::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION};
-        const { assert!(COMPATIBLE_SINCE < PROTOCOL_VERSION) };
-        let welcomed = |version| maitty_ipc_transport::Welcomed { version, compatible_since: COMPATIBLE_SINCE };
-        let older = welcomed(PROTOCOL_VERSION - 1);
-        assert!(super::accepts(false, older));
-        assert!(!super::accepts(true, older));
-        assert!(super::accepts(true, welcomed(PROTOCOL_VERSION)));
-        assert!(!super::accepts(false, welcomed(COMPATIBLE_SINCE - 1)));
-    }
-
-    #[test]
     fn a_hello_for_another_machine_never_carries_a_pane_claim() {
         let dial = || super::Dial {
             attach: false,

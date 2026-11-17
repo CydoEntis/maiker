@@ -103,7 +103,6 @@ impl App {
             Action::ReloadAgents => self.reload_agents_from_menu(),
             Action::Branches => self.toggle_branch_sheet(),
             Action::References => self.toggle_references_sheet(),
-            Action::Tickets => self.toggle_tickets_sheet(),
             Action::History => self.mode = Mode::History { sel: 0 },
             Action::Machines => self.open_machines(),
             Action::SpawnTab(c) => {
@@ -375,7 +374,6 @@ impl App {
             Action::Changes,
             Action::Branches,
             Action::References,
-            Action::Tickets,
             Action::CopyMode,
             Action::Search,
             Action::ScrollUp,

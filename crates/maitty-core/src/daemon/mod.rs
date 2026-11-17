@@ -26,7 +26,6 @@ mod git_rule;
 mod github;
 mod helpers;
 mod identity;
-mod keychain;
 mod last_lines;
 mod pane_terminal;
 mod permission_ask;
@@ -49,15 +48,6 @@ mod status;
 mod sync;
 mod term;
 mod terminal_sends;
-mod ticket_http;
-mod ticket_keys;
-mod ticket_links;
-mod ticket_repo_file;
-mod ticket_setup;
-mod tickets;
-mod tickets_github;
-mod tickets_linear;
-mod tickets_plane;
 mod usage;
 mod usage_store;
 mod warm;
@@ -85,9 +75,6 @@ type ClientId = u64;
 /// What a client that fell too far behind is told as it is let go.
 const LAGGED_REASON: &str = "This window fell too far behind the service and was let go; it connects again for a fresh copy.";
 /// How often the daemon looks at its timers (statuses, saves and git).
-/// What a window from before tickets became read-only is told when it asks to change one.
-const TICKET_WRITE_RETIRED: &str = "Maitty no longer changes tickets; change it in the tracker";
-
 const TICK: Duration = Duration::from_millis(250);
 const INTEGRATION_STARTUP_GRACE: Duration = Duration::from_secs(3);
 /// How often each workspace's git state is read again.
@@ -311,14 +298,6 @@ pub enum Ev {
         tag: u64,
         answer: crate::protocol::SideAnswer,
     },
-    /// An agent's ask for its project's ticket setup, with the project and what is set up read.
-    TicketSetupRead {
-        client: ClientId,
-        term: TermId,
-        source: Option<maitty_shared::ticket_links::TicketSetupSource>,
-        link: String,
-        found: Result<ticket_setup::Found, String>,
-    },
     RepoReady {
         client: ClientId,
         tag: u64,
@@ -471,8 +450,6 @@ struct Daemon {
     /// pane's status before it asked.
     questions: Vec<(HumanQuestion, ClientId, Status)>,
     secrets: secrets::Secrets,
-    /// When each project's ticket setup was last opened for an agent.
-    ticket_setups: ticket_setup::Shown,
     /// The agents' sign-ins this daemon runs on a window's request.
     sign_ins: agent_sign_in::SignIns,
     prs: pr::Prs,
@@ -790,7 +767,6 @@ async fn serve(
             if !client_reads(&msg, theirs) {
                 continue;
             }
-            let msg = for_client(msg, theirs);
             let bye = matches!(msg, ServerMsg::Bye);
             if ipc::send(&mut w, &msg).await.is_err() || bye {
                 return;
@@ -829,21 +805,6 @@ async fn serve(
 /// never sent a message added after it: it could not decode it, and would drop the connection.
 fn client_reads(msg: &ServerMsg, theirs: u32) -> bool {
     theirs >= msg.introduced_in()
-}
-
-/// `msg` as a client at `theirs` can read it. A reasoning item is a kind of history entry added
-/// inside the compatibility window: an older client could not decode a page that held one, so
-/// its pages go without them.
-fn for_client(mut msg: ServerMsg, theirs: u32) -> ServerMsg {
-    use crate::conversation::history::Content;
-    if theirs < REASONING_ITEM_SINCE
-        && let ServerMsg::Reply(Reply::ConversationRead(read)) = &mut msg
-    {
-        read.history
-            .entries
-            .retain(|entry| !matches!(entry.content, Content::Reasoning { .. }));
-    }
-    msg
 }
 
 /// Whether a frame that would not decode is passed over instead of ending the connection: only
@@ -1255,12 +1216,6 @@ impl Daemon {
             {
                 anyhow::bail!("only a pane asks for its own secret")
             }
-            // The setup is shown to you on a pane's behalf; a window opens it itself.
-            Command::OpenTicketSetup { term, .. }
-                if self.clients.get(&client).and_then(|c| c.from) != Some(*term) =>
-            {
-                anyhow::bail!("only an agent pane asks for its own project's ticket setup")
-            }
             Command::AnswerSecret { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("a secret is yours to give, not a pane's")
             }
@@ -1348,7 +1303,6 @@ impl Daemon {
             pending_ops: 0,
             questions: Vec::new(),
             secrets: secrets::Secrets::default(),
-            ticket_setups: ticket_setup::Shown::default(),
             sign_ins: agent_sign_in::SignIns::default(),
             prs: pr::Prs::default(),
             last_secret_files: Instant::now(),
@@ -2526,9 +2480,6 @@ impl Daemon {
             Ev::SideAnswerReady { client, tag, answer } => {
                 self.send(client, ServerMsg::Reply(Reply::SideAnswer { tag, answer }));
             }
-            Ev::TicketSetupRead { client, term, source, link, found } => {
-                self.ticket_setup_read(client, term, source, link, found);
-            }
             Ev::RepoReady {
                 client,
                 tag,
@@ -3239,28 +3190,6 @@ impl Daemon {
                             }
                         }
                     }
-                    Query::Tickets { .. }
-                        if self.clients.get(&client).is_some_and(|client| {
-                            client.from.is_some() || client.structured.is_some()
-                        }) =>
-                    {
-                        ServerMsg::Error("Only a human client can read tickets from this machine".into())
-                    }
-                    Query::TicketKeys { .. }
-                        if self.clients.get(&client).is_some_and(|client| {
-                            client.from.is_some() || client.structured.is_some()
-                        }) =>
-                    {
-                        ServerMsg::Error("Only a human client can keep a ticket provider's key".into())
-                    }
-                    // Retired: Maitty only reads tickets. The request stays on the wire so a window from
-                    // before is told so, rather than losing its connection over an unknown message.
-                    Query::TicketWrite { tag, .. } => ServerMsg::Reply(Reply::TicketWrite {
-                        tag,
-                        answer: Err(maitty_shared::tickets::TicketError::Invalid(
-                            TICKET_WRITE_RETIRED.into(),
-                        )),
-                    }),
                     Query::Extensions { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
@@ -3273,40 +3202,6 @@ impl Daemon {
                         tokio::task::spawn_blocking(move || {
                             let answer = extensions::answer(request);
                             let reply = Reply::Extensions { tag, answer };
-                            let _ = tx.blocking_send(Ev::Answered { client, reply });
-                        });
-                        return;
-                    }
-                    Query::TicketLinks { .. }
-                        if self.clients.get(&client).is_some_and(|client| {
-                            client.from.is_some() || client.structured.is_some()
-                        }) =>
-                    {
-                        ServerMsg::Error("Only a human client can change which tickets a project reads".into())
-                    }
-                    Query::TicketLinks { place, change, tag } => {
-                        let tx = self.tx.clone();
-                        tokio::task::spawn_blocking(move || {
-                            let answer = ticket_links::change(&ticket_links::LinkStore::real(), place, change, ticket_links::main_checkout, &ticket_links::RepoFiles::real());
-                            let reply = Reply::TicketLinks { tag, answer };
-                            let _ = tx.blocking_send(Ev::Answered { client, reply });
-                        });
-                        return;
-                    }
-                    Query::TicketKeys { change, tag } => {
-                        let tx = self.tx.clone();
-                        tokio::task::spawn_blocking(move || {
-                            let answer = ticket_keys::change(&ticket_keys::KeyStore::real(), change);
-                            let reply = Reply::TicketKeys { tag, answer };
-                            let _ = tx.blocking_send(Ev::Answered { client, reply });
-                        });
-                        return;
-                    }
-                    Query::Tickets { source, request, tag } => {
-                        let tx = self.tx.clone();
-                        tokio::task::spawn_blocking(move || {
-                            let answer = tickets::answer(&source, request);
-                            let reply = Reply::Tickets { tag, answer };
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
@@ -4271,43 +4166,6 @@ mod tests {
             PROTOCOL_VERSION + 1,
             &anyhow::anyhow!("the pipe closed")
         ));
-    }
-
-    #[test]
-    fn a_client_from_before_reasoning_items_is_sent_its_history_without_them() {
-        use super::{REASONING_ITEM_SINCE, Reply, ServerMsg, for_client};
-        use crate::conversation::history::Content;
-        let page: crate::conversation::ReadResult = serde_json::from_value(serde_json::json!({
-            "conversation": 1, "generation": 1, "status": "Done", "receipt": null, "error": null,
-            "checks": [], "approvals": [],
-            "history": { "next": null, "completeness": "Complete", "entries": [
-                { "source": { "conversation": 1, "turn": "t", "item": "thought" }, "state": "Completed",
-                  "content": { "Reasoning": { "text": "Weighing two fixes" } } },
-                { "source": { "conversation": 1, "turn": "t", "item": "said" }, "state": "Completed",
-                  "content": { "Message": { "role": "Assistant", "text": "Done." } } },
-            ] },
-        }))
-        .unwrap();
-        let kinds = |theirs: u32| {
-            let sent = for_client(ServerMsg::Reply(Reply::ConversationRead(page.clone())), theirs);
-            let ServerMsg::Reply(Reply::ConversationRead(read)) = sent else {
-                panic!("a read stays a read");
-            };
-            read.history
-                .entries
-                .iter()
-                .map(|entry| matches!(entry.content, Content::Reasoning { .. }))
-                .collect::<Vec<_>>()
-        };
-
-        assert_eq!(kinds(REASONING_ITEM_SINCE), [true, false]);
-        assert_eq!(kinds(REASONING_ITEM_SINCE - 1), [false]);
-        const {
-            assert!(
-                REASONING_ITEM_SINCE > crate::protocol::COMPATIBLE_SINCE
-                    && REASONING_ITEM_SINCE <= crate::protocol::PROTOCOL_VERSION
-            )
-        };
     }
 
     #[test]

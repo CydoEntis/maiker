@@ -623,56 +623,6 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   is passed on only when its name is `owner/name` in GitHub's own characters, and the address to clone
   is built from that name (`clone_address`), so text from `gh` or from another machine never becomes an
   address by itself. Only a person's client may ask.
-- **Reading tickets** (`Query::Tickets`, `daemon/tickets_github.rs`, `maitty_shared::tickets`) reads a
-  repository's milestones, issues and issue comments through the machine's own `gh`, and writes
-  nothing: there is no request that comments, labels, closes or edits. The repository must be
-  `owner/name` (`is_repo`); an assignee must be a login; a label and a search are checked, and each is
-  joined to its flag (`--label=…`) so it can never be read as a flag of its own; a milestone or an
-  issue must belong to that repository. Everything is an argument list, never a shell line, and `gh`'s
-  prompts are off. No token is asked for, kept, logged or sent. **What comes back is other people's
-  writing and is not trusted**: control and hidden characters are dropped (`hidden::sanitize`), every
-  string is cut, lists and comments are capped, a number that is not a whole number is refused, an
-  address is built from the checked repository and number (a pull request link must be exactly a
-  GitHub pull request's address), and `gh`'s output is read only up to 4 MiB. No ticket text is
-  logged, and a failure is one of a few fixed lines, never `gh`'s own words (which may echo a token).
-  A ticket's text that looks like an instruction is still only text; it reaches an agent only framed
-  as the ticket's words (MAITTY-394). The same cleaning is applied again to an answer from another
-  machine (`remote_policy::vet`), and only a person's client may ask.
-- **A ticket provider's key** (Plane, Linear; `Query::TicketKeys`, `daemon/ticket_keys.rs`) is held by the
-  daemon of the computer that reads the tickets, in the system's keychain (`daemon/keychain.rs`:
-  Windows Credential Manager, the macOS login Keychain, the Secret Service on Linux), so it is not a
-  file an agent running as the same user can read by opening it. A machine with no keychain (no Secret
-  Service, a server reached over ssh) keeps it in one small file per provider in Maitty's data folder
-  (`ticket-keys/plane.json`, `ticket-keys/linear.json`: the folder `0700`, the file `0600` on unix; on
-  Windows the user's own app data, which only they and administrators can read), and the client says
-  so ("Key kept in a file: no keychain on this machine"). A key moves from the file to the keychain only
-  once the keychain gives it back unchanged (DATABASE). A keychain error is never logged as it came,
-  since one kind of it holds the stored bytes; only "unavailable" or "failed" is kept. The keychain
-  crates (`keyring-core` and one native store per platform; the Secret Service one over pure-Rust D-Bus
-  with Rust crypto) run no build script and log no secret. The key is never
-  in `config.toml` (which is synced), a repository, a log line, a snapshot, an agent's environment or
-  a reply to a client. A person's client sets or removes a key; a pane and a structured runtime are
-  refused before the request is read ([ADR 0006](adr/0006-secrets-never-enter-chat.md): a secret is
-  never typed into a conversation). The only thing a client can read back is whether a key is set, where
-  it is kept (`stored_in`: keychain or file), and Plane's server address and workspace, which are not
-  secret. In the daemon the key is a `Secret`: it
-  prints as `Secret(..)`, and on the wire it is a `SecretText`, which prints as `<hidden>`. A key is
-  checked on the way in (printable ASCII, 8 to 200 characters); Plane's address must pass the same
-  `check_base_url` that every request does, so a key cannot be saved for an address it could not be
-  sent to; Linear's server is fixed and a key for it takes no address.
-- **A repository's ticket file** (`.maitty/tickets.toml`, `daemon/ticket_repo_file.rs`) is the repository's
-  text, so it is untrusted. It is read only when it and its `.maitty` folder are plain (a link is refused), at
-  most 16 KB, as TOML with no unknown keys; every part is checked (GitHub `owner/name`, Plane's address through
-  `check_base_url` and its workspace and project as plain ids, a Linear team id). It only fills a source not
-  linked here, and it never decides where a key goes: a Plane entry is used only when its address and workspace
-  are the ones your saved key is for, and otherwise it is shown as a note and not used. It is never written.
-- **An agent's ticket setup** (`Command::OpenTicketSetup`, `daemon/ticket_setup.rs`, `<app>_tickets_setup`) only
-  opens the setup in the person's windows. The agent never sends or receives a key (the MCP tool refuses
-  anything but an http(s) link, and the reply says only what is linked and whether a key is saved), it cannot
-  save a link, and only the pane itself may ask, for its own project, once per project every 5 seconds. The
-  suggested link is drawn as text and never opened or saved on its own. An ask from another machine is ignored.
-- **Tickets are never written** (ADR 0011). No request changes a ticket; a retired `Query::TicketWrite` from an
-  older window is answered with a refusal before any key is read or any command runs.
 - **Extensions** (`Query::Extensions`, `daemon/extensions/`, `maitty_shared::extensions`) install code that runs with
   the person's access: a plugin ships hooks and servers, an MCP server is a command (or a remote address that hears
   the person's prompts), and neither agent asks first (`plugin install --json` simply does it). So the daemon asks.
@@ -694,32 +644,6 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   the page says to use the agent's own terminal. What an agent says is shown as one cleaned line with words that
   look like a key (`key=…`, a bearer, a 32-character token) hidden; a typed error is the contract, not stderr.
   *Not run on Windows or against a live plugin from the internet.*
-- **Reading Plane and Linear** (`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`, over
-  `daemon/ticket_http.rs`) sends a stored key to a server, so what goes where is fixed. *Sent:* the key
-  in one header (`X-API-Key` for Plane, `Authorization` for Linear), the request path, and for Linear a
-  GraphQL query; a person's search words, label and name go to Linear as query *variables*, never into
-  the query text, and to Plane not at all (it is filtered here). *Sent to:* Plane's address from the key
-  file, which must pass `check_base_url` on every call (https anywhere; http only to loopback, a private
-  or link-local address, a name with no dots or ending `.local`/`.lan`), with its workspace and every id
-  restricted to letters, digits and dashes before it enters a path; Linear's one server,
-  `https://api.linear.app/graphql`, a constant that the key file cannot change. Every request in these
-  two files is a read: Plane's calls are all `GET`, Linear's are all `query`. *How:*
-  the system `curl` (no new dependency), with the key on its standard input as a config, never on the
-  command line where `ps` shows it; `--disable` so a user's `.curlrc` cannot change it; no redirect is
-  followed, so a key is never forwarded; Plane may be spoken to over http or https, Linear over https
-  only; 20 seconds and 4 MiB at most (the reader stops at the cap even when the server does not say how
-  long its answer is). *Refused:* a control character in a request, a header name that is not plain, an
-  address that fails `check_base_url`. *What comes back is other people's writing and is not trusted:*
-  cleaned and capped as GitHub's is, an id that is not plain characters is dropped, a ticket's address
-  is built here (Plane) or kept only when it is `https://linear.app/…` (Linear), a pull request link
-  must be exactly a GitHub pull request's address, HTML in a Plane description is reduced to text.
-  *Never in any message, log or `Debug`:* the key, a ticket's text, and the server's own words: a
-  failure is one of a few fixed lines (key refused, not found, rate limited, "the server had an error",
-  "could not be reached", "larger than can be read"), and a refused key is `SignedOut`. Linear's cost is
-  capped (at most 50 nodes a connection, 8 pages a list, small fixed nested lists) so a query cannot be
-  refused as too complex or used up a rate limit. A ticket's text that looks like an instruction is
-  still only text. Not yet checked against a live Plane or Linear server; the shapes follow their public
-  APIs.
 
 No user accounts. Access to the daemon is access to its local socket: a named
 pipe on Windows, a Unix socket in the temp directory elsewhere, named per user

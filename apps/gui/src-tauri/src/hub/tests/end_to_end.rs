@@ -91,11 +91,7 @@ impl Host {
                 | Reaction::GitHubOwners { .. }
                 | Reaction::AgentCommands { .. }
                 | Reaction::Repositories { .. }
-                | Reaction::Tickets { .. }
-                | Reaction::TicketKeys { .. }
-                | Reaction::TicketLinks { .. }
                 | Reaction::Extensions { .. }
-                | Reaction::TicketSetup(_)
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),
                 Reaction::Sessions { machine, snapshot } => {

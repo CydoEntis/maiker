@@ -37,19 +37,6 @@ pub fn clone_address(repo: &str) -> Option<String> {
     is_repo(repo).then(|| format!("https://github.com/{repo}.git"))
 }
 
-/// The repository `owner/name` a git remote's address points at on github.com, or `None` for any other host or
-/// shape. Takes the https form (`https://github.com/owner/name(.git)`) and the ssh forms (`git@github.com:owner/name`,
-/// `ssh://git@github.com/owner/name`); a name is checked with `is_repo`, never trusted as written.
-pub fn repo_of_remote(address: &str) -> Option<String> {
-    let address = address.trim();
-    let path = ["https://github.com/", "http://github.com/", "git@github.com:", "ssh://git@github.com/"]
-        .iter()
-        .find_map(|prefix| address.strip_prefix(prefix))?;
-    let path = path.trim_end_matches('/');
-    let path = path.strip_suffix(".git").unwrap_or(path);
-    is_repo(path).then(|| path.to_owned())
-}
-
 /// The longest number a pull request has, in digits.
 const PULL_NUMBER_MAX_DIGITS: usize = 10;
 
@@ -79,21 +66,6 @@ pub fn is_time(text: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn a_remote_names_its_github_repository_and_nothing_else() {
-        for (remote, repo) in [
-            ("https://github.com/CydoEntis/maitty.git", "CydoEntis/maitty"),
-            ("https://github.com/o/r", "o/r"),
-            ("git@github.com:my-org/my.repo_1.git", "my-org/my.repo_1"),
-            ("ssh://git@github.com/o/r.git\n", "o/r"),
-        ] {
-            assert_eq!(repo_of_remote(remote).as_deref(), Some(repo), "{remote}");
-        }
-        for not in ["https://gitlab.com/o/r.git", "https://github.com/o", "https://github.com/o/r/tree/main", "git@github.com:../x", "", "https://github.com.evil/o/r"] {
-            assert_eq!(repo_of_remote(not), None, "{not}");
-        }
-    }
 
     #[test]
     fn a_pull_request_address_is_githubs_and_nothing_more() {

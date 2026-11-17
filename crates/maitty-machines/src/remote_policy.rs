@@ -15,7 +15,6 @@ use crate::remote_snapshot::{ITEMS_MAX, PANE_DIM_MAX, sanitize_snapshot, sanitiz
 use maitty_shared::hidden::sanitize;
 use maitty_shared::github::{clone_address, is_login, is_time};
 use maitty_shared::protocol::{GitHubAnswer, GitHubRepoList, Reply, ServerMsg};
-use maitty_shared::tickets::TicketError;
 
 /// Most bytes of a remote clipboard write that are honoured.
 pub const CLIPBOARD_MAX_BYTES: usize = 64 * 1024;
@@ -87,12 +86,6 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::Reply(Reply::SavedConversations { .. }) => {
             Verdict::Ignore("saved conversations are listed for this computer's folders only")
         }
-        // Another person's words about a repository this window asked that machine for; cleaned
-        // in `vet` and only while the question is out.
-        ServerMsg::Reply(Reply::Tickets { .. } | Reply::TicketKeys { .. }) => Verdict::Answer,
-        ServerMsg::Reply(Reply::TicketWrite { .. }) => {
-            Verdict::Ignore("ticket writes are asked of this computer only")
-        }
         ServerMsg::Reply(Reply::Extensions { .. }) => {
             Verdict::Ignore("extensions are changed on this computer only")
         }
@@ -112,9 +105,6 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         }
         ServerMsg::ConversationChanged { .. } => {
             Verdict::Ignore("the chats read here are this computer's, not another machine's")
-        }
-        ServerMsg::TicketSetup(_) => {
-            Verdict::Ignore("the ticket setup opened here is for this computer's projects")
         }
     }
 }
@@ -237,27 +227,6 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
         }),
         // Another machine's folder names: paths and branches cleaned, the list capped.
         ServerMsg::Reply(Reply::Repositories { tag, found }) => ServerMsg::Reply(Reply::Repositories { tag, found: found.cleaned() }),
-        ServerMsg::Reply(Reply::Tickets { tag, answer }) => ServerMsg::Reply(Reply::Tickets {
-            tag,
-            answer: match answer {
-                Ok(reply) => reply.cleaned().ok_or_else(|| TicketError::Invalid("that machine sent a ticket that is not one".into())),
-                Err(error) => Err(error.cleaned()),
-            },
-        }),
-        // Only whether a key is set and where it points; the words are cleaned, the list capped.
-        ServerMsg::Reply(Reply::TicketKeys { tag, answer }) => ServerMsg::Reply(Reply::TicketKeys {
-            tag,
-            answer: answer
-                .map(|states| states.into_iter().take(maitty_shared::tickets::TicketProvider::ALL.len()).map(|state| state.cleaned()).collect())
-                .map_err(|error| error.cleaned()),
-        }),
-        // A repository file's notes are that repository's words.
-        ServerMsg::Reply(Reply::TicketLinks { tag, answer }) => ServerMsg::Reply(Reply::TicketLinks {
-            tag,
-            answer: answer
-                .map(|links| maitty_shared::ticket_links::TicketLinks { repo_file: links.repo_file.map(|file| file.cleaned()), ..links })
-                .map_err(|error| error.cleaned()),
-        }),
         other => other,
     })
 }
@@ -697,70 +666,6 @@ mod tests {
     }
 
     #[test]
-    fn tickets_from_another_machine_are_answers_and_are_cleaned_and_capped() {
-        use maitty_shared::tickets::{
-            StateCategory, TICKET_BODY_MAX_CHARS, TICKET_COMMENTS_MAX, Ticket, TicketComment, TicketState, TicketSummary, TicketsReply,
-        };
-        let summary = |id: &str| TicketSummary {
-            id: id.into(),
-            title: "t\u{1b}[31m\u{202e}x\n".into(),
-            state: TicketState { name: "Open".into(), category: StateCategory::Open },
-            labels: Vec::new(),
-            assignee: None,
-            url: "javascript:alert(1)".into(),
-            groups: Vec::new(),
-            updated_at: "<b>".into(),
-        };
-        let ticket = |id: &str| Ticket {
-            summary: summary(id),
-            body: format!("a\u{1b}[0m\u{200b}b{}", "z".repeat(TICKET_BODY_MAX_CHARS)),
-            comments: (0..TICKET_COMMENTS_MAX + 5).map(|_| TicketComment { author: "a".into(), body: "b".into(), created_at: String::new() }).collect(),
-            comments_more: false,
-            links: vec!["javascript:x".into()],
-            blocked_by: Vec::new(),
-        };
-        let reply = |tag, answer| ServerMsg::Reply(Reply::Tickets { tag, answer });
-
-        // It is an answer: kept while a question is out, dropped when none is.
-        let sent = reply(3, Ok(TicketsReply::Ticket(Box::new(ticket("github:o/r#1")))));
-        assert_eq!(allow(&nothing_on(), &sent), Verdict::Answer);
-        assert!(vet(&nothing_on(), false, "box", sent.clone()).is_none());
-        let Some(ServerMsg::Reply(Reply::Tickets { tag: 3, answer: Ok(TicketsReply::Ticket(clean)) })) = vet(&nothing_on(), true, "box", sent) else {
-            panic!("an answer that was asked for is kept");
-        };
-        assert_eq!(clean.summary.title, "t[31mx");
-        assert_eq!((clean.summary.url.as_str(), clean.summary.updated_at.as_str()), ("", ""));
-        assert!(clean.body.starts_with("a[0mb") && clean.body.chars().count() == TICKET_BODY_MAX_CHARS);
-        assert_eq!((clean.comments.len(), clean.comments_more, clean.links.len()), (TICKET_COMMENTS_MAX, true, 0));
-
-        // A ticket with an id that is not one is refused, and an error is one clean line.
-        let forged = reply(4, Ok(TicketsReply::Ticket(Box::new(ticket("x y")))));
-        let Some(ServerMsg::Reply(Reply::Tickets { answer: Err(TicketError::Invalid(_)), .. })) = vet(&nothing_on(), true, "box", forged) else {
-            panic!("a ticket without an id is refused");
-        };
-        let failed = reply(5, Err(TicketError::Unreachable("no\u{1b}[0m\nway".into())));
-        let Some(ServerMsg::Reply(Reply::Tickets { answer: Err(TicketError::Unreachable(why)), .. })) = vet(&nothing_on(), true, "box", failed) else {
-            panic!("a reason is kept");
-        };
-        assert!(!why.contains(['\u{1b}', '\n']));
-    }
-
-    #[test]
-    fn where_another_machines_keys_stand_is_cleaned_and_capped() {
-        use maitty_shared::tickets::{TicketKeyState, TicketProvider};
-        let state = |provider| TicketKeyState { provider, set: true, address: "https://p\u{1b}[0m.example\u{202e}".into(), workspace: "w\n".into(), stored_in: maitty_shared::tickets::KeyStorage::Keychain };
-        let sent = ServerMsg::Reply(Reply::TicketKeys { tag: 2, answer: Ok(vec![state(TicketProvider::Plane), state(TicketProvider::Linear), state(TicketProvider::Plane)]) });
-        assert_eq!(allow(&nothing_on(), &sent), Verdict::Answer);
-        assert!(vet(&nothing_on(), false, "box", sent.clone()).is_none());
-        let Some(ServerMsg::Reply(Reply::TicketKeys { answer: Ok(states), .. })) = vet(&nothing_on(), true, "box", sent) else {
-            panic!("an answer that was asked for is kept");
-        };
-        assert_eq!(states.len(), TicketProvider::ALL.len());
-        assert_eq!((states[0].address.as_str(), states[0].workspace.as_str()), ("https://p[0m.example", "w"));
-        assert_eq!(states[0].stored_in, maitty_shared::tickets::KeyStorage::Keychain, "where the key is kept comes through");
-    }
-
-    #[test]
     fn commands_from_another_machine_are_cleaned_and_only_while_asked() {
         use maitty_shared::agent_commands::AgentCommand;
         let command = |name: &str, description: &str| AgentCommand { name: name.into(), description: description.into(), hint: String::new(), aliases: Vec::new() };
@@ -903,12 +808,6 @@ mod tests {
                 id: maitty_shared::conversation::ConversationId(1),
                 generation: 1,
             },
-            ServerMsg::TicketSetup(maitty_shared::ticket_links::TicketSetupAsk {
-                term: 1,
-                folder: "/srv/app".into(),
-                source: None,
-                link: String::new(),
-            }),
             ServerMsg::Bye,
         ]
     }
@@ -931,7 +830,6 @@ mod tests {
             ServerMsg::SettingsChanged(_) => "SettingsChanged",
             ServerMsg::Raise => "Raise",
             ServerMsg::ConversationChanged { .. } => "ConversationChanged",
-            ServerMsg::TicketSetup(_) => "TicketSetup",
             ServerMsg::Bye => "Bye",
         }
     }
@@ -978,8 +876,7 @@ mod tests {
                 "AutoWorkspace",
                 "SettingsChanged",
                 "Raise",
-                "ConversationChanged",
-                "TicketSetup"
+                "ConversationChanged"
             ]
         );
     }

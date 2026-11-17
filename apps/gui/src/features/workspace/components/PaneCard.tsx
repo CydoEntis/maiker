@@ -49,8 +49,6 @@ export type PaneCardProps = {
   changedFiles: number
   /** Checks of the pull request that fail: said beside Checks in the ⋯ menu. */
   failingChecks: number
-  /** Opens the project's tickets over the chat area; absent where there are none to open. */
-  onTickets?: () => void
   /** Shows or hides the terminal dock; absent where the session cannot have one. */
   onToggleTerminal?: () => void
   terminalShown: boolean
@@ -124,14 +122,13 @@ export function PaneCard(props: PaneCardProps) {
     ? CHAT_AGENTS.filter((agent) => agent !== session.process).map((agent) => ({ label: `Hand off to ${agentName(agent)}`, disabled: !props.online, run: () => { props.onHandoff(agent) } }))
     : []
 
-  // What the removed tools bar held, behind the ⋯: the side panel's four views, Tickets and the terminal dock.
+  // What the removed tools bar held, behind the ⋯: the side panel's four views and the terminal dock.
   const toolItems: MenuEntry[] = [
     ...(props.onPanel === undefined ? [] : PANEL_VIEWS.map(({ view, label }) => ({
       label,
       hint: view === 'changes' ? shortcutText('inspect') : view === 'checks' && props.failingChecks > 0 ? `${String(props.failingChecks)} failed` : props.panelView === view ? 'Open' : '',
       run: () => { props.onPanel?.(view) },
     }))),
-    ...(props.onTickets === undefined ? [] : [{ label: 'Tickets', run: props.onTickets }]),
     ...(props.onToggleTerminal === undefined ? [] : [{ label: props.terminalShown ? 'Hide terminal' : 'Terminal', hint: shortcutText('terminal'), run: props.onToggleTerminal }]),
   ]
 

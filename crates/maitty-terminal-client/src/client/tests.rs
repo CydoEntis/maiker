@@ -14852,16 +14852,16 @@ mod drawer_tab_tests {
     }
 
     #[test]
-    fn tab_and_shift_tab_cycle_files_changes_branch_references_and_tickets() {
+    fn tab_and_shift_tab_cycle_files_changes_branch_and_references() {
         let (mut app, dir) = in_repo("cycle");
         app.act(Action::Files);
-        use screen::SheetKind::{Branch, Changes, Files, References, Tickets};
-        for want in [Changes, Branch, References, Tickets, Files] {
+        use screen::SheetKind::{Branch, Changes, Files, References};
+        for want in [Changes, Branch, References, Files] {
             key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
             assert_eq!(open(&app), Some(want), "Tab");
             assert!(app.view_has_keys(), "the new view has the keys");
         }
-        for want in [Tickets, References, Branch, Changes, Files] {
+        for want in [References, Branch, Changes, Files] {
             key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT);
             assert_eq!(open(&app), Some(want), "Shift+Tab");
         }

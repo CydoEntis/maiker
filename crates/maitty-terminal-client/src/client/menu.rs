@@ -632,7 +632,6 @@ impl App {
             ("Branches", Action::Branches),
             ("History", Action::History),
             ("References", Action::References),
-            ("Tickets", Action::Tickets),
         ]
         .into_iter()
         .map(|(label, action)| (label.to_string(), Act::Tool(action)))
