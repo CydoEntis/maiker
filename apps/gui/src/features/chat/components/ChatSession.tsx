@@ -16,7 +16,7 @@ import { useChatFeed } from '../useChatFeed'
 import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } from '../useChatComposer'
 import { countUserMessages } from '../workPhase'
 import { startedWithYolo } from '../yoloSessions'
-import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel } from '../chatMeta'
+import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
 import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
@@ -51,6 +51,9 @@ import type { ConfirmAsk, WindowRoute } from '../windowCommands'
 import { namedCommand } from '../slashCommands'
 import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import { useAside } from '../useAside'
+import { lastReply, permissionsCard, statusCard, transcriptMarkdown } from '../commandCards'
+import { copyBlock, saveBlock } from '../saveBlock'
+import { nowSeconds } from '@/features/workspace/model/newChatHost'
 import { SignInCard } from '@/features/signin/SignInCard'
 import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { AsideCard } from './AsideCard'
@@ -338,7 +341,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
-  const [confirming, setConfirming] = useState<{ ask: ConfirmAsk; typed: string } | null>(null)
+  // `then` is what a yes does when it is not the command itself: moving the session to plan mode.
+  const [confirming, setConfirming] = useState<{ ask: ConfirmAsk; typed: string; then?: () => void } | null>(null)
   const aside = useAside(link.conversation)
   const signIn = useAgentSignIn(undefined)
   const signInView = signIn.view
@@ -346,20 +350,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const runConfirmed = (typed: string) => {
     if (runInTerminal !== undefined && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) runInTerminal(typed)
     else void sendText(typed)
-  }
-  const runInWindow = windowActions === undefined ? undefined : (route: WindowRoute, typed: string) => {
-    switch (route.kind) {
-      case 'settings': windowActions.openSettings(route.section); return
-      case 'panel': windowActions.openPanel(route.view); return
-      case 'recent': windowActions.openRecent(); return
-      case 'confirm': setConfirming({ ask: route.ask, typed }); return
-      case 'aside': aside.ask(route.title, route.ask); return
-      case 'note': aside.show(route.title, route.text); return
-      case 'signIn': signIn.begin(route.agent); return
-      case 'rename': windowActions.renameSession(route.name); void sendText(typed); return
-      case 'commands':
-      case 'complete': return
-    }
   }
   // A message just sent shows at once, with the agent taken to be at work on it, until the history has it.
   // A first message typed while the agent started is held, and shows exactly as the starting chat showed it (the bubble, then the
@@ -372,6 +362,45 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // What the history says without the working line or hidden runs: whether the agent has answered what was last asked,
   // and the summary a new chat starts from, which reads the last reply as it was said.
   const bareRows = useMemo(() => buildRows(events, false, root, echoText, false), [events, root, echoText])
+  // A command the window answers from what the chat holds, or by a control it already has. Nothing here changes a permission
+  // mode without a click: /plan asks first, and /permissions only says what the modes are.
+  const pickMode = 'onPickMode' in agentControls ? agentControls.onPickMode : undefined
+  const runInWindow = windowActions === undefined ? undefined : (route: WindowRoute, typed: string) => {
+    switch (route.kind) {
+      case 'settings': windowActions.openSettings(route.section); return
+      case 'panel': windowActions.openPanel(route.view); return
+      case 'recent': windowActions.openRecent(); return
+      case 'confirm': setConfirming({ ask: route.ask, typed }); return
+      case 'aside': aside.ask(route.title, route.ask); return
+      case 'note': aside.show(route.title, route.text); return
+      case 'signIn': signIn.begin(route.agent); return
+      case 'rename': windowActions.renameSession(route.name); void sendText(typed); return
+      case 'card':
+        if (route.card === 'status') aside.show('Status', statusCard({ agent, model: shownModel, effort, mode: shownMode, folder: root, usage, now: nowSeconds(), working, online }))
+        else aside.show('Permissions', permissionsCard(agent, shownMode, agent === 'codex' ? CODEX_START_MODES : PICKABLE_MODES))
+        return
+      case 'copy': {
+        const reply = lastReply(bareRows)
+        if (reply === null) toast.message(`${agent} has not said anything yet.`)
+        else copyBlock(reply, 'Could not copy the reply')
+        return
+      }
+      case 'export': {
+        const text = transcriptMarkdown(bareRows, agent)
+        if (text === null) toast.message('There is nothing to export yet.')
+        else saveBlock('conversation', 'md', text)
+        return
+      }
+      case 'plan':
+        if (shownMode === PLAN_MODE) aside.show('Plan mode', `${agent} is already in plan mode. It reads and plans, and changes nothing until you approve the plan.`)
+        else if (pickMode === undefined) aside.show('Plan mode', 'This chat cannot change its permission mode from here.')
+        else if (chipsLocked !== null) toast.message(chipsLocked)
+        else setConfirming({ ask: { title: 'Switch to plan mode?', body: `${agent} will read and plan and change nothing until you approve the plan. You can pick another mode with the shield button.`, confirmLabel: 'Plan mode' }, typed, then: () => { pickMode(PLAN_MODE) } })
+        return
+      case 'commands':
+      case 'complete': return
+    }
+  }
   const lastKind = bareRows.at(-1)?.kind
   const replied = lastKind !== undefined && lastKind !== 'user' && lastKind !== 'echo'
   useEffect(() => { repliedRef.current = replied })
@@ -594,7 +623,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   return (
     <FilesHereContext.Provider value={sessionId === undefined || machineNameOf(sessionId) === null}>
     <div ref={chat} className="mx-chat" onKeyDown={onKeyDown} onClick={keepComposerFocus} onMouseUp={(event) => { const next = pickedText(event); if (next !== undefined) setPicked(next) }}>
-      {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed } = confirming; setConfirming(null); runConfirmed(typed) }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
+      {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={() => { if (chat.current !== null) quotePicked(chat.current) }} />}
       {(notices.length > 0 || fullAccess) && (
@@ -623,7 +652,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         <ChatSkeleton />
       )}
       {signInView !== null && <SignInCard view={signInView} onCancel={() => { signIn.cancel(signInView.agent) }} onClose={signIn.close} onRetry={() => { signIn.begin(signInView.agent) }} />}
-      {aside.aside !== null && <AsideCard aside={aside.aside} onClose={aside.close} onAskInConversation={(question) => { aside.close(); void sendText(question) }} />}
+      {aside.aside !== null && <OpenFileContext.Provider value={openFile}><AsideCard aside={aside.aside} onClose={aside.close} onAskInConversation={(question) => { aside.close(); void sendText(question) }} /></OpenFileContext.Provider>}
       <Composer
         agent={agent}
         composer={composer}
