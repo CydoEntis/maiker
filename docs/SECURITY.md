@@ -172,7 +172,7 @@ Daemon › Service log). The webview supplies nothing: the log, the folder and t
 host's, and an existing file is never replaced (`export::save_in`). The log names folders,
 repositories and sessions, so the setting says to look before sharing it.
 
-`agent_commands` (the same module) asks the same way for the slash commands Claude Code takes, for
+`agent_commands` (`maitty-agent-ask`, started by the host for this computer and by a daemon for its own machine on `Query::AgentCommands`; another machine's answer is cleaned again in `remote_policy`) asks the same way for the slash commands Claude Code takes, for
 the chat's command picker. It differs in one input: the webview names the folder the program is
 started in, so the project's own commands and skills are listed. The host starts it only in a full
 path to a folder that exists, and in the home folder otherwise; a compromised webview could thereby

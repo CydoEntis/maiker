@@ -14,8 +14,9 @@
 
 use maitty_machines::MachineId;
 use maitty_machines::remote_snapshot::sanitize_snapshot;
-use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, SignInAgent, SignInState, Snapshot, Status, TermId};
+use maitty_shared::agent_commands::AgentCommand;
 use maitty_shared::extensions::{ExtError, ExtReply};
+use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, SignInAgent, SignInState, Snapshot, Status, TermId};
 use maitty_shared::settings_view::SharedSettings;
 use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWritten, TicketsReply};
 use std::collections::{BTreeMap, HashMap};
@@ -132,6 +133,12 @@ pub enum Out {
         machine: MachineId,
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
+    },
+    /// The slash commands and skills an agent takes on a machine, already cleaned.
+    AgentCommands {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<Vec<AgentCommand>, String>,
     },
     /// What a machine read of a ticket source, already cleaned by the daemon (and vetted for another machine's).
     Tickets {
@@ -291,6 +298,9 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::GitHubOwners { tag, answer }) => {
                 out.push(Out::GitHubOwners { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::AgentCommands { tag, answer }) => {
+                out.push(Out::AgentCommands { machine, tag, answer });
             }
             ServerMsg::Reply(Reply::Tickets { tag, answer }) => {
                 out.push(Out::Tickets { machine, tag, answer });

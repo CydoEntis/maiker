@@ -1207,12 +1207,7 @@ export async function loadAgentModels(agent: 'claude' | 'codex'): Promise<z.infe
   return invokeParsed('agent_models', AgentModelsSchema, { agent })
 }
 
-const AgentCommandsSchema = z.array(z.object({ name: z.string(), description: z.string(), hint: z.string(), aliases: z.array(z.string()) }))
-
-/** The slash commands an agent takes in a folder (its own, and the person's and the project's); empty for an agent with no list to ask for. */
-export async function loadAgentCommands(agent: string, folder: string): Promise<z.infer<typeof AgentCommandsSchema>> {
-  return invokeParsed('agent_commands', AgentCommandsSchema, { agent, folder })
-}
+export { loadAgentCommands } from './agentCommands'
 
 const AgentAuthSchema = z.object({ installed: z.boolean(), signedIn: z.boolean().nullable(), account: z.string(), plan: z.string() })
 export type AgentAuth = z.infer<typeof AgentAuthSchema>

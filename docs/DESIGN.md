@@ -495,8 +495,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   messages. The text size draws the whole chat larger or smaller (`zoom` on `.mx-chat`), cards and message box included.
 - **Slash commands.** In a Claude chat, a slash as the first thing in the message box opens the agent's commands over
   it (`SlashPicker`, the shared `ResultsList`): its own, and the person's and the project's commands, skills and
-  plugins, as Claude Code itself lists them for the session's folder (`agent_commands`, asked as the chat opens and
-  again after five minutes), each with what it does and what it takes. Typing narrows them (the exact name, then names
+  plugins, as Claude Code itself lists them for the session's folder on the machine the chat runs on (`agent_commands`,
+  or `agent_commands_on` for another machine's daemon; asked as the chat opens and again after five minutes; a machine
+  that is offline or lacks the agent is named in the picker's note, never answered with this computer's list), each with what it does and what it takes. Typing narrows them (the exact name, then names
   that start with it, then a plugin's command by its own name, then names that hold it). The list is square, headed
   "Commands" with the number that match, with the keys at its foot (↑↓ choose, Tab complete, Enter run, Esc close);
   with none it says "No command by that name" and "Press Enter to send <typed> to the agent as a message.". ↑ ↓ move, **Tab** completes
@@ -506,7 +507,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   follows 400ms later (`typeMessage`, `COMMAND_SUBMIT_GAP_MS`): sent with the text, Claude Code takes the Enter for the
   path it is completing and leaves `/export /some/path` typed in its box, and Codex loses it. Claude Code leaves
   the commands that only its terminal runs out of that list (`/help`, `/permissions`, `/resume`, `/add-dir`…), so they
-  are written by hand in `terminalCommands.ts` (from Claude Code 2.1.322, each run in 2.1.325) and offered, tagged `terminal`, to an agent
+  are written by hand in `terminalCommands.ts` (`CLAUDE_COMMANDS_PINNED_FOR`, the version each was run in) and offered, tagged `terminal`, to an agent
   that has a terminal: running one types it there and shows the terminal, since its menu is the terminal's to draw,
   and it is refused with a toast while the agent works. One typed out with what it takes goes the same way, since
   Claude Code draws its answer only in the terminal.
@@ -555,8 +556,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   the agent has not reported yet is an empty ring and "–" in `--dim` ("not reported yet" in its tooltip), never a
   made-up 0% (ADR 0009). Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
-  list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from Codex CLI
-  0.167.0). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
+  list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from the Codex CLI
+  named by `CODEX_COMMANDS_PINNED_FOR`). The few whose result the conversation shows are sent from the chat; the rest open a picker or a page in
   Codex's terminal, are tagged `terminal`, and run there with the terminal shown. Codex does list its **skills**
   (`agent_commands` asks its app server, `skills/list`), so those are offered too, tagged `skill` and written `$name`
   as Codex's own box takes them: beside the commands after a slash, alone after a `$`. Picking one leaves `$name ` in

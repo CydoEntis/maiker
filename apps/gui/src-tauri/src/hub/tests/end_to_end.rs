@@ -89,6 +89,7 @@ impl Host {
                 | Reaction::GitHubAccounts { .. }
                 | Reaction::GitHubRepos { .. }
                 | Reaction::GitHubOwners { .. }
+                | Reaction::AgentCommands { .. }
                 | Reaction::Tickets { .. }
                 | Reaction::TicketKeys { .. }
                 | Reaction::TicketWrite { .. }

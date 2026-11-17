@@ -5,6 +5,7 @@
 //! arguments (never through a shell), sends that one request, reads the reply and stops it. No
 //! message is sent, so it uses none of the account's allowance, and the session is not kept.
 
+use maitty_shared::agent_commands::{AGENT_COMMANDS_MAX, AgentCommand, DESCRIPTION_MAX_CHARS, HINT_MAX_CHARS, command_name, one_line};
 use serde_json::Value;
 use std::path::Path;
 use std::process::Stdio;
@@ -41,48 +42,7 @@ pub struct Listed {
     pub efforts: Vec<String>,
 }
 
-/// One slash command as Claude Code lists it, cleaned for the window (`commands`).
-#[derive(Debug, PartialEq, serde::Serialize)]
-pub struct Command {
-    /// What is typed after the slash: `compact`, or `plugin:command`.
-    pub name: String,
-    pub description: String,
-    /// What the command takes after its name, as its author wrote it; empty when it takes nothing.
-    pub hint: String,
-    /// Other names it answers to.
-    pub aliases: Vec<String>,
-}
-
-/// A reply longer than this is cut: no installation has this many commands.
-const MAX_COMMANDS: usize = 2000;
-const MAX_NAME_CHARS: usize = 100;
-/// The picker shows a line or two of a description; skills write paragraphs.
-const MAX_DESCRIPTION_CHARS: usize = 240;
-const MAX_HINT_CHARS: usize = 80;
-/// Claude Code's own plumbing, which nobody types.
-const INTERNAL_PREFIX: &str = "__";
-
-/// A name the window may put in a text box and send to a terminal: letters, digits and the marks
-/// command names are written with. Anything else (a space, a control character, an escape) is not a
-/// command name, so the entry is left out.
-pub(crate) fn command_name(raw: &str) -> Option<String> {
-    let name = raw.trim();
-    let allowed = |c: char| c.is_alphanumeric() || matches!(c, '-' | '_' | ':' | '.');
-    (!name.is_empty()
-        && !name.starts_with(INTERNAL_PREFIX)
-        && name.chars().count() <= MAX_NAME_CHARS
-        && name.chars().all(allowed))
-    .then(|| name.to_string())
-}
-
-/// Text for one line of the picker: runs of whitespace and control characters become one space, and
-/// it is cut at `limit` characters.
-pub(crate) fn one_line(raw: &str, limit: usize) -> String {
-    let words: Vec<&str> = raw.split(|c: char| c.is_whitespace() || c.is_control()).filter(|word| !word.is_empty()).collect();
-    words.join(" ").chars().take(limit).collect()
-}
-
-fn commands(reply: &Value) -> Vec<Command> {
+fn commands(reply: &Value) -> Vec<AgentCommand> {
     reply
         .get("commands")
         .and_then(Value::as_array)
@@ -90,10 +50,10 @@ fn commands(reply: &Value) -> Vec<Command> {
         .flatten()
         .filter_map(|command| {
             let text = |key: &str| command.get(key).and_then(Value::as_str).unwrap_or_default();
-            Some(Command {
+            Some(AgentCommand {
                 name: command_name(text("name"))?,
-                description: one_line(text("description"), MAX_DESCRIPTION_CHARS),
-                hint: one_line(text("argumentHint"), MAX_HINT_CHARS),
+                description: one_line(text("description"), DESCRIPTION_MAX_CHARS),
+                hint: one_line(text("argumentHint"), HINT_MAX_CHARS),
                 aliases: command
                     .get("aliases")
                     .and_then(Value::as_array)
@@ -103,7 +63,7 @@ fn commands(reply: &Value) -> Vec<Command> {
                     .collect(),
             })
         })
-        .take(MAX_COMMANDS)
+        .take(AGENT_COMMANDS_MAX)
         .collect()
 }
 
@@ -162,7 +122,7 @@ pub async fn ask(executable: &Path, folder: &Path) -> Result<Vec<Listed>, String
 
 /// Asks the Claude Code at `executable` for the slash commands it takes in `folder`: its own, and
 /// the commands, skills and plugins of the person and of that project.
-pub async fn ask_commands(executable: &Path, folder: &Path) -> Result<Vec<Command>, String> {
+pub async fn ask_commands(executable: &Path, folder: &Path) -> Result<Vec<AgentCommand>, String> {
     initialize(executable, folder).await.map(|reply| commands(&reply))
 }
 
@@ -220,7 +180,8 @@ async fn initialize(executable: &Path, folder: &Path) -> Result<Value, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{commands, listed, reply_in, Command, Listed, MAX_DESCRIPTION_CHARS};
+    use super::{commands, listed, reply_in, Listed, DESCRIPTION_MAX_CHARS};
+    use maitty_shared::agent_commands::AgentCommand;
 
     const REPLY: &str = r#"{"type":"control_response","response":{"request_id":"maitty-models","subtype":"success","response":{"models":[
         {"value":"default","resolvedModel":"claude-fable-5-2","displayName":"Default (recommended)","description":"Fable 5.2","supportsEffort":true,"supportedEffortLevels":["low","medium","high","xhigh","max"]},
@@ -265,8 +226,8 @@ mod tests {
         assert_eq!(
             commands(&reply),
             [
-                Command { name: "compact".into(), description: "Clear history but keep a summary".into(), hint: String::new(), aliases: vec![] },
-                Command { name: "developer:pr".into(), description: "Open a pull request".into(), hint: "[title]".into(), aliases: vec!["pr".into()] },
+                AgentCommand { name: "compact".into(), description: "Clear history but keep a summary".into(), hint: String::new(), aliases: vec![] },
+                AgentCommand { name: "developer:pr".into(), description: "Open a pull request".into(), hint: "[title]".into(), aliases: vec!["pr".into()] },
             ]
         );
     }
@@ -287,7 +248,7 @@ mod tests {
         let listed = commands(&reply);
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].name, "ok");
-        assert_eq!(listed[0].description.chars().count(), MAX_DESCRIPTION_CHARS);
+        assert_eq!(listed[0].description.chars().count(), DESCRIPTION_MAX_CHARS);
         assert!(commands(&serde_json::json!({})).is_empty());
     }
 
