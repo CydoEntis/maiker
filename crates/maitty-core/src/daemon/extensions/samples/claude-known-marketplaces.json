@@ -1,0 +1,10 @@
+{
+  "local-mk": {
+    "source": {
+      "source": "directory",
+      "path": "/home/me/sample/mk"
+    },
+    "installLocation": "/home/me/sample/mk",
+    "lastUpdated": "2026-11-17T02:58:27.878Z"
+  }
+}

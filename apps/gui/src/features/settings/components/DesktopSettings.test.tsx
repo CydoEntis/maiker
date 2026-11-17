@@ -13,6 +13,15 @@ const accounts = vi.hoisted(() => ({
   signOutAgent: vi.fn<(agent: string) => Promise<void>>(),
 }))
 
+const signIn = vi.hoisted(() => ({
+  agentSignIn: vi.fn<(agent: string, request: string) => Promise<{ kind: string; link?: string | null; code?: string | null; failure?: string }>>(),
+}))
+
+vi.mock('@/api/agentSignIn', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/api/agentSignIn')>()),
+  agentSignIn: signIn.agentSignIn,
+}))
+
 vi.mock('@/api/daemon', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/daemon')>()),
   loadAgentAuth: accounts.loadAgentAuth,
@@ -51,17 +60,39 @@ describe('the agents page', () => {
     await waitFor(() => { expect(accounts.loadAgentAuth.mock.calls.filter(([agent]) => agent === 'claude')).toHaveLength(2) })
   })
 
-  it('opens the agent\'s own sign-in for one that is not signed in, and offers nothing for one that is not installed', async () => {
+  it('signs an agent in from a card that shows its link and code, and offers nothing for one that is not installed', async () => {
     const user = userEvent.setup()
-    const onSignInAgent = vi.fn()
     accounts.loadAgentAuth.mockReset().mockImplementation((agent) => Promise.resolve(agent === 'claude'
       ? { installed: false, signedIn: null, account: '', plan: '' }
       : { installed: true, signedIn: false, account: '', plan: '' }))
-    renderSettings('permissions', { onSignInAgent })
+    signIn.agentSignIn.mockReset().mockResolvedValue({ kind: 'waiting', link: 'https://auth.example/device', code: 'AB12-CD34' })
+    renderSettings('permissions')
 
     expect(await screen.findByText('Not installed on this computer.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sign in to Claude' })).not.toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Sign in to Codex' }))
+
+    expect(signIn.agentSignIn).toHaveBeenCalledWith('codex', 'start')
+    const card = await screen.findByRole('region', { name: 'Sign in to Codex' })
+    expect(within(card).getByLabelText('One-time code')).toHaveTextContent('AB12-CD34')
+    expect(within(card).getByRole('button', { name: 'Open link' })).toBeInTheDocument()
+
+    signIn.agentSignIn.mockResolvedValue({ kind: 'idle' })
+    await user.click(within(card).getByRole('button', { name: 'Cancel' }))
+    expect(signIn.agentSignIn).toHaveBeenCalledWith('codex', 'cancel')
+    expect(screen.queryByRole('region', { name: 'Sign in to Codex' })).not.toBeInTheDocument()
+  })
+
+  it('says why a sign-in failed and then offers the agent\'s own sign-in in a terminal', async () => {
+    const user = userEvent.setup()
+    const onSignInAgent = vi.fn()
+    accounts.loadAgentAuth.mockReset().mockResolvedValue({ installed: true, signedIn: false, account: '', plan: '' })
+    signIn.agentSignIn.mockReset().mockResolvedValue({ kind: 'failed', failure: 'timed-out' })
+    renderSettings('permissions', { onSignInAgent })
+
+    await user.click(await screen.findByRole('button', { name: 'Sign in to Codex' }))
+    expect(await screen.findByText('Nobody finished the Codex sign-in in time.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Sign in to Codex in a terminal' }))
 
     expect(onSignInAgent).toHaveBeenCalledExactlyOnceWith('codex')
   })
@@ -78,7 +109,7 @@ describe('desktop settings', () => {
   it('groups the sections the way the design does', () => {
     renderSettings('general')
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(nav).toHaveTextContent('APPGeneralGAppearanceANotificationsNHotkeys?AGENTSChatCPermissionsETerminalTMACHINESRemote machinesMTicketsI')
+    expect(nav).toHaveTextContent('APPGeneralGAppearanceANotificationsNHotkeys?AGENTSChatCPermissionsETerminalTExtensionsXMACHINESRemote machinesMTicketsI')
     expect(within(nav).getByRole('button', { name: /General/ })).toHaveAttribute('aria-current', 'page')
   })
 

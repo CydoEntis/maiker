@@ -29,7 +29,7 @@ import { keepComposerFocus } from '../keepComposerFocus'
 import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
-import { noteAgentSaid, writeChoice } from '../agentChoice'
+import { DEFAULT_PICK, noteAgentSaid, writeChoice } from '../agentChoice'
 import { Composer } from './Composer'
 import { ChatItem, type ChatItemContext } from './ChatItems'
 import { KnownRowsContext } from '../knownRows'
@@ -37,6 +37,7 @@ import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
+import { CommandMenuTray } from './CommandMenuTray'
 import { ProblemBanner } from './ProblemBanner'
 import { summaryOf } from '../summary'
 import type { ChatProblem } from '../problem'
@@ -53,6 +54,8 @@ import { useAside } from '../useAside'
 import { lastReply, permissionsCard, statusCard, transcriptMarkdown } from '../commandCards'
 import { copyBlock, saveBlock } from '../saveBlock'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
+import { SignInCard } from '@/features/signin/SignInCard'
+import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { AsideCard } from './AsideCard'
 import type { RewindPlace } from '../editFromHere'
 import type { FileSearchPlace } from '../fileMention'
@@ -188,7 +191,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }, [working, refresh])
   // The transcript has no entry for a terminal agent's prompt until it is answered, so the chat shows it from the hook's report.
   const stoppedOnPrompt = link.readOnly === true && feed.status === 'Blocked'
-  const answersPrompt = stoppedOnPrompt && typeInto !== undefined && (ask?.answerable === true || (ask?.choices?.length ?? 0) > 0 || formQuestions(ask).length > 0)
   const promptKeys = abilitiesOf(agent).answerKeys
   const answerPrompt = typeInto === undefined || promptKeys === null ? undefined : (choice: AskChoice) => typeInto(promptKeys[choice]).then(refresh)
   // A menu the chat has no buttons for is answered with the keys a person would press, in the agent's own terminal.
@@ -207,15 +209,20 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const answerOwn = typeKeys === undefined ? undefined : (text: string) => typeKeys(ownAnswerKeys(ask?.choices?.length ?? 0, text))
   // A chat that follows the agent's own terminal changes its mode, model and reasoning the way its user would: by typing the agent's commands
   // (Shift+Tab, /model, /effort). Offered for Claude, and not while it works, when the keys would land in its turn.
-  // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model), until the agent's own file says it.
+  // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model, effort), until the agent's own file says it.
+  // The agent's files are the one record of what it runs, so a terminal command and a pick here always show the same.
   const [liveMode, setLiveMode] = useState<{ base: string | null; value: string } | null>(null)
   const [liveModel, setLiveModel] = useState<{ base: string | null; value: string } | null>(null)
+  const [liveEffort, setLiveEffort] = useState<{ base: string | null; value: string } | null>(null)
   const metaMode = feed.meta?.mode ?? null
   const metaModel = feed.meta?.model ?? null
   // What the chat was started with, until the agent's own file says it: the chips the starting chat drew stay as they were.
   const [started] = useState(() => startChoiceOf(sessionId))
   const shownMode = (liveMode !== null && liveMode.base === metaMode ? liveMode.value : metaMode) ?? started?.mode ?? null
-  const shownModel = liveModel !== null && liveModel.base === metaModel ? liveModel.value : metaModel
+  const startedModel = started === null || started.model === DEFAULT_PICK ? null : started.model
+  const startedEffort = started === null || started.reasoning === DEFAULT_PICK ? null : started.reasoning
+  const shownModel = (liveModel !== null && liveModel.base === metaModel ? liveModel.value : metaModel) ?? startedModel
+  const shownEffort = (liveEffort !== null && liveEffort.base === effort ? liveEffort.value : effort) ?? startedEffort
   const abilities = abilitiesOf(agent)
   const canChangeAgent = typeInto !== undefined && abilities.changeAgent && link.readOnly === true
   // Another machine's chat: its screen cannot be read from here, so a mode that must be checked on screen is not picked
@@ -229,9 +236,22 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const chipsLocked = !online ? 'The daemon is offline' : working ? `${agent} is working. Change this when it finishes.` : null
   // Picked commands are typed one after another: each waits for its Enter, so a model and an effort picked together do not interleave.
   const commandChain = useRef<Promise<void>>(Promise.resolve())
+  // A menu the agent's own command opened (Codex's /model), drawn in the chat until it is closed.
+  const [menuOpen, setMenuOpen] = useState(false)
   const agentControls = useMemo(() => {
     if (canPickCodexMode) {
       return {
+        // Codex has no model flag a chat can set on a running session: its /model menu is typed and shown here, and the person picks in it.
+        onOpenModelMenu: () => {
+          if (pickerLocked !== null || chipsLocked !== null) return
+          setMenuOpen(true)
+          const typed = commandChain.current.then(() => typeMessage(typeInto, agent, '/model')).then(refresh)
+          commandChain.current = typed.catch((error: unknown) => {
+            setMenuOpen(false)
+            toast.error(errorMessage(error, 'Could not open the model menu'))
+          })
+        },
+        modelMenuLocked: pickerLocked ?? chipsLocked,
         modes: CODEX_START_MODES,
         modeAgent: 'Codex',
         onPickMode: (target: string) => {
@@ -272,11 +292,14 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         if (pickerLocked !== null) return
         const model = /^\/model (\S+)/.exec(text)?.[1]
         if (model !== undefined) setLiveModel({ base: metaModel, value: model })
+        const level = /^\/effort (\S+)/.exec(text)?.[1]
+        if (level !== undefined) setLiveEffort({ base: effort, value: level })
         // Through typeMessage, so Claude Code gets its Enter after a pause: sent with the command, the Enter is taken
         // for the completion it is showing and the command never runs.
         const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(refresh)
         commandChain.current = typed.catch((error: unknown) => {
           if (model !== undefined) setLiveModel(null)
+          if (level !== undefined) setLiveEffort(null)
           toast.error(errorMessage(error, 'Could not type the command'))
         })
       },
@@ -308,8 +331,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         })
       } }),
     }
-  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, shownMode, pickerLocked, remote])
-  const composer = useChatComposer({ link, agent, feed, online, refresh, answersPrompt, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
+  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, effort, shownMode, pickerLocked, remote])
+  const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
@@ -321,6 +344,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // `then` is what a yes does when it is not the command itself: moving the session to plan mode.
   const [confirming, setConfirming] = useState<{ ask: ConfirmAsk; typed: string; then?: () => void } | null>(null)
   const aside = useAside(link.conversation)
+  const signIn = useAgentSignIn(undefined)
+  const signInView = signIn.view
   // Once confirmed it runs where Claude Code runs it: one only the terminal answers is typed there and shown, the rest are sent.
   const runConfirmed = (typed: string) => {
     if (runInTerminal !== undefined && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) runInTerminal(typed)
@@ -348,6 +373,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       case 'confirm': setConfirming({ ask: route.ask, typed }); return
       case 'aside': aside.ask(route.title, route.ask); return
       case 'note': aside.show(route.title, route.text); return
+      case 'signIn': signIn.begin(route.agent); return
       case 'rename': windowActions.renameSession(route.name); void sendText(typed); return
       case 'card':
         if (route.card === 'status') aside.show('Status', statusCard({ agent, model: shownModel, effort, mode: shownMode, folder: root, usage, now: nowSeconds(), working, online }))
@@ -435,14 +461,16 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }
   const pending = useMemo(() => allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event ?? null, [allRows])
   // The model and effort picked on the new-chat page are this conversation's choice from its first frame, so the picker shows them.
+  // A chat that follows the terminal keeps no choice of its own: what its agent says it runs is the choice.
+  const followsTerminal = link.readOnly === true
   useLayoutEffect(() => {
     if (sessionId === undefined) return
-    if (started !== null) writeChoice(link.conversation, { model: started.model, reasoning: started.reasoning })
+    if (started !== null && !followsTerminal) writeChoice(link.conversation, { model: started.model, reasoning: started.reasoning })
     releaseStartChoice(sessionId)
-  }, [sessionId, started, link.conversation])
-  // Once the agent says it runs another model or effort than it last said (a /model typed in the terminal), that is
-  // what the message box shows and what the next message keeps. After the start choice above, so it is not undone.
-  useEffect(() => { noteAgentSaid(link.conversation, { model: metaModel, effort }) }, [link.conversation, metaModel, effort])
+  }, [sessionId, started, link.conversation, followsTerminal])
+  // Once the agent says it runs another model or effort than it last said, that is what the message box shows and
+  // what the next message keeps. After the start choice above, so it is not undone.
+  useEffect(() => { if (!followsTerminal) noteAgentSaid(link.conversation, { model: metaModel, effort }) }, [link.conversation, metaModel, effort, followsTerminal])
   // The session's unsent text comes along when its chat was given a new conversation number.
   useEffect(() => {
     if (sessionId !== undefined) followComposer(sessionId, link.conversation)
@@ -579,10 +607,13 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const canOpenFile = onOpenFile !== null
   const openFile = useMemo<OpenFile | null>(() => (canOpenFile ? (path, line) => { openFileRef.current?.(path, line) } : null), [canOpenFile])
 
+  // The menu's keys would answer a question or land in a turn, so it goes when the agent asks or works.
+  if (menuOpen && (stoppedOnPrompt || working)) setMenuOpen(false)
   // Keyed by the question: a new one starts with nothing typed, and its answers sized for its own questions.
   const askKey = `${ask?.tool ?? ''}:${ask?.detail ?? ''}:${JSON.stringify(ask?.questions ?? ask?.choices ?? [])}`
   const question = pending !== null
     ? <ApprovalTray key={pending.requestId} event={pending} actions={approval} agent={agent} />
+    : menuOpen && sendKeys !== undefined && online ? <CommandMenuTray agent="Codex" topic="model" readScreen={readScreen} sendKeys={sendKeys} onClose={() => { setMenuOpen(false) }} />
     : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
@@ -620,6 +651,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       ) : (
         <ChatSkeleton />
       )}
+      {signInView !== null && <SignInCard view={signInView} onCancel={() => { signIn.cancel(signInView.agent) }} onClose={signIn.close} onRetry={() => { signIn.begin(signInView.agent) }} />}
       {aside.aside !== null && <OpenFileContext.Provider value={openFile}><AsideCard aside={aside.aside} onClose={aside.close} onAskInConversation={(question) => { aside.close(); void sendText(question) }} /></OpenFileContext.Provider>}
       <Composer
         agent={agent}
@@ -630,7 +662,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         question={question}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
       />
     </div>
     </FilesHereContext.Provider>

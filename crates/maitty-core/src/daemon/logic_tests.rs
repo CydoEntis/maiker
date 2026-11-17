@@ -8141,6 +8141,52 @@ fn an_agent_saved_mid_turn_comes_back_as_a_resume_of_its_conversation() {
 }
 
 #[test]
+fn a_resumed_claude_runs_the_model_and_effort_it_last_said() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.session) = (Some("claude".into()), Some("abc123".into()));
+    }
+    // Before it has said anything, a resume is the plain one.
+    let plain = d.resume_cmd(&d.terms[&t]).expect("claude can be resumed");
+    assert!(!plain.contains("--model") && !plain.contains("--effort"), "{plain}");
+
+    // Its transcript says a model and an effort: a sleep, a move or a reload brings it back on them.
+    d.agent_effort(vec![(t, Some("max".into()), Some("claude-opus-5-5[1m]".into()))]);
+    let resume = d.resume_cmd(&d.terms[&t]).expect("claude can be resumed");
+    assert!(resume.contains("abc123") && resume.contains("--effort max"), "{resume}");
+    assert!(resume.contains("--model 'claude-opus-5-5[1m]'") || resume.contains("--model \"claude-opus-5-5[1m]\""), "quoted for the shell: {resume}");
+
+    // A read that finds no request keeps them; the shown effort says nothing then.
+    d.agent_effort(vec![(t, None, None)]);
+    assert_eq!(d.terms[&t].effort, None);
+    assert_eq!(d.resume_cmd(&d.terms[&t]), Some(resume.clone()));
+
+    // And after the server restarts, from what was saved.
+    let saved = d.saved();
+    let pane = persist::SavedPane {
+        agent: Some("claude".into()),
+        session: Some("abc123".into()),
+        runs_with: d.terms[&t].runs_with.clone(),
+        ..Default::default()
+    };
+    assert!(serde_json::to_string(&saved).is_ok());
+    assert_eq!(d.restore_cmd(&pane), Some(resume));
+
+    // Only Claude takes these, and nothing that would not pass as a pick is added.
+    let codex = persist::SavedPane { agent: Some("codex".into()), session: Some("s1".into()), runs_with: pane.runs_with.clone(), ..Default::default() };
+    let codex_resume = d.restore_cmd(&codex).expect("codex resumes");
+    assert!(!codex_resume.contains("--model") && !codex_resume.contains("--effort"), "{codex_resume}");
+    let odd = persist::SavedPane {
+        runs_with: crate::conversation::TurnChoice { model: Some("a;rm -rf ~".into()), effort: Some("max".into()) },
+        ..pane.clone()
+    };
+    assert_eq!(d.restore_cmd(&odd), Some(plain));
+    close(&mut d, &[t]);
+}
+
+#[test]
 fn a_conversation_comes_back_in_one_pane_only() {
     let (d, _rx) = daemon();
     let folder = std::env::temp_dir();

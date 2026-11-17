@@ -85,6 +85,7 @@ impl Host {
                 | Reaction::Notice { .. }
                 | Reaction::Attention { .. }
                 | Reaction::Clipboard { .. }
+                | Reaction::AgentSignIn { .. }
                 | Reaction::GitHubAccounts { .. }
                 | Reaction::GitHubRepos { .. }
                 | Reaction::GitHubOwners { .. }
@@ -93,6 +94,7 @@ impl Host {
                 | Reaction::TicketKeys { .. }
                 | Reaction::TicketWrite { .. }
                 | Reaction::TicketLinks { .. }
+                | Reaction::Extensions { .. }
                 | Reaction::TicketSetup(_)
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),

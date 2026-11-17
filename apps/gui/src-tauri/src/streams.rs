@@ -15,7 +15,8 @@
 use maitty_machines::MachineId;
 use maitty_machines::remote_snapshot::sanitize_snapshot;
 use maitty_shared::agent_commands::AgentCommand;
-use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, Snapshot, Status, TermId};
+use maitty_shared::extensions::{ExtError, ExtReply};
+use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, SignInAgent, SignInState, Snapshot, Status, TermId};
 use maitty_shared::settings_view::SharedSettings;
 use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWritten, TicketsReply};
 use std::collections::{BTreeMap, HashMap};
@@ -109,6 +110,12 @@ pub enum Out {
         tag: u64,
         outcome: Result<String, String>,
     },
+    /// Where this computer's agent sign-in stands.
+    AgentSignIn {
+        tag: u64,
+        agent: SignInAgent,
+        state: SignInState,
+    },
     /// Who a machine says is signed in to GitHub there, already cleaned.
     GitHubAccounts {
         machine: MachineId,
@@ -150,6 +157,12 @@ pub enum Out {
         machine: MachineId,
         tag: u64,
         answer: Result<TicketWritten, TicketError>,
+    },
+    /// What a request about the extensions of this computer did, or why it did nothing.
+    Extensions {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<ExtReply, ExtError>,
     },
     /// Which sources each project reads on this computer, or why a change was refused.
     TicketLinks {
@@ -273,6 +286,10 @@ impl Streams {
             ServerMsg::Reply(Reply::Cloned { tag, outcome }) => {
                 out.push(Out::Cloned { machine, tag, outcome });
             }
+            // This computer's only: a link and a code another machine's login printed are not for this window.
+            ServerMsg::Reply(Reply::AgentSignIn { tag, agent, state }) if machine == MachineId::LOCAL => {
+                out.push(Out::AgentSignIn { tag, agent, state });
+            }
             ServerMsg::Reply(Reply::GitHubAccounts { tag, report }) => {
                 out.push(Out::GitHubAccounts { machine, tag, report });
             }
@@ -296,6 +313,9 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::TicketLinks { tag, answer }) => {
                 out.push(Out::TicketLinks { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::Extensions { tag, answer }) => {
+                out.push(Out::Extensions { machine, tag, answer });
             }
             // This computer's only: another machine's agent never opens a setup here.
             ServerMsg::TicketSetup(ask) if machine == MachineId::LOCAL => {

@@ -102,6 +102,19 @@ describe('the commands the window answers itself', () => {
     expect(fake.submitMessage).not.toHaveBeenCalled()
   })
 
+  it('opens the Extensions page for the commands that open a menu of plugins, skills, servers and hooks, and sends nothing', async () => {
+    const actions = windowActions()
+    const { user, box } = await open({ windowActions: actions })
+
+    await user.type(box, '/skills{Escape}{Enter}')
+    await user.type(box, '/hooks{Escape}{Enter}')
+
+    expect(actions.openSettings).toHaveBeenCalledTimes(2)
+    expect(actions.openSettings).toHaveBeenNthCalledWith(1, 'extensions')
+    expect(actions.openSettings).toHaveBeenNthCalledWith(2, 'extensions')
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+  })
+
   it('lists every command for /help, right in the box', async () => {
     const { user, box } = await open({ windowActions: windowActions() })
 
@@ -233,9 +246,9 @@ describe('the commands the window answers itself', () => {
   it('says a command only the terminal runs cannot run in a chat that has no terminal, and sends nothing', async () => {
     const { user, box } = await open({ windowActions: windowActions() })
 
-    await user.type(box, '/hooks{Escape}{Enter}')
+    await user.type(box, '/keybindings{Escape}{Enter}')
 
-    const card = screen.getByRole('region', { name: '/hooks' })
+    const card = screen.getByRole('region', { name: '/keybindings' })
     expect(card).toHaveTextContent("only works in Claude Code's own terminal, and this chat has none")
     expect(fake.submitMessage).not.toHaveBeenCalled()
     expect(box).toHaveValue('')

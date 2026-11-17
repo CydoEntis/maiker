@@ -169,4 +169,15 @@ mod tests {
         assert!(text.starts_with("Accessing workspace:"), "{text}");
         assert_eq!(asking("just some output\nno menu here"), "");
     }
+
+    /// Codex's wording is from its source, not a capture: the chat card only recognises exact words, so
+    /// a different real screen just leaves the generic menu card.
+    #[test]
+    fn codex_trust_menu_is_read_with_the_folder_above_its_choices() {
+        let screen = "> You are in /home/vox/app\n\n  Do you trust the contents of this directory? Working with untrusted contents comes with higher risk of prompt injection.\n\n\u{203a} 1. Yes, continue\n  2. No, quit\n\n  Press enter to continue";
+        let text = asking(screen);
+        assert!(text.starts_with("> You are in /home/vox/app"), "{text}");
+        assert!(text.contains("\n1. Yes, continue"), "{text}");
+        assert!(text.ends_with("\n2. No, quit"), "{text}");
+    }
 }

@@ -5,6 +5,7 @@
 //! channel, so there is no locking around the model.
 
 mod agent_commands;
+mod agent_sign_in;
 mod approvals;
 mod branch_agent;
 mod check;
@@ -17,6 +18,7 @@ mod commit;
 mod commands;
 mod contain;
 mod conversation;
+mod extensions;
 mod folders;
 mod git;
 mod git_identity;
@@ -216,7 +218,7 @@ pub enum Ev {
         limits: Option<Vec<Limit>>,
     },
     /// The effort each agent's own files say it runs at (`usage::poll_effort`).
-    AgentEffort(Vec<(TermId, Option<String>)>),
+    AgentEffort(Vec<(TermId, Option<String>, Option<String>)>),
     /// A worktree made for an agent started from a shell (`Command::AgentWorktree`).
     AgentWorktreeMade {
         client: ClientId,
@@ -465,6 +467,8 @@ struct Daemon {
     secrets: secrets::Secrets,
     /// When each project's ticket setup was last opened for an agent.
     ticket_setups: ticket_setup::Shown,
+    /// The agents' sign-ins this daemon runs on a window's request.
+    sign_ins: agent_sign_in::SignIns,
     prs: pr::Prs,
     last_secret_files: Instant,
     git_busy: bool,
@@ -1335,6 +1339,7 @@ impl Daemon {
             questions: Vec::new(),
             secrets: secrets::Secrets::default(),
             ticket_setups: ticket_setup::Shown::default(),
+            sign_ins: agent_sign_in::SignIns::default(),
             prs: pr::Prs::default(),
             last_secret_files: Instant::now(),
             git_busy: false,
@@ -3157,6 +3162,13 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can clone a repository".into())
                     }
+                    Query::AgentSignIn { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can sign an agent in".into())
+                    }
                     Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
@@ -3200,6 +3212,22 @@ impl Daemon {
                         }) =>
                     {
                         ServerMsg::Error("Only a human client can write to a ticket".into())
+                    }
+                    Query::Extensions { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can change the extensions of this machine".into())
+                    }
+                    Query::Extensions { request, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = extensions::answer(request);
+                            let reply = Reply::Extensions { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
                     }
                     Query::TicketLinks { .. }
                         if self.clients.get(&client).is_some_and(|client| {
@@ -3286,6 +3314,14 @@ impl Daemon {
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
+                    }
+                    Query::AgentSignIn { agent, request, tag } => {
+                        let state = match request {
+                            SignInRequest::Start => self.sign_ins.start(agent, agent_sign_in::cli_for(agent)),
+                            SignInRequest::Cancel => self.sign_ins.cancel(agent),
+                            SignInRequest::Read => self.sign_ins.read(agent),
+                        };
+                        ServerMsg::Reply(Reply::AgentSignIn { tag, agent, state })
                     }
                     Query::GitHubAccounts { tag } => {
                         let tx = self.tx.clone();

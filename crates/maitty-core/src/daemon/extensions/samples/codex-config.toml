@@ -1,0 +1,13 @@
+[marketplaces.local-mk]
+source_type = "local"
+source = "/home/me/sample/mk"
+
+[plugins."hello@local-mk"]
+enabled = true
+
+[mcp_servers.srv]
+command = "echo"
+args = ["a", "b"]
+
+[mcp_servers.web]
+url = "https://example.com/mcp"
