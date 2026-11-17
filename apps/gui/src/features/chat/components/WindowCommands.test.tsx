@@ -8,11 +8,14 @@ import { forgetChatFeeds } from '../useChatFeed'
 import { ChatSession, type WindowActions } from './ChatSession'
 
 const fake = vi.hoisted(() => ({
+  copyText: vi.fn<(text: string) => Promise<void>>(),
   current: null as null | { read: (cursor: never) => Promise<unknown> },
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string) => Promise<unknown>>(),
   loadAgentCommands: vi.fn<(agent: string, folder: string) => Promise<{ name: string; description: string; hint: string; aliases: string[] }[]>>(),
   sideAnswer: vi.fn<(conversation: number, ask: unknown) => Promise<{ ok: true; text: string } | { ok: false; reason: string }>>(),
 }))
+
+vi.mock('@/lib/clipboard', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/clipboard')>()), copyText: fake.copyText }))
 
 vi.mock('@/api/daemon', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/daemon')>()),
@@ -42,6 +45,7 @@ beforeEach(() => {
   forgetSlashCommands()
   fake.submitMessage.mockReset().mockResolvedValue({})
   fake.loadAgentCommands.mockReset().mockResolvedValue(COMMANDS)
+  fake.copyText.mockReset().mockResolvedValue(undefined)
   fake.sideAnswer.mockReset().mockResolvedValue({ ok: true, text: '## Context Usage\n\n**Tokens:** 48.2k' })
 })
 
@@ -55,9 +59,10 @@ async function settle(ms = 0) {
   await act(async () => { await vi.advanceTimersByTimeAsync(ms) })
 }
 
-async function open(props: Partial<Parameters<typeof ChatSession>[0]> = {}) {
+async function open(props: Partial<Parameters<typeof ChatSession>[0]> = {}, history: (daemon: FakeDaemonHistory) => void = () => undefined) {
   const daemon = new FakeDaemonHistory()
   daemon.upsert(daemon.message('t1', 'u', 'User', 'earlier'))
+  history(daemon)
   fake.current = daemon
   const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
   render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1 }} agent="claude" online root={ROOT} {...props} />)
@@ -65,7 +70,7 @@ async function open(props: Partial<Parameters<typeof ChatSession>[0]> = {}) {
   return { user, box: screen.getByRole('textbox', { name: `Message ${props.agent ?? 'claude'}` }) }
 }
 
-const offered = () => within(screen.getByRole('listbox', { name: 'claude commands' })).getAllByRole('option').map((option) => option.textContent)
+const offered = (agent = 'claude') => within(screen.getByRole('listbox', { name: `${agent} commands` })).getAllByRole('option').map((option) => option.textContent)
 
 function windowActions() {
   return { openSettings: vi.fn<WindowActions['openSettings']>(), openPanel: vi.fn<WindowActions['openPanel']>(), openRecent: vi.fn<WindowActions['openRecent']>(), renameSession: vi.fn<WindowActions['renameSession']>() }
@@ -235,5 +240,64 @@ describe('the commands the window answers itself', () => {
     expect(fake.submitMessage).not.toHaveBeenCalled()
     expect(box).toHaveValue('')
   })
-})
 
+  it('shows the session\'s model, mode and folder for /status, in a card and not in the conversation', async () => {
+    const { user, box } = await open({ windowActions: windowActions() }, (daemon) => { daemon.meta = { mode: 'plan', model: 'opus' } })
+
+    await user.type(box, '/status{Escape}{Enter}')
+
+    const card = screen.getByRole('region', { name: 'Status' })
+    expect(card).toHaveTextContent('Model: opus')
+    expect(card).toHaveTextContent('Permissions: Plan mode')
+    expect(card).toHaveTextContent('Folder: /home/me/app')
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+    expect(box).toHaveValue('')
+  })
+
+  it('copies the last thing Claude said for /copy, and sends nothing', async () => {
+    const { user, box } = await open({ windowActions: windowActions() }, (daemon) => { daemon.upsert(daemon.message('t1', 'a1', 'Assistant', 'Here is the fix.')) })
+
+    await user.type(box, '/copy{Escape}{Enter}')
+
+    expect(fake.copyText).toHaveBeenCalledExactlyOnceWith('Here is the fix.')
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+  })
+
+  it('lists the memory files for /memory, with the project\'s own file named so it opens', async () => {
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/memory{Escape}{Enter}')
+
+    const card = screen.getByRole('region', { name: 'Memory' })
+    expect(card).toHaveTextContent('CLAUDE.md')
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+  })
+
+  it('never changes the mode for /plan without a yes: a chat with no mode control says so, and sends nothing', async () => {
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/plan{Escape}{Enter}')
+
+    expect(screen.getByRole('region', { name: 'Plan mode' })).toHaveTextContent('cannot change its permission mode')
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+  })
+
+  it('answers Codex\'s /status and /permissions in cards, and opens its changes for /diff, none of them in the terminal', async () => {
+    fake.loadAgentCommands.mockResolvedValue([])
+    const actions = windowActions()
+    const { user, box } = await open({ agent: 'codex', windowActions: actions }, (daemon) => { daemon.meta = { mode: 'codexAuto', model: 'gpt-5' } })
+
+    await user.type(box, '/status')
+    expect(offered('codex')[0]).toBe('/statusanswered hereShow current session configuration and token usage')
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('region', { name: 'Status' })).toHaveTextContent('Model: gpt-5')
+
+    await user.type(box, '/permissions{Escape}{Enter}')
+    const card = screen.getByRole('region', { name: 'Permissions' })
+    expect(card).toHaveTextContent('Maitty never changes it for you')
+
+    await user.type(box, '/diff{Escape}{Enter}')
+    expect(actions.openPanel).toHaveBeenCalledExactlyOnceWith('changes')
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+  })
+})

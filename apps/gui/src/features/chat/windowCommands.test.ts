@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SlashCommand } from './slashCommands'
+import { CODEX_COMMANDS } from './codexCommands'
+import { CLAUDE_TERMINAL_COMMANDS } from './terminalCommands'
 import { ASKS_FIRST, typedCommand, windowRouteOf, withWindowRoutes } from './windowCommands'
 
 const command = (name: string, terminal?: true): SlashCommand => ({ name, description: '', hint: '', aliases: [], ...(terminal === undefined ? {} : { terminal }) })
@@ -61,3 +63,49 @@ describe('the commands the window answers itself', () => {
   })
 })
 
+describe('the commands that have a chat version', () => {
+  it('answers /status, /copy, /export and /plan for Claude without a terminal, and /memory in a card', () => {
+    expect(windowRouteOf('status')).toEqual({ kind: 'card', card: 'status' })
+    expect(windowRouteOf('copy')).toEqual({ kind: 'copy' })
+    expect(windowRouteOf('export')).toEqual({ kind: 'export' })
+    expect(windowRouteOf('plan')).toEqual({ kind: 'plan' })
+    expect(windowRouteOf('memory')?.kind).toBe('note')
+  })
+
+  it('leaves them to the agent when something follows the name, since that changes what they do', () => {
+    expect(windowRouteOf('export', 'notes.md')).toBeNull()
+    expect(windowRouteOf('plan', 'fix the build')).toBeNull()
+    expect(windowRouteOf('status', 'x', 'codex')).toBeNull()
+  })
+
+  it('answers Codex\'s commands by Codex\'s names, and none of Claude\'s own', () => {
+    expect(windowRouteOf('diff', '', 'codex')).toEqual({ kind: 'panel', view: 'changes' })
+    expect(windowRouteOf('resume', '', 'codex')).toEqual({ kind: 'recent' })
+    expect(windowRouteOf('permissions', '', 'codex')).toEqual({ kind: 'card', card: 'permissions' })
+    expect(windowRouteOf('permissions', '', 'claude')).toEqual({ kind: 'settings', section: 'permissions' })
+    expect(windowRouteOf('clear', '', 'codex')).toBeNull()
+    expect(windowRouteOf('btw', 'what?', 'codex')).toBeNull()
+    expect(windowRouteOf('rename', 'x', 'codex')).toBeNull()
+  })
+
+  it('names, in one place, the Codex commands the window answers, so a command lost from the list is noticed', () => {
+    const answered = withWindowRoutes(CODEX_COMMANDS, 'codex').filter((command) => command.opens !== undefined).map((command) => command.name)
+
+    expect(answered).toEqual(['copy', 'diff', 'export', 'permissions', 'resume', 'status'])
+    expect(withWindowRoutes(CODEX_COMMANDS, 'codex').filter((command) => command.opens !== undefined).every((command) => command.terminal === undefined)).toBe(true)
+  })
+
+  it('names the Claude commands the window answers out of the terminal\'s list, none of them terminal-only any more', () => {
+    const answered = withWindowRoutes(CLAUDE_TERMINAL_COMMANDS).filter((command) => command.terminal !== true).map((command) => command.name)
+
+    expect(answered).toEqual(expect.arrayContaining(['copy', 'diff', 'export', 'memory', 'plan', 'status', 'resume', 'permissions']))
+    // Every command the window answers is still in the list, so none is lost from the picker.
+    expect(withWindowRoutes(CLAUDE_TERMINAL_COMMANDS)).toHaveLength(CLAUDE_TERMINAL_COMMANDS.length)
+  })
+
+  it('asks first for /plan: it is tagged as asking, and is no longer the terminal\'s', () => {
+    const [plan] = withWindowRoutes([command('plan', true)])
+
+    expect(plan).toEqual({ ...command('plan'), opens: ASKS_FIRST })
+  })
+})
