@@ -1,3 +1,4 @@
+import type { SignInAgent } from '@/api/agentSignIn'
 import type { SideAsk, SideCommand } from '@/api/daemon'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
@@ -15,6 +16,7 @@ import type { SlashCommand } from './slashCommands'
  *   conversation is not added to (`sideAnswer`).
  * - `note`: a card above the box that says where the thing is, for a command that only shows a web page's address.
  * - `complete`: the box is filled in, for a command that is nothing without what follows it.
+ * - `signIn`: a card above the box runs the agent's own sign-in and shows its link and code.
  * - `rename`: the Maitty session takes the name too, and the command still goes to Claude Code, so both agree.
  */
 export type WindowRoute =
@@ -26,6 +28,7 @@ export type WindowRoute =
   | { readonly kind: 'aside'; readonly title: string; readonly ask: SideAsk }
   | { readonly kind: 'note'; readonly title: string; readonly text: string }
   | { readonly kind: 'complete'; readonly text: string }
+  | { readonly kind: 'signIn'; readonly agent: SignInAgent }
   | { readonly kind: 'rename'; readonly name: string }
 
 export type ConfirmAsk = { readonly title: string; readonly body: string; readonly confirmLabel: string }
@@ -58,6 +61,8 @@ const CLEAR: WindowRoute = { kind: 'confirm', ask: { title: 'Start a new convers
 // The Permissions page lists the commands approved for each project, the window's view of Claude Code's allow rules.
 const SETTINGS_PERMISSIONS: WindowRoute = { kind: 'settings', section: 'permissions' }
 const HISTORY: WindowRoute = { kind: 'panel', view: 'history' }
+// The Extensions page lists, adds, switches and removes the skills, plugins and MCP servers these commands open a menu for.
+const SETTINGS_EXTENSIONS: WindowRoute = { kind: 'settings', section: 'extensions' }
 
 /** What a command does in the window, by Claude Code's names for it, and the words the picker tags it with. */
 const ROUTES: Readonly<Record<string, { readonly route: WindowRoute; readonly opens: string }>> = {
@@ -75,13 +80,19 @@ const ROUTES: Readonly<Record<string, { readonly route: WindowRoute; readonly op
   bg: { route: BACKGROUND, opens: ASKS_FIRST },
   clear: { route: CLEAR, opens: ASKS_FIRST },
   [SIDE_QUESTION]: { route: { kind: 'complete', text: `/${SIDE_QUESTION} ` }, opens: ANSWERED_HERE },
+  login: { route: { kind: 'signIn', agent: 'claude' }, opens: ANSWERED_HERE },
   context: { route: aside('context', 'Context'), opens: ANSWERED_HERE },
   usage: { route: aside('usage', 'Usage'), opens: ANSWERED_HERE },
   'skill-doctor': { route: aside('skill-doctor', 'Skills'), opens: ANSWERED_HERE },
   goal: { route: aside('goal', 'Goal'), opens: ANSWERED_HERE },
   advisor: { route: aside('advisor', 'Advisor'), opens: ANSWERED_HERE },
   config: { route: aside('config', 'Config'), opens: ANSWERED_HERE },
-  mcp: { route: aside('mcp', 'MCP servers'), opens: ANSWERED_HERE },
+  mcp: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  plugin: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  plugins: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  marketplace: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  skills: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  hooks: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
   // Claude Code draws a QR code or opens a browser for these; the address is all there is to show.
   mobile: { route: note('Claude on your phone', 'Get the Claude app at [claude.ai/mobile](https://claude.ai/mobile), then sign in with the same account to see your sessions.'), opens: ANSWERED_HERE },
   'privacy-settings': { route: note('Privacy settings', 'Your privacy settings are on your account page: [claude.ai/settings/data-privacy-controls](https://claude.ai/settings/data-privacy-controls).'), opens: ANSWERED_HERE },

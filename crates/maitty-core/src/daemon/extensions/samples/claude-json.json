@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "srv": {
+      "type": "stdio",
+      "command": "echo",
+      "args": [
+        "a",
+        "b"
+      ],
+      "env": {}
+    }
+  },
+  "projects": {
+    "/home/me/sample/proj": {
+      "mcpServers": {
+        "mine": {
+          "type": "stdio",
+          "command": "node",
+          "args": [
+            "server.js"
+          ],
+          "env": {}
+        }
+      }
+    }
+  }
+}

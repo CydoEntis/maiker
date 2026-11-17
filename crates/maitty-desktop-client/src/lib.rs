@@ -2477,6 +2477,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::GitIdentityRule { .. }
         | Query::CloneRepo { .. }
         | Query::TicketWrite { .. }
+        | Query::Extensions { .. }
         | Query::SideAnswer { .. } => false,
         Query::Settings
         | Query::AllowedCommands
@@ -2492,6 +2493,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::PaneSearch { .. }
         | Query::UsageReport { .. }
         | Query::ListFolders { .. }
+        | Query::AgentSignIn { .. }
         | Query::GitHubAccounts { .. }
         | Query::GitHubRepos { .. }
         | Query::GitHubOwners { .. }

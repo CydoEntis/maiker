@@ -93,6 +93,13 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::Reply(Reply::TicketWrite { .. }) => {
             Verdict::Ignore("ticket writes are asked of this computer only")
         }
+        ServerMsg::Reply(Reply::Extensions { .. }) => {
+            Verdict::Ignore("extensions are changed on this computer only")
+        }
+        // A link and a code from another machine's output would be shown as if this window had asked for them.
+        ServerMsg::Reply(Reply::AgentSignIn { .. }) => {
+            Verdict::Ignore("agents are signed in on this computer only")
+        }
         ServerMsg::Error(_) | ServerMsg::Reply(_) => Verdict::Answer,
         ServerMsg::AskRemoveWorktree { .. } => {
             Verdict::Ignore("a worktree prompt names a folder on this computer")
@@ -657,6 +664,17 @@ mod tests {
         };
         assert!(!why.contains(['\u{7}', '\n']) && why.len() <= NAME_MAX, "{why:?}");
         assert!(vet(&nothing_on(), false, "box", cloned(Ok("/x".into()))).is_none());
+    }
+
+    #[test]
+    fn another_machines_sign_in_link_is_never_shown_even_when_asked_for() {
+        use maitty_shared::protocol::{SignInAgent, SignInState};
+        let link = ServerMsg::Reply(Reply::AgentSignIn {
+            tag: 1,
+            agent: SignInAgent::Codex,
+            state: SignInState::Waiting { link: Some("https://evil.example/".into()), code: Some("AB-12".into()) },
+        });
+        assert!(vet(&nothing_on(), true, "box", link).is_none());
     }
 
     #[test]

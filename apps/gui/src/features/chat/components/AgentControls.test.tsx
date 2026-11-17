@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
@@ -160,5 +160,37 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · Opus 5.5 · High/ })).toHaveTextContent('Opus 5.5')
     expect(screen.getByRole('button', { name: /^Permission mode: Plan/ })).toBeInTheDocument()
     expect(startChoiceOf('s1')).toBeNull()
+  })
+
+  it('opens Codex\'s own /model menu in the chat from the model label, and closes it with Esc', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const typeInto = open('codex')
+    await settle(IDLE_POLL_MS)
+
+    await user.click(screen.getByRole('button', { name: /^Model: .* Open its menu/ }))
+    await settle(COMMAND_SUBMIT_GAP_MS)
+    // The command first and its Enter after a pause, as every typed command goes; nothing is typed that the person did not ask for.
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model', '\r'])
+    const card = screen.getByRole('region', { name: 'Codex model menu' })
+    expect(within(card).getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
+
+    await user.click(within(card).getByRole('button', { name: 'Down' }))
+    expect(typeInto).toHaveBeenLastCalledWith('\x1b[B')
+    await user.click(within(card).getByRole('button', { name: 'Close' }))
+    expect(typeInto).toHaveBeenLastCalledWith('\x1b')
+    expect(screen.queryByRole('region', { name: 'Codex model menu' })).not.toBeInTheDocument()
+  })
+
+  it('does not open Codex\'s model menu while it works, and says why', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const typeInto = open('codex', 'Working')
+    await settle(IDLE_POLL_MS)
+
+    const label = screen.getByRole('button', { name: /^Model: .* Open its menu/ })
+    expect(label).toHaveAttribute('aria-disabled', 'true')
+    expect(label).toHaveAttribute('title', expect.stringMatching(/working/))
+    await user.click(label)
+    expect(typeInto).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region', { name: 'Codex model menu' })).not.toBeInTheDocument()
   })
 })

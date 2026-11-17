@@ -1,6 +1,7 @@
 ﻿pub mod agent_commands;
 pub mod clock;
 pub mod conversation;
+pub mod extensions;
 pub mod github;
 pub mod handoff;
 pub mod hidden;

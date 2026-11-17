@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "hello@local-mk": true
+  }
+}
