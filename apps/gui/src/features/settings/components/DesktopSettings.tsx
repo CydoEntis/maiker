@@ -25,6 +25,8 @@ import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { errorMessage } from '@/lib/error-message'
 import { loadAgentAuth, signOutAgent, type AgentAuth } from '@/api/daemon'
+import { SignInCard } from '@/features/signin/SignInCard'
+import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { BUNDLED_FONT_NAME, fontStackFor, installedMonospaceFamilies, WEIGHT_BOLD, WEIGHT_EXTRA_BOLD, WEIGHT_LIGHT, WEIGHT_MEDIUM, WEIGHT_REGULAR, WEIGHT_SEMIBOLD, type TerminalFontWeight } from '@/lib/terminalFont'
 import type { Added, Grant, HostChoice, MachineActivity } from '@/api/machines'
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
@@ -679,8 +681,9 @@ function accountWords(state: AccountState): string {
 
 /**
  * The accounts the agents are signed in to, as each agent's own command says, with sign in and sign out. Signing in
- * is the agent's own interactive command, opened in a terminal; signing out runs its command here. The window keeps
- * no credentials: it only asks the agent and tells it.
+ * runs the agent's own login in the daemon and shows its link and code in a card here; where that cannot be done, the
+ * agent's own sign-in can still be opened in a terminal. Signing out runs its command here. The window keeps no
+ * credentials: it only asks the agent and tells it.
  */
 function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void) | undefined }) {
   const [states, setStates] = useState<Readonly<Record<AccountAgent, AccountState>>>({ claude: { status: 'loading' }, codex: { status: 'loading' } })
@@ -696,6 +699,8 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
     return () => { current = false }
   }, [asked])
   const again = () => { setAsked((count) => count + 1) }
+  const signIn = useAgentSignIn(again)
+  const shown = signIn.view
   const signOut = (agent: AccountAgent, label: string) => {
     signOutAgent(agent).then(
       () => { toast.success(`${label} signed out`, { description: 'Sessions already running keep their sign-in until they are restarted.' }); again() },
@@ -703,9 +708,11 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
     )
   }
   return (
+    <>
+    {shown !== null && <SignInCard view={shown} onCancel={() => { signIn.cancel(shown.agent) }} onClose={signIn.close} onRetry={() => { signIn.begin(shown.agent) }} />}
     <Card title="Accounts"
       meta={<button type="button" className="mx-scard-meta-button" onClick={again}>Check again</button>}
-      foot="Sign in opens the agent's own sign-in in a terminal: finish it there, then check again. Maitty keeps no passwords or keys."
+      foot="Sign in runs the agent's own sign-in and shows its link and code here. Maitty keeps no passwords or keys."
     >
       {ACCOUNT_AGENTS.map(([agent, label]) => {
         const state = states[agent]
@@ -713,13 +720,15 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
         return (
           <Row key={agent} label={label} detail={accountWords(state)}>
             <span style={{ display: 'flex', gap: 8 }}>
-              {auth?.installed === true && auth.signedIn !== true && onSignIn !== undefined && <button type="button" className="mx-scard-button is-primary" aria-label={`Sign in to ${label}`} onClick={() => { onSignIn(agent) }}>Sign in</button>}
+              {auth?.installed === true && auth.signedIn !== true && <button type="button" className="mx-scard-button is-primary" aria-label={`Sign in to ${label}`} onClick={() => { signIn.begin(agent) }}>Sign in</button>}
+              {auth?.installed === true && auth.signedIn !== true && onSignIn !== undefined && shown?.agent === agent && (shown.problem !== null || shown.state.kind === 'failed') && <button type="button" className="mx-scard-button" aria-label={`Sign in to ${label} in a terminal`} onClick={() => { onSignIn(agent) }}>Use a terminal</button>}
               {auth?.signedIn === true && <button type="button" className="mx-scard-button" aria-label={`Sign out of ${label}`} onClick={() => { signOut(agent, label) }}>Sign out</button>}
             </span>
           </Row>
         )
       })}
     </Card>
+    </>
   )
 }
 

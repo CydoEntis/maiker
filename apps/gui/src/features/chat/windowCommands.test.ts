@@ -13,6 +13,14 @@ describe('the commands the window answers itself', () => {
     expect(windowRouteOf('help')).toEqual({ kind: 'commands' })
   })
 
+  it('signs Claude in from a card instead of the terminal, and still leaves /logout to the terminal', () => {
+    expect(windowRouteOf('login')).toEqual({ kind: 'signIn', agent: 'claude' })
+    expect(windowRouteOf('login', 'x')).toBeNull()
+    expect(windowRouteOf('logout')).toBeNull()
+    const [login] = withWindowRoutes([command('login', true)])
+    expect(login?.terminal).toBeUndefined()
+  })
+
   it('leaves a command typed with something after it to Claude Code, which has a use for what was typed', () => {
     expect(windowRouteOf('resume', 'abc123')).toBeNull()
     expect(windowRouteOf('diff', 'src')).toBeNull()
