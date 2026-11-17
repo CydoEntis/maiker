@@ -37,6 +37,7 @@ import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
+import { CommandMenuTray } from './CommandMenuTray'
 import { ProblemBanner } from './ProblemBanner'
 import { summaryOf } from '../summary'
 import type { ChatProblem } from '../problem'
@@ -187,7 +188,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }, [working, refresh])
   // The transcript has no entry for a terminal agent's prompt until it is answered, so the chat shows it from the hook's report.
   const stoppedOnPrompt = link.readOnly === true && feed.status === 'Blocked'
-  const answersPrompt = stoppedOnPrompt && typeInto !== undefined && (ask?.answerable === true || (ask?.choices?.length ?? 0) > 0 || formQuestions(ask).length > 0)
   const promptKeys = abilitiesOf(agent).answerKeys
   const answerPrompt = typeInto === undefined || promptKeys === null ? undefined : (choice: AskChoice) => typeInto(promptKeys[choice]).then(refresh)
   // A menu the chat has no buttons for is answered with the keys a person would press, in the agent's own terminal.
@@ -226,9 +226,22 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const chipsLocked = !online ? 'The daemon is offline' : working ? `${agent} is working. Change this when it finishes.` : null
   // Picked commands are typed one after another: each waits for its Enter, so a model and an effort picked together do not interleave.
   const commandChain = useRef<Promise<void>>(Promise.resolve())
+  // A menu the agent's own command opened (Codex's /model), drawn in the chat until it is closed.
+  const [menuOpen, setMenuOpen] = useState(false)
   const agentControls = useMemo(() => {
     if (canPickCodexMode) {
       return {
+        // Codex has no model flag a chat can set on a running session: its /model menu is typed and shown here, and the person picks in it.
+        onOpenModelMenu: () => {
+          if (pickerLocked !== null || chipsLocked !== null) return
+          setMenuOpen(true)
+          const typed = commandChain.current.then(() => typeMessage(typeInto, agent, '/model')).then(refresh)
+          commandChain.current = typed.catch((error: unknown) => {
+            setMenuOpen(false)
+            toast.error(errorMessage(error, 'Could not open the model menu'))
+          })
+        },
+        modelMenuLocked: pickerLocked ?? chipsLocked,
         modes: CODEX_START_MODES,
         modeAgent: 'Codex',
         onPickMode: (target: string) => {
@@ -306,7 +319,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       } }),
     }
   }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, shownMode, pickerLocked, remote])
-  const composer = useChatComposer({ link, agent, feed, online, refresh, answersPrompt, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
+  const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
@@ -553,10 +566,13 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const canOpenFile = onOpenFile !== null
   const openFile = useMemo<OpenFile | null>(() => (canOpenFile ? (path, line) => { openFileRef.current?.(path, line) } : null), [canOpenFile])
 
+  // The menu's keys would answer a question or land in a turn, so it goes when the agent asks or works.
+  if (menuOpen && (stoppedOnPrompt || working)) setMenuOpen(false)
   // Keyed by the question: a new one starts with nothing typed, and its answers sized for its own questions.
   const askKey = `${ask?.tool ?? ''}:${ask?.detail ?? ''}:${JSON.stringify(ask?.questions ?? ask?.choices ?? [])}`
   const question = pending !== null
     ? <ApprovalTray key={pending.requestId} event={pending} actions={approval} agent={agent} />
+    : menuOpen && sendKeys !== undefined && online ? <CommandMenuTray agent="Codex" topic="model" readScreen={readScreen} sendKeys={sendKeys} onClose={() => { setMenuOpen(false) }} />
     : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,

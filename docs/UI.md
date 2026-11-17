@@ -1381,7 +1381,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   a dropdown that presses Shift+Tab until the agent's screen shows the pick (`modeFromScreen`), and is off while the
   agent works; the model and reasoning picker sends `/model` and `/effort`, and a pick made while the agent works is
   typed in at once, as it would be in the terminal, for the agent to take as soon as it can; only a question the agent is asking holds the picker, since typed text would answer it. The agent
-  itself is never changed in a chat that has started. Other agents show them read-only. A Codex chat shows none yet (`chatMeta.ts`,
+  itself is never changed in a chat that has started. A Codex chat on this computer moves its mode with Codex's own `/permissions` command
+  and shows the pick until its screen says the command was refused (Codex's files do not name its mode, so the chat claims no more than that);
+  its model label is a button that types `/model` and draws Codex's menu in the chat (`CommandMenuTray`: the menu as its terminal shows it
+  and the keys a person presses; Close types Esc), off while Codex works or asks. Nothing is chosen for the person: each pick is theirs, and
+  Bypass permissions / Full access list what they allow in the menu. Other agents, and a chat on another machine (whose screen cannot be read from here), show them read-only (`chatMeta.ts`,
   `SessionMeta` in the read result). Bypass permissions is pickable only when Claude started allowing it: **Settings >
   General > Yolo mode** has one switch per agent, off by default, that adds the agent's own launch flag to sessions started
   afterwards (`yoloFlags`).
@@ -1451,7 +1455,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   first message, the starting chat holds them with its held message and shows the echo as text and chips.
 - **Read-only chat.** For a link with `readOnly` the composer is off with "Read-only: talk to the agent in the
   terminal" as its placeholder, and offers no Stop or queue wording; the daemon refuses send, approve and cancel
-  for such a conversation. The history and status still follow the agent.
+  for such a conversation. The history and status still follow the agent. When the agent asks, the box points at the
+  card above it, which always carries the question's buttons or, where the chat has none, the terminal's menu and keys
+  (`TerminalPrompt`), so a question is never answered only in the terminal.
 - **Trust this folder.** A new folder makes the agent ask "do you trust this folder?" before it reports in, so the question is
   in the starting chat (`StartingChat`), read from the daemon's `asking` text (`parseTrustPrompt`, `trustPrompt.ts`). The card
   (`TrustFolderTray`) names the exact folder the screen shows, says in plain words what trusting allows (read and change files,

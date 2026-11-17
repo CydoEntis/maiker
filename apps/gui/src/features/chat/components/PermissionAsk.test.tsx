@@ -5,7 +5,7 @@ import type { PermissionAsk } from '@/data/preview'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetComposers } from '../composerStore'
 import { ANSWER_KEYS } from '../permissionAsk'
-import { PENDING_APPROVAL_NOTE, TYPING_ASKING_NOTE } from '../useChatComposer'
+import { PENDING_APPROVAL_NOTE } from '../useChatComposer'
 import { forgetChatFeeds } from '../useChatFeed'
 import { ChatSession } from './ChatSession'
 
@@ -284,7 +284,9 @@ describe('the chat of an agent stopped on a permission prompt', () => {
 
     expect(screen.getByText('claude is waiting for you')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', TYPING_ASKING_NOTE)
+    // The card above carries the terminal's keys, so the box points at it and never sends the person to the terminal.
+    expect(screen.getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
   })
 
   it('shows no card while the agent is not stopped on a prompt', async () => {
