@@ -1418,8 +1418,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   number (the receipt's plus one; a failed send is retried with the same number so the daemon can tell a retry from a
   new message). Enter sends, Shift+Enter adds a line (not while an input method is composing), Esc or Stop interrupts
   the running turn (`cancel_conversation`). It is off, with the reason as its placeholder, while an approval is
-  pending ("Answer the request above first"); the request's first control then has the focus, so `y` / `a` / `n` or
-  Enter answer it at once, and the box has the focus back once it is answered (only when the focus was in this chat's
+  pending ("Answer the request above first"); the request's first control that takes a key then has the focus, so `y` / `a` / `n` or
+  Enter answer it at once (a card answered only by a click, such as trusting a folder, takes no focus), and the box has the focus back once it is answered (only when the focus was in this chat's
   box or nowhere). While the daemon is offline the box still takes typing and says why it cannot send. ↑ in an
   empty box brings back the last message sent in this chat, ↑ again the one before, ↓ forward and back to an empty box;
   it steps only while the box holds the recalled message unedited (`promptRecall.ts`). The text of every box is kept

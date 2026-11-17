@@ -107,7 +107,9 @@ const NO_MESSAGES: readonly string[] = []
 const PERCENT = 100
 
 /** What in the question tray takes the focus when it opens: its first field, else its first button. */
-const TRAY_FIRST_CONTROL = 'input:not([disabled]), textarea:not([disabled]), button:not([disabled])'
+// Only a question that takes keys gets the focus: a card answered only by a click (trusting a folder) must not be
+// answered by a stray Enter meant for the box.
+const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
 
 /**
  * The message box (layout 2h): the question tray when the agent asks, then one box: the text with attach at its top
