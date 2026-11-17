@@ -30,7 +30,7 @@ import { ShowSidebarButton } from './ShowSidebarButton'
 
 /** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow, terminalShown, setDockFocused, sessionMap, sidebarMode, toggleSidebar, focusMode, newTerminal } = useWorkspace()
+  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow, terminalShown, setDockFocused, sessionMap, sidebarMode, toggleSidebar, focusMode, newTerminal } = useWorkspace()
   const tip = useTipWithKeys()
   // The version whose Update ready banner Later put away; the sidebar's chip still offers the restart.
   const [updateLater, setUpdateLater] = useState<string | null>(null)
@@ -152,8 +152,9 @@ export function WorkspaceMain() {
                 ) : (
                   <EmptyState
                     hasSessions={sessions.length > 0}
+                    listed={sessionsListed}
                     startFolderLabel={startFolderLabel}
-                                  canStart={canStart}
+                    canStart={canStart}
                     onNewSession={() => { newSession(focusedMachineNumber) }}
                     onChangeStartFolder={() => { setSettingsSection('general') }}
                   />

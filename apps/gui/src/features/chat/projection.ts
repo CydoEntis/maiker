@@ -171,15 +171,20 @@ export function applyApprovals(state: ChatProjection, pending: readonly unknown[
   const listed = new Set(requests.map((request) => approvalId(request.request_id)))
   const known = new Set(state.approvals.map((approval) => approval.id))
 
-  const approvals: ApprovalEvent[] = state.approvals.map((approval) =>
-    approval.resolution.status === 'pending' && !listed.has(approval.id)
-      ? { ...approval, resolution: { status: 'answered', answer: 'unknown' } }
-      : approval,
-  )
+  let changed = rejectedInputs !== state.rejectedInputs
+  const approvals: ApprovalEvent[] = state.approvals.map((approval) => {
+    if (approval.resolution.status !== 'pending' || listed.has(approval.id)) return approval
+    changed = true
+    return { ...approval, resolution: { status: 'answered', answer: 'unknown' } }
+  })
   for (const request of requests) {
-    if (!known.has(approvalId(request.request_id))) approvals.push(approvalEventOf(request))
+    if (known.has(approvalId(request.request_id))) continue
+    approvals.push(approvalEventOf(request))
+    changed = true
   }
-  return { ...state, approvals, rejectedInputs }
+  // Every page carries the list; one that changes nothing keeps the projection, so an open chat does not redraw on
+  // every read while the agent works.
+  return changed ? { ...state, approvals, rejectedInputs } : state
 }
 
 /**

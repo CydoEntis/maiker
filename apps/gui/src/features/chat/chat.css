@@ -533,6 +533,8 @@ button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-of
 .mx-composer-note-action { border: 0; padding: 0; background: none; font: inherit; color: var(--fg2); text-decoration: underline; cursor: pointer; }
 .mx-composer-note-action:hover { color: var(--fg); }
 
+/* The question tray's slot: no box of its own, so the tray lays out in the column as before; it is only there to find the tray's first control. */
+.mx-question-slot { display: contents; }
 /* The running subagents (`RunningSubagents`): a 34px bar floating under the pane's header, as wide as the chat's
    column, on the menu surface. Opening it extends it downward over the feed without moving it; the feed fades behind
    it, more while it is open. It floats over the terminal view the same way. */

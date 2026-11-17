@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { nextShown, TICK_MS, useTypedText } from './useTypedText'
+import { nextPosition, shownAt, TICK_MS, useTypedText } from './useTypedText'
 
 beforeEach(() => { vi.useFakeTimers() })
 afterEach(() => { vi.useRealTimers() })
@@ -29,28 +29,30 @@ describe('typed text', () => {
     expect(result.current).toBe('Going well, thanks.')
   })
 
-  it('comes out a few whole words at a time at a steady pace, not most of it in the first moment', () => {
+  it('comes out word by word at a steady pace, not most of it in the first moment', () => {
     const reply = 'The quick brown fox jumps over the lazy dog and keeps on running. '.repeat(40)
-    const steps: number[] = []
-    for (let shown = 0; shown < reply.length; shown = nextShown(reply, shown)) steps.push(shown)
+    const stops: number[] = []
+    for (let position = 0; position < reply.length; position = nextPosition(reply, position)) stops.push(shownAt(reply, position))
 
-    // Every stop is at the end of a word.
-    expect(steps.slice(1).every((at) => /\s/.test(reply.charAt(at)))).toBe(true)
+    // Every stop is at the end of a word, and each frame adds at most a few words, never a burst.
+    expect(stops.slice(1).every((at) => at === 0 || /\s/.test(reply.charAt(at)))).toBe(true)
+    const steps = stops.slice(1).map((at, index) => at - (stops[index] ?? 0))
+    expect(Math.max(...steps)).toBeLessThan(60)
     // A quarter of a second in, most of a long reply is still to come; it is all there within a few seconds.
     const quarterSecond = Math.round(250 / TICK_MS)
-    expect(steps[quarterSecond]).toBeLessThan(reply.length / 4)
-    expect(steps.length * TICK_MS).toBeLessThan(6000)
-    expect(steps.length * TICK_MS).toBeGreaterThan(2000)
+    expect(stops[quarterSecond]).toBeLessThan(reply.length / 4)
+    expect(stops.length * TICK_MS).toBeLessThan(5000)
+    expect(stops.length * TICK_MS).toBeGreaterThan(2000)
   })
 
   it('takes a short reply a moment, and never passes the end', () => {
-    expect(nextShown('ok', 0)).toBe(2)
-    expect(nextShown('ok', 2)).toBe(2)
-    expect(nextShown('ok', 9)).toBe(2)
+    expect(shownAt('ok', nextPosition('ok', 2))).toBe(2)
+    expect(shownAt('ok', 9)).toBe(2)
     const line = 'Done: all four checks pass and the branch is pushed.'
     let ticks = 0
-    for (let shown = 0; shown < line.length; shown = nextShown(line, shown)) ticks += 1
+    for (let position = 0; position < line.length; position = nextPosition(line, position)) ticks += 1
     expect(ticks * TICK_MS).toBeLessThan(400)
+    expect(ticks * TICK_MS).toBeGreaterThan(100)
   })
 
   it('runs no timer once it has caught up, and starts one again when more arrives', () => {

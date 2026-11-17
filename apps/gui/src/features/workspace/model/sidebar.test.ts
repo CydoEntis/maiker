@@ -131,6 +131,12 @@ describe('status sections', () => {
     const sections = statusSections([session(1, { agent: 'claude', status: 'working' }), limited(2)])
     expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t2']], ['working', ['t1']]])
   })
+
+  it('keeps the held row in the section it was picked in, and moves the others', () => {
+    const sessions = [session(1, { agent: 'claude', status: 'idle' }), session(2, { agent: 'claude', status: 'idle' })]
+    const sections = statusSections(sessions, { id: 't1', section: 'done' })
+    expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['done', ['t1']], ['idle', ['t2']]])
+  })
 })
 
 describe('shells', () => {

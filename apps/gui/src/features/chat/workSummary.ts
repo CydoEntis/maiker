@@ -1,4 +1,5 @@
 import type { CommandEvent, EditEvent, ItemStatus, ToolEvent } from './chatEvents'
+import { shownCommandStatus } from './commandIntent'
 
 /** A step that is folded into a run of work: anything but the to-do list, which stays in view. */
 export type WorkStep = EditEvent | CommandEvent | ToolEvent
@@ -42,9 +43,10 @@ export function workSummary(steps: readonly WorkStep[]): string {
 
 /** The run as one status: running while any step is, failed when one failed, else how the last one ended. */
 export function workStatus(steps: readonly WorkStep[]): ItemStatus {
-  if (steps.some((step) => step.status === 'running')) return 'running'
-  if (steps.some((step) => step.status === 'failed')) return 'failed'
-  return steps.at(-1)?.status ?? 'completed'
+  const statuses = steps.map((step) => (step.kind === 'command' ? shownCommandStatus(step) : step.status))
+  if (statuses.includes('running')) return 'running'
+  if (statuses.includes('failed')) return 'failed'
+  return statuses.at(-1) ?? 'completed'
 }
 
 /**
