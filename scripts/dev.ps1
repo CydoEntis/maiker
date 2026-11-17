@@ -2,8 +2,9 @@
 #   .\scripts\dev.ps1 tui    build the terminal app and run it from target\debug (nothing is installed)
 #   .\scripts\dev.ps1 gui    start the desktop app (Vite and the Rust host rebuild from this folder)
 # Both print the commit and when the binary was built first; compare it with what you expect.
-# The terminal app runs its own service (<PREFIX>_SOCKET=dev-<folder> unless you set one), so a debug
-# build never takes over the service your installed app and its agents use.
+# Both run their own service (<PREFIX>_SOCKET=dev-<folder> unless you set one), so a debug build never
+# takes over the service your installed app and its agents use. The desktop app also gets its own data,
+# config and install folders under %LOCALAPPDATA%\maiker-dev\<folder>, so it starts empty and shares nothing.
 param([Parameter(Mandatory = $true)][ValidateSet('tui', 'gui')][string]$App)
 
 $ErrorActionPreference = 'Stop'
@@ -43,6 +44,22 @@ if ($App -eq 'tui') {
     Write-Host "running $exe (built $((Get-Item $exe).LastWriteTime))" -ForegroundColor Cyan
     & $exe
 } else {
+    # A desktop build from a checkout must not reach the installed service: its own socket, data, config and install
+    # folder (docs/ENVIRONMENT.md, isolated tests). Anything you set yourself is kept.
+    $prefix = Get-Brand 'ENV_PREFIX'
+    $isolated = Join-Path $env:LOCALAPPDATA ('maiker-dev\' + (Split-Path -Leaf $root))
+    $defaults = @{
+        SOCKET      = 'dev-' + (Split-Path -Leaf $root)
+        DATA_DIR    = Join-Path $isolated 'data'
+        CONFIG      = Join-Path $isolated 'config.toml'
+        INSTALL_DIR = Join-Path $isolated 'bin'
+    }
+    foreach ($key in $defaults.Keys) {
+        $name = "${prefix}_$key"
+        if (-not [Environment]::GetEnvironmentVariable($name)) { [Environment]::SetEnvironmentVariable($name, $defaults[$key]) }
+    }
+    New-Item -ItemType Directory -Force -Path $defaults.DATA_DIR, $defaults.INSTALL_DIR | Out-Null
+    Write-Host "own service: $([Environment]::GetEnvironmentVariable($socketVariable))  data: $([Environment]::GetEnvironmentVariable($prefix + '_DATA_DIR'))" -ForegroundColor Cyan
     Set-Location (Join-Path $root 'apps\gui')
     if (-not (Test-Path node_modules)) {
         pnpm install --frozen-lockfile --config.node-linker=hoisted
