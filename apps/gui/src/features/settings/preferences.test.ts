@@ -27,7 +27,7 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, morePanelTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -129,6 +129,15 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(true)
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: 'yes' }))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
+  })
+
+  it('keeps Files and History off the tools bar unless they were added', () => {
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({}))
+    expect(readSettingsPreferences().morePanelTools).toBe(false)
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ morePanelTools: true }))
+    expect(readSettingsPreferences().morePanelTools).toBe(true)
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ morePanelTools: 'yes' }))
+    expect(readSettingsPreferences().morePanelTools).toBe(false)
   })
 
   it('opens agent sessions in the chat unless a view was chosen, and ignores nonsense', () => {

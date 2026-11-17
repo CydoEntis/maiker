@@ -26,11 +26,11 @@ function ToolButton({ label, tip, path, on, badge, onClick }: { label: string; t
   )
 }
 
-/** The side panel's views, in the bar's order, with what each one's button is called. */
-const PANEL_TOOLS: readonly { view: InspectView; label: string }[] = [
+/** The side panel's views, in the bar's order, with what each one's button is called. `more` ones show only when Settings adds them. */
+const PANEL_TOOLS: readonly { view: InspectView; label: string; more?: true }[] = [
   { view: 'changes', label: 'Changes' },
-  { view: 'files', label: 'Files' },
-  { view: 'history', label: 'History' },
+  { view: 'files', label: 'Files', more: true },
+  { view: 'history', label: 'History', more: true },
   { view: 'checks', label: 'Checks' },
 ]
 
@@ -43,7 +43,7 @@ const PANEL_TOOLS: readonly { view: InspectView; label: string }[] = [
  */
 export function ActivityBar() {
   const tip = useTipWithKeys()
-  const { focusedSession, inspectOpen, inspectView, setInspectView, setInspectOpen, inspectRefusal, setTurnDiff, diffStat, ticketsOpen, setTicketsOpen, paneViews, newChatOpen, terminalShown, canDock, toggleTerminal } = useWorkspace()
+  const { preferences, focusedSession, inspectOpen, inspectView, setInspectView, setInspectOpen, inspectRefusal, setTurnDiff, diffStat, ticketsOpen, setTicketsOpen, paneViews, newChatOpen, terminalShown, canDock, toggleTerminal } = useWorkspace()
   if (focusedSession === undefined) return null
   const session = focusedSession
   const pick = (view: InspectView) => {
@@ -92,7 +92,7 @@ export function ActivityBar() {
           <span className="mx-tools-divider" aria-hidden="true" />
         </>
       )}
-      {PANEL_TOOLS.map((tool) => (
+      {PANEL_TOOLS.filter((tool) => tool.more !== true || preferences.morePanelTools).map((tool) => (
         <ToolButton key={tool.view} label={tool.label} path={PATHS[tool.view as keyof typeof PATHS]} on={inspectOpen && inspectView === tool.view} badge={badgeOf(tool.view)} onClick={() => { pick(tool.view) }} {...(tool.view === 'changes' ? { tip: tip('Changes', 'inspect') } : {})} />
       ))}
       <ToolButton

@@ -290,7 +290,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   a card on `--main` with a `--line` hairline, 8px from the edges. Its 32px buttons are `--muted`; the open one is on a
   faint wash with a 2px `--accent` line on its inner edge. Top to bottom: **Work** (always; with no runs it opens the
   setup view, `WorkSetup`: a factory running elsewhere in the project, what a factory is (no factory named), and
-  Open Tickets; then a divider), **Changes** (a plain badge with the changed-file count), **Files**, **History**,
+  Open Tickets; then a divider), **Changes** (a plain badge with the changed-file count), **Files** and **History** (only
+  while Settings › Appearance › **Files and History tools** is on, `morePanelTools`, off by default: the bar keeps to
+  reviewing what agents did; opening a file from a chat or terminal, and `/rewind`, still show those views),
   **Checks** (a red badge with the checks that want you), **Tickets** (the Tickets view over the chat area, UI ›
   *Tickets view*), and at its foot **Terminal** (shows or hides the terminal dock with the focused session's
   terminals, adding the first when it has none; `toggleTerminal`). A view button opens the side panel on that view, or closes it when it is already showing it;

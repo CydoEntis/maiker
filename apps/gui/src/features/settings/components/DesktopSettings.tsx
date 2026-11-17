@@ -607,6 +607,9 @@ function AppearanceSection({ preferences, update, systemReducedMotion, systemDar
         <Row label="Icons" detail="Agent and folder icons in their own colours, or neutral gray tiles.">
           <SegmentedChoice label="Icons" value={preferences.iconColor} options={ICON_COLOR_OPTIONS} onChange={(value) => { update('iconColor', value) }} />
         </Row>
+        <Row label="Files and History tools" detail="Adds Files and History to the tools bar on the right, beside Changes and Checks. Opening a file from a chat, or /rewind, still shows them.">
+          <Switch aria-label="Files and History tools" checked={preferences.morePanelTools} onCheckedChange={(value) => { update('morePanelTools', value) }} />
+        </Row>
       </Card>
       <Card title="Interface size">
         <Row label="Density" detail="How much room the sidebar rows, pane headers and gaps get.">
