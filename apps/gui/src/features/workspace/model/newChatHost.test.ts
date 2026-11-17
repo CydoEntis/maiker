@@ -3,6 +3,12 @@ import { ageOf, launchFlags, yoloFlags } from './newChatHost'
 
 
 describe('launchFlags', () => {
+  it('puts a picked Gemini model on the launch line as -m, and never an effort', () => {
+    expect(launchFlags('gemini', 'flash', 'high')).toBe(' -m flash')
+    expect(launchFlags('gemini', 'default', 'max')).toBe('')
+    expect(launchFlags('gemini', 'bad model; rm -rf', 'default')).toBe('')
+  })
+
   it('puts a picked Claude model and effort on the launch line', () => {
     expect(launchFlags('claude', 'sonnet', 'high')).toBe(' --model sonnet --effort high')
     expect(launchFlags('claude', 'default', 'max')).toBe(' --effort max')

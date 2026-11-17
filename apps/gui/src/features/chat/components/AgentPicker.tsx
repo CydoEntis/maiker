@@ -5,6 +5,7 @@ import { Popover } from 'radix-ui'
 import { PopupContent } from '@/components/ui/popup'
 import { CHAT_AGENTS, type ChatAgent } from '@/features/workspace/model/chatView'
 import { AppIcon, Icon } from '@/features/workspace/components/glyphs'
+import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
 import { AGENT_LABEL, modelName } from '../modelName'
 import {
   choiceFor, DEFAULT_PICK, effortAllowed, KNOWN_MODELS, effortBars, effortWord, leadingModels, menuModels, modelInUse, pickedModel, REASONING_LABEL, REASONING_LEVELS, useAgentModels, useDiscoveredModels,
@@ -83,9 +84,11 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
   const leading = leadingModels(rows, modelId)
   const shown = allModels ? rows : leading
   // Nothing picked means the agent's own, and its files may say which: that is what is true, so that is what shows.
-  const inUse = choice.reasoning === DEFAULT_PICK ? currentEffort : choice.reasoning
+  // An agent with no effort setting shows none, whatever a page started with.
+  const takesEffort = abilitiesOf(agent).takesEffort
+  const inUse = takesEffort ? (choice.reasoning === DEFAULT_PICK ? currentEffort : choice.reasoning) : null
   const inUseWord = effortWord(inUse)
-  const summary = `${AGENT_LABEL[agent]} · ${model?.label ?? ''} · ${inUseWord ?? REASONING_LABEL[choice.reasoning]}`
+  const summary = `${AGENT_LABEL[agent]} · ${model?.label ?? ''} · ${inUseWord ?? (takesEffort ? REASONING_LABEL[choice.reasoning] : 'no effort setting')}`
   const pickModel = (option: ModelOption) => {
     onChange({ model: choiceFor(option) })
     live?.(`/model ${choiceFor(option)}`)
@@ -129,27 +132,31 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
             <Icon name="chevronDown" />
           </button>
         )}
-        <div className="mx-mm-effort">
-          <span className="mx-mm-effort-word">Effort</span>
-          <RadioGroup aria-label="Effort" orientation="horizontal" value={choice.reasoning === DEFAULT_PICK ? '' : choice.reasoning} onValueChange={(value) => { pickLevel(value as Reasoning) }} className="mx-mm-bars">
-            {REASONING_LEVELS.map((level, index) => {
-              const allowed = effortAllowed(agent, model, level)
-              return (
-                <RadioGroupItem
-                  key={level}
-                  value={level}
-                  disabled={!allowed}
-                  aria-label={REASONING_LABEL[level]}
-                  title={allowed ? REASONING_LABEL[level] : `${REASONING_LABEL[level]}: not on this model`}
-                  className={`mx-mm-bar${index < effortBars(inUse) ? ' is-on' : ''}`}
-                  // A second press on the picked level lets go of it: the chat keeps the agent's own again.
-                  onClick={() => { if (level === choice.reasoning) pickLevel(DEFAULT_PICK) }}
-                />
-              )
-            })}
-          </RadioGroup>
-          <span className="mx-mm-level">{choice.reasoning !== DEFAULT_PICK ? REASONING_LABEL[choice.reasoning] : inUseWord !== null ? `${inUseWord} · agent's own` : "Agent's own"}</span>
-        </div>
+        {takesEffort ? (
+          <div className="mx-mm-effort">
+            <span className="mx-mm-effort-word">Effort</span>
+            <RadioGroup aria-label="Effort" orientation="horizontal" value={choice.reasoning === DEFAULT_PICK ? '' : choice.reasoning} onValueChange={(value) => { pickLevel(value as Reasoning) }} className="mx-mm-bars">
+              {REASONING_LEVELS.map((level, index) => {
+                const allowed = effortAllowed(agent, model, level)
+                return (
+                  <RadioGroupItem
+                    key={level}
+                    value={level}
+                    disabled={!allowed}
+                    aria-label={REASONING_LABEL[level]}
+                    title={allowed ? REASONING_LABEL[level] : `${REASONING_LABEL[level]}: not on this model`}
+                    className={`mx-mm-bar${index < effortBars(inUse) ? ' is-on' : ''}`}
+                    // A second press on the picked level lets go of it: the chat keeps the agent's own again.
+                    onClick={() => { if (level === choice.reasoning) pickLevel(DEFAULT_PICK) }}
+                  />
+                )
+              })}
+            </RadioGroup>
+            <span className="mx-mm-level">{choice.reasoning !== DEFAULT_PICK ? REASONING_LABEL[choice.reasoning] : inUseWord !== null ? `${inUseWord} · agent's own` : "Agent's own"}</span>
+          </div>
+        ) : (
+          <p className="mx-mm-note">{`${AGENT_LABEL[agent]} has no effort setting to pick here.`}</p>
+        )}
       </PopupContent>
     </Popover.Root>
   )

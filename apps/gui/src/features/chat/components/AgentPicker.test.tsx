@@ -42,6 +42,18 @@ describe('the effort the agent runs at', () => {
   })
 })
 
+describe('Gemini', () => {
+  it('offers its model aliases, and says it has no effort to pick instead of showing bars', async () => {
+    render(<AgentPicker agent="gemini" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} />)
+    const button = screen.getByRole('button', { name: /Agent, model and reasoning: Gemini · .* · no effort setting/ })
+    expect(button).not.toHaveTextContent(/Low|Medium|High|Max/)
+    await userEvent.click(button)
+    expect(within(screen.getByRole('radiogroup', { name: 'Model' })).getAllByRole('radio').map((model) => model.textContent)).toEqual(['Default', 'Pro', 'Flash', 'Flash Lite'])
+    expect(screen.queryByRole('radiogroup', { name: 'Effort' })).not.toBeInTheDocument()
+    expect(screen.getByText('Gemini has no effort setting to pick here.')).toBeInTheDocument()
+  })
+})
+
 describe('the model button and its menu', () => {
   it('shows the current choice on its button and opens one column: the models, then the effort', async () => {
     const user = userEvent.setup()
