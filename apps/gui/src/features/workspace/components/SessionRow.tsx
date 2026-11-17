@@ -36,7 +36,7 @@ function PlaceLine({ session, showProject, machine }: { session: SessionView; sh
       {showProject && branch !== null && <span className="mx-row-slash" aria-hidden="true">/</span>}
       {branch !== null && <span className="mx-row-branch-name">{branch}</span>}
       {machine !== null && <span className="mx-row-machine">{machineLabel(machine)}</span>}
-      <span className="mx-row-agent"><AppIcon process={session.process} size={14} flat dimmed={session.status === 'idle' || session.status === 'unknown'} /></span>
+      <span className="mx-row-agent"><AppIcon process={session.process} size={14} dimmed={session.status === 'idle' || session.status === 'unknown'} /></span>
     </span>
   )
 }

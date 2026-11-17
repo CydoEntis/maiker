@@ -42,14 +42,7 @@
 .mx-row-close:hover:not(:disabled) { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
 .mx-sidebar-foot { border-top-color: var(--line); }
 
-/* The frame's flat tile: the mark in its own colour on the raised surface, ringed by a hairline. */
-.mx-app-icon.is-flat { background: var(--m-raise); box-shadow: inset 0 0 0 1px var(--line); border-radius: calc(var(--r-control) * .8); }
-.mx-app-icon.is-flat.is-claude { color: #D97757; }
-.mx-app-icon.is-flat.is-codex, .mx-app-icon.is-flat.is-opencode { color: var(--fg2); }
-.mx-app-icon.is-flat.is-shell { color: var(--dim); }
 .mx-app-icon.is-flat.size-16, .mx-sidebar .mx-app-icon.is-flat.size-16 { width: 16px; height: 16px; font-size: 7px; }
-.mx-app-icon.is-flat.size-16 svg { width: 11px; height: 11px; }
-.mx-app-icon.is-flat.size-20 svg { width: 13px; height: 13px; }
 .mx-app-icon.is-dimmed { opacity: .45; }
 
 /* The 9px status badge, cut out of the tile by a ring in the surface colour. */

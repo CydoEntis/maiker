@@ -260,3 +260,19 @@ describe('the picker for a chat on another machine', () => {
     expect(everywhereModel('codex', 'gpt-x')).toBe('default')
   })
 })
+
+describe('the New session dialog\'s compact button', () => {
+  it('names the model and a dim effort, without the agent\'s name, its mark or the strength meter', () => {
+    const { container } = render(<AgentPicker compact agent="claude" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} currentModel="claude-sonnet-5-5" />)
+    const button = screen.getByRole('button', { name: /Agent, model and reasoning/ })
+    expect(button).toHaveTextContent('Sonnet 5.5· Medium')
+    expect(button).not.toHaveTextContent('Claude')
+    expect(container.querySelector('.mx-model-icon')).toBeNull()
+    expect(container.querySelector('.mx-mm-mini')).toBeNull()
+  })
+
+  it('falls back to the agent\'s own name when no model is known', () => {
+    render(<AgentPicker compact agent="codex" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} />)
+    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Codex')
+  })
+})

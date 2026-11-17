@@ -106,9 +106,21 @@ describe('settings preferences', () => {
   it('starts a fresh install with folded corners and keeps saved corners', () => {
     expect(readSettingsPreferences()).toMatchObject({ corners: 'folded' })
     for (const corners of ['square', 'rounded', 'folded']) {
-      localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners }))
+      localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners, cornersEra: 2 }))
       expect(readSettingsPreferences()).toMatchObject({ corners })
     }
+  })
+
+  it('reads corners saved before folded became the default (no era stamp) as the default, not as a choice', () => {
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners: 'square' }))
+    expect(readSettingsPreferences().corners).toBe('folded')
+  })
+
+  it('reads a Terminal view default saved before the redesign (no era stamp) as the Chat default', () => {
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' } }))
+    expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'chat', gemini: 'chat' } }))
+    expect(readSettingsPreferences().chatViewDefault.claude).toBe('terminal')
   })
 
   it('carries a window style saved before the corner switch over to its corners, and falls back from nonsense', () => {
@@ -118,7 +130,7 @@ describe('settings preferences', () => {
     }
     expect(['glass', 'console', 'flat', 'tiled', 'minimal', 'expressive', 'frosted'].map(corners)).toEqual(Array(7).fill('rounded'))
     expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'folded'])
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square' }))
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square', cornersEra: 2 }))
     expect(readSettingsPreferences().corners).toBe('square')
   })
 
@@ -133,7 +145,7 @@ describe('settings preferences', () => {
 
   it('opens agent sessions in the chat unless a view was chosen, and ignores nonsense', () => {
     expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'terminal', codex: 'sideways' } }))
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'sideways' } }))
     expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'terminal', codex: 'chat', gemini: 'chat' })
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: 'terminal' }))
     expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })

@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { windowRoot } from './windowRoot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import { firstHitPerPane, searchPalette, withOutputHits, type PaletteItem } from '../model/palette'
 import type { SearchHit } from '@/features/find/api'
 import { usePaletteOutput } from '../usePaletteOutput'
 import { Icon, type IconName } from './glyphs'
-import { StatusMark, type StatusMarkState } from '@/components/StatusMark'
-import type { SessionStatus } from '../model/session'
+import { StatusIcon } from '@/components/ui/status-icon'
 
 /** The palette's groups (layout 2h), in the order they are listed; a theme is something to do, so it sits with the actions. */
 const GROUPS: ReadonlyArray<{ id: string; name: string; kinds: readonly PaletteItem['kind'][] }> = [
@@ -18,8 +18,6 @@ const GROUPS: ReadonlyArray<{ id: string; name: string; kinds: readonly PaletteI
 
 /** The mark at a row's left, so a chat, a project and an action read apart before their words do. */
 const MARKS: Record<PaletteItem['kind'], IconName> = { Session: 'chat', Project: 'folder', Action: 'prompt', Theme: 'palette', Output: 'terminal' }
-/** A chat's mark (layout 2h): its status, the same shape the sidebar uses, so the palette reads like the list. */
-const STATUS_MARKS: Record<SessionStatus, StatusMarkState> = { needs: 'needs-you', working: 'working', limited: 'needs-you', error: 'needs-you', done: 'done', idle: 'idle', unknown: 'unknown' }
 const optionId = (index: number) => `mx-palette-option-${String(index)}`
 
 type Props = {
@@ -52,7 +50,7 @@ export function CommandPalette({ items, outputItem, onClose }: Props) {
   }
   const row = (item: PaletteItem, index: number) => (
     <ResultsOption key={item.id} id={optionId(index)} selected={index === active} className={`mx-palette-row${index === active ? ' is-selected' : ''}`} onMouseMove={() => { setSelected(index) }} onClick={() => { run(item) }}>
-      <span className="mx-palette-mark" aria-hidden="true">{item.status ? <StatusMark status={STATUS_MARKS[item.status]} /> : <Icon name={MARKS[item.kind]} size={14} />}</span>
+      <span className="mx-palette-mark" aria-hidden="true">{item.status ? <StatusIcon status={item.status} /> : <Icon name={MARKS[item.kind]} size={14} />}</span>
       <span className="mx-palette-label">{item.label}</span>
       {item.detail && <span className={`mx-palette-detail${item.kind === 'Output' ? ' is-output' : ''}`}>{item.detail}</span>}
       <span className="mx-spacer" />
@@ -73,7 +71,7 @@ export function CommandPalette({ items, outputItem, onClose }: Props) {
   }
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
-      <DialogContent unstyled overlayClassName="mx-palette-scrim" aria-label="Command palette" aria-describedby={undefined} className="mx-palette" onKeyDown={onKeyDown} onOpenAutoFocus={(event) => { event.preventDefault() }}>
+      <DialogContent unstyled container={windowRoot()} overlayClassName="mx-palette-scrim" aria-label="Command palette" aria-describedby={undefined} className="mx-palette" onKeyDown={onKeyDown} onOpenAutoFocus={(event) => { event.preventDefault() }}>
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <div className="mx-palette-input">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
@@ -101,7 +99,7 @@ export function CommandPalette({ items, outputItem, onClose }: Props) {
               </div>
             )
           })}
-          {shown.length === 0 && <div className="mx-palette-empty">Nothing matches “{query}”.</div>}
+          {shown.length === 0 && <div className="mx-palette-empty">Nothing matches "{query}"</div>}
         </ResultsList>
         <div className="mx-palette-foot"><span><kbd className="mx-keycap">↑↓</kbd>move</span><span><kbd className="mx-keycap">Enter</kbd>open</span></div>
       </DialogContent>

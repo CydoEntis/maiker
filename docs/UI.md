@@ -240,7 +240,10 @@ Rules for `apps/gui/`. Owner-approved 2026-11-04.
    Folded is the default corner style and needs two drawings: `corner-shape: bevel` where it exists, and a `clip-path`
    fallback under `@supports not (corner-shape: bevel)` for WebKit, the engine the app ships in on Linux and macOS
    ([DESIGN](DESIGN.md#desktop-app), Corners). A new surface with a cut is added to both, with its size, and its border,
-   shadow and flaps are checked in the fallback, where a clip-path clips them.
+   shadow and flaps are checked in the fallback, where a clip-path clips them, and a surface whose edge is not a plain
+   border (an inset shadow, a themed colour) sets `--fold-line` to that colour so the cut keeps its line. Look at the
+   fallback in the real engine, not in Chromium with `corner-shape` switched off: WebKitGTK renders it headless under
+   `cage` (`GtkOffscreenWindow`, `WEBKIT_DISABLE_COMPOSITING_MODE=1`, see `scripts/perf/webkit-harness.py`).
 4. Old CSS moves to these rules only when a ticket touches that area. There is
    no big-bang rewrite.
 
@@ -258,7 +261,7 @@ error. There are no exempt files.
 
 Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
 
-1. The window is at least 720px wide. Under 1100px the sidebar is the 60px rail and
+1. The window is at least 720px wide. Under 1100px the sidebar is the 52px rail ([DESIGN](DESIGN.md#desktop-app), the rail) and
    expanding it opens the full sidebar as an overlay; under 800px panes stack in one
    column. The widths are constants in `features/workspace/model/windowSize.ts`; change
    them there and in DESIGN, nowhere else.
@@ -1355,7 +1358,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     reported". Every one starts folded, a failed one too.
   - *Approval card:* see Approvals. *Helper agents:* consecutive helper calls are one card, "3 agents, 2 working",
     a row each (title, type, what it was asked, its time); a row opens what it was asked and its report. *Plan:*
-    the agent's own to-do items, "N of M done" and a progress bar. *Live box:* "Working for 12s", "Esc to stop", the current step and a skeleton; no token count,
+    the agent's own to-do items, "N of M done" and a progress bar. *Live box:* a frameless line, the running light, "Working for 12s" and "Esc to stop", over a skeleton (the step is for screen readers only; a deliberate deviation from the prototype's bordered box); no token count,
     because the daemon's history carries none.
   - *Markdown* (`markdown.ts`, `components/Markdown.tsx`): an agent message is read into a data tree and drawn as
     elements. There is no HTML anywhere (no `dangerouslySetInnerHTML`), raw tags are text, images are never loaded
@@ -1388,7 +1391,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   (`holdStartChoice`): the starting chat draws them in the same chips the real chat has (locked), and the real chat takes them as
   its conversation's choice, so nothing in the box changes when it takes over. One message is held at a time. **Connect <agent>** on its notice installs the hooks and then restarts that session in place (`reloadAgentOnDaemon`, `Command::ReloadAgent`), so the agent loads them. A message sent into the terminal is drawn at once as an `echo` row, with the
   working line under it, until the history has those words (`countUserMessages` against the count at send time); it is
-  dropped after 20 s rather than left standing as sent. The **live box's step line** says what the agent is doing from the newest
+  dropped after 20 s rather than left standing as sent. The **live box's step** (read aloud only) says what the agent is doing from the newest
   step still running (`workPhase.ts`): "reading src/app.ts", "writing hello.txt", "running npm test", "thinking". It says
   only what the history says. When only helpers keep the session working after the agent's own turn ended
   (`Session.helpersOnly`, from `TermInfo.own_turn_over`), it says "Free · 3 helpers working", and

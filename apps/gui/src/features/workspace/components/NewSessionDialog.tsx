@@ -14,7 +14,7 @@ import { openAgentDocs } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { CHAT_AGENTS, chatAgentOf, DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '../model/chatView'
 import { abilitiesOf } from '../model/agentAbilities'
-import { ageOf, nowSeconds, useFolderBranches, useInstalledAgents } from '../model/newChatHost'
+import { useFolderBranches, useInstalledAgents } from '../model/newChatHost'
 import type { BusyBranches, NewSessionProject } from '../model/newSession'
 import { suggestBranchName } from '../model/worktreeName'
 import { AppIcon, Icon } from './glyphs'
@@ -288,7 +288,6 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
     }
   }
 
-  const [now] = useState(nowSeconds)
   const dot = (colour: string): ReactNode => <span className="mx-nsd-dot" style={{ background: colour }} aria-hidden="true" />
   const machineRows: ChipItem[] = machines.map((candidate) => ({ key: `machine:${String(candidate.machine)}`, label: candidate.label, icon: dot('var(--ok)'), checked: candidate.machine === machine, onPick: () => { if (candidate.machine !== machine) onOtherMachine(candidate.machine) } }))
   const folderItem = (project: NewSessionProject): ChipItem => ({
@@ -308,7 +307,8 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
     return {
       key: `branch:${entry.name}`,
       label: entry.name,
-      right: who === null ? <span className="mx-chip-count">{ageOf(entry.when, now)}</span> : <span className="mx-nc-in-use" title={`${who} is working on it`}>in use</span>,
+      mono: true,
+      right: who === null ? undefined : <span className="mx-nc-in-use" title={`${who} is working on it`}>in use</span>,
       checked: (explicit?.name ?? here) === entry.name && explicit?.create !== true,
       onPick: () => { setBranchPick({ folder, pick: { name: entry.name, create: false, worktree: treeMode } }) },
     }
@@ -349,7 +349,7 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
           {branches !== null && (
             <>
               <span className="mx-nsd-sep" aria-hidden="true">/</span>
-              <ChipMenu variant="token" triggerClass="mx-nsd-token" side="bottom" width={TOKEN_LIST_WIDTH} title="Branch" hint={`in ${folderName}`} summary={branchLabel}
+              <ChipMenu variant="token" triggerClass="mx-nsd-token is-branch" side="bottom" width={TOKEN_LIST_WIDTH} title="Branch" hint={`in ${folderName}`} summary={branchLabel}
                 icon={<Icon name="branch" size={12} />} label={<span className="mx-nsd-token-text is-mono">{branchLabel}</span>}
                 search="Find or name a new branch" sections={[{ heading: 'Branches', items: branchRows }]} fromQuery={fromBranchName} />
             </>
@@ -376,12 +376,12 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
         <div className="mx-nsd-foot">
           {!terminal && (
             <>
-              <Segmented aria-label="Agent" value={agent} className="mx-nsd-seg" onValueChange={(next) => { const chosen = chatAgentOf(next); if (chosen !== null) pickAgent(chosen) }}>
+              <Segmented aria-label="Agent" value={agent} className="mx-nsd-seg" data-agents={CHAT_AGENTS.length} onValueChange={(next) => { const chosen = chatAgentOf(next); if (chosen !== null) pickAgent(chosen) }}>
                 {CHAT_AGENTS.map((name) => (
-                  <SegmentedItem key={name} value={name} className="mx-nsd-seg-option"><AppIcon process={name} size={14} />{AGENT_LABEL[name]}</SegmentedItem>
+                  <SegmentedItem key={name} value={name} title={AGENT_LABEL[name]} className="mx-nsd-seg-option"><AppIcon process={name} size={14} /><span className="mx-nsd-seg-word">{AGENT_LABEL[name]}</span></SegmentedItem>
                 ))}
               </Segmented>
-              <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} />
+              <AgentPicker compact fixedModels={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} />
             </>
           )}
           <span className="mx-nsd-grow" />

@@ -61,6 +61,8 @@ type PickerProps = {
    * agent, so for a chat on another machine they may not exist there.
    */
   fixedModels?: boolean
+  /** The New session dialog's button: the model and a dim effort only (the agent is already chosen beside it), with no agent mark or strength meter. */
+  compact?: boolean
 }
 
 /**
@@ -70,7 +72,7 @@ type PickerProps = {
  * What is picked goes to the agent with the next message; the account's default model and a level
  * that was never picked send nothing, so the chat keeps what it started with.
  */
-export function AgentPicker({ agent, choice, onChange, currentModel = null, currentEffort = null, onAgent, live, locked, fixedModels = false }: PickerProps) {
+export function AgentPicker({ agent, choice, onChange, currentModel = null, currentEffort = null, onAgent, live, locked, fixedModels = false, compact = false }: PickerProps) {
   const [open, setOpen] = useState(false)
   const [allModels, setAllModels] = useState(false)
   useDiscoveredModels(agent)
@@ -89,6 +91,9 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
   const inUse = takesEffort ? (choice.reasoning === DEFAULT_PICK ? currentEffort : choice.reasoning) : null
   const inUseWord = effortWord(inUse)
   const summary = `${AGENT_LABEL[agent]} · ${model?.label ?? ''} · ${inUseWord ?? (takesEffort ? REASONING_LABEL[choice.reasoning] : 'no effort setting')}`
+  // A chat's button names the agent too; the dialog's, beside the agent switch, only the model (the agent's own name when none was picked).
+  const fullName = modelName(agent, choice.model === DEFAULT_PICK && currentModel !== null ? undefined : model, currentModel)
+  const shownName = compact ? fullName.slice(AGENT_LABEL[agent].length).trim() || AGENT_LABEL[agent] : fullName
   const pickModel = (option: ModelOption) => {
     onChange({ model: choiceFor(option) })
     live?.(`/model ${choiceFor(option)}`)
@@ -103,11 +108,11 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
     <Popover.Root open={open && locked === undefined} onOpenChange={(next) => { if (locked === undefined) setOpen(next) }}>
       <Popover.Trigger asChild>
         <button type="button" aria-label={`Agent, model and reasoning: ${summary}`} title={locked ?? 'Model and effort'} aria-disabled={locked !== undefined} className={`mx-model-button${locked === undefined ? '' : ' is-locked'}`}>
-          <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>
+          {!compact && <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>}
           <span className="mx-model-name">{/* With nothing picked, what the agent says it runs is the better name than the row that stands for it. */}
-            {modelName(agent, choice.model === DEFAULT_PICK && currentModel !== null ? undefined : model, currentModel)}</span>
-          {inUseWord !== null && <span className="mx-model-level">{inUseWord}</span>}
-          <MiniMeter level={inUse ?? DEFAULT_PICK} />
+            {shownName}</span>
+          {inUseWord !== null && <span className={compact ? 'mx-model-effort' : 'mx-model-level'}>{compact ? `· ${inUseWord}` : inUseWord}</span>}
+          {!compact && <MiniMeter level={inUse ?? DEFAULT_PICK} />}
           <Icon name="chevronDown" />
         </button>
       </Popover.Trigger>

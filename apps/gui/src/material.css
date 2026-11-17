@@ -145,7 +145,7 @@
 :root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] > * { border-radius: 0 !important; }
 :root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] > button:first-of-type { border-top-left-radius: 6px !important; }
 :root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] > button:last-of-type { border-bottom-right-radius: 6px !important; }
-:root[data-corners="folded"] .mx-app :is(.mx-app-icon, .mx-badge) { border-radius: 4px 0 4px 0 !important; }
+:root[data-corners="folded"] .mx-app .mx-badge { border-radius: 4px 0 4px 0 !important; }
 /* Fold flaps: the cut corner of a floating card shows the folded-over paper, a 14px triangle, lighter at the top left
    (7% of the text colour over the card) and lighter still at the bottom right (12%). Only a surface that is already
    positioned carries them. */
@@ -163,61 +163,81 @@
 /* ---- Folded corners without `corner-shape` (WebKit) ----
    The desktop runs in WebKit on Linux and macOS, where `corner-shape: bevel` does not exist and the radius above would only
    round the corner. Here the cut is a `clip-path` polygon with the same size as the radius it replaces (`--fold`): the
-   top-left and bottom-right corners cut, the others square. A clip-path also clips what is drawn on the edge, so:
-     - the border: a surface that has a hairline draws it along the cut with a one-pixel background stripe in `--fold-line`
-       (`--line2`); a button gets none, its fill ends at the cut. Border and stripe both sit on the border box.
+   top-left and bottom-right corners cut, the others square (`--fold-tl` and `--fold-br` override one corner; 0 keeps it
+   square, which is how the first and last choice of a segmented control cut only their outer corner). A clip-path also
+   clips what is drawn on the edge, so:
+     - the edge along the cut is one 1px anti-aliased stripe drawn inside the cut as the top background layer of every
+       cut surface, in `--fold-line`. A surface says what its edge is by setting `--fold-line` (its border colour, or the
+       colour of its 1px inset shadow); unset it is transparent, so a filled button with no edge shows no line. The
+       defaults below follow the tokens the surfaces already draw their edges in.
      - the shadow and the focus ring: every polygon is the box grown by `--fold-bleed` (4px, a float's 48px) with
        the two cut triangles taken out through a zero-width slit from the grown corner, so a box-shadow still shows around
        the cut and nothing outside is clipped; no wrapper and no `filter`, which keeps a web view without a GPU cheap
        (docs/PERFORMANCE.md).
      - the fold flaps: 16px here (14px above) so the flap's long edge lies on the cut, and the flap draws the hairline too. */
 @supports not (corner-shape: bevel) {
-  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-app-icon, .mx-badge, .mx-status-icon) { --fold: 4px; --fold-bleed: 4px; }
-  :root[data-corners="folded"][data-corners] .mx-app :is(button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip) { --fold: 5px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-badge, .mx-status-icon) { --fold: 4px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is(button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip) { --fold: 5px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-bubble, [data-fold], .mx-live, .mx-work, .mx-step-card, .mx-answered) { --fold: 10px; --fold-bleed: 4px; }
   :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] { --fold: 8px; --fold-bleed: 4px; }
-  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-bubble, [data-fold], .mx-live, .mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered) { --fold: 10px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] > * { --fold: 6px; --fold-bleed: 4px; --fold-tl: 0px; --fold-br: 0px; }
+  :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] > :first-child { --fold-tl: 6px; }
+  :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] > :last-child { --fold-br: 6px; }
   :root[data-corners="folded"][data-corners] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card) { --fold: 12px; --fold-bleed: 4px; }
   :root[data-corners="folded"][data-corners] .mx-app :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting) { --fold: 14px; --fold-bleed: 48px; }
 
+  /* A custom property inherits, so every cut surface starts with no edge and no one-corner override of its own; the rules
+     after this one (more specific by one :is) say otherwise. */
+  :root[data-corners="folded"][data-corners] .mx-app :where(.mx-badge, .mx-status-icon, button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip,
+    [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-step-card, .mx-answered, .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card,
+    [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting) {
+    --fold-line: transparent; --fold-tl: initial; --fold-br: initial;
+  }
+
+  /* The edge colours the surfaces draw: structural surfaces and chat blocks in --line, controls and floats in --line2. */
+  :root[data-corners="folded"][data-corners] .mx-app :is(input, textarea, select, kbd, .mx-chip, .mx-file-chip, .mx-box, .mx-field, .mx-live, .mx-work, .mx-step-card, .mx-answered,
+    [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting,
+    .mx-settings-search, .mx-settings-update-button, .mx-picker-button, .mx-switch) { --fold-line: var(--line2); }
+  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-card, .mx-bubble, [data-fold], [role="radiogroup"][data-fold],
+    .mx-settings-nav-item.is-current) { --fold-line: var(--line); }
+  /* An input inside a field that draws the edge itself has none of its own. */
+  :root[data-corners="folded"][data-corners] .mx-app :is(label, .mx-field, .mx-box) :is(input, textarea) { --fold-line: transparent; }
+  /* The message box's border is the accent while it has focus; so is its cut. */
+  :root[data-corners="folded"][data-corners] .mx-app .mx-box:focus-within { --fold-line: var(--accent); }
+
   :root[data-corners="folded"][data-corners] .mx-app :is(
-    .mx-app-icon, .mx-badge, .mx-status-icon, button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip,
-    [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered,
+    .mx-badge, .mx-status-icon, button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip,
+    [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-step-card, .mx-answered,
     .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card,
     [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting
-  ):not([role="radiogroup"][data-fold] > *, .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-head, .mx-agents-head, .mx-qd-clear, .mx-dock-marker) {
+  ):not([role="radiogroup"][data-fold] > :not(:first-child, :last-child), .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-head, .mx-agents-head, .mx-qd-clear, .mx-dock-marker) {
     border-radius: 0 !important;
     clip-path: polygon(
-      calc(-1 * var(--fold-bleed)) calc(-1 * var(--fold-bleed)), 0 0, 0 var(--fold), var(--fold) 0, 0 0, calc(-1 * var(--fold-bleed)) calc(-1 * var(--fold-bleed)),
+      calc(-1 * var(--fold-bleed)) calc(-1 * var(--fold-bleed)), 0 0, 0 var(--fold-tl, var(--fold)), var(--fold-tl, var(--fold)) 0, 0 0, calc(-1 * var(--fold-bleed)) calc(-1 * var(--fold-bleed)),
       calc(100% + var(--fold-bleed)) calc(-1 * var(--fold-bleed)), calc(100% + var(--fold-bleed)) calc(100% + var(--fold-bleed)),
-      100% 100%, 100% calc(100% - var(--fold)), calc(100% - var(--fold)) 100%, 100% 100%, calc(100% + var(--fold-bleed)) calc(100% + var(--fold-bleed)),
+      100% 100%, 100% calc(100% - var(--fold-br, var(--fold))), calc(100% - var(--fold-br, var(--fold))) 100%, 100% 100%, calc(100% + var(--fold-bleed)) calc(100% + var(--fold-bleed)),
       calc(-1 * var(--fold-bleed)) calc(100% + var(--fold-bleed)));
-  }
-  /* The hairline along both cuts, for the surfaces that have one (everything above except buttons and the status tiles). */
-  :root[data-corners="folded"][data-corners] .mx-app :is(
-    input, textarea, select, kbd, .mx-chip, [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered,
-    .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card,
-    [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting
-  ):not(button) {
-    --fold-line: var(--line2);
+    /* The stripe, over whatever fill the surface has; the fill's own `background` shorthand cannot remove it (this selector is
+       more specific), and a surface with its own background-image gives it up. */
     background-image:
-      linear-gradient(135deg, transparent 50%, var(--fold-line) 50% calc(50% + 1px), transparent 0),
-      linear-gradient(315deg, transparent 50%, var(--fold-line) 50% calc(50% + 1px), transparent 0);
-    background-size: var(--fold) var(--fold), var(--fold) var(--fold);
+      linear-gradient(135deg, transparent calc(50% - .5px), var(--fold-line, transparent) 50% calc(50% + 1px), transparent calc(50% + 1.5px)),
+      linear-gradient(315deg, transparent calc(50% - .5px), var(--fold-line, transparent) 50% calc(50% + 1px), transparent calc(50% + 1.5px));
+    background-size: var(--fold-tl, var(--fold)) var(--fold-tl, var(--fold)), var(--fold-br, var(--fold)) var(--fold-br, var(--fold));
     background-position: 0 0, 100% 100%;
     background-repeat: no-repeat;
     background-origin: border-box;
   }
-  /* The message box's border is the accent while it has focus; so is its cut. */
-  :root[data-corners="folded"][data-corners] .mx-app .mx-box:focus-within { --fold-line: var(--accent); }
+  /* Settings is a dialog but not positioned by its scrim, so the flaps need it to be their box. */
+  :root[data-corners="folded"] .mx-app .mx-settings { position: relative; }
   /* The flaps: their long edge is the cut, with the hairline on it. */
   :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before,
   :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
     width: 16px; height: 16px;
   }
   :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before {
-    background: linear-gradient(135deg, transparent 50%, var(--line2) 50% calc(50% + 1px), color-mix(in srgb, var(--fg) 7%, var(--main)) calc(50% + 1px));
+    background: linear-gradient(135deg, transparent 50%, var(--fold-line, var(--line2)) 50% calc(50% + 1px), color-mix(in srgb, var(--fg) 7%, var(--main)) calc(50% + 1px));
   }
   :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
-    background: linear-gradient(315deg, transparent 50%, var(--line2) 50% calc(50% + 1px), color-mix(in srgb, var(--fg) 12%, var(--main)) calc(50% + 1px));
+    background: linear-gradient(315deg, transparent 50%, var(--fold-line, var(--line2)) 50% calc(50% + 1px), color-mix(in srgb, var(--fg) 12%, var(--main)) calc(50% + 1px));
   }
 }

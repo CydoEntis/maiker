@@ -196,7 +196,7 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
           <span className="mx-fp-row-sub">{`${niceOf(parentOf(repo.path), home)}/`}</span>
         </span>
         <span className="mx-fp-row-side">
-          {repo.branch !== null && <span className="mx-fp-branch"><Icon name="branch" size={11} stroke="currentColor" />{repo.branch}</span>}
+          {repo.branch !== null && <span className="mx-fp-branch"><Icon name="branch" size={11} stroke="currentColor" /><span className="mx-fp-branch-name">{repo.branch}</span></span>}
           {repo.lastUsed !== null && <span className="mx-fp-when">{`Used ${agoOf(repo.lastUsed, now)}`}</span>}
         </span>
       </ResultsOption>
@@ -286,7 +286,7 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
                     onClick={() => { if (on) go(path); else setSelected(row) }}>
                     <Icon name="folder" size={14} />
                     <span className="mx-fp-row-name">{entry.name}</span>
-                    {entry.git !== null && <span className="mx-fp-branch"><Icon name="branch" size={11} stroke="currentColor" />{entry.git}</span>}
+                    {entry.git !== null && <span className="mx-fp-branch"><Icon name="branch" size={11} stroke="currentColor" /><span className="mx-fp-branch-name">{entry.git}</span></span>}
                     <button type="button" className="mx-fp-enter" aria-label={`Open ${entry.name}`} title="Open folder (→)" onClick={(event) => { event.stopPropagation(); go(path) }}><Icon name="chevron" /></button>
                   </ResultsOption>
                 )

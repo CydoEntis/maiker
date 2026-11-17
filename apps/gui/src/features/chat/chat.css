@@ -38,29 +38,27 @@
 
 /* The person's message: attachments, the bubble, then its time and menu under it. */
 .mx-msg-user { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
-.mx-msg-user .mx-bubble { margin: 0; max-width: min(560px, 85%); padding: 9px 13px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--bubble); font-size: 14px; line-height: 1.55; white-space: pre-wrap; text-wrap: pretty; overflow-wrap: anywhere; color: var(--fg); }
+.mx-msg-user .mx-bubble { margin: 0; max-width: min(560px, 80%); padding: 10px 14px; border: 0; border-radius: var(--r-panel); background: color-mix(in srgb, var(--fg) 7%, var(--main)); font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; text-wrap: pretty; overflow-wrap: anywhere; color: var(--fg); }
 .mx-msg-meta { display: flex; align-items: center; gap: 6px; min-height: 28px; font-size: 11.5px; color: var(--dim); }
 .mx-msg-user.is-echo .mx-bubble { opacity: .6; }
 .mx-msg-menu { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 0; background: none; color: var(--muted); cursor: pointer; outline: none; }
 .mx-msg-menu:hover, .mx-msg-menu[data-state="open"] { background: var(--m-hover); color: var(--fg); }
 .mx-msg-menu:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
 .mx-msg-menu-why { margin: 2px 6px 4px; max-width: 240px; font-size: 11.5px; line-height: 1.4; color: var(--dim); white-space: normal; }
-/* The agent's reply: its lead sentence in the text colour, the rest a step quieter, 10px between blocks. */
-.mx-msg-agent { display: flex; flex-direction: column; gap: 10px; font-size: 14.5px; line-height: 1.65; color: var(--fg2); overflow-wrap: anywhere; }
-.mx-msg-lead { margin: 0; font-weight: 600; color: var(--fg); white-space: pre-wrap; text-wrap: pretty; }
+/* The agent's reply: plain text, its first paragraph in the text colour and the rest a step quieter, 8px between blocks.
+   Nothing in it is bold unless the writer made it so. */
+.mx-msg-agent { display: flex; flex-direction: column; gap: 8px; font-size: 14.5px; line-height: 1.65; color: var(--fg2); overflow-wrap: anywhere; }
+.mx-msg-lead { margin: 0; font-weight: 400; color: var(--fg); white-space: pre-wrap; text-wrap: pretty; }
 .mx-msg-rest { color: var(--fg2); }
 .mx-msg-empty { margin: 0; font-size: 13px; font-style: italic; color: var(--dim); }
 /* While the agent works the chat shows one box (`LiveBox`): the clock and how to stop, the step it is on, and a
    skeleton where the reply will be. */
 @keyframes mxShim { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
-.mx-live { display: flex; flex-direction: column; background: var(--m-well); border: 1px solid var(--line2); }
-.mx-live-head { display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 10px 0 12px; font-size: 13px; color: var(--fg); }
+.mx-live { display: flex; flex-direction: column; }
+.mx-live-head { display: flex; align-items: center; gap: 9px; min-height: 28px; font-size: 12.5px; color: var(--muted); }
 .mx-live-time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .mx-live-esc { flex: none; font-size: 11.5px; color: var(--dim); }
-.mx-live-step { display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 0 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--fg2); }
-.mx-live-mark { flex: none; width: 12px; text-align: center; color: var(--dim); }
-.mx-live-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-live-skeleton { display: flex; flex-direction: column; gap: 9px; padding: 4px 12px 14px 33px; }
+.mx-live-skeleton { display: flex; flex-direction: column; gap: 9px; padding: 6px 0 4px 21px; }
 .mx-sk { height: 11px; background: linear-gradient(90deg, color-mix(in srgb, var(--fg) 7%, transparent) 0%, color-mix(in srgb, var(--fg) 13%, transparent) 50%, color-mix(in srgb, var(--fg) 7%, transparent) 100%); background-size: 840px 100%; animation: mxShim 1.6s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .mx-sk { animation: none; } }
 :root[data-reduced-motion="true"] .mx-sk { animation: none; }
@@ -76,23 +74,32 @@
 
 /* Rich text in a reply. */
 .mx-md-rule { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
-/* A table is a card like a code block: its Copy and Save sit in the head, never loose under it where they read as part of the next paragraph. */
-.mx-md-tablecard { min-width: 0; }
-.mx-md-tableacts { flex-wrap: wrap; }
-.mx-md-tabletitle { font-size: 12px; font-weight: 600; color: var(--fg2); }
-.mx-md-table table { width: 100%; border-collapse: collapse; font-size: 13px; line-height: 1.45; }
+/* A table (design: TableCard) has no box: a title row, then the table with a rule under its head and under each row. */
+.mx-md-tablecard { display: flex; min-width: 0; flex-direction: column; }
+.mx-md-tableacts { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.mx-md-tabletitle { font-size: 13px; font-weight: 600; color: var(--fg); }
+.mx-md-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; line-height: 1.45; }
 /* The message breaks long words anywhere, which let a narrow column shrink to one letter a line. A cell keeps its words whole; a table too wide for the column scrolls in its own region. */
-.mx-md-table :is(th, td) { padding: 7px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow-wrap: normal; word-break: normal; }
-.mx-md-table th { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.mx-md-table :is(th, td) { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+.mx-md-table th { padding-top: 7px; padding-bottom: 7px; font-size: 12px; font-weight: 500; color: var(--dim); border-bottom-color: var(--line2); }
 .mx-md-table td { color: var(--fg2); }
+.mx-md-table td:first-child { font-weight: 500; color: var(--fg); }
 .mx-md-table td.mx-md-num { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.mx-md-table tbody tr:last-child td { border-bottom: 0; }
+.mx-md-table :is(th, td):last-child { padding-right: 0; }
+/* A list: a dim bullet or number in a 12px slot, then the item; bold lead words are in the text colour. */
+.mx-md-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; line-height: 1.6; }
+.mx-md-list > li { display: flex; gap: 10px; }
+.mx-md-list > li::before { content: attr(data-bullet); flex: none; min-width: 12px; color: var(--dim); }
+.mx-md-item { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A note: the well with a 2px coloured edge; its lead in the text colour. */
+.mx-note { display: flex; gap: 10px; padding: 10px 12px; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: inset 2px 0 0 var(--needs); font-size: 13.5px; line-height: 1.55; }
+.mx-note-lead { flex: none; font-weight: 600; color: var(--fg); }
+.mx-note-text { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-code-chip { padding: 1px 5px; background: var(--m-sel); font-family: var(--mono); font-size: .9em; color: var(--fg); }
-.mx-code-lang { font-family: var(--mono); font-size: 11px; font-weight: 600; color: var(--muted); }
-.mx-code-body { margin: 0; padding: 8px 0; overflow-x: auto; overflow-y: hidden; background: var(--m-well); font-family: var(--mono); font-size: 12.5px; line-height: 1.65; white-space: pre; color: var(--fg2); }
+.mx-code-body { margin: 0; padding: 8px 0; overflow-x: auto; overflow-y: hidden; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; white-space: pre; color: var(--fg); }
 .mx-code-body .code-line { display: flex; min-width: max-content; }
-.mx-code-num { flex: none; width: 36px; padding-right: 10px; text-align: right; color: var(--dim); user-select: none; }
-.mx-code-text { padding-right: 12px; white-space: pre; }
+.mx-code-num { flex: none; width: 34px; padding-right: 12px; text-align: right; color: var(--dim); user-select: none; }
+.mx-code-text { padding-right: 14px; white-space: pre; }
 .mx-chat .tok-keyword { color: var(--code-kw); }
 .mx-chat .tok-string { color: var(--code-str); }
 .mx-chat .tok-comment { color: var(--code-com); font-style: italic; }
@@ -101,15 +108,17 @@
 
 /* One step the agent took: a 30px row that opens to its detail. */
 .mx-step { display: flex; flex-direction: column; min-width: 0; }
-.mx-step-row { display: flex; width: 100%; min-width: 0; min-height: 30px; align-items: center; gap: 9px; padding: 0 4px; text-align: left; font-size: 13px; color: var(--fg2); outline: none; }
+.mx-step-row { display: flex; width: 100%; min-width: 0; min-height: 30px; align-items: center; gap: 9px; padding: 0 8px; text-align: left; font-size: 13px; color: var(--fg2); outline: none; }
 button.mx-step-row:hover { background: var(--m-hover); }
 button.mx-step-row:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 /* Amber is the one colour that means "needs you", so only a step a request is waiting on wears it: a tint and a left edge. */
 .mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); box-shadow: inset 2px 0 0 var(--needs); }
-.mx-step-glyph { flex: none; display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; }
-.mx-step-tool { flex: none; display: inline-flex; color: var(--muted); }
+/* The mark in front of a step sits in a 16px slot: ✓ and ■ quiet, × red, ! amber, the running light while it works. */
+.mx-step-glyph { flex: none; display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; font: 600 11px var(--mono); color: var(--dim); }
+.mx-step-glyph.is-failed { color: var(--err); font-size: 13px; }
+.mx-step-glyph.is-needs { color: var(--needs); font-size: 13px; font-weight: 800; }
 .mx-step-verb { flex: none; font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; }
-.mx-step-target { display: inline-flex; min-width: 0; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12.5px; color: var(--fg2); white-space: nowrap; }
+.mx-step-target { display: inline-flex; min-width: 0; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; color: var(--fg2); white-space: nowrap; }
 .mx-step-target > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-step-target > [data-slot="tag"] { flex: none; overflow: visible; }
 .mx-step-server { margin-right: 6px; font-weight: 500; color: var(--dim); }
@@ -136,40 +145,41 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 /* A well that says why there is no diff: a secret, too large, or still being written. */
 .mx-step-well { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: var(--m-well); font-size: 12.5px; color: var(--muted); }
 .mx-step-wellspin { display: inline-flex; width: 9px; height: 9px; align-items: center; justify-content: center; color: var(--working); }
-
-/* The detail under a step in a run: a card with a head and its well flush below. */
-.mx-step-card { overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--card); }
-.mx-step-head { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line); font-size: 12.5px; color: var(--fg2); }
-.mx-step-head:last-child { border-bottom: 0; }
-.mx-step-head.is-command { align-items: flex-start; padding-right: 10px; }
-.mx-step-head.is-command > [data-slot="tag"] { margin-top: 9px; }
-.mx-step-prompt { flex: none; font-family: var(--mono); font-size: 12.5px; line-height: 18px; color: var(--dim); user-select: none; }
-.mx-step-head.is-command > .mx-step-prompt { padding: 9px 0; }
 .mx-step-path { min-width: 0; flex: 1; font-family: var(--mono); font-size: 12px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-step-command { display: block; flex: 1; min-width: 0; padding: 9px 0; font-family: var(--mono); font-size: 12.5px; font-weight: 500; line-height: 18px; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
-.mx-step-command.is-short { padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-step-output { margin: 0; max-height: 320px; overflow: auto; padding: 8px 12px; background: var(--m-well); font-family: var(--mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; color: var(--fg2); }
 
-/* A command or an edit on its own in the chat: a card with the step's facts in its head. */
-.mx-step-alone.is-waiting { border-color: var(--needs); }
-.mx-step-cardhead { gap: 8px; }
-.mx-step-cardtoggle { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; align-self: stretch; text-align: left; outline: none; }
-.mx-step-cardtoggle:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
-.mx-step-cardtoggle > [data-slot="tag"] { flex: none; }
-.mx-step-cardhead > [data-slot="tag"] { flex: none; }
-.mx-step-cardbody { display: flex; min-width: 0; flex-direction: column; }
-.mx-step-cardbody > .mx-step-absent { padding: 10px 12px; }
+/* A block (`Block`): a command, a diff or a code block. A hairline box on the well; its 34px head opens it. */
+.mx-block { position: relative; display: flex; flex-direction: column; min-width: 0; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); }
+.mx-block.is-failed { box-shadow: inset 2px 0 0 var(--err); }
+.mx-block.is-waiting { border-color: var(--needs); }
+.mx-block-head { display: flex; min-width: 0; min-height: 34px; align-items: center; padding: 0 8px 0 0; font-size: 12.5px; color: var(--fg2); }
+.mx-block-head.is-open { border-bottom: 1px solid var(--line); }
+.mx-block-head.is-static { gap: 8px; padding: 0 10px 0 12px; }
+.mx-block-toggle { display: flex; flex: 1; min-width: 0; align-items: center; align-self: stretch; gap: 8px; padding: 0 10px 0 12px; text-align: left; outline: none; }
+.mx-block-toggle:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
+.mx-block-toggle:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-block-prompt { flex: none; font: 400 12px var(--mono); color: var(--dim); user-select: none; }
+/* What the block is: one line that cuts with an ellipsis, never wraps, so a long command or path cannot push the head wider than the column. */
+.mx-block-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 12px var(--mono); color: var(--fg); }
+.mx-block-label { flex: none; font: 600 11px var(--ui); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.mx-block-light { flex: none; display: inline-flex; }
+.mx-block-command { flex: 1; min-width: 0; padding: 7px 0; font: 400 12px/1.5 var(--mono); color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mx-block-action { flex: none; height: 22px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 12px; color: var(--dim); white-space: nowrap; outline: none; }
+.mx-block-action:hover { color: var(--fg); background: var(--m-hover); }
+.mx-block-action:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-block-output { margin: 0; max-height: 320px; overflow: auto; padding: 8px 14px; font: 400 12px/1.7 var(--mono); white-space: pre; color: var(--fg2); }
+.mx-block-output.is-command { max-height: none; color: var(--fg); border-bottom: 1px solid var(--line); white-space: pre-wrap; overflow-wrap: anywhere; }
 
-.mx-diff { padding: 6px 0; overflow-x: auto; background: var(--m-well); font-family: var(--mono); font-size: 12px; line-height: 1.65; }
-.mx-diff-hunk { padding: 0 12px 0 58px; color: var(--link); white-space: pre; }
-.mx-diff-line { display: flex; white-space: pre; min-width: max-content; color: var(--fg2); }
-.mx-diff-line.is-add { background: color-mix(in oklab, var(--done) 13%, transparent); }
-.mx-diff-line.is-del { background: color-mix(in oklab, var(--err) 13%, transparent); }
-.mx-diff-num { flex: none; width: 36px; padding-right: 8px; text-align: right; color: var(--dim); user-select: none; }
-.mx-diff-sign { width: 14px; flex: none; text-align: center; color: var(--dim); user-select: none; }
+/* A diff: two 34px number columns (old, new), a 14px sign, the code; added and removed lines tinted 10%. */
+.mx-diff { padding: 6px 0; overflow-x: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; }
+.mx-diff-hunk { padding: 0 14px 0 82px; color: var(--link); white-space: pre; }
+.mx-diff-line { display: flex; white-space: pre; min-width: max-content; color: var(--fg); }
+.mx-diff-line.is-add { background: color-mix(in srgb, var(--done) 10%, transparent); }
+.mx-diff-line.is-del { background: color-mix(in srgb, var(--err) 10%, transparent); }
+.mx-diff-num { flex: none; width: 34px; padding-right: 8px; text-align: right; color: var(--dim); user-select: none; }
+.mx-diff-sign { width: 14px; flex: none; text-align: center; font-weight: 600; color: var(--dim); user-select: none; }
 .mx-diff-line.is-add .mx-diff-sign { color: var(--done); }
 .mx-diff-line.is-del .mx-diff-sign { color: var(--err); }
-.mx-diff-text { padding-right: 12px; }
+.mx-diff-text { padding-right: 14px; }
 .mx-ghost-btn { flex: none; display: inline-flex; height: 24px; align-items: center; gap: 5px; padding: 0 8px; font-size: 12px; font-weight: 500; color: var(--fg2); white-space: nowrap; }
 .mx-ghost-btn:hover { background: var(--m-hover); color: var(--fg); }
 
@@ -202,9 +212,12 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-answered-step:hover { text-decoration-color: currentColor; }
 
 /* The end of a turn: centred words between hairlines, and the files it changed. */
-.mx-divider { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--dim); }
+/* The turn's footer: how it ended on one quiet line (✓ Finished in 2m 4s), no rules. */
+.mx-divider { display: flex; align-items: center; gap: 8px; min-height: 30px; margin-top: 6px; font-size: 12.5px; color: var(--dim); }
+.mx-divider-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-divider-line { flex: 1; height: 1px; background: var(--line); }
 /* A compaction is a turning point in the chat, so it is drawn as one: a pill in the link colour across the line. */
+.mx-compacted { justify-content: center; gap: 10px; font-size: 12px; margin-top: 0; }
 .mx-compacted .mx-divider-line { background: color-mix(in oklab, var(--link) 35%, var(--line)); }
 .mx-compacted-pill { flex: none; display: inline-flex; height: 24px; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; background: color-mix(in oklab, var(--link) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--link) 40%, transparent); color: var(--link); font-size: 12px; font-weight: 600; }
 .mx-compacted-hooks { font-weight: 400; color: var(--muted); }
@@ -215,8 +228,13 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-summary-toggle { flex: none; display: inline-flex; height: 24px; align-items: center; gap: 6px; padding: 0 8px; border-radius: 6px; font-size: 12px; color: var(--muted); }
 .mx-summary-toggle:hover { color: var(--fg); background: rgba(var(--hl), calc(.05 * var(--hk))); }
 .mx-summary-body { max-height: 360px; overflow-y: auto; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(var(--hl), calc(.09 * var(--hk))); font-size: 12.5px; color: var(--fg2); animation: v7fade .2s ease-out; }
-.mx-changed-said { font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; }
-.mx-changed-counts { display: flex; gap: 6px; font-family: var(--mono); font-size: 12px; font-weight: 500; }
+/* The files a turn changed, as chips: a 26px hairline box each, type tag, name and, at the end, the turn's counts. */
+.mx-changed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mx-file-chip { display: inline-flex; min-width: 0; max-width: 100%; height: 26px; align-items: center; gap: 7px; padding: 0 8px; border: 1px solid var(--line2); border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); outline: none; }
+button.mx-file-chip:hover { background: var(--m-hover); color: var(--fg); }
+button.mx-file-chip:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-file-chip.is-more { color: var(--dim); }
+.mx-changed-counts { display: flex; gap: 6px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; }
 .mx-changed-counts .is-add { color: var(--done); }
 .mx-changed-counts .is-remove { color: var(--err); }
 
@@ -227,13 +245,13 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-work-head:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
 .mx-work-head:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-work-mark { flex: none; width: 16px; text-align: center; font: 600 13px var(--mono); color: #D97757; }
-/* Wraps instead of cutting off: the end of the line is where "a step failed" is said. */
 .mx-work-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--fg); }
 .mx-work-count { flex: none; display: inline-flex; height: 18px; align-items: center; padding: 0 7px; font-size: 11px; font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--fg) 7%, transparent); }
 .mx-work-steps { display: flex; flex-direction: column; padding: 2px 0 4px; border-top: 1px solid var(--line); }
 .mx-work-steps .mx-step-row { padding: 0 8px; }
 .mx-work-steps .mx-step-body { margin: 4px 12px 8px 35px; }
-.mx-work-failed { background: color-mix(in oklab, var(--err) 7%, transparent); }
+.mx-work.is-failed { box-shadow: inset 2px 0 0 var(--err); }
+.mx-work-failed-note { flex: none; font: 500 11.5px var(--mono); color: var(--err); }
 
 /* The agent's reasoning: one quiet italic line that opens to the text, ruled on its left. */
 .mx-thought { display: flex; flex-direction: column; gap: 6px; }
@@ -512,7 +530,15 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: inset 0 -2px 0 v
 
 /* Folded corners (docs/DESIGN.md): chat blocks and bubbles are cut 10px, a floating action card 14px with its flaps; the
    Square and Rounded corners come from the tokens. */
-:root[data-corners="folded"] .mx-app :is(.mx-live, .mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered) { border-radius: 10px 0 10px 0 !important; }
+:root[data-corners="folded"] .mx-app :is(.mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered) { border-radius: 10px 0 10px 0 !important; }
 :root[data-corners="folded"] .mx-app .mx-waiting { border-radius: 14px 0 14px 0 !important; }
 :root[data-corners="folded"] .mx-app .mx-chat .mx-waiting-step { border-radius: 0 !important; }
 .mx-waiting-head:has(+ .mx-waiting-body > .mx-waiting-form) { border-bottom: 0; }
+:root[data-corners="folded"] .mx-app .mx-file-chip { border-radius: 5px 0 5px 0 !important; }
+
+/* An agent's mark in the chat is a flat glyph in its own colour: no tile, no gradient, no ring behind it (design: the mark
+   is never set on a coloured square). It covers the model chip, the agent picker and any mark in the feed. */
+:is(.mx-chat, .mx-mm-agent, .mx-model-icon) .mx-app-icon:is(.is-claude, .is-codex, .is-gemini, .is-deepseek, .is-opencode, .is-rust, .is-shell, .is-tinted, .is-flat) { background: none; box-shadow: none; color: var(--fg2); }
+:is(.mx-chat, .mx-mm-agent, .mx-model-icon) .mx-app-icon.is-claude { color: #D97757; }
+:is(.mx-chat, .mx-mm-agent, .mx-model-icon) .mx-app-icon.is-shell { color: var(--dim); }
+:is(.mx-chat, .mx-mm-agent, .mx-model-icon) .mx-app-icon svg { width: 100%; height: 100%; }

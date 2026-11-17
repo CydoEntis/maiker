@@ -268,8 +268,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   the message box, 14px floats, 10px chat bubbles, 8px toggle frames, 4px tiles (`material.css`, last block). A web view
   with `corner-shape: bevel` draws it with `border-radius: N 0 N 0`. WebKit (Linux, macOS) has none, so
   `@supports not (corner-shape: bevel)` draws the same cut with a `clip-path` polygon sized `--fold`, and pays for what
-  the polygon clips: a surface with a hairline gets it along the cut as a 1px background stripe (`--fold-line`, the
-  accent on a focused message box), a button gets none, a float's polygon is widened by `--fold-bleed` (48px) on its
+  the polygon clips: every cut surface draws a 1px anti-aliased stripe along both cuts as its top background layer, in
+  `--fold-line` (the colour of its border or its 1px inset shadow; transparent when unset, so a filled button with no
+  edge shows no line; the accent on a focused message box; Button and Card variants set it; a segmented control's first
+  and last choice cut only their outer corner through `--fold-tl` and `--fold-br`), a float's polygon is widened by `--fold-bleed` (48px) on its
   square sides so its shadow survives (no `filter`, no wrapper: cheap on software drawing), and the flaps are 16px with
   the hairline on their long edge. A new Folded surface is added to both blocks and looked at in both engines. The corners are the desktop app's own: the
   shared `window_style` setting is not read by the desktop. A window style saved before the switch carries over: Glass,
@@ -279,8 +281,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   segment, a palette row), `--c-field-*` (dropdown buttons, pickers, the new-session segments, inputs), `--c-track-*`
   (the tray behind a segmented control), `--c-sw-*` and `--c-knob-*` (the switch), `--c-tile-ring` (agent and shell
   tiles) and `--c-head-bg` (sticky headers). A new control gets tokens first and is checked in both corners and both
-  kinds of theme. **Icons** (Settings › Appearance › Icons, `iconColor`, `data-icons`): `color` keeps app icons in
-  their own colours; `grayscale` makes them neutral `--raise` tiles.
+  kinds of theme. **Agent marks** are flat glyphs with no tile or background anywhere (`AppIcon`): Claude's is
+  `--agent-claude` orange, every other agent's takes `--fg2`, a shell's `--dim`. Settings › Appearance › Icons
+  (`iconColor`, `data-icons`): `grayscale` makes Claude's neutral too. **Segmented control**: a 28px frame on `--well`
+  with a 1px `--line` edge and 2px of room; 22px choices (12px/500, `--dim`, `--fg` on `--m-sel` while picked) with a
+  13px mark 6px from the word. **Drawers** (Changes, Files, the terminal dock) grow as they slide: `from` opacity 0,
+  translate 28px and width (height for the bottom dock) 0 over `--panel-in`, out over `--panel-out`, so the chat
+  beside them narrows with them; Reduce motion (the OS or Settings) shows them at once.
 - **Focus and popovers.** Focus is a 2px `--accent` underline (`inset 0 -2px 0 var(--accent)`) on buttons, fields and rows,
   one rule in `workspace.css` (and the same in `index.css` outside the window); menu items and options keep their own highlight, and the message box is the one
   exception: its whole border turns accent. A popover grows from the corner that touches its anchor: `transform-origin` is Radix's
@@ -299,7 +306,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   (shows or hides the dock, adding the first terminal when the session has none; `toggleTerminal`), then the pane's own entries.
   A view button opens the side panel on that view, or closes it when it already shows it. There is no middle column and no tab bar: the window is the sidebar, the workspace and the side panel.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
-  60px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
+  52px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
   widths are `COMPACT_WIDTH_PX` and `NARROW_WIDTH_PX` in `model/windowSize.ts`. The chat column keeps at least
   **400px** (`--chat-min`): the side panel beside it shrinks first, down to its 300px, and under **900px**
@@ -425,9 +432,14 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   With nothing running the list says "Chats and shells you start appear here, sorted by what needs you."
   The foot holds the update button (nothing while there is nothing to do: the version lives only in Settings; or "Reconnecting to maikerd…") and the Settings gear; Recent sessions is in the command palette.
   Hidden (Ctrl+Shift+B, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
-  sidebar** button. The rail's foot has a Recent sessions clock and the gear. The edge drags (208 to 440px;
-  double-click resets). The **rail** of a narrow window is the starters, then one tile per session.
-- **Replies are revealed a sentence at a time.** While the agent works the chat draws only the live box (below); when the
+  sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (the collapsed sidebar, or a narrow
+  window's; `Rail` in `Sidebar.tsx`) is 52px: expand, search and new session (32px buttons) on top, then one 30px row per
+  chat holding only its 14px `StatusIcon`, in the full list's order and groups with a 20px divider between groups; the
+  open chat has the `--sel` fill and a 2px `--fg` bar on its left edge. Hovering a row shows the same hover card as the
+  full list, a click opens the chat and a right-click gives the same menu. The foot has the update button and Settings.
+  No agent logos, initials or connection dot (the service's state is the title-bar chip), and no Recent sessions button
+  (it is in the command palette). The width eases on the drawers' timing.
+- **Replies are revealed a sentence at a time.** While the agent works the chat draws only the quiet working line and skeleton (*The live box*, below); when the
   work ends its reply appears one unit every 120 ms (`useRevealedText`, `REVEAL_MS`): a sentence of prose, a list item, a
   table row or a whole fenced block of code (`revealEnds`), so what shows is always finished, never half a word. Steps
   arrive already folded. A reply that arrives after the history has loaded is revealed from its first sentence; what the
@@ -599,7 +611,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   tab text size (12, 13.5, 15 px). They are CSS variables on the window root (`--pad`, `--sidebar-fs`,
   `--tab-fs`, `--icon-scale`), so every size rule that reads one follows it. The docked sidebar's right edge is a
   drag handle (`role=separator`, 208–440 px, default 264): the width follows the pointer and is saved
-  on release; arrow keys step 16 px, Home or a double-click resets. The collapsed rail is fixed at 60px.
+  on release; arrow keys step 16 px, Home or a double-click resets. The collapsed rail is fixed at 52px.
 - **Terminal text.** Settings › Terminal sets, in one Text group of rows, the size (11 to 16), the cursor and its
   blink, the font family, the normal weight
   (Light 300, Regular 400, Medium 500, Semibold 600) and the bold weight (Semibold, Bold 700, Extra bold 800).
@@ -804,7 +816,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   The header is a size container: under 700px the project goes, under 560px the branch's name and the machine. Right: the **Chat | Terminal** toggle (a data-fold segmented frame, a 13px mark and the word in each), the
   **Changes** button (two joined branches) with a count badge of the changed files, a **Files** button and the **⋯** menu (Changes, Files, History, Checks, Tickets, Terminal, then split, rename and the pane's other entries). There is no PR chip (the pull
   request is in the row's hover card and Checks), no replay control and no model name.
-- **New session dialog.** 620px, `--main` with a `--line2` edge, the dialog shadow and a 14px corner (Folded: bevel and flaps), over a 50% black scrim. A 44px header band on `--well` holds the Machine, Project and Branch tokens (28px, 13px text, a 9px chevron, `/` between them; each opens a 320px list with a 34px head that names the token, a 32px search and 32px rows; a footer row for **Add a machine…**, **Open a folder…**, **Clone from GitHub…**), then the **Own worktree** switch with its 12px label and ×. A one-line note under it (12px `--muted`) says what a worktree is, or which chat holds the branch. The message box is 4 rows (14px on 1.5) with no border of its own; the foot is a 50px row: agent switch, model button (28px), **Opens as** Chat | Terminal and **Start** (28px, `--fg` on the page colour, `Ctrl ↵` in 11px mono). Focus is the 2px accent underline on every control. Terminal mode drops the worktree switch and Start reads **Open terminal**.
+- **New session dialog.** 620px, `--main` with a `--line2` edge, the dialog shadow and a 14px corner (Folded: bevel and flaps), over a 50% black scrim. A 44px header band on `--well` holds the Machine, Project and Branch tokens (28px, 13px text, a 9px chevron, `/` between them; each opens a 320px list with a 34px head that names the token, a 32px search and 32px rows; a footer row for **Add a machine…**, **Open a folder…**, **Clone from GitHub…**), then the **Own worktree** switch with its 12px label and ×. A one-line note under it (12px `--muted`) says what a worktree is, or which chat holds the branch. The message box is 4 rows (14px on 1.5) with no border of its own; the foot is a 50px row: agent switch, model button (28px), **Opens as** Chat | Terminal and **Start** (28px, `--fg` on the page colour, `Ctrl ↵` in 11px mono). Focus is the 2px accent underline on every control, except the message box, which has none (the dialog's border does not change either). The foot wraps instead of clipping: the model button is compact (model and a dim effort, no agent name, mark or meter), unselected agents show their mark alone, agent marks are bare glyphs with no tile, and the Branch token gives up width before Project and Machine. Token lists sit above the dialog (z-index 95). Terminal mode drops the worktree switch and Start reads **Open terminal**.
 - **Open a folder picker.** 580px, the same float. A 46px head ("Open a folder on" and the machine dropdown, 14px 600), 32px tabs (Repositories | Browse; the picked one has the accent underline), a 40px find field, then a 300px list: 30px rows for folders (name, a mono branch, an enter chevron on the picked row), 40px rows for repositories (name, `~/code/` path in mono, "Used <ago>"). The foot is 50px: the index note and Rescan at the left, Cancel and **Open <name> ↵** at the right. The M loader shows while a machine is read for more than 160 ms; an asleep machine shows an amber dot and a sentence instead of a list.
 - **Command palette.** 600px at 14vh, a 14px float. A 48px header with a search icon, "Search chats, projects and actions…" (14px) and an `Esc` key; group headings in 11px 600 `--dim`; 36px rows (mark, label, the mono detail, its key); the picked row has the accent underline. The foot shows `↑↓ move` and `Enter open`; an empty search says `Nothing matches "…"`. Recent sessions and Resume a saved chat open from it in the same float.
 - **Model menu (layout 2h).** 300px, square, on `--main` with a `--line2` edge, opening up from the right of the
@@ -940,11 +952,23 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   short; the room shrinks as the reply grows. Nothing after that moves the view but the reader: a reply never scrolls the
   chat down, and a chat opens on its newest row only until its first rows are measured. Queuing a message while the agent
   works does not move the view (the message is in the dock, not the chat).
-- **The live box.** While the agent works the turn shows one box (`LiveBox`, `--well` ground, `--line2` border,
-  `role="status"`): a 36px row with the 12px running light, "Working for 12s" (the time in mono) and "Esc to stop" (11.5px,
-  `--dim`); a 34px row with the step it is on ("Reading src/x.ts", `✻ Thinking` before any step); and a skeleton of three
-  bars (92, 80 and 56%, `.mx-sk`, a 1.6s shimmer). The turn's messages, thoughts and steps stay out of the chat until the work
-  ends (`liveRows`); a plan, helpers, and a step a request waits on stay.
+- **The live box.** While the agent works the turn shows one frameless, quiet block (`LiveBox`, `role="status"`): no border,
+  no background, no header bar. One 28px line with the 12px running light, "Working for 12s" (12.5px `--muted`, the time in
+  mono) and "Esc to stop" (11.5px `--dim`) at the right, then a skeleton of three bars (92, 80 and 56%, `.mx-sk`, a 1.6s
+  shimmer that is static under Reduce motion). The step the agent is on is said only to screen readers. **Deliberate deviation
+  from the prototype**, which frames this as a bordered card with a step row. The turn's messages, thoughts and steps stay out of
+  the chat until the work ends (`liveRows`); a plan, helpers, and a step a request waits on stay.
+- **Chat blocks follow the Maiker Desktop prototype, not Chat Feed.dc.html** (the older spec). Your message is a plain bubble
+  (no border, `--fg` 7% over `--main`, 14.5px/1.6, 10px 14px); the agent's reply is plain 14.5/1.65 text with its first
+  paragraph in `--fg` and the rest `--fg2`, nothing bold unless written so. A command, a diff and a code block are one `Block`
+  (`--well`, `--line` hairline, `data-fold`, a 34px head with a chevron that turns). A command head reads `$ command` and, at the
+  right, "exit 1 · 2.9s" (red when it failed; a provider with no exit code shows only the time, and a screen reader hears "exit
+  code not reported"); a failed block has a 2px red left edge; there is no check mark, chip or copy icon (Copy is a text button
+  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote) is the well with a
+  2px `--needs` edge and a bold lead. A list uses dim bullets; a table has no box (title row, Copy, rules under the head and
+  rows). A turn ends in one quiet footer line ("✓ Finished in 2m 4s", × red when failed), the files it changed are 26px chips. An
+  agent's mark in the chat (model chip, picker) is a flat glyph in its own colour with no tile. A run row keeps its ✱ and wears a red
+  edge and the word "failed" when a step failed; inside it, steps are ✓ (quiet) or × (red) rows.
 - **A run of steps is one row** (`WorkCard`): "Read 6 files, ran 1 command", a "6 steps" chip and a chevron on the `--well`
   ground; opened it lists the steps, and only one step is open at a time. There is no "latest 3" and no "+N more".
 - **Action cards** (`WaitingCard`, Needs Card in the design) are floating cards the width of the message box: `--main`, a

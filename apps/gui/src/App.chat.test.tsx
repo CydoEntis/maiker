@@ -127,7 +127,7 @@ describe('the Terminal | Chat view of a pane', () => {
     forgetChatFeeds()
     forgetComposers()
     // These tests switch a pane between its views, so agents start in the terminal here; the default (the chat) has its own test.
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'terminal', codex: 'terminal' } }))
+    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'terminal' } }))
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 59, canRestart: false, sessionCount: 1, activeTurnCount: 0 })
   })

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
 import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
-import { AppIcon, Icon, StatusBadge } from './glyphs'
+import { AppIcon, Icon } from './glyphs'
+import { StatusIcon } from '@/components/ui/status-icon'
 import { Collapse } from './Collapse'
 import { useReducedMotion } from './motion'
 import { useFlip } from './useFlip'
@@ -115,6 +116,32 @@ function snoozeEntries(session: SessionView, online: boolean, onSnooze: (id: str
   return snoozeChoices(Date.now(), session.resumeAt).map((choice) => ({ label: choice.label, disabled: !online, run: () => { onSnooze(session.id, choice.until) } }))
 }
 
+/** A session's right-click menu, the same in the full list and in the rail. */
+function sessionMenuEntries(props: SidebarProps, session: SessionView): MenuEntry[] {
+  const agent = !isShell(session)
+  const other = session.id !== props.focusedId
+  return [
+    { label: 'Open', run: () => { props.onShowSession(session.id) } },
+    ...(other ? [{ label: 'Open in split right', run: () => { props.onSplitSession(session.id, 'right') } }, { label: 'Open in split down', run: () => { props.onSplitSession(session.id, 'down') } }] : []),
+    ...(agent ? [{ label: 'Show changes', run: () => { props.onShowChanges(session.id) } }] : []),
+    'separator',
+    { label: 'Rename…', hint: 'F2', run: () => { props.onRenameSession(session.id) } },
+    { label: 'Copy folder path', run: () => { props.onCopyPath(session.id) } },
+    ...(session.machineName === null ? [] : [{ label: 'Rename machine…', run: () => { props.onRenameMachine(session.machineName ?? '') } }]),
+    ...(session.machineName === null ? [] : [{ label: 'Get a file…', disabled: !props.online, run: () => { props.onGetFile(session.id) } }]),
+    ...(session.machineName === null && session.pane > 0 && props.onSpecialists !== undefined ? [{ label: 'Specialist agents…', disabled: !props.online, run: () => { props.onSpecialists?.(session.id) } }] : []),
+    // A finished agent waits under Finished until you look; this files it under Idle without opening it.
+    ...(session.status === 'done' ? [{ label: 'Mark as done', disabled: !props.online, run: () => { props.onMarkDone(session.id) } }] : []),
+    ...(canPutAway(session) ? [{ label: 'Put away', disabled: !props.online, run: () => { props.onPutAway(session.id) } }] : []),
+    ...snoozeEntries(session, props.online, props.onSnooze),
+    ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
+    ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),
+    'separator',
+    // Stopping an agent asks a second click; a plain shell has nothing running to lose.
+    { label: agent ? 'Stop session' : 'Close shell', danger: true, disabled: !props.online, run: () => { props.onEndSession(session.id) } },
+  ]
+}
+
 export function Sidebar(props: SidebarProps) {
   const [resizing, setResizing] = useState(false)
   const className = `mx-sidebar mx-card${props.mode === 'rail' ? ' is-rail' : ''}${resizing ? ' is-resizing' : ''}`
@@ -205,30 +232,7 @@ function Expanded(props: SidebarProps) {
     { label: 'Add a remote machine…', run: props.onAddMachine },
   ]
 
-  const sessionMenu = (session: SessionView): MenuEntry[] => {
-    const agent = !isShell(session)
-    const other = session.id !== props.focusedId
-    return [
-      { label: 'Open', run: () => { props.onShowSession(session.id) } },
-      ...(other ? [{ label: 'Open in split right', run: () => { props.onSplitSession(session.id, 'right') } }, { label: 'Open in split down', run: () => { props.onSplitSession(session.id, 'down') } }] : []),
-      ...(agent ? [{ label: 'Show changes', run: () => { props.onShowChanges(session.id) } }] : []),
-      'separator',
-      { label: 'Rename…', hint: 'F2', run: () => { props.onRenameSession(session.id) } },
-      { label: 'Copy folder path', run: () => { props.onCopyPath(session.id) } },
-      ...(session.machineName === null ? [] : [{ label: 'Rename machine…', run: () => { props.onRenameMachine(session.machineName ?? '') } }]),
-      ...(session.machineName === null ? [] : [{ label: 'Get a file…', disabled: !props.online, run: () => { props.onGetFile(session.id) } }]),
-      ...(session.machineName === null && session.pane > 0 && props.onSpecialists !== undefined ? [{ label: 'Specialist agents…', disabled: !props.online, run: () => { props.onSpecialists?.(session.id) } }] : []),
-      // A finished agent waits under Finished until you look; this files it under Idle without opening it.
-      ...(session.status === 'done' ? [{ label: 'Mark as done', disabled: !props.online, run: () => { props.onMarkDone(session.id) } }] : []),
-      ...(canPutAway(session) ? [{ label: 'Put away', disabled: !props.online, run: () => { props.onPutAway(session.id) } }] : []),
-      ...snoozeEntries(session, props.online, props.onSnooze),
-      ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
-      ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),
-      'separator',
-      // Stopping an agent asks a second click; a plain shell has nothing running to lose.
-      { label: agent ? 'Stop session' : 'Close shell', danger: true, disabled: !props.online, run: () => { props.onEndSession(session.id) } },
-    ]
-  }
+  const sessionMenu = (session: SessionView): MenuEntry[] => sessionMenuEntries(props, session)
 
   const machineMenu = (head: MachineHead): MenuEntry[] => {
     const open = views.isOpen(head.key)
@@ -479,7 +483,7 @@ function DraftRow({ process }: { process: string }) {
   return (
     <div className="mx-row-wrap mx-draft-wrap" role="status" aria-label="New chat, waiting for the first message" data-flip="draft">
       <div className="mx-row mx-draft">
-        <span className="mx-row-icon"><AppIcon process={process} size={16} flat dimmed /></span>
+        <span className="mx-row-icon"><AppIcon process={process} size={16} dimmed /></span>
         <span className="mx-row-text">
           <span className="mx-draft-name">New chat</span>
           <span className="mx-draft-tag">draft</span>
@@ -518,41 +522,72 @@ function ProjectSection({ name, color, needs, sessions, renderRow }: { name: str
   )
 }
 
-/** The 60px rail of a narrow window: the starters, then one tile per session with its status badge. */
+/**
+ * The slim strip of a narrow window, in the design's language: the sidebar toggle, search and new session, then one flat
+ * status icon per session under its status (a hairline between the sections, in the order of the expanded list), the
+ * update button and Settings at the foot. A session's hover card is the expanded row's. There is no agent tile and no
+ * connection dot: the service's state shows in the title bar alone.
+ */
 function Rail(props: SidebarProps) {
   const tip = useTipWithKeys()
-  const label = props.online ? `${DAEMON_NAME} · ${String(props.sessions.length)} sessions` : `Reconnecting to ${DAEMON_NAME}…`
+  const [hover, setHover] = useState<{ id: string; row: Box } | null>(null)
+  const hoverTimer = useRef<number | null>(null)
+  const endHover = () => {
+    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current)
+    hoverTimer.current = null
+    setHover(null)
+  }
+  const beginHover = (id: string, element: HTMLElement) => {
+    endHover()
+    hoverTimer.current = window.setTimeout(() => {
+      const box = element.getBoundingClientRect()
+      setHover({ id, row: { left: box.left, right: box.right, top: box.top } })
+    }, HOVER_CARD_DELAY_MS)
+  }
+  useEffect(() => () => { if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current) }, [])
+  const [menu, setMenu] = useState<OpenMenu | null>(null)
+  const hovered = hover === null || menu !== null ? undefined : props.sessions.find((session) => session.id === hover.id)
+  const sections = statusSections(splitPutAway(props.sessions).listed, null, DEFAULT_SIDEBAR_SORT)
   return (
     <div className="mx-rail">
       <div className="mx-rail-top">
         <button type="button" className="mx-head-button is-rail" aria-label="Expand sidebar" title={tip('Expand sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="expand" /></button>
-        <button type="button" className="mx-head-button is-rail" aria-label="New agent chat" title={tip('New agent chat', 'new-agent-chat')} disabled={!props.canStart} onClick={() => { props.onNewAgentChat(props.machines[0]?.machine ?? 0) }}><Icon name="chatPlus" size={15} /></button>
-        <button type="button" className="mx-head-button is-rail" aria-label="New shell" title={tip('New shell', 'new-terminal')} disabled={!props.canStart} onClick={() => { props.onNewShell(props.machines[0]?.machine ?? 0) }}><Icon name="terminal" size={15} /></button>
+        <button type="button" className="mx-head-button is-rail" aria-label="New session" title={tip('New session', 'new-agent-chat')} disabled={!props.canStart} onClick={() => { props.onNewAgentChat(props.machines[0]?.machine ?? 0) }}><Icon name="plus" size={15} /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={15} /></button>
       </div>
-      <div className="mx-rail-divider" />
+      <div className="mx-rail-rule" aria-hidden="true" />
       <div className="mx-rail-list mx-no-scrollbar" role="list" aria-label="Sessions">
-        {machineGroups(splitPutAway(props.sessions).listed, props.machines, false, props.order).flatMap((group) => group.sessions).map((session) => (
-          <button
-            key={session.id}
-            type="button"
-            role="listitem"
-            className={`mx-rail-session${session.id === props.focusedId ? ' is-selected' : ''}`}
-            aria-label={`${rowTitle(session)}, ${STATUS_WORD[session.status]}`}
-            aria-current={session.id === props.focusedId ? 'page' : undefined}
-            title={rowTitle(session)}
-            onClick={() => { props.onShowSession(session.id) }}
-          >
-            <span className="mx-row-icon"><AppIcon process={session.process} size={24} dimmed={session.status === 'unknown'} /><StatusBadge status={session.status} /></span>
-          </button>
+        {sections.map((section, index) => (
+          <Fragment key={section.key}>
+            {index > 0 && <div role="separator" aria-label={`${section.name} · ${String(section.sessions.length)}`} className="mx-rail-sep" />}
+            {section.sessions.map((session) => (
+              <div key={session.id} role="listitem" className={`mx-rail-item${session.id === props.focusedId ? ' is-selected' : ''}${session.status === 'idle' ? ' is-idle' : ''}`}>
+                <span className="mx-rail-bar" aria-hidden="true" />
+                <button
+                  type="button"
+                  className="mx-rail-session"
+                  aria-label={`${rowTitle(session)} · ${STATUS_WORD[session.status]}`}
+                  aria-current={session.id === props.focusedId ? 'page' : undefined}
+                  onClick={() => { endHover(); props.onShowSession(session.id) }}
+                  onContextMenu={(event) => { event.preventDefault(); endHover(); setMenu({ title: rowTitle(session), at: { x: event.clientX, y: event.clientY }, items: sessionMenuEntries(props, session) }) }}
+                  onPointerEnter={(event) => { beginHover(session.id, event.currentTarget) }}
+                  onPointerLeave={endHover}
+                  onFocus={(event) => { beginHover(session.id, event.currentTarget) }}
+                  onBlur={endHover}
+                >
+                  <StatusIcon status={session.status} />
+                </button>
+              </div>
+            ))}
+          </Fragment>
         ))}
       </div>
       <div className="mx-rail-bottom">
         {props.railUpdateSlot}
-        <span className={`mx-daemon-dot${props.online ? '' : ' is-offline'}`} role="img" aria-label={label} title={label} />
-        <button type="button" className="mx-head-button is-rail" aria-label="Recent sessions" title="Recent sessions: reopen one closed on this computer" onClick={props.onRecentSessions}><Icon name="history" size={13} /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></button>
       </div>
+      {hovered && hover && <RowHoverCard session={hovered} row={hover.row} portalContainer={props.portalContainer} />}
+      {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
   )
 }

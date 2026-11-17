@@ -33,7 +33,7 @@ describe('command step', () => {
     expect(group.querySelector('code')?.textContent).toBe("python3 - <<'EOF' …")
     expect(group).not.toHaveTextContent('five')
     await userEvent.click(within(group).getByRole('button', { expanded: false }))
-    expect(group.querySelector('.mx-step-command')?.textContent).toBe(script)
+    expect(group.querySelector('.mx-block-command')?.textContent).toBe(script)
     expect(group).toHaveTextContent('three four five')
   })
 
@@ -57,7 +57,8 @@ describe('command step', () => {
   it('says a command reported no exit code, without claiming it passed', () => {
     render(<CommandStep event={{ ...finished(), timing: { startedAtMs: 1_000, completedAtMs: 4_000 } }} />)
 
-    expect(screen.getByText('exit code not reported · 3s')).toBeInTheDocument()
+    expect(screen.getByText('3s')).toBeInTheDocument()
+    expect(screen.getByText('exit code not reported')).toHaveClass('sr-only')
     expect(screen.queryByText(/^exit [0-9]/)).toBeNull()
   })
 
@@ -78,27 +79,23 @@ describe('command step', () => {
     vi.useRealTimers()
   })
 
-  it('shows the last 6 lines and all of them on request', async () => {
+  it('shows every line of the output once opened, scrolling inside its box', async () => {
     render(<CommandStep event={finished({ exitCode: 0, output: ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'].join('\n') })} />)
 
     const group = screen.getByRole('group', { name: 'Command pnpm test' })
     await userEvent.click(screen.getByRole('button', { expanded: false }))
-    expect(group).toHaveTextContent('three four five six seven eight')
-    expect(within(group).queryByText(/^one/)).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: 'Show all 8 lines' }))
-    expect(group).toHaveTextContent('one two three')
-    await userEvent.click(screen.getByRole('button', { name: 'Show less' }))
-    expect(within(group).queryByText(/^one/)).toBeNull()
+    expect(group).toHaveTextContent('one two three four five six seven eight')
   })
 
-  it('on its own is a card with the command, how it ended and a copy button in its head', async () => {
+  it('on its own is a block with the command and how it ended in its head, and a Copy button once open', async () => {
     render(<CommandStep event={finished({ exitCode: 2, status: 'failed' })} alone />)
 
     const group = screen.getByRole('group', { name: 'Command pnpm test' })
-    expect(within(group).getByText('exit 2')).toBeInTheDocument()
-    expect(within(group).getByRole('button', { name: 'Copy command' })).toBeInTheDocument()
+    expect(within(group).getByText(/^exit 2/)).toBeInTheDocument()
+    expect(within(group).queryByRole('button', { name: 'Copy command' })).toBeNull()
     expect(group).not.toHaveTextContent('three four five')
     await userEvent.click(within(group).getByRole('button', { expanded: false }))
+    expect(within(group).getByRole('button', { name: 'Copy command' })).toBeInTheDocument()
     expect(group).toHaveTextContent('three four five')
     await userEvent.click(within(group).getByRole('button', { expanded: true }))
     expect(group).not.toHaveTextContent('five')
@@ -196,7 +193,7 @@ describe('edit step on its own', () => {
     await openStep()
 
     const group = screen.getByRole('group', { name: 'Edit src/a.ts' })
-    expect(group.querySelectorAll('.mx-diff-num')[1]?.textContent).toBe('1')
+    expect(group.querySelectorAll('.mx-diff-line.is-add .mx-diff-num')[1]?.textContent).toBe('1')
     expect(within(group).getByText('new')).toBeInTheDocument()
     await userEvent.click(within(group).getByRole('button', { name: 'Open in side panel' }))
     expect(onOpen).toHaveBeenCalledWith('/repo/src/a.ts')

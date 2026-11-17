@@ -29,6 +29,13 @@ function DesktopTitleBar({ platform, start, end }: { platform: TitleBarPlatform;
   const appWindow = useMemo(() => getCurrentWindow(), [])
   const [maximized, setMaximized] = useState(false)
 
+  // The window is created without the system's bar (tauri.conf.json), but some Linux window managers add their own to
+  // a window anyway, which shows two bars. Asking again once the window exists takes it away again; it is a no-op where
+  // there is none, and a refusal leaves the window as it was.
+  useEffect(() => {
+    void appWindow.setDecorations(false).catch(() => undefined)
+  }, [appWindow])
+
   useEffect(() => {
     let unlisten: (() => void) | undefined
     let active = true

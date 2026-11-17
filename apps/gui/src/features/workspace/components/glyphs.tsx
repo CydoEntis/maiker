@@ -4,7 +4,6 @@ import { attachSpinner, currentGlyph, isWebSpinner, isWideSpinner, spinnerFrames
 import { WebSpinner } from '@/components/WebSpinner'
 import { SHELL_PROCESS, type SessionStatus } from '../model/session'
 import { CLAUDE_MARK, CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
-import { programStyle } from './programStyle'
 import { FOLDER_PATH } from './paths'
 import { useReducedMotion } from './motion'
 
@@ -139,7 +138,7 @@ export function Icon({ name, ...props }: IconProps & { name: IconName }) {
 
 type IconKind = { kind: 'shell' | 'codex' | 'claude' | 'deepseek' | 'gemini' | 'opencode' | 'rust'; glyph: ReactNode }
 
-const MARK_SIZE = '66%'
+const MARK_SIZE = '100%'
 
 function Mark({ d }: { d: string }) {
   return (
@@ -161,16 +160,16 @@ const SHELL_ICON: IconKind = { kind: 'shell', glyph: '>_' }
 type IconSize = 14 | 16 | 18 | 20 | 22 | 24 | 26 | 28 | 32
 
 /**
- * An agent's or program's tile. `flat` is the frame's tile (sidebar rows, the pane header): the mark in its own colour
- * on the raised surface with a hairline, instead of the mark on its brand gradient.
+ * An agent's or program's mark: the glyph alone, flat, with no tile or background behind it anywhere (the design's
+ * rule 1: colour means status, plus Claude's orange). Claude's is orange, every other mark takes the text colour.
  */
-export function AppIcon({ process, size, dimmed = false, flat = false }: { process: string; size: IconSize; dimmed?: boolean; flat?: boolean }) {
+export function AppIcon({ process, size, dimmed = false }: { process: string; size: IconSize; dimmed?: boolean }) {
   const program = process.split(/\s+/)[0] ?? ''
   const icon = ICONS[program] ?? (program === SHELL_PROCESS || program === '' ? SHELL_ICON : null)
-  const className = `mx-app-icon size-${String(size)}${dimmed ? ' is-dimmed' : ''}${flat ? ' is-flat' : ''}`
+  const className = `mx-app-icon size-${String(size)}${dimmed ? ' is-dimmed' : ''} is-flat`
   if (icon) return <span className={`${className} is-${icon.kind}`} aria-hidden="true">{icon.glyph}</span>
-  // Any other agent or program: its first letter on a colour taken from its name, so each stays recognisable.
-  return <span className={`${className} is-tinted`} style={programStyle(program)} aria-hidden="true">{program.charAt(0).toUpperCase()}</span>
+  // Any other agent or program: its first letter, flat.
+  return <span className={`${className} is-tinted`} aria-hidden="true">{program.charAt(0).toUpperCase()}</span>
 }
 
 /**

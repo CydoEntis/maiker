@@ -1,10 +1,7 @@
 import { memo, useContext, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Card, CardHead } from '@/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Fold } from '@/components/ui/fold'
-import { Counter } from '@/components/ui/progress'
 import { CodeChip } from '@/components/ui/tag'
 import { HighlightedLine } from '@/components/HighlightedLine'
 import { fileTag } from '@/features/inspect/fileTag'
@@ -15,6 +12,8 @@ import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBloc
 import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
 import { copyBlock, saveBlock } from '../saveBlock'
+import { TypeTag } from '@/components/ui/tag'
+import { Block as BlockBox, BlockHead } from './Block'
 import { FileBadge } from './cardParts'
 
 /**
@@ -90,48 +89,61 @@ const CodeLine = memo(function CodeLine({ line, number, hint }: { line: string; 
   return <span className="code-line"><span className="mx-code-num" aria-hidden="true">{number}</span><span className="mx-code-text"><HighlightedLine line={line} path={hint} /></span>{'\n'}</span>
 })
 
-/** A fenced code block: its language, Copy and Save over the code, folded past its first lines when it is long. */
+/** A fenced code block (design: CodeBlock): a head with its type tag and language, Copy and Save, and numbered lines under it; folded past its first lines when it is long, and closable from its chevron. */
 function CodeBlock({ language, text }: { language: string; text: string }) {
   const [all, setAll] = useState(false)
+  const [open, setOpen] = useState(true)
   const lines = text.split('\n')
   const folds = lines.length > CODE_FOLD_LINES + CODE_FOLD_SLACK
   const shown = folds && !all ? lines.slice(0, CODE_FOLD_LINES) : lines
   const hint = `code.${extensionForLanguage(language)}`
+  const tag = fileTag(hint)
   return (
-    <Card className="mx-step-card">
-      <CardHead>
-        <span className="mx-code-lang">{language === '' ? 'code' : language}</span>
-        <span className="mx-spacer" />
-        <Button variant="ghost" size="sm" onClick={() => { copyBlock(text, 'Could not copy the code') }}>Copy</Button>
-        <Button variant="ghost" size="sm" title="Save as a file in your export folder" onClick={() => { saveBlock(language === '' ? 'code' : language, codeExtension(language), text) }}>Save</Button>
-      </CardHead>
-      <pre className="mx-code-body" aria-label={language === '' ? 'Code' : `Code, ${language}`}>
-        <code>{shown.map((line, index) => <CodeLine key={index} line={line} number={index + 1} hint={hint} />)}</code>
-      </pre>
-      {folds && <Fold open={all} onToggle={() => { setAll((current) => !current) }} more={`Show ${String(lines.length - CODE_FOLD_LINES)} more lines`} less="Show less" />}
-    </Card>
+    <BlockBox>
+      <BlockHead
+        open={open}
+        onToggle={() => { setOpen((current) => !current) }}
+        actions={(
+          <>
+            <button type="button" className="mx-block-action" onClick={() => { copyBlock(text, 'Could not copy the code') }}>Copy</button>
+            <button type="button" className="mx-block-action" title="Save as a file in your export folder" onClick={() => { saveBlock(language === '' ? 'code' : language, codeExtension(language), text) }}>Save</button>
+          </>
+        )}
+      >
+        {tag !== null && <TypeTag tag={tag} />}
+        <span className="mx-block-title">{language === '' ? 'code' : language}</span>
+      </BlockHead>
+      {open && (
+        <>
+          <pre className="mx-code-body" aria-label={language === '' ? 'Code' : `Code, ${language}`}>
+            <code>{shown.map((line, index) => <CodeLine key={index} line={line} number={index + 1} hint={hint} />)}</code>
+          </pre>
+          {folds && <Fold open={all} onToggle={() => { setAll((current) => !current) }} more={`Show ${String(lines.length - CODE_FOLD_LINES)} more lines`} less="Show less" />}
+        </>
+      )}
+    </BlockBox>
   )
 }
 
 type TableBlock = Extract<Block, { kind: 'table' }>
 
 /**
- * A table (`TableCard`): its head says how many rows it has, with Copy and Save as (Markdown, CSV, HTML). A column of
- * figures sits right, in mono. Cells never wrap; a table wider than the card scrolls sideways inside its own region, which the keyboard can reach.
+ * A table (design: TableCard): no box, a title row with how many rows it has, Copy and Save as, and the table under it with
+ * a rule below its head and one under each row. A column of figures sits right, in mono. Cells never wrap; a table wider than
+ * the column scrolls sideways inside its own region, which the keyboard can reach.
  */
 function TableCard({ block }: { block: TableBlock }) {
   const rows = block.rows.length
   const figures = numericColumns(block)
   return (
-    <Card className="mx-step-card mx-md-tablecard">
-      <CardHead className="mx-md-tableacts" role="group" aria-label="Copy or save this table">
-        <span className="mx-md-tabletitle">Table</span>
-        <Counter>{rows} {rows === 1 ? 'row' : 'rows'}</Counter>
+    <div className="mx-md-tablecard">
+      <div className="mx-md-tableacts" role="group" aria-label="Copy or save this table">
+        <span className="mx-md-tabletitle">{rows} {rows === 1 ? 'row' : 'rows'}</span>
         <span className="mx-spacer" />
-        <Button variant="ghost" size="sm" onClick={() => { copyBlock(tableMarkdown(block), 'Could not copy the table') }}>Copy</Button>
+        <button type="button" className="mx-block-action" onClick={() => { copyBlock(tableMarkdown(block), 'Could not copy the table') }}>Copy</button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm">Save as<ChevronDown aria-hidden="true" /></Button>
+            <button type="button" className="mx-block-action">Save as<ChevronDown className="size-3" aria-hidden="true" /></button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" container={document.querySelector<HTMLElement>('.mx-app')} className="text-fg">
             <DropdownMenuItem title="Save as a Markdown file in your export folder" onSelect={() => { saveBlock('table', 'md', tableMarkdown(block)) }}>Markdown</DropdownMenuItem>
@@ -139,7 +151,7 @@ function TableCard({ block }: { block: TableBlock }) {
             <DropdownMenuItem title="Save as an HTML page in your export folder" onSelect={() => { saveBlock('table', 'html', tableHtml(block)) }}>HTML</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </CardHead>
+      </div>
       <div role="region" aria-label="Table" tabIndex={0} className="mx-md-table max-w-full overflow-x-auto">
         <table className="w-full border-collapse">
           <thead>
@@ -160,7 +172,7 @@ function TableCard({ block }: { block: TableBlock }) {
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   )
 }
 
@@ -188,13 +200,28 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
     case 'code':
       return <CodeBlock language={block.language} text={block.text} />
     case 'list': {
-      const items = block.items.map((item, index) => <li key={index} className="whitespace-pre-wrap"><Inlines nodes={item} /></li>)
-      return block.ordered
-        ? <ol start={block.start} className="m-0 flex flex-col gap-1 pl-[22px] list-decimal">{items}</ol>
-        : <ul className="m-0 flex flex-col gap-1 pl-5 list-disc">{items}</ul>
+      const List = block.ordered ? 'ol' : 'ul'
+      return (
+        <List className="mx-md-list" role="list">
+          {block.items.map((item, index) => (
+            <li key={index} data-bullet={block.ordered ? `${String((block.start ?? 1) + index)}.` : '•'}>
+              <span className="mx-md-item"><Inlines nodes={item} /></span>
+            </li>
+          ))}
+        </List>
+      )
     }
-    case 'quote':
-      return <blockquote className="m-0 border-l-2 border-line2 py-0.5 pl-3.5 whitespace-pre-wrap text-muted"><Inlines nodes={block.inlines} /></blockquote>
+    case 'quote': {
+      // A note (design: Note): a well with a coloured left edge; text bold at its start is the lead beside the rest.
+      const [first, ...rest] = block.inlines
+      const lead = first?.kind === 'strong' ? first : null
+      return (
+        <div data-fold="" className="mx-note">
+          {lead !== null && <span className="mx-note-lead"><Inlines nodes={lead.children} /></span>}
+          <span className="mx-note-text"><Inlines nodes={lead === null ? block.inlines : rest} /></span>
+        </div>
+      )
+    }
     case 'rule':
       return <hr className="mx-md-rule" />
     case 'table':
@@ -205,7 +232,7 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
 /** A message's text as markdown blocks, spaced like paragraphs. */
 export const Markdown = memo(function Markdown({ text, className = '' }: { text: string; className?: string }) {
   return (
-    <div className={`flex flex-col gap-2.5 ${className}`}>
+    <div className={`flex flex-col gap-2 ${className}`}>
       {parseMarkdown(text).map((block, index) => <BlockView key={index} block={block} />)}
     </div>
   )

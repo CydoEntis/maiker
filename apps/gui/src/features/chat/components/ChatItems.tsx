@@ -1,8 +1,5 @@
 import { memo, useContext, useEffect, type ReactNode } from 'react'
 import { Icon } from '@/features/workspace/components/glyphs'
-import { Button } from '@/components/ui/button'
-import { Card, CardHead } from '@/components/ui/card'
-import { StatusMark } from '@/components/ui/status-mark'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import type { TurnSpan } from '@/features/inspect/turnRange'
 import { dividerText, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
@@ -14,6 +11,7 @@ import { WorkingMark } from './WorkingMark'
 import { LiveBox } from './LiveBox'
 import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { parseAttachmentMessage } from '../attachmentMessage'
+import { withoutPasteTags } from '../messagePreview'
 import { AgentsCard } from './AgentsCard'
 import { SentAttachments } from './Attachments'
 import { ApprovalCard, type ApprovalActions } from './ApprovalCard'
@@ -21,6 +19,7 @@ import { compactionOf, type Compaction } from '../compaction'
 import { ContextSummary } from './ContextSummary'
 import { InlineMarkdown, Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
+import { FileBadge } from './cardParts'
 import { StepView } from './StepCards'
 import { ThoughtRow } from './ThoughtRow'
 import { WorkCard } from './WorkCard'
@@ -32,6 +31,11 @@ import { stripRestoreNote, type EditFromHere } from '../editFromHere'
  * not carry is said to be unavailable, never guessed. Colours are theme tokens; only a step that is
  * running animates, so a long conversation costs nothing at rest.
  */
+
+/** The character a turn's footer starts with, by how the turn ended. */
+const DIVIDER_MARK = { completed: '✓', failed: '×', interrupted: '■' } as const
+/** How many changed files a turn's row names; the rest are counted. */
+const CHANGED_CHIPS = 8
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
@@ -132,14 +136,14 @@ function AgentMessage({ rowKey, paragraphs, status }: { rowKey: string; paragrap
 function SaidText({ text: sent }: { text: string }) {
   // The note a restore put in front is for the agent; the person sees what they wrote. Blank lines around it (Claude
   // Code stores a pasted message with two in front) would only draw an empty band in the bubble.
-  const text = stripRestoreNote(sent).replace(/^\s*\n/, '').trimEnd()
+  const text = withoutPasteTags(stripRestoreNote(sent)).replace(/^\s*\n/, '').trimEnd()
   const attached = parseAttachmentMessage(text)
   if (attached === null) return <p className="mx-bubble">{text}</p>
   // Attachments sit above the bubble, as they were added before the text was sent.
   return (
     <>
       <SentAttachments files={attached.files} />
-      {attached.text !== '' && <p className="mx-bubble">{attached.text}</p>}
+      {attached.text.trim() !== '' && <p className="mx-bubble">{attached.text.trim()}</p>}
     </>
   )
 }
@@ -193,28 +197,25 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     case 'approval':
       return <Frame><ApprovalCard event={row.event} actions={approval} step={row.step} onGoToStep={goToStep} /></Frame>
     case 'divider':
+      // The turn's footer (design): a quiet line with how it ended, no rules. ✓ finished, × failed, ■ stopped.
       return (
         <div className={`mx-chat-row mx-divider${row.event.outcome === 'failed' ? ' is-failed' : ''}`} role="separator" aria-label={dividerText(row.event, clock)}>
-          <span className="mx-divider-line" />
-          {row.event.outcome !== 'completed' && <span aria-hidden="true"><StatusMark state={row.event.outcome === 'failed' ? 'failed' : 'stopped'} /></span>}
-          <span className="mx-divider-text">{dividerText(row.event, clock)}</span>
-          <span className="mx-divider-line" />
+          <span className="mx-divider-text"><span aria-hidden="true">{DIVIDER_MARK[row.event.outcome]} </span>{dividerText(row.event, clock)}</span>
         </div>
       )
     case 'changes': {
-      const first = row.files[0]
-      // A head-only card (`ChangedFilesBar`): Review opens the side panel on what this turn changed.
+      // The files the turn changed as chips (design: file chips); choosing one opens what this turn changed in the side panel.
+      const shown = row.files.slice(0, CHANGED_CHIPS)
+      const more = row.files.length - shown.length
       return (
         <Frame>
-          <Card className="mx-changed">
-            <CardHead>
-              <span className="flex shrink-0 text-(--muted)" aria-hidden="true"><Icon name="toolEdit" size={13} /></span>
-              <span className="mx-changed-said">{row.files.length} changed {row.files.length === 1 ? 'file' : 'files'}</span>
-              {row.lines !== null && <span className="mx-changed-counts"><span className="is-add">+{row.lines.added}</span><span className="is-remove">−{row.lines.removed}</span></span>}
-              <span className="mx-spacer" />
-              {openDiff !== null && first !== undefined && <Button variant="soft" size="sm" title="Show what this turn changed" onClick={() => { openDiff(first, row.turn) }}>Review</Button>}
-            </CardHead>
-          </Card>
+          <div className="mx-changed" role="group" aria-label={`${String(row.files.length)} changed ${row.files.length === 1 ? 'file' : 'files'}`}>
+            {shown.map((file) => (openDiff === null
+              ? <span key={file} className="mx-file-chip" title={file}><FileBadge path={file} /></span>
+              : <button key={file} type="button" className="mx-file-chip" title={`Show what this turn changed in ${file}`} onClick={() => { openDiff(file, row.turn) }}><FileBadge path={file} /></button>))}
+            {more > 0 && <span className="mx-file-chip is-more">+{more} more</span>}
+            {row.lines !== null && <span className="mx-changed-counts"><span className="is-add">+{row.lines.added}</span><span className="is-remove">−{row.lines.removed}</span></span>}
+          </div>
         </Frame>
       )
     }

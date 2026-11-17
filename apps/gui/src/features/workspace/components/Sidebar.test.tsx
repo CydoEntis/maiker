@@ -593,14 +593,23 @@ describe('the top of the sidebar', () => {
     expect(onSearch).toHaveBeenCalledTimes(1)
   })
 
-  it('opens Recent sessions from the rail; docked, it is in the Maitty menu instead', async () => {
+  it('is the design\'s rail: expand, search and new session on top, one status-icon row per chat in the list\'s groups, Settings below', async () => {
     const user = userEvent.setup()
-    const onRecentSessions = vi.fn()
-    const { again } = show([], { onRecentSessions })
+    const onShowSession = vi.fn()
+    const sessions = [session(1, { agent: 'claude', named: true, title: 'Waiting', status: 'needs-you' }), session(2, { agent: 'claude', named: true, title: 'Busy', status: 'working' })]
+    show(sessions, { mode: 'rail', onShowSession, focusedId: sessions[0]?.id ?? null })
+    for (const name of ['Expand sidebar', 'Search', 'New session', 'Settings']) expect(screen.getByRole('button', { name })).toBeTruthy()
+    // No tile, no initials, no connection dot and no Recent sessions button (it is in the palette).
     expect(screen.queryByRole('button', { name: 'Recent sessions' })).toBeNull()
-    again({ mode: 'rail' })
-    await user.click(screen.getByRole('button', { name: 'Recent sessions' }))
-    expect(onRecentSessions).toHaveBeenCalledTimes(1)
+    expect(document.querySelector('.mx-daemon-dot, .mx-app-icon')).toBeNull()
+    expect(screen.getAllByRole('separator')).toHaveLength(1)
+    const rows = screen.getAllByRole('listitem')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]?.classList.contains('is-selected')).toBe(true)
+    await user.click(screen.getByRole('button', { name: /^Busy/ }))
+    expect(onShowSession).toHaveBeenCalledWith(sessions[1]?.id)
+    await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: /^Busy/ }) })
+    expect(await screen.findByRole('menuitem', { name: 'Open' })).toBeTruthy()
   })
 
   it('offers a shell and a remote machine from a right-click on New chat', async () => {

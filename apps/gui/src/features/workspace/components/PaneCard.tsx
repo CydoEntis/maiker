@@ -209,6 +209,10 @@ export function PaneCard(props: PaneCardProps) {
               <button type="button" className={`mx-pane-control${props.panelView === 'files' ? ' is-on' : ''}`} aria-label="Files" title="Files" aria-pressed={props.panelView === 'files'} onMouseDown={stop} onClick={() => { props.onPanel?.('files') }}><Icon name="files" size={15} /></button>
             </>
           )}
+          {props.onViewChange === undefined && props.onToggleTerminal !== undefined && (
+            // A pane with no Chat | Terminal switch (the chat alone) still has a visible way to its terminal.
+            <button type="button" className={`mx-pane-control${props.terminalShown ? ' is-on' : ''}`} aria-label="Terminal" title={props.terminalShown ? 'Hide terminal' : 'Terminal'} aria-pressed={props.terminalShown} onMouseDown={stop} onClick={props.onToggleTerminal}><Icon name="terminalBox" size={15} /></button>
+          )}
           <button
             type="button"
             className="mx-pane-control mx-pane-more"

@@ -32,7 +32,8 @@ describe('a run of steps', () => {
   it('stays folded when a step failed, and its head says so', () => {
     render(card([commandEvent('1', { command: 'pnpm test', exitCode: 1, status: 'failed', output: 'boom' })]))
 
-    expect(screen.getByText(/a step failed/)).toBeInTheDocument()
+    expect(screen.getByText('failed')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /a step failed/ })).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Command pnpm test' })).toBeNull()
   })
 

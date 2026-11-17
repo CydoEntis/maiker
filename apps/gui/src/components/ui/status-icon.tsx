@@ -24,7 +24,7 @@ const DEFAULT_SIZE = 14
 /**
  * A session's status as the design draws it: a small square with the status's own glyph (`!` needs you in the needs
  * colour, `✓` done, `×` failed, `–` idle and dim). Working is an empty tile with a light running round its edge, and
- * under Folded corners the light follows the cut outline. Idle and unknown are dimmed, not coloured.
+ * under Folded corners the light follows the cut outline and under Rounded corners it runs round a circle. Idle and unknown are dimmed, not coloured.
  */
 function StatusIcon({ status, size = DEFAULT_SIZE, className }: { status: StatusIconKind; size?: number; className?: string }) {
   return (
@@ -38,6 +38,7 @@ function StatusIcon({ status, size = DEFAULT_SIZE, className }: { status: Status
       {status === "working" ? (
         <svg viewBox="0 0 10 10" preserveAspectRatio="none" className="mx-status-light" focusable="false">
           <rect className="mx-sq" x=".5" y=".5" width="9" height="9" fill="none" strokeWidth="1.5" vectorEffect="non-scaling-stroke" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
+          <circle className="mx-round" cx="5" cy="5" r="4.5" fill="none" strokeWidth="1.5" vectorEffect="non-scaling-stroke" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
           <path className="mx-fold" d={FOLDED_OUTLINE} fill="none" strokeWidth=".95" strokeLinecap="square" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
         </svg>
       ) : status === "unknown" ? null : (

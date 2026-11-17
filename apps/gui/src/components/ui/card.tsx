@@ -14,8 +14,8 @@ const cardVariants = cva(
     variants: {
       tone: {
         none: "border-(--line)",
-        needs: "border-(--needs)",
-        err: "border-[color-mix(in_oklab,var(--err)_55%,var(--line))]",
+        needs: "border-(--needs) [--fold-line:var(--needs)]",
+        err: "border-[color-mix(in_oklab,var(--err)_55%,var(--line))] [--fold-line:color-mix(in_oklab,var(--err)_55%,var(--line))]",
       },
       interactive: {
         true: "cursor-pointer outline-none transition-[border-color] duration-(--t-fast) hover:border-(--line2) focus-visible:shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--focus)]",
@@ -27,7 +27,7 @@ const cardVariants = cva(
 )
 
 function Card({ className, tone, interactive, ...props }: React.ComponentProps<"div"> & VariantProps<typeof cardVariants>) {
-  return <div data-slot="card" className={cn(cardVariants({ tone, interactive }), className)} {...props} />
+  return <div data-slot="card" data-fold className={cn(cardVariants({ tone, interactive }), className)} {...props} />
 }
 
 /** The head strip: a mark and title at the left, its buttons at the right. */

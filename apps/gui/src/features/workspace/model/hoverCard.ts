@@ -1,4 +1,5 @@
 import { machineLabel } from '@/data/machineNicknames'
+import { messagePreview } from '@/features/chat/messagePreview'
 import { SHELL_PROCESS, type SessionStatus, type SessionView } from './session'
 import { projectOf } from './sidebar'
 import { pullRequestHeadline, pullRequestTone, type PullRequestTone } from './pullRequest'
@@ -23,7 +24,8 @@ const WORD: Record<SessionStatus, string> = {
 }
 
 function clipped(text: string): string {
-  const line = text.trim().split('\n')[0] ?? ''
+  // One plain line: the paste tags and the attached-files block are transport, not what was said.
+  const line = messagePreview(text)
   return line.length > SAID_CHARS ? `${line.slice(0, SAID_CHARS - 1)}…` : line
 }
 

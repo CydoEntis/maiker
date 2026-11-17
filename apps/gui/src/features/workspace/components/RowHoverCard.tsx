@@ -65,7 +65,7 @@ export function RowHoverCard({ session, row, portalContainer }: Props) {
         )}
       </div>
       <div className="mx-hover-foot">
-        <AppIcon process={session.process} size={14} flat />
+        <AppIcon process={session.process} size={14} />
         <span className="mx-hover-who">{text.who}</span>
         <span className="mx-spacer" />
         {session.statusSince !== null && <span className="mx-hover-when"><Ago at={session.statusSince} /> ago</span>}

@@ -13,6 +13,10 @@ import { CommandStep, EditStep } from '@/features/chat/components/StepCards'
 import { ThoughtRow } from '@/features/chat/components/ThoughtRow'
 import { WorkCard } from '@/features/chat/components/WorkCard'
 import { LiveBox } from '@/features/chat/components/LiveBox'
+import { ChatItem, type ChatItemContext } from '@/features/chat/components/ChatItems'
+import type { ChatRow } from '@/features/chat/chatRows'
+import type { TurnEvent } from '@/features/chat/chatEvents'
+import { messageEvent } from '@/features/chat/eventFixtures'
 
 /** How long the gallery's live box says it has worked. */
 const LIVE_MS = 12_000
@@ -156,6 +160,60 @@ export function ChatFeed() {
         <AgentsCard agents={[subagentEvent('a1', { title: 'Find call sites', status: 'running', prompt: 'Find every caller of refundable()', timing: { startedAtMs: OPENED_MS, completedAtMs: null } }), subagentEvent('a2', { title: 'Check the limits', report: 'The limit is checked in two places.' }), subagentEvent('a3', { title: 'Review the migration', agentType: 'Plan', report: 'It is safe to rerun.' })]} />
         <ThoughtRow texts={['The second refund must not exceed what is left, so subtract the earlier ones first.']} />
         <div className="mx-msg-agent"><Markdown text={REPLY} /></div>
+      </div>
+    </div>
+  )
+}
+
+const NOTHING_OPEN = () => undefined
+const ITEM_CONTEXT: ChatItemContext = { agent: 'claude', workingSince: LIVE_SINCE, approval: null, root: null, openDiff: NOTHING_OPEN, goToStep: null, waitingStep: null }
+const TURN: TurnEvent = { kind: 'turn', id: 'turn1', turnId: 't1', outcome: 'completed', startedAtMs: 0, endedAtMs: 124_000, timed: true }
+const CLEAN_OUTPUT = ['Reading schema from src/db/schema.ts', '1 table added: sessions', 'Migration written: drizzle/0043_add_sessions.sql'].join('\n')
+const TSC_OUTPUT = ["src/routes/logout.ts:14:22 - error TS2339: Property 'token' does not exist on type 'Session'.", "src/routes/me.ts:9:31 - error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.", '', 'Found 2 errors in 2 files.'].join('\n')
+const LONG_COMMAND = 'pnpm exec vitest run --coverage --reporter=verbose --config vitest.integration.config.ts src/features/billing/refunds src/features/billing/invoices'
+const PROSE = [
+  'Flags now come from the settings table.',
+  '',
+  'Here is what moved:',
+  '',
+  '| Flag | Before | After |',
+  '| --- | --- | --- |',
+  '| newCheckout | Hard-coded on | Settings table |',
+  '| exportCsv | Hard-coded off | Settings table |',
+  '',
+  '- **Reads:** still go through `isEnabled()`, so none of the 23 call sites changed.',
+  '- **Writes:** setFlag() saves to the table and clears the cache.',
+  '',
+  '```ts',
+  "import { isEnabled, setFlag } from './flags';",
+  "await setFlag('exportCsv', true);",
+  '```',
+  '',
+  '> **Heads up** Existing environments need the migration before deploying: pnpm db:migrate.',
+].join('\n')
+
+/** The feed as the Maiker prototype draws it (Move auth from JWT to sessions), built from the real rows. */
+export function ChatParity() {
+  const rows: ChatRow[] = [
+    { kind: 'user', key: 'u1', event: messageEvent('u1', 'user', 'Move auth from JWT to server sessions. Keep existing logins working during the switch, and add tests.') },
+    { kind: 'agent', key: 'a1', turnId: 't1', status: 'completed', paragraphs: ["I'll start by finding everywhere the JWT is issued, read and checked.", 'Then I will plan the switch so both kinds of login work until old tokens expire.'] },
+    { kind: 'work', key: 'w1', events: [toolEvent('t1', { name: 'Grep', target: 'jwt' }), toolEvent('t2', { target: 'src/auth/token.ts' }), toolEvent('t3', { target: 'src/auth/middleware.ts' })] },
+    { kind: 'step', key: 's1', event: commandEvent('c1', { command: 'pnpm drizzle-kit generate --name add_sessions', output: CLEAN_OUTPUT, exitCode: 0, durationMs: 1_400 }) },
+    { kind: 'work', key: 'w2', events: [editEvent('e1', { file: 'src/auth/session.ts', diff: { status: 'available', hunks: [{ header: '@@ -12,2 +12,3 @@', lines: DIFF }], added: 2, removed: 1, truncated: false } }), commandEvent('c2', { command: 'pnpm tsc --noEmit', output: TSC_OUTPUT, exitCode: 2, status: 'failed', durationMs: 2_900 })] },
+    { kind: 'step', key: 's2', event: commandEvent('c3', { command: 'pnpm tsc --noEmit', output: TSC_OUTPUT, exitCode: 2, status: 'failed', durationMs: 2_900 }) },
+    { kind: 'step', key: 's3', event: commandEvent('c4', { command: 'pnpm tsc --noEmit', output: 'No errors.', exitCode: 0, durationMs: 3_800 }) },
+    { kind: 'step', key: 's4', event: commandEvent('c5', { command: LONG_COMMAND, output: 'Tests: 12 passed, 12 total', durationMs: 4_200 }) },
+    { kind: 'step', key: 's5', event: editEvent('e2', { file: 'src/flags/settings.ts', diff: { status: 'available', hunks: [{ header: '@@ -12,2 +12,3 @@', lines: DIFF }], added: 2, removed: 1, truncated: false } }) },
+    { kind: 'divider', key: 'd1', event: TURN },
+    { kind: 'user', key: 'u2', event: messageEvent('u2', 'user', 'Should sessions be stored in Redis instead of Postgres? And does that change how logout reads the session?') },
+    { kind: 'working', key: 'wk', phrase: 'running the full test suite' },
+    { kind: 'agent', key: 'a2', turnId: 't2', status: 'completed', paragraphs: PROSE.split('\n\n') },
+    { kind: 'changes', key: 'ch', files: ['src/flags/settings.ts', 'src/flags/index.ts', 'drizzle/0043_flags.sql', 'src/flags/settings.test.ts'], lines: { added: 186, removed: 41 }, turn: null },
+  ]
+  return (
+    <div className="mx-chat" style={{ zoom: 1 }}>
+      <div className="mx-chat-scroller flex flex-col">
+        {rows.map((row) => <ChatItem key={row.key} row={row} {...ITEM_CONTEXT} />)}
       </div>
     </div>
   )

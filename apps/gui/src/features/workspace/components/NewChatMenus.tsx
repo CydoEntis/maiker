@@ -5,7 +5,7 @@ import { PopupContent } from '@/components/ui/popup'
 import { Icon } from './glyphs'
 
 /** One row of a chip's list: a name, what is under it, and what sits at its right. */
-export type ChipItem = { key: string; label: string; sub?: string; icon?: ReactNode; badge?: string; right?: ReactNode; checked: boolean; disabled?: boolean; onPick: () => void }
+export type ChipItem = { key: string; label: string; sub?: string; icon?: ReactNode; badge?: string; /** The name is a branch or a path: set in the mono face. */ mono?: boolean; right?: ReactNode; checked: boolean; disabled?: boolean; onPick: () => void }
 export type ChipSection = { heading: string; items: readonly ChipItem[] }
 
 type Props = {
@@ -75,7 +75,7 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
               {section.items.map((item) => <ChipRow key={item.key} item={item} onPick={pick} />)}
             </div>
           ))}
-          {kept.length === 0 && !made && <p className="mx-chip-none">Nothing matches</p>}
+          {kept.length === 0 && !made && <p className="mx-chip-none">{variant === 'token' ? 'Nothing matches.' : 'Nothing matches'}</p>}
         </ChoiceList>
         {below}
         {footer !== undefined && <div className="mx-chip-footer">{footer}</div>}
@@ -89,7 +89,7 @@ function ChipRow({ item, onPick }: { item: ChipItem; onPick: (item: ChipItem) =>
     <ChoiceItem value={item.key} disabled={item.disabled} className={`mx-chip-row${item.checked ? ' is-checked' : ''}`} onPick={() => { onPick(item) }}>
       {item.icon}
       <span className="mx-chip-row-text">
-        <span className="mx-chip-row-label">{item.label}{item.badge !== undefined && <span className="mx-chip-badge">{item.badge}</span>}</span>
+        <span className={`mx-chip-row-label${item.mono === true ? ' is-mono' : ''}`}>{item.label}{item.badge !== undefined && <span className="mx-chip-badge">{item.badge}</span>}</span>
         {item.sub !== undefined && <span className="mx-chip-row-sub">{item.sub}</span>}
       </span>
       {item.right}

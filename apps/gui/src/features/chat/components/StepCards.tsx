@@ -1,22 +1,21 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowUpRight, Copy, Lock } from 'lucide-react'
+import { ArrowUpRight, Lock } from 'lucide-react'
 import { HighlightedLine } from '@/components/HighlightedLine'
-import { Icon, Spinner } from '@/features/workspace/components/glyphs'
+import { Spinner } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
 import type { CommandEvent, EditEvent, ToolEvent } from '../chatEvents'
 import { isOmitted, redactionNote } from '../redaction'
-import { commandEnded, commandMeta, commandTook, relativePath } from '../stepInfo'
-import { commandIntent, shownCommandStatus } from '../commandIntent'
+import { commandHeadMeta, relativePath } from '../stepInfo'
+import { commandIntent, foundNothing, shownCommandStatus } from '../commandIntent'
 import { toolFacts, type ToolFacts } from '../toolFacts'
 import type { WorkStep } from '../workSummary'
 import { documentOf } from '../writtenDocument'
-import { IconButton } from '@/components/ui/button'
-import { Card, CardHead } from '@/components/ui/card'
 import { Fold } from '@/components/ui/fold'
-import { Tag } from '@/components/ui/tag'
+import { StatusIcon } from '@/components/ui/status-icon'
 import { copyText as writeClipboard } from '@/lib/clipboard'
 import { toast } from '@/lib/toast'
-import { ChangePill, FileBadge, StepGlyph, StepRow, type MetaTone } from './cardParts'
+import { Block, BlockHead } from './Block'
+import { ChangePill, FileBadge, StepRow, type MetaTone } from './cardParts'
 import { diffRows, type DiffRow } from './diffRows'
 import { DocumentCard } from './DocumentCard'
 
@@ -27,7 +26,6 @@ import { DocumentCard } from './DocumentCard'
  */
 
 export const FOLD_LINES = 12
-export const COMMAND_TAIL_LINES = 6
 
 const STOPPED_WORD = 'stopped'
 const FAILED_WORD = 'failed'
@@ -88,7 +86,6 @@ export function ToolStep({ event, root = null, waiting = false, control }: ToolS
       <StepRow
         status={event.status}
         verb={facts.kind === 'extension' ? <><span className="mx-step-server">{facts.server}</span>{facts.tool}</> : facts.verb}
-        {...(facts.kind === 'extension' ? {} : { tool: 'read' as const })}
         target={<ToolTarget facts={facts} />}
         meta={meta}
         metaTone={event.status === 'failed' ? 'danger' : 'dim'}
@@ -127,27 +124,24 @@ function copyCommand(command: string): void {
   )
 }
 
-/** The command's output: its last lines in a well, all of them on request, and what the daemon hid. */
+/** The command's output on the well: every line, scrolling inside 320px, and what the daemon hid. */
 function CommandOutput({ event }: { event: CommandEvent }) {
-  const [all, setAll] = useState(false)
   const omitted = isOmitted(event.output)
-  const lines = event.output === '' || omitted ? [] : event.output.replace(/\n+$/, '').split('\n')
-  const shown = all ? lines : lines.slice(-COMMAND_TAIL_LINES)
+  const text = event.output === '' || omitted ? '' : event.output.replace(/\n+$/, '')
   return (
     <>
       {omitted && <p className="mx-step-note">The output shows a secret file, so the history does not keep it.</p>}
-      {shown.length > 0 && <pre className="mx-step-output">{shown.join('\n')}</pre>}
-      {shown.length > 0 && <RedactionNote texts={[event.output]} />}
-      {lines.length > COMMAND_TAIL_LINES && <Fold open={all} onToggle={() => { setAll((current) => !current) }} more={`Show all ${String(lines.length)} lines`} less="Show less" />}
+      {text !== '' && <pre className="mx-block-output">{text}</pre>}
+      {text !== '' && <RedactionNote texts={[event.output]} />}
     </>
   )
 }
 
 /**
  * A command the agent ran. In a run it is one line, the command's first line and how it ended, as the
- * agent's own terminal shows it; opened it is the whole command and the last lines of its output (all
- * of it on request). On its own it is a card with the command in its head, open on its output once it
- * has ended. Every one starts folded, a failed one too: its line says it failed, and opening it shows why.
+ * agent's own terminal shows it; opened it is the whole command and its output. On its own it is a block with the
+ * command in its head and, at the right, how it ended ("exit 1 · 2.9s", red when it failed). Every one starts
+ * folded, a failed one too: its line says it failed, and opening it shows why.
  */
 export function CommandStep({ event, alone = false, waiting = false, control }: CommandStepProps) {
   const [open, toggle] = useOpen(control)
@@ -158,26 +152,28 @@ export function CommandStep({ event, alone = false, waiting = false, control }: 
   const first = typed[0] ?? ''
   const running = status === 'running'
   const failed = status === 'failed'
-  const meta = running ? <ElapsedSince since={event.timing.startedAtMs ?? event.observed.firstSeenAtMs} /> : commandMeta(event)
+  const unreported = !running && !failed && status !== 'interrupted' && event.exitCode === null && !foundNothing(event)
+  const meta = running ? <ElapsedSince since={event.timing.startedAtMs ?? event.observed.firstSeenAtMs} /> : commandHeadMeta(event)
   const metaTone = running ? 'working' : failed ? 'danger' : 'dim'
-  const took = commandTook(event)
   const short = event.command === '' ? 'A command' : typed.length > 1 ? `${first} …` : first
+  // A provider that reported no exit code is said to have reported none, to a screen reader, so a finished command never reads as one that passed.
+  const unreportedNote = unreported ? <span className="sr-only">exit code not reported</span> : null
   if (alone) {
     return (
-      <Card role="group" aria-label={`Command ${first}`} tone={failed ? 'err' : 'none'} className={`mx-step-alone${waiting ? ' is-waiting' : ''}`}>
-        <CardHead className="mx-step-cardhead">
-          <button type="button" className="mx-step-cardtoggle" aria-expanded={open} onClick={toggle}>
-            <StepGlyph status={status} waiting={waiting} />
-            <span className="mx-step-prompt" aria-hidden="true">$</span>
-            {open ? <span className="mx-step-command">{event.command}</span> : <code className="mx-step-command is-short">{short}</code>}
-            <span className="sr-only">{failed ? FAILED_WORD : status === 'interrupted' ? STOPPED_WORD : running ? 'Running' : 'Done'}</span>
-          </button>
-          {!running && <Tag tone={failed ? 'err' : event.exitCode === 0 ? 'done' : 'neutral'}>{commandEnded(event)}</Tag>}
-          {waiting ? <span className="mx-step-meta is-warn">waiting for you ↓</span> : (running || took !== null) && <span className={`mx-step-meta is-${metaTone}`}>{running ? meta : took}</span>}
-          {event.command !== '' && <IconButton label="Copy command" onClick={() => { copyCommand(event.command) }}><Copy className="size-3.5" aria-hidden="true" /></IconButton>}
-        </CardHead>
-        {open && <div className="mx-step-cardbody"><CommandOutput event={event} /></div>}
-      </Card>
+      <Block role="group" aria-label={`Command ${first}`} failed={failed} waiting={waiting}>
+        <BlockHead
+          open={open}
+          onToggle={toggle}
+          actions={open && event.command !== '' ? <button type="button" className="mx-block-action" aria-label="Copy command" onClick={() => { copyCommand(event.command) }}>Copy</button> : undefined}
+        >
+          <span className="mx-block-prompt" aria-hidden="true">$</span>
+          <code className="mx-block-title">{short}</code>
+          {waiting ? <span className="mx-step-meta is-warn">waiting for you ↓</span> : meta !== null && meta !== '' && <span className={`mx-step-meta is-${metaTone}`}>{meta}</span>}
+          {unreportedNote}
+          <span className="sr-only">{failed ? FAILED_WORD : status === 'interrupted' ? STOPPED_WORD : running ? 'Running' : 'Done'}</span>
+        </BlockHead>
+        {open && <CommandBody event={event} full={event.command !== short} />}
+      </Block>
     )
   }
   return (
@@ -185,11 +181,10 @@ export function CommandStep({ event, alone = false, waiting = false, control }: 
       <StepRow
         status={status}
         verb={intent?.verb ?? 'Run'}
-        tool="run"
         target={intent !== null
           ? (intent.target === null ? undefined : <code className="mx-code-chip">{intent.target}</code>)
           : <code className="mx-code-chip">{short}</code>}
-        meta={meta}
+        meta={<>{meta}{unreportedNote}</>}
         metaTone={metaTone}
         open={open}
         onToggle={toggle}
@@ -197,28 +192,38 @@ export function CommandStep({ event, alone = false, waiting = false, control }: 
       />
       {open && (
         <div className="mx-step-body">
-          <div className="mx-step-card">
-            <div className="mx-step-head is-command">
-              <span className="mx-step-prompt" aria-hidden="true">$</span>
-              <span className="mx-step-command">{event.command}</span>
-              {failed && event.exitCode !== null && <Tag tone="err">exit {event.exitCode}</Tag>}
+          <Block>
+            <div className="mx-block-head is-open is-static">
+              <span className="mx-block-prompt" aria-hidden="true">$</span>
+              <span className="mx-block-command">{event.command}</span>
             </div>
             <CommandOutput event={event} />
-          </div>
+          </Block>
         </div>
       )}
     </div>
   )
 }
 
+/** What opens under a command's head: the whole command when the head cut it short, then its output. */
+function CommandBody({ event, full }: { event: CommandEvent; full: boolean }) {
+  return (
+    <>
+      {full && <pre className="mx-block-output is-command">{event.command}</pre>}
+      <CommandOutput event={event} />
+    </>
+  )
+}
+
 const LINE_TONE: Record<DiffRow['tone'], string> = { add: ' is-add', remove: ' is-del', context: '', header: '' }
 
-/** One line of a diff: a hunk header in blue, or the line with its sign and the file's syntax colours. */
+/** One line of a diff: a hunk header in blue, or the line with its old and new number, its sign and the file's syntax colours. */
 function DiffLine({ row, path }: { row: DiffRow; path: string }) {
   if (row.tone === 'header') return <div className="mx-diff-hunk">{row.text}</div>
   return (
     <div className={`mx-diff-line${LINE_TONE[row.tone]}`}>
-      <span className="mx-diff-num" aria-hidden="true">{row.number ?? ''}</span>
+      <span className="mx-diff-num" aria-hidden="true">{row.oldNumber ?? ''}</span>
+      <span className="mx-diff-num" aria-hidden="true">{row.newNumber ?? ''}</span>
       <span className="mx-diff-sign" aria-hidden="true">{row.sign}</span>
       <span className="mx-diff-text">{row.text === '' ? ' ' : <HighlightedLine line={row.text} path={path} />}</span>
     </div>
@@ -240,6 +245,10 @@ function EditMeta({ event }: { event: EditEvent }) {
     </>
   )
 }
+
+/** The label a file-change block opens with, where the history says whether the file was new or removed. */
+const EDIT_LABEL: Partial<Record<EditEvent['change'], string>> = { add: 'Created', delete: 'Deleted' }
+const RUNNING_LIGHT_PX = 12
 
 const EDIT_TONE: Partial<Record<EditEvent['status'], MetaTone>> = { running: 'working', failed: 'danger' }
 
@@ -288,35 +297,38 @@ export function EditStep({ event, root, onOpen, alone = false, waiting = false, 
   if (alone) {
     const failed = event.status === 'failed'
     return (
-      <Card role="group" aria-label={`${verb} ${name}`} tone={failed ? 'err' : 'none'} className={`mx-step-alone${waiting ? ' is-waiting' : ''}`}>
-        <CardHead className="mx-step-cardhead">
-          <button type="button" className="mx-step-cardtoggle" aria-expanded={open} title={open ? 'Hide the diff' : 'Show the diff'} onClick={toggle}>
-            <StepGlyph status={event.status} waiting={waiting} />
-            <span className="sr-only">{verb}</span>
-            {target}
-          </button>
+      <Block role="group" aria-label={`${verb} ${name}`} failed={failed} waiting={waiting}>
+        <BlockHead
+          open={open}
+          onToggle={toggle}
+          title={open ? 'Hide the diff' : 'Show the diff'}
+          actions={openFile !== null ? <button type="button" className="mx-block-action" aria-label="Open in side panel" onClick={openFile}>Open</button> : undefined}
+        >
+          {event.status === 'running' && <span className="mx-block-light" aria-hidden="true"><StatusIcon status="working" size={RUNNING_LIGHT_PX} /></span>}
+          <span className="mx-block-label">{EDIT_LABEL[event.change] ?? (event.tool === 'Write' ? 'Wrote' : 'Edited')}</span>
+          {file === null ? <span className="mx-step-plain">a file</span> : <FileBadge path={file} />}
+          <span className="mx-spacer" />
           {waiting ? <span className="mx-step-meta is-warn">waiting for you ↓</span> : <span className={`mx-step-meta is-${metaTone}`}><EditMeta event={event} /></span>}
-          {openFile !== null && <IconButton label="Open in side panel" onClick={openFile}><Icon name="openSide" size={15} /></IconButton>}
-        </CardHead>
-        {open && <div className="mx-step-cardbody"><EditBody event={event} file={file} sidePanel={null} /></div>}
-      </Card>
+        </BlockHead>
+        {open && <EditBody event={event} file={file} sidePanel={null} />}
+      </Block>
     )
   }
   const sidePanel = openFile !== null && <button type="button" className="mx-ghost-btn" onClick={openFile}>Open in side panel<ArrowUpRight className="size-3" aria-hidden="true" /></button>
   const hasDiff = event.diff.status === 'available' && !event.diff.truncated && event.status !== 'running'
   return (
     <div role="group" aria-label={`${verb} ${name}`} className="mx-step">
-      <StepRow status={event.status} verb={verb} tool="edit" target={target} meta={<EditMeta event={event} />} metaTone={metaTone} open={open} onToggle={toggle} waiting={waiting} />
+      <StepRow status={event.status} verb={verb} target={target} meta={<EditMeta event={event} />} metaTone={metaTone} open={open} onToggle={toggle} waiting={waiting} />
       {open && (
         <div className="mx-step-body">
           {hasDiff ? (
-            <div className="mx-step-card">
-              <div className="mx-step-head">
+            <Block>
+              <div className="mx-block-head is-open is-static">
                 <span className="mx-step-path" title={name}>{name}</span>
                 {sidePanel}
               </div>
               <EditBody event={event} file={file} sidePanel={null} />
-            </div>
+            </Block>
           ) : <EditBody event={event} file={file} sidePanel={sidePanel} />}
         </div>
       )}
