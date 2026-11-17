@@ -4,6 +4,7 @@
 //! scanner, background git work and client connections talk to it through a single
 //! channel, so there is no locking around the model.
 
+mod agent_commands;
 mod agent_sign_in;
 mod approvals;
 mod branch_agent;
@@ -3174,6 +3175,22 @@ impl Daemon {
                         }) =>
                     {
                         ServerMsg::Error("Only a human client can ask about this machine's GitHub account".into())
+                    }
+                    Query::AgentCommands { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can list an agent's commands on this machine".into())
+                    }
+                    Query::AgentCommands { agent, folder, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::spawn(async move {
+                            let answer = agent_commands::answer(agent, folder).await;
+                            let reply = Reply::AgentCommands { tag, answer };
+                            let _ = tx.send(Ev::Answered { client, reply }).await;
+                        });
+                        return;
                     }
                     Query::Tickets { .. }
                         if self.clients.get(&client).is_some_and(|client| {

@@ -23,6 +23,8 @@ use maitty_machines::link::Timing;
 use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
+use maitty_shared::agent_commands::AgentCommand;
+use maitty_shared::conversation::Provider;
 use maitty_shared::extensions::{ExtError, ExtReply, ExtRequest};
 use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId, TicketKeyChange};
 use maitty_shared::ticket_links::{TicketLinkChange, TicketLinks, TicketPlace};
@@ -65,6 +67,10 @@ const GITHUB_REPOS_EVENT: &str = "github-repos";
 const GITHUB_OWNERS_EVENT: &str = "github-owners";
 /// Longer than any owner or search the daemon takes.
 const MOST_GITHUB_WORD_BYTES: usize = 256;
+/// The slash commands and skills an agent takes on a machine: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
+const AGENT_COMMANDS_EVENT: &str = "agent-commands";
+/// Longer than any folder a daemon takes.
+const MOST_AGENT_FOLDER_BYTES: usize = 4096;
 /// Where an agent's sign-in stands on this computer: `{machine, tag, agent, state, link, code, failure}`.
 const AGENT_SIGN_IN_EVENT: &str = "agent-sign-in";
 /// What this computer's daemon read of a ticket source: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
@@ -516,6 +522,21 @@ impl Wire {
         self.send(machine_of(machine), ClientMsg::Query(Query::GitHubRepos { owner, search, tag }))
     }
 
+    /// Ask a machine's daemon for the slash commands and skills `agent` takes in `folder` there. The daemon
+    /// decides what folder it will start in; only what could not be a request is refused here. The answer
+    /// comes back as an `agent-commands` event carrying `tag`.
+    pub fn agent_commands(&self, machine: u16, agent: &str, folder: &str, tag: u64) -> Result<(), String> {
+        let agent = match agent {
+            "claude" => Provider::Claude,
+            "codex" => Provider::Codex,
+            _ => return Err("That agent has no list of commands to ask for".to_string()),
+        };
+        if folder.len() > MOST_AGENT_FOLDER_BYTES || folder.chars().any(char::is_control) {
+            return Err("That folder cannot be sent".to_string());
+        }
+        self.send(machine_of(Some(machine)), ClientMsg::Query(Query::AgentCommands { agent, folder: folder.to_owned(), tag }))
+    }
+
     /// Ask this computer's daemon to read a ticket source: `owner/name` for GitHub (its own `gh`), or `plane` or
     /// `linear` (the key it keeps). The daemon checks the source and the request and cleans the answer; only what
     /// could not be a source is refused here. The answer comes back as a `tickets` event carrying `tag`.
@@ -727,6 +748,14 @@ pub fn github_repos(
 #[tauri::command]
 pub fn github_owners(wire: tauri::State<'_, Wire>, machine: Option<u16>, tag: u64) -> Result<(), String> {
     wire.github_owners(machine, tag)
+}
+
+/// Asks another machine for the slash commands and skills an agent takes in a folder there. The
+/// answer arrives as an `agent-commands` event with the same `tag`; a machine that is offline is
+/// an error here, never an answer from this computer (this computer's own list is `agent_commands`).
+#[tauri::command]
+pub fn agent_commands_on(wire: tauri::State<'_, Wire>, machine: u16, agent: String, folder: String, tag: u64) -> Result<(), String> {
+    wire.agent_commands(machine, &agent, &folder, tag)
 }
 
 /// Asks the daemon for the shared settings; the answer arrives as a `shared-settings` event.
@@ -962,6 +991,12 @@ pub enum Reaction {
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
     },
+    /// The slash commands and skills an agent takes on a machine, for the window that asked.
+    AgentCommands {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<Vec<AgentCommand>, String>,
+    },
     /// What a ticket source gave, for the window that asked.
     Tickets {
         machine: MachineId,
@@ -1084,6 +1119,7 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
             Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
             Out::GitHubOwners { machine, tag, answer } => Some(Reaction::GitHubOwners { machine, tag, answer }),
+            Out::AgentCommands { machine, tag, answer } => Some(Reaction::AgentCommands { machine, tag, answer }),
             Out::Tickets { machine, tag, answer } => Some(Reaction::Tickets { machine, tag, answer }),
             Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
             Out::TicketWrite { machine, tag, answer } => Some(Reaction::TicketWrite { machine, tag, answer }),
@@ -1328,6 +1364,9 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             }
             Reaction::GitHubOwners { machine, tag, answer } => {
                 let _ = app.emit(GITHUB_OWNERS_EVENT, github_list_answer(machine, tag, answer));
+            }
+            Reaction::AgentCommands { machine, tag, answer } => {
+                let _ = app.emit(AGENT_COMMANDS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
             Reaction::Tickets { machine, tag, answer } => {
                 let _ = app.emit(TICKETS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });

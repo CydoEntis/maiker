@@ -6,10 +6,17 @@ const said = (name: string, description: string, hint = ''): SlashCommand => ({ 
 const shown = (name: string, description: string, hint = '', aliases: readonly string[] = []): SlashCommand => ({ name, description, hint, aliases, terminal: true })
 
 /**
+ * The Codex CLI version `CODEX_COMMANDS` was written from. It is named here and nowhere else;
+ * `cargo test -p maitty-agent-ask -- --ignored` fails when the installed Codex is newer (docs/TESTING.md,
+ * *Agent command lists*), since Codex lists its commands only inside its terminal.
+ */
+export const CODEX_COMMANDS_PINNED_FOR = '0.167.0'
+
+/**
  * Codex's own commands. Codex has no way to be asked what it takes (Claude Code has: `agent_commands`), so they are
- * written here by hand: the names from OpenAI's command reference and the descriptions from the Codex CLI 0.167.0
- * installed where this was written. A command Codex adds later is missing until this list is brought up to date,
- * and one it drops is answered by Codex itself. Windows-only and debugging commands are left out.
+ * written here by hand: the names from OpenAI's command reference and the descriptions from the Codex CLI above. A
+ * command Codex adds later is missing until this list is brought up to date, and one it drops is answered by Codex
+ * itself. Windows-only and debugging commands are left out.
  */
 export const CODEX_COMMANDS: readonly SlashCommand[] = [
   said('clear', 'Clear the terminal and start a new chat'),

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetComposers } from '../composerStore'
+import { forgetMachines, registerMachine } from '@/api/machines'
 import { forgetSlashCommands } from '../slashCommands'
 import { forgetChatFeeds } from '../useChatFeed'
 import { ChatSession } from './ChatSession'
@@ -10,7 +11,7 @@ import { ChatSession } from './ChatSession'
 const fake = vi.hoisted(() => ({
   current: null as null | { read: (cursor: never) => Promise<unknown> },
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string) => Promise<unknown>>(),
-  loadAgentCommands: vi.fn<(agent: string, folder: string) => Promise<{ name: string; description: string; hint: string; aliases: string[] }[]>>(),
+  loadAgentCommands: vi.fn<(agent: string, folder: string, machine?: number) => Promise<{ name: string; description: string; hint: string; aliases: string[] }[]>>(),
 }))
 
 vi.mock('@/api/daemon', async (importOriginal) => ({
@@ -36,6 +37,7 @@ beforeEach(() => {
   forgetChatFeeds()
   forgetComposers()
   forgetSlashCommands()
+  forgetMachines()
   fake.submitMessage.mockReset().mockResolvedValue({})
   fake.loadAgentCommands.mockReset().mockResolvedValue(COMMANDS)
 })
@@ -221,6 +223,36 @@ describe('the agent\'s commands in the message box', () => {
 
     expect(box).toHaveValue('$pdf ')
     expect(typeInto).not.toHaveBeenCalled()
+  })
+
+  it('asks the machine a chat runs on for its commands, not this computer', async () => {
+    registerMachine('kingdom', 3)
+    const { user, box } = await open({ sessionId: 'kingdom/t7' })
+    expect(fake.loadAgentCommands).toHaveBeenCalledExactlyOnceWith('claude', ROOT, 3)
+
+    await user.type(box, '/com')
+
+    expect(offered()).toEqual(['/compactKeep a summary of the conversation'])
+  })
+
+  it('says why a machine could not list, and offers no other computer\'s commands in their place', async () => {
+    registerMachine('kingdom', 3)
+    fake.loadAgentCommands.mockRejectedValue(new Error('kingdom is not connected'))
+    const { user, box } = await open({ sessionId: 'kingdom/t7' })
+
+    await user.type(box, '/c')
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.getByText("Could not list claude's commands: kingdom is not connected")).toBeInTheDocument()
+  })
+
+  it('asks nothing of a machine this window has not been told of', async () => {
+    const { user, box } = await open({ sessionId: 'ghost/t7' })
+
+    await user.type(box, '/c')
+
+    expect(fake.loadAgentCommands).not.toHaveBeenCalled()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 
   it('opens no list for a dollar sign in a Claude chat, which has no such thing', async () => {

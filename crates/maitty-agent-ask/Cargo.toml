@@ -1,0 +1,11 @@
+[package]
+name = "maitty-agent-ask"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+maitty-shared = { path = "../maitty-shared" }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "rt", "time", "io-util", "process"] }
+tracing = "0.1"
