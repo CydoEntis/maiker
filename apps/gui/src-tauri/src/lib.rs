@@ -1857,8 +1857,8 @@ mod tests {
         assert!(defaults("model = \"not listed\"").is_empty());
     }
 
-    fn listed(id: &str, resolved: &str, efforts: &[&str]) -> super::maitty_agent_ask::claude::Listed {
-        super::maitty_agent_ask::claude::Listed {
+    fn listed(id: &str, resolved: &str, efforts: &[&str]) -> maitty_agent_ask::claude::Listed {
+        maitty_agent_ask::claude::Listed {
             id: id.into(),
             label: id.to_uppercase(),
             blurb: String::new(),
@@ -1867,7 +1867,7 @@ mod tests {
         }
     }
 
-    fn claude_list() -> Vec<super::maitty_agent_ask::claude::Listed> {
+    fn claude_list() -> Vec<maitty_agent_ask::claude::Listed> {
         vec![
             listed("default", "claude-fable-5-2", &["low"]),
             listed("opus", "claude-opus-5-5", &["low", "max"]),

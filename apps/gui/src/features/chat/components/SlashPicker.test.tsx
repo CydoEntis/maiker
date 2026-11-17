@@ -11,7 +11,7 @@ import { ChatSession } from './ChatSession'
 const fake = vi.hoisted(() => ({
   current: null as null | { read: (cursor: never) => Promise<unknown> },
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string) => Promise<unknown>>(),
-  loadAgentCommands: vi.fn<(agent: string, folder: string) => Promise<{ name: string; description: string; hint: string; aliases: string[] }[]>>(),
+  loadAgentCommands: vi.fn<(agent: string, folder: string, machine?: number) => Promise<{ name: string; description: string; hint: string; aliases: string[] }[]>>(),
 }))
 
 vi.mock('@/api/daemon', async (importOriginal) => ({

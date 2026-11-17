@@ -131,7 +131,8 @@ function refresh(key: string, agent: string, folder: string, machine: number): v
   const known = listed.get(key) ?? NOT_ASKED
   if (known.loading || (known.at > 0 && known.error === null && Date.now() - known.at < STALE_MS)) return
   put(key, { ...known, loading: true, error: null })
-  (machine === LOCAL_MACHINE ? loadAgentCommands(agent, folder) : loadAgentCommands(agent, folder, machine)).then(
+  const asked = machine === LOCAL_MACHINE ? loadAgentCommands(agent, folder) : loadAgentCommands(agent, folder, machine)
+  asked.then(
     (commands) => { put(key, { at: Date.now(), commands, loading: false, error: null }) },
     (failure: unknown) => {
       console.warn("Could not list the agent's commands", failure)
