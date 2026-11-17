@@ -1,0 +1,1 @@
+{"command":"install","outcome":"failed","plugin":"nope@local-mk","scope":"user","message":"Plugin \"nope\" not found in marketplace \"local-mk\". Your local copy may be out of date — try `claude plugin marketplace update local-mk`.","failureCode":"not_found"}

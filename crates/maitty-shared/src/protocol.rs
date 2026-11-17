@@ -12,7 +12,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 109;
+pub const PROTOCOL_VERSION: u32 = 110;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -206,6 +206,10 @@ pub const TICKET_LINKS_SINCE: u32 = 108;
 /// windows (`Command::OpenTicketSetup`, `ServerMsg::TicketSetup`) and reads a repository's
 /// `.maitty/tickets.toml` (`TicketLinks::repo_file`).
 pub const TICKET_SETUP_SINCE: u32 = 109;
+
+/// The first version whose daemon lists, adds, switches and removes the skills, plugins, MCP
+/// servers and marketplaces of Claude Code and Codex on request (`Query::Extensions`).
+pub const EXTENSIONS_SINCE: u32 = 110;
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
@@ -1279,6 +1283,14 @@ pub enum Query {
         confirmed: bool,
         tag: u64,
     },
+    /// Read or change the skills, plugins, MCP servers and marketplaces of Claude Code and Codex on
+    /// this daemon's computer (human clients only). A list reads files and starts nothing. An add
+    /// runs only with the one-time token a `PreviewAdd` gave, so what it will run was shown first.
+    /// The answer is `Reply::Extensions` with the same `tag`.
+    Extensions {
+        request: crate::extensions::ExtRequest,
+        tag: u64,
+    },
     /// Say or change which ticket sources a project reads on this daemon's computer (human clients
     /// only). `place` is the folder in front, which the answer resolves to its project (this
     /// computer's folders to their repository's main checkout); `None` asks only for the list. The
@@ -1592,6 +1604,11 @@ pub enum Reply {
     TicketWrite {
         tag: u64,
         answer: Result<crate::tickets::TicketWritten, crate::tickets::TicketError>,
+    },
+    /// What a `Query::Extensions` found or did, or why it did nothing.
+    Extensions {
+        tag: u64,
+        answer: Result<crate::extensions::ExtReply, crate::extensions::ExtError>,
     },
     /// The projects' ticket links after a `Query::TicketLinks`, or why the change was refused.
     TicketLinks {
@@ -2526,6 +2543,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ServerMsg::Reply(Reply::TicketWrite { .. }) => TICKET_WRITE_SINCE,
             ServerMsg::Reply(Reply::TicketLinks { .. }) => TICKET_LINKS_SINCE,
+            ServerMsg::Reply(Reply::Extensions { .. }) => EXTENSIONS_SINCE,
             ServerMsg::TicketSetup(_) => TICKET_SETUP_SINCE,
             _ => COMPATIBLE_SINCE,
         }
@@ -2551,6 +2569,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ClientMsg::Query(Query::TicketWrite { .. }) => TICKET_WRITE_SINCE,
             ClientMsg::Query(Query::TicketLinks { .. }) => TICKET_LINKS_SINCE,
+            ClientMsg::Query(Query::Extensions { .. }) => EXTENSIONS_SINCE,
             ClientMsg::Command(Command::OpenTicketSetup { .. }) => TICKET_SETUP_SINCE,
             ClientMsg::Query(Query::GitIdentities { .. }) => GIT_IDENTITIES_SINCE,
             ClientMsg::Query(Query::GitIdentityRule { .. }) => GIT_RULES_SINCE,
@@ -4604,6 +4623,32 @@ mod tests {
             assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
         }
         const { assert!(TICKET_WRITE_SINCE > TICKET_KEYS_SINCE && TICKET_WRITE_SINCE < PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_WRITE_SINCE) };
+    }
+
+    /// The extensions page is a new request and a new reply: a daemon built before them is never
+    /// asked, a client built before them is never sent the answer, and nothing older changes.
+    #[test]
+    fn extensions_are_asked_only_of_a_daemon_that_knows_them_and_changes_nothing_older() {
+        use crate::extensions::{ExtAgent, ExtError, ExtReply, ExtRequest, ExtTarget, ExtKind, ExtScope};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            GitIdentities { tag: u64 },
+        }
+        let target = ExtTarget { agent: ExtAgent::Claude, kind: ExtKind::Plugin, id: "a@b".into(), scope: ExtScope::User, project: None };
+        let query = Query::Extensions { request: ExtRequest::Remove { target }, tag: 7 };
+        let bytes = encode(&query).unwrap();
+        assert!(decode::<OldQuery>(&bytes).is_err());
+        assert!(matches!(decode::<Query>(&bytes), Ok(Query::Extensions { tag: 7, request: ExtRequest::Remove { .. } })));
+        assert_eq!(ClientMsg::Query(query).introduced_in(), EXTENSIONS_SINCE);
+        for answer in [Ok(ExtReply::Done("x".into())), Err(ExtError::NeedsTerminal("claude mcp login x".into()))] {
+            let reply = ServerMsg::Reply(Reply::Extensions { tag: 7, answer });
+            assert_eq!(reply.introduced_in(), EXTENSIONS_SINCE);
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+        // New messages only, so the window an older peer talks in stays where it was.
+        const { assert!(EXTENSIONS_SINCE > TICKET_SETUP_SINCE && EXTENSIONS_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < EXTENSIONS_SINCE) };
     }
 
     /// A project's ticket links are a new request and a new reply: a daemon built before them is

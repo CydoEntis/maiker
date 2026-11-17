@@ -2131,6 +2131,19 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             "{unconfirmed:?}"
         );
 
+        // Installing code is a person's: a pane is refused, and a person's client with no preview token is
+        // answered with a refusal and nothing runs.
+        let ask = |request| Query::Extensions { request, tag: 9 };
+        let from = authenticated_pane(&mut session);
+        let add = maitty_shared::extensions::ExtRequest::Add { token: "0".repeat(32) };
+        let refused = exchange(&mut session, 463, crate::protocol::ClientMsg::Query(ask(add.clone())), Some(from)).await;
+        assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
+        let untokened = exchange(&mut session, 464, crate::protocol::ClientMsg::Query(ask(add)), None).await;
+        assert!(
+            matches!(untokened, ServerMsg::Reply(crate::protocol::Reply::Extensions { tag: 9, answer: Err(maitty_shared::extensions::ExtError::NeedsConfirmation) })),
+            "{untokened:?}"
+        );
+
         let from = authenticated_pane(&mut session);
         let push = Query::Git { term: from.0, request: crate::protocol::GitRequest::Push, tag: 9 };
         let refused = exchange(&mut session, 450, crate::protocol::ClientMsg::Query(push), Some(from)).await;

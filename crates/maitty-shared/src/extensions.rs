@@ -93,11 +93,16 @@ pub struct ExtItem {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ExtensionList {
     pub items: Vec<ExtItem>,
+    /// One line for each file that exists but could not be read, so a list that looks empty is
+    /// not mistaken for one that is.
+    #[serde(default)]
+    pub problems: Vec<String>,
 }
 
 impl ExtensionList {
     /// What a client draws: every string cleaned and cut, the list capped.
     pub fn cleaned(self) -> ExtensionList {
+        let problems = self.problems.iter().take(EXT_RUNS_MAX).map(|problem| line(problem, EXT_DETAIL_MAX_CHARS)).collect();
         let items = self
             .items
             .into_iter()
@@ -109,7 +114,7 @@ impl ExtensionList {
                 ..item
             })
             .collect();
-        ExtensionList { items }
+        ExtensionList { items, problems }
     }
 }
 
@@ -499,7 +504,7 @@ mod tests {
             detail: "x".repeat(EXT_DETAIL_MAX_CHARS + 50),
             enabled: Some(true),
         };
-        let cleaned = ExtensionList { items: vec![item; EXT_ITEMS_MAX + 5] }.cleaned();
+        let cleaned = ExtensionList { items: vec![item; EXT_ITEMS_MAX + 5], problems: Vec::new() }.cleaned();
         assert_eq!(cleaned.items.len(), EXT_ITEMS_MAX);
         assert_eq!(cleaned.items[0].name, "evil[2J");
         assert_eq!(cleaned.items[0].detail.chars().count(), EXT_DETAIL_MAX_CHARS);

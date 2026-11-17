@@ -16,6 +16,7 @@ mod commit;
 mod commands;
 mod contain;
 mod conversation;
+mod extensions;
 mod folders;
 mod git;
 mod git_identity;
@@ -3183,6 +3184,22 @@ impl Daemon {
                         }) =>
                     {
                         ServerMsg::Error("Only a human client can write to a ticket".into())
+                    }
+                    Query::Extensions { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can change the extensions of this machine".into())
+                    }
+                    Query::Extensions { request, tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let answer = extensions::answer(request);
+                            let reply = Reply::Extensions { tag, answer };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
                     }
                     Query::TicketLinks { .. }
                         if self.clients.get(&client).is_some_and(|client| {

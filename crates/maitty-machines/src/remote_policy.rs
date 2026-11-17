@@ -93,6 +93,9 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::Reply(Reply::TicketWrite { .. }) => {
             Verdict::Ignore("ticket writes are asked of this computer only")
         }
+        ServerMsg::Reply(Reply::Extensions { .. }) => {
+            Verdict::Ignore("extensions are changed on this computer only")
+        }
         ServerMsg::Error(_) | ServerMsg::Reply(_) => Verdict::Answer,
         ServerMsg::AskRemoveWorktree { .. } => {
             Verdict::Ignore("a worktree prompt names a folder on this computer")
