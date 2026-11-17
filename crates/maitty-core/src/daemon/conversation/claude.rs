@@ -42,18 +42,8 @@ impl Client {
             .env_clear()
             .envs(environment.iter().filter_map(|(key, value)| {
                 let name = key.to_string_lossy();
-                let reserved = [
-                    concat!(env!("APP_ENV"), "_TERM_ID"),
-                    concat!(env!("APP_ENV"), "_PANE_TOKEN"),
-                    "CODEX_HOME",
-                ];
-                (!crate::ipc::STRUCTURED_ENV
-                    .iter()
-                    .any(|entry| name.eq_ignore_ascii_case(entry))
-                    && !reserved
-                        .iter()
-                        .any(|entry| name.eq_ignore_ascii_case(entry)))
-                .then_some((key, value))
+                (!crate::ipc::is_identity_env(&name) && !name.eq_ignore_ascii_case("CODEX_HOME"))
+                    .then_some((key, value))
             }))
             .env("CLAUDE_CONFIG_DIR", config_root)
             .env_remove("CLAUDECODE")
@@ -342,9 +332,7 @@ async fn verify_cli_version(
             environment
                 .iter()
                 .filter(|(key, _)| {
-                    !crate::ipc::STRUCTURED_ENV
-                        .iter()
-                        .any(|name| key.to_string_lossy().eq_ignore_ascii_case(name))
+                    !crate::ipc::is_identity_env(&key.to_string_lossy())
                         && !["CODEX_HOME", "CLAUDECODE"]
                             .iter()
                             .any(|name| key.to_string_lossy().eq_ignore_ascii_case(name))

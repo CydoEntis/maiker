@@ -88,28 +88,37 @@
 .mx-project-count { font-size: 11px; color: var(--dim); font-variant-numeric: tabular-nums; }
 
 /* A session row: the app tile with its status badge, the name over the project and branch, and a word when it stopped. */
-/* The card beside a row the pointer rests on (`RowHoverCard`). */
+/* The card beside a row the pointer rests on (`RowHoverCard`): 300px, one shared floating shadow, growing from the row's
+   edge. Its icons hang in the left margin, so the text lines up under the name. */
 .mx-hover-card {
-  position: fixed; z-index: 85; width: 290px; display: flex; flex-direction: column; gap: 10px; padding: 13px 14px; border-radius: 13px; pointer-events: none;
-  background: linear-gradient(180deg, rgba(var(--hl), calc(.07 * var(--hk))), rgba(var(--hl), calc(.02 * var(--hk)))), var(--main);
-  box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.11 * var(--hk))), 0 18px 44px -12px rgba(var(--sd), calc(.8 * var(--sk)));
-  font-family: "Geist Variable", Geist, system-ui, sans-serif; color: var(--fg);
-  animation: mx-pop .14s ease-out; transform-origin: left top;
+  position: fixed; z-index: 85; width: 300px; display: flex; flex-direction: column; border-radius: var(--r-panel); pointer-events: none;
+  background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh); color: var(--fg);
+  animation: mx-grow .16s cubic-bezier(.2, .8, .2, 1); transform-origin: left top;
 }
-.mx-hover-head { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.mx-hover-head b { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-hover-head small { font: 400 11.5px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-hover-status { --tone: var(--muted); display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; border-radius: 9px; font-size: 12.5px; line-height: 1.45; background: color-mix(in srgb, var(--tone) 12%, transparent); }
-.mx-hover-status.is-needs { --tone: var(--warn); }
-.mx-hover-status.is-working { --tone: var(--working); }
-.mx-hover-status.is-done { --tone: var(--ok); }
-.mx-hover-status.is-error { --tone: var(--danger); }
-.mx-hover-status > i { flex: none; margin-top: 5px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone); }
-.mx-hover-status > span { min-width: 0; display: flex; flex-direction: column; gap: 2px; color: var(--fg2); overflow-wrap: anywhere; }
-.mx-hover-status b { font-weight: 600; color: var(--tone); }
-.mx-hover-facts { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 12px; color: var(--fg2); }
-.mx-hover-facts > span:nth-child(odd) { color: var(--dim); }
-.mx-hover-facts > span:nth-child(even) { min-width: 0; overflow-wrap: anywhere; }
+.mx-app[data-side="right"] .mx-hover-card { transform-origin: right top; }
+.mx-hover-head { display: flex; gap: 10px; padding: 12px 14px 10px; }
+.mx-hover-head .mx-hover-status { flex: none; margin-top: 2px; }
+.mx-hover-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mx-hover-head b { font-size: 13.5px; line-height: 19px; font-weight: 600; color: var(--fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.mx-hover-activity { font-size: 12px; line-height: 17px; color: var(--fg2); overflow-wrap: anywhere; }
+.mx-hover-activity.is-word { color: var(--dim); }
+.mx-hover-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 14px 12px 38px; font-size: 12px; line-height: 16px; }
+.mx-hover-row { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--fg2); }
+.mx-hover-row > span:not(.mx-hover-row-icon):not(.sr-only) { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-hover-row:first-child { color: var(--fg); }
+.mx-hover-row-icon { position: absolute; left: -24px; top: 1.5px; display: inline-flex; color: var(--dim); }
+.mx-hover-row .is-mono { font-family: var(--mono); }
+.mx-hover-row .is-add { color: var(--ok); }
+.mx-hover-row .is-del { color: var(--danger); }
+.mx-hover-row .is-pr-bad { color: var(--danger); }
+.mx-hover-row .is-pr-waiting { color: var(--working); }
+.mx-hover-row .is-pr-good { color: var(--ok); }
+.mx-hover-tag { flex: none; height: 16px; display: inline-flex; align-items: center; padding: 0 5px; border: 1px solid var(--line2); font-size: 10.5px; color: var(--muted); }
+.mx-hover-foot { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
+.mx-hover-who { white-space: nowrap; }
+.mx-hover-when { font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .mx-hover-card { animation: none; } }
+:root:has(.mx-app[data-motion="reduced"]) .mx-hover-card { animation: none; }
 .mx-row-wrap { position: relative; display: flex; flex-direction: column; gap: 2px; }
 /* The close button sits at the right of the row's first line and only shows while the row is hovered or has the keys. */
 .mx-row-close { position: absolute; bottom: 5px; right: 6px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); background: var(--main); opacity: 0; pointer-events: none; transition: opacity .12s ease, color .12s ease, background-color .12s ease; }
@@ -124,11 +133,16 @@
 .mx-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: calc(40px * var(--pad, 1)); padding: 4px 6px 4px 10px; border-radius: 8px; text-align: left; transition: background-color .12s ease; }
 .mx-row:hover { background: rgba(var(--hl), calc(.045 * var(--hk))); }
 .mx-row.is-selected, .mx-row.is-selected:hover { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); }
-.mx-row-icon { position: relative; flex: none; display: flex; }
-.mx-row-icon .mx-badge { right: -4px; bottom: -4px; width: 12px; height: 12px; border-radius: calc(3.5px * var(--rk)); font-size: 9px; font-weight: 800; line-height: 1; }
-.mx-row-icon .mx-badge.is-working { background: var(--bg); overflow: hidden; color: var(--working); font-family: var(--mono); }
-.mx-row-icon .mx-badge.is-working .mx-spin { font-size: 9px; line-height: 1; }
-.mx-row-icon .mx-badge.is-unknown { width: 11px; height: 11px; background: var(--bg); border: 1.5px dashed var(--dim); box-shadow: none; }
+/* The status icon sits level with the name, not centred on the two lines. */
+.mx-row { align-items: flex-start; }
+.mx-row .mx-row-icon { margin-top: 3px; }
+.mx-row-folder { display: inline-flex; flex: none; color: var(--dim); }
+.mx-row-slash { flex: none; color: var(--line2); }
+.mx-row-sub .mx-row-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
+.mx-row-sub .mx-row-machine { margin-left: auto; padding-left: 8px; flex: none; font-family: var(--mono); }
+.mx-row-agent { display: inline-flex; flex: none; margin-left: auto; }
+.mx-row-sub .mx-row-machine ~ .mx-row-agent { margin-left: 6px; }
+.mx-row.is-idle .mx-row-name, .mx-row.is-idle .mx-row-sub { opacity: .7; }
 /* A shell's tile in the sidebar is a flat raised square, so agents stand out among shells. */
 .mx-row.is-shell .mx-app-icon.is-shell, .mx-rail-session .mx-app-icon.is-shell { background: var(--m-raise); color: var(--accent-text); box-shadow: var(--c-tile-ring); }
 .mx-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -192,7 +206,6 @@
 .mx-sub-row { position: relative; display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px 0 36px; border-radius: 7px; text-align: left; color: var(--fg2); }
 .mx-sub-row:hover { background: rgba(var(--hl), calc(.05 * var(--hk))); }
 .mx-sub-row.is-open { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
-.mx-sub-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .mx-sub-bend { position: absolute; left: 19px; top: 6px; width: 11px; height: 7px; border-left: 1px solid var(--line2); border-bottom: 1px solid var(--line2); border-bottom-left-radius: 5px; }
 .mx-sub-mark { flex: none; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; }
 .mx-sub-mark.is-working { color: var(--working); font-family: var(--mono); }
@@ -201,3 +214,25 @@
 .mx-sub-mark.is-stopped { color: var(--dim); }
 .mx-sub-name { flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-sub-row.is-more .mx-sub-name { color: var(--dim); }
+
+/* The ≡ menu (`SidebarFilterMenu`): 264px, grows from the button's bottom-left corner. Rows are Group and Sort toggles, a
+   project search and the projects (six rows, then it scrolls), and Reset when anything differs from the start. */
+.mx-pop.mx-grp-menu { width: 264px; padding: 6px 0 0; display: flex; flex-direction: column; box-shadow: var(--pop-sh-menu); }
+.mx-grp-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; }
+.mx-grp-label { flex: none; width: 44px; font-size: 12px; color: var(--muted); }
+.mx-grp-row .mx-segmented { flex: 1; min-width: 0; }
+.mx-grp-row .mx-segmented button { flex: 1; min-width: 0; height: 24px; padding: 0 6px; justify-content: center; }
+.mx-grp-search { display: flex; align-items: center; gap: 8px; height: 34px; margin-top: 6px; padding: 0 10px; border-top: 1px solid var(--line); box-shadow: inset 0 -1px 0 var(--line); color: var(--dim); }
+.mx-grp-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font-size: 12.5px; color: var(--fg); }
+.mx-grp-search:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-grp-projects { max-height: 188px; overflow-y: auto; padding: 4px; }
+.mx-grp-project { width: 100%; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 12.5px; text-align: left; color: var(--fg2); }
+.mx-grp-project:hover { background: var(--m-hover); color: var(--fg); }
+.mx-grp-project.is-on { background: var(--m-sel); color: var(--fg); }
+.mx-grp-square { flex: none; width: 7px; height: 7px; }
+.mx-grp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-grp-count { font: 400 11px var(--mono); color: var(--dim); }
+.mx-grp-none { padding: 10px 8px; font-size: 12px; color: var(--dim); }
+.mx-grp-foot { display: flex; justify-content: flex-end; padding: 4px 6px; border-top: 1px solid var(--line); }
+.mx-grp-reset { height: 24px; padding: 0 8px; font-size: 12px; color: var(--fg2); }
+.mx-grp-reset:hover { background: var(--m-hover); color: var(--fg); }

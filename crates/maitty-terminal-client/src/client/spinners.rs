@@ -234,7 +234,7 @@ mod tests {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        if std::env::var_os(concat!(env!("APP_ENV"), "_SHOW")).is_some() {
+        if maitty_shared::brand::env_var_os("SHOW").is_some() {
             println!("{text}");
         }
         text

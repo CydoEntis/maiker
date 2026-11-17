@@ -528,12 +528,8 @@ impl Daemon {
                     let valid_entry = valid_provider_environment_entry(key, value);
                     let key = key.to_string_lossy();
                     valid_entry
-                        && !crate::ipc::STRUCTURED_ENV
-                            .iter()
-                            .any(|excluded| key.eq_ignore_ascii_case(excluded))
+                        && !crate::ipc::is_identity_env(&key)
                         && ![
-                            concat!(env!("APP_ENV"), "_TERM_ID"),
-                            concat!(env!("APP_ENV"), "_PANE_TOKEN"),
                             "CODEX_HOME",
                             "CLAUDE_CONFIG_DIR",
                         ]

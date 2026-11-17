@@ -1,16 +1,29 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { WindowPortal } from '@/components/ui/portal'
+import { StatusIcon } from '@/components/ui/status-icon'
 import type { SessionView } from '../model/session'
-import { useNow } from '@/lib/clock'
-import { hoverCardText, placeHoverCard, statusWhyLine, type Box } from '../model/hoverCard'
+import { hoverCardText, placeHoverCard, type Box } from '../model/hoverCard'
 import { rowTitle } from '../model/sidebar'
+import { AppIcon, Icon, type IconName } from './glyphs'
 import { Ago } from './times'
 
 type Props = { session: SessionView; row: Box; portalContainer: HTMLElement | null }
 
+/** One line of the card: its icon hangs in the margin left of the text, and a screen reader hears what it is. */
+function CardRow({ icon, what, children }: { icon: IconName; what: string; children: ReactNode }) {
+  return (
+    <div className="mx-hover-row">
+      <span className="mx-hover-row-icon" aria-hidden="true"><Icon name={icon} size={13} /></span>
+      <span className="sr-only">{what}</span>
+      {children}
+    </div>
+  )
+}
+
 /**
- * The card beside a sidebar row the pointer rests on: what the session is, what it is doing, and its
- * changes. It only tells; it takes no pointer input, so it can never be in the way of the next row.
+ * The card beside a sidebar row the pointer rests on: what the session is doing, then its folder, branch, changes and
+ * pull request, and who runs it and when it last moved. It only tells; it takes no pointer input, so it can never be
+ * in the way of the next row.
  */
 export function RowHoverCard({ session, row, portalContainer }: Props) {
   const card = useRef<HTMLDivElement>(null)
@@ -20,21 +33,43 @@ export function RowHoverCard({ session, row, portalContainer }: Props) {
     setAt(placeHoverCard(row, height, window.innerWidth, window.innerHeight))
   }, [row, session])
   const text = hoverCardText(session, rowTitle(session))
-  const why = statusWhyLine(session, useNow())
   return (
     <WindowPortal container={portalContainer}>
-    <div ref={card} role="tooltip" className="mx-hover-card" style={at === null ? { visibility: 'hidden' } : at}>
-      <span className="mx-hover-head"><b>{text.title}</b><small>{text.meta}</small></span>
-      <span className={`mx-hover-status is-${text.status}`}>
-        <i aria-hidden="true" />
-        <span><b>{text.headline}</b><span>{text.line}</span></span>
-      </span>
-      <span className="mx-hover-facts">
-        <span>Agent</span><span>{text.agent}</span>
-        <span>Changes</span><span>{text.changes}</span>
-        {why !== null && <><span>Set by</span><span>{why}</span></>}
-        <span>Last activity</span><span>{session.statusSince === null ? 'Not known' : <><Ago at={session.statusSince} /> ago</>}</span>
-      </span>
+    <div ref={card} role="tooltip" className="mx-hover-card" data-float style={at === null ? { visibility: 'hidden' } : at}>
+      <div className="mx-hover-head">
+        <StatusIcon status={session.status} className="mx-hover-status" />
+        <span className="mx-hover-head-text">
+          <b>{text.title}</b>
+          <span className={`mx-hover-activity${text.activity === null ? ' is-word' : ''}`}>{text.activity ?? text.word}</span>
+        </span>
+      </div>
+      <div className="mx-hover-rows">
+        <CardRow icon={session.worktree ? 'folderLocked' : 'folderPlain'} what="Folder"><span className={text.folder.mono ? 'is-mono' : ''}>{text.folder.text}</span></CardRow>
+        {text.branch !== null && (
+          <CardRow icon="branch" what="Branch">
+            <span className="is-mono">{text.branch}</span>
+            {text.folder.ownWorktree && <span className="mx-hover-tag">own worktree</span>}
+          </CardRow>
+        )}
+        {text.changes !== null && (
+          <CardRow icon="diffStat" what="Changes">
+            <span className="is-add is-mono">+{text.changes.added}</span>
+            <span className="is-del is-mono">−{text.changes.removed}</span>
+          </CardRow>
+        )}
+        {text.pr !== null && (
+          <CardRow icon="pullRequest" what="Pull request">
+            <span className="is-mono">{text.pr.number}</span>
+            <span className={`is-pr-${text.pr.tone}`}>{text.pr.state}</span>
+          </CardRow>
+        )}
+      </div>
+      <div className="mx-hover-foot">
+        <AppIcon process={session.process} size={14} flat />
+        <span className="mx-hover-who">{text.who}</span>
+        <span className="mx-spacer" />
+        {session.statusSince !== null && <span className="mx-hover-when"><Ago at={session.statusSince} /> ago</span>}
+      </div>
     </div>
     </WindowPortal>
   )

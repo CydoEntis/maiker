@@ -156,12 +156,13 @@ impl Sandbox {
     }
 
     /// The sandbox's environment: what makes a `maitty` its own daemon's.
-    pub fn env(&self) -> [(&'static str, String); 3] {
+    pub fn env(&self) -> [(String, String); 3] {
+        let name = maitty_shared::brand::env_name;
         [
-            ("MAITTY_SOCKET", self.socket.clone()),
-            ("MAITTY_DATA_DIR", self.data().display().to_string()),
+            (name("SOCKET"), self.socket.clone()),
+            (name("DATA_DIR"), self.data().display().to_string()),
             (
-                "MAITTY_CONFIG",
+                name("CONFIG"),
                 self.dir.join("config.toml").display().to_string(),
             ),
         ]
@@ -170,12 +171,10 @@ impl Sandbox {
     /// `maitty` as this sandbox's own, with no remote and no pane identity.
     pub fn maitty(&self) -> Command {
         let mut command = Command::new(&self.maitty);
-        command
-            .envs(self.env())
-            .env_remove("MAITTY_REMOTE")
-            .env_remove("MAITTY_REMOTE_CMD")
-            .env_remove("MAITTY_TERM_ID")
-            .env_remove("MAITTY_PANE_TOKEN");
+        command.envs(self.env());
+        for key in ["REMOTE", "REMOTE_CMD", "TERM_ID", "PANE_TOKEN"] {
+            maitty_shared::brand::remove_child_env(&mut command, key);
+        }
         command
     }
 

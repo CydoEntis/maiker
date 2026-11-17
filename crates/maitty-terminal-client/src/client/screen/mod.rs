@@ -427,7 +427,7 @@ pub(super) const SIDE_MAX: u16 = 60;
 
 fn saved_path() -> PathBuf {
     // Per server, like the saved session: a test server (<APP>_SOCKET) keeps its own.
-    let name = match std::env::var(concat!(env!("APP_ENV"), "_SOCKET")) {
+    let name = match maitty_shared::brand::env_var("SOCKET") {
         Ok(l) if l != "default" => format!("{APP_COMMAND}-ui-{l}.json"),
         _ => concat!(env!("APP_COMMAND"), "-ui.json").into(),
     };

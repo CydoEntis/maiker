@@ -235,6 +235,8 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
             tag,
             answer: maitty_shared::agent_commands::cleaned_answer(answer),
         }),
+        // Another machine's folder names: paths and branches cleaned, the list capped.
+        ServerMsg::Reply(Reply::Repositories { tag, found }) => ServerMsg::Reply(Reply::Repositories { tag, found: found.cleaned() }),
         ServerMsg::Reply(Reply::Tickets { tag, answer }) => ServerMsg::Reply(Reply::Tickets {
             tag,
             answer: match answer {
@@ -774,6 +776,24 @@ mod tests {
             panic!("a refusal is kept");
         };
         assert!(!why.contains('\u{1b}'));
+    }
+
+    #[test]
+    fn repositories_from_another_machine_are_cleaned_and_only_while_asked() {
+        use maitty_shared::repositories::{IndexedRepository, RepositoryIndex};
+        let repo = |path: &str, branch: &str| IndexedRepository { path: path.into(), branch: Some(branch.into()), last_used: 3 };
+        let sent = || {
+            ServerMsg::Reply(Reply::Repositories {
+                tag: 6,
+                found: RepositoryIndex { repos: vec![repo("/srv/app", "ma\u{1b}[2Jin"), repo("/srv/\u{1b}x", "main")], indexed_at: 9, more: false },
+            })
+        };
+        assert_eq!(allow(&nothing_on(), &sent()), Verdict::Answer);
+        let Some(ServerMsg::Reply(Reply::Repositories { found, .. })) = vet(&nothing_on(), true, "box", sent()) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(found.repos, vec![repo("/srv/app", "ma[2Jin")], "a path with control characters is dropped");
+        assert!(vet(&nothing_on(), false, "box", sent()).is_none(), "an answer to nothing is dropped");
     }
 
     #[test]

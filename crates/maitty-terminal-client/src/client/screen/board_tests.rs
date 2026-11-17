@@ -1,5 +1,5 @@
 //! The status log, broadcasting, even pane widths and
-//! Recent sessions, drawn and driven as a person would. `MAITTY_SHOW=1 cargo test board_tests --
+//! Recent sessions, drawn and driven as a person would. `AGENT_SHOW=1 cargo test board_tests --
 //! --nocapture` prints the frames.
 use super::*;
 use crate::client::reference_fixture::{self, Stage};
@@ -21,7 +21,7 @@ fn text(app: &mut App, w: u16, h: u16) -> Vec<String> {
 }
 
 fn show(rows: &[String], title: &str) {
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title}");
         for row in rows {
             println!("{row}");

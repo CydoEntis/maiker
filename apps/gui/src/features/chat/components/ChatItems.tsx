@@ -3,15 +3,15 @@ import { Icon } from '@/features/workspace/components/glyphs'
 import { Button } from '@/components/ui/button'
 import { Card, CardHead } from '@/components/ui/card'
 import { StatusMark } from '@/components/ui/status-mark'
-import { ElapsedSince } from '@/features/workspace/components/times'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import type { TurnSpan } from '@/features/inspect/turnRange'
 import { dividerText, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
 import type { ItemStatus } from '../chatEvents'
 import { KnownRowsContext } from '../knownRows'
 import { isWaitingStep } from '../stepInfo'
-import { useTypedText } from '../useTypedText'
+import { useRevealedText } from '../useRevealedText'
 import { WorkingMark } from './WorkingMark'
+import { LiveBox } from './LiveBox'
 import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { parseAttachmentMessage } from '../attachmentMessage'
 import { AgentsCard } from './AgentsCard'
@@ -103,18 +103,19 @@ function sameProps(a: RowProps, b: RowProps): boolean {
 }
 
 /**
- * An agent's reply. One still arriving is read in its finished form, so a half-typed mark does not flash, and is typed in
- * as it comes rather than appearing in chunks; a finished one is read as written, once the typing has caught up.
+ * An agent's reply. One that arrives while the person is looking appears sentence by sentence (a list item or a table row
+ * each count as one), so what shows is always finished; one that was already there shows whole. A reply still arriving
+ * is read in its finished form, so a half-written mark does not flash.
  */
 function AgentMessage({ rowKey, paragraphs, status }: { rowKey: string; paragraphs: readonly string[]; status: ItemStatus }) {
   const reduced = useContext(ReducedMotionContext)
   const known = useContext(KnownRowsContext)
   const target = (status === 'running' ? streamingParagraphs(paragraphs) : paragraphs).join('\n\n')
-  const typed = useTypedText(target, !reduced, known !== null && !known.has(rowKey))
-  // Typed in once: drawn again, this row shows whole.
+  const typed = useRevealedText(target, !reduced, known !== null && !known.has(rowKey))
+  // Revealed once: drawn again, this row shows whole.
   useEffect(() => { known?.add(rowKey) }, [known, rowKey])
   const { lead, rest } = splitLead(typed === target ? (status === 'running' ? streamingParagraphs(paragraphs) : paragraphs) : paragraphsOf(typed))
-  const empty = lead === '' && rest.length === 0
+  const empty = target.trim() === ''
   return (
     <div className="mx-msg-agent">
       {lead !== '' && <p className="mx-msg-lead"><InlineMarkdown text={lead} /></p>}
@@ -188,7 +189,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     case 'work':
       return <Frame><WorkCard steps={row.events} root={root} openDiff={openDiff} waitingStep={waitingStep} /></Frame>
     case 'agents':
-      return <Frame><AgentsCard agents={row.events} process={agent} /></Frame>
+      return <Frame><AgentsCard agents={row.events} rowKey={row.key} /></Frame>
     case 'approval':
       return <Frame><ApprovalCard event={row.event} actions={approval} step={row.step} onGoToStep={goToStep} /></Frame>
     case 'divider':
@@ -219,15 +220,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     }
     case 'working':
       // Token counts are not shown: the daemon's history carries none, and an estimate would be invented.
-      return (
-        <Frame>
-          <div className="mx-working">
-            <WorkingMark agent={agent} />
-            <span className="mx-working-text">{agent} is {row.phrase}</span>
-            {workingSince !== null && <span className="mx-working-time"><ElapsedSince since={workingSince} /></span>}
-          </div>
-        </Frame>
-      )
+      return <Frame><LiveBox phrase={row.phrase} since={workingSince} /></Frame>
   }
 }, sameProps)
 

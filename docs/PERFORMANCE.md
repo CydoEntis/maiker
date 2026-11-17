@@ -415,7 +415,7 @@ letters on time. Every platform now starts on WebGL; the setting stays for a mac
 # The window: open, on a monitor, not focused. Its geometry:
 hyprctl clients -j | jq -r '.[] | select(.class=="maitty-gui") | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"'
 # A shell pane it shows (find its number with `maitty read <n>`), then for each key:
-MAITTY_SOCKET=default maitty send -p <pane> --no-enter x
+AGENT_SOCKET=default maitty send -p <pane> --no-enter x
 grim -g "<geometry>" shot.png     # every half second; compare with the shot before the key
 ```
 
@@ -433,7 +433,7 @@ app and in the harness, before anything is fixed.
 Measure first, change second. No fix goes in on a theory.
 
 1. **Reproduce away from the owner's window.** A dev build on a nested socket
-   (`MAITTY_SOCKET=<name>`), on the same machine. Also start the v0.64.0 AppImage on that machine
+   (`AGENT_SOCKET=<name>`), on the same machine. Also start the v0.64.0 AppImage on that machine
    and note whether it is one step behind: that says whether the cause arrived in v0.65.0.
 2. **Add the probe.** Stamp one key at each hop and log the six times:
    xterm `onData` → the `terminal_input` command received by the host → `Output` from the daemon
@@ -556,7 +556,7 @@ and once out of once on 2.54.1. Omarchy sets the variable for the whole session.
 **Fix.** On Linux the host sets both variables before the web view starts, only for NVIDIA under
 Wayland (`apps/gui/src-tauri/src/linux_gpu.rs`). It adds nothing when the person set a WebKit
 drawing variable themselves, set explicit sync to stay on, or opted out with
-`MAITTY_NO_GPU_FORCE=1` ([ENVIRONMENT](ENVIRONMENT.md#project-specific-variables)).
+`AGENT_NO_GPU_FORCE=1` ([ENVIRONMENT](ENVIRONMENT.md#project-specific-variables)).
 
 **The report read 0% CPU throughout.** `performance.rs` refreshed the process table twice a
 sample, and `sysinfo` moves a process's CPU mark on every refresh, so the share was always the work
@@ -580,7 +580,7 @@ A new chat used to wait on five steps one after another: start a shell, list the
 `maitty integrate <agent>` (a process), type the agent's name into the shell once it was ready, then
 wait for the agent's first report. Now the agent is the new session's first command
 (`start_agent_session`, which accepts only a known agent and plain flag words), the status hooks are
-connected once per run of the window and ahead of time (when the new chat page opens), and an open
+connected once per run of the window and ahead of time (when the New session dialog opens), and an open
 chat that is working asks the daemon for news every 300 ms (`ACTIVE_POLL_MS`), not every second.
 The daemon also says when a conversation changed (`ServerMsg::ConversationChanged`), so the chat
 reads then and, once told, polls only every second (`TOLD_ACTIVE_POLL_MS`); its reads go out on a
@@ -596,8 +596,8 @@ Measure it on Windows with a screen recording at 30 fps: count frames from Enter
 ## A reply being typed out in chat (2026-11-09)
 
 The chat reads snapshots, at least 100 ms apart, so the daemon's news never arrives faster than
-that. The cost while a reply streams is the typing effect: `useTypedText` moves the shown text
-forward every 40 ms (24 ms when this was measured), and each step parsed and rendered the whole message again. Measured in the
+that. The cost while a reply is revealed is one step per sentence: `useRevealedText` adds a unit every 120 ms (it moved the text
+every 40 ms, then 24 ms, when this was measured), and each step parsed and rendered the whole message again. Measured in the
 test renderer on a 2.2 KB reply of 40 blocks: 1.27 ms a step, 0.07 ms of it parsing. Blocks whose
 parse did not change are now left as they are (`BlockView` in `Markdown.tsx`): 0.48 ms a step. The
 timer also stops once the text has caught up, so messages at rest wake nothing. To re-measure,

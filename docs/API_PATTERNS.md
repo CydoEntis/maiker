@@ -179,7 +179,7 @@ commands are `prewarm_agent_session` (the agent names and flag rules of `start_a
 daemon running is older) and `drop_prewarmed_agent`.
 
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
-app's new chat page and ticket starts, on this computer or another machine, whose own daemon makes it in its checkout
+app's New session dialog and ticket starts, on this computer or another machine, whose own daemon makes it in its checkout
 over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
 absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
@@ -356,7 +356,11 @@ and exit non-zero.
 ## Project-specific: auth model
 
 Socket access is the auth (see `docs/SECURITY.md`); pane status reports also need
-the pane's process tree or `MAITTY_PANE_TOKEN`.
+the pane's process tree or `AGENT_PANE_TOKEN` (a pane started before the prefix change has
+`MAITTY_PANE_TOKEN`, which is read the same way; ADR 0012). The names of the daemon, the socket and
+the variables are not part of the protocol: renaming one is no `PROTOCOL_VERSION` change, and the socket
+name still comes from the command, so a client of another version finds the same daemon and
+the handshake decides whether they can talk.
 
 ## Project-specific: feature/module structure
 
@@ -1098,6 +1102,26 @@ that is offline (a daemon older than the window is one that needs its update, AD
 and shown in the picker; nothing falls back to this computer's list. Names and lines from another machine are cleaned and capped again
 (`remote_policy::vet`, `maitty_shared::agent_commands`).
 
+Protocol 114 (`REPOSITORIES_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
+`introduced_in` arm) adds `Query::Repositories { rescan, tag }` with `Reply::Repositories { tag, found }`, where
+`found` is `RepositoryIndex { repos, indexed_at, more }` and each repo is `IndexedRepository { path, branch,
+last_used }` (`maitty_shared::repositories`; `path` absolute with `/`, `last_used` unix seconds, 0 when unknown). The
+daemon keeps the list in memory (`daemon::repo_index`): a search walks the home folder on a blocking thread, breadth
+first, at most 5 folders deep, 100,000 folders and 15 seconds (`REPOSITORY_SEARCH_LIMIT_SECS`), skipping hidden folders,
+build and package folders (`node_modules`, `target`, ...), the system's media and app folders, links (never followed),
+network mounts (Linux: nfs, cifs, sshfs, ...) and linked worktrees; a repository is listed and not entered. It runs no
+git: the branch is `HEAD`, the use is the time of `.git/logs/HEAD`. The first search starts with the daemon; the answer
+to a question counts the repositories panes run in (found or not, outside the home folder too) as used when a pane there
+last had output or input. Without `rescan` the list is answered at once, except that a daemon that has not finished one
+search yet waits for it; with `rescan` a search starts (one at a time; a question during one joins it) and every
+waiting question is answered when it ends. The list is cut at 300, most recently used first, and `more` says it was cut
+or a search ran out of time. Human clients only. The desktop host asks through `repositories(machine, rescan, tag)`
+(this computer when `machine` is left out) and raises a `repositories` event `{ machine, tag, answer }`; the window
+(`apps/gui/src/api/repositories.ts`: `listRepositories`, `rescanRepositories`) waits 50 seconds, the host expects the
+answer for the search limit plus the clone margin (`routing::REPOSITORIES_ANSWER_WINDOW`). Another machine's list is
+cleaned and capped again (`remote_policy::vet`, `RepositoryIndex::cleaned`). A daemon from before 114 never answers, so
+the window's wait ends with its own words.
+
 The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
 `ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
 `{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them
@@ -1541,7 +1565,7 @@ the rest are dropped silently. Nothing blocks and nothing is queued.
 pane address `machine/id`, else `--on`, else the `--remote` adapter (`ipc::Machine::current()`),
 else this computer. Each command is handed that `Target` and opens its connection with
 `ipc::open_to` (for another machine, `maitty_machines::open_remote`); nothing reads the environment for the machine after that. A configured machine only
-attaches. The pane a command runs in (`$MAITTY_TERM_ID`) is a pane of this computer's daemon, so it is
+attaches. The pane a command runs in (`$AGENT_TERM_ID`) is a pane of this computer's daemon, so it is
 the default pane only when the target is this computer or the ad-hoc `--remote` route; a command
 aimed at a named machine needs an explicit `--pane machine/id`. `ls` is unchanged for this computer;
 named at a machine it heads the list with `machine <name>`, writes panes as `name/id`, and

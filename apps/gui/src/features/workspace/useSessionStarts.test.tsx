@@ -29,7 +29,7 @@ vi.mock('@/lib/toast', () => ({ toast }))
 vi.mock('./model/agentHooks', () => ({ connectAgentOnce: () => Promise.resolve() }))
 
 import { useSessionStarts } from './useSessionStarts'
-import type { NewChatRequest } from './components/NewChatPage'
+import type { NewChatRequest } from './components/NewSessionDialog'
 
 const ID = '0d0f5c1e-1111-4222-8333-444455556666'
 

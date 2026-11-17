@@ -11,7 +11,6 @@ import { Panel } from '@/components/ui/panel'
 import { PickerSelect, type PickerGroup, type PickerItem } from './PickerSelect'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
-import { SpinnerPicker } from './SpinnerPicker'
 import { PerformanceSection } from './PerformanceSection'
 import type { GitHubSignIn } from './GitHubSection'
 import { MachinesPage } from './MachinesPage'
@@ -34,6 +33,7 @@ import type { MachineHead, UpdateAction } from '@/features/workspace/model/machi
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
 import { CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
+import { DAEMON_NAME } from '@/brand'
 
 export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'tickets' | 'usage' | 'performance'
 
@@ -75,7 +75,7 @@ export type MachinesInfo = {
 export type DaemonInfo = {
   online: boolean
   sessionCount: number
-  /** Reported by maittyd; rows are left out until it does. */
+  /** Reported by the daemon; rows are left out until it does. */
   version?: string
   socket?: string
 }
@@ -167,7 +167,7 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
 
 const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   general: ['General', 'Where sessions start and what happens to them.'],
-  appearance: ['Appearance', 'Colours, layout, spinner and motion for the whole window.'],
+  appearance: ['Appearance', 'Colours, layout and motion for the whole window.'],
   notifications: ['Notifications', 'When the system should tell you a session needs you.'],
   keys: ['Hotkeys', 'Everything the window handles before the shell does.'],
   chat: ['Chat', 'How a chat starts, and how wide and large it is drawn.'],
@@ -271,7 +271,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
       case 'chat': return <ChatSection preferences={preferences} update={update} />
       case 'permissions': return <><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
       case 'terminal': return <TerminalSection preferences={preferences} update={update} />
-      case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemReducedMotion={props.systemReducedMotion} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
+      case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
       case 'usage': return <UsageSection usage={props.usage} />
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <MachinesPage daemon={props.daemon} machines={props.machines} github={props.github} appVersion={props.appVersion} />
@@ -472,7 +472,7 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
         <Row label="Reopen layout on launch" detail="Restore the panes and splits you had last time.">
           <Switch aria-label="Reopen layout on launch" checked={preferences.restoreLayout} onCheckedChange={(value) => { update('restoreLayout', value) }} />
         </Row>
-        <Row label="Closing the window" detail="Sessions are owned by maittyd and keep running.">
+        <Row label="Closing the window" detail={`Sessions are owned by ${DAEMON_NAME} and keep running.`}>
           <span style={{ fontSize: 12, color: 'var(--dim)' }}>Keeps running</span>
         </Row>
         <Row label="Welcome" detail="Replay the short intro: where sessions start and the keys to know.">
@@ -557,7 +557,7 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         </Row>
       </Card>
       <Card title="Scrollback">
-        <Row label="Lines kept per pane" detail="Older output is dropped from the GUI. maittyd keeps the full history.">
+        <Row label="Lines kept per pane" detail={`Older output is dropped from the GUI. ${DAEMON_NAME} keeps the full history.`}>
           <SegmentedChoice label="Lines kept per pane" value={preferences.scrollback} options={SCROLLBACKS} onChange={(value) => { update('scrollback', value) }} />
         </Row>
         <Row label="Scroll speed" detail="Lines per wheel notch. Normal is xterm's own pace, which feels slow at this line height.">
@@ -581,8 +581,7 @@ const MODE_OPTIONS = [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']
 
 const CORNER_OPTIONS = CORNERS.map((id) => [id, CORNER_NAMES[id]] as const)
 
-function AppearanceSection({ preferences, update, systemReducedMotion, systemDark, onPreviewTheme }: { preferences: SettingsPreferences; update: Update; systemReducedMotion: boolean; systemDark: boolean; onPreviewTheme: (name: string | null) => void }) {
-  const reduced = preferences.reduceMotion || systemReducedMotion
+function AppearanceSection({ preferences, update, systemDark, onPreviewTheme }: { preferences: SettingsPreferences; update: Update; systemDark: boolean; onPreviewTheme: (name: string | null) => void }) {
   const darkInUse = preferences.themeMode === 'dark' || (preferences.themeMode === 'system' && systemDark)
   return (
     <>
@@ -599,16 +598,10 @@ function AppearanceSection({ preferences, update, systemReducedMotion, systemDar
         <Row label="Corners" detail="Square keeps every panel, button and field sharp. Rounded softens them.">
           <SegmentedChoice label="Corners" value={preferences.corners} options={CORNER_OPTIONS} onChange={(value) => { update('corners', value) }} />
         </Row>
-        <Row label="Working spinner" detail="Shown on tabs, pane headers and sidebar rows while something runs.">
-          <SpinnerPicker value={preferences.spinner} reduced={reduced} onPick={(spinner) => { update('spinner', spinner) }} />
-        </Row>
       </Card>
       <Card title="Surfaces">
         <Row label="Icons" detail="Agent and folder icons in their own colours, or neutral gray tiles.">
           <SegmentedChoice label="Icons" value={preferences.iconColor} options={ICON_COLOR_OPTIONS} onChange={(value) => { update('iconColor', value) }} />
-        </Row>
-        <Row label="Files and History tools" detail="Adds Files and History to the tools bar on the right, beside Changes and Checks. Opening a file from a chat, or /rewind, still shows them.">
-          <Switch aria-label="Files and History tools" checked={preferences.morePanelTools} onCheckedChange={(value) => { update('morePanelTools', value) }} />
         </Row>
       </Card>
       <Card title="Interface size">

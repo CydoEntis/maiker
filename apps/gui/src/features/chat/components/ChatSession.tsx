@@ -9,7 +9,7 @@ import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
 import type { SessionStatus } from '@/features/workspace/model/session'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { hasPendingApproval, runningTurnStartedAt, type ChatFeed } from '../chatFeed'
-import { buildRows, type ChatRow } from '../chatRows'
+import { buildRows, liveRows, type ChatRow } from '../chatRows'
 import { findRow, registerChatFind } from '../chatSearch'
 import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
@@ -31,7 +31,9 @@ import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
 import { DEFAULT_PICK, noteAgentSaid, writeChoice } from '../agentChoice'
-import { Composer } from './Composer'
+import { Composer, type DockOpen } from './Composer'
+import { HelpersDock } from './HelpersDock'
+import { dockHelpers, HelpersLiveContext, liveAgentsRow, type HelpersLive } from '../helpersDock'
 import { ChatItem, type ChatItemContext } from './ChatItems'
 import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
@@ -88,6 +90,8 @@ function announcement(feed: ChatFeed, agent: ChatAgent, working: boolean): strin
 }
 
 const rowKey = (row: ChatRow) => row.key
+/** A message the person sent: the row the view stands on after a send. */
+const isSentRow = (row: ChatRow) => row.kind === 'user' || row.kind === 'echo'
 
 /** A pending request is asked in the tray over the message box, so it is not also a row of the list. */
 const isPendingApproval = (row: ChatRow) => row.kind === 'approval' && row.event.resolution.status === 'pending'
@@ -98,6 +102,7 @@ const KEY_DECISION: Readonly<Record<string, ApprovalDecision>> = Object.fromEntr
 /** Whether a key press belongs to a field, where a letter is text and not an answer. */
 const typedInField = (target: EventTarget) => target instanceof Element && target.closest('input, textarea, [contenteditable="true"]') !== null
 
+const NO_SUBAGENTS: readonly SubagentView[] = []
 const ERROR_WORDS_MAX = 140
 const truncateError = (reason: string) => (reason.length > ERROR_WORDS_MAX ? `${reason.slice(0, ERROR_WORDS_MAX)}…` : reason)
 
@@ -133,6 +138,8 @@ type Props = {
   sessionId?: string
   /** A subagent whose own chat shows instead of the session's, and the way back. */
   subagent?: SubagentView | null
+  /** The helpers the runtime lists for this session, for what each is doing in the helpers line. */
+  subagents?: readonly SubagentView[]
   onBackToMain?: () => void
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage
@@ -162,7 +169,7 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
+export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
@@ -408,7 +415,21 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const holdWorking = settling && !replied
   const freePhrase = agentFree ? `free · ${String(helpersOnly)} ${helpersOnly === 1 ? 'helper' : 'helpers'} working` : null
   const allRows = useMemo(() => buildRows(events, working || holdWorking || agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase), [events, working, holdWorking, agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase])
-  const rows = useMemo(() => allRows.filter((row) => !isPendingApproval(row)), [allRows])
+  const rows = useMemo(() => liveRows(allRows.filter((row) => !isPendingApproval(row)), allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event.stepId ?? null), [allRows])
+  // The dock above the box: the helpers line while helpers work (the last agents row with one running, and only while
+  // the session itself is not at rest, or a history that never recorded their end would keep the line for ever), the
+  // queue under it. One of the two lists is open at a time.
+  const [dockOpen, setDockOpen] = useState<DockOpen>(null)
+  const helpersMayRun = paneStatus === undefined || paneStatus === 'working' || paneStatus === 'needs' || helpersOnly > 0
+  const liveRow = useMemo(() => (helpersMayRun ? liveAgentsRow(rows) : null), [helpersMayRun, rows])
+  const dockedHelpers = useMemo(() => (liveRow === null ? [] : dockHelpers(liveRow.events, subagents)), [liveRow, subagents])
+  const queuedCount = composer.queue.length
+  // A list with nothing left to list folds itself, so it is closed the next time it has something.
+  if ((dockOpen === 'helpers' && liveRow === null) || (dockOpen === 'queue' && queuedCount <= 1)) setDockOpen(null)
+  const helpersLive = useMemo<HelpersLive | null>(() => (liveRow === null ? null : { key: liveRow.key, open: () => { setDockOpen('helpers') } }), [liveRow])
+  const dock = useMemo(() => ({ open: dockOpen, set: setDockOpen }), [dockOpen])
+  // A session that failed keeps what was queued; it goes when the agent runs again.
+  const queueNote = paneStatus === 'error' && queuedCount > 0 ? 'This session failed. Your queued messages are kept and go out when it runs again.' : null
   // What ↑ in the box brings back: the messages sent in this chat, each once in a row, the newest last.
   const sentMessages = useMemo(() => sentTexts(events), [events])
   // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
@@ -463,7 +484,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setKnown(new Set(rows.map(rowKey)))
   }
   const pending = useMemo(() => allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event ?? null, [allRows])
-  // The model and effort picked on the new-chat page are this conversation's choice from its first frame, so the picker shows them.
+  // The model and effort picked on the New session dialog are this conversation's choice from its first frame, so the picker shows them.
   // A chat that follows the terminal keeps no choice of its own: what its agent says it runs is the choice.
   const followsTerminal = link.readOnly === true
   useLayoutEffect(() => {
@@ -526,14 +547,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   // An approval's link to its tool step scrolls the list there; the nonce makes a second click on the same link scroll again.
   const [scrollTarget, setScrollTarget] = useState<{ key: string; nonce: number } | null>(null)
-  // A message sent, or queued behind the running turn, takes the chat back to its newest row.
+  // A message sent takes the chat to it: it stands at the top of the view and the reply fills in below it. One queued
+  // behind the running turn is not in the chat yet (it shows in the dock), so the view stays where it is.
   const [sentCount, setSentCount] = useState(0)
   // A message is its words and how often they were said before it, so the same words sent again count, and the echo
   // going quiet does not.
   const sentKey = echo === null ? null : `${echo.text}\u0000${String(echo.baseline)}`
   const [seenSend, setSeenSend] = useState({ sentKey, queued: composer.queue.length })
   if (seenSend.sentKey !== sentKey || seenSend.queued !== composer.queue.length) {
-    if ((sentKey !== null && sentKey !== seenSend.sentKey) || composer.queue.length > seenSend.queued) setSentCount(sentCount + 1)
+    if (sentKey !== null && sentKey !== seenSend.sentKey) setSentCount(sentCount + 1)
     setSeenSend({ sentKey, queued: composer.queue.length })
   }
   const goToStep = useCallback((key: string) => { setScrollTarget((current) => ({ key, nonce: (current?.nonce ?? 0) + 1 })) }, [])
@@ -648,7 +670,9 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
         <KnownRowsContext.Provider value={known}>
           <OpenFileContext.Provider value={openFile}>
-          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={sentCount} />
+          <HelpersLiveContext.Provider value={helpersLive}>
+          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={sentCount} isSent={isSentRow} />
+          </HelpersLiveContext.Provider>
           </OpenFileContext.Provider>
         </KnownRowsContext.Provider>
       ) : (
@@ -663,6 +687,9 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet.
         {...(abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
         question={question}
+        helpers={dockedHelpers.length > 0 ? <HelpersDock helpers={dockedHelpers} open={dock.open === 'helpers'} onOpenChange={(open) => { setDockOpen(open ? 'helpers' : null) }} /> : null}
+        dock={dock}
+        queueNote={queueNote}
         waiting={held !== null}
         files={fileSearch}
         facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}

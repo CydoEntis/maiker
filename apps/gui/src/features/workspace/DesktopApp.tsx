@@ -10,12 +10,12 @@ import { WorkspaceMain } from './components/WorkspaceMain'
 import { WorkspaceDialogs } from './components/WorkspaceDialogs'
 import { AppTitleBar } from './components/AppTitleBar'
 import { WorkspaceSidePanel } from './components/WorkspaceSidePanel'
-import { ActivityBar } from './components/ActivityBar'
 import './workspace.css'
 import './components/sidebar.css'
 import './components/pane.css'
 import './components/menu.css'
 import './components/dialogs.css'
+import './components/session-dialogs.css'
 import './components/frame.css'
 import '@/features/chat/chat.css'
 
@@ -34,7 +34,6 @@ export function DesktopApp() {
             <WorkspaceSidebars />
             <WorkspaceMain />
             <WorkspaceSidePanel />
-            {!workspace.focusMode && <ActivityBar />}
             <WorkspaceDialogs />
           </div>
           <Toaster position={preferences.toastPosition} theme={theme.light ? 'light' : 'dark'} />

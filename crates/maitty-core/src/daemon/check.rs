@@ -43,7 +43,9 @@ const OUTPUT_DRAIN_GRACE: Duration = Duration::from_secs(2);
 const READ_CHUNK_BYTES: usize = 8 * 1024;
 /// Variables the check's process must not see: the pane's secret lets whoever holds it
 /// report that pane's status.
-const SCRUBBED_ENV: &[&str] = &[concat!(env!("APP_ENV"), "_PANE_TOKEN")];
+fn scrubbed_env() -> Vec<String> {
+    maitty_shared::brand::env_names("PANE_TOKEN")
+}
 
 /// How a check's process ended, before it is read as a result.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -128,7 +130,9 @@ pub struct CheckRun {
 /// Run `line` through `shell` in `dir` until it ends or `timeout` passes, and stop its whole
 /// process tree if it does not. Its output is returned and never logged.
 pub fn run_check(shell: &[String], dir: &Path, line: &str, timeout: Duration) -> CheckRun {
-    run_scrubbed(shell, dir, line, timeout, SCRUBBED_ENV)
+    let scrub = scrubbed_env();
+    let scrub: Vec<&str> = scrub.iter().map(String::as_str).collect();
+    run_scrubbed(shell, dir, line, timeout, &scrub)
 }
 
 fn run_scrubbed(
@@ -1522,9 +1526,11 @@ mod tests {
 
     #[test]
     fn the_check_does_not_inherit_the_panes_token_but_keeps_the_rest_of_the_environment() {
+        let scrubbed = scrubbed_env();
         assert!(
-            SCRUBBED_ENV.contains(&concat!(env!("APP_ENV"), "_PANE_TOKEN")),
-            "the secret is scrubbed"
+            scrubbed.contains(&concat!(env!("APP_ENV"), "_PANE_TOKEN").to_string())
+                && scrubbed.iter().any(|name| name.ends_with("_PANE_TOKEN") && !name.starts_with(env!("APP_ENV"))),
+            "the secret is scrubbed under its current and its old name: {scrubbed:?}"
         );
         // Names nothing else reads, so setting them cannot disturb a test running beside this one.
         let (secret, plain) = (

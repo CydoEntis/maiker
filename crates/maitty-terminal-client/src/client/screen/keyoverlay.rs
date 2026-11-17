@@ -151,7 +151,7 @@ pub(in crate::client) fn key_groups() -> Vec<(&'static str, Vec<KeyRow>)> {
             ],
         ),
         (
-            env!("APP_ENV"),
+            crate::brand::APP_HEADING,
             vec![
                 r("Search commands", vec![A::Palette], true),
                 r("Settings", vec![A::Settings], true),
@@ -190,7 +190,7 @@ fn group_of(a: &Action) -> &'static str {
         | A::SideMove(_) => "PANES",
         A::NewTab | A::NextTab | A::PrevTab | A::CloseTab | A::RenameTab | A::SpawnTab(_) | A::SelectTab(_) => "PANES",
         A::RemoveWorktree | A::TidyWorktrees | A::NewWorktree(_) => "TOOLS",
-        _ => env!("APP_ENV"),
+        _ => crate::brand::APP_HEADING,
     }
 }
 

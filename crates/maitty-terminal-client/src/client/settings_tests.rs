@@ -1,6 +1,6 @@
 //! The settings-side views the desktop app has and the terminal app now shares: usage by period,
 //! approved commands, and a machine's details (GitHub, git identity, this computer's service).
-//! `MAITTY_SHOW=1 cargo test settings_tests -- --nocapture` prints the frames.
+//! `AGENT_SHOW=1 cargo test settings_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::MachineId;
@@ -22,7 +22,7 @@ pub(super) fn sent(rx: &mut mpsc::UnboundedReceiver<Outgoing>) -> Vec<Outgoing> 
 
 pub(super) fn frame(app: &mut App, title: &str, w: u16, h: u16) -> String {
     let text = raw_text(app, Layout::Floating, w, h, "unicode");
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title} ({w}x{h})\n{text}");
     }
     text

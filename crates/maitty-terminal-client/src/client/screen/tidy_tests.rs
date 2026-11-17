@@ -1,5 +1,5 @@
 //! The clean-up list: what comes ticked, and what Remove asks before anything goes.
-//! `MAITTY_SHOW=1 cargo test screen::tidy::tests -- --nocapture` prints the frame.
+//! `AGENT_SHOW=1 cargo test screen::tidy::tests -- --nocapture` prints the frame.
 use super::*;
 use crate::client::menu::Act;
 use crate::client::reference_fixture::{self, Stage};
@@ -56,7 +56,7 @@ fn frame(app: &mut App) -> Vec<String> {
                 .to_string()
         })
         .collect();
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         rows.iter().for_each(|r| println!("{r}"));
     }
     rows

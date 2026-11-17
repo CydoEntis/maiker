@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import type { TurnEvent } from './chatEvents'
 import { approvalEvent, commandEvent, editEvent, messageEvent, reasoningEvent, todoEvent, toolEvent } from './eventFixtures'
-import { buildRows, dividerText, formatDuration, paragraphsOf, splitLead, streamingParagraphs } from './chatRows'
+import { buildRows, dividerText, formatDuration, liveRows, paragraphsOf, splitLead, streamingParagraphs } from './chatRows'
+
+describe('the rows drawn while the agent works', () => {
+  const events = [messageEvent('u1', 'user', 'Fix it'), toolEvent('s1', { target: 'a.ts' }), messageEvent('a1', 'agent', 'Looking.'), commandEvent('c1', { command: 'pnpm test' })]
+
+  it('leaves the turn in progress to the live box: no reply, thought or step of it', () => {
+    expect(liveRows(buildRows(events, true), null).map((row) => row.kind)).toEqual(['user', 'working'])
+  })
+
+  it('shows everything once the work has ended', () => {
+    const rows = buildRows(events, false)
+
+    expect(liveRows(rows, null)).toEqual(rows)
+  })
+
+  it('keeps what the person sent and the turns before it', () => {
+    const earlier = [messageEvent('u0', 'user', 'First'), messageEvent('a0', 'agent', 'Done.'), ...events]
+
+    expect(liveRows(buildRows(earlier, true), null).map((row) => row.kind)).toEqual(['user', 'agent', 'user', 'working'])
+  })
+
+  it('keeps a step a request is waiting on, so it is never hidden from the person who must answer', () => {
+    expect(liveRows(buildRows(events, true), 'c1').map((row) => row.kind)).toContain('step')
+  })
+})
 
 const message = messageEvent
 const command = (id: string, turnId = 't1') => ({ ...commandEvent(id), turnId })

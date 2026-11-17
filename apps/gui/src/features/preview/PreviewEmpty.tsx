@@ -8,6 +8,7 @@ import { focusMainContent } from './shared'
 import { ConversationSidebar } from './Sidebar'
 import { NewConversationDialog } from './NewConversationDialog'
 import { usePreview } from './previewContext'
+import { DAEMON_NAME } from '@/brand'
 
 /** The screen with no conversation open: the sidebar and what to start. */
 export function PreviewEmpty() {
@@ -101,7 +102,7 @@ export function PreviewEmpty() {
                   ? 'Connecting to your local Maitty service.'
                   : sessionsQuery.isError
                     ? daemonConnectionError(sessionsQuery.error)
-                    : 'Start an agent session in a folder, and switch between chat and its native terminal at any time. Sessions live in maittyd, so closing this window never stops an agent.'}
+                    : `Start an agent session in a folder, and switch between chat and its native terminal at any time. Sessions live in ${DAEMON_NAME}, so closing this window never stops an agent.`}
               </p>
               {!sessionsQuery.isLoading && !sessionsQuery.isError && (
                 <div

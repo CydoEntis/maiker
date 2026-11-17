@@ -162,6 +162,10 @@ export type ChatComposer = {
   removeQueued: (id: number) => void
   /** Takes a queued message back into the message box, ahead of anything typed there, so it can be changed and sent again. */
   editQueued: (id: number) => void
+  /** Puts a queued message one place nearer the front: the sends after it are queued again behind it, in the new order. */
+  moveQueuedUp: (id: number) => void
+  /** Removes every queued message. */
+  clearQueued: () => void
   /**
    * Types a queued message into the agent now, in the turn that is running, as typing in its terminal does: the agent
    * reads it at its next step instead of when the turn ends. For a chat the daemon runs, the daemon sends it now
@@ -487,6 +491,66 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
       })
   }, [queue, conversation, link.generation, refresh, takeBack, notLetGo])
 
+  /**
+   * The daemon's queue only takes a message at its end, so a message moves up by taking it and everything after the
+   * one above it out and queueing them again in the new order. A message the daemon will not let go of (it was just
+   * sent) stops the move, and what was already taken out goes back as it was. One that cannot be queued again goes
+   * back in the box, so no words are lost.
+   */
+  const moveQueuedUp = useCallback((operation: number) => {
+    const at = queue.findIndex((item) => item.id === operation)
+    const above = queue[at - 1]
+    const moved = queue[at]
+    if (at < 1 || above === undefined || moved === undefined || disabledReason !== null || sending) return
+    const tail = queue.slice(at - 1)
+    const target = { id: String(conversation), generation: link.generation }
+    const takeOutOf = (item: QueuedItem): Promise<void> => {
+      if (item.id >= 0) return dequeueMessage(target, item.id)
+      const taking = takeBack(item.id)
+      return taking === null ? Promise.reject(new Error('That message is no longer waiting; it may already have been sent')) : taking.gone
+    }
+    const queueAgain = async (item: QueuedItem): Promise<boolean> => {
+      if (item.id < 0 && paneQueue !== undefined) {
+        try {
+          await paneQueue.add(item.text, false, paneSendOperation(null, item.text, Date.now()))
+          return true
+        } catch {
+          return false
+        } finally {
+          takeOut(taken.current, item.text)
+        }
+      }
+      return send(item.text)
+    }
+    void (async () => {
+      const removed: QueuedItem[] = []
+      let refused: unknown = null
+      // From the back, so the places of the ones still to be taken out do not move.
+      for (const item of [...tail].reverse()) {
+        try {
+          await takeOutOf(item)
+          removed.unshift(item)
+        } catch (failure) {
+          refused = failure
+          break
+        }
+      }
+      const again = refused === null ? [moved, above, ...queue.slice(at + 1)] : removed
+      for (const item of again) {
+        if (!(await queueAgain(item))) updateComposer(conversation, messageIntoDraft(item.text))
+      }
+      if (refused !== null) setError(errorMessage(refused, 'Could not move the queued message'))
+      refresh()
+    })()
+  }, [queue, disabledReason, sending, conversation, link.generation, takeBack, paneQueue, send, refresh])
+
+  const clearQueued = useCallback(() => {
+    // The pane's queue is named by place: the last place first, so the places still to go do not move.
+    const ids = queue.map((item) => item.id)
+    const byPlaceFromBack = ids.filter((id) => id < 0).sort((a, b) => a - b)
+    for (const id of [...byPlaceFromBack, ...ids.filter((id) => id >= 0)]) removeQueued(id)
+  }, [queue, removeQueued])
+
   const stop = useCallback(() => {
     if (!running || feed.cancelling) return
     if (typeText !== undefined) {
@@ -498,7 +562,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
       .catch((failure: unknown) => { setError(errorMessage(failure, 'Could not interrupt the turn')) })
   }, [running, feed.cancelling, conversation, link.generation, refresh, typeText])
 
-  return { conversationKey: link.conversation, setDraft, attachments, attach, readOnly, attachable: !readOnly || typing, queue, removeQueued, editQueued, sendQueuedNow: disabledReason === null ? sendQueuedNow : undefined, sendingNow, submit, stop, running, sending, disabledReason,
+  return { conversationKey: link.conversation, setDraft, attachments, attach, readOnly, attachable: !readOnly || typing, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow: disabledReason === null ? sendQueuedNow : undefined, sendingNow, submit, stop, running, sending, disabledReason,
     // Offline, the message cannot go but the person can still write it: a reconnect a few seconds later should not
     // cost them what they were typing, nor the box its focus.
     draftable: disabledReason === null || disabledReason === OFFLINE_NOTE,

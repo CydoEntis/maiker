@@ -134,15 +134,15 @@ export function useWorkspaceState() {
   const [startedFrom, setStartedFrom] = useState<ReadonlySet<string> | null>(null)
   // A new session on another machine asks for a folder there first.
   // The machine the New session modal opened on; null while it is closed.
-  /** The machine the new chat page starts its chat on. */
+  /** The machine the New session dialog starts its chat on. */
   const [newChatMachine, setNewChatMachine] = useState<number>(LOCAL_MACHINE)
-  /** A folder and first message the new chat page opens with (a chat continued from a full one). */
+  /** A folder and first message the New session dialog opens with (a chat continued from a full one). */
   const [newChatSeed, setNewChatSeed] = useState<{ folder: string; message: string } | null>(null)
-  // The agent picked on the new chat page, for the sidebar's draft row; null until the page says.
+  // The agent picked on the New session dialog, for the sidebar's draft row; null until the page says.
   const [newChatAgent, setNewChatAgent] = useState<ChatAgent | null>(null)
   // The page a new agent chat starts from (agent, folder, model, effort), over the panes.
   const [newChatOpen, setNewChatOpen] = useState(false)
-  // Opening the new chat page is the moment to connect the default agent's hooks, so starting it does not wait for that.
+  // Opening the New session dialog is the moment to connect the default agent's hooks, so starting it does not wait for that.
   useEffect(() => {
     if (newChatOpen) connectAgentOnce(preferences.defaultAgent).catch(() => { /* the start itself reports a failure */ })
   }, [newChatOpen, preferences.defaultAgent])
@@ -341,7 +341,7 @@ export function useWorkspaceState() {
   const renameInline = !focusMode && (sidebarMode === 'docked' || drawerShown)
   const dialogOpen = settingsSection !== null || (renameId !== null && !renameInline) || getFileId !== null || specialistsId !== null || newChatOpen || renamingMachine !== null || recentOpen
   const modalOpen = dialogOpen || overlayOpen
-  // Only the new chat page is up, with no dialog over it.
+  // Only the New session dialog is up, with no dialog over it.
   const onNewChatPage = newChatOpen && settingsSection === null && (renameId === null || renameInline) && getFileId === null && specialistsId === null && renamingMachine === null && !recentOpen
   useShortcutKeys({ runShortcut, canUndoClose: lastClose !== null, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides: preferences.keyOverrides })
 
@@ -427,7 +427,7 @@ export function useWorkspaceState() {
       if (other?.status === 'idle' && !isChatSession(other.conversation)) void sendTo(other, data).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not broadcast to a pane')) })
     }
   }, [layout, sessionMap, sendTo])
-  // Opens the new chat page on a folder picked from the system's dialog.
+  // Opens the New session dialog on a folder picked from the system's dialog.
   const openFolder = useCallback(() => {
     void chooseStartFolder(home).then((folder) => {
       if (folder === null) return
@@ -435,7 +435,7 @@ export function useWorkspaceState() {
       setNewChatOpen(true)
     })
   }, [chooseStartFolder, home])
-  const { paletteItems, paletteOutputItem } = usePaletteItems({ paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen })
+  const { paletteItems, paletteOutputItem } = usePaletteItems({ paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setTicketsOpen })
   const { serviceFooterText, offlineDetail, restartOffer, appBehindOffer } = useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, online, failures, sessionsQuery })
   const { tab, mountedTabs } = useMountedTabs({ layout })
   const startFolderLabel = preferences.startFolder.trim() ? tildePath(resolveStartFolder(preferences.startFolder, home), home) : '~'

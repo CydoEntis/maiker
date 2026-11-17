@@ -1,4 +1,4 @@
-//! The fake-ssh harness (`examples/fake-ssh.rs`): `MAITTY_SSH` points at it, so the whole
+//! The fake-ssh harness (`examples/fake-ssh.rs`): `AGENT_SSH` points at it, so the whole
 //! remote path (spawn, framing, handshake, failure) runs against a real daemon on a private
 //! socket with no ssh and no server. Each test gets its own socket, data folder and daemon.
 
@@ -7,6 +7,7 @@ use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::time::{Duration, Instant};
 
+use maitty_shared::brand::{env_name, remove_child_env};
 use maitty_test_support::{fake_ssh, output_within, text};
 
 const MAITTY: &str = env!("CARGO_BIN_EXE_maitty");
@@ -45,25 +46,24 @@ impl Sandbox {
     fn local(&self, program: impl AsRef<std::ffi::OsStr>) -> Command {
         let mut command = Command::new(program);
         command
-            .env("MAITTY_SOCKET", &self.socket)
-            .env("MAITTY_DATA_DIR", self.data())
-            .env("MAITTY_CONFIG", self.dir.join("config.toml"))
-            .env_remove("MAITTY_REMOTE")
-            .env_remove("MAITTY_REMOTE_CMD")
-            // Run inside a maitty pane, the suite would speak as that pane and be refused.
-            .env_remove("MAITTY_TERM_ID")
-            .env_remove("MAITTY_PANE_TOKEN");
+            .env(env_name("SOCKET"), &self.socket)
+            .env(env_name("DATA_DIR"), self.data())
+            .env(env_name("CONFIG"), self.dir.join("config.toml"));
+        // Run inside a maitty pane, the suite would speak as that pane and be refused.
+        for key in ["REMOTE", "REMOTE_CMD", "TERM_ID", "PANE_TOKEN"] {
+            remove_child_env(&mut command, key);
+        }
         command
     }
 
-    /// `program` as above, with the fake ssh in `mode` as `MAITTY_SSH`.
+    /// `program` as above, with the fake ssh in `mode` as `AGENT_SSH`.
     fn command(&self, program: impl AsRef<std::ffi::OsStr>, mode: &str) -> Command {
         let mut command = self.local(program);
         command
-            .env("MAITTY_SSH", fake_ssh())
-            .env("MAITTY_FAKE_SSH_MAITTY", MAITTY)
-            .env("MAITTY_FAKE_SSH_MODE", mode)
-            .env("MAITTY_FAKE_SSH_LOG", self.log());
+            .env(env_name("SSH"), fake_ssh())
+            .env(env_name("FAKE_SSH_MAITTY"), MAITTY)
+            .env(env_name("FAKE_SSH_MODE"), mode)
+            .env(env_name("FAKE_SSH_LOG"), self.log());
         command
     }
 
@@ -171,7 +171,7 @@ fn a_host_that_is_an_ssh_option_never_reaches_ssh() {
     let sandbox = Sandbox::new();
     let mut command = sandbox.command(MAITTY, "proxy");
     command
-        .env("MAITTY_REMOTE", "-oProxyCommand=touch pwned")
+        .env(env_name("REMOTE"), "-oProxyCommand=touch pwned")
         .args(["ls", "--json"]);
     let out = output_within(command, WAIT);
     assert!(
@@ -193,9 +193,9 @@ fn hello_sent_to_a_remote_from_a_pane(sandbox: &Sandbox) -> runtime::protocol::C
     let hello = sandbox.dir.join("hello.bin");
     let mut command = sandbox.command(MAITTY, "capture-hello");
     command
-        .env("MAITTY_FAKE_SSH_HELLO", &hello)
-        .env("MAITTY_TERM_ID", "7")
-        .env("MAITTY_PANE_TOKEN", "local-pane-secret")
+        .env(env_name("FAKE_SSH_HELLO"), &hello)
+        .env(env_name("TERM_ID"), "7")
+        .env(env_name("PANE_TOKEN"), "local-pane-secret")
         .args(["--remote", "box", "ls", "--json"]);
     let _ = output_within(command, WAIT);
     let bytes = std::fs::read(&hello).expect("the shim captured the Hello");
@@ -519,12 +519,9 @@ fn ssh_errors_belong_to_their_own_connection() {
             shim.clone(),
             "--mode=proxy".into(),
             format!("--maitty={MAITTY}"),
-            format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-            format!("--env=MAITTY_DATA_DIR={}", sandbox.data().display()),
-            format!(
-                "--env=MAITTY_CONFIG={}",
-                sandbox.dir.join("config.toml").display()
-            ),
+            format!("--env={}={}", env_name("SOCKET"), sandbox.socket),
+            format!("--env={}={}", env_name("DATA_DIR"), sandbox.data().display()),
+            format!("--env={}={}", env_name("CONFIG"), sandbox.dir.join("config.toml").display()),
         ],
         "maitty",
     );
@@ -566,12 +563,9 @@ fn machine_in_mode(name: &str, sandbox: &Sandbox, mode: &str) -> runtime::ipc::M
             fake_ssh().to_string_lossy().into_owned(),
             format!("--mode={mode}"),
             format!("--maitty={MAITTY}"),
-            format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-            format!("--env=MAITTY_DATA_DIR={}", sandbox.data().display()),
-            format!(
-                "--env=MAITTY_CONFIG={}",
-                sandbox.dir.join("config.toml").display()
-            ),
+            format!("--env={}={}", env_name("SOCKET"), sandbox.socket),
+            format!("--env={}={}", env_name("DATA_DIR"), sandbox.data().display()),
+            format!("--env={}={}", env_name("CONFIG"), sandbox.dir.join("config.toml").display()),
         ],
         "maitty",
     )
@@ -987,12 +981,9 @@ mod supervised {
             format!("--maitty={MAITTY}"),
             calls,
             format!("--argv-log={}", argv_log(sandbox).display()),
-            format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-            format!("--env=MAITTY_DATA_DIR={}", sandbox.data().display()),
-            format!(
-                "--env=MAITTY_CONFIG={}",
-                sandbox.dir.join("config.toml").display()
-            ),
+            format!("--env={}={}", env_name("SOCKET"), sandbox.socket),
+            format!("--env={}={}", env_name("DATA_DIR"), sandbox.data().display()),
+            format!("--env={}={}", env_name("CONFIG"), sandbox.dir.join("config.toml").display()),
         ];
         Machine::ssh("box", ssh, "maitty").attach_only()
     }
@@ -1510,12 +1501,9 @@ mod custom_transport {
             fake_ssh().to_string_lossy().into_owned(),
             format!("--mode={mode}"),
             format!("--maitty={MAITTY}"),
-            format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-            format!("--env=MAITTY_DATA_DIR={}", sandbox.data().display()),
-            format!(
-                "--env=MAITTY_CONFIG={}",
-                sandbox.dir.join("config.toml").display()
-            ),
+            format!("--env={}={}", env_name("SOCKET"), sandbox.socket),
+            format!("--env={}={}", env_name("DATA_DIR"), sandbox.data().display()),
+            format!("--env={}={}", env_name("CONFIG"), sandbox.dir.join("config.toml").display()),
         ];
         words.extend(extra.iter().cloned());
         if placeholder {

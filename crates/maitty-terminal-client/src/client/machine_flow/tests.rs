@@ -37,15 +37,9 @@ fn prefix(sandbox: &Sandbox, mode: &str, calls: &Path) -> Vec<String> {
         format!("--mode={mode}"),
         format!("--maitty={}", sandbox.maitty.display()),
         format!("--calls={}", calls.display()),
-        format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-        format!(
-            "--env=MAITTY_DATA_DIR={}",
-            sandbox.dir.join("data").display()
-        ),
-        format!(
-            "--env=MAITTY_CONFIG={}",
-            sandbox.dir.join("config.toml").display()
-        ),
+        format!("--env={}={}", maitty_shared::brand::env_name("SOCKET"), sandbox.socket),
+        format!("--env={}={}", maitty_shared::brand::env_name("DATA_DIR"), sandbox.dir.join("data").display()),
+        format!("--env={}={}", maitty_shared::brand::env_name("CONFIG"), sandbox.dir.join("config.toml").display()),
     ]
 }
 

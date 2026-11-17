@@ -1,8 +1,8 @@
-//! A stand-in for `ssh` in tests: point `MAITTY_SSH` at it. It ignores the host and every
+//! A stand-in for `ssh` in tests: point `AGENT_SSH` at it. It ignores the host and every
 //! option, and runs `maitty proxy` against whatever socket the test chose, so connection,
 //! framing, handshake and failure paths run with no real server and no `sh`.
 //!
-//! `MAITTY_FAKE_SSH_MAITTY` names the `maitty` to run. `MAITTY_FAKE_SSH_MODE` picks the
+//! `AGENT_FAKE_SSH_MAITTY` names the `maitty` to run. `AGENT_FAKE_SSH_MODE` picks the
 //! behaviour: `proxy` (default), `auth-fail`, `noise`, `noise-only`, `noise-flood`, `old`, `hang`,
 //! `mismatch` (an older daemon), `mismatch-newer`, `exit`, `unreachable` (ssh cannot connect), `not-installed` (the remote has no
 //! app), `capture-hello`, `require-pipes`, `capture-argv`.
@@ -22,9 +22,9 @@
 //! the install and paste scripts run against a temporary filesystem. The host's `XDG_*` folders
 //! are removed from its environment, so a fake remote never writes to the real ones. `--argv-log=<path>` appends each
 //! remote command, newlines written as a backslash and `n`, so a test can see what was (not) sent.
-//! `capture-hello` writes the client's first frame (its Hello) to the file `MAITTY_FAKE_SSH_HELLO`
+//! `capture-hello` writes the client's first frame (its Hello) to the file `AGENT_FAKE_SSH_HELLO`
 //! names, answers it with a Welcome, and exits.
-//! `MAITTY_FAKE_SSH_LOG`, when set, receives the arguments it was called with, one per line.
+//! `AGENT_FAKE_SSH_LOG`, when set, receives the arguments it was called with, one per line.
 //!
 //! A test that holds several machines in one process puts each machine's settings in the
 //! arguments instead, where they win over the environment: `--mode=<mode>`,
@@ -62,8 +62,8 @@ struct Own {
 
 fn own(args: &[String]) -> Own {
     let mut own = Own {
-        mode: std::env::var("MAITTY_FAKE_SSH_MODE").unwrap_or_else(|_| "proxy".into()),
-        maitty: std::env::var_os("MAITTY_FAKE_SSH_MAITTY"),
+        mode: maitty_shared::brand::env_var("FAKE_SSH_MODE").unwrap_or_else(|_| "proxy".into()),
+        maitty: maitty_shared::brand::env_var_os("FAKE_SSH_MAITTY"),
         env: Vec::new(),
         calls: None,
         home: None,
@@ -100,7 +100,7 @@ fn own(args: &[String]) -> Own {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let own = own(&args);
-    if let Some(log) = std::env::var_os("MAITTY_FAKE_SSH_LOG") {
+    if let Some(log) = maitty_shared::brand::env_var_os("FAKE_SSH_LOG") {
         let mut text = args.join("\n");
         text.push('\n');
         std::fs::write(log, text).expect("write the argument log");
@@ -185,7 +185,7 @@ fn main() {
         }
         "capture-hello" => capture_hello(),
         other => {
-            eprintln!("fake-ssh: unknown MAITTY_FAKE_SSH_MODE {other}");
+            eprintln!("fake-ssh: unknown AGENT_FAKE_SSH_MODE {other}");
             std::process::exit(2);
         }
     }
@@ -240,8 +240,8 @@ fn welcome_frame(version: u32) -> Vec<u8> {
 
 /// Keeps what a remote daemon would be told first, so a test can read the Hello.
 fn capture_hello() {
-    let path = std::env::var_os("MAITTY_FAKE_SSH_HELLO")
-        .expect("MAITTY_FAKE_SSH_HELLO names the file for the Hello");
+    let path = maitty_shared::brand::env_var_os("FAKE_SSH_HELLO")
+        .expect("the FAKE_SSH_HELLO variable names the file for the Hello");
     let mut stdin = std::io::stdin().lock();
     let mut length = [0u8; 4];
     stdin
@@ -323,7 +323,7 @@ fn run_proxy(own: &Own) -> i32 {
     let maitty = own
         .maitty
         .as_ref()
-        .expect("MAITTY_FAKE_SSH_MAITTY or --maitty names the maitty to run");
+        .expect("the FAKE_SSH_MAITTY variable or --maitty names the maitty to run");
     let mut child = proxy_command(own, maitty)
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
@@ -343,7 +343,7 @@ fn run_old_proxy(own: &Own) -> i32 {
     let maitty = own
         .maitty
         .as_ref()
-        .expect("MAITTY_FAKE_SSH_MAITTY or --maitty names the maitty to run");
+        .expect("the FAKE_SSH_MAITTY variable or --maitty names the maitty to run");
     let mut child = proxy_command(own, maitty)
         .stdin(Stdio::inherit())
         .stdout(Stdio::piped())

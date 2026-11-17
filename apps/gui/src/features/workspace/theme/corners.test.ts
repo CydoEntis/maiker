@@ -3,10 +3,11 @@ import { findTheme, themeStyle } from './themes'
 import { CORNERS, cornersOfWindowStyle, DEFAULT_CORNERS, isCorners, withLook } from './corners'
 
 describe('corners', () => {
-  it('are square or rounded, square by default', () => {
-    expect(CORNERS).toEqual(['square', 'rounded'])
-    expect(DEFAULT_CORNERS).toBe('square')
+  it('are square, rounded or folded, square by default', () => {
+    expect(CORNERS).toEqual(['square', 'rounded', 'folded'])
+    expect(DEFAULT_CORNERS).toBe('folded')
     expect(isCorners('rounded')).toBe(true)
+    expect(isCorners('folded')).toBe(true)
     expect(isCorners('glass')).toBe(false)
   })
 

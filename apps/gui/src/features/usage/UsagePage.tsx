@@ -8,6 +8,7 @@ import {
   type DayBar, type Ring, type RingTone,
 } from './model'
 import { UsageTable, type OpenSession } from './UsageTable'
+import { DAEMON_NAME } from '@/brand'
 
 /** A modest refresh while the page is open; the daemon is also asked on open and when the period changes. */
 export const USAGE_REFRESH_MS = 60_000
@@ -261,7 +262,7 @@ function LoadFailed({ onRetry, retrying }: { onRetry: () => void; retrying: bool
   return (
     <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 py-12 text-center">
       <h2 className="text-[15px] font-semibold">Could not load usage</h2>
-      <p className="max-w-sm text-[12.5px] text-dim">Maitty could not read the usage figures from maittyd. Your sessions are not affected.</p>
+      <p className="max-w-sm text-[12.5px] text-dim">Maitty could not read the usage figures from {DAEMON_NAME}. Your sessions are not affected.</p>
       <button type="button" disabled={retrying} className="rounded-(--r-control) bg-raise px-3 py-1.5 text-[12.5px] font-medium hover:bg-hover" onClick={onRetry}>Retry</button>
     </div>
   )

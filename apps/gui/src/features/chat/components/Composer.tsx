@@ -103,7 +103,18 @@ type Props = {
   files?: FileSearchPlace | undefined
   /** The messages the person sent in this chat, oldest first, for ↑ to bring back (`promptRecall.ts`). */
   sent?: readonly string[]
+  /** The helpers line (`HelpersDock`), drawn between the question tray and the queue. */
+  helpers?: ReactNode
+  /** Which part of the dock is open: only one is, so opening one folds the other. */
+  dock?: DockState
+  /** A quiet line under the queue, for a session that stopped or failed with messages still waiting. */
+  queueNote?: string | null
 }
+
+/** The dock above the box has one thing open at a time: the helpers list or the queue's list. */
+export type DockOpen = 'helpers' | 'queue' | null
+export type DockState = { readonly open: DockOpen; readonly set: (open: DockOpen) => void }
+const DOCK_CLOSED: DockState = { open: null, set: () => undefined }
 
 const NO_CHANGE = () => undefined
 const NO_MESSAGES: readonly string[] = []
@@ -121,8 +132,8 @@ const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
  * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
  * offline the box still takes typing but does not send.
  */
-export function Composer({ agent, composer, conversation, commandsFrom, question = null, facts, waiting = false, files, sent = NO_MESSAGES }: Props) {
-  const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
+export function Composer({ agent, composer, conversation, commandsFrom, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null }: Props) {
+  const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
   const draft = composer.draft ?? storedDraft
@@ -133,7 +144,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   const recalled = useRef<Recalled | null>(null)
   useKeepTyping(text, attachments.length)
   // A chat that opens takes the typing, as the terminal under it would, when nothing else on the page has it:
-  // the new-chat page has just closed, or the starting chat's box was replaced by this one.
+  // the New session dialog has just closed, or the starting chat's box was replaced by this one.
   useEffect(() => {
     const active = document.activeElement
     if (active !== null && active !== document.body) return
@@ -340,8 +351,23 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   return (
     <div ref={box} className="mx-composer">
       <div className="mx-composer-column">
-        <QueuedMessages agent={agent} queue={queue} onRemove={removeQueued} onEdit={(id) => { editQueued(id); text.current?.focus() }} onSendNow={sendQueuedNow} sendingNow={sendingNow} />
         <div ref={tray} className="mx-question-slot">{question}</div>
+        {helpers}
+        <QueuedMessages
+          agent={agent}
+          queue={queue}
+          open={dock.open === 'queue'}
+          onOpenChange={(open) => { dock.set(open ? 'queue' : null) }}
+          onRead={() => { if (dock.open === 'helpers') dock.set(null) }}
+          helpersOpen={dock.open === 'helpers'}
+          onRemove={removeQueued}
+          onEdit={(id) => { editQueued(id); text.current?.focus() }}
+          onSendNow={sendQueuedNow}
+          onMoveUp={moveQueuedUp}
+          onClear={clearQueued}
+          sendingNow={sendingNow}
+          note={queueNote}
+        />
         <div className={`mx-box${off ? ' is-locked' : ''}`}>
           {picking && (
             <SlashPicker agent={agent} typed={draft.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={run} onHover={(index) => { setCursor({ query, index }) }} />
@@ -424,6 +450,8 @@ function modeLockedWhy(facts: Pick<ComposerFacts, 'modeLocked' | 'agentChips'>):
 const usageName = (item: { window: string | null }): string => (item.window === null ? 'Ctx' : item.window === 'week' ? 'Wk' : item.window)
 /** The meter's ring, square as the window's corners are: a path round a 12px box, starting at the top middle. */
 const METER_PATH = 'M6 1H11V11H1V1H6'
+/** The same ring under Rounded corners: a circle from the same start point. */
+const METER_ROUND = 'M6 1A5 5 0 1 1 6 11A5 5 0 1 1 6 1'
 
 /**
  * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
@@ -442,8 +470,10 @@ function UsageMeters({ usage, always, onOpen }: { usage: SessionUsage; always: b
           <>
             <span className="mx-usage-name">{usageName(item)}</span>
             <svg className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={item.percent} width="12" height="12" viewBox="0 0 12 12">
-              <path d={METER_PATH} className="mx-usage-track" />
-              <path d={METER_PATH} className="mx-usage-fill" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
+              <path d={METER_PATH} className="mx-usage-track mx-usage-sq" />
+              <path d={METER_PATH} className="mx-usage-fill mx-usage-sq" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
+              <path d={METER_ROUND} className="mx-usage-track mx-usage-round" />
+              <path d={METER_ROUND} className="mx-usage-fill mx-usage-round" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
             </svg>
             <span className="mx-usage-figure">{`${String(item.percent)}%`}</span>
           </>

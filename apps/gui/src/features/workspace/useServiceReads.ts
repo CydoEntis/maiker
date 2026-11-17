@@ -20,7 +20,7 @@ export function useServiceReads({ failures, setFailures }: {
   failures: number
   setFailures: Dispatch<SetStateAction<number>>
 }) {
-  // While maittyd is unreachable, try again after 1, 2, 4, then every 8 seconds.
+  // While the daemon is unreachable, try again after 1, 2, 4, then every 8 seconds.
   const retryDelay = BACKOFF_BASE ** Math.min(MAX_RETRY_EXPONENT, Math.max(0, failures - 1)) * SECOND_MS
   const sessionsQuery = useQuery({
     queryKey: ['conversations'],

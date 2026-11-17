@@ -1,7 +1,7 @@
 import { parseTaskNotifications } from './taskNotification'
 import type { ApprovalEvent, ChatEvent, CommandEvent, EditEvent, ItemStatus, MessageEvent, SubagentEvent, SummaryEvent, TodoEvent, ToolEvent, TurnEvent } from './chatEvents'
 import { startsTable, streamingText } from './markdown'
-import { describeStep } from './stepInfo'
+import { describeStep, isWaitingStep } from './stepInfo'
 import { describeWork } from './workPhase'
 import { documentOf } from './writtenDocument'
 import { isQuietRun, type WorkStep } from './workSummary'
@@ -160,6 +160,24 @@ export function buildRows(events: readonly ChatEvent[], working: boolean, root: 
   if (echoText !== null) shown.push({ kind: 'echo', key: ECHO_ROW_KEY, text: echoText })
   if (working || (echoText !== null && echoThinking)) shown.push({ kind: 'working', key: WORKING_ROW_KEY, phrase: workingPhrase ?? describeWork(events, root) })
   return linkApprovals(shown, events, root)
+}
+
+/**
+ * The rows to draw while the agent works. The turn in progress shows only the live box: its messages, thoughts and steps
+ * stay out of the chat until the work ends, then the steps arrive folded and the reply is revealed a sentence at a time.
+ * What is not part of the work stays: a plan, helpers, a helper's report, and a step a request is waiting on, so that
+ * is never hidden from the person who has to answer it.
+ */
+export function liveRows(rows: readonly ChatRow[], waitingStep: string | null): ChatRow[] {
+  if (!rows.some((row) => row.kind === 'working')) return [...rows]
+  const sent = rows.findLastIndex((row) => row.kind === 'user' || row.kind === 'echo')
+  return rows.filter((row, index) => {
+    if (index <= sent) return true
+    if (row.kind === 'agent' || row.kind === 'thought') return false
+    if (row.kind === 'step') return row.event.kind === 'todo' || isWaitingStep(waitingStep, row.event.id)
+    if (row.kind === 'work') return row.events.some((event) => isWaitingStep(waitingStep, event.id))
+    return true
+  })
 }
 
 function isQuietRow(row: ChatRow): boolean {

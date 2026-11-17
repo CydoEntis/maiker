@@ -95,13 +95,13 @@ The dev server and the window use port 1420 (`server.port` in `vite.config.ts`, 
 `tauri.conf.json`) with `strictPort`: if something else holds 1420, `pnpm desktop:dev` stops with
 an error instead of letting the window load that other server. To try a build without touching
 the sessions of a running daemon, give it its own server, as for any nested test:
-`MAITTY_INSTALL_DIR=/tmp/maitty-try-bin MAITTY_DATA_DIR=/tmp/maitty-try-data MAITTY_SOCKET=try pnpm desktop:dev`. The install folder matters: the app runs the one shared `maitty` file (ADR 0004) and keeps an installed file that is newer than the app, so without its own `MAITTY_INSTALL_DIR` a build from a checkout runs the daemon you installed, a release behind it, and asks to restart it. On NVIDIA under
+`AGENT_INSTALL_DIR=/tmp/maitty-try-bin AGENT_DATA_DIR=/tmp/maitty-try-data AGENT_SOCKET=try pnpm desktop:dev`. The install folder matters: the app runs the one shared `maitty` file (ADR 0004) and keeps an installed file that is newer than the app, so without its own `AGENT_INSTALL_DIR` a build from a checkout runs the daemon you installed, a release behind it, and asks to restart it. On NVIDIA under
 Wayland, WebKitGTK can die with `Error 71 (Protocol error) dispatching to Wayland display`; start
 with `WEBKIT_DISABLE_DMABUF_RENDERER=1` (verified on Hyprland, RTX 4060, WebKitGTK 2.52.6).
 
 Two things to know when building on Windows while a desktop daemon is running:
 
-- `cargo build` fails with "Access is denied" if a `maitty-gui-daemon.exe` that
+- `cargo build` fails with "Access is denied" if a `maikerd.exe` that
   was started from `target\debug` is still running, because Windows will not let
   cargo replace the running file. Don't kill it (it owns your sessions); build into
   another folder instead: `CARGO_TARGET_DIR=C:/dev/maitty-gate-target cargo build`.
@@ -138,15 +138,14 @@ on macOS), never in the repo and never synced. The daemon reads it once when it
 starts; Settings › Check forgets an answer.
 
 `ui.spinner` is an array of up to 64 single-column frame strings; an empty array
-uses `icons.working` without animation. Settings → Appearance → Working spinner
-offers presets and a custom editor. Preserve explicit custom frames on reload.
+uses `icons.working` without animation. The terminal app's Settings offers presets and a custom editor; the desktop app has no spinner setting. Preserve explicit custom frames on reload.
 
 ## Project-specific: machines
 
 `[[machines]]` names other computers reached over ssh. It is read only from
 `config.local.toml` (beside `config.toml`), which is per computer and never synced. A
 `[[machines]]` entry in `config.toml`, the file sync shares, is a load error that says where
-to move it; the file is left as it was. With `MAITTY_CONFIG` set, that file is the whole
+to move it; the file is left as it was. With `AGENT_CONFIG` set, that file is the whole
 config and is held to the same rule.
 
 | Key | Meaning |
@@ -160,8 +159,8 @@ config and is held to the same rule.
 | `mcp` | default `false`; lets an agent in a pane on this computer reach this machine through its MCP tools (`machine` argument or a `machine/id` id): list, read, send, wait. Off, a call naming the machine is refused with `machine_not_enabled` and the machine is not dialled. On, the agent's own pane still needs the `read` or `write` grant. Starting, answering and interrupting stay local-only. See [SECURITY](SECURITY.md) |
 
 Validation runs when the config loads. `--remote host` is an ad-hoc machine named after the
-host, with no table entry: `MAITTY_SSH` is its ssh program and leading arguments (split on
-whitespace), `MAITTY_REMOTE_CMD` its remote command. A `[[machines]]` entry uses `ssh_args` and
+host, with no table entry: `AGENT_SSH` is its ssh program and leading arguments (split on
+whitespace), `AGENT_REMOTE_CMD` its remote command. A `[[machines]]` entry uses `ssh_args` and
 `remote_cmd` instead, and does not read those two variables.
 
 A machine with a `via` is connected, redialled and checked like any other, with these differences.
@@ -195,12 +194,12 @@ machine, and a pane there is written `machine/id` (`--pane build/4`, `read build
 case, is this computer. Names compare ignoring case, as the config check does. `--on` works with `ls`,
 `read`, `send`, `wait`, `split`, `handoff`, `new`, `focus`, `close`, `grant`, `teach`, `popup` and
 `kill-server`; any other command refuses it rather than act here. The machine of a command is the
-address's, else `--on`, else `--remote` (and `MAITTY_REMOTE`), else this computer. `--on X` with
+address's, else `--on`, else `--remote` (and `AGENT_REMOTE`), else this computer. `--on X` with
 `--pane Y/4` for another machine, `--on` with `--remote`, and an address with `--remote` are usage
 errors (exit 2), as are `ls --all` beside `--on`, `--remote` or a pane address, and an unknown name, which lists the names that work. `--remote host` is the ad-hoc
 route and behaves as it always did; a configured machine is only attached to by `--on` (it never starts a remote daemon).
 
-`$MAITTY_TERM_ID` and `$MAITTY_PANE_TOKEN` name a pane of the daemon on this computer. They stay the
+`$AGENT_TERM_ID` and `$AGENT_PANE_TOKEN` name a pane of the daemon on this computer. They stay the
 default pane and the identity of a command that talks to this computer (`--on local` included). A
 command given `--on build` or `build/..` never takes them: it needs `--pane build/<id>`, and the other
 machine is told no pane id or token. `kill-server --on build` stops every session on that machine and
@@ -276,28 +275,41 @@ daemon's automatic clean-up does not read inactivity at all.
 ## Project-specific: variables
 
 No `.env` file: Maitty is configured through `config.toml`. Environment variables
-it reads:
+it reads.
+
+**The prefix is `AGENT_`, and it is not the product's name** ([ADR 0012](adr/0012-brand-names-live-in-one-place-and-env-has-a-generic-prefix.md)).
+It is `env_prefix` in `apps/tui/Cargo.toml`; Rust code reads and sets a variable by its key
+without the prefix through `maitty_shared::brand` (`env_var("SOCKET")`, `env_name("SOCKET")`),
+the desktop app and `scripts/dev.ps1` read `ENV_PREFIX` from `apps/gui/src/brand.ts`, and the
+installers and the release workflow name it once. A rename of the product leaves every variable
+alone. The prefix the app used before, `MAITTY_`, is still read when the `AGENT_` name is not set
+(the new name wins), and what the app starts (a pane's id and token, socket, remote routing,
+worktree hook variables) carries both, so sessions open before an update, installed hooks and your
+own scripts keep working. `env_previous` in `Cargo.toml` lists the old prefixes; remove one
+when nothing supported uses it.
 
 | Variable | Purpose | Set by |
 | --- | --- | --- |
-| `MAITTY_CONFIG` | use this config file instead of the default | user |
-| `MAITTY_DATA_DIR` | absolute directory for saved state, logs and approval settings; validated and captured at startup | developer / user |
-| `MAITTY_SOCKET` | name of a separate server (like `tmux -L`); used for nested test servers | user |
-| `MAITTY_REMOTE` | the SSH host this client works on (from `--remote`) | maitty |
-| `MAITTY_SSH`, `MAITTY_REMOTE_CMD` | replace `ssh` / the remote `maitty` command (`MAITTY_REMOTE_CMD` is one program path); removed from every pane's environment, like `MAITTY_REMOTE` | user |
-| `MAITTY_UPDATE_PROGRESS` | `1` makes `maitty machine update` print a `progress: N` line on stderr as each stage ends (the desktop app sets it; a person at a terminal never sees it) | desktop app |
-| `MAITTY_TERM_ID`, `MAITTY_PANE_TOKEN` | the pane's id and secret, set inside every pane | daemon |
-| `MAITTY_SHOW` | tests print rendered frames | developer |
-| `MAITTY_NO_INTEGRATE` | `1`: the installers and `maitty update` leave agents' config alone instead of running `maitty integrate`, and `maitty uninstall` leaves it alone too | user |
-| `MAITTY_NO_GPU_FORCE` | `1`: the desktop app on Linux leaves the web view's drawing variables alone (it otherwise sets `WEBKIT_FORCE_DMABUF_RENDERER=1` and `__NV_DISABLE_EXPLICIT_SYNC=1` for NVIDIA under Wayland; see [PERFORMANCE](PERFORMANCE.md#the-page-was-drawn-on-the-cpu-2026-11-10)) | user |
+| `AGENT_INSTALL_DIR`, `AGENT_NO_PATH`, `AGENT_VERSION`, `AGENT_FROM` | the installers' settings (folder, leave PATH alone, a release tag, a folder of release files); `install.ps1` and `install.sh` read them under the old prefix too | user / CI |
+| `AGENT_LOG` | log filter for the daemon (`tracing` directives, default `info`) | developer |
+| `AGENT_CONFIG` | use this config file instead of the default | user |
+| `AGENT_DATA_DIR` | absolute directory for saved state, logs and approval settings; validated and captured at startup | developer / user |
+| `AGENT_SOCKET` | name of a separate server (like `tmux -L`); used for nested test servers | user |
+| `AGENT_REMOTE` | the SSH host this client works on (from `--remote`) | maitty |
+| `AGENT_SSH`, `AGENT_REMOTE_CMD` | replace `ssh` / the remote `maitty` command (`AGENT_REMOTE_CMD` is one program path); removed from every pane's environment, like `AGENT_REMOTE` | user |
+| `AGENT_UPDATE_PROGRESS` | `1` makes `maitty machine update` print a `progress: N` line on stderr as each stage ends (the desktop app sets it; a person at a terminal never sees it) | desktop app |
+| `AGENT_TERM_ID`, `AGENT_PANE_TOKEN` | the pane's id and secret, set inside every pane | daemon |
+| `AGENT_SHOW` | tests print rendered frames | developer |
+| `AGENT_NO_INTEGRATE` | `1`: the installers and `maitty update` leave agents' config alone instead of running `maitty integrate`, and `maitty uninstall` leaves it alone too | user |
+| `AGENT_NO_GPU_FORCE` | `1`: the desktop app on Linux leaves the web view's drawing variables alone (it otherwise sets `WEBKIT_FORCE_DMABUF_RENDERER=1` and `__NV_DISABLE_EXPLICIT_SYNC=1` for NVIDIA under Wayland; see [PERFORMANCE](PERFORMANCE.md#the-page-was-drawn-on-the-cpu-2026-11-10)) | user |
 | `PI_CODING_AGENT_DIR` | Pi/OMP native agent configuration directory; do not share between the two apps | user / agent app |
 | `PI_CONFIG_DIR` | OMP config folder below the user's home, default `.omp` | user / OMP |
 | `KIMI_CODE_HOME` | Kimi config directory, default `~/.kimi-code` | user / Kimi |
 | `XDG_CONFIG_HOME`, `XDG_STATE_HOME` | native OpenCode configuration/state roots; Kilo's config also uses the config root | user / OS |
 | `EDITOR`, `VISUAL`, `SHELL`, `COMSPEC` | editor and shell defaults | OS / user |
 
-For isolated tests, set `MAITTY_DATA_DIR`, `MAITTY_CONFIG` and a unique
-`MAITTY_SOCKET` together. Keep the data directory outside the test repository:
+For isolated tests, set `AGENT_DATA_DIR`, `AGENT_CONFIG` and a unique
+`AGENT_SOCKET` together. Keep the data directory outside the test repository:
 it contains approval decisions that repository files must not control. The data
 override skips legacy-name migration; it does not redirect config files or
 provider-native history. Empty or relative paths and existing non-directories
@@ -380,8 +392,8 @@ are explicit CLI launch inputs; the actor sets `CODEX_HOME` to that root. No new
 provider credential setting is introduced.
 
 Structured provider children receive four internal, runtime-scoped variables:
-`MAITTY_CONVERSATION_ID`, `MAITTY_CONVERSATION_GENERATION`,
-`MAITTY_CONVERSATION_CONNECTION`, and secret `MAITTY_CONVERSATION_AUTH`.
+`AGENT_CONVERSATION_ID`, `AGENT_CONVERSATION_GENERATION`,
+`AGENT_CONVERSATION_CONNECTION`, and secret `AGENT_CONVERSATION_AUTH`.
 The daemon owns these values; do not set or log them. All four are required when
 any is present. They identify a live runtime without a terminal pane. Provider
 launch strips inherited pane/structured claims, and configured MCP subprocess

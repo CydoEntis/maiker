@@ -863,7 +863,7 @@ no sounds, so there is no switch for them.
 A new session (**New session**, ⌘T) starts where the focused session is. On another machine it asks for a
 folder there, starting at `~`, because the folder picker is this computer's; a folder that does not exist
 opens in the machine's home folder. To start on a project that is not on the machine yet, use **Clone a
-repository…** on the new chat page (beside Browse…, or in the project menu): paste the repository's address,
+repository…** in the New session dialog (in the project list): paste the repository's address,
 pick the folder it goes inside, and the chat opens on the new folder. The side panel's **Changes** tab
 works for a session on another machine too: it lists the changed files and their diffs, read from that
 machine. You can commit there too: tick the files, write the message, and **Commit**, **Pull** / **Push** /
@@ -982,12 +982,12 @@ means](#what-a-sessions-status-means).
 ### Starting a chat
 
 **New chat** (the `+` at the top of the sidebar, the Maitty menu at the top left of the window, or **New agent chat…** in the command palette, Ctrl+Shift+T, ⌘T
-on a Mac) opens a page that asks "What are we building today?". When nothing is running, the window
-opens on this page. It starts on your most recent project: write the first message and press Enter.
+on a Mac) opens the New session dialog. When nothing is running, the window shows "No sessions running" and the same
+dialog opens from it. It starts on your most recent project: write the first message and press Ctrl+Enter (⌘Enter on a Mac).
 The agent starts in its own terminal and the chat opens. (**New agent chat** without the dots,
-Ctrl+Shift+A, skips the page: it starts a chat at once with the default agent in the start folder.)
+Ctrl+Shift+A, skips the dialog: it starts a chat at once with the default agent in the start folder.)
 
-**Where the chat runs** is in the page's header, as it is on a running chat's pane:
+**Where the chat runs** is in the dialog's header, as it is on a running chat's pane:
 
 - **Name.** Type a name for the chat, or leave it empty and the first message names it.
 - **Project.** Pick another project, paste a path, **Browse…**, or **Clone from GitHub…**. The
@@ -1011,12 +1011,12 @@ so and offers **set it up**.
 Claude or Codex saved for a project on this computer. Pick one and its agent starts in that folder
 with that conversation.
 
-**Keep drafting.** Press Ctrl+Enter (⌘Enter on a Mac) instead of Enter. The chat starts and is listed
-in the sidebar, but it is not opened. The page stays, the message box and its files are emptied, and
+**Keep drafting.** Press Ctrl+Shift+Enter (⇧⌘Enter on a Mac) instead of Ctrl+Enter. The chat starts and is listed
+in the sidebar, but it is not opened. The dialog stays, the message box and its files are emptied, and
 every other choice is kept, so you can write the next chat while the first one starts. In a new worktree,
 the next one gets a new branch name. If a start fails, a line under the box says why, with **Put back**,
 which puts the message and its files back in the box after whatever you typed since, and **Dismiss**.
-On another machine Ctrl+Enter is a plain start. Esc closes the page.
+On another machine Ctrl+Shift+Enter is a plain start. Esc closes the dialog.
 
 ### Answering prompts
 
@@ -1214,7 +1214,7 @@ Maitty detects common command-line agents automatically and combines process,
 terminal-screen and native lifecycle evidence where available. Status means:
 
 1. **Native hooks** report lifecycle events. The installer and `maitty update` run `maitty integrate`, which
-   connects every installed agent at once (`MAITTY_NO_INTEGRATE=1` skips it). `maitty integrate claude` adds hooks to `~/.claude/settings.json`.
+   connects every installed agent at once (`AGENT_NO_INTEGRATE=1` skips it). `maitty integrate claude` adds hooks to `~/.claude/settings.json`.
    They stay inert outside maitty panes and are tagged so a re-run or `--uninstall` replaces them cleanly.
    Any tool can report its own state with `maitty hook <name> --status working|blocked|done|idle`.
    `maitty integrate gemini` and `maitty integrate qwen` do the same for Gemini CLI and Qwen Code;

@@ -168,14 +168,14 @@ impl Machine {
     /// The machine `--remote host` (or `<APP>_REMOTE`) names, else this one. The flag's
     /// only reader: everything else is handed a `Machine`.
     pub fn current() -> Machine {
-        let Some(host) = std::env::var(concat!(env!("APP_ENV"), "_REMOTE"))
+        let Some(host) = maitty_shared::brand::env_var("REMOTE")
             .ok()
             .filter(|s| !s.trim().is_empty())
         else {
             return Machine::local();
         };
-        let ssh = std::env::var(concat!(env!("APP_ENV"), "_SSH")).ok();
-        let remote_cmd = std::env::var(concat!(env!("APP_ENV"), "_REMOTE_CMD")).ok();
+        let ssh = maitty_shared::brand::env_var("SSH").ok();
+        let remote_cmd = maitty_shared::brand::env_var("REMOTE_CMD").ok();
         Machine::adhoc(&host, ssh.as_deref(), remote_cmd)
     }
 

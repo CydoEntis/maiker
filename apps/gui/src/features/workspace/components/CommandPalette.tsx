@@ -84,12 +84,12 @@ export function CommandPalette({ items, outputItem, onClose }: Props) {
             aria-controls="mx-palette-list"
             {...(shown.length > 0 ? { 'aria-activedescendant': optionId(active) } : {})}
             aria-label="Search the palette"
-            placeholder="Jump to a chat, project or action…"
+            placeholder="Search chats, projects and actions…"
             value={query}
             spellCheck={false}
             onChange={(event) => { setQuery(event.target.value); setSelected(0) }}
           />
-          <kbd className="mx-keycap">esc</kbd>
+          <kbd className="mx-keycap">Esc</kbd>
         </div>
         <ResultsList ref={list} id="mx-palette-list" aria-label="Results" className="mx-palette-list">
           {groups.map((group, at) => {
@@ -103,7 +103,7 @@ export function CommandPalette({ items, outputItem, onClose }: Props) {
           })}
           {shown.length === 0 && <div className="mx-palette-empty">Nothing matches “{query}”.</div>}
         </ResultsList>
-        <div className="mx-palette-foot"><span>↑ ↓ move</span><span>↵ open</span></div>
+        <div className="mx-palette-foot"><span><kbd className="mx-keycap">↑↓</kbd>move</span><span><kbd className="mx-keycap">Enter</kbd>open</span></div>
       </DialogContent>
     </Dialog>
   )

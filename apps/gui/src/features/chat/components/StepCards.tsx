@@ -38,9 +38,14 @@ function RedactionNote({ texts }: { texts: readonly (string | null)[] }) {
   return note === null ? null : <p className="mx-step-note">{note}</p>
 }
 
-/** Folded until the person opens it: a chat of many steps stays short, and its lines say how each one went. */
-function useOpen(): [boolean, () => void] {
+/**
+ * Whether a step's detail is open, and how to flip it. Folded until the person opens it: a chat of many steps stays short,
+ * and its lines say how each one went. A run of steps hands each one its `control`, so only one of them is open at a time.
+ */
+export type OpenControl = { open: boolean; toggle: () => void }
+function useOpen(control?: OpenControl): [boolean, () => void] {
   const [open, setOpen] = useState(false)
+  if (control !== undefined) return [control.open, control.toggle]
   return [open, () => { setOpen(!open) }]
 }
 
@@ -65,6 +70,7 @@ function ToolTarget({ facts }: { facts: ToolFacts }) {
 }
 
 type ToolStepProps = {
+  control?: OpenControl
   event: ToolEvent
   /** The session's folder, so paths are shown relative to it. */
   root?: string | null
@@ -72,8 +78,8 @@ type ToolStepProps = {
 }
 
 /** Any tool with no card of its own: a read, a search, a fetch, an extension's tool. Opens to its input and result. */
-export function ToolStep({ event, root = null, waiting = false }: ToolStepProps) {
-  const [open, toggle] = useOpen()
+export function ToolStep({ event, root = null, waiting = false, control }: ToolStepProps) {
+  const [open, toggle] = useOpen(control)
   const facts = toolFacts(event, root)
   const meta = event.status === 'failed' ? FAILED_WORD : event.status === 'interrupted' ? STOPPED_WORD : facts.kind === 'file' ? facts.lines : null
   const result = event.detail.trim()
@@ -107,6 +113,7 @@ export function ToolStep({ event, root = null, waiting = false }: ToolStepProps)
 }
 
 type CommandStepProps = {
+  control?: OpenControl
   event: CommandEvent
   /** On its own in the chat: a card with the command in its head, not one line of an opened run. */
   alone?: boolean
@@ -142,8 +149,8 @@ function CommandOutput({ event }: { event: CommandEvent }) {
  * of it on request). On its own it is a card with the command in its head, open on its output once it
  * has ended. Every one starts folded, a failed one too: its line says it failed, and opening it shows why.
  */
-export function CommandStep({ event, alone = false, waiting = false }: CommandStepProps) {
-  const [open, toggle] = useOpen()
+export function CommandStep({ event, alone = false, waiting = false, control }: CommandStepProps) {
+  const [open, toggle] = useOpen(control)
   // A search that found nothing exits 1 but did not fail; how it shows is the one place that decides it.
   const status = shownCommandStatus(event)
   const intent = commandIntent(event.command)
@@ -255,6 +262,7 @@ function EditBody({ event, file, sidePanel }: { event: EditEvent; file: string |
 }
 
 type EditStepProps = {
+  control?: OpenControl
   event: EditEvent
   /** The session's folder, so the file is shown relative to it. */
   root: string | null
@@ -266,8 +274,8 @@ type EditStepProps = {
 }
 
 /** A file change: the file, what happened to it and its counts, opening to the first lines of its diff. */
-export function EditStep({ event, root, onOpen, alone = false, waiting = false }: EditStepProps) {
-  const [open, toggle] = useOpen()
+export function EditStep({ event, root, onOpen, alone = false, waiting = false, control }: EditStepProps) {
+  const [open, toggle] = useOpen(control)
   const file = event.file === null ? null : relativePath(event.file, root)
   const name = file ?? 'a file'
   const verb = event.tool === 'Write' ? 'Write' : 'Edit'
@@ -317,6 +325,8 @@ export function EditStep({ event, root, onOpen, alone = false, waiting = false }
 }
 
 type StepViewProps = {
+  /** Where a step's open state lives, when the step is one of a run and only one of them may be open. */
+  control?: OpenControl
   event: WorkStep
   root: string | null
   openDiff: ((file: string) => void) | null
@@ -326,8 +336,9 @@ type StepViewProps = {
 }
 
 /** The row for one step, whatever kind it is. */
-export function StepView({ event, root, openDiff, alone = false, waiting = false }: StepViewProps) {
-  if (event.kind === 'edit') return <EditStep event={event} root={root} onOpen={openDiff} alone={alone} waiting={waiting} />
-  if (event.kind === 'command') return <CommandStep event={event} alone={alone} waiting={waiting} />
-  return <ToolStep event={event} root={root} waiting={waiting} />
+export function StepView({ event, root, openDiff, alone = false, waiting = false, control }: StepViewProps) {
+  const own = control === undefined ? {} : { control }
+  if (event.kind === 'edit') return <EditStep event={event} root={root} onOpen={openDiff} alone={alone} waiting={waiting} {...own} />
+  if (event.kind === 'command') return <CommandStep event={event} alone={alone} waiting={waiting} {...own} />
+  return <ToolStep event={event} root={root} waiting={waiting} {...own} />
 }

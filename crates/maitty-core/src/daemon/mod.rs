@@ -38,6 +38,7 @@ mod reopen;
 mod pull_request;
 mod repeats;
 mod repo;
+mod repo_index;
 mod restore;
 mod scan;
 mod search;
@@ -300,6 +301,10 @@ pub enum Ev {
         client: ClientId,
         tag: u64,
         found: crate::protocol::SavedConversations,
+    },
+    /// A search for repositories ended (`repo_index`).
+    RepositoriesFound {
+        found: repo_index::Found,
     },
     SideAnswerReady {
         client: ClientId,
@@ -596,6 +601,8 @@ struct Daemon {
     /// An agent a window asked for ahead of its first message (`Command::Prewarm`).
     warm: Option<warm::Warm>,
     last_vanished_check: Instant,
+    /// The git repositories found on this machine, for a window's folder picker.
+    repo_index: repo_index::Index,
     /// The last automatic workspace move, for undo.
     auto_undo: Option<AutoUndo>,
     /// When a pane's process or a pane's agent last ended on its own (see `LOSS_HOLD`).
@@ -719,8 +726,10 @@ fn init_logging() {
             .with_writer(Mutex::new(file))
             .with_ansi(false)
             .with_env_filter(
-                tracing_subscriber::EnvFilter::try_from_env(concat!(env!("APP_ENV"), "_LOG"))
-                    .unwrap_or_else(|_| "info".into()),
+                maitty_shared::brand::env_var("LOG")
+                    .ok()
+                    .and_then(|directives| tracing_subscriber::EnvFilter::try_new(directives).ok())
+                    .unwrap_or_else(|| "info".into()),
             )
             .try_init();
     }
@@ -1436,6 +1445,7 @@ impl Daemon {
             adopt: None,
             adopted: None,
             last_vanished_check: crate::clock::ago(VANISHED_CHECK_EVERY - VANISHED_CHECK_FIRST),
+            repo_index: repo_index::Index::default(),
             last_loss: None,
             auto_undo: None,
         }
@@ -1552,6 +1562,31 @@ impl Daemon {
             crate::restart::publish(&activity);
             self.last_activity = Some(activity);
         }
+    }
+
+    /// Starts a search for repositories on a blocking thread; its end comes back as
+    /// `Ev::RepositoriesFound`. The caller has already marked the index as searching.
+    /// The first one starts on the first question, so a daemon nobody asks never walks the home folder.
+    fn search_repositories(&self) {
+        let tx = self.tx.clone();
+        tokio::task::spawn_blocking(move || {
+            // A search that panics still answers (with nothing), or every later ask would wait on it forever.
+            let found = std::panic::catch_unwind(repo_index::search_home).unwrap_or_default();
+            let _ = tx.blocking_send(Ev::RepositoriesFound { found });
+        });
+    }
+
+    /// The repositories panes run in, each with when a pane there last had output or input.
+    fn running_repositories(&self) -> Vec<repo_index::Running> {
+        let now = term::unix_now();
+        self.terms
+            .values()
+            .filter_map(|term| {
+                let head = term.head.as_ref()?;
+                let idle = term.last_output.max(term.last_input).elapsed().as_secs();
+                Some(repo_index::Running { root: head.main_root.clone(), last_active: now.saturating_sub(idle) })
+            })
+            .collect()
     }
 
     /// Look at git again on the next tick (something just changed it).
@@ -2479,6 +2514,15 @@ impl Daemon {
             Ev::SavedConversationsReady { client, tag, found } => {
                 self.send(client, ServerMsg::Reply(Reply::SavedConversations { tag, found }));
             }
+            Ev::RepositoriesFound { found } => {
+                let waiting = self.repo_index.finished(found, term::unix_now());
+                if !waiting.is_empty() {
+                    let found = self.repo_index.view(&self.running_repositories());
+                    for (client, tag) in waiting {
+                        self.send(client, ServerMsg::Reply(Reply::Repositories { tag, found: found.clone() }));
+                    }
+                }
+            }
             Ev::SideAnswerReady { client, tag, answer } => {
                 self.send(client, ServerMsg::Reply(Reply::SideAnswer { tag, answer }));
             }
@@ -3174,6 +3218,26 @@ impl Daemon {
                             let _ = tx.send(Ev::Answered { client, reply }).await;
                         });
                         return;
+                    }
+                    Query::Repositories { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can list the repositories on this machine".into())
+                    }
+                    Query::Repositories { rescan, tag } => {
+                        match self.repo_index.ask(client, tag, rescan) {
+                            repo_index::Ask::Answer => {
+                                let found = self.repo_index.view(&self.running_repositories());
+                                ServerMsg::Reply(Reply::Repositories { tag, found })
+                            }
+                            repo_index::Ask::Wait => return,
+                            repo_index::Ask::Search => {
+                                self.search_repositories();
+                                return;
+                            }
+                        }
                     }
                     Query::Tickets { .. }
                         if self.clients.get(&client).is_some_and(|client| {

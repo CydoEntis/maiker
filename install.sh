@@ -4,23 +4,29 @@
 #   Public repo:   curl -fsSL https://raw.githubusercontent.com/<REPO>/main/install.sh | sh
 #   Private repo:  gh api -H "Accept: application/vnd.github.raw" repos/<REPO>/contents/install.sh | sh
 #
-# Settings (environment variables, <APP> being the app's command in capitals):
-#   <APP>_VERSION      a tag such as v0.1.0 (default: the latest release)
-#   <APP>_INSTALL_DIR  where the binary goes (default: ~/.local/bin)
-#   <APP>_NO_INTEGRATE set to 1 to leave your agents' config alone (no `<app> integrate`)
-#   <APP>_FROM         a folder holding a release's files, used in place of downloading them (the
+# Settings (environment variables; the prefix is generic, not the app's name, ADR 0012):
+#   AGENT_VERSION      a tag such as v0.1.0 (default: the latest release)
+#   AGENT_INSTALL_DIR  where the binary goes (default: ~/.local/bin)
+#   AGENT_NO_INTEGRATE set to 1 to leave your agents' config alone (no `<app> integrate`)
+#   AGENT_FROM         a folder holding a release's files, used in place of downloading them (the
 #                      release workflow tries a release this way before publishing it)
+# The old prefix (MAITTY_) still works when the new name is not set.
 set -eu
 
 # The app's command and where it is released: the only place this script names it (ADR 0008).
 APP="maitty"
 REPO="CydoEntis/maitty"
 
-ENV_PREFIX="$(printf '%s' "$APP" | tr 'a-z-' 'A-Z_')"
-eval "VERSION=\${${ENV_PREFIX}_VERSION:-}"
-eval "DIR=\${${ENV_PREFIX}_INSTALL_DIR:-\$HOME/.local/bin}"
-eval "NO_INTEGRATE=\${${ENV_PREFIX}_NO_INTEGRATE:-}"
-eval "FROM=\${${ENV_PREFIX}_FROM:-}"
+# The prefix of the app's environment variables, and the one it had before (still read).
+ENV_PREFIX="AGENT"
+OLD_ENV_PREFIX="MAITTY"
+# setting NAME: the value of <ENV_PREFIX>_NAME, else of <OLD_ENV_PREFIX>_NAME, else empty.
+setting() { eval "printf '%s' \"\${${ENV_PREFIX}_$1:-\${${OLD_ENV_PREFIX}_$1:-}}\""; }
+VERSION="$(setting VERSION)"
+DIR="$(setting INSTALL_DIR)"
+DIR="${DIR:-$HOME/.local/bin}"
+NO_INTEGRATE="$(setting NO_INTEGRATE)"
+FROM="$(setting FROM)"
 
 say() { printf '%s\n' "$*"; }
 fail() { say "$APP install: $*" >&2; exit 1; }

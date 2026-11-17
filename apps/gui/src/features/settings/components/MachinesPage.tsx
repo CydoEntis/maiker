@@ -11,6 +11,7 @@ import { installNote, UPDATE_WORDS, updateVerb, updateWarning, type MachineHead,
 import { SettingsSearch } from '../settingsSearch'
 import { Card, Row, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
+import { DAEMON_NAME } from '@/brand'
 
 /** A computer: this one, and the tile of a remote one. The window does not know a machine's kind, so every remote is a server. */
 const MONITOR_PATH = 'M3 4h18v12H3zM8 20h8M12 16v4'
@@ -245,8 +246,8 @@ function MachineDetail({ head, sessions, machines, github, onRemoved }: { head: 
   return (
     <>
       <Card title="Connection">
-        {health === 'ok' && <ValueRow label="Link" detail="Over ssh, through its own maittyd.">connected</ValueRow>}
-        {health === 'quiet' && <ValueRow label="Link" detail="Over ssh, through its own maittyd.">{head.chip?.word ?? 'connecting'}</ValueRow>}
+        {health === 'ok' && <ValueRow label="Link" detail={`Over ssh, through its own ${DAEMON_NAME}.`}>connected</ValueRow>}
+        {health === 'quiet' && <ValueRow label="Link" detail={`Over ssh, through its own ${DAEMON_NAME}.`}>{head.chip?.word ?? 'connecting'}</ValueRow>}
         {down && (
           <Row label={capitalised(head.chip?.word ?? 'unreachable')} detail={head.why ?? 'Maitty keeps trying to reach it.'}>
             <span className="mx-mach-buttons">

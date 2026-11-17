@@ -2,7 +2,7 @@
 //!
 //! A pane is addressed `machine/id` (or a bare `id`), and `--on <machine>` names the machine for
 //! a command that has no pane. `--remote host` stays the ad-hoc route. The pane a command runs
-//! in (`$MAITTY_TERM_ID`) belongs to the daemon on this computer, so it is only a default when
+//! in (`$AGENT_TERM_ID`) belongs to the daemon on this computer, so it is only a default when
 //! the command talks to this computer.
 
 use crate::client::remote_snapshot::sanitize_snapshot;
@@ -195,7 +195,7 @@ pub(crate) struct Target {
 }
 
 impl Target {
-    /// The machine `--remote` (or `$MAITTY_REMOTE`) names, else this computer.
+    /// The machine `--remote` (or `$AGENT_REMOTE`) names, else this computer.
     pub(crate) fn current() -> Target {
         Target {
             machine: Machine::current(),
@@ -247,7 +247,7 @@ impl Target {
         self.named.then(|| self.machine.name())
     }
 
-    /// Whether `$MAITTY_TERM_ID` names a pane on this machine.
+    /// Whether `$AGENT_TERM_ID` names a pane on this machine.
     pub(crate) fn owns_env_pane(&self) -> bool {
         !self.named || !self.is_remote()
     }

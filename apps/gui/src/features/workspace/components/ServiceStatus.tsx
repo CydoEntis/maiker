@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { RECONNECT_TRIES, serviceStateOf, tryNumber } from '../model/serviceState'
 import { OfflineBanner, type AppBehindOffer, type RestartOffer } from './states'
+import { DAEMON_NAME } from '@/brand'
 
 const SECOND_MS = 1000
 
@@ -19,14 +20,14 @@ function useNow(): number {
   return now
 }
 
-/** Under the pane header while maittyd does not answer and more tries are coming. */
+/** Under the pane header while the daemon does not answer and more tries are coming. */
 function ReconnectingBar({ failures, retryAt, onRetry }: { failures: number; retryAt: number | null; onRetry: () => void }) {
   const seconds = secondsUntil(retryAt, useNow())
   return (
     <div className="mx-offline" role="status">
       <span className="mx-offline-dot" aria-hidden="true" />
       <span className="mx-offline-text">
-        <strong>Reconnecting to maittyd</strong> · your sessions are still running
+        <strong>Reconnecting to {DAEMON_NAME}</strong> · your sessions are still running
       </span>
       <span className="mx-offline-count mono">
         Try {tryNumber(failures)} of {RECONNECT_TRIES}{seconds !== null && ` · next in ${String(seconds)}s`}
@@ -198,7 +199,7 @@ function AppBehindCard({ offer, sessions, onLater }: { offer: AppBehindOffer; se
 }
 
 /**
- * What the window shows while maittyd cannot be reached: a reconnecting bar for the first tries, the
+ * What the window shows while the daemon cannot be reached: a reconnecting bar for the first tries, the
  * Service stopped banner after the last one, or the update card (then a bar) when the service is another
  * version. Nothing when it is connected.
  */
@@ -213,7 +214,7 @@ export function ServiceStatus({ online, failures, mismatch, retryAt, detail, res
   appBehind: AppBehindOffer | null
   /** The sessions this window last knew of, for "your N sessions keep running". */
   sessions: number
-  /** Tries to reach maittyd again now. The window's connection starts the service when it is not running, so this is also how it is started. */
+  /** Tries to reach the daemon again now. The window's connection starts the service when it is not running, so this is also how it is started. */
   onRetry: () => void
   /** Shows the service's log, the only record of why it stopped. */
   onOpenLog: () => void

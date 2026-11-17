@@ -172,6 +172,11 @@ Daemon › Service log). The webview supplies nothing: the log, the folder and t
 host's, and an existing file is never replaced (`export::save_in`). The log names folders,
 repositories and sessions, so the setting says to look before sharing it.
 
+The repository index (`daemon::repo_index`, `Query::Repositories`) takes no input beyond a flag: its search starts at the
+home folder, never follows a link, never enters a hidden folder or another computer's mount, is bounded in depth, folders
+and time, and only reads `.git` files. It tells a window folder names and branches, which the window already reads through
+`ListFolders`; another machine's names are cleaned again in `remote_policy` and a path with control characters is dropped.
+
 `agent_commands` (`maitty-agent-ask`, started by the host for this computer and by a daemon for its own machine on `Query::AgentCommands`; another machine's answer is cleaned again in `remote_policy`) asks the same way for the slash commands Claude Code takes, for
 the chat's command picker. It differs in one input: the webview names the folder the program is
 started in, so the project's own commands and skills are listed. The host starts it only in a full
@@ -217,7 +222,7 @@ The agent launchers (`crates/maitty-core/src/shim.rs`) sit first on `PATH` in ev
 files in maitty's own data folder, written by the daemon as the user; a process that can write
 there can already run as the user through the shell startup files maitty writes beside them.
 A launcher asks for a worktree with `maitty agent-dir`, which sends the pane's own
-`MAITTY_TERM_ID` and `MAITTY_PANE_TOKEN` and nothing from its arguments; a wrong or missing token
+`AGENT_TERM_ID` and `AGENT_PANE_TOKEN` and nothing from its arguments; a wrong or missing token
 makes the caller "from a pane" but not that pane, and the daemon answers with nothing (worktrees,
 like status reports, are trusted only from the pane itself). A launcher passes the agent's
 arguments on as an argument vector, never through a shell, and the paths it embeds are
@@ -228,7 +233,7 @@ The daemon runs the user's own `$SHELL -ilc` once at start to learn the login PA
 startup files already are, and bounded further: the shell is started by path as an argument
 vector, never through a shell, and only when `$SHELL` is an absolute path to an existing file
 (else `/bin/sh`); it has no terminal (its own session) and null stdin, its error output is
-discarded, and the `MAITTY_*` variables (pane id and token, socket, routing) are removed from its
+discarded, and the `AGENT_*` variables (pane id and token, socket, routing) are removed from its
 environment; a timeout kills its whole process group; its output is read only between two
 marker words, capped in size, and used as PATH entries, never executed or logged. It runs in
 the daemon, on the machine the daemon serves, never on a client.
@@ -236,7 +241,7 @@ the daemon, on the machine the daemon serves, never on a client.
 A project's check is a command the daemon runs as the user when an agent's turn ends. It
 comes from the user's own `config.toml` (`[[check]]`) or, for a project with none there, from
 the repo's `.maitty/checks.toml` under the approval rules below. It runs through the user's shell in the
-session's worktree with no stdin and without `MAITTY_PANE_TOKEN`, so it cannot report status
+session's worktree with no stdin and without `AGENT_PANE_TOKEN`, so it cannot report status
 as the pane. On timeout its whole process tree is killed (process group on unix, job object
 on Windows). If the daemon dies, a check dies with it on Windows (the job closes) and on
 Linux (a parent-death signal kills the shell; a descendant the shell already started is
@@ -258,7 +263,7 @@ anything. A group whose leader's start time differs from the recorded one is lef
 that has been given to another process is never signalled; ids 0 and 1 and negatives never are.
 
 An agent can start helpers only if you say so. Who is asking is proven the way status reports are
-(the pane's `MAITTY_PANE_TOKEN` on the connection); the answer is `AnswerHelpers`, which the daemon
+(the pane's `AGENT_PANE_TOKEN` on the connection); the answer is `AnswerHelpers`, which the daemon
 refuses from any pane and accepts only for a request it holds. The desktop app sends it through its own command (`answer_helpers`), which takes one of three words (`allow`, `always`, `no`) and refuses anything else. "Always in this project" is kept in
 `helper-projects.json` in Maitty's data folder, never in the repo, so an agent that can write the
 repo cannot grant itself helpers. A helper's own permission prompts still come to you.
@@ -316,7 +321,7 @@ editing `.maitty/checks.toml`, cannot make Maitty run anything. The rules:
 
 Residual risk: a process running as the same OS user can edit `check-approvals.json`, which
 counts after the next daemon restart, and a process that hides its pane identity (no
-`MAITTY_TERM_ID`) is treated as you, as for grants. Both need code already running as you.
+`AGENT_TERM_ID`) is treated as you, as for grants. Both need code already running as you.
 
 Overriding a failed check is a recorded, visible action: the time and the reason stay on the
 result and its `Overridden` state shows wherever the check does. It needs the write grant on
@@ -367,8 +372,8 @@ the config load. The remote command is one string for the remote user's login sh
 word is POSIX single-quoted whatever the client runs (a Windows client to a Linux remote
 included); `remote_cmd` is one program path, a control character or newline in it is refused,
 and only a leading `~/` stays unquoted. A remote machine is untrusted, so the pane id and token
-a command carries (`Hello.from`) are sent only to this computer's daemon, and `MAITTY_REMOTE`,
-`MAITTY_SSH` and `MAITTY_REMOTE_CMD` are removed from every pane's environment. The table is
+a command carries (`Hello.from`) are sent only to this computer's daemon, and `AGENT_REMOTE`,
+`AGENT_SSH` and `AGENT_REMOTE_CMD` are removed from every pane's environment. The table is
 read only from `config.local.toml` and refused in the synced
 `config.toml`, so a shared config cannot point this computer at a host.
 
@@ -721,7 +726,7 @@ pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
 (`maitty-<user>-<label>.sock`). Socket access must stay limited to the user who
 started the daemon. Status reports (`maitty hook`) are accepted only from a
 process inside the pane (traced through its process tree) or carrying that
-pane's `MAITTY_PANE_TOKEN`, a random secret set only in that pane's environment.
+pane's `AGENT_PANE_TOKEN`, a random secret set only in that pane's environment.
 Listing specialist agents (`Query::Specialists`, ADR 0010) reads only the fixed agent folders of the
 pane's repository and the user's home, never a path a client names; it is for human clients with read
 access to the pane, writes nothing, and bounds the count and size of what it returns. Names,
@@ -734,7 +739,7 @@ control characters and hidden characters (`hidden::sanitize`), and a failure to 
 one cleaned line with its fix (`link_failure::classify`). `read` prints another machine's screen
 without escape sequences or other control characters (newlines stay); `read --raw` prints it exactly
 as sent, which is the person's choice to make and can move the cursor or retitle the terminal. The
-pane a command runs in belongs to this computer's daemon, so `$MAITTY_TERM_ID` is never the default
+pane a command runs in belongs to this computer's daemon, so `$AGENT_TERM_ID` is never the default
 pane on another machine and the Hello to it carries no pane id or token. `kill-server --on` stops all
 of that machine's sessions and needs `--yes`.
 
@@ -792,7 +797,7 @@ edits the config of every agent installed on the machine: Claude Code's `setting
 `settings.json`, Kimi's `config.toml`, Mastra Code's `hooks.json`, and adapter files for OpenCode,
 Pi, OMP and Kilo. Only Maitty's own entries change; a changed config file is first copied to
 `<file>.maitty-bak` (once). Agents that aren't installed get no folder or file. A failure
-warns and leaves the install in place. `MAITTY_NO_INTEGRATE=1` skips the step.
+warns and leaves the install in place. `AGENT_NO_INTEGRATE=1` skips the step.
 
 `cargo audit` (install with `cargo install cargo-audit`) before releases; GitHub
 push protection for secrets. Not yet in CI (there is no CI yet).
@@ -888,7 +893,7 @@ The agent runs with the user's permissions, so the window's start path is narrow
 
 ## Project-specific: cloning a repository from the desktop
 
-The new chat page's Clone from GitHub runs `git clone` in the desktop host (`git_clone`, `src-tauri/src/clone.rs`),
+The New session dialog's Clone from GitHub runs `git clone` in the desktop host (`git_clone`, `src-tauri/src/clone.rs`),
 off the UI thread, with the user's permissions. What was pasted never reaches git as typed:
 
 - It is read as a GitHub owner and repository name (owner/repo, a github.com page or HTTPS address, or

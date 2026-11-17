@@ -1,4 +1,5 @@
 ﻿pub mod agent_commands;
+pub mod brand;
 pub mod clock;
 pub mod conversation;
 pub mod extensions;
@@ -11,6 +12,7 @@ pub mod output_line;
 pub mod overlap;
 pub mod protocol;
 pub mod repo;
+pub mod repositories;
 pub mod settings_view;
 pub mod specialists;
 pub mod ticket_links;

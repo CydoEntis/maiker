@@ -3,7 +3,7 @@
    theme token; amber (`--needs`) is only ever "needs you". */
 
 .mx-chat-layer { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; min-height: 0; background: transparent; font-family: var(--ui); line-height: normal; cursor: default; }
-.mx-pane-body.is-chat > :not(.mx-chat-layer, .mx-subs) { visibility: hidden; }
+.mx-pane-body.is-chat > :not(.mx-chat-layer) { visibility: hidden; }
 /* The body keeps its padding in the chat view: the chat layer covers it anyway (absolute, inset 0), and dropping it
    would resize the hidden terminal on every switch, so the agent would redraw its whole screen twice. */
 /* The chat's size is the person's: `--chat-zoom` draws all of it larger or smaller (Settings › Chat text size), and
@@ -24,7 +24,8 @@
 /* The column's 760px and the scrollbar's 8px: the scrollbar sits at the column's edge, not the pane's. */
 .mx-chat-scroller { align-self: center; width: 100%; max-width: calc(var(--chat-width, 760px) + 8px); }
 .mx-chat-jump { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); }
-.mx-chat-scroller { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 36px); mask-image: linear-gradient(180deg, transparent 0, #000 36px); padding: 36px 0 10px; }
+/* No padding above the rows: a message just sent stands 16px under the top (its row's own 8px and the list's 8px), so the fade is short too. */
+.mx-chat-scroller { -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 12px); mask-image: linear-gradient(180deg, transparent 0, #000 12px); padding: 0 0 10px; }
 .mx-chat-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 36px 0 10px; display: flex; flex-direction: column-reverse; -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 36px); mask-image: linear-gradient(180deg, transparent 0, #000 36px); }
 /* Rows are 16px apart: half of it above each row and half below. */
 .mx-chat-column { margin: 0 auto; width: 100%; max-width: var(--chat-width, 760px); padding: 0 20px; display: flex; flex-direction: column; gap: 16px; }
@@ -49,9 +50,23 @@
 .mx-msg-lead { margin: 0; font-weight: 600; color: var(--fg); white-space: pre-wrap; text-wrap: pretty; }
 .mx-msg-rest { color: var(--fg2); }
 .mx-msg-empty { margin: 0; font-size: 13px; font-style: italic; color: var(--dim); }
-/* What the agent is doing now: the working spinner, the words, and the time in mono. */
+/* While the agent works the chat shows one box (`LiveBox`): the clock and how to stop, the step it is on, and a
+   skeleton where the reply will be. */
+@keyframes mxShim { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
+.mx-live { display: flex; flex-direction: column; background: var(--m-well); border: 1px solid var(--line2); }
+.mx-live-head { display: flex; align-items: center; gap: 9px; height: 36px; padding: 0 10px 0 12px; font-size: 13px; color: var(--fg); }
+.mx-live-time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.mx-live-esc { flex: none; font-size: 11.5px; color: var(--dim); }
+.mx-live-step { display: flex; align-items: center; gap: 9px; min-height: 34px; padding: 0 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--fg2); }
+.mx-live-mark { flex: none; width: 12px; text-align: center; color: var(--dim); }
+.mx-live-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-live-skeleton { display: flex; flex-direction: column; gap: 9px; padding: 4px 12px 14px 33px; }
+.mx-sk { height: 11px; background: linear-gradient(90deg, color-mix(in srgb, var(--fg) 7%, transparent) 0%, color-mix(in srgb, var(--fg) 13%, transparent) 50%, color-mix(in srgb, var(--fg) 7%, transparent) 100%); background-size: 840px 100%; animation: mxShim 1.6s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .mx-sk { animation: none; } }
+:root[data-reduced-motion="true"] .mx-sk { animation: none; }
+/* The mark before "Sending…" and "starting…": the running light, 12px. */
 .mx-working { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 13px; color: var(--muted); }
-.mx-working-mark { display: inline-flex; flex: none; width: 14px; height: 14px; align-items: center; justify-content: center; color: var(--working); }
+.mx-working-mark { display: inline-flex; flex: none; width: 14px; height: 14px; align-items: center; justify-content: center; }
 .mx-working-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-working-time { flex: none; font-family: var(--mono); font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
 /* A helper's report: ↳, its summary cut short, and the time that never shrinks. */
@@ -88,7 +103,7 @@
 .mx-step { display: flex; flex-direction: column; min-width: 0; }
 .mx-step-row { display: flex; width: 100%; min-width: 0; min-height: 30px; align-items: center; gap: 9px; padding: 0 4px; text-align: left; font-size: 13px; color: var(--fg2); outline: none; }
 button.mx-step-row:hover { background: var(--m-hover); }
-button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+button.mx-step-row:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 /* Amber is the one colour that means "needs you", so only a step a request is waiting on wears it: a tint and a left edge. */
 .mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); box-shadow: inset 2px 0 0 var(--needs); }
 .mx-step-glyph { flex: none; display: inline-flex; width: 14px; height: 14px; align-items: center; justify-content: center; }
@@ -139,7 +154,7 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .mx-step-alone.is-waiting { border-color: var(--needs); }
 .mx-step-cardhead { gap: 8px; }
 .mx-step-cardtoggle { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; align-self: stretch; text-align: left; outline: none; }
-.mx-step-cardtoggle:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+.mx-step-cardtoggle:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-step-cardtoggle > [data-slot="tag"] { flex: none; }
 .mx-step-cardhead > [data-slot="tag"] { flex: none; }
 .mx-step-cardbody { display: flex; min-width: 0; flex-direction: column; }
@@ -178,25 +193,6 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .mx-plan-mark.is-current { box-shadow: inset 0 0 0 1px var(--working); }
 .mx-plan-ring { width: 6px; height: 6px; background: var(--working); }
 
-/* Helper agents: a 40px row each, several in one card with a hairline between them. */
-.mx-agents { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
-.mx-agents.is-carded > li + li { border-top: 1px solid var(--line); }
-.mx-agents-counts { font-size: 12px; font-weight: 400; color: var(--muted); }
-.mx-agent-row { display: flex; width: 100%; min-height: 40px; align-items: center; gap: 9px; padding: 4px 12px; text-align: left; outline: none; }
-.mx-agents:not(.is-carded) .mx-agent-row { padding: 4px; }
-.mx-agent-row:not(:disabled):hover { background: var(--m-hover); }
-.mx-agent-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
-.mx-agent-tile { position: relative; flex: none; display: flex; }
-.mx-agent-badge { position: absolute; right: -5px; bottom: -5px; display: flex; width: 15px; height: 15px; align-items: center; justify-content: center; background: var(--card); }
-.mx-agent-badge > .mx-step-glyph { transform: scale(.8); }
-.mx-agent-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; }
-.mx-agent-name { display: flex; min-width: 0; align-items: baseline; gap: 7px; white-space: nowrap; }
-.mx-agent-name strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; font-weight: 600; color: var(--fg); }
-.mx-agent-name span { flex: none; font-size: 11.5px; color: var(--dim); }
-.mx-agent-asked { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
-.mx-agent-detail { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 12px 43px; font-size: 13px; line-height: 1.5; }
-.mx-agent-prompt { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted); }
-.mx-agent-report { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg2); }
 
 /* A request that was answered, folded into one line. */
 .mx-answered { display: flex; min-width: 0; min-height: 32px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
@@ -224,19 +220,19 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .mx-changed-counts .is-add { color: var(--done); }
 .mx-changed-counts .is-remove { color: var(--err); }
 
-/* A run of steps (`WorkCard`): a card whose head says what it did, over its latest steps. */
-.mx-work-cardhead { padding: 0; }
-.mx-work-head { display: flex; flex: 1; min-width: 0; min-height: 36px; align-items: center; gap: 8px; padding: 0 10px 0 12px; text-align: left; font-size: 13px; outline: none; }
-.mx-work-head:hover { background: var(--m-hover); }
-.mx-work-head:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
+/* A run of steps (`WorkCard`): one 32px row on the well, "what it did", a count of steps and a chevron; opened, the steps
+   list under a hairline. */
+.mx-work { display: flex; min-width: 0; flex-direction: column; background: var(--m-well); border: 1px solid var(--line); }
+.mx-work-head { display: flex; width: 100%; min-width: 0; min-height: 32px; align-items: center; gap: 9px; padding: 0 8px; text-align: left; font-size: 13px; color: var(--fg2); outline: none; }
+.mx-work-head:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+.mx-work-head:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-work-mark { flex: none; width: 16px; text-align: center; font: 600 13px var(--mono); color: #D97757; }
 /* Wraps instead of cutting off: the end of the line is where "a step failed" is said. */
-.mx-work-text { min-width: 0; overflow-wrap: anywhere; font-weight: 600; color: var(--fg); }
-.mx-work-steps { display: flex; flex-direction: column; padding: 2px 0; }
-.mx-work-steps .mx-step-row { padding: 0 12px; }
+.mx-work-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; color: var(--fg); }
+.mx-work-count { flex: none; display: inline-flex; height: 18px; align-items: center; padding: 0 7px; font-size: 11px; font-weight: 600; color: var(--muted); background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.mx-work-steps { display: flex; flex-direction: column; padding: 2px 0 4px; border-top: 1px solid var(--line); }
+.mx-work-steps .mx-step-row { padding: 0 8px; }
 .mx-work-steps .mx-step-body { margin: 4px 12px 8px 35px; }
-.mx-work-more { display: block; width: 100%; padding: 6px 12px; border-top: 1px solid var(--line); text-align: left; font-size: 12px; color: var(--muted); outline: none; }
-.mx-work-more:hover { background: var(--m-hover); color: var(--fg); }
-.mx-work-more:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .mx-work-failed { background: color-mix(in oklab, var(--err) 7%, transparent); }
 
 /* The agent's reasoning: one quiet italic line that opens to the text, ruled on its left. */
@@ -267,44 +263,17 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .mx-aside-wait { margin: 0; color: var(--muted); }
 .mx-signin-code { font: 600 14px var(--mono); letter-spacing: .06em; padding: 1px 6px; border-radius: var(--r-badge); background: color-mix(in oklab, var(--link) 14%, transparent); user-select: all; }
 .mx-composer-error { margin: 6px 0 0; align-self: stretch; font-size: 12px; color: var(--danger); }
-.mx-queue-row { align-self: stretch; display: flex; justify-content: flex-end; align-items: flex-start; gap: 8px; margin: 0 0 8px; }
-.mx-queue { flex: 1; min-width: 0; list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.mx-queued { position: relative; max-width: 85%; display: flex; flex-direction: column; gap: 4px; padding: 6px 8px 9px 14px; border-radius: 16px 16px 5px 16px; border: 1px dashed var(--line2); font-size: 14px; line-height: 1.5; color: var(--fg2); }
-/* Several waiting: the cards take the accent's line, so a stack is not taken for one message. */
-.mx-queued.is-many { border-color: var(--accent-line); cursor: pointer; }
-.mx-queued-head { display: flex; align-items: center; gap: 2px; min-height: 22px; font-size: 11.5px; color: var(--dim); }
-.mx-queued-place { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
-.mx-queue-place { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px; background: var(--accent-soft); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent-text, var(--accent)); }
-/* Edit and Remove sit above the text button's stretched area, so they take their own clicks. */
-.mx-queued-tool { position: relative; z-index: 1; flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); }
-.mx-queued-tool:hover { color: var(--fg); background: var(--m-hover); }
-.mx-queued-tool.is-send:hover { color: var(--accent-text); }
-.mx-queued-text { white-space: pre-wrap; overflow-wrap: anywhere; text-align: left; font: inherit; color: inherit; padding-right: 6px; }
-button.mx-queued-text { cursor: pointer; }
-button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
-/* In the stack the front message keeps to two lines; spread out, each shows whole. */
-.mx-queue.is-stacked .mx-queued-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-/* The stack: the next message to be sent in front, the edges of up to two more under it, each a step narrower. The ones behind
-   have no content, so the stack is as wide as its front card. */
-.mx-queue.is-stacked { flex: 0 1 auto; max-width: 85%; align-items: stretch; gap: 0; }
-.mx-queue.is-stacked .mx-queued { max-width: none; }
-.mx-queued.is-behind { height: 7px; margin: 0 10px; padding: 0; border-top: 0; border-radius: 0 0 10px 10px; opacity: .72; }
-.mx-queued.is-behind + .mx-queued.is-behind { margin: 0 20px; opacity: .48; }
-.mx-queued.is-behind + .mx-queued.is-behind ~ .mx-queued.is-behind { display: none; }
-.mx-queued.is-behind > * { display: none; }
-/* Beside the stack: one small card for each message behind the front one, numbered by its place. */
-.mx-queue:not(.is-stacked) .mx-queued { animation: mxRise .2s cubic-bezier(.2, .8, .2, 1) both; }
-@media (prefers-reduced-motion: reduce) { .mx-queue .mx-queued { animation: none; } }
 
-/* Layer one: what the agent waits on, a card rising out of the top of the box (`WaitingCard`). It is 24px narrower than
-   the box and open at its bottom, so it reads as coming from the box; amber is its edge because it needs you. */
+/* Layer one: what the agent waits on, a floating card above the message box (`WaitingCard`, Needs Card in the design): the
+   box's width, a --line2 border, the shared floating shadow, folded corners with flaps under Folded. It rises in, 0.2s. */
 @keyframes mxRise { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 .mx-waiting {
-  position: relative; z-index: 1; width: calc(100% - 24px); margin: 0 12px; border-bottom: 0;
-  border-bottom-left-radius: 0; border-bottom-right-radius: 0; outline: none;
-  animation: mxRise .2s var(--ease, cubic-bezier(.2, .8, .2, 1)) both;
+  position: relative; z-index: 1; width: 100%; margin: 0 0 8px; outline: none;
+  background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh);
+  animation: mxRise .2s cubic-bezier(.2, .8, .2, 1) both;
 }
-.mx-waiting:focus-visible { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus); }
+.mx-waiting:focus-visible { box-shadow: var(--pop-sh), inset 0 -2px 0 var(--accent); }
+.mx-waiting-bang { flex: none; width: 14px; text-align: center; font: 800 13px/1 var(--mono); color: var(--needs); }
 .mx-waiting-head { display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .mx-waiting-head:last-child { border-bottom: 0; }
 .mx-waiting-title { min-width: 0; font-size: 13px; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
@@ -313,7 +282,6 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-waiting-body.is-flush { gap: 0; padding: 0; }
 .mx-waiting-body.is-flush > :is(.mx-waiting-text, .mx-waiting-note) { padding: 10px 12px 0; }
 .mx-waiting-foot { display: flex; min-height: 40px; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-top: 1px solid var(--line); }
-.mx-waiting-body > .mx-waiting-foot.is-form, .mx-waiting-form > .mx-waiting-foot.is-form { margin: 0 -12px -10px; }
 .mx-waiting-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg2); overflow-wrap: anywhere; }
 .mx-waiting-text.is-pre { white-space: pre-wrap; }
 .mx-waiting-note { margin: 0; font-size: 12px; color: var(--muted); }
@@ -331,41 +299,45 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-terminal-options { position: relative; max-height: 220px; overflow: auto; }
 .mx-terminal-selected { display: block; margin: 0 -12px; padding: 0 12px; background: color-mix(in oklab, var(--needs) 14%, transparent); color: var(--fg); }
 .mx-terminal-key { min-width: 34px; justify-content: center; font-family: var(--mono); }
-/* Questions: each a group of option boxes, the picked one on the amber edge. */
-.mx-waiting-form { display: flex; flex-direction: column; gap: 10px; margin: 0; }
-/* One tab per question; the one shown in the needs colour, an answered one ticked. */
-.mx-waiting-steps { display: flex; gap: 4px; min-width: 0; }
-.mx-waiting-step { flex: 0 1 auto; min-width: 0; height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-size: 12px; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
-.mx-waiting-step:hover { background: var(--m-hover); color: var(--fg); }
-.mx-waiting-step.is-on { color: var(--fg); box-shadow: inset 0 0 0 1px var(--needs); }
+/* Questions: one at a time. Tabs with an amber underline, numbered answers with no boxes, a ruled line for your own words. */
+.mx-waiting-form { display: flex; flex-direction: column; gap: 0; margin: 0; outline: none; }
+.mx-waiting-steps { display: flex; align-items: stretch; gap: 16px; min-width: 0; padding: 0 12px 0 34px; border-bottom: 1px solid var(--line); overflow: hidden; }
+.mx-waiting-step { flex: 0 1 auto; min-width: 0; height: 30px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.mx-waiting-step:hover { color: var(--fg); }
+.mx-waiting-step.is-on { color: var(--fg); box-shadow: inset 0 -2px 0 var(--needs); }
 .mx-waiting-step-mark { flex: none; font: 600 11px var(--mono); color: var(--dim); }
-.mx-waiting-step.is-on .mx-waiting-step-mark { color: var(--needs); }
+.mx-waiting-step.is-on .mx-waiting-step-mark { color: var(--fg); }
 .mx-waiting-step.is-done .mx-waiting-step-mark { color: var(--done); }
 .mx-waiting-step-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-waiting-question { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px; }
-.mx-waiting-question > legend { padding: 0; margin-bottom: 6px; font-size: 14px; font-weight: 600; color: var(--fg); }
-/* A question that takes several answers says so beside it, and its boxes tick rather than fill. */
-.mx-waiting-any { margin-left: 4px; font-size: 12px; font-weight: 400; color: var(--muted); }
-.mx-option.is-check.is-picked .mx-option-mark::after { width: 8px; height: 4px; background: none; border: solid var(--needs); border-width: 0 0 1.5px 1.5px; transform: translateY(-1px) rotate(-45deg); }
-.mx-waiting-options { display: flex; flex-direction: column; gap: 6px; }
-.mx-option { display: flex; width: 100%; align-items: flex-start; gap: 10px; padding: 9px 10px; box-shadow: inset 0 0 0 1px var(--line); text-align: left; font-size: 13px; color: var(--fg); cursor: pointer; outline: none; }
-.mx-option:hover { background: var(--m-hover); }
-.mx-option:focus-visible, .mx-option:has(input:focus-visible) { box-shadow: inset 0 0 0 1px var(--line), 0 0 0 2px var(--focus); }
-.mx-option.is-picked { background: color-mix(in oklab, var(--needs) 8%, transparent); box-shadow: inset 0 0 0 1px var(--needs); }
+.mx-waiting-question { margin: 0; padding: 12px 12px 8px; border: 0; display: flex; flex-direction: column; min-width: 0; max-height: min(300px, 40vh); overflow-y: auto; }
+.mx-waiting-question > legend { float: left; width: 100%; padding: 0 0 8px 22px; font-size: 14px; line-height: 1.45; font-weight: 500; color: var(--fg); text-wrap: pretty; }
+.mx-waiting-question > legend + * { clear: both; }
+/* A question that takes several answers says so beside it. */
+.mx-waiting-any { margin-left: 8px; font-size: 11.5px; font-weight: 400; color: var(--dim); }
+.mx-waiting-options { display: flex; flex-direction: column; gap: 0; }
+.mx-option { display: flex; width: 100%; align-items: baseline; gap: 10px; min-height: 32px; padding: 7px 8px 7px 0; text-align: left; font-size: 13px; color: var(--fg2); cursor: pointer; outline: none; background: transparent; }
+.mx-option:hover, .mx-option.is-active { background: var(--m-hover); color: var(--fg); }
+.mx-option:focus-visible, .mx-option:has(input:focus-visible) { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-option.is-picked { color: var(--fg); }
 .mx-option:disabled { cursor: default; opacity: .55; }
-.mx-option-mark { flex: none; display: inline-flex; width: 14px; height: 14px; margin-top: 2px; align-items: center; justify-content: center; box-shadow: inset 0 0 0 1.5px var(--line2); }
-.mx-option.is-picked .mx-option-mark { box-shadow: inset 0 0 0 1.5px var(--needs); }
-.mx-option.is-picked .mx-option-mark::after { content: ""; width: 6px; height: 6px; background: var(--needs); }
-.mx-option-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-weight: 600; overflow-wrap: anywhere; }
+.mx-option-key { flex: none; width: 22px; text-align: right; font: 600 11.5px var(--mono); color: var(--dim); }
+.mx-option.is-picked .mx-option-key { color: var(--needs); }
+.mx-option-tick { flex: none; width: 14px; font-size: 12px; color: var(--needs); }
+.mx-option-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-weight: 400; overflow-wrap: anywhere; }
+.mx-option.is-picked .mx-option-text { font-weight: 600; }
 .mx-option-about { font-size: 12px; font-weight: 400; line-height: 1.45; color: var(--muted); }
-.mx-option-key { flex: none; padding: 1px 5px; border: 1px solid currentColor; font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--muted); opacity: .7; }
-.mx-option.is-own { align-items: center; cursor: text; }
-.mx-option-input { flex: 1; min-width: 0; height: 22px; padding: 0; border: 0; background: transparent; font-size: 13px; color: var(--fg); outline: none; }
+.mx-option.is-own { align-items: center; min-height: 34px; padding: 0 8px 0 0; cursor: text; }
+.mx-option.is-own:hover { background: transparent; }
+.mx-option-input { flex: 1; min-width: 0; height: 28px; padding: 0; border: 0; background: transparent; font-size: 13px; color: var(--fg); outline: none; box-shadow: inset 0 -1px 0 var(--line); }
+.mx-option-input:focus { box-shadow: inset 0 -2px 0 var(--needs); }
 .mx-option-input::placeholder { color: var(--dim); font-weight: 400; }
-.mx-waiting-input { width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--line2); background: var(--m-well); font-size: 13px; color: var(--fg); outline: none; }
+.mx-waiting-input { width: 100%; height: 30px; padding: 0; border: 0; background: transparent; font-size: 13px; color: var(--fg); outline: none; box-shadow: inset 0 -1px 0 var(--line); }
 .mx-waiting-input::placeholder { color: var(--dim); }
-.mx-waiting-input:focus-visible { border-color: var(--focus); }
+.mx-waiting-input:focus { box-shadow: inset 0 -2px 0 var(--needs); }
+.mx-waiting-form > .mx-waiting-foot { border-top: 0; padding: 4px 8px 4px 34px; min-height: 42px; }
+.mx-waiting-form > .mx-waiting-foot .mx-waiting-note { font-size: 11.5px; color: var(--dim); }
 @media (prefers-reduced-motion: reduce) { .mx-waiting { animation: none; } }
+:root[data-reduced-motion="true"] .mx-waiting { animation: none; }
 
 /* Layer two: the glass box. */
 .mx-box {
@@ -373,7 +345,8 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
   border: 1px solid var(--line2); background: var(--main);
   transition: opacity .25s, border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
-.mx-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+/* The message box is the one field whose whole border takes the focus, with no second ring. */
+.mx-box:focus-within { border-color: var(--accent); }
 /* The agent's commands, over the box while a slash and a name are typed. It floats, so the box and the chat stay put. */
 /* Square, as the window's corners are: a head that counts the matches, the rows, and the keys at its foot. */
 .mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(340px, 50vh); border: 1px solid var(--line2); background: var(--main); box-shadow: 0 3px 10px rgba(var(--sd), calc(.35 * var(--sk))); animation: v7fade .12s var(--ease-out); }
@@ -400,7 +373,8 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-box-text::placeholder { color: var(--dim); }
 .mx-box-text:disabled { cursor: not-allowed; }
 .mx-box-row { display: flex; align-items: center; gap: 4px; }
-.mx-box-attach { position: absolute; top: 8px; right: 8px; width: 30px; height: 30px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; color: var(--fg2); }
+/* Attach and send are both 32px and share the box's right inset, so they line up one above the other. */
+.mx-box-attach { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; color: var(--fg2); box-shadow: inset 0 0 0 1px var(--line); }
 .mx-box-attach:hover { background: var(--m-hover); color: var(--fg); }
 .mx-box-attach[aria-disabled="true"] { cursor: not-allowed; }
 .mx-model-button { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; outline: none; }
@@ -484,15 +458,16 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-usage-ring { flex: none; display: block; overflow: visible; }
 .mx-usage-ring path { fill: none; stroke-width: 2; }
 .mx-usage-track { stroke: var(--line2); }
-.mx-usage-fill { stroke: var(--usage-ink); }
+/* Neutral: the meters say how much is used, never how worried to be; colour is for status only (design rule 1). */
+.mx-usage-fill { stroke: var(--fg2); }
 .mx-usage-name { font-family: var(--ui); font-weight: 400; color: var(--dim); }
-.mx-usage-item.is-ok { --usage-ink: var(--m-ok); }
-.mx-usage-item.is-mid { --usage-ink: var(--m-mid); }
-.mx-usage-item.is-high { --usage-ink: var(--m-or); }
-.mx-usage-item.is-max { --usage-ink: var(--m-hi); }
+/* The ring follows the corners: a square path under Square and Folded, a circle under Rounded. */
+.mx-usage-round { display: none; }
+:root[data-corners="rounded"] .mx-usage-round { display: inline; }
+:root[data-corners="rounded"] .mx-usage-sq { display: none; }
 /* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
 .mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
-button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button.mx-usage-item:focus-visible { outline: none; box-shadow: inset 0 -2px 0 var(--accent); }
 /* The short names go first on a narrow window; the rings and figures stay. */
 @media (max-width: 1180px) { .mx-usage-name { display: none; } }
 /* The permission mode: a shield and a chevron, its name in the tooltip; red in a mode that asks about nothing. */
@@ -504,7 +479,7 @@ button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-of
 /* Plan mode, said inside the box while it is on. */
 .mx-plan-strip { margin: 0; display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); }
 .mx-plan-strip-name { font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ansi-blue); }
-.mx-usage-figure { color: var(--usage-ink); }
+.mx-usage-figure { color: var(--muted); }
 
 /* A subagent's own chat: the bar that names it and leads back. */
 .mx-sub-bar { flex: none; display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; margin: 10px 20px 0; padding: 0 6px 0 10px; border: 1px solid var(--line); background: var(--m-well); font-size: 12.5px; color: var(--muted); }
@@ -534,36 +509,10 @@ button.mx-usage-item:focus-visible { outline: 2px solid var(--focus); outline-of
 
 /* The question tray's slot: no box of its own, so the tray lays out in the column as before; it is only there to find the tray's first control. */
 .mx-question-slot { display: contents; }
-/* The running subagents (`RunningSubagents`): a 34px bar floating under the pane's header, as wide as the chat's
-   column, on the menu surface. Opening it extends it downward over the feed without moving it; the feed fades behind
-   it, more while it is open. It floats over the terminal view the same way. */
-.mx-subs { position: absolute; top: 0; left: 0; right: 0; z-index: 4; display: flex; justify-content: center; padding: 8px 12px 0; pointer-events: none; }
-.mx-subs-fade { position: absolute; top: 0; left: 0; right: 0; height: 22px; background: linear-gradient(var(--main), transparent); -webkit-mask-image: linear-gradient(#000 40%, transparent); mask-image: linear-gradient(#000 40%, transparent); transition: height var(--t-base, .18s) var(--ease, ease); }
-.mx-subs.is-open .mx-subs-fade { height: 44px; }
-.mx-subs-card { position: relative; display: flex; width: 100%; max-width: var(--chat-width, 760px); flex-direction: column; border: 1px solid var(--line2); border-radius: var(--r-panel); background: var(--card); box-shadow: var(--sh-pop); font-family: var(--ui); line-height: normal; pointer-events: auto; animation: mxRise .2s var(--ease, ease) both; }
-.mx-subs-bar { display: flex; width: 100%; min-width: 0; height: 34px; align-items: center; gap: 8px; padding: 0 12px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
-.mx-subs-bar:hover { background: var(--m-hover); }
-.mx-subs-bar:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
-.mx-subs-chevron { flex: none; display: inline-flex; transition: transform var(--t-base, .18s) var(--ease, ease); }
-.mx-subs.is-open .mx-subs-chevron { transform: rotate(180deg); }
-.mx-subs-spin { display: inline-flex; width: 14px; flex: none; justify-content: center; color: var(--working); }
-.mx-subs-count { flex: none; font-weight: 600; color: var(--fg); }
-.mx-subs-first { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-subs-task { color: var(--fg2); }
-.mx-subs-activity { color: var(--dim); }
-.mx-subs-more { flex: none; font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--dim); }
-.mx-subs-list { list-style: none; margin: 0; padding: 0; max-height: min(440px, 60vh); overflow: auto; border-top: 1px solid var(--line); }
-.mx-subs-item + .mx-subs-item { border-top: 1px solid var(--line); }
-.mx-subs-row { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 9px; padding: 5px 12px; text-align: left; outline: none; }
-.mx-subs-row:hover { background: var(--m-hover); }
-.mx-subs-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
-.mx-subs-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 1px; }
-.mx-subs-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--fg); }
-.mx-subs-kind { margin-left: 7px; font-size: 11.5px; font-weight: 400; color: var(--dim); }
-.mx-subs-latest { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--muted); }
-.mx-subs-time { flex: none; font-family: var(--mono); font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
-.mx-subs-detail { display: flex; flex-direction: column; gap: 6px; padding: 0 12px 12px 35px; }
-.mx-subs-detail p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
-.mx-subs-detail p.is-mono { font-family: var(--mono); font-size: 12px; }
-.mx-subs-label { font-size: 11px; font-weight: 600; color: var(--dim); }
-@media (prefers-reduced-motion: reduce) { .mx-subs-card { animation: none; } .mx-subs-fade, .mx-subs-chevron { transition: none; } }
+
+/* Folded corners (docs/DESIGN.md): chat blocks and bubbles are cut 10px, a floating action card 14px with its flaps; the
+   Square and Rounded corners come from the tokens. */
+:root[data-corners="folded"] .mx-app :is(.mx-live, .mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered) { border-radius: 10px 0 10px 0 !important; }
+:root[data-corners="folded"] .mx-app .mx-waiting { border-radius: 14px 0 14px 0 !important; }
+:root[data-corners="folded"] .mx-app .mx-chat .mx-waiting-step { border-radius: 0 !important; }
+.mx-waiting-head:has(+ .mx-waiting-body > .mx-waiting-form) { border-bottom: 0; }

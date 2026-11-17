@@ -7,7 +7,7 @@ const execute = promisify(execFile);
 const executable = __APP_EXE__;
 
 export const AppStatus = async ({ client } = {}) => {
-  if (!process.env.__APP_ENV___TERM_ID) return {};
+  if (!(process.env.__APP_ENV___TERM_ID || process.env.__APP_ENV_PREVIOUS___TERM_ID)) return {};
   const pending = new Set();
   let queue = Promise.resolve(), warned = false, active, state = "idle";
   const send = (id, next, event) => {

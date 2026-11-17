@@ -2,10 +2,14 @@ import type { ReactNode } from 'react'
 import { fileTag } from '@/features/inspect/fileTag'
 import { StatusMark, type MarkState } from '@/components/ui/status-mark'
 import { FileBadge as UiFileBadge, Tag } from '@/components/ui/tag'
-import { Icon, Spinner } from '@/features/workspace/components/glyphs'
+import { Icon } from '@/features/workspace/components/glyphs'
+import { StatusIcon } from '@/components/ui/status-icon'
 import type { FileChangeKind, ItemStatus } from '../chatEvents'
 
 /** Small pieces the chat's steps and cards share. Colours are theme tokens. */
+
+/** The running light inside a step's 14px mark. */
+const RUNNING_LIGHT_PX = 12
 
 const STATUS_WORD: Record<ItemStatus, string> = { running: 'Running', completed: 'Done', failed: 'Failed', interrupted: 'Stopped' }
 
@@ -19,7 +23,7 @@ const MARK_OF: Record<ItemStatus, MarkState> = { running: 'running', completed: 
 export function StepGlyph({ status, waiting = false }: { status: ItemStatus; waiting?: boolean }) {
   return (
     <span className="mx-step-glyph" aria-hidden="true">
-      <StatusMark state={waiting ? 'needs' : MARK_OF[status]} spinner={<Spinner />} />
+      <StatusMark state={waiting ? 'needs' : MARK_OF[status]} spinner={<StatusIcon status="working" size={RUNNING_LIGHT_PX} />} />
     </span>
   )
 }

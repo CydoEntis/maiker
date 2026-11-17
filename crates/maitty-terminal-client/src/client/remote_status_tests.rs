@@ -43,12 +43,9 @@ impl Sandbox {
                 self.shim.to_string_lossy().into_owned(),
                 "--mode=proxy".into(),
                 format!("--maitty={}", self.maitty.display()),
-                format!("--env=MAITTY_SOCKET={}", self.socket),
-                format!("--env=MAITTY_DATA_DIR={}", self.dir.join("data").display()),
-                format!(
-                    "--env=MAITTY_CONFIG={}",
-                    self.dir.join("config.toml").display()
-                ),
+                format!("--env={}={}", maitty_shared::brand::env_name("SOCKET"), self.socket),
+                format!("--env={}={}", maitty_shared::brand::env_name("DATA_DIR"), self.dir.join("data").display()),
+                format!("--env={}={}", maitty_shared::brand::env_name("CONFIG"), self.dir.join("config.toml").display()),
             ],
             "maitty",
         )
@@ -60,11 +57,11 @@ impl Drop for Sandbox {
         // Must not panic: a failed test is already unwinding.
         let _ = Process::new(&self.maitty)
             .arg("kill-server")
-            .env("MAITTY_SOCKET", &self.socket)
-            .env("MAITTY_DATA_DIR", self.dir.join("data"))
-            .env("MAITTY_CONFIG", self.dir.join("config.toml"))
-            .env_remove("MAITTY_TERM_ID")
-            .env_remove("MAITTY_PANE_TOKEN")
+            .env(maitty_shared::brand::env_name("SOCKET"), &self.socket)
+            .env(maitty_shared::brand::env_name("DATA_DIR"), self.dir.join("data"))
+            .env(maitty_shared::brand::env_name("CONFIG"), self.dir.join("config.toml"))
+            .env_remove(maitty_shared::brand::env_name("TERM_ID"))
+            .env_remove(maitty_shared::brand::env_name("PANE_TOKEN"))
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -303,7 +300,7 @@ fn frame_text(app: &mut App) -> String {
         .iter()
         .map(|c| c.symbol())
         .collect::<String>();
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("{text}");
     }
     text

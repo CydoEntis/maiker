@@ -1,6 +1,6 @@
 # maitty configuration
 # Location: %APPDATA%\maitty\config.toml on Windows, ~/.config/maitty/config.toml elsewhere
-# (override with MAITTY_CONFIG). Every key is optional; reload with <prefix> Ctrl+R.
+# (override with AGENT_CONFIG). Every key is optional; reload with <prefix> Ctrl+R.
 
 prefix = "ctrl+a"
 
@@ -176,7 +176,7 @@ pattern_rows = 12
 
 # Per-repo settings go in the repo, in a .maitty.toml file (commit it to share them):
 #   [hooks]
-#   on_create = "npm install"        # runs in each new worktree ($MAITTY_BRANCH, $MAITTY_WORKTREE, ...)
+#   on_create = "npm install"        # runs in each new worktree ($AGENT_BRANCH, $AGENT_WORKTREE, ...)
 #   on_remove = ""                   # runs before a worktree is removed
 
 # Checks: when an agent's turn ends in a project listed here, Maitty runs `command` through
@@ -185,7 +185,7 @@ pattern_rows = 12
 # checks (checkpoints), each with its own `name` (default: the command's last word, so
 # "npm test" is `test`); two in one project may not share a name.
 # `timeout_s` (default 600) stops a run that hangs, and its whole process tree with it.
-# The command does not get the pane's MAITTY_PANE_TOKEN, and its output stays on the daemon.
+# The command does not get the pane's AGENT_PANE_TOKEN, and its output stays on the daemon.
 # Several run in the order listed, each whatever the one before it returned; the session
 # reads done only when every one passed (or you overrode it).
 # [[check]]

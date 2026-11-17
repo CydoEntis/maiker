@@ -6,7 +6,7 @@ const execute = promisify(execFile);
 const executable = __APP_EXE__;
 
 export default function (pi) {
-  if (!process.env.__APP_ENV___TERM_ID) return;
+  if (!(process.env.__APP_ENV___TERM_ID || process.env.__APP_ENV_PREVIOUS___TERM_ID)) return;
   let running = false;
   let prompts = 0;
   let warned = false;

@@ -27,7 +27,7 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, morePanelTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -103,9 +103,9 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().restoreLayout).toBe(true)
   })
 
-  it('starts a fresh install with square corners and keeps saved corners', () => {
-    expect(readSettingsPreferences()).toMatchObject({ corners: 'square' })
-    for (const corners of ['square', 'rounded']) {
+  it('starts a fresh install with folded corners and keeps saved corners', () => {
+    expect(readSettingsPreferences()).toMatchObject({ corners: 'folded' })
+    for (const corners of ['square', 'rounded', 'folded']) {
       localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners }))
       expect(readSettingsPreferences()).toMatchObject({ corners })
     }
@@ -117,7 +117,7 @@ describe('settings preferences', () => {
       return readSettingsPreferences().corners
     }
     expect(['glass', 'console', 'flat', 'tiled', 'minimal', 'expressive', 'frosted'].map(corners)).toEqual(Array(7).fill('rounded'))
-    expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'square'])
+    expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'folded'])
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square' }))
     expect(readSettingsPreferences().corners).toBe('square')
   })
@@ -129,15 +129,6 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(true)
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: 'yes' }))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
-  })
-
-  it('keeps Files and History off the tools bar unless they were added', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({}))
-    expect(readSettingsPreferences().morePanelTools).toBe(false)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ morePanelTools: true }))
-    expect(readSettingsPreferences().morePanelTools).toBe(true)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ morePanelTools: 'yes' }))
-    expect(readSettingsPreferences().morePanelTools).toBe(false)
   })
 
   it('opens agent sessions in the chat unless a view was chosen, and ignores nonsense', () => {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { canPutAway, canSnooze, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, SIDEBAR_GROUPINGS, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder } from '../model/sidebar'
+import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
 import { AppIcon, Icon, StatusBadge } from './glyphs'
@@ -12,9 +12,11 @@ import { useStatusFlash } from './useStatusFlash'
 import { snoozeChoices } from '../model/snooze'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
+import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { SubagentRows } from './SubagentRows'
 import { RowHoverCard } from './RowHoverCard'
 import { HOVER_CARD_DELAY_MS, type Box } from '../model/hoverCard'
+import { DAEMON_NAME } from '@/brand'
 
 
 export type SidebarProps = {
@@ -93,11 +95,8 @@ export type SidebarProps = {
   draft?: DraftChat | null | undefined
 }
 
-/** The new chat page's chat while it is unsent: where it will start, and the agent picked for it. */
+/** The New session dialog's chat while it is unsent: where it will start, and the agent picked for it. */
 export type DraftChat = { machine: number; process: string }
-
-/** The gap between a button and the menu that opens under it. */
-const MENU_GAP_PX = 4
 
 type OpenMenu = { title: string; at: { x: number; y: number }; items: MenuEntry[] }
 
@@ -165,6 +164,7 @@ function Expanded(props: SidebarProps) {
   useEffect(() => () => { if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current) }, [])
   const hovered = hover === null || menu !== null ? undefined : props.sessions.find((session) => session.id === hover.id)
   const [pickedProject, setPickedProject] = useState<string | null>(null)
+  const [sort, setSort] = useState<SidebarSort>(DEFAULT_SIDEBAR_SORT)
   const views = useMachineViews()
   // Folded until opened, unlike the other headings: what is put away is out of the way.
   const [putAwayOpen, setPutAwayOpen] = useState(false)
@@ -184,29 +184,13 @@ function Expanded(props: SidebarProps) {
   const held = hold.row
   const draft = props.draft ?? null
   const groups = machineGroups(sessions, props.machines, draft !== null, props.order)
-  const groupingLabel = SIDEBAR_GROUPINGS.find(([grouping]) => grouping === props.grouping)?.[1] ?? ''
   const localMachine = props.machines[0]?.machine ?? 0
-  const picked = (on: boolean, otherwise = '') => (on ? '✓' : otherwise)
-  // Group by, then which project's sessions to show: one menu for both, as the header has one button.
-  const filterMenu = (): MenuEntry[] => [
-    { heading: 'Group by' },
-    ...SIDEBAR_GROUPINGS.map(([grouping, label]) => ({ label, hint: picked(props.grouping === grouping), run: () => { props.onGrouping(grouping) } })),
-    'separator' as const,
-    { heading: 'Show' },
-    { label: 'All projects', hint: picked(project === null, String(props.sessions.length)), run: () => { setPickedProject(null) } },
-    ...projects.map((choice) => ({ label: choice.name, hint: picked(project === choice.name, String(choice.count)), run: () => { setPickedProject(choice.name) } })),
-  ]
   const startMenu = (): MenuEntry[] => [
     { label: 'New agent chat', hint: shortcutText('new-agent-chat'), disabled: !props.canStart, run: () => { props.onNewAgentChat(localMachine) } },
     { label: 'New shell', hint: shortcutText('new-terminal'), disabled: !props.canStart, run: () => { props.onNewShell(localMachine) } },
     'separator',
     { label: 'Add a remote machine…', run: props.onAddMachine },
   ]
-  /** A menu under the button that opens it, not at the pointer, so it opens the same from the keyboard. */
-  const openUnder = (event: MouseEvent<HTMLElement>, title: string, items: MenuEntry[]) => {
-    const box = event.currentTarget.getBoundingClientRect()
-    setMenu({ title, at: { x: box.left, y: box.bottom + MENU_GAP_PX }, items })
-  }
   const openMenu = (event: MouseEvent, title: string, items: MenuEntry[]) => {
     event.preventDefault()
     event.stopPropagation()
@@ -302,19 +286,19 @@ function Expanded(props: SidebarProps) {
         <span className="mx-sidebar-title">Chats</span>
         <span className="mx-spacer" />
         <button type="button" className="mx-head-button" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={14} /></button>
-        <button type="button" className="mx-head-button" aria-label={`Filter and group: ${project ?? 'All projects'}, by ${groupingLabel.toLowerCase()}`} title="Filter and group" aria-haspopup="menu" onClick={(event) => { openUnder(event, 'Filter and group', filterMenu()) }}><Icon name="filter" /></button>
+        <SidebarFilterMenu grouping={props.grouping} onGrouping={props.onGrouping} sort={sort} onSort={setSort} projects={projects} project={project} onProject={setPickedProject} />
         <button type="button" className="mx-head-button" aria-label="New chat" title={tip('New chat', 'new-agent-chat')} disabled={!props.canStart} onClick={() => { props.onNewAgentChat(localMachine) }} onContextMenu={(event) => { openMenu(event, 'Start', startMenu()) }}><Icon name="plus" size={15} /></button>
       </div>
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
         {props.grouping !== 'machine' && (
           <section aria-label="Agents" className="mx-sections">
             {draft !== null && <DraftRow process={draft.process} />}
-            {props.grouping === 'status' && statusSections(sessions, held).map((section) => (
+            {props.grouping === 'status' && statusSections(sessions, held, sort).map((section) => (
               <ListSection key={section.key} id={`status:${section.key}`} tone={section.key} name={section.name} count={section.sessions.length} label={section.name} open={views.isOpen(`status:${section.key}`)} onToggle={() => { views.toggle(`status:${section.key}`) }}>
                 {section.sessions.map((session) => renderRow(session, true, true))}
               </ListSection>
             ))}
-            {props.grouping === 'project' && projectSections(sessions, props.machines).map((section) => (
+            {props.grouping === 'project' && projectSections(sessions, props.machines, sort).map((section) => (
               <ListSection key={section.key} id={section.key} name={section.name} color={section.color} machine={section.head.name === null ? null : section.head} needs={section.needs} count={section.sessions.length} label={section.head.name === null ? section.name : `${section.name} on ${machineTitle(section.head)}`} open={views.isOpen(section.key)} onToggle={() => { views.toggle(section.key) }}>
                 {section.sessions.map((session) => renderRow(session, false))}
               </ListSection>
@@ -357,7 +341,7 @@ function Expanded(props: SidebarProps) {
       <div className="mx-sidebar-foot">
         {props.online
           ? <span className="mx-foot-slot">{props.updateSlot}</span>
-          : <><span className="mx-daemon-dot is-offline" aria-hidden="true" /><span className="mx-daemon-text is-offline" role="status">{props.serviceText ?? 'Reconnecting to maittyd…'}</span></>}
+          : <><span className="mx-daemon-dot is-offline" aria-hidden="true" /><span className="mx-daemon-text is-offline" role="status">{props.serviceText ?? `Reconnecting to ${DAEMON_NAME}…`}</span></>}
         <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={15} /></button>
       </div>
       {hovered && hover && <RowHoverCard session={hovered} row={hover.row} portalContainer={props.portalContainer} />}
@@ -537,7 +521,7 @@ function ProjectSection({ name, color, needs, sessions, renderRow }: { name: str
 /** The 60px rail of a narrow window: the starters, then one tile per session with its status badge. */
 function Rail(props: SidebarProps) {
   const tip = useTipWithKeys()
-  const label = props.online ? `maittyd · ${String(props.sessions.length)} sessions` : 'Reconnecting to maittyd…'
+  const label = props.online ? `${DAEMON_NAME} · ${String(props.sessions.length)} sessions` : `Reconnecting to ${DAEMON_NAME}…`
   return (
     <div className="mx-rail">
       <div className="mx-rail-top">

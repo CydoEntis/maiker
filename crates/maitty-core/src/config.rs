@@ -732,7 +732,7 @@ pub fn builtin_agents() -> Vec<AgentDef> {
 }
 
 pub fn config_path() -> PathBuf {
-    if let Ok(p) = std::env::var(concat!(env!("APP_ENV"), "_CONFIG")) {
+    if let Ok(p) = maitty_shared::brand::env_var("CONFIG") {
         return PathBuf::from(p);
     }
     if cfg!(windows)
@@ -774,7 +774,7 @@ pub fn initialize_data_dir() -> Result<()> {
     if DATA_DIRECTORY.get().is_some() {
         return Ok(());
     }
-    let directory = resolve_data_directory(std::env::var_os(DATA_DIR_ENV))?;
+    let directory = resolve_data_directory(maitty_shared::brand::env_var_os("DATA_DIR"))?;
     DATA_DIRECTORY.get_or_init(|| directory);
     Ok(())
 }
@@ -838,7 +838,7 @@ pub fn migrate_old_names() {
     if DATA_DIRECTORY
         .get()
         .is_some_and(|directory| directory.overridden)
-        || std::env::var_os(concat!(env!("APP_ENV"), "_CONFIG")).is_some()
+        || maitty_shared::brand::env_var_os("CONFIG").is_some()
     {
         return;
     }
@@ -996,7 +996,7 @@ impl Config {
 
     /// Load the config file; a missing file is the defaults, a broken one is an error.
     pub fn load() -> Result<Config> {
-        let own_file = std::env::var_os(concat!(env!("APP_ENV"), "_CONFIG")).is_some();
+        let own_file = maitty_shared::brand::env_var_os("CONFIG").is_some();
         Config::load_at(&config_path(), !own_file)
     }
 

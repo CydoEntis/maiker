@@ -179,10 +179,9 @@ export function Gallery() {
           <div className="w-[800px] max-w-full"><ChatFeed /></div>
           <div className="w-[400px] max-w-full"><ChatFeed /></div>
         </div>
-        <h2 className="m-0 mt-4 text-[18px] font-[650]">Running subagents</h2>
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">The dock: helpers, queue, record</h2>
         <div className="flex flex-wrap items-start gap-6">
           <div className="w-[800px] max-w-full"><SubagentsBars /></div>
-          <div className="w-[400px] max-w-full"><SubagentsBars /></div>
         </div>
         <h2 className="m-0 mt-4 text-[18px] font-[650]">Waiting cards</h2>
         <div className="flex flex-wrap items-start gap-6">

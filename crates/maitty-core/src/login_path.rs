@@ -224,10 +224,18 @@ fn read_path(mut stdout: impl std::io::Read) -> Option<Vec<PathBuf>> {
 /// daemon it belongs to.
 #[cfg(unix)]
 fn scrub_app_env(command: &mut std::process::Command) {
-    let prefix = concat!(env!("APP_ENV"), "_");
+    let prefixes: Vec<&str> = std::iter::once(env!("APP_ENV"))
+        .chain(maitty_shared::brand::previous_env_prefixes())
+        .collect();
     for (key, _) in std::env::vars_os() {
         let name = key.to_string_lossy();
-        if name.starts_with(prefix) || name == env!("APP_ENV") {
+        let ours = prefixes.iter().any(|prefix| {
+            name == *prefix
+                || name
+                    .strip_prefix(prefix)
+                    .is_some_and(|rest| rest.starts_with('_'))
+        });
+        if ours {
             command.env_remove(&key);
         }
     }

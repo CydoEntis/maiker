@@ -5,8 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
+import { DAEMON_NAME } from '@/brand'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, morePanelTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -189,15 +190,6 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ yoloCodex: true, yoloClaude: false, yoloGemini: false }))
   })
 
-  it('adds Files and History to the tools bar, off by default', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance')
-
-    expect(screen.getByRole('switch', { name: 'Files and History tools' })).not.toBeChecked()
-    await user.click(screen.getByRole('switch', { name: 'Files and History tools' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ morePanelTools: true }))
-  })
-
   it('turns on hiding successful tool calls, off by default', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('chat')
@@ -320,42 +312,9 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, scrollback: 100000 })
   })
 
-  it('picks a working spinner from a dropdown of TUI and web spinners', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance')
-    const button = screen.getByRole('button', { name: /^Working spinner: / })
-    expect(button).toHaveTextContent('Braille')
-    expect(button).toHaveTextContent('From the Maitty TUI')
-
-    await user.click(button)
-    const list = await screen.findByRole('menu', { name: /^Working spinner/ })
-    const choices = within(list).getAllByRole('menuitemradio')
-    // The preview glyph is text inside the item (Braille, block elements or a line character); the name is what is left.
-    expect(choices.map((choice) => choice.textContent.replace(/[\u2800-\u28FF\u2580-\u259F|/\\-]/g, '').replace(/(From the Maitty TUI|Web icon)$/, ''))).toEqual(['Blocks', 'Braille', 'Snake', 'Bars', 'Line', 'Circle', 'Dots', 'Equalizer', 'Spokes', 'Ping'])
-    expect(list).toHaveTextContent('Maitty TUI')
-    expect(list).toHaveTextContent('Web')
-    expect(within(list).getByRole('menuitemradio', { name: /Braille/ })).toHaveAttribute('aria-checked', 'true')
-    expect(list.querySelectorAll('.mx-wspin')).toHaveLength(5)
-
-    await user.click(within(list).getByRole('menuitemradio', { name: /Circle/ }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, spinner: 'circle' })
-    expect(screen.queryByRole('menu')).toBeNull()
-  })
-
-  it('names a web spinner as a web icon, and closes the list with Esc without closing Settings', async () => {
-    const user = userEvent.setup()
-    const onClose = vi.fn()
-    renderSettings('appearance', { preferences: { ...PREFS, spinner: 'ping' }, onClose })
-    const button = screen.getByRole('button', { name: /^Working spinner: / })
-    expect(button).toHaveTextContent('Ping')
-    expect(button).toHaveTextContent('Web icon')
-
-    await user.click(button)
-    await screen.findByRole('menu', { name: /^Working spinner/ })
-    await user.keyboard('{Escape}')
-
-    await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
-    expect(onClose).not.toHaveBeenCalled()
+  it('offers no working-spinner choice: the M loader is the one spinner', () => {
+    renderSettings('appearance')
+    expect(screen.queryByRole('button', { name: /^Working spinner/ })).toBeNull()
   })
 
   it('measures running animations on the Performance page and offers no animation level to choose', () => {
@@ -431,7 +390,7 @@ describe('desktop settings', () => {
     expect(screen.queryByRole('switch', { name: 'Needs you' })).toBeNull()
   })
 
-  it('shows only what maittyd reports about itself, as This computer on the Machines page', async () => {
+  it(`shows only what ${DAEMON_NAME} reports about itself, as This computer on the Machines page`, async () => {
     const user = userEvent.setup()
     renderSettings('machines', { daemon: { online: false, sessionCount: 3 } })
     await user.click(screen.getByRole('button', { name: /This computer/ }))
@@ -479,7 +438,7 @@ describe('desktop settings', () => {
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, corners: 'square' } })
     const corners = screen.getByRole('radiogroup', { name: 'Corners' })
 
-    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded'])
+    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded', 'Folded'])
     expect(within(corners).getByRole('radio', { name: 'Square' })).toHaveAttribute('aria-checked', 'true')
 
     await user.click(within(corners).getByRole('radio', { name: 'Rounded' }))

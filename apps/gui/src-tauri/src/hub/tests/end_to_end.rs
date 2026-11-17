@@ -90,6 +90,7 @@ impl Host {
                 | Reaction::GitHubRepos { .. }
                 | Reaction::GitHubOwners { .. }
                 | Reaction::AgentCommands { .. }
+                | Reaction::Repositories { .. }
                 | Reaction::Tickets { .. }
                 | Reaction::TicketKeys { .. }
                 | Reaction::TicketLinks { .. }

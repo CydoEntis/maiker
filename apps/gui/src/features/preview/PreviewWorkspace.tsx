@@ -20,6 +20,7 @@ import { Composer } from './Composer'
 import { CommandDialog } from './CommandDialog'
 import { KeyboardDialog } from './KeyboardDialog'
 import { usePreview } from './previewContext'
+import { DAEMON_NAME } from '@/brand'
 
 /** The screen with a conversation open: the sidebar, its tabs, the feed, the composer and each dialog. */
 export function PreviewWorkspace() {
@@ -151,7 +152,7 @@ export function PreviewWorkspace() {
                   <div className="connection-warning" role="alert">
                     <CircleAlert size={15} />
                     <span>
-                      Disconnected from maittyd. Agents keep running in the
+                      Disconnected from {DAEMON_NAME}. Agents keep running in the
                       daemon. Statuses are the last known values; reconnect
                       before sending or approving.
                     </span>

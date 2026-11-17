@@ -1,6 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react'
 import { cardVariants } from '@/components/ui/card'
-import { StatusMark } from '@/components/ui/status-mark'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -35,11 +34,12 @@ export function WaitingCard({ label, title, aside, children, flush = false, foot
       aria-label={label}
       tabIndex={onEnter === undefined ? undefined : 0}
       aria-keyshortcuts={onEnter === undefined ? undefined : 'Enter'}
-      className={cn(cardVariants({ tone: 'needs' }), 'mx-waiting')}
+      data-float=""
+      className={cn(cardVariants({ tone: 'none' }), 'mx-waiting')}
       onKeyDown={onKeyDown}
     >
       <div className="mx-waiting-head">
-        <StatusMark state="needs" />
+        <span className="mx-waiting-bang" aria-hidden="true">!</span>
         <span className="mx-waiting-title">{title}</span>
         <span className="mx-spacer" />
         {aside !== undefined && <span className="mx-waiting-aside">{aside}</span>}

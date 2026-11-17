@@ -5,8 +5,7 @@ use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const APP_COMMAND: &str = env!("MAITTY_APP_COMMAND");
-const APP_ENV: &str = env!("MAITTY_APP_ENV");
+const APP_COMMAND: &str = env!("APP_COMMAND");
 
 /// Where `install.ps1`, `install.sh` and this module all keep the executable.
 pub fn shared_daemon_path() -> Result<PathBuf> {
@@ -15,7 +14,7 @@ pub fn shared_daemon_path() -> Result<PathBuf> {
     } else {
         APP_COMMAND.to_string()
     };
-    if let Some(directory) = std::env::var_os(format!("{APP_ENV}_INSTALL_DIR")) {
+    if let Some(directory) = maitty_shared::brand::env_var_os("INSTALL_DIR") {
         return Ok(PathBuf::from(directory).join(file));
     }
     #[cfg(windows)]
@@ -139,7 +138,7 @@ fn path_with(existing: &str, directory: &str) -> Option<String> {
 fn put_folder_on_path(target: &Path) -> Result<()> {
     #[cfg(windows)]
     {
-        if std::env::var(format!("{APP_ENV}_NO_PATH")).as_deref() == Ok("1") {
+        if maitty_shared::brand::env_var("NO_PATH").as_deref() == Ok("1") {
             return Ok(());
         }
         let directory = target
@@ -185,18 +184,18 @@ fn windows_user_path() -> Result<String> {
 #[cfg(windows)]
 fn set_windows_user_path(value: &str) -> Result<()> {
     use std::os::windows::process::CommandExt;
+    let path_variable = maitty_shared::brand::env_name("NEW_USER_PATH");
+    let changed_variable = maitty_shared::brand::env_name("PATH_CHANGED");
+    // An expandable string keeps `%VARIABLE%` entries working; setting and clearing a
+    // variable tells running programs the environment changed.
+    let script = format!(
+        "Set-ItemProperty -Path 'HKCU:\\Environment' -Name Path -Type ExpandString -Value $env:{path_variable}; \
+         [Environment]::SetEnvironmentVariable('{changed_variable}','1','User'); \
+         [Environment]::SetEnvironmentVariable('{changed_variable}',$null,'User')"
+    );
     let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            // An expandable string keeps `%VARIABLE%` entries working; setting and clearing a
-            // variable tells running programs the environment changed.
-            "Set-ItemProperty -Path 'HKCU:\\Environment' -Name Path -Type ExpandString -Value $env:MAITTY_NEW_USER_PATH; \
-             [Environment]::SetEnvironmentVariable('MAITTY_PATH_CHANGED','1','User'); \
-             [Environment]::SetEnvironmentVariable('MAITTY_PATH_CHANGED',$null,'User')",
-        ])
-        .env("MAITTY_NEW_USER_PATH", value)
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .env(&path_variable, value)
         .creation_flags(0x0800_0000)
         .output()
         .context("running PowerShell")?;
@@ -309,7 +308,7 @@ mod tests {
         replace_file(&source, &target).unwrap();
 
         assert_eq!(std::fs::read(&target).unwrap(), b"new");
-        assert!(!directory.join(concat!(".", env!("MAITTY_APP_COMMAND"), ".new")).exists());
+        assert!(!directory.join(concat!(".", env!("APP_COMMAND"), ".new")).exists());
         std::fs::remove_dir_all(&directory).unwrap();
     }
 
@@ -323,7 +322,7 @@ mod tests {
         let target = directory.join("installed.exe");
         std::fs::write(&source, b"newest").unwrap();
         std::fs::write(&target, b"newer").unwrap();
-        let first_aside = directory.join(concat!(env!("MAITTY_APP_COMMAND"), ".old.exe"));
+        let first_aside = directory.join(concat!(env!("APP_COMMAND"), ".old.exe"));
         std::fs::write(&first_aside, b"oldest").unwrap();
         // A running program's file cannot be removed; an open handle that shares nothing is the same lock.
         let in_use = {
@@ -338,7 +337,7 @@ mod tests {
         replace_file(&source, &target).unwrap();
 
         assert_eq!(std::fs::read(&target).unwrap(), b"newest");
-        let second_aside = directory.join(concat!(env!("MAITTY_APP_COMMAND"), ".old-2.exe"));
+        let second_aside = directory.join(concat!(env!("APP_COMMAND"), ".old-2.exe"));
         assert_eq!(std::fs::read(&second_aside).unwrap(), b"newer");
         drop(in_use);
         assert_eq!(std::fs::read(&first_aside).unwrap(), b"oldest");

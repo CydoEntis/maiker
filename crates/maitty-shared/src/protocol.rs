@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 113;
+pub const PROTOCOL_VERSION: u32 = 114;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -186,6 +186,10 @@ pub const GIT_RULES_SINCE: u32 = 103;
 /// The first version whose daemon lists an agent's slash commands and skills on request
 /// (`Query::AgentCommands`). 110 and 111 belong to changes that landed beside it.
 pub const AGENT_COMMANDS_SINCE: u32 = 112;
+
+/// The first version whose daemon lists the git repositories it found on its machine
+/// (`Query::Repositories`).
+pub const REPOSITORIES_SINCE: u32 = 114;
 
 /// The first version whose daemon reads the tickets of a source on request (`Query::Tickets`).
 pub const TICKETS_SINCE: u32 = 105;
@@ -1331,6 +1335,14 @@ pub enum Query {
         folder: String,
         tag: u64,
     },
+    /// The git repositories this daemon found on its computer, most recently used first (human
+    /// clients only). With `rescan` the daemon searches again first; without it a search that has
+    /// not finished once is waited for and an earlier one's list is answered at once. The answer
+    /// is `Reply::Repositories` with the same `tag`.
+    Repositories {
+        rescan: bool,
+        tag: u64,
+    },
     /// Read tickets from `source` on this daemon's computer (human clients only): its groups, a
     /// page of its tickets or one ticket. `source` is a GitHub repository, `owner/name`, read
     /// with the machine's own `gh`, or `plane` or `linear`, read with the key the daemon kept
@@ -1675,6 +1687,11 @@ pub enum Reply {
     AgentCommands {
         tag: u64,
         answer: Result<Vec<crate::agent_commands::AgentCommand>, String>,
+    },
+    /// The repositories a `Query::Repositories` found.
+    Repositories {
+        tag: u64,
+        found: crate::repositories::RepositoryIndex,
     },
     /// What a `Query::Tickets` found, or why it found nothing.
     Tickets {
@@ -2623,6 +2640,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::WorktreeStanding(_)) => WORKTREE_STANDING_SINCE,
             ServerMsg::Reply(Reply::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
             ServerMsg::Reply(Reply::AgentCommands { .. }) => AGENT_COMMANDS_SINCE,
+            ServerMsg::Reply(Reply::Repositories { .. }) => REPOSITORIES_SINCE,
             ServerMsg::Reply(Reply::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
             ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
             ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
@@ -2652,6 +2670,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::GitHubAccounts { .. }) => GITHUB_ACCOUNTS_SINCE,
             ClientMsg::Query(Query::GitHubRepos { .. } | Query::GitHubOwners { .. }) => GITHUB_REPOS_SINCE,
             ClientMsg::Query(Query::AgentCommands { .. }) => AGENT_COMMANDS_SINCE,
+            ClientMsg::Query(Query::Repositories { .. }) => REPOSITORIES_SINCE,
             ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
             ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
             ClientMsg::Query(Query::TicketWrite { .. }) => TICKET_WRITE_SINCE,
@@ -3107,7 +3126,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 113);
+        assert_eq!(PROTOCOL_VERSION, 114);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3597,7 +3616,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 113);
+        assert_eq!(PROTOCOL_VERSION, 114);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4786,6 +4805,42 @@ mod tests {
             assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
         }
         const { assert!(AGENT_COMMANDS_SINCE > COMPATIBLE_SINCE && AGENT_COMMANDS_SINCE < PROTOCOL_VERSION) };
+    }
+
+    /// Listing a machine's repositories is a new query and a new reply: a peer built before them
+    /// cannot read either, so the window stays open (`COMPATIBLE_SINCE` does not move) and each
+    /// message has its own `introduced_in` arm; an older peer's messages still read.
+    #[test]
+    fn a_repositories_ask_passes_only_between_peers_that_know_it() {
+        use crate::repositories::{IndexedRepository, RepositoryIndex};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            ListFolders { path: String, tag: u64 },
+        }
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldReply {
+            Ok,
+        }
+        let ask = Query::Repositories { rescan: true, tag: 8 };
+        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err(), "a daemon from before cannot read the question");
+        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::Repositories { rescan: true, tag: 8 })));
+        let old_listing = encode(&Query::ListFolders { path: "~".into(), tag: 1 }).unwrap();
+        assert!(matches!(decode::<Query>(&old_listing), Ok(Query::ListFolders { tag: 1, .. })), "an older client's query still reads");
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), REPOSITORIES_SINCE);
+        let found = RepositoryIndex {
+            repos: vec![IndexedRepository { path: "/home/me/app".into(), branch: Some("main".into()), last_used: 1_794_000_000 }],
+            indexed_at: 1_794_000_100,
+            more: false,
+        };
+        let answer = Reply::Repositories { tag: 8, found };
+        assert!(decode::<OldReply>(&encode(&answer).unwrap()).is_err(), "a client from before cannot read the answer");
+        let reply = ServerMsg::Reply(answer);
+        assert_eq!(reply.introduced_in(), REPOSITORIES_SINCE);
+        let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+        assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        const { assert!(REPOSITORIES_SINCE > COMPATIBLE_SINCE && REPOSITORIES_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never

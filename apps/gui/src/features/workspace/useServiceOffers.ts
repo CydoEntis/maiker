@@ -11,7 +11,7 @@ import { useUpdater } from '@/features/updates/useUpdater'
 import type { AppBehindOffer, RestartOffer } from './components/states'
 
 /**
- * The desktop app: a terminal multiplexer window over sessions maittyd owns. Tabs and
+ * The desktop app: a terminal multiplexer window over sessions the daemon owns. Tabs and
  * splits are this window's arrangement; closing them only detaches.
  */
 /** What restarting an older service does to the sessions it owns, in words. */

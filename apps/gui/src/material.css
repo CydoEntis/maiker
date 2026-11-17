@@ -19,6 +19,13 @@
 /* ---- tokens ---- */
 /* Portalled content can sit outside the window root, so the light and shade have defaults here. */
 :root { --hl: 255, 255, 255; --hs: 255, 255, 255; --hk: 1; --sd: 0, 0, 0; --sk: 1; }
+/* The one shadow for everything that floats, scaled by the theme's shadow strength (`--sk`). Nothing hard-codes its own:
+   a floating card, a dialog and an anchored menu each read one of these three. */
+:root {
+  --pop-sh: 0 4px 14px rgba(0, 0, 0, calc(.2 * var(--sk)));
+  --pop-sh-dialog: 0 12px 32px rgba(0, 0, 0, calc(.45 * var(--sk)));
+  --pop-sh-menu: 0 3px 10px rgba(0, 0, 0, calc(.18 * var(--sk)));
+}
 /* The theme's own solid colours, under the role names. Declared on the window root as well, because
    the theme colours are set inline there. */
 :root, .mx-app, .app-shell {
@@ -81,8 +88,11 @@
   background: var(--main);
   border: 1px solid var(--line);
   /* One plain shadow keeps a flat float apart from what is under it. */
-  box-shadow: 0 10px 28px rgba(0, 0, 0, .35);
+  box-shadow: var(--pop-sh);
 }
+/* A dialog casts the deeper shadow, an anchored menu the lighter one. */
+.mx-app :is([role="dialog"], [role="alertdialog"], .mx-palette, .mx-settings, .mx-welcome, .mx-rename, .mx-ns-dialog) { box-shadow: var(--pop-sh-dialog); }
+.mx-app :is([role="menu"], .mx-ctx, .mx-menu, .mx-picker-menu) { box-shadow: var(--pop-sh-menu); }
 /* The corner readout sits on the window, not over it. */
 .mx-app .mx-perf-hud { box-shadow: none; }
 /* Whatever opens over the window is solid: the theme's own ground, never a tint of what is behind it. This sits after the
@@ -93,6 +103,16 @@
 }
 :root :is([data-radix-popper-content-wrapper] > *) { background-color: var(--main); }
 
+/* Popovers grow from the corner that touches their anchor: 160ms, from scale .9 (design rule 12). Radix publishes the
+   anchor corner as `--radix-popper-transform-origin`. A dialog has no anchor, so it has no `data-side` and does not grow. */
+@keyframes mx-grow { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+.mx-app :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] {
+  transform-origin: var(--radix-popper-transform-origin, top left);
+  animation: mx-grow .16s cubic-bezier(.2, .8, .2, 1);
+}
+@media (prefers-reduced-motion: reduce) { .mx-app :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; } }
+.mx-app[data-motion="reduced"] :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; }
+
 /* ---- field ---- */
 /* A field sits one step off the pane it is on, so the message box can be told from its ground. */
 .mx-app .mx-box,
@@ -102,9 +122,6 @@
   box-shadow: none;
 }
 
-/* The new chat page sits over the panes, so it stays opaque. */
-.mx-app .mx-newchat { background: var(--main, var(--popover)); }
-
 /* ---- inside a float: the settings dialog's own parts take the material, not fills of their own ---- */
 .mx-app .mx-settings-nav { background: var(--m-well); border-right-color: var(--line); }
 .mx-app .mx-settings-header { background: transparent; border-bottom-color: var(--line); }
@@ -112,3 +129,95 @@
 /* ---- corners ----
    What the tokens cannot say: Square squares every corner, Rounded keeps each component's own radius. */
 :root[data-corners="square"] .mx-app * { border-radius: 0 !important; }
+
+/* ---- Folded corners ----
+   The M icon's cut: the top-left and bottom-right corners are bevelled, the other two stay square. A radius of `N 0 N 0`
+   with `corner-shape: bevel` draws it. A web view without `corner-shape` (WebKit) draws the cut with the `@supports not` block
+   at the end of this file. One size per role: 5px controls, 12px panes and the
+   message box, 14px floats, 10px chat bubbles. A shape inside another is smaller and cut only on its outer corners (a
+   segmented control: 8px frame, 6px on the first button's top-left and the last's bottom-right). */
+:root[data-corners="folded"] .mx-app * { border-radius: 0 !important; corner-shape: bevel; }
+:root[data-corners="folded"] .mx-app :is(button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip) { border-radius: 5px 0 5px 0 !important; }
+:root[data-corners="folded"] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card) { border-radius: 12px 0 12px 0 !important; }
+:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card) { border-radius: 14px 0 14px 0 !important; }
+:root[data-corners="folded"] .mx-app :is(.mx-bubble, [data-fold]) { border-radius: 10px 0 10px 0 !important; }
+:root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] { border-radius: 8px 0 8px 0 !important; }
+:root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] > * { border-radius: 0 !important; }
+:root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] > button:first-of-type { border-top-left-radius: 6px !important; }
+:root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] > button:last-of-type { border-bottom-right-radius: 6px !important; }
+:root[data-corners="folded"] .mx-app :is(.mx-app-icon, .mx-badge) { border-radius: 4px 0 4px 0 !important; }
+/* Fold flaps: the cut corner of a floating card shows the folded-over paper, a 14px triangle, lighter at the top left
+   (7% of the text colour over the card) and lighter still at the bottom right (12%). Only a surface that is already
+   positioned carries them. */
+:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before,
+:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
+  content: ""; position: absolute; z-index: 1; width: 14px; height: 14px; pointer-events: none;
+}
+:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before {
+  left: -1px; top: -1px; background: linear-gradient(135deg, transparent 50%, color-mix(in srgb, var(--fg) 7%, var(--main)) 50%);
+}
+:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
+  right: -1px; bottom: -1px; background: linear-gradient(315deg, transparent 50%, color-mix(in srgb, var(--fg) 12%, var(--main)) 50%);
+}
+
+/* ---- Folded corners without `corner-shape` (WebKit) ----
+   The desktop runs in WebKit on Linux and macOS, where `corner-shape: bevel` does not exist and the radius above would only
+   round the corner. Here the cut is a `clip-path` polygon with the same size as the radius it replaces (`--fold`): the
+   top-left and bottom-right corners cut, the others square. A clip-path also clips what is drawn on the edge, so:
+     - the border: a surface that has a hairline draws it along the cut with a one-pixel background stripe in `--fold-line`
+       (`--line2`); a button gets none, its fill ends at the cut. Border and stripe both sit on the border box.
+     - the shadow and the focus ring: every polygon is the box grown by `--fold-bleed` (4px, a float's 48px) with
+       the two cut triangles taken out through a zero-width slit from the grown corner, so a box-shadow still shows around
+       the cut and nothing outside is clipped; no wrapper and no `filter`, which keeps a web view without a GPU cheap
+       (docs/PERFORMANCE.md).
+     - the fold flaps: 16px here (14px above) so the flap's long edge lies on the cut, and the flap draws the hairline too. */
+@supports not (corner-shape: bevel) {
+  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-app-icon, .mx-badge, .mx-status-icon) { --fold: 4px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is(button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip) { --fold: 5px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] { --fold: 8px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-bubble, [data-fold], .mx-live, .mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered) { --fold: 10px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card) { --fold: 12px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting) { --fold: 14px; --fold-bleed: 48px; }
+
+  :root[data-corners="folded"][data-corners] .mx-app :is(
+    .mx-app-icon, .mx-badge, .mx-status-icon, button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip,
+    [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered,
+    .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card,
+    [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting
+  ):not([role="radiogroup"][data-fold] > *, .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-head, .mx-agents-head, .mx-qd-clear, .mx-dock-marker) {
+    border-radius: 0 !important;
+    clip-path: polygon(
+      calc(-1 * var(--fold-bleed)) calc(-1 * var(--fold-bleed)), 0 0, 0 var(--fold), var(--fold) 0, 0 0, calc(-1 * var(--fold-bleed)) calc(-1 * var(--fold-bleed)),
+      calc(100% + var(--fold-bleed)) calc(-1 * var(--fold-bleed)), calc(100% + var(--fold-bleed)) calc(100% + var(--fold-bleed)),
+      100% 100%, 100% calc(100% - var(--fold)), calc(100% - var(--fold)) 100%, 100% 100%, calc(100% + var(--fold-bleed)) calc(100% + var(--fold-bleed)),
+      calc(-1 * var(--fold-bleed)) calc(100% + var(--fold-bleed)));
+  }
+  /* The hairline along both cuts, for the surfaces that have one (everything above except buttons and the status tiles). */
+  :root[data-corners="folded"][data-corners] .mx-app :is(
+    input, textarea, select, kbd, .mx-chip, [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered,
+    .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card,
+    [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting
+  ):not(button) {
+    --fold-line: var(--line2);
+    background-image:
+      linear-gradient(135deg, transparent 50%, var(--fold-line) 50% calc(50% + 1px), transparent 0),
+      linear-gradient(315deg, transparent 50%, var(--fold-line) 50% calc(50% + 1px), transparent 0);
+    background-size: var(--fold) var(--fold), var(--fold) var(--fold);
+    background-position: 0 0, 100% 100%;
+    background-repeat: no-repeat;
+    background-origin: border-box;
+  }
+  /* The message box's border is the accent while it has focus; so is its cut. */
+  :root[data-corners="folded"][data-corners] .mx-app .mx-box:focus-within { --fold-line: var(--accent); }
+  /* The flaps: their long edge is the cut, with the hairline on it. */
+  :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before,
+  :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
+    width: 16px; height: 16px;
+  }
+  :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before {
+    background: linear-gradient(135deg, transparent 50%, var(--line2) 50% calc(50% + 1px), color-mix(in srgb, var(--fg) 7%, var(--main)) calc(50% + 1px));
+  }
+  :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
+    background: linear-gradient(315deg, transparent 50%, var(--line2) 50% calc(50% + 1px), color-mix(in srgb, var(--fg) 12%, var(--main)) calc(50% + 1px));
+  }
+}

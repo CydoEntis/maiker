@@ -3,7 +3,7 @@ import { closedSessions, reopenClosedSession, type ClosedSession } from '@/api/d
 import { errorMessage } from '@/lib/error-message'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { DEFAULT_PICK } from '@/features/chat/agentChoice'
-import type { NewChatRequest } from '../components/NewChatPage'
+import type { NewChatRequest } from '../components/NewSessionDialog'
 import { resumeWords } from './moveToWorktree'
 
 /** What the Recent sessions list knows: nothing yet, the list, or why there is none. */

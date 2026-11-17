@@ -14,7 +14,7 @@ const clip = (text: string, limit: number): string => {
 /**
  * A summary of a chat to open a fresh one with, written from the chat itself and not by a model: the task it began
  * with, the latest things the person asked, and the agent's last reply. It is plain text the person can edit before
- * it is sent, on the new chat page.
+ * it is sent, on the New session dialog.
  */
 export function summaryOf(rows: readonly ChatRow[]): string {
   const asks = rows.flatMap((row) => (row.kind === 'user' && row.event.text.trim() !== '' ? [row.event.text] : []))

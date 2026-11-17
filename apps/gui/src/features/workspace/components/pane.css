@@ -34,53 +34,51 @@
 .mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 0 0 1.5px transparent; transition: box-shadow .15s; }
 .mx-pane.is-focused .mx-pane-ring { box-shadow: inset 0 0 0 1.5px var(--accent-line), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
 
-/* The pane header (desktop frame, section 4): the agent's tile and badge, the title, then the view tabs and controls. */
-.mx-pane-head { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); cursor: default; }
+/* The session header (52px, two lines): the status icon and the name, and under the name where the chat works (folder,
+   project / branch, machine). Right: the Chat | Terminal toggle, Changes, Files and the ⋯ menu. */
+.mx-pane-head { flex: none; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); cursor: default; container: pane-head / inline-size; }
 .mx-pane-head.is-draggable { cursor: grab; }
 .mx-pane-show-sidebar { flex: none; width: 28px; height: 28px; margin-left: -4px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
 .mx-pane-show-sidebar:hover { background: var(--m-hover); color: var(--fg); }
-.mx-pane-show-sidebar:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
-.mx-pane-icon { position: relative; width: 20px; height: 20px; flex: none; }
-.mx-pane-head { container: pane-head / inline-size; }
-.mx-pane-title { flex: 1; min-width: 64px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
-.mx-pane-title .mx-inline-name { flex: 0 1 220px; min-width: 60px; height: 28px; padding: 0 6px; margin-left: -6px; font: 600 14px var(--ui); color: var(--fg); background: var(--m-well); border: 1px solid var(--accent); outline: none; }
+.mx-pane-id { flex: 0 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 10px; row-gap: 1px; align-items: center; }
+.mx-pane-id.is-shell { align-items: center; }
+.mx-pane-icon { flex: none; display: inline-flex; width: 14px; height: 14px; }
+.mx-pane-title { min-width: 0; display: flex; }
+.mx-pane-title .mx-inline-name { flex: 0 1 auto; min-width: 120px; height: 22px; padding: 0 6px; margin-left: -6px; font: 600 14px var(--ui); color: var(--fg); background: var(--m-well); border: 1px solid var(--accent); outline: none; }
+.mx-pane-name { flex: 0 1 auto; min-width: 0; height: 22px; display: flex; align-items: center; padding: 0 4px; margin-left: -4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; letter-spacing: -.005em; color: var(--fg); }
+.mx-pane-name.is-editable { cursor: text; }
+.mx-pane-name.is-editable:hover { background: var(--m-hover); }
 
-/* Where the chat works, after its name (layout 2h): the project, locked, then the branch. The project goes first as the
-   pane narrows, then the branch's name, leaving its mark. */
-.mx-crumbs { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
-.mx-crumb-sep { flex: none; color: var(--line2); }
-.mx-crumb-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
-.mx-crumb-project svg { flex: none; color: var(--dim); }
-.mx-crumb-square { flex: none; width: 7px; height: 7px; }
+/* Line two: the folder, the project, the branch, the machine. The project goes first as the pane narrows, then the
+   branch's name, leaving its mark. */
+.mx-crumbs { grid-column: 2; flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.mx-crumb-folder { flex: none; display: inline-flex; color: var(--muted); }
+.mx-crumb-sep, .mx-crumb-dot { flex: none; color: var(--line2); }
+.mx-crumb-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; }
 .mx-crumb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mx-crumb { flex: 0 1 auto; min-width: 0; height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; border-radius: var(--r-control); white-space: nowrap; outline: none; }
-.mx-crumb:not(.is-static):hover, .mx-crumb[data-state="open"] { background: var(--m-hover); }
-.mx-crumb:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent-line); }
+.mx-crumb-machine { flex: none; color: var(--muted); }
+.mx-crumb { flex: 0 2 auto; min-width: 0; height: 20px; display: inline-flex; align-items: center; gap: 5px; padding: 0 4px; margin-left: -4px; border-radius: var(--r-control); white-space: nowrap; outline: none; color: var(--branch); }
+.mx-crumb:not(.is-static):hover, .mx-crumb[data-state="open"] { background: var(--m-hover); color: var(--fg); }
 .mx-crumb > svg:last-child { flex: none; color: var(--dim); }
-.mx-crumb-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); color: var(--branch); }
-.mx-crumb-branch-icon { flex: none; display: inline-flex; color: var(--branch); }
+.mx-crumb-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); color: inherit; }
+.mx-crumb-branch-icon { flex: none; display: inline-flex; color: inherit; }
 .mx-crumb-branch-icon svg { stroke: currentColor; }
-.mx-crumb-branch.is-worktree, .mx-crumb-branch-icon.is-worktree { color: var(--ansi-blue); }
-@container pane-head (max-width: 700px) { .mx-crumb-project, .mx-crumb-sep.is-project { display: none; } }
-@container pane-head (max-width: 560px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child { display: none; } }
-.mx-pane-name { font-size: 14px; line-height: 18px; font-weight: 600; letter-spacing: -.01em; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
-.mx-pane-pr { flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
-.mx-pane-pr.is-bad { color: var(--danger); }
-.mx-pane-pr.is-good { color: var(--ok); }
-.mx-pane-pr.is-waiting { color: var(--working); }
-.mx-pane-controls { display: flex; align-items: center; gap: 2px; margin-left: auto; height: 100%; }
-.mx-pane-control { width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--dim); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+@container pane-head (max-width: 700px) { .mx-crumb-project, .mx-crumb-folder + .mx-crumb-project + .mx-crumb-sep { display: none; } }
+@container pane-head (max-width: 560px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child, .mx-crumb-dot, .mx-crumb-machine { display: none; } }
+.mx-pane-controls { display: flex; align-items: center; gap: 4px; margin-left: auto; height: 100%; }
+.mx-pane-control { position: relative; width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--dim); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-pane-control:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
-.mx-pane-control.is-close:not(:disabled):hover { background: var(--danger-soft); color: var(--danger); }
+.mx-pane-control.is-on { background: var(--m-sel); color: var(--fg); }
+.mx-pane-more { color: var(--muted); }
+.mx-pane-control.is-close:not(:disabled):hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .mx-pane-control:disabled { opacity: .3; }
+/* The Changes button's count of changed files. */
+.mx-pane-count { position: absolute; top: 1px; right: 0; min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 9px/1 var(--mono); color: var(--bg); background: var(--fg2); }
 
-/* The view tabs: plain words the height of the header, the chosen one underlined in the accent. */
-.mx-view-switch { display: flex; align-items: stretch; gap: 16px; height: 100%; margin-right: 10px; flex: none; }
-.mx-view-option { display: flex; align-items: center; padding: 0 1px; font-size: 12.5px; font-weight: 500; color: var(--dim); transition: color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
-.mx-view-option:hover { color: var(--fg); }
-.mx-view-option[aria-checked="true"] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
-.mx-view-option:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.mx-view-option { gap: 5px; }
+/* The Chat | Terminal toggle: the shared segmented frame (folded under Folded corners), 13px mark and word in each choice. */
+.mx-view-switch { margin-right: 6px; }
+.mx-segmented.mx-view-switch { height: 28px; box-sizing: border-box; }
+.mx-segmented .mx-view-option { height: 22px; gap: 6px; padding: 0 10px; font-size: 12px; font-weight: 500; }
 .mx-view-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
 .mx-view-needs { width: 7px; height: 7px; border-radius: 2px; background: var(--needs); }
 

@@ -1,81 +1,39 @@
-import { useContext, useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardHead } from '@/components/ui/card'
-import { AppIcon } from '@/features/workspace/components/glyphs'
-import { ElapsedSince } from '@/features/workspace/components/times'
+import { useContext, useId, useState } from 'react'
 import type { SubagentEvent } from '../chatEvents'
-import { OpenSubagentContext } from '../openSubagent'
-import { agentsSummary, elapsedMs, tookText } from '../stepInfo'
-import { StepGlyph } from './cardParts'
+import { dockHelpers, helperCounts, HelpersLiveContext } from '../helpersDock'
+import { agentsSummary } from '../stepInfo'
+import { ChevronGlyph } from './DockIcons'
+import { HelperCounts, HelperRows, HelperStrip, HelpersMarker } from './HelpersDock'
 
-const TILE_SIZE = 22
-
-function AgentTime({ agent }: { agent: SubagentEvent }) {
-  if (agent.status === 'running') return <span className="mx-step-meta is-working"><ElapsedSince since={agent.timing.startedAtMs ?? agent.observed.firstSeenAtMs} /></span>
-  if (agent.status === 'failed') return <span className="mx-step-meta is-danger">failed</span>
-  if (agent.status === 'interrupted') return <span className="mx-step-meta is-dim">stopped</span>
-  const took = elapsedMs(agent, null, 0)
-  return <span className="mx-step-meta is-dim">{took === null ? 'done' : tookText(took)}</span>
-}
-
-type AgentRowProps = {
-  agent: SubagentEvent
-  /** The program the helper runs under, for its tile. */
-  process: string
+type AgentsCardProps = {
+  agents: readonly SubagentEvent[]
+  /** The chat row this is, so it can tell it is the one the dock above the message box follows. */
+  rowKey?: string
 }
 
 /**
- * One helper agent: its tile and status, its title and type, what it was asked, and its report when opened, with
- * **Open its chat** while it runs.
+ * The helper agents a turn started. While any of them works, the dock above the message box follows them and this row is
+ * one quiet line, "Started N helpers · running below". Once they have all finished it becomes the record: the count,
+ * how each ended, a block each in a progress strip, and a row each that opens to what it was asked and what it answered.
+ * The record opens by itself only when something is worth reading in it: a helper still working or one that failed.
  */
-export function AgentRow({ agent, process }: AgentRowProps) {
-  const [open, setOpen] = useState(false)
-  const report = agent.report.trim()
-  const asked = agent.prompt?.split('\n')[0] ?? null
-  const openChat = useContext(OpenSubagentContext)(agent.title, asked)
-  const hasMore = agent.prompt !== null || report !== '' || openChat !== null
+export function AgentsCard({ agents, rowKey }: AgentsCardProps) {
+  const live = useContext(HelpersLiveContext)
+  const helpers = dockHelpers(agents, [])
+  const counts = helperCounts(helpers)
+  const [chosen, setChosen] = useState<boolean | null>(null)
+  const list = useId()
+  if (rowKey !== undefined && live?.key === rowKey) return <HelpersMarker count={agents.length} onOpen={live.open} />
+  const open = chosen ?? (counts.working > 0 || counts.failed > 0)
   return (
-    <li>
-      <button type="button" aria-expanded={hasMore ? open : undefined} disabled={!hasMore} className="mx-agent-row" onClick={() => { setOpen((current) => !current) }}>
-        <span className="mx-agent-tile">
-          <AppIcon process={process} size={TILE_SIZE} />
-          <span className="mx-agent-badge"><StepGlyph status={agent.status} /></span>
-        </span>
-        <span className="mx-agent-text">
-          <span className="mx-agent-name">
-            <strong>{agent.title ?? 'A helper agent'}</strong>
-            {agent.agentType !== null && <span>{agent.agentType}</span>}
-          </span>
-          {asked !== null && <span className="mx-agent-asked">{asked}</span>}
-        </span>
-        <AgentTime agent={agent} />
+    <section className="mx-agents-record" data-fold="1" role="group" aria-label={agentsSummary(agents)}>
+      <button type="button" className={`mx-agents-head${open ? ' is-open' : ''}`} aria-expanded={open} aria-controls={list} onClick={() => { setChosen(!open) }}>
+        <span className="mx-agents-title">{helpers.length} {helpers.length === 1 ? 'helper' : 'helpers'}</span>
+        <HelperCounts helpers={helpers} />
+        <HelperStrip helpers={helpers} />
+        <span className={`mx-dock-chevron is-down${open ? ' is-open' : ''}`}><ChevronGlyph /></span>
       </button>
-      {open && (
-        <div className="mx-agent-detail">
-          {agent.prompt !== null && <p className="mx-agent-prompt">{agent.prompt}</p>}
-          {report !== '' && <p className="mx-agent-report">{agent.report}</p>}
-          {openChat !== null && <div><Button variant="soft" size="sm" onClick={openChat}>Open its chat</Button></div>}
-        </div>
-      )}
-    </li>
-  )
-}
-
-type AgentsCardProps = { agents: readonly SubagentEvent[]; process: string }
-
-/** The helper agents a turn ran. One is a row by itself; several share a card that counts them. */
-export function AgentsCard({ agents, process }: AgentsCardProps) {
-  const rows = agents.map((agent) => <AgentRow key={agent.id} agent={agent} process={process} />)
-  if (agents.length === 1) return <ul role="group" aria-label={agentsSummary(agents)} className="mx-agents">{rows}</ul>
-  const working = agents.filter((agent) => agent.status === 'running').length
-  const done = agents.filter((agent) => agent.status === 'completed').length
-  return (
-    <Card role="group" aria-label={agentsSummary(agents)}>
-      <CardHead>
-        <span>{agents.length} agents</span>
-        <span className="mx-agents-counts">{[working > 0 ? `${String(working)} working` : null, done > 0 ? `${String(done)} done` : null].filter((part) => part !== null).join(' · ')}</span>
-      </CardHead>
-      <ul className="mx-agents is-carded">{rows}</ul>
-    </Card>
+      {open && <div id={list}><HelperRows helpers={helpers} /></div>}
+    </section>
   )
 }

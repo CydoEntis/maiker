@@ -26,9 +26,9 @@ const DOWN_RETRY: Duration = Duration::from_secs(15);
 const DOWN_W: u16 = 64;
 const DOWN_H: u16 = 13;
 
-/// What the service is called on screen: the command with a `d`, as `maittyd`.
+/// What the service is called on screen.
 fn daemon_name() -> String {
-    format!("{}d", crate::brand::APP_COMMAND)
+    maitty_shared::brand::DAEMON_NAME.to_string()
 }
 
 /// Whether the window has its daemon.
@@ -116,7 +116,7 @@ impl App {
             ServiceKey::Start if self.service.is_down() => {
                 self.service_start_now = true;
             }
-            ServiceKey::Leave => self.quit = Some("left while maittyd was away".into()),
+            ServiceKey::Leave => self.quit = Some(format!("left while {} was away", daemon_name())),
             _ => {}
         }
         self.dirty = true;

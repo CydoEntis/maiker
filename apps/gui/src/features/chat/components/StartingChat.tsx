@@ -97,6 +97,8 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     queue: [],
     removeQueued: () => undefined,
     editQueued: () => undefined,
+    moveQueuedUp: () => undefined,
+    clearQueued: () => undefined,
     submit: () => {
       const text = draft.trim()
       // One message is held at a time: a second would replace the first before it was ever sent.

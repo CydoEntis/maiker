@@ -54,7 +54,7 @@ layers*. Never reverse the direction.
 src/
   main.rs        argument parsing, picks client / daemon / CLI role
   cli.rs         one-shot subcommands (send, read, wait, hook, allow, doctor, â€¦)
-  cli/target.rs  which machine a one-shot command talks to and which pane it means: `PaneAddress` (`4`, `build/4`), `resolve_machine` (`local` or a configured name), `Target` (the machine, whether it was named, whether `$MAITTY_TERM_ID` is its pane, how its failures and replies are shown); the flags that choose it are in ENVIRONMENT "The command line on a machine"
+  cli/target.rs  which machine a one-shot command talks to and which pane it means: `PaneAddress` (`4`, `build/4`), `resolve_machine` (`local` or a configured name), `Target` (the machine, whether it was named, whether `$AGENT_TERM_ID` is its pane, how its failures and replies are shown); the flags that choose it are in ENVIRONMENT "The command line on a machine"
   cli/doctor_machines.rs  the machines section of `doctor`: per machine, reachable, app version, protocol, login PATH and ssh options (a custom transport: the protocol check and its program's name), each one line, all machines at once within one budget each (`machine_probe`, `link_failure`; nothing from a machine is shown uncleaned)
   cli/machines_ls.rs  `ls --all`: this computer and every configured machine asked at the same time, one that does not answer reported on its own line
   cli/mcp/machines.rs  the MCP tools' `machine` argument and `machine/id` ids: routing, the `mcp` opt-in, the calling pane's grants checked here before a machine is dialled, typed errors (`McpError`) and the cleaned, cut, `[machine: name]`-led replies (SECURITY "MCP across machines")
@@ -207,7 +207,9 @@ monorepo split.
 
 The terminal `maitty` binary runs as a daemon or as a client:
 
-- **Daemon (server):** started on demand, one per user (or per `MAITTY_SOCKET`
+- **Daemon (server):** called `maikerd` on screen and as the desktop app's bundled file (it is the
+  `daemon` subcommand of the one binary; a service started under the older bundled name
+  `maitty-gui-daemon` is still recognised). Started on demand, one per user (or per `AGENT_SOCKET`
   name). Owns every pane: spawns shells and agents in pseudo-terminals
   (ConPTY on Windows), parses their output with `vt100`, detects agent status,
   manages worktrees, persists sessions, and restores them after a restart.
@@ -333,21 +335,30 @@ docs/                             architecture, roadmap and design specs
 
 ## Project-specific: patterns and conventions
 
-**The app's name** lives in `apps/tui/Cargo.toml` and nowhere else in the code (ADR 0008): the package
-name is the command, `[package.metadata.brand]` holds the name people see and the names it had
-before. `build.rs` hands them to the code as `APP_COMMAND`, `APP_NAME`, `APP_ENV` and
-`APP_PREVIOUS`; `crates/maitty-core/src/brand.rs` wraps them. Write a
+**The app's names** live in `apps/tui/Cargo.toml` and nowhere else in the code (ADR 0008, 0012): the
+package name is the command, `[package.metadata.brand]` holds the name people see, the daemon's
+name (`maikerd`), the environment prefix (`AGENT`, brand-free) and the names each had before.
+`build.rs` hands them to the code as `APP_COMMAND`, `APP_NAME`, `APP_DAEMON`, `APP_ENV`,
+`APP_PREVIOUS`, `APP_DAEMON_PREVIOUS` and `APP_ENV_PREVIOUS`; `crates/maitty-shared/src/brand.rs` is the
+one Rust module that reads them (`DAEMON_NAME`, `DATA_DIR_NAME`, `SOCKET_BASE_NAME`, `ENV_PREFIX`,
+`env_var`, `env_names`, ...; `maitty-core`'s `brand.rs` re-exports it), and `apps/gui/src/brand.ts`
+is the same set for the desktop app and its scripts (a test keeps them equal). Environment
+variables are written as a key without a prefix: read one with `brand::env_var("SOCKET")`, which
+also finds the old `MAITTY_` name, and set a child's with `set_child_env`, which sets both. Write a
 name-bearing string as
 `concat!(".", env!("APP_COMMAND"), ".toml")`, or name `APP_NAME` in a format string with
 arguments of its own. Adapters in `crates/maitty-terminal-client/src/cli/*.js` are
 templates (`__APP_NAME__`,
-`__APP_COMMAND__`, `__APP_ENV__`, `__APP_EXE__`) filled in when installed. `tests/naming.rs`
-fails on the name written out. To rename the app:
+`__APP_COMMAND__`, `__APP_ENV__`, `__APP_ENV_PREVIOUS__`, `__APP_EXE__`) filled in when
+installed. `tests/naming.rs` fails on the name, the daemon's name or an environment prefix
+written out. To rename the app:
 
 1. In `apps/tui/Cargo.toml`, set the package `name` (the command) and `[package.metadata.brand] name`,
    and put the old command first in `previous`. Build once and commit `Cargo.lock` too (it
    records the package name; releases build `--locked`).
-2. In `install.sh` and `install.ps1`, set `APP` / `$app` and the repository (a test checks them).
+2. In `install.sh` and `install.ps1`, set `APP` / `$app` and the repository (a test checks them),
+   and in `apps/gui/src/brand.ts` the same names. The daemon's name and the environment prefix
+   are separate decisions and stay as they are.
 3. Replace the name in the reference frames by hand (they show it; see
    [TESTING](TESTING.md#project-specific-layout-and-fixtures)).
 4. Replace the name in the docs (not the ADRs), then rename the GitHub repository.
@@ -370,13 +381,13 @@ calling `maitty agent-launch` on Windows). The agents are the built-in four plus
 agents run (the first word of a plain-named `command`, so an agent named `work` that runs `claude` adds nothing), and only when `worktree.per_agent` is on. `daemon/term.rs` also defines a shell
 function per agent (bash `--rcfile`, zsh `ZDOTDIR`, fish `-C`, PowerShell's startup script) and
 keeps the launcher folder first on `PATH` before each prompt or command, since a manager like
-mise puts its own shims in front. The function sets `MAITTY_AGENT_DIR_DONE` for the one command
+mise puts its own shims in front. The function sets `AGENT_DIR_DONE` for the one command
 so the launcher does not ask a second time. The daemon decides (`Command::AgentWorktree`): only
 a pane with no agent yet, only in a git repo's main checkout, and a caller without the pane's
 secret gets an empty answer.
 
 `client/restart_prompt.rs` is the one screen outside the app loop: before a window opens, it
-asks once to replace a running server of another version that has agents working or waiting (`main.rs` calls it). `restart.rs` owns the rest of the one-step update: the activity file a server publishes beside its pid file (`Activity`, so a newer maitty can decide without asking an older server anything), the plan for a mismatch (`plan_for_mismatch`), waiting for the old server's socket to close, and re-opening the window on the installed maitty (`relaunch`). The stop itself is `cli::kill_server`, which reaches servers of any version by process and only ever the server of this `MAITTY_SOCKET`.
+asks once to replace a running server of another version that has agents working or waiting (`main.rs` calls it). `restart.rs` owns the rest of the one-step update: the activity file a server publishes beside its pid file (`Activity`, so a newer maitty can decide without asking an older server anything), the plan for a mismatch (`plan_for_mismatch`), waiting for the old server's socket to close, and re-opening the window on the installed maitty (`relaunch`). The stop itself is `cli::kill_server`, which reaches servers of any version by process and only ever the server of this `AGENT_SOCKET`.
 offers to replace a running server of another version (`main.rs` calls it; the restart itself is
 `cli::kill_server`, which reaches servers of any version).
 

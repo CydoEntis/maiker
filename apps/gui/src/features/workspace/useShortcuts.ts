@@ -43,7 +43,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
     // How each layer of the Esc ladder closes. A new dialog adds its closer here and its id to ESC_LADDER.
     const closers: Partial<Record<EscLayer, () => void>> = {
       palette: () => { setPaletteOpen(false) },
-      // The new chat page counts as a dialog here, so this layer is the one that closes it too.
+      // The New session dialog counts as a dialog here, so this layer is the one that closes it too.
       settings: () => { setSettingsSection(null); setNewChatOpen(false) },
       drawer: () => { setDrawerOpen(false) },
       'focus-mode': () => { setFocusMode(false) },

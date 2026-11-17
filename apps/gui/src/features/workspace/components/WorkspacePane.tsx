@@ -16,17 +16,18 @@ import { LOCAL_MACHINE } from '@/api/machines'
 import type { TurnSpan } from '@/features/inspect/turnRange'
 import { COMMAND_SUBMIT_GAP_MS } from '@/features/chat/useChatComposer'
 import { contextFull, type ChatProblem } from '@/features/chat/problem'
-import { RunningSubagents } from '@/features/chat/components/RunningSubagents'
 import { ChatPane } from '@/features/chat/components/ChatPane'
 import { NoTerminalNote } from '@/features/chat/components/NoTerminalNote'
 import { type Arrangement, focusPane, type PaneSlot, toggleMaximize } from '../model/layout'
-import { runningBarShown, toSubagentView } from '../model/subagents'
+import { toSubagentView } from '../model/subagents'
 import { isShell } from '../model/sidebar'
 import { moveRefusal } from '../model/moveToWorktree'
 import { guardLocal } from '@/lib/localOnly'
 import type { RewindPlace } from '@/features/chat/editFromHere'
 import { fileSearchOf } from '@/features/chat/fileMention'
 import { ShowSidebarButton } from './ShowSidebarButton'
+import { checksNeedingYou } from '@/features/inspect/checks'
+import type { InspectView } from '@/features/inspect/InspectPanel'
 
 /** Whether a session can show a chat at all: an agent the app reads. A shell or another program has none, so it gets no switch. */
 function hasChat(availability: ReturnType<typeof chatAvailability>): boolean {
@@ -45,7 +46,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, inspectView, diffStat, setTicketsOpen, setInspectOpen, terminalShown, canDock, toggleTerminal } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -135,6 +136,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           process={session.process}
           online={online}
           subagent={subagent ?? null}
+          subagents={helpers}
           onBackToMain={() => { setOpenSubagent(null) }}
           windowActions={{ openSettings: setSettingsSection, openPanel: (view) => { openPanel(pane.id, session.id, view) }, openRecent: () => { setRecentOpen(true) }, renameSession: (name) => { saveName(session.id, name) } }}
           onBackToTerminal={showTerminal}
@@ -149,10 +151,13 @@ export function WorkspacePane({ shown, pane, kept }: {
         </OpenSubagentContext.Provider>
         </PaneErrorBoundary>
       ) : undefined}
-      overlay={!runningBarShown({ kept, asking: session.status === 'needs' }) ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
-      panelOpen={inspectOpen && focused}
-      {...(hasPanel ? { onPanel: () => { togglePanel(pane.id, session.id) } } : {})}
-      changed={{ added: session.diffAdded, removed: session.diffRemoved }}
+      panelView={inspectOpen && focused ? inspectView : null}
+      {...(hasPanel ? { onPanel: (view: InspectView) => { setTicketsOpen(false); togglePanel(pane.id, session.id, view) } } : {})}
+      changedFiles={focused ? (diffStat.data?.files ?? 0) : 0}
+      failingChecks={checksNeedingYou(session.checks)}
+      onTickets={() => { setInspectOpen(false); setTicketsOpen(true) }}
+      {...(canDock && focused ? { onToggleTerminal: toggleTerminal } : {})}
+      terminalShown={terminalShown}
       {...(terminals && !shell ? { onNewTerminal: () => { addAgentTerminal(session.id) } } : {})}
       online={online}
       portalContainer={root}

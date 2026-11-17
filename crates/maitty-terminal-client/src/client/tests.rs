@@ -354,7 +354,7 @@ mod screen_tests {
     }
 
     fn show(s: &str) {
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{s}");
         }
     }
@@ -437,7 +437,7 @@ mod screen_tests {
                 o.contains("goes after the leader") && o.contains("= split") && o.contains("Esc"),
                 "{w}x{h}\n{o}"
             );
-            for g in ["SESSIONS", "PANES", "SIDEBAR", "TOOLS", env!("APP_ENV")] {
+            for g in ["SESSIONS", "PANES", "SIDEBAR", "TOOLS", crate::brand::APP_HEADING] {
                 assert!(o.contains(g), "{w}x{h}: the map has {g}");
             }
             assert!(
@@ -502,7 +502,7 @@ mod screen_tests {
                 x("PANES"),
                 x("SIDEBAR"),
                 x("TOOLS"),
-                x(env!("APP_ENV")),
+                x(crate::brand::APP_HEADING),
             ];
             xs.sort();
             xs.dedup();
@@ -2860,7 +2860,7 @@ mod screen_tests {
         assert!(matches!(app.mode, Mode::KeyMap(_)));
         let o = draw(&mut app, 160, 45);
         show(&o);
-        for g in ["SESSIONS", "PANES", "SIDEBAR", "TOOLS", env!("APP_ENV")] {
+        for g in ["SESSIONS", "PANES", "SIDEBAR", "TOOLS", crate::brand::APP_HEADING] {
             assert!(o.contains(g), "the key map has {g}");
         }
         assert!(
@@ -8186,7 +8186,7 @@ mod settings_splash_tests {
             scroll: 0,
         }));
         let keys = draw(&mut app);
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{splash}\n{settings}\n{keys}");
         }
         assert!(splash.contains(env!("APP_TAGLINE")));
@@ -8593,7 +8593,7 @@ mod shots {
     #[ignore]
     fn write_the_readme_screens() {
         let dir = std::path::PathBuf::from(
-            std::env::var(concat!(env!("APP_ENV"), "_SHOTS")).expect(concat!(
+            maitty_shared::brand::env_var("SHOTS").expect(concat!(
                 "set ",
                 env!("APP_ENV"),
                 "_SHOTS"
@@ -8785,7 +8785,7 @@ mod check_row_tests {
     }
 
     fn show(buf: &Buffer, title: &str) {
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("--- {title}");
             for y in 0..buf.area.height {
                 println!(
@@ -9161,7 +9161,7 @@ mod check_sheet_tests {
 
     fn draw(app: &mut App, w: u16, h: u16) -> String {
         let o = frame(&render(app, w, h));
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{o}");
         }
         o
@@ -9887,7 +9887,7 @@ mod check_inbox_tests {
         let buf = buffer(app, w, h);
         // The Inbox only: the sidebar beside it lists the same sessions.
         let out = lines(&buf, app.screen.side_rect.right());
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!(
                 "--- {w}x{h} {}/{}\n{}",
                 app.cfg.ui.layout,
@@ -10406,7 +10406,7 @@ mod check_settings_tests {
     }
 
     pub(super) fn show(s: &str) {
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{s}");
         }
     }
@@ -10963,7 +10963,7 @@ mod check_wiring_tests {
             })
             .collect();
         let frame = frame.replace(|c| ('\u{e000}'..='\u{f8ff}').contains(&c), "");
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!(
                 "--- {w}x{h} {}/{}\n{frame}",
                 app.cfg.ui.layout, app.cfg.ui.panes
@@ -11878,7 +11878,7 @@ mod restart_tests {
                     + "\n"
             })
             .collect();
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{out}");
         }
         out
@@ -15544,7 +15544,7 @@ mod pane_swap_tests {
             mouse(&mut app, MouseEventKind::Down(MouseButton::Left), from);
             mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), onto);
             let screen = draw(&mut app);
-            if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+            if maitty_shared::brand::env_var("SHOW").is_ok() {
                 println!("{layout}\n{screen}");
             }
             assert!(

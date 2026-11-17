@@ -60,7 +60,7 @@ curl -fsSL https://raw.githubusercontent.com/CydoEntis/maitty/main/install.sh | 
 
 The installer picks the build for your machine, verifies its checksum and needs no administrator
 rights. It then runs `maitty integrate`, which connects every agent installed on the machine (see
-[Connect your agents](#connect-your-agents)); set `MAITTY_NO_INTEGRATE=1` to skip that. You can
+[Connect your agents](#connect-your-agents)); set `AGENT_NO_INTEGRATE=1` to skip that. You can
 also download an archive from [Releases](https://github.com/CydoEntis/maitty/releases), or build
 from source with `cargo install --git https://github.com/CydoEntis/maitty maitty`.
 

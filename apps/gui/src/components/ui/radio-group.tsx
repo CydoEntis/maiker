@@ -13,7 +13,7 @@ function RadioGroupItem({ className, ...props }: React.ComponentProps<typeof Rad
 
 /** The segmented control: a row of buttons, one picked, on the window's track and selection tokens. */
 function Segmented({ className, tall = false, ...props }: React.ComponentProps<typeof RadioGroupPrimitive.Root> & { tall?: boolean }) {
-  return <RadioGroupPrimitive.Root data-slot="segmented" orientation="horizontal" className={cn("mx-segmented", tall && "is-tall", className)} {...props} />
+  return <RadioGroupPrimitive.Root data-slot="segmented" data-fold orientation="horizontal" className={cn("mx-segmented", tall && "is-tall", className)} {...props} />
 }
 
 function SegmentedItem({ className, ...props }: React.ComponentProps<typeof RadioGroupPrimitive.Item>) {

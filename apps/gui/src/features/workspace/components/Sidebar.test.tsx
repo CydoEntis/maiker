@@ -90,12 +90,12 @@ describe('the sidebar', () => {
     expect(names()).toEqual(['Asking', 'Exited shell', 'Idle agent', 'Working', 'Finished'])
   })
 
-  it('puts the name first and the project under it, leaving the branch to the hover card', () => {
+  it('puts the name first and the folder, project and branch under it', () => {
     show([session(1, { agent: 'claude', named: true, title: 'Growth', repo: 'AeVoxGrowth', branch: 'agent/grow-025', folder: '/home/me/AeVoxGrowth', cwd: '/home/me/AeVoxGrowth' }), session(2, { cwd: '/home/me/dev', folder: '/home/me/dev' })])
     const growth = screen.getByRole('button', { name: /^Growth,/ })
     expect(growth.querySelector('.mx-row-name')?.textContent).toBe('Growth')
     expect(growth.querySelector('.mx-row-project-name')?.textContent).toBe('AeVoxGrowth')
-    expect(growth).not.toHaveTextContent('agent/grow-025')
+    expect(growth.querySelector('.mx-row-branch-name')?.textContent).toBe('agent/grow-025')
     expect(screen.getByRole('button', { name: /^dev, shell/ })).toBeTruthy()
   })
 
@@ -384,7 +384,7 @@ describe('a session row', () => {
       const card = screen.getByRole('tooltip')
       expect(card).toHaveTextContent('Growth')
       expect(card).toHaveTextContent('Needs you')
-      expect(card).toHaveTextContent('No changes')
+      expect(card).toHaveTextContent('claude · This computer')
       fireEvent.mouseLeave(row)
       expect(screen.queryByRole('tooltip')).toBeNull()
     } finally {
@@ -518,11 +518,10 @@ describe('grouped by status', () => {
     expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Idle'])
   })
 
-  it('lists shells as ordinary rows of the status sections', () => {
+  it('lists shells under Terminals, after the agents', () => {
     show([session(9, { named: true, title: 'Dev server', status: 'working' }), ...mixed()], { grouping: 'status' })
-    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Finished', 'Idle'])
-    expect(within(screen.getByRole('list', { name: 'Working' })).getByRole('button', { name: /^Dev server,/ })).toBeTruthy()
-    expect(screen.queryByRole('list', { name: 'Terminals' })).toBeNull()
+    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Finished', 'Idle', 'Terminals'])
+    expect(within(screen.getByRole('list', { name: 'Terminals' })).getByRole('button', { name: /^Dev server,/ })).toBeTruthy()
   })
 
   it('says which other machine a row runs on, since no heading does', () => {
@@ -530,7 +529,7 @@ describe('grouped by status', () => {
     expect(within(screen.getByRole('button', { name: /^There,/ })).getByText('devbox')).toBeTruthy()
   })
 
-  it('names another machine by its given name, with its own name as the tooltip, and this computer not at all', () => {
+  it('names another machine by its given name, with no native tooltip, and this computer not at all', () => {
     writeMachineNicknames({ devbox: 'Kingdom' })
     try {
       show([
@@ -538,7 +537,7 @@ describe('grouped by status', () => {
         session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'app2', branch: 'feat/remote-branch' }),
       ], { machines: [LOCAL_HEAD, DEVBOX], grouping: 'status' })
       const there = screen.getByRole('button', { name: /^There,/ })
-      expect(within(there).getByText('Kingdom')).toHaveAttribute('title', 'devbox')
+      expect(within(there).getByText('Kingdom')).not.toHaveAttribute('title')
       const here = screen.getByRole('button', { name: /^Here,/ })
       expect(here.querySelector('.mx-row-machine')).toBeNull()
     } finally {
@@ -614,15 +613,48 @@ describe('the top of the sidebar', () => {
     expect(onNewShell).toHaveBeenCalledWith(0)
   })
 
-  it('narrows the list to one project, and back to all of them', async () => {
+  it('narrows the list to one project, and back to all of them, with the menu staying open', async () => {
     const user = userEvent.setup()
     show([session(1, { named: true, title: 'Alpha', cwd: '/home/me/shop' }), session(2, { named: true, title: 'Beta', cwd: '/home/me/docs' })], { grouping: 'status' })
-    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects, by status' }))
-    await user.click(screen.getByRole('menuitem', { name: /^docs/ }))
+    const names = () => screen.getAllByRole('button', { name: /^(Alpha|Beta),/ }).map((row) => row.querySelector('.mx-row-name')?.textContent)
+    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects' }))
+    await user.click(screen.getByRole('button', { name: /^docs/ }))
     expect(names()).toEqual(['Beta'])
-    await user.click(screen.getByRole('button', { name: 'Filter and group: docs, by status' }))
-    await user.click(screen.getByRole('menuitem', { name: /^All projects/ }))
-    expect(names()).toEqual(['Alpha', 'Beta'])
+    expect(screen.getByRole('dialog', { name: 'Group, sort and filter' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: /^All projects/ }))
+    expect(names()).toEqual(['Beta', 'Alpha'])
+  })
+
+  it('lists the busiest project first and finds one by typing', async () => {
+    const user = userEvent.setup()
+    show([
+      session(1, { named: true, title: 'A1', cwd: '/home/me/solo' }),
+      session(2, { named: true, title: 'B1', cwd: '/home/me/busy' }),
+      session(3, { named: true, title: 'B2', cwd: '/home/me/busy' }),
+    ], { grouping: 'status' })
+    await user.click(screen.getByRole('button', { name: /^Filter and group/ }))
+    const group = screen.getByRole('group', { name: 'Show projects' })
+    expect(within(group).getAllByRole('button').map((button) => button.querySelector('.mx-grp-name')?.textContent)).toEqual(['All projects', 'busy', 'solo'])
+    await user.type(screen.getByRole('textbox', { name: 'Filter projects' }), 'so')
+    expect(within(group).getAllByRole('button').map((button) => button.querySelector('.mx-grp-name')?.textContent)).toEqual(['solo'])
+    await user.type(screen.getByRole('textbox', { name: 'Filter projects' }), 'zz')
+    expect(within(group).getByText('No project matches.')).toBeTruthy()
+  })
+
+  it('sorts newest first by default, by name on request, and Reset brings the default back', async () => {
+    const user = userEvent.setup()
+    show([session(1, { named: true, title: 'Mid', agent: 'claude' }), session(2, { named: true, title: 'Zed', agent: 'claude' }), session(3, { named: true, title: 'Amy', agent: 'claude' })], { grouping: 'status' })
+    const names = () => screen.getAllByRole('button', { name: /^(Mid|Zed|Amy),/ }).map((row) => row.querySelector('.mx-row-name')?.textContent)
+    expect(names()).toEqual(['Amy', 'Zed', 'Mid'])
+    await user.click(screen.getByRole('button', { name: /^Filter and group/ }))
+    expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull()
+    await user.click(screen.getByRole('radio', { name: 'A–Z' }))
+    expect(names()).toEqual(['Amy', 'Mid', 'Zed'])
+    await user.click(screen.getByRole('radio', { name: 'Oldest' }))
+    expect(names()).toEqual(['Mid', 'Zed', 'Amy'])
+    await user.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(names()).toEqual(['Amy', 'Zed', 'Mid'])
+    expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull()
   })
 
   it('asks for another grouping from the same menu', async () => {
@@ -630,8 +662,13 @@ describe('the top of the sidebar', () => {
     const onGrouping = vi.fn()
     show([], { grouping: 'status', onGrouping })
     await user.click(screen.getByRole('button', { name: /^Filter and group/ }))
-    expect(screen.getByText('Group by')).toBeTruthy()
-    await user.click(screen.getByRole('menuitem', { name: /^Project/ }))
+    await user.click(screen.getByRole('radio', { name: 'Project' }))
     expect(onGrouping).toHaveBeenCalledWith('project')
+  })
+
+  it('lists a plain shell under Terminals, last', () => {
+    show([session(1, { agent: 'claude', named: true, title: 'Agent' }), session(2, { named: true, title: 'Shell' })], { grouping: 'status' })
+    const heads = screen.getAllByRole('button', { expanded: true }).map((button) => button.querySelector('.mx-section-name')?.textContent).filter((name) => name !== undefined)
+    expect(heads).toEqual(['Idle', 'Terminals'])
   })
 })

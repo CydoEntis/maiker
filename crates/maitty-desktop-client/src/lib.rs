@@ -19,9 +19,8 @@ use std::time::Duration;
 pub const MAX_TERMINAL_INPUT_BYTES: usize = 16 * 1024;
 /// The longest message the daemon is asked to hold for a starting agent.
 pub const MAX_HELD_MESSAGE_BYTES: usize = 256 * 1024;
-const APP_COMMAND: &str = env!("MAITTY_APP_COMMAND");
-const APP_NAME: &str = env!("MAITTY_APP_NAME");
-const APP_ENV: &str = env!("MAITTY_APP_ENV");
+const APP_COMMAND: &str = env!("APP_COMMAND");
+const APP_NAME: &str = env!("APP_NAME");
 
 /// What the window may ask a pane's daemon to do, whichever machine the pane is on. One place
 /// makes each message, so this computer's panes and another machine's are asked the same way.
@@ -237,7 +236,7 @@ fn read_activity() -> Option<Activity> {
 
 /// Where the daemon keeps this socket's saved sessions, which the next daemon restores.
 fn session_file() -> PathBuf {
-    let label = std::env::var(format!("{APP_ENV}_SOCKET")).unwrap_or_else(|_| "default".into());
+    let label = maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
     ipc::data_dir().join(format!("session-{label}.json"))
 }
 
@@ -335,8 +334,8 @@ fn process_command(pid: u32) -> (Vec<u8>, Option<Vec<u8>>) {
 }
 
 /// Whether a process's NUL-separated command line is this product's daemon: the terminal app's
-/// program, or the copy the desktop app bundles (named with `-gui-daemon`, and with the target
-/// triple when it runs from a development build), started with `daemon`.
+/// program, or the copy the desktop app bundles (named `DAEMON_NAME` or a name it had before, and
+/// with the target triple when it runs from a development build), started with `daemon`.
 #[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
 fn is_daemon_command_line(command_line: &[u8]) -> bool {
     let mut args = command_line.split(|byte| *byte == 0);
@@ -358,8 +357,16 @@ pub fn is_daemon_invocation(program: &[u8], first_argument: Option<&[u8]>) -> bo
         Some(stem) if file[stem..].eq_ignore_ascii_case(EXE_SUFFIX) => &file[..stem],
         _ => file,
     };
-    let bundled = format!("{APP_COMMAND}-gui-daemon");
-    (name == APP_COMMAND.as_bytes() || name.starts_with(bundled.as_bytes()))
+    let bundled = |bundled: &str| {
+        name == bundled.as_bytes()
+            || name
+                .strip_prefix(bundled.as_bytes())
+                .is_some_and(|rest| rest.starts_with(b"-"))
+    };
+    (name == APP_COMMAND.as_bytes()
+        || std::iter::once(maitty_shared::brand::DAEMON_NAME)
+            .chain(maitty_shared::brand::previous_daemon_names())
+            .any(bundled))
         && first_argument == Some(b"daemon".as_slice())
 }
 
@@ -711,7 +718,7 @@ pub async fn handoff_brief(
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(maitty_shared::handoff::brief(
         &maitty_shared::handoff::Facts { pane: term, agent, task, last_prompt, branch, checkout, changed, screen },
-        env!("MAITTY_APP_COMMAND"),
+        env!("APP_COMMAND"),
     ))
 }
 
@@ -2264,7 +2271,7 @@ mod tests {
     fn finds_codex_in_the_nested_windows_npm_package() {
         let root = std::env::temp_dir().join(format!(
             "{}-codex-app-server-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2288,7 +2295,7 @@ mod tests {
     fn finds_codex_under_nvm_symlink_when_node_is_not_on_path() {
         let root = std::env::temp_dir().join(format!(
             "{}-codex-nvm-path-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2313,7 +2320,7 @@ mod tests {
     fn finds_codex_under_the_standard_npm_root_when_node_is_not_on_path() {
         let root = std::env::temp_dir().join(format!(
             "{}-codex-npm-root-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2338,7 +2345,7 @@ mod tests {
     fn finds_codex_under_the_system_node_root_when_node_is_not_on_path() {
         let root = std::env::temp_dir().join(format!(
             "{}-codex-system-node-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2498,6 +2505,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::GitHubRepos { .. }
         | Query::GitHubOwners { .. }
         | Query::AgentCommands { .. }
+        | Query::Repositories { .. }
         | Query::Tickets { .. }
         | Query::TicketKeys { .. }
         | Query::TicketLinks { .. }
@@ -2895,20 +2903,29 @@ mod restart_confirmation_tests {
 
     #[test]
     fn the_daemon_to_restart_may_be_the_terminal_apps_or_the_one_the_desktop_app_bundles() {
-        let command = env!("MAITTY_APP_COMMAND");
+        let command = env!("APP_COMMAND");
+        let daemon = maitty_shared::brand::DAEMON_NAME;
+        // A service started before the rename keeps its old name until it is restarted.
+        let old = maitty_shared::brand::previous_daemon_names()
+            .next()
+            .expect("the old bundled name is carried");
         let line = |program: &str, args: &str| format!("{program}\0{args}\0").into_bytes();
         for program in [
             format!("/home/me/.local/bin/{command}"),
             command.to_string(),
-            format!("/tmp/.mount_AppXyZ/usr/bin/{command}-gui-daemon"),
-            format!("/repo/target/debug/{command}-gui-daemon-x86_64-unknown-linux-gnu"),
+            format!("/tmp/.mount_AppXyZ/usr/bin/{daemon}"),
+            format!("/repo/target/debug/{daemon}-x86_64-unknown-linux-gnu"),
+            format!("/tmp/.mount_AppXyZ/usr/bin/{old}"),
+            format!("/repo/target/debug/{old}-x86_64-unknown-linux-gnu"),
             format!(r"C:\Users\me\AppData\Local\Maitty\{command}.exe"),
-            format!(r"C:\Program Files\Maitty\{command}-gui-daemon.EXE"),
+            format!(r"C:\Program Files\Maitty\{daemon}.EXE"),
+            format!(r"C:\Program Files\Maitty\{old}.EXE"),
         ] {
             assert!(is_daemon_command_line(&line(&program, "daemon")), "{program}");
         }
         for (program, args) in [
             (format!("/usr/bin/not{command}"), "daemon"),
+            (format!("/usr/bin/{daemon}x"), "daemon"),
             (format!("/usr/bin/{command}"), "mcp"),
             (format!("/usr/bin/{command}"), ""),
             ("/usr/bin/bash".to_string(), "daemon"),
@@ -3022,7 +3039,7 @@ mod executable_lookup_tests {
     fn preserves_a_mise_shim_name_when_resolving_codex() {
         let directory = std::env::temp_dir().join(format!(
             "{}-mise-shim-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -3058,7 +3075,7 @@ mod windows_claude_tests {
     use super::windows_claude_from;
 
     fn folder(name: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!("{}-{name}-{}", env!("MAITTY_APP_COMMAND"), std::process::id()));
+        let root = std::env::temp_dir().join(format!("{}-{name}-{}", env!("APP_COMMAND"), std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         root

@@ -526,7 +526,7 @@ describe('conversation workspace', () => {
 
       const send = screen.getByRole('button', { name: 'Send answers' })
       expect(send).toBeDisabled()
-      await user.click(screen.getByRole('checkbox', { name: /Choose A/ }))
+      await user.click(screen.getByRole('switch', { name: /Choose A/ }))
       await user.type(screen.getByLabelText('Your answer for Secret'), 'private')
       expect(send).toBeEnabled()
       expect(screen.getByLabelText('Other answer for Choice')).toBeInTheDocument()

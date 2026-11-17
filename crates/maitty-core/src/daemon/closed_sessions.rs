@@ -54,7 +54,7 @@ impl ClosedSessions {
     /// Where this daemon keeps the list, named by socket so a nested daemon never shares it.
     pub fn default_path() -> PathBuf {
         let label =
-            std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into());
+            maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
         crate::config::data_dir().join(format!("closed-sessions-{label}.json"))
     }
 

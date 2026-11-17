@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DiffLine } from '../chatEvents'
 import { approvalEvent, commandEvent, editEvent, subagentEvent, todoEvent, toolEvent } from '../eventFixtures'
 import { AgentsCard } from './AgentsCard'
+import { HelpersLiveContext } from '../helpersDock'
 import { ApprovalCard } from './ApprovalCard'
 import { Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
@@ -245,23 +246,42 @@ describe('plan card', () => {
   })
 })
 
-describe('helper agents card', () => {
-  it('summarises, shows done time, and opens the prompt and report', async () => {
-    const done = { ...subagentEvent('a', { title: 'Audit', prompt: 'Read parser.rs', report: 'Found 3 issues.' }), timing: { startedAtMs: 0, completedAtMs: 330_000 } }
-    render(<AgentsCard agents={[done, subagentEvent('b', { title: 'Search', status: 'running' })]} process="claude" />)
+describe('helper agents record', () => {
+  it('is one block with the count, how each ended and a row each, open when one failed or still works', async () => {
+    const done = subagentEvent('a', { title: 'Audit', prompt: 'Read parser.rs', report: 'Found 3 issues.' })
+    render(<AgentsCard agents={[done, subagentEvent('b', { title: 'Search', status: 'failed', prompt: 'Find it', report: 'No index.' })]} />)
 
-    expect(screen.getByRole('group', { name: '2 agents, 1 working' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Audit.*5m 30s/ })).toBeInTheDocument()
+    const block = screen.getByRole('group', { name: '2 agents, all done' })
+    expect(within(block).getByText('2 helpers')).toBeInTheDocument()
+    expect(within(block).getByText('1 done')).toBeInTheDocument()
+    expect(within(block).getByText('1 failed')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /Audit/ }))
-    // Once in the row, where a long ask is cut short, and whole in the opened detail.
-    expect(screen.getAllByText('Read parser.rs')).toHaveLength(2)
-    expect(screen.getByText('Found 3 issues.')).toBeInTheDocument()
+    expect(screen.getByText('Asked to')).toBeInTheDocument()
+    expect(screen.getByText('Read parser.rs')).toBeInTheDocument()
+    expect(screen.getByText('Answer')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Search/ }))
+    expect(screen.getByText('What went wrong')).toBeInTheDocument()
   })
 
-  it('has nothing to open for a helper with no prompt or report', () => {
-    render(<AgentsCard agents={[subagentEvent('a', { title: 'Quiet' })]} process="claude" />)
+  it('stays folded when every helper finished well, and opens on a click', async () => {
+    render(<AgentsCard agents={[subagentEvent('a', { title: 'Audit', report: 'Fine.' })]} />)
 
-    expect(screen.getByRole('button', { name: /Quiet/ })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /Audit/ })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /1 helper/ }))
+    expect(screen.getByRole('button', { name: /Audit/ })).toBeInTheDocument()
+  })
+
+  it('is one quiet line while the dock follows its helpers, and the line opens the dock', async () => {
+    const open = vi.fn()
+    render(
+      <HelpersLiveContext.Provider value={{ key: 'a', open }}>
+        <AgentsCard rowKey="a" agents={[subagentEvent('a', { title: 'Audit', status: 'running' }), subagentEvent('b', { title: 'Search', status: 'running' })]} />
+      </HelpersLiveContext.Provider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /Started 2 helpers/ }))
+    expect(screen.getByText('· running below')).toBeInTheDocument()
+    expect(open).toHaveBeenCalledOnce()
   })
 })
 

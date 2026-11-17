@@ -61,7 +61,7 @@ describe('how the chat feels while it waits', () => {
     expect(screen.getByText('earlier')).toBeInTheDocument()
   })
 
-  it('draws a message at once when it is sent and says the agent is thinking, until the history has it', async () => {
+  it('draws a message at once when it is sent and shows the live box saying the agent is thinking, until the history has it', async () => {
     const { daemon, typeInto, user } = open()
     await settle()
 
@@ -71,7 +71,7 @@ describe('how the chat feels while it waits', () => {
     await settle(PASTE_SUBMIT_GAP_MS + 1)
     expect(typeInto).toHaveBeenCalledTimes(2)
     expect(screen.getByLabelText('Sending')).toHaveTextContent('hello there')
-    expect(screen.getByText(/claude is thinking/)).toBeInTheDocument()
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
 
     // The agent writes its file: the real message replaces the drawn one, and there is only one.
     daemon.upsert(daemon.message('t1', 'u2', 'User', 'hello there'))
@@ -125,18 +125,18 @@ describe('how the chat feels while it waits', () => {
     await settle()
     await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
     await settle(PASTE_SUBMIT_GAP_MS + 1)
-    expect(screen.getByText(/claude is thinking/)).toBeInTheDocument()
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
 
     await settle(4_100)
 
-    expect(screen.queryByText(/claude is thinking/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Thinking')).not.toBeInTheDocument()
     expect(screen.getByLabelText('Sending')).toHaveTextContent('hello there')
   })
 
   it('reads again as a turn ends, so the last words are not left to the slow idle poll', async () => {
     const { daemon } = open('Working')
     await settle()
-    expect(screen.getByText(/claude is thinking/)).toBeInTheDocument()
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
 
     // The turn ends; the agent's last message is written a moment after the status changes.
     daemon.status = 'Idle'
@@ -179,13 +179,13 @@ describe('how the chat feels while it waits', () => {
   it('shows the agent working as soon as the pane says so, before the conversation has been read again', async () => {
     const { daemon, setPaneStatus } = open('Idle')
     await settle()
-    expect(screen.queryByText(/claude is thinking/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Thinking')).not.toBeInTheDocument()
 
     // A turn started in the terminal: the pane's status is live, the chat's own read is still "idle".
     setPaneStatus('working')
     await settle()
 
-    expect(screen.getByText(/claude is thinking/)).toBeInTheDocument()
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', 'Queue a message for when claude finishes')
 
     // And the chat read the conversation at that moment, not at its next idle poll.
@@ -193,7 +193,7 @@ describe('how the chat feels while it waits', () => {
     setPaneStatus('idle')
     await settle(700)
     expect(screen.getByText('asked in the terminal')).toBeInTheDocument()
-    expect(screen.queryByText(/claude is thinking/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Thinking')).not.toBeInTheDocument()
   })
 
   it('says the agent is free while only its helpers work, and takes a message at once', async () => {
@@ -203,8 +203,8 @@ describe('how the chat feels while it waits', () => {
     setPaneStatus('working', 3)
     await settle()
 
-    expect(screen.getByText('claude is free · 3 helpers working')).toBeInTheDocument()
-    expect(screen.queryByText(/claude is thinking/)).not.toBeInTheDocument()
+    expect(screen.getByText('Free · 3 helpers working')).toBeInTheDocument()
+    expect(screen.queryByText('Thinking')).not.toBeInTheDocument()
     const box = screen.getByRole('textbox', { name: 'Message claude' })
     expect(box).not.toHaveAttribute('placeholder', 'Queue a message for when claude finishes')
     await user.type(box, 'and Slack too{Enter}')
@@ -212,7 +212,7 @@ describe('how the chat feels while it waits', () => {
     expect(typeInto).toHaveBeenCalledWith('\x1b[200~and Slack too\x1b[201~')
   })
 
-  it('keeps the working line up for a moment after the turn ends, so the pane is not blank before the reply is read', async () => {
+  it('keeps the live box up for a moment after the turn ends, so the pane is not blank before the reply is read', async () => {
     const { daemon, setPaneStatus } = open('Idle')
     await settle()
     setPaneStatus('working')
@@ -223,11 +223,11 @@ describe('how the chat feels while it waits', () => {
     // The turn ended on the pane, but the history has no answer yet.
     setPaneStatus('idle')
     await settle(50)
-    expect(screen.getByText(/claude is thinking/)).toBeInTheDocument()
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
 
     // And it does not stay for good: with no answer it gives way after a moment.
     await settle(1000)
-    expect(screen.queryByText(/claude is thinking/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Thinking')).not.toBeInTheDocument()
   })
 
   it('gives the focus back to the message box when you click the conversation, so one click is enough to type again', async () => {

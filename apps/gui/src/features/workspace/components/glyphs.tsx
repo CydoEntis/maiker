@@ -112,6 +112,22 @@ const ICON_DRAWINGS = {
   openSide: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M4 4h16v16H4zM14 4v16" /></Svg>,
   shield: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z" /></Svg>,
   bang: () => <Svg size={9} strokeWidth={3.5} stroke="var(--danger)"><path d="M12 6v7" /><path d="M12 18h.01" /></Svg>,
+  /** The session header's Changes button: two branches meeting, the design's git mark. */
+  gitChanges: ({ size = 15 }: IconProps) => <Svg size={size} strokeWidth={1.8}><circle cx="6" cy="6" r="2.2" /><circle cx="6" cy="18" r="2.2" /><circle cx="18" cy="8" r="2.2" /><path d="M6 8.2v7.6M18 10.2c0 4-6 3.2-10.2 6.4" /></Svg>,
+  /** The folder of a session in a worktree of its own: locked to it. */
+  folderLocked: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M10 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v2.5" /><rect x="14" y="17" width="8" height="5" rx="1" /><path d="M20 17v-2a2 2 0 1 0-4 0v2" /></Svg>,
+  /** The plain folder of a hover card's folder line, in the design's own stroke. */
+  folderPlain: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M3 6h6l2 2h10v11H3z" /></Svg>,
+  /** The ⋯ button. */
+  more: ({ size = 15 }: IconProps) => <Svg size={size} strokeWidth={1.8} fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></Svg>,
+  /** A line count of changes, as the hover card's changes row draws it. */
+  diffStat: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M12 4v7M8.5 7.5h7M8.5 17h7" /></Svg>,
+  pullRequest: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M6 8v13M8 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0M18 15v-6a3 3 0 0 0-3-3h-4M13 3.5 10.5 6 13 8.5M20 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0" /></Svg>,
+  /** The Chat | Terminal toggle's own marks, at the design's 13px. */
+  chatBox: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 5h16v11H9l-5 4z" strokeLinejoin="round" /></Svg>,
+  terminalBox: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 5h16v14H4zM8 10l3 2.5L8 15M13 15h3" /></Svg>,
+  restart: ({ size = 15 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" /></Svg>,
+  checks: ({ size = 15 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M9 11l3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></Svg>,
 } satisfies Record<string, (props: IconProps) => ReactNode>
 
 export type IconName = keyof typeof ICON_DRAWINGS

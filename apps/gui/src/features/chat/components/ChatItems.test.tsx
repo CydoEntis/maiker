@@ -48,17 +48,18 @@ describe('a reply from the agent', () => {
     expect(container).toHaveTextContent('Now the **bol')
   })
 
-  it('is typed in once: drawn again, a reply that arrived live shows whole', () => {
+  it('is revealed once, a sentence at a time: drawn again, a reply that arrived live shows whole', () => {
     const known = new Set<string>()
-    const live = () => <KnownRowsContext.Provider value={known}>{reply('completed', 'The endpoint is in.')}</KnownRowsContext.Provider>
+    const live = () => <KnownRowsContext.Provider value={known}>{reply('completed', 'The endpoint is in. It has tests.')}</KnownRowsContext.Provider>
 
     const first = render(live())
-    expect(first.container).not.toHaveTextContent('The endpoint is in.')
+    expect(first.container).toHaveTextContent('The endpoint is in.')
+    expect(first.container).not.toHaveTextContent('It has tests.')
     first.unmount()
 
     // What the list does when the row scrolls out of sight and back.
     const again = render(live())
-    expect(again.container).toHaveTextContent('The endpoint is in.')
+    expect(again.container).toHaveTextContent('It has tests.')
   })
 
   it('shows no half-typed table while it is still arriving', () => {

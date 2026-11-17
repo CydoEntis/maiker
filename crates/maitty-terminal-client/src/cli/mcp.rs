@@ -874,7 +874,7 @@ pub fn run() -> Result<()> {
     let server = Server::new(
         cfg,
         caller_root(),
-        std::env::var(concat!(env!("APP_ENV"), "_TERM_ID"))
+        maitty_shared::brand::env_var("TERM_ID")
             .ok()
             .and_then(|s| s.parse().ok()),
         Reach::live(),

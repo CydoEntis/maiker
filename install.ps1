@@ -3,21 +3,28 @@
 #   Public repo:   irm https://raw.githubusercontent.com/<REPO>/main/install.ps1 | iex
 #   Private repo:  gh api -H "Accept: application/vnd.github.raw" repos/<REPO>/contents/install.ps1 | Out-String | iex
 #
-# Settings (environment variables, <APP> being the app's command in capitals):
-#   <APP>_VERSION      a tag such as v0.1.0 (default: the latest release)
-#   <APP>_INSTALL_DIR  where <app>.exe goes (default: %LOCALAPPDATA%\Programs\<app>)
-#   <APP>_NO_PATH      set to 1 to leave your PATH alone
-#   <APP>_NO_INTEGRATE set to 1 to leave your agents' config alone (no `<app> integrate`)
-#   <APP>_FROM         a folder holding a release's files, used in place of downloading them (the
+# Settings (environment variables; the prefix is generic, not the app's name, ADR 0012):
+#   AGENT_VERSION      a tag such as v0.1.0 (default: the latest release)
+#   AGENT_INSTALL_DIR  where <app>.exe goes (default: %LOCALAPPDATA%\Programs\<app>)
+#   AGENT_NO_PATH      set to 1 to leave your PATH alone
+#   AGENT_NO_INTEGRATE set to 1 to leave your agents' config alone (no `<app> integrate`)
+#   AGENT_FROM         a folder holding a release's files, used in place of downloading them (the
 #                      release workflow tries a release this way before publishing it)
+# The old prefix (MAITTY_) still works when the new name is not set.
 $ErrorActionPreference = 'Stop'
 
 # The app's command and where it is released: the only place this script names it (ADR 0008).
 $app = 'maitty'
 $repo = 'CydoEntis/maitty'
 
-$envPrefix = $app.ToUpper().Replace('-', '_')
-function Setting($name) { [Environment]::GetEnvironmentVariable("$($envPrefix)_$name") }
+# The prefix of the app's environment variables, and the one it had before (still read).
+$envPrefix = 'AGENT'
+$oldEnvPrefix = 'MAITTY'
+function Setting($name) {
+    $value = [Environment]::GetEnvironmentVariable("$($envPrefix)_$name")
+    if ($value) { return $value }
+    [Environment]::GetEnvironmentVariable("$($oldEnvPrefix)_$name")
+}
 $version = Setting 'VERSION'
 $from = Setting 'FROM'
 $dir = if (Setting 'INSTALL_DIR') { Setting 'INSTALL_DIR' } else { Join-Path $env:LOCALAPPDATA "Programs\$app" }

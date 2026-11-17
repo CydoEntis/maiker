@@ -15,6 +15,7 @@
 use maitty_machines::MachineId;
 use maitty_machines::remote_snapshot::sanitize_snapshot;
 use maitty_shared::agent_commands::AgentCommand;
+use maitty_shared::repositories::RepositoryIndex;
 use maitty_shared::extensions::{ExtError, ExtReply};
 use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, SignInAgent, SignInState, Snapshot, Status, TermId};
 use maitty_shared::settings_view::SharedSettings;
@@ -139,6 +140,12 @@ pub enum Out {
         machine: MachineId,
         tag: u64,
         answer: Result<Vec<AgentCommand>, String>,
+    },
+    /// The repositories a machine found, already cleaned.
+    Repositories {
+        machine: MachineId,
+        tag: u64,
+        found: RepositoryIndex,
     },
     /// What a machine read of a ticket source, already cleaned by the daemon (and vetted for another machine's).
     Tickets {
@@ -295,6 +302,9 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::AgentCommands { tag, answer }) => {
                 out.push(Out::AgentCommands { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::Repositories { tag, found }) => {
+                out.push(Out::Repositories { machine, tag, found });
             }
             ServerMsg::Reply(Reply::Tickets { tag, answer }) => {
                 out.push(Out::Tickets { machine, tag, answer });

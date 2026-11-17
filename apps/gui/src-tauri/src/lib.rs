@@ -56,13 +56,14 @@ fn bundled_daemon(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let suffix = if cfg!(windows) { ".exe" } else { "" };
     let (file_name, development_path) = if cfg!(debug_assertions) {
         let file_name = format!(
-            "binaries/maitty-gui-daemon-{}{suffix}",
-            env!("MAITTY_TARGET_TRIPLE")
+            "binaries/{}-{}{suffix}",
+            maitty_shared::brand::DAEMON_NAME,
+            env!("APP_TARGET_TRIPLE")
         );
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(&file_name);
         (file_name, Some(path))
     } else {
-        (format!("maitty-gui-daemon{suffix}"), None)
+        (format!("{}{suffix}", maitty_shared::brand::DAEMON_NAME), None)
     };
     if let Some(path) = development_path {
         return path
@@ -82,10 +83,11 @@ fn bundled_daemon(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         && let Some(directory) = gui_executable.parent()
     {
         candidates.push(directory.join(format!(
-            "maitty-gui-daemon-{}{suffix}",
-            env!("MAITTY_TARGET_TRIPLE")
+            "{}-{}{suffix}",
+            maitty_shared::brand::DAEMON_NAME,
+            env!("APP_TARGET_TRIPLE")
         )));
-        candidates.push(directory.join(format!("maitty-gui-daemon{suffix}")));
+        candidates.push(directory.join(format!("{}{suffix}", maitty_shared::brand::DAEMON_NAME)));
     }
     first_existing_daemon(&candidates)
         .ok_or_else(|| "the bundled daemon executable is missing".into())
@@ -1740,6 +1742,7 @@ pub fn run() {
             terminal_stream::github_repos,
             terminal_stream::github_owners,
             terminal_stream::agent_commands_on,
+            terminal_stream::repositories,
             terminal_stream::tickets,
             github_repo_of,
             terminal_stream::ticket_keys,
@@ -1940,14 +1943,16 @@ mod tests {
     #[test]
     fn daemon_lookup_uses_the_first_existing_packaged_or_adjacent_binary() {
         let directory = std::env::temp_dir().join(format!(
-            "maitty-gui-daemon-path-{}-{}",
+            "{}-path-{}-{}",
+            maitty_shared::brand::DAEMON_NAME,
             std::process::id(),
             NEXT_TEMP_DIRECTORY.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir(&directory).unwrap();
 
         let missing_resource = directory.join("resources").join("maitty.exe");
-        let adjacent_sidecar = directory.join("maitty-gui-daemon-x86_64-pc-windows-msvc.exe");
+        let sidecar_name = format!("{}-x86_64-pc-windows-msvc.exe", maitty_shared::brand::DAEMON_NAME);
+        let adjacent_sidecar = directory.join(&sidecar_name);
         let adjacent_daemon = directory.join("maitty.exe");
         std::fs::write(&adjacent_sidecar, []).unwrap();
         std::fs::write(&adjacent_daemon, []).unwrap();
@@ -1964,13 +1969,13 @@ mod tests {
         assert_eq!(
             first_existing_daemon(&[
                 packaged_daemon.clone(),
-                directory.join("maitty-gui-daemon-x86_64-pc-windows-msvc.exe"),
+                directory.join(&sidecar_name),
                 directory.join("maitty.exe"),
             ]),
             Some(packaged_daemon.clone())
         );
 
-        std::fs::remove_file(directory.join("maitty-gui-daemon-x86_64-pc-windows-msvc.exe"))
+        std::fs::remove_file(directory.join(&sidecar_name))
             .unwrap();
         std::fs::remove_file(directory.join("maitty.exe")).unwrap();
         std::fs::remove_file(packaged_daemon).unwrap();

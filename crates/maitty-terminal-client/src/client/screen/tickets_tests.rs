@@ -1,7 +1,7 @@
 //! Tickets in the side panel: what is asked of this computer's daemon, every state it draws, that
 //! links are the daemon's (set up in place, once per project), and that nothing is written or sent
 //! without its review and `y`.
-//! `MAITTY_SHOW=1 cargo test tickets_tests -- --nocapture` prints the frames.
+//! `AGENT_SHOW=1 cargo test tickets_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::Outgoing;
@@ -95,7 +95,7 @@ fn tag_of(msgs: &[ClientMsg], want: impl Fn(&Query) -> bool) -> u64 {
 
 fn frame_at(app: &mut App, title: &str, w: u16, h: u16) -> String {
     let text = raw_text(app, Layout::Floating, w, h, "unicode");
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title} ({w}x{h})\n{text}");
     }
     text
