@@ -2477,6 +2477,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::GitIdentityRule { .. }
         | Query::CloneRepo { .. }
         | Query::TicketWrite { .. }
+        | Query::Extensions { .. }
         | Query::SideAnswer { .. } => false,
         Query::Settings
         | Query::AllowedCommands

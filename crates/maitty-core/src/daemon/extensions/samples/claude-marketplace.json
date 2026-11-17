@@ -1,0 +1,1 @@
+{"name":"local-mk","owner":{"name":"me"},"plugins":[{"name":"hello","source":"./plugins/hello","description":"Says hello"},{"name":"far","source":{"source":"github","repo":"someone/far"}}]}

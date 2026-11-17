@@ -61,6 +61,8 @@ const CLEAR: WindowRoute = { kind: 'confirm', ask: { title: 'Start a new convers
 // The Permissions page lists the commands approved for each project, the window's view of Claude Code's allow rules.
 const SETTINGS_PERMISSIONS: WindowRoute = { kind: 'settings', section: 'permissions' }
 const HISTORY: WindowRoute = { kind: 'panel', view: 'history' }
+// The Extensions page lists, adds, switches and removes the skills, plugins and MCP servers these commands open a menu for.
+const SETTINGS_EXTENSIONS: WindowRoute = { kind: 'settings', section: 'extensions' }
 
 /** What a command does in the window, by Claude Code's names for it, and the words the picker tags it with. */
 const ROUTES: Readonly<Record<string, { readonly route: WindowRoute; readonly opens: string }>> = {
@@ -85,7 +87,12 @@ const ROUTES: Readonly<Record<string, { readonly route: WindowRoute; readonly op
   goal: { route: aside('goal', 'Goal'), opens: ANSWERED_HERE },
   advisor: { route: aside('advisor', 'Advisor'), opens: ANSWERED_HERE },
   config: { route: aside('config', 'Config'), opens: ANSWERED_HERE },
-  mcp: { route: aside('mcp', 'MCP servers'), opens: ANSWERED_HERE },
+  mcp: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  plugin: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  plugins: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  marketplace: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  skills: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
+  hooks: { route: SETTINGS_EXTENSIONS, opens: 'Settings' },
   // Claude Code draws a QR code or opens a browser for these; the address is all there is to show.
   mobile: { route: note('Claude on your phone', 'Get the Claude app at [claude.ai/mobile](https://claude.ai/mobile), then sign in with the same account to see your sessions.'), opens: ANSWERED_HERE },
   'privacy-settings': { route: note('Privacy settings', 'Your privacy settings are on your account page: [claude.ai/settings/data-privacy-controls](https://claude.ai/settings/data-privacy-controls).'), opens: ANSWERED_HERE },

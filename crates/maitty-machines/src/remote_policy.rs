@@ -93,6 +93,9 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::Reply(Reply::TicketWrite { .. }) => {
             Verdict::Ignore("ticket writes are asked of this computer only")
         }
+        ServerMsg::Reply(Reply::Extensions { .. }) => {
+            Verdict::Ignore("extensions are changed on this computer only")
+        }
         // A link and a code from another machine's output would be shown as if this window had asked for them.
         ServerMsg::Reply(Reply::AgentSignIn { .. }) => {
             Verdict::Ignore("agents are signed in on this computer only")

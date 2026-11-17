@@ -93,6 +93,7 @@ impl Host {
                 | Reaction::TicketKeys { .. }
                 | Reaction::TicketWrite { .. }
                 | Reaction::TicketLinks { .. }
+                | Reaction::Extensions { .. }
                 | Reaction::TicketSetup(_)
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),
