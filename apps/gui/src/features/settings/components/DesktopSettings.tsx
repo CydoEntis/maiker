@@ -17,6 +17,7 @@ import type { GitHubSignIn } from './GitHubSection'
 import { MachinesPage } from './MachinesPage'
 import { UpdateBox } from './UpdateBox'
 import { TicketsSection } from '@/features/tickets/TicketsSettings'
+import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { TicketsProject } from '@/features/tickets/model/ticketProjects'
 import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
 import { CHAT_AGENTS } from '@/features/workspace/model/chatView'
@@ -32,7 +33,7 @@ import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
 import { CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
 
-export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'machines' | 'tickets' | 'usage' | 'performance'
+export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'tickets' | 'usage' | 'performance'
 
 /** The other machines, for the Machines page: what the window knows of each, and what it can ask of the host. */
 export type MachinesInfo = {
@@ -150,6 +151,7 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
       { id: 'chat', label: 'Chat', key: 'C', tint: 'var(--ok)', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
       { id: 'permissions', label: 'Permissions', key: 'E', tint: 'var(--ansi-mag)', path: 'M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z' },
       { id: 'terminal', label: 'Terminal', key: 'T', tint: 'var(--ansi-blue)', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
+      { id: 'extensions', label: 'Extensions', key: 'X', tint: 'var(--warn)', path: 'M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3M7 6h10v12H7z' },
     ],
   },
   {
@@ -169,13 +171,14 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   chat: ['Chat', 'How a chat starts, and how wide and large it is drawn.'],
   permissions: ['Permissions', 'Who your agents are signed in as, and what they may run without asking.'],
   terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
+  extensions: ['Extensions', 'Skills, plugins and MCP servers for Claude Code and Codex, for you and for a project.'],
   machines: ['Remote machines', 'Other computers whose sessions show up in your sidebar.'],
   tickets: ['Tickets', 'Where Maitty reads tickets from. It only reads them.'],
   usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
   performance: ['Performance', 'What the window is spending its time on, measured live.'],
 }
 
-const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', m: 'machines', i: 'tickets' }
+const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', x: 'extensions', m: 'machines', i: 'tickets' }
 
 /** Esc ends an open theme list, or a running add-machine, first; Settings stays. A part that handles Esc itself is marked `data-owns-escape`. */
 const keepForOpenList = (event: globalThis.KeyboardEvent) => {
@@ -270,6 +273,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
       case 'usage': return <UsageSection usage={props.usage} />
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <MachinesPage daemon={props.daemon} machines={props.machines} github={props.github} appVersion={props.appVersion} />
+      case 'extensions': return <ExtensionsSection projects={props.ticketProjects ?? []} />
       case 'tickets': return <TicketsSection projects={props.ticketProjects ?? []} signIn={props.github} />
       case 'keys': return <HotkeysSection platform={props.platform} overrides={preferences.keyOverrides} onOverrides={(next) => { update('keyOverrides', next) }} />
       case 'performance': return <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />

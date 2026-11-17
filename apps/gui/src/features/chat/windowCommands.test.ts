@@ -13,6 +13,24 @@ describe('the commands the window answers itself', () => {
     expect(windowRouteOf('help')).toEqual({ kind: 'commands' })
   })
 
+  it('opens the Extensions page for the commands that open a menu of skills, plugins, servers and hooks', () => {
+    for (const name of ['plugin', 'plugins', 'marketplace', 'skills', 'hooks', 'mcp']) {
+      expect(windowRouteOf(name), name).toEqual({ kind: 'settings', section: 'extensions' })
+    }
+    // With something after the name it is Claude Code's own subcommand (`/mcp list`), which the page does not answer.
+    expect(windowRouteOf('mcp', 'list')).toBeNull()
+    expect(windowRouteOf('plugin', 'install a@b')).toBeNull()
+  })
+
+  it('offers those commands where there is no terminal, because the window answers them', () => {
+    const tagged = withWindowRoutes([command('skills', true), command('hooks', true), command('plugin', true)])
+    expect(tagged).toEqual([
+      { ...command('skills'), opens: 'Settings' },
+      { ...command('hooks'), opens: 'Settings' },
+      { ...command('plugin'), opens: 'Settings' },
+    ])
+  })
+
   it('leaves a command typed with something after it to Claude Code, which has a use for what was typed', () => {
     expect(windowRouteOf('resume', 'abc123')).toBeNull()
     expect(windowRouteOf('diff', 'src')).toBeNull()
