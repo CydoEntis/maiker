@@ -1,4 +1,4 @@
-# 0010. Workflows and specialist agents stay outside Maitty; Maitty shows them
+# 0010. Workflows and specialist agents stay outside Maitty; Maitty shows the specialists
 
 - **Status:** Accepted
 - **Date:** 2026-11-13
@@ -36,27 +36,13 @@ one way of working, and makes every stalled stage Maitty's fault. Status must st
    session's transcript, Codex's child thread named by its parent thread, and Codex app-server
    collab items for structured conversations. This is history, so it is display only and never
    changes status.
-3. **A workflow reports its progress to Maitty through one provider-neutral command:**
-   `maitty workflow report`. Any process in the pane may run it, so it works the same under
-   Claude Code, Codex or a plain script. The daemon accepts it as it accepts a hook, verified by the
-   pane's process tree or `MAITTY_PANE_TOKEN`, so every report belongs to a known session. A report
-   names one run of the workflow: the workflow's name, a run id, an optional ticket (key, title, link),
-   the ordered steps, and for each step its state (waiting, working, passed, failed, sent back,
-   needs you, skipped), an optional short note, and an optional helper label: the name the workflow
-   gave the helper doing the step (Claude's Agent description, Codex's task name). The daemon links
-   the step to a helper of the same pane whose label is equal, ignoring case and punctuation (Codex
-   task names are snake_case, so `MAITTY-42 builder` names `maitty_42_builder`), and to nothing otherwise. The daemon validates and bounds every field,
-   keeps the latest report per run with the pane, and sends it to clients. It is a new message, so
-   it gets its own `introduced_in` arm and a `PROTOCOL_VERSION` bump.
-4. **Workflow progress is display only.** It never changes a pane's status and never raises an
-   alert of its own. A workflow that needs the user stops its agent and asks, and the agent's
-   trusted status says "needs you"; the workflow view explains why.
-5. **Maitty never reads a workflow's own files** (for example `.kitchen/jobs/`). A file in a
-   repository is not tied to a session and holds one tool's format. Maitty knows a workflow only
-   through its reports.
-6. **No plugin system or marketplace for now.** The report command is the whole contract a third
-   party needs. Maitty lists a project's specialist files read-only (the desktop app's
-   *Specialist agents…*, `Query::Specialists`); it never makes, edits or runs one.
+3. **Maitty shows no workflow's own progress** ([0011](0011-maitty-reads-tickets-and-shows-no-workflow-runs.md)).
+   A workflow's helpers show as subagents (point 2); its steps, runs and tickets are the
+   workflow's own business.
+4. **Maitty never reads a workflow's own files** (for example `.kitchen/jobs/`). A file in a
+   repository is not tied to a session and holds one tool's format.
+5. **No plugin system or marketplace for now.** Maitty lists a project's specialist files read-only
+   (the desktop app's *Specialist agents…*, `Query::Specialists`); it never makes, edits or runs one.
 
 ## Alternatives considered
 
@@ -66,19 +52,16 @@ one way of working, and makes every stalled stage Maitty's fault. Status must st
   session, so tickets could not be placed under the session working them. Each tool's format would
   need its own reader, and 0003 forbids reading unverified files.
 - **A plugin system and extension marketplace**: installing, sandboxing, updating and supporting
-  third-party code on three platforms is a product of its own. Today there is one workflow, Kitchen.
-  The report command does not rule this out later.
+  third-party code on three platforms is a product of its own.
+- **A report command that shows a workflow's steps in Maitty** (`maitty workflow report` and a Work
+  board): built, then removed by [0011](0011-maitty-reads-tickets-and-shows-no-workflow-runs.md)
+  because it pulled Maitty away from showing which agents need you.
 - **Maitty's own agent editor**: Claude Code's `/agents` and Codex's files already do this, and the
   two formats differ and keep changing.
 
 ## Consequences
 
-- Specialists and workflows change without a Maitty release. A Codex version of a workflow needs
-  only Codex agent files and a call to the same command.
-- Maitty maintains one small message, the report command, and two readers of provider subagent
-  records. A change to the report's shape follows the protocol rules (0002).
-- A workflow that never calls the command still runs. Its subagents show live, but its steps do not.
-- What a step shows is only as true as the workflow's report. Maitty guarantees it came from the
-  pane, not that it is accurate.
-- Revisit point 6 when several independent workflows report to Maitty and users ask to install them
-  from inside it.
+- Specialists and workflows change without a Maitty release.
+- Maitty maintains two readers of provider subagent records.
+- A workflow's helpers show live; where the workflow itself stands, it says in its own place.
+- Revisit point 5 when several independent workflows ask to be installed from inside Maitty.

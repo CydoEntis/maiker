@@ -98,17 +98,10 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `Ctrl+R` | Reload the config |
 
 **Search only** (`Ctrl+K`, then type): new tab, Updates, find in the pane, previous / next
-command in history, send the prefix itself to the program, Work board, Status log, Recent
+command in history, send the prefix itself to the program, Status log, Recent
 sessions…, Reset pane widths.
 
-## Work board, run and status log
-
-| Key | Action |
-|---|---|
-| `↑` `↓` (`k` `j`) | The card before / after, column by column |
-| `←` `→` (`h` `l`) | The first card of the column before / after |
-| `Enter` or a click | Open the card's run: its steps; `Esc` goes back to the board on that card |
-| `Esc` | Close the board |
+## Status log
 
 The status log scrolls with `↑` `↓` and `PgUp` `PgDn`; `Esc` closes it.
 
@@ -516,8 +509,7 @@ In `[keys.prefix]` its action is `references`. It has the keys while open.
 ## Tickets view
 
 Leader + `p` opens the tickets of the project the session in front works in. In `[keys.prefix]` its
-action is `tickets`. It has the keys while open. Nothing is written to a ticket without `y` on a
-review page (or a click on its confirm button); Enter never writes.
+action is `tickets`. It has the keys while open. It only reads tickets: change one in its tracker.
 
 | Keys | Action |
 | --- | --- |
@@ -534,11 +526,9 @@ review page (or a click on its confirm button); Enter never writes.
 | s | Start an agent on it (review first) |
 | Esc, p | Clear the search, then close |
 
-On a ticket: Up / Down scroll, `s` start an agent in a new worktree, `t` send it to the session in
-front, `c` comment, `d` mark done, `o` open its link, `y` copy its link, `r` read again, Esc back.
-The start and send pages show exactly what will be sent; Left / Right picks the agent; `y` starts or
-sends. The comment page takes text (Enter is a new line); Tab reviews it, and on the review `y`
-posts it, `e` edits it, Esc cancels. Sources: Enter changes the row, `x` turns GitHub off, removes
+On a ticket: Up / Down scroll, `s` start an agent in a new worktree, `o` open its link, `y` copy its
+link, `r` read again, Esc back. The start page shows exactly what will be sent; Left / Right picks
+the agent; `y` starts. Sources: Enter changes the row, `x` turns GitHub off, removes
 a key (asks first) or unlinks another project; in the key form Tab moves between fields and Enter
 connects. Setting up from a tab, Esc goes back to the list.
 

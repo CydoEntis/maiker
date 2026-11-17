@@ -17,4 +17,3 @@ pub mod ticket_links;
 pub mod ticket_paste;
 pub mod tickets;
 pub mod usage_report;
-pub mod workflow;

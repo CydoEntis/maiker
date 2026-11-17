@@ -92,7 +92,6 @@ impl Host {
                 | Reaction::AgentCommands { .. }
                 | Reaction::Tickets { .. }
                 | Reaction::TicketKeys { .. }
-                | Reaction::TicketWrite { .. }
                 | Reaction::TicketLinks { .. }
                 | Reaction::Extensions { .. }
                 | Reaction::TicketSetup(_)

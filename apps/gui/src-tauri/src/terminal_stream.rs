@@ -28,7 +28,7 @@ use maitty_shared::conversation::Provider;
 use maitty_shared::extensions::{ExtError, ExtReply, ExtRequest};
 use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId, TicketKeyChange};
 use maitty_shared::ticket_links::{TicketLinkChange, TicketLinks, TicketPlace};
-use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWrite, TicketWritten, TicketsReply, TicketsRequest};
+use maitty_shared::tickets::{TicketError, TicketKeyState, TicketsReply, TicketsRequest};
 use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -77,7 +77,6 @@ const AGENT_SIGN_IN_EVENT: &str = "agent-sign-in";
 const TICKETS_EVENT: &str = "tickets";
 /// Where the ticket providers' keys stand: `{machine, tag, answer}`, never a key.
 const TICKET_KEYS_EVENT: &str = "ticket-keys";
-const TICKET_WRITE_EVENT: &str = "ticket-write";
 /// What a request about the extensions (skills, plugins, MCP servers, marketplaces) did: `{machine, tag, answer}`.
 const EXTENSIONS_EVENT: &str = "extensions";
 /// Which sources each project reads: `{machine, tag, answer}`, `answer` `{Ok}` (the asked project, every linked one, your names) or `{Err}`.
@@ -554,9 +553,6 @@ impl Wire {
         self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketKeys { change, tag }))
     }
 
-    /// Ask this computer's daemon to write one change to a ticket: a comment, or closing it. `confirmed` is the
-    /// person's click on the confirm step, passed on as it is; the daemon writes nothing without it and refuses
-    /// an agent's connection. The answer comes back as a `ticket-write` event carrying `tag`.
     /// Ask this computer's daemon which sources a project reads, or change them. The answer is a `ticket-links`
     /// event carrying `tag`.
     pub fn ticket_links(&self, place: Option<TicketPlace>, change: TicketLinkChange, tag: u64) -> Result<(), String> {
@@ -567,19 +563,6 @@ impl Wire {
     /// runs only with the token its preview gave. The answer comes back as an `extensions` event carrying `tag`.
     pub fn extensions(&self, request: ExtRequest, tag: u64) -> Result<(), String> {
         self.send(MachineId::LOCAL, ClientMsg::Query(Query::Extensions { request, tag }))
-    }
-
-    pub fn ticket_write(&self, source: &str, id: &str, write: TicketWrite, confirmed: bool, tag: u64) -> Result<(), String> {
-        let (source, id) = (source.trim(), id.trim());
-        for text in [source, id] {
-            if text.is_empty() || text.len() > MOST_TICKET_SOURCE_BYTES || text.chars().any(char::is_control) {
-                return Err("That ticket cannot be written to".to_string());
-            }
-        }
-        self.send(
-            MachineId::LOCAL,
-            ClientMsg::Query(Query::TicketWrite { source: source.to_owned(), id: id.to_owned(), write, confirmed, tag }),
-        )
     }
 
     /// Ask a machine's daemon (this computer's when none is named) whose repositories it can list.
@@ -673,20 +656,6 @@ pub fn ticket_keys(wire: tauri::State<'_, Wire>, change: TicketKeyChange, tag: u
 #[tauri::command]
 pub fn ticket_links(wire: tauri::State<'_, Wire>, place: Option<TicketPlace>, change: TicketLinkChange, tag: u64) -> Result<(), String> {
     wire.ticket_links(place, change, tag)
-}
-
-/// Asks this computer's daemon to add a comment to a ticket or close it, after the person confirmed exactly what
-/// is shown. The answer arrives as a `ticket-write` event with the same `tag`.
-#[tauri::command]
-pub fn ticket_write(
-    wire: tauri::State<'_, Wire>,
-    source: String,
-    id: String,
-    write: TicketWrite,
-    confirmed: bool,
-    tag: u64,
-) -> Result<(), String> {
-    wire.ticket_write(&source, &id, write, confirmed, tag)
 }
 
 /// Asks this computer's daemon about the extensions of Claude Code and Codex. The answer arrives as an `extensions`
@@ -1009,12 +978,6 @@ pub enum Reaction {
         tag: u64,
         answer: Result<Vec<TicketKeyState>, TicketError>,
     },
-    /// What a confirmed write to a ticket did, for the window that asked.
-    TicketWrite {
-        machine: MachineId,
-        tag: u64,
-        answer: Result<TicketWritten, TicketError>,
-    },
     /// What a request about extensions did, for the window that asked.
     Extensions {
         machine: MachineId,
@@ -1122,7 +1085,6 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::AgentCommands { machine, tag, answer } => Some(Reaction::AgentCommands { machine, tag, answer }),
             Out::Tickets { machine, tag, answer } => Some(Reaction::Tickets { machine, tag, answer }),
             Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
-            Out::TicketWrite { machine, tag, answer } => Some(Reaction::TicketWrite { machine, tag, answer }),
             Out::TicketLinks { machine, tag, answer } => Some(Reaction::TicketLinks { machine, tag, answer }),
             Out::Extensions { machine, tag, answer } => Some(Reaction::Extensions { machine, tag, answer }),
             Out::TicketSetup(ask) => Some(Reaction::TicketSetup(ask)),
@@ -1374,9 +1336,6 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::TicketKeys { machine, tag, answer } => {
                 let _ = app.emit(TICKET_KEYS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
-            Reaction::TicketWrite { machine, tag, answer } => {
-                let _ = app.emit(TICKET_WRITE_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
-            }
             Reaction::Extensions { machine, tag, answer } => {
                 let _ = app.emit(EXTENSIONS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
@@ -1484,16 +1443,6 @@ mod tests {
         assert_eq!(serde_json::to_value(refused).unwrap(), serde_json::json!({"machine": 0, "tag": 4, "answer": {"Err": "SignedOut"}}));
         let none = TaggedAnswer { machine: 0, tag: 5, answer: Ok::<_, TicketError>(Vec::<TicketKeyState>::new()) };
         assert_eq!(serde_json::to_value(none).unwrap(), serde_json::json!({"machine": 0, "tag": 5, "answer": {"Ok": []}}));
-    }
-
-    #[test]
-    fn a_ticket_write_and_its_answer_keep_their_shapes() {
-        let comment: TicketWrite = serde_json::from_value(serde_json::json!({"Comment": {"text": "done"}})).unwrap();
-        assert_eq!(comment, TicketWrite::Comment { text: "done".into() });
-        assert_eq!(serde_json::from_value::<TicketWrite>(serde_json::json!("Close")).unwrap(), TicketWrite::Close);
-        assert!(serde_json::from_value::<TicketWrite>(serde_json::json!({"Delete": {}})).is_err());
-        let done = TaggedAnswer { machine: 0, tag: 6, answer: Ok::<_, TicketError>(TicketWritten::Commented) };
-        assert_eq!(serde_json::to_value(done).unwrap(), serde_json::json!({"machine": 0, "tag": 6, "answer": {"Ok": "Commented"}}));
     }
 
     #[test]

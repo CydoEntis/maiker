@@ -24,9 +24,8 @@ struct Kept {
     tab_of: Option<TermId>,
     queue: std::collections::VecDeque<String>,
     held_message: Option<String>,
-    /// Its helpers' records and workflow runs: the history of the same conversation.
+    /// Its helpers' records: the history of the same conversation.
     subagent_activity: Vec<SubagentActivity>,
-    workflows: Vec<maitty_shared::workflow::WorkflowRun>,
 }
 
 impl Kept {
@@ -50,7 +49,6 @@ impl Kept {
             queue: t.queue.clone(),
             held_message: t.held_message.as_ref().map(|held| held.text.clone()),
             subagent_activity: t.subagent_activity.clone(),
-            workflows: t.workflows.clone(),
         }
     }
 
@@ -64,7 +62,7 @@ impl Kept {
             (self.model, self.grants, self.started_by, self.tab_of);
         t.queue = self.queue;
         t.held_message = self.held_message.as_deref().map(term::HeldMessage::new);
-        (t.subagent_activity, t.workflows) = (self.subagent_activity, self.workflows);
+        t.subagent_activity = self.subagent_activity;
     }
 }
 
@@ -310,7 +308,6 @@ impl Daemon {
             held_message: term.held_message.as_ref().map(|held| held.text.clone()),
             account: term.account.clone(),
             subagent_activity: term.subagent_activity.clone(),
-            workflows: term.workflows.clone(),
             checks: term.checks.infos(),
             checks_overridden: term
                 .checks
@@ -631,7 +628,6 @@ impl Daemon {
                                     pane.held_message.as_deref().map(term::HeldMessage::new);
                                 t.restore_checks(&check_dir, old, &pane);
                                 let now = term::unix_now();
-                                t.workflows = pane.workflows;
                                 t.subagent_activity = pane.subagent_activity.into_iter().map(|mut activity| {
                                     if activity.state.active() {
                                         activity.state = SubagentState::ConnectionLost;

@@ -1,6 +1,5 @@
 //! GitHub issues as tickets, read through this machine's own GitHub command line (`gh`): the
-//! repository's milestones, a page of its issues, one issue with its comments. Read-only here (the
-//! confirmed writes are `tickets_write`). No token
+//! repository's milestones, a page of its issues, one issue with its comments. Read-only (ADR 0011). No token
 //! is asked for, kept, logged or sent: signing in and the credentials stay `gh`'s own.
 //!
 //! What `gh` prints is other people's writing. Every string is cleaned and cut and every list is

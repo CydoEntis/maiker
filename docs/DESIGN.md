@@ -99,11 +99,7 @@ running for as long as it runs (after its parent's turn too), one finished in th
 few seconds; `└` and a mark each, or under the open session one row each with `├`/`└` and the name,
 and a quiet `└ 3 done · show` line that lists the finished ones (`· hide` folds them again). A subagent's row
 opens its own steps in a modal ("subagent name": what it was asked, `▸` what it ran, what it said, the newest that
-fit, asked again every 1.5 s while it works); Enter goes to its parent's pane. Another machine's opens the pane. Under the
-open session, after its subagents, the workflow runs it reported that are still going (ADR 0010), one line
-each: the step's mark (`·` waiting, the spinner working, `✓` passed, `✕` failed, `↺` sent back, `●` needs you
-in amber, `–` skipped), the ticket and the step (`├ ● MAITTY-43 spec`), then `└ 2 runs done`. A run's line
-opens its steps in a modal ("run MAITTY-42"): each step's mark, name, note and helper.
+fit, asked again every 1.5 s while it works); Enter goes to its parent's pane. Another machine's opens the pane.
 On the bottom border the release chip (` ↑ v0.15.0 ` when a release is out, else the version) and
 ` menu `, each opening a menu upward. See UI › *the sidebar*; the Machines dialog and its states
 are in UI › *Machines dialog*.
@@ -288,10 +284,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   `TitleBarView.tsx`). What the old Maitty menu started is in the command palette and the sidebar.
 - **Tools bar** (`ActivityBar.tsx`, `frame.css`; layout 2h). A 40px column at the window's edge opposite the sidebar,
   a card on `--main` with a `--line` hairline, 8px from the edges. Its 32px buttons are `--muted`; the open one is on a
-  faint wash with a 2px `--accent` line on its inner edge. Top to bottom: **Work** (always; with no runs it opens the
-  setup view, `WorkSetup`: a factory running elsewhere in the project, what a factory is (no factory named), and
-  Open Tickets; then a divider), **Changes** (a plain badge with the changed-file count), **Files**, **History**,
-  **Checks** (a red badge with the checks that want you), **Tickets** (the Tickets view over the chat area, UI ›
+  faint wash with a 2px `--accent` line on its inner edge. Top to bottom: **Changes** (a plain badge with the changed-file count), **Files** and **History** (only
+  while Settings › Appearance › **Files and History tools** is on, `morePanelTools`, off by default: the bar keeps to
+  reviewing what agents did; opening a file from a chat or terminal, and `/rewind`, still show those views),
+  **Checks** (a red badge with the checks that want you), **Tickets** (Start from a ticket, over the chat area, UI ›
   *Tickets view*), and at its foot **Terminal** (shows or hides the terminal dock with the focused session's
   terminals, adding the first when it has none; `toggleTerminal`). A view button opens the side panel on that view, or closes it when it is already showing it;
   with no session it says "Open a session first". Badges are 13px, mono 9px/700, at the button's top right: plain is
@@ -591,7 +587,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   a `--line` hairline: the 20px flat app icon with its status badge (named "Agent · Status" for screen readers), the
   name (14px, 600; the folder and branch in its tooltip) and a pull request's state (`#45 merged` in `--ok`; once the
   branch has commits after the merged one, `#45 merged · 3 new commits` in `--working`, since work goes on), then at the right the **Chat ·
-  Terminal · Work** tabs (agents with a chat, or with workflow runs; 12.5px 500 `--dim`, the chosen one `--fg` underlined 2px in `--accent`), ⋯ and
+  Terminal** tabs (agents with a chat; 12.5px 500 `--dim`, the chosen one `--fg` underlined 2px in `--accent`), ⋯ and
   close. Split right, Split down, Maximize, Changes and files and Show or Hide the terminals are in ⋯ and on their
   keys; the tools bar does the side panel and the terminals. Under 360px the tabs go too
   (`model/paneHeader.ts`); Show chat or Show terminal stays in ⋯ and the title keeps its room. The main area is one
@@ -696,39 +692,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   too. A binding with `available: false` is registered but its key does nothing and the overlay
   hides it until the feature lands; none is off now (Undo close is on).
   Jump to the next session that needs you is ⌘J on macOS and Ctrl+Shift+J elsewhere: a bare Ctrl+J is a terminal key.
-- **Work tab** (`features/work/`, the daemon's `workflows`, ADR 0010, `model/workflows.ts`). A session that reported
-  workflow runs gets a **Work** tab, after Chat and Terminal, with the count of runs going (mono, `--dim`) and
-  a 7px `--needs` square while one needs you. Work covers the pane like the chat (the terminal stays mounted, paused)
-  until Chat or Terminal is chosen. Its 44px bar says **Runs** (13.5px, 600) and, in 12px `--muted`, "1 needs you ·
-  4 working · 3 done" or "Nothing running". The board (`WorkBoard`) is one column per step name the runs reported, in
-  their order (a name one run lacks goes in after the step before it, `model/board.ts`), first letter capital, then
-  **Needs human** (every run going with a step that needs you; its title `--needs` while it holds one) and **Done**
-  (every finished run): equal width, 168px at least, as tall as the pane, gap 8, scrolling sideways when they do not
-  fit. A column is a `--m-well` strip with an inset `--line`, a 36px head with its name (12.5px, 600, `--muted` when
-  empty) and mono count, and "Nothing here" when empty. A run going sits in its first step that has not passed (skipped
-  counts as passed). A run's card (`--main`, inset `--line`; `--fg2` while open; a 7% `--needs` wash with a 45% edge
-  when it needs you) holds the run's mark (needs, working, waiting, done or failed, `runState`), the ticket key in mono
-  12px 600 (else "factory 007"), at the right "done" in `--done` or "failed" in `--err` once over, the title in two
-  lines at most ("No ticket" muted without one), a **step bar** (`CardTrack`: one 4px segment per step, gap 3, `--line2`
-  while waiting, `--done` once passed, `--working` pulsing while in hand, `--needs` pulsing when it needs you, `--err`
-  failed, `--muted` sent back, named in its tooltip) so the card shows where the run is, the run's **review** steps (named "review …") as 20px mono chips once
-  its first step passed (the name without "review": passed `--done` on a 14% wash, working `--working` with a spinner
-  and a pulse, needs you `--needs` with "!", failed `--err` with ✕, sent back `--muted` with ↺, waiting dashed, skipped
-  struck through), and the step's note wrapped, or "a and b are working." when several steps are in hand. A click opens
-  the run in a drawer (`RunDrawer`, `min(480px, 60%)`, `--main`, a `--line2` edge, sliding 24px in .22s) over the board
-  dimmed to 18% black: a 44px head with **Work** (a button back to the board) › the key in mono, **Open ticket ↗** (a
-  web address only, opened in the browser) and close; the key in mono 13px 700 with the run's word in its colour
-  ("needs you", "working", "done"), the title (14px, 600) and "Updated 2m ago · This computer · project · ⑂ branch"
-  (11.5px `--dim`); a strip of 20px nodes, one per step, joined by lines that fill `--done` as steps pass, each named
-  underneath in its state's colour; then each step as a row ruled off by `--line`: its mark, name (600 while working or
-  needing you, `--muted` while waiting or skipped), the word in lower case in its state's colour, the note in `--fg2`,
-  and a step needing you on a 7% `--needs` wash. A step's helper label is a mono `--link` button under its note ("MAITTY-42
-  build ›") that opens a 300px read-only card: the label and the step's word, what the helper was asked, its latest
-  activity while it works on this computer, its result, **Open its chat**, and "Read-only. To change anything, ask in the
-  main chat." (on another machine: "Runs on devbox. Helpers on other machines show their task and result only. …").
-  Escape, the crumb, close or a click outside closes the drawer. The sidebar shows no runs, and a session with runs
-  shows no subagent bar: its helpers are on the board. Marks are StatusMark's, with ↺ for sent back, – for skipped and ? for a state added later.
-- **Chat · Terminal tabs.** An agent's pane header carries text tabs, Chat then Terminal; Work is on the activity bar, and while the Work board covers the pane neither tab is underlined. The
+- **Chat · Terminal tabs.** An agent's pane header carries text tabs, Chat then Terminal. The
   chat covers the pane body while the terminal stays mounted underneath, hidden by `visibility`, so it keeps streaming
   and keeps its size: switching sends nothing to the daemon, except that going to the terminal moves the text waiting
   in the chat box into the agent's prompt (one paste, no Enter; `model/draftCarry.ts`), under the message box's rule: only while

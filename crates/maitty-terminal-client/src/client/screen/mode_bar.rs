@@ -416,7 +416,6 @@ fn keys_holder(app: &App) -> Option<Holder> {
                 ("", "any other key back"),
             ),
         },
-                Mode::Run { board: Some(_), .. } => holder("RUN", &[], ("Esc", "back")),
         Mode::MachineInfo(_) => holder("MACHINE", &[("g", "GitHub"), ("a", "add rule")], ("Esc", "close")),
         Mode::Approved(v) if v.confirming => {
             holder("APPROVED COMMANDS", &[("Enter", "forget it")], ("Esc", "keep it"))
@@ -427,8 +426,6 @@ fn keys_holder(app: &App) -> Option<Holder> {
             ("Esc", "close"),
         ),
         Mode::Usage => holder("USAGE", &[("Tab", "period"), ("Enter", "open")], ("Esc", "close")),
-        Mode::Run { .. } => holder("RUN", &[], ("Esc", "close")),
-        Mode::Work { .. } => holder("WORK", &[("Enter", "open run")], ("Esc", "close")),
         Mode::StatusLog { .. } => holder("STATUS LOG", &[], ("Esc", "close")),
         Mode::Helper(_) => holder("SUBAGENT", &[("Enter", "its pane")], ("Esc", "close")),
         Mode::Clone(_) => holder("CLONE", &[("Tab", "next line"), ("Enter", "clone")], ("Esc", "close")),

@@ -1743,7 +1743,6 @@ pub fn run() {
             terminal_stream::tickets,
             github_repo_of,
             terminal_stream::ticket_keys,
-            terminal_stream::ticket_write,
             terminal_stream::extensions,
             terminal_stream::ticket_links,
             terminal_stream::get_shared_settings,

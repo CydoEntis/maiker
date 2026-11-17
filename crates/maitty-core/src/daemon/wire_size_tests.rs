@@ -405,7 +405,6 @@ fn pane(i: u32) -> TermInfo {
             code: Some(1),
             at: NOW - 400,
         }),
-        workflows: Vec::new(),
     }
 }
 

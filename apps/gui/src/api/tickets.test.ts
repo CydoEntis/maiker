@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { commentProblem, githubRepoOf, loadTicket, loadTicketGroups, loadTicketKeys, loadTicketPage, saveTicketKey, TICKET_COMMENT_MAX_CHARS, writeTicket } from './tickets'
+import { githubRepoOf, loadTicket, loadTicketGroups, loadTicketKeys, loadTicketPage, saveTicketKey } from './tickets'
 
 const shell = vi.hoisted(() => ({
   invoke: vi.fn<(command: string, args: { tag?: number }) => Promise<unknown>>(),
@@ -81,36 +81,6 @@ describe('ticket keys', () => {
     await answer('ticket-keys', { Ok: [] })
     await asked
     expect(shell.invoke).toHaveBeenCalledWith('ticket_keys', { change: { Set: { provider: 'Plane', address: 'https://plane.example', workspace: 'acme', key: 'secret-value' } }, tag: expect.any(Number) as number })
-  })
-})
-
-describe('writing to a ticket', () => {
-  it('sends a comment trimmed, marked confirmed, and reads what was done', async () => {
-    const asked = writeTicket('me/shop', SUMMARY.id, { kind: 'comment', text: '  Fixed in #7\r\nthanks \n' }, true)
-    await answer('ticket-write', { Ok: 'Commented' })
-    await expect(asked).resolves.toEqual({ ok: true, value: 'Commented' })
-    expect(shell.invoke).toHaveBeenCalledWith('ticket_write', { source: 'me/shop', id: SUMMARY.id, write: { Comment: { text: 'Fixed in #7\nthanks' } }, confirmed: true, tag: expect.any(Number) as number })
-  })
-
-  it('closes a ticket and says why a write was refused', async () => {
-    const closed = writeTicket('plane', 'plane:p1#i1', { kind: 'close' }, true)
-    await answer('ticket-write', { Ok: 'Closed' })
-    await expect(closed).resolves.toEqual({ ok: true, value: 'Closed' })
-    expect(shell.invoke).toHaveBeenCalledWith('ticket_write', { source: 'plane', id: 'plane:p1#i1', write: 'Close', confirmed: true, tag: expect.any(Number) as number })
-
-    shell.invoke.mockClear()
-    const refused = writeTicket('plane', 'plane:p1#i1', { kind: 'close' }, true)
-    await answer('ticket-write', { Err: 'SignedOut' })
-    await expect(refused).resolves.toEqual({ ok: false, failure: { kind: 'signed-out' } })
-  })
-
-  it('knows a comment that cannot be sent before asking', () => {
-    expect(commentProblem('hello\nthere')).toBeNull()
-    expect(commentProblem('  \n ')).not.toBeNull()
-    expect(commentProblem('x'.repeat(TICKET_COMMENT_MAX_CHARS))).toBeNull()
-    expect(commentProblem('x'.repeat(TICKET_COMMENT_MAX_CHARS + 1))).not.toBeNull()
-    expect(commentProblem('tab\there')).not.toBeNull()
-    expect(commentProblem('zero\u200bwidth')).not.toBeNull()
   })
 })
 

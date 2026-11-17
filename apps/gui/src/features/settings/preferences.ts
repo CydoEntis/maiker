@@ -112,6 +112,8 @@ export type SettingsPreferences = {
   defaultAgent: ChatAgent
   /** The chat leaves out runs of reads and searches that succeeded (`isQuietRun`). Off until you turn it on. */
   hideSuccessfulTools: boolean
+  /** The tools bar also has Files and History, beside Changes and Checks. Off: the bar keeps to reviewing what agents did. */
+  morePanelTools: boolean
   /** Yolo mode per agent, off by default: Claude may pick Bypass permissions; Codex and Gemini start with approvals and sandbox off. */
   yoloClaude: boolean
   yoloCodex: boolean
@@ -204,6 +206,7 @@ function defaults(): SettingsPreferences {
     chatViewDefault: DEFAULT_CHAT_VIEWS,
     defaultAgent: 'claude',
     hideSuccessfulTools: false,
+    morePanelTools: false,
     yoloClaude: false,
     yoloCodex: false,
     yoloGemini: false,
@@ -283,6 +286,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       chatViewDefault: chatViewDefault(preferences.chatViewDefault, fallback.chatViewDefault),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
+      morePanelTools: bool(preferences.morePanelTools, fallback.morePanelTools),
       yoloClaude: bool(preferences.yoloClaude, fallback.yoloClaude),
       yoloCodex: bool(preferences.yoloCodex, fallback.yoloCodex),
       yoloGemini: bool(preferences.yoloGemini, fallback.yoloGemini),
