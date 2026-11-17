@@ -385,8 +385,28 @@ describe('a session row', () => {
       expect(card).toHaveTextContent('Growth')
       expect(card).toHaveTextContent('Needs you')
       expect(card).toHaveTextContent('claude · This computer')
+      expect(card).toHaveAttribute('data-open', 'true')
       fireEvent.mouseLeave(row)
-      expect(screen.queryByRole('tooltip')).toBeNull()
+      // Hidden at once, kept mounted a moment so the next row's card needs no delay, then gone.
+      expect(screen.getByRole('tooltip', { hidden: true })).toHaveAttribute('data-open', 'false')
+      act(() => { vi.advanceTimersByTime(250) })
+      expect(screen.queryByRole('tooltip', { hidden: true })).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('shows the next row\'s card at once when the pointer moves on within the warm time', () => {
+    vi.useFakeTimers()
+    try {
+      show([session(1, { agent: 'claude', named: true, title: 'Growth' }), session(2, { agent: 'claude', named: true, title: 'Billing' })])
+      const first = screen.getByRole('button', { name: /^Growth,/ }).closest('.mx-row-wrap') as HTMLElement
+      const second = screen.getByRole('button', { name: /^Billing,/ }).closest('.mx-row-wrap') as HTMLElement
+      fireEvent.mouseEnter(first)
+      act(() => { vi.advanceTimersByTime(450) })
+      fireEvent.mouseLeave(first)
+      fireEvent.mouseEnter(second)
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Billing')
     } finally {
       vi.useRealTimers()
     }

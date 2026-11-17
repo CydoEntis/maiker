@@ -408,8 +408,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   9px status badge at its corner (`!` needs you, pulsing; the spinner; `✓` done; `×` stopped; `‖` limited; a dashed
   square for unknown; none while idle), the name with how long it has been in its state at the right, and the project
   (and another machine) under it.
-  A pointer resting on a row for 450ms shows a **hover card** beside it (`RowHoverCard`, 300px, its top 4px above the row and
-  kept inside the window, growing from its row-side corner; never a native `title`): the status icon and name (two lines at most) over the
+  A pointer resting on a row for 450ms shows a **hover card** beside it (`RowHoverCard`, 300px, its top 4px above the row (a row in the lower half of the window stands the card on its
+  bottom instead, so it grows up) and kept inside the window, fading in by opacity with a one-pixel ring and no blurred
+  shadow; while it is warm, moving to another row within 250ms shows it there at once, with no 450ms wait and no fade;
+  never a native `title`): the status icon and name (two lines at most) over the
   activity line in the daemon's own words (the status word, dim, only when it said nothing; never both), then icon rows hanging in the left margin: the
   folder (locked for a worktree; a shell shows its working directory in mono), the branch in mono with an **own worktree** tag, the changes
   (`+added` `--ok`, `−removed` `--danger`) and the pull request (`#218` and its state in the state's colour), and a 30px footer with the agent's mark,

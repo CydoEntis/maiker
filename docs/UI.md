@@ -73,7 +73,13 @@ outcome.
 - Every control has an accessible name. Every input has a label.
 - Color is never the only signal, and text contrast meets WCAG AA.
 - Status and errors are announced without stealing focus.
-- Honour `prefers-reduced-motion`.
+- Honour `prefers-reduced-motion`, and the in-app Reduce motion setting through
+  `:root[data-reduced-motion="true"]` (never `:root:has(...)`, which is re-evaluated on every DOM change).
+- Motion is cheap on a software painter ([PERFORMANCE](PERFORMANCE.md)): transform and opacity only, no blurred
+  shadow on what comes and goes with the pointer (use `--pop-sh-flat`), infinite loops pause under
+  `:root[data-window="inactive"]`, and a hover that only shows something (the sidebar's card) lives in a store outside
+  React state (`HoverController`), so it never draws the rows. Under `data-gpu="software"` popovers fade and slide
+  rather than scale and scrims appear at once.
 - The layout works at 200% zoom and at the smallest supported width.
 
 ## Styling

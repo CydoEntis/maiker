@@ -2,22 +2,13 @@ import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 
 import { RECONNECT_TRIES, serviceStateOf, tryNumber } from '../model/serviceState'
 import { OfflineBanner, type AppBehindOffer, type RestartOffer } from './states'
 import { DAEMON_NAME } from '@/brand'
+import { useNow } from '@/lib/clock'
 
 const SECOND_MS = 1000
 
 /** The number of whole seconds left until `at`, never below one while a try is still to come. */
 function secondsUntil(at: number | null, now: number): number | null {
   return at === null ? null : Math.max(1, Math.ceil((at - now) / SECOND_MS))
-}
-
-/** Re-renders each second so a countdown ticks. */
-function useNow(): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const timer = window.setInterval(() => { setNow(Date.now()) }, SECOND_MS)
-    return () => { window.clearInterval(timer) }
-  }, [])
-  return now
 }
 
 /** Under the pane header while the daemon does not answer and more tries are coming. */

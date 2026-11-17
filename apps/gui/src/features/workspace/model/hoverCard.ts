@@ -11,6 +11,7 @@ const EDGE_PX = 8
 /** The card starts a little above its row, so the row's own line reads beside the card's first. */
 const ABOVE_ROW_PX = 4
 const SAID_CHARS = 140
+const HALF = 2
 
 /** The words that stand in for an activity line when the session reported none. */
 const WORD: Record<SessionStatus, string> = {
@@ -67,15 +68,20 @@ export function hoverCardText(session: SessionView, title: string): HoverCardTex
   }
 }
 
-export type Box = { left: number; right: number; top: number }
+export type Box = { left: number; right: number; top: number; bottom: number }
+
+/** Where a card sits: `left`, and `top` for a row in the upper half of the window or `bottom` for one in the lower half. */
+export type CardPlace = { left: number } & ({ top: number } | { bottom: number })
 
 /**
- * Where the card goes: beside the row on the side away from the window's edge, its top 4px above the
- * row's, and moved up when it would run past the bottom of the window.
+ * Where the card goes, worked out from the row alone (no measuring of the card): beside the row on the side away from
+ * the window's edge. A row in the upper half hangs the card from 4px above the row's top; a row in the lower half stands
+ * it on 4px below the row's bottom, so the card grows up and never runs past the window. The stylesheet caps its height
+ * at the window's.
  */
-export function placeHoverCard(row: Box, cardHeight: number, windowWidth: number, windowHeight: number): { left: number; top: number } {
+export function placeHoverCard(row: Box, windowWidth: number, windowHeight: number): CardPlace {
   const fitsRight = row.right + GAP_PX + HOVER_CARD_WIDTH_PX <= windowWidth - EDGE_PX
   const left = fitsRight ? row.right + GAP_PX : Math.max(EDGE_PX, row.left - GAP_PX - HOVER_CARD_WIDTH_PX)
-  const top = Math.max(EDGE_PX, Math.min(row.top - ABOVE_ROW_PX, windowHeight - EDGE_PX - cardHeight))
-  return { left, top }
+  if (row.top + (row.bottom - row.top) / HALF <= windowHeight / HALF) return { left, top: Math.max(EDGE_PX, row.top - ABOVE_ROW_PX) }
+  return { left, bottom: Math.max(EDGE_PX, windowHeight - row.bottom - ABOVE_ROW_PX) }
 }

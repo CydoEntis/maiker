@@ -1,13 +1,13 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { memo, type CSSProperties, type ReactNode } from 'react'
 import { WindowPortal } from '@/components/ui/portal'
 import { StatusIcon } from '@/components/ui/status-icon'
 import type { SessionView } from '../model/session'
-import { hoverCardText, placeHoverCard, type Box } from '../model/hoverCard'
+import { hoverCardText, type CardPlace } from '../model/hoverCard'
 import { rowTitle } from '../model/sidebar'
 import { AppIcon, Icon, type IconName } from './glyphs'
 import { Ago } from './times'
 
-type Props = { session: SessionView; row: Box; portalContainer: HTMLElement | null }
+type Props = { session: SessionView; place: CardPlace; open: boolean; cold: boolean; portalContainer: HTMLElement | null }
 
 /** One line of the card: its icon hangs in the margin left of the text, and a screen reader hears what it is. */
 function CardRow({ icon, what, children }: { icon: IconName; what: string; children: ReactNode }) {
@@ -25,17 +25,12 @@ function CardRow({ icon, what, children }: { icon: IconName; what: string; child
  * pull request, and who runs it and when it last moved. It only tells; it takes no pointer input, so it can never be
  * in the way of the next row.
  */
-export function RowHoverCard({ session, row, portalContainer }: Props) {
-  const card = useRef<HTMLDivElement>(null)
-  const [at, setAt] = useState<{ left: number; top: number } | null>(null)
-  useLayoutEffect(() => {
-    const height = card.current?.getBoundingClientRect().height ?? 0
-    setAt(placeHoverCard(row, height, window.innerWidth, window.innerHeight))
-  }, [row, session])
+function RowHoverCardView({ session, place, open, cold, portalContainer }: Props) {
+  // The place is known before the first draw (worked out from the row), so the card is never drawn hidden, measured and moved.
   const text = hoverCardText(session, rowTitle(session))
   return (
     <WindowPortal container={portalContainer}>
-    <div ref={card} role="tooltip" className="mx-hover-card" data-float style={at === null ? { visibility: 'hidden' } : at}>
+    <div role="tooltip" className={`mx-hover-card${cold ? ' is-cold' : ''}`} data-float data-open={open} style={place satisfies CSSProperties}>
       <div className="mx-hover-head">
         <StatusIcon status={session.status} className="mx-hover-status" />
         <span className="mx-hover-head-text">
@@ -74,3 +69,5 @@ export function RowHoverCard({ session, row, portalContainer }: Props) {
     </WindowPortal>
   )
 }
+
+export const RowHoverCard = memo(RowHoverCardView)

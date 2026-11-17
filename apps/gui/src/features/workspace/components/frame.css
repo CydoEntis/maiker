@@ -56,6 +56,7 @@
 .mx-app .mx-badge.is-unknown { width: 8px; height: 8px; background: var(--card); border: 1.5px dashed var(--dim); }
 @keyframes mx-badge-pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .mx-app .mx-badge.is-needs { animation: none; } }
+:root[data-window="inactive"] .mx-app .mx-badge.is-needs { animation-play-state: paused; }
 :root[data-reduced-motion="true"] .mx-app .mx-badge.is-needs { animation: none; }
 
 /* The main area: one flat card on `--card`, 8px from the window and the sidebar. One pane fills it edge to edge, its

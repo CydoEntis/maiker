@@ -1,5 +1,6 @@
 import { ToastCard } from '@/components/ui/toast-card'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useNow } from '@/lib/clock'
 import { useAppearsAfter } from '@/lib/useAppearsAfter'
 import { useShortcutText } from '@/features/shortcuts/platform'
 import { Icon } from './glyphs'
@@ -81,12 +82,8 @@ const SECOND_MS = 1000
 
 /** Under the tabs while the daemon is unreachable: the last known screen stays, input waits. */
 export function OfflineBanner({ retryAt, detail, restart, appBehind = false, onRetry }: { retryAt: number | null; detail: string | null; restart: RestartOffer | null; appBehind?: boolean; onRetry: () => void }) {
-  const [now, setNow] = useState(() => Date.now())
+  const now = useNow()
   const [armed, setArmed] = useState(false)
-  useEffect(() => {
-    const timer = window.setInterval(() => { setNow(Date.now()) }, SECOND_MS)
-    return () => { window.clearInterval(timer) }
-  }, [])
   const seconds = retryAt === null ? null : Math.max(1, Math.ceil((retryAt - now) / SECOND_MS))
   return (
     <div className="mx-offline" role="status">

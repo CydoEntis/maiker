@@ -639,3 +639,38 @@ The page caps (`MAX_READ_ENTRIES`, and `MAX_READ_BYTES` = 256 KiB of JSON) are u
 budgets. When a budget fails, find what grew; if the growth is meant, re-measure with
 `cargo test -p maitty-core wire_size -- --nocapture`, set the budget to the new size plus 20% and
 update this table.
+
+## Hover, popovers and every animation on WebKitGTK (2026-11-17)
+
+The sidebar stuttered when the pointer moved over sessions and their hover cards, on a software-painting WebKitGTK.
+What was changed, and how sure we are that it matters:
+
+| Change | Where | Basis |
+| --- | --- | --- |
+| Hover lives outside React state: `HoverController` (`model/hoverController.ts`) holds the card, the 450ms timer and the warm window; `RowHoverHost` is the only component that follows it. A hover no longer draws the sidebar's rows. | `Sidebar.tsx`, `RowHoverHost.tsx`, `useHoverController.ts` | Read in code: the old state sat in `Expanded`, so each show and hide re-ran every row and `useFlip`'s layout reads. Cost not measured. |
+| `useFlip` measures only when `layoutKey` changes (what can move a row: sessions, status, helpers, grouping, sort, folds), not on every draw. | `useFlip.ts`, `flipKey` in `Sidebar.tsx` | Read in code. |
+| The card is placed from the row's box alone (`placeHoverCard`: `top` for a row in the upper half, `bottom` for the lower half, `max-height: calc(100vh - 16px)`), once, in the timer callback. It no longer renders hidden, measures itself and moves. | `hoverCard.ts`, `RowHoverCard.tsx` | Read in code. |
+| One card stays mounted while warm: leaving a row hides it (`data-open="false"`), and entering another within `HOVER_CARD_WARM_MS` (250ms) shows it there at once, no 450ms wait and no fade. The first card still waits 450ms. This is a small behaviour change. | `hoverController.ts` | By design. |
+| The card fades in by opacity only (`mx-hover-in`, 120ms) and has a 1px ring (`--pop-sh-flat`) in place of the blurred shadow, so its clip-path bleed is 4px instead of 48px (`--float-bleed`). Tips take the same ring. | `sidebar.css`, `material.css` | Shadow and clip costs are in the 2026-11-03 tables above; the card's share is a guess. |
+| Software painting (`data-gpu="software"`): popovers fade and slide 4px (`mx-grow-flat`) instead of scaling; dialogs fade without their scale; full-window scrims appear at once; floats' clip bleed is 4px. | `material.css`, `workspace.css` | Guess from the same tables. |
+| `data-gpu` is also set by a probe: 1.5s after start, on the Linux web view, 6 frames are timed while a 1px element moves by transform, and at least half over 24ms flips `data-gpu` to `software` (`lib/gpu.ts`). WebKitGTK reports WebGL 2 on CPU-painting machines, so the WebGL test alone never fired. | `lib/gpu.ts` | The probe's threshold is a guess; it has not been run on a slow machine. |
+| Loops: the running light moves in 16 steps a lap (about 15 frames a second); the skeleton shimmer is a transform-moved highlight over a still base; the M loader's fill colour is computed once; the status pulse, badge pulse, dock breath, M loader, shimmer, update bar and machine spinner pause while the window is hidden (`data-window="inactive"`). | `workspace.css`, `chat.css`, `session-dialogs.css`, `frame.css`, `dock.css` | 2026-11-03: all infinite animations cost 33 of 58 points. |
+| The reduced-motion rules no longer use `:root:has(.mx-app[data-motion="reduced"])`; they read `:root[data-reduced-motion="true"]`. | `sidebar.css`, `workspace.css` | Read in code: `:has` over the whole app is re-evaluated on every DOM change. |
+| The terminal fits its grid at most every 90ms while its pane keeps changing size (a sliding sidebar or drawer) and once at the end (`throttleTrailing`, `FIT_WHILE_ANIMATING_MS`). A fold's grid rows are `contain: layout style`. | `TerminalView.tsx`, `lib/throttle.ts`, `sidebar.css` | Read in code: a resize observer fired the fit at every frame. |
+| A row's status flash is an overlay that fades by opacity, not an animation of the row's background and ring. | `useStatusFlash.ts`, `sidebar.css` | Read in code. |
+| The offline banners and `Elapsed` read the shared second clock (`lib/clock.ts`), which stops while the window is hidden, instead of one interval each. | `Elapsed.tsx`, `states.tsx`, `ServiceStatus.tsx` | Read in code. |
+
+### What was measured, and what could not be
+
+The harness (WebKitGTK 2.5x under `cage` with the pixman renderer, a scripted hover sequence over five rows, frame times from
+`requestAnimationFrame`) runs every frame at the display's 60 Hz on the development machine, before and after (p95 17-18ms,
+no frame over 24ms in either, with a hover sequence, three idle seconds, or rapid row-to-row moves, with and without the
+WebGL 2 context). It is capped by the display, so it **could not show** the stutter or its removal; a slow machine is needed for
+that. The before and after screenshots of the page with the card open, in software and GPU mode, match except for the card's
+removed blurred shadow. Not done, and why:
+
+- The folded cut's `clip-path` on nearly every control (`material.css`) is unchanged beyond the float bleed: a plain panel polygon or corner pseudo-elements risk the border and stripe results the shell fixed, and the gain is unmeasured.
+- The chat's jump-to-latest glide still sets the scroll position through React each frame (`VirtualList.tsx`): the rows in view are chosen from it, and throttling it would leave blank rows.
+- `HelpersDock`, `ProblemBanner`, `TicketsPage` and `useRevealedText` keep their own timers.
+- The sidebar's width transition is kept (the look is the same); only the terminal's fits are throttled.
+- The `:is()` lists and the universal `border-radius: 0 !important` in `material.css` are unchanged.

@@ -4,16 +4,21 @@ import { HOVER_CARD_WIDTH_PX, hoverCardText, placeHoverCard } from './hoverCard'
 import { toSessionView } from './session'
 
 describe('where the hover card goes', () => {
-  it('sits to the right of the row, 4px above it', () => {
-    expect(placeHoverCard({ left: 20, right: 280, top: 200 }, 180, 1400, 900)).toEqual({ left: 288, top: 196 })
+  it('sits to the right of the row, 4px above it, for a row in the upper half', () => {
+    expect(placeHoverCard({ left: 20, right: 280, top: 200, bottom: 240 }, 1400, 900)).toEqual({ left: 288, top: 196 })
   })
 
-  it('moves up so it never runs past the bottom of the window', () => {
-    expect(placeHoverCard({ left: 20, right: 280, top: 800 }, 180, 1400, 900).top).toBe(712)
+  it('stands on the row, growing up, for a row in the lower half, so it never runs past the window', () => {
+    expect(placeHoverCard({ left: 20, right: 280, top: 800, bottom: 840 }, 1400, 900)).toEqual({ left: 288, bottom: 56 })
+  })
+
+  it('keeps 8px from the window edge', () => {
+    expect(placeHoverCard({ left: 20, right: 280, top: 2, bottom: 40 }, 1400, 900)).toEqual({ left: 288, top: 8 })
+    expect(placeHoverCard({ left: 20, right: 280, top: 860, bottom: 899 }, 1400, 900)).toEqual({ left: 288, bottom: 8 })
   })
 
   it('goes to the left of a sidebar that is on the right', () => {
-    expect(placeHoverCard({ left: 1120, right: 1380, top: 200 }, 180, 1400, 900).left).toBe(1120 - 8 - HOVER_CARD_WIDTH_PX)
+    expect(placeHoverCard({ left: 1120, right: 1380, top: 200, bottom: 240 }, 1400, 900).left).toBe(1120 - 8 - HOVER_CARD_WIDTH_PX)
   })
 })
 

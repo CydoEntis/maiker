@@ -1,16 +1,18 @@
 /* ---- The M loader: a wait that fills a view. The left leg, the fold and the right leg trace on their own beats, fill, fade and start over (2.4s). ---- */
 .mx-mloader { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 12.5px; color: var(--muted); }
-.mx-mtrace path { stroke: var(--fg2); stroke-width: 4; stroke-dasharray: 320; stroke-dashoffset: 320; fill: transparent; animation: mx-trace-m 2.4s cubic-bezier(.6, 0, .3, 1) infinite; }
+.mx-mtrace path { --mk-fill: color-mix(in srgb, var(--fg) 14%, transparent); stroke: var(--fg2); stroke-width: 4; stroke-dasharray: 320; stroke-dashoffset: 320; fill: transparent; animation: mx-trace-m 2.4s cubic-bezier(.6, 0, .3, 1) infinite; }
 .mx-mtrace .mx-mk-a { animation-delay: 0s; }
 .mx-mtrace .mx-mk-c { animation-delay: .25s; }
 .mx-mtrace .mx-mk-b { animation-delay: .5s; }
 @keyframes mx-trace-m {
   0% { stroke-dashoffset: 320; fill: transparent; }
   45% { stroke-dashoffset: 0; fill: transparent; }
-  60% { fill: color-mix(in srgb, var(--fg) 14%, transparent); }
-  85% { stroke-dashoffset: 0; fill: color-mix(in srgb, var(--fg) 14%, transparent); opacity: 1; }
+  60% { fill: var(--mk-fill); }
+  85% { stroke-dashoffset: 0; fill: var(--mk-fill); opacity: 1; }
   100% { stroke-dashoffset: 0; opacity: 0; }
 }
+/* A hidden window does not draw the loader. */
+:root[data-window="inactive"] .mx-mtrace path { animation-play-state: paused; }
 @media (prefers-reduced-motion: reduce) { .mx-mtrace path { animation: none; stroke-dashoffset: 0; } }
 :root[data-reduced-motion="true"] .mx-mtrace path { animation: none; stroke-dashoffset: 0; }
 

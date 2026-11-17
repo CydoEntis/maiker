@@ -53,15 +53,18 @@
 .mx-msg-empty { margin: 0; font-size: 13px; font-style: italic; color: var(--dim); }
 /* While the agent works the chat shows one box (`LiveBox`): the clock and how to stop, the step it is on, and a
    skeleton where the reply will be. */
-@keyframes mxShim { 0% { background-position: -420px 0; } 100% { background-position: 420px 0; } }
+/* The shimmer is a highlight layer moved by transform (the base colour is still, so nothing repaints per frame). */
+@keyframes mxShim { from { transform: translateX(-420px); } to { transform: translateX(420px); } }
 .mx-live { display: flex; flex-direction: column; }
 .mx-live-head { display: flex; align-items: center; gap: 9px; min-height: 28px; font-size: 12.5px; color: var(--muted); }
 .mx-live-time { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .mx-live-esc { flex: none; font-size: 11.5px; color: var(--dim); }
 .mx-live-skeleton { display: flex; flex-direction: column; gap: 9px; padding: 6px 0 4px 21px; }
-.mx-sk { height: 11px; background: linear-gradient(90deg, color-mix(in srgb, var(--fg) 7%, transparent) 0%, color-mix(in srgb, var(--fg) 13%, transparent) 50%, color-mix(in srgb, var(--fg) 7%, transparent) 100%); background-size: 840px 100%; animation: mxShim 1.6s linear infinite; }
-@media (prefers-reduced-motion: reduce) { .mx-sk { animation: none; } }
-:root[data-reduced-motion="true"] .mx-sk { animation: none; }
+.mx-sk { --sk-base: color-mix(in srgb, var(--fg) 7%, transparent); --sk-lift: color-mix(in srgb, var(--fg) 6.5%, transparent); position: relative; overflow: hidden; height: 11px; background: var(--sk-base); }
+.mx-sk::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 840px; background: linear-gradient(90deg, transparent 0%, var(--sk-lift) 50%, transparent 100%); animation: mxShim 1.6s linear infinite; }
+:root[data-window="inactive"] .mx-sk::after { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) { .mx-sk::after { animation: none; } }
+:root[data-reduced-motion="true"] .mx-sk::after { animation: none; }
 /* The mark before "Sending…" and "starting…": the running light, 12px. */
 .mx-working { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 13px; color: var(--muted); }
 .mx-working-mark { display: inline-flex; flex: none; width: 14px; height: 14px; align-items: center; justify-content: center; }

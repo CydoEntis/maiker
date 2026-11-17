@@ -93,6 +93,8 @@
 /* A dialog casts the deeper shadow, an anchored menu the lighter one. */
 .mx-app :is([role="dialog"], [role="alertdialog"], .mx-palette, .mx-settings, .mx-welcome, .mx-rename, .mx-ns-dialog) { box-shadow: var(--pop-sh-dialog); }
 .mx-app :is([role="menu"], .mx-ctx, .mx-menu, .mx-picker-menu) { box-shadow: var(--pop-sh-menu); }
+/* A tip and the hover card are drawn over the busiest part of the window and come and go with the pointer: always the flat ring. */
+.mx-app .mx-tip { box-shadow: var(--pop-sh-flat); --float-bleed: 4px; }
 /* The corner readout sits on the window, not over it. */
 .mx-app .mx-perf-hud { box-shadow: none; }
 /* Whatever opens over the window is solid: the theme's own ground, never a tint of what is behind it. This sits after the
@@ -110,6 +112,9 @@
   transform-origin: var(--radix-popper-transform-origin, top left);
   animation: mx-grow .16s cubic-bezier(.2, .8, .2, 1);
 }
+/* Under software painting a scale repaints the popover at every size: it fades and slides 4px instead (transform and opacity only). */
+@keyframes mx-grow-flat { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+:root[data-gpu="software"] .mx-app :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation-name: mx-grow-flat; }
 @media (prefers-reduced-motion: reduce) { .mx-app :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; } }
 .mx-app[data-motion="reduced"] :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; }
 
@@ -184,7 +189,7 @@
   :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] > :first-child { --fold-tl: 6px; }
   :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] > :last-child { --fold-br: 6px; }
   :root[data-corners="folded"][data-corners] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card) { --fold: 12px; --fold-bleed: 4px; }
-  :root[data-corners="folded"][data-corners] .mx-app :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting) { --fold: 14px; --fold-bleed: 48px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting) { --fold: 14px; --fold-bleed: var(--float-bleed, 48px); }
 
   /* A custom property inherits, so every cut surface starts with no edge and no one-corner override of its own; the rules
      after this one (more specific by one :is) say otherwise. */

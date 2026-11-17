@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
 import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
@@ -15,8 +15,8 @@ import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
 import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { SubagentRows } from './SubagentRows'
-import { RowHoverCard } from './RowHoverCard'
-import { HOVER_CARD_DELAY_MS, type Box } from '../model/hoverCard'
+import { RowHoverHost } from './RowHoverHost'
+import { useHoverController } from './useHoverController'
 import { DAEMON_NAME } from '@/brand'
 
 
@@ -153,6 +153,16 @@ export function Sidebar(props: SidebarProps) {
   )
 }
 
+/**
+ * What can move a row: which sessions there are, their order and sections (status, put away, snoozed), whether they hold
+ * helper rows, how the list is grouped, sorted and folded. When it is the same string, nothing moved and `useFlip`
+ * measures nothing.
+ */
+function flipKey(props: SidebarProps, sessions: readonly SessionView[], sort: SidebarSort, project: string | null, putAwayOpen: boolean, views: ReturnType<typeof useMachineViews>, drafting: boolean): string {
+  const rows = props.sessions.map((session) => `${session.id}:${session.status}:${session.archived ? 'a' : ''}${session.snoozedUntil === null ? '' : 's'}:${String(session.subagents.length)}:${rowTitle(session)}`).join('|')
+  return `${rows}#${props.grouping}#${sort}#${project ?? ''}#${String(putAwayOpen)}#${views.signature}#${String(drafting)}#${String(sessions.length)}#${String(props.focusedId)}`
+}
+
 const PUT_AWAY_SECTION = 'put-away'
 
 /** Which headings are folded and which machines are grouped by project. */
@@ -161,6 +171,8 @@ function useMachineViews() {
   const [byProject, setByProject] = useState<ReadonlySet<string>>(new Set())
   const flip = (set: ReadonlySet<string>, key: string) => { const next = new Set(set); if (!next.delete(key)) next.add(key); return next }
   return {
+    /** Which headings are folded and which machines are grouped: what `flipKey` reads. */
+    signature: `${[...folded].join(',')}/${[...byProject].join(',')}`,
     isOpen: (key: string) => !folded.has(key),
     toggle: (key: string) => { setFolded((current) => flip(current, key)) },
     isByProject: (key: string) => byProject.has(key),
@@ -173,30 +185,16 @@ function Expanded(props: SidebarProps) {
   const shortcutText = useShortcutText()
   const list = useRef<HTMLDivElement>(null)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
-  // The card beside a row the pointer rests on. A click, a menu or leaving the row puts it away.
-  const [hover, setHover] = useState<{ id: string; row: Box } | null>(null)
-  const hoverTimer = useRef<number | null>(null)
-  const endHover = () => {
-    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current)
-    hoverTimer.current = null
-    setHover(null)
-  }
-  const beginHover = (id: string, element: HTMLElement) => {
-    endHover()
-    hoverTimer.current = window.setTimeout(() => {
-      const box = element.getBoundingClientRect()
-      setHover({ id, row: { left: box.left, right: box.right, top: box.top } })
-    }, HOVER_CARD_DELAY_MS)
-  }
-  useEffect(() => () => { if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current) }, [])
-  const hovered = hover === null || menu !== null ? undefined : props.sessions.find((session) => session.id === hover.id)
+  // The card beside a row the pointer rests on. It follows a controller outside React state, so a hover never draws the rows.
+  const hover = useHoverController()
+  const endHover = () => { hover.leave() }
+  const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
   const [pickedProject, setPickedProject] = useState<string | null>(null)
   const [sort, setSort] = useState<SidebarSort>(DEFAULT_SIDEBAR_SORT)
   const views = useMachineViews()
   // Folded until opened, unlike the other headings: what is put away is out of the way.
   const [putAwayOpen, setPutAwayOpen] = useState(false)
   const reduced = useReducedMotion()
-  useFlip(list, reduced)
   useStatusFlash(list, props.sessions, reduced)
   const projects = projectChoices(props.sessions)
   // A project whose last session closed is no longer a choice, so the list goes back to all of them.
@@ -212,6 +210,7 @@ function Expanded(props: SidebarProps) {
   const draft = props.draft ?? null
   const groups = machineGroups(sessions, props.machines, draft !== null, props.order)
   const localMachine = props.machines[0]?.machine ?? 0
+  useFlip(list, reduced, flipKey(props, sessions, sort, project, putAwayOpen, views, draft !== null))
   const startMenu = (): MenuEntry[] => [
     { label: 'New agent chat', hint: shortcutText('new-agent-chat'), disabled: !props.canStart, run: () => { props.onNewAgentChat(localMachine) } },
     { label: 'New shell', hint: shortcutText('new-terminal'), disabled: !props.canStart, run: () => { props.onNewShell(localMachine) } },
@@ -221,6 +220,7 @@ function Expanded(props: SidebarProps) {
   const openMenu = (event: MouseEvent, title: string, items: MenuEntry[]) => {
     event.preventDefault()
     event.stopPropagation()
+    endHover()
     setMenu({ title, at: { x: event.clientX, y: event.clientY }, items })
   }
 
@@ -348,7 +348,7 @@ function Expanded(props: SidebarProps) {
           : <><span className="mx-daemon-dot is-offline" aria-hidden="true" /><span className="mx-daemon-text is-offline" role="status">{props.serviceText ?? `Reconnecting to ${DAEMON_NAME}…`}</span></>}
         <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={15} /></button>
       </div>
-      {hovered && hover && <RowHoverCard session={hovered} row={hover.row} portalContainer={props.portalContainer} />}
+      <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
   )
@@ -530,23 +530,10 @@ function ProjectSection({ name, color, needs, sessions, renderRow }: { name: str
  */
 function Rail(props: SidebarProps) {
   const tip = useTipWithKeys()
-  const [hover, setHover] = useState<{ id: string; row: Box } | null>(null)
-  const hoverTimer = useRef<number | null>(null)
-  const endHover = () => {
-    if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current)
-    hoverTimer.current = null
-    setHover(null)
-  }
-  const beginHover = (id: string, element: HTMLElement) => {
-    endHover()
-    hoverTimer.current = window.setTimeout(() => {
-      const box = element.getBoundingClientRect()
-      setHover({ id, row: { left: box.left, right: box.right, top: box.top } })
-    }, HOVER_CARD_DELAY_MS)
-  }
-  useEffect(() => () => { if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current) }, [])
+  const hover = useHoverController()
+  const endHover = () => { hover.leave() }
+  const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
   const [menu, setMenu] = useState<OpenMenu | null>(null)
-  const hovered = hover === null || menu !== null ? undefined : props.sessions.find((session) => session.id === hover.id)
   const sections = statusSections(splitPutAway(props.sessions).listed, null, DEFAULT_SIDEBAR_SORT)
   return (
     <div className="mx-rail">
@@ -586,7 +573,7 @@ function Rail(props: SidebarProps) {
         {props.railUpdateSlot}
         <button type="button" className="mx-head-button is-rail" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></button>
       </div>
-      {hovered && hover && <RowHoverCard session={hovered} row={hover.row} portalContainer={props.portalContainer} />}
+      <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
   )
