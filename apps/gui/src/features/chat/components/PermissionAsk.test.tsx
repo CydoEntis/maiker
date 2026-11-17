@@ -319,13 +319,14 @@ describe("Claude's own \"don't ask again\" choice", () => {
     expect(typeInto).toHaveBeenCalledExactlyOnceWith('2')
   })
 
-  it('answers no key by itself: Enter and the number do nothing', async () => {
+  it('is not picked by its number, and Enter still means only the first choice, Yes once', async () => {
     const { typeInto } = await openWith(BASH_ASK, MENU)
     const card = screen.getByRole('region', { name: 'claude needs your permission' })
 
     fireEvent.keyDown(card, { key: '2' })
-    fireEvent.keyDown(card, { key: 'Enter' })
     expect(typeInto).not.toHaveBeenCalled()
+    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(typeInto).toHaveBeenCalledExactlyOnceWith(ANSWER_KEYS.approve)
   })
 
   it('offers it for no menu it cannot read, for another agent or for a question', async () => {
