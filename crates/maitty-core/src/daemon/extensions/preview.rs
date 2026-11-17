@@ -58,7 +58,7 @@ fn describe(env: &Env, add: &ExtAdd) -> Result<ExtPreview, ExtError> {
             let (name, market) = plugin.split_once('@').ok_or_else(|| ExtError::Invalid("A plugin is written name@marketplace".into()))?;
             let found = market_of(env, *agent, market).ok_or(ExtError::NotFound)?;
             let mut shown = blank(*agent, ExtKind::Plugin, plugin, *scope, format!("Plugin {name} from the marketplace {market} ({})", found.source));
-            let entry = found.dir.as_deref().and_then(|dir| manifest(dir)).and_then(|manifest| plugin_entry(&manifest, name));
+            let entry = found.dir.as_deref().and_then(manifest).and_then(|manifest| plugin_entry(&manifest, name));
             match (entry, found.dir.as_deref()) {
                 (Some(PluginSource::Folder(relative)), Some(dir)) => match inside(dir, &relative) {
                     Some(folder) => shown.runs = runs_of(&folder, &mut shown.hosts),

@@ -190,16 +190,17 @@ fn set_codex_plugin(config: &Path, id: &str, enabled: bool) -> Result<(), ExtErr
 /// Whether a command did what was asked, from what it said.
 fn outcome(agent: ExtAgent, kind: ExtKind, said: &Said) -> Result<(), ExtError> {
     // Claude's plugin and marketplace commands answer in one JSON line, and say what failed in it.
-    if agent == ExtAgent::Claude && matches!(kind, ExtKind::Plugin | ExtKind::Marketplace) {
-        if let Some(json) = said.stdout.lines().rev().find_map(|line| serde_json::from_str::<Value>(line.trim()).ok()).filter(Value::is_object) {
-            let text = |field: &str| json.get(field).and_then(Value::as_str).unwrap_or_default();
-            return match (text("outcome"), text("failureCode")) {
-                ("ok", _) => Ok(()),
-                (_, "not_found") => Err(ExtError::NotFound),
-                (_, _) if text("message").to_ascii_lowercase().contains("already") => Err(ExtError::AlreadyInstalled),
-                _ => Err(ExtError::Failed(first_line(text("message")))),
-            };
-        }
+    if agent == ExtAgent::Claude
+        && matches!(kind, ExtKind::Plugin | ExtKind::Marketplace)
+        && let Some(json) = said.stdout.lines().rev().find_map(|line| serde_json::from_str::<Value>(line.trim()).ok()).filter(Value::is_object)
+    {
+        let text = |field: &str| json.get(field).and_then(Value::as_str).unwrap_or_default();
+        return match (text("outcome"), text("failureCode")) {
+            ("ok", _) => Ok(()),
+            (_, "not_found") => Err(ExtError::NotFound),
+            (_, _) if text("message").to_ascii_lowercase().contains("already") => Err(ExtError::AlreadyInstalled),
+            _ => Err(ExtError::Failed(first_line(text("message")))),
+        };
     }
     if said.success {
         return Ok(());

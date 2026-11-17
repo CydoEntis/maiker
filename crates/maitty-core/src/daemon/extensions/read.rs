@@ -48,7 +48,7 @@ struct Found {
 }
 
 impl Found {
-    fn add(&mut self, agent: ExtAgent, kind: ExtKind, scope: ExtScope, id: &str, name: &str, detail: String, enabled: Option<bool>) {
+    fn add(&mut self, (agent, kind, scope): (ExtAgent, ExtKind, ExtScope), id: &str, name: &str, detail: String, enabled: Option<bool>) {
         self.items.push(ExtItem { agent, kind, scope, id: id.to_owned(), name: name.to_owned(), detail, enabled });
     }
 }
@@ -131,14 +131,14 @@ fn claude(homes: &Homes, project: Option<&Path>, found: &mut Found) {
                 let enabled = settings.as_ref().and_then(|settings| settings.get("enabledPlugins")).and_then(|plugins| plugins.get(id)).and_then(Value::as_bool).unwrap_or(true);
                 let version = install.get("version").and_then(Value::as_str).map(|version| format!("version {version}")).unwrap_or_default();
                 let name = id.split('@').next().unwrap_or(id);
-                found.add(agent, ExtKind::Plugin, scope, id, name, version, Some(enabled));
+                found.add((agent, ExtKind::Plugin, scope), id, name, version, Some(enabled));
             }
         }
     }
 
     if let Some(markets) = read_json(&homes.claude_dir.join("plugins").join("known_marketplaces.json"), found) {
         for (name, market) in markets.as_object().into_iter().flatten() {
-            found.add(agent, ExtKind::Marketplace, ExtScope::User, name, name, market_source(market.get("source")), None);
+            found.add((agent, ExtKind::Marketplace, ExtScope::User), name, name, market_source(market.get("source")), None);
         }
     }
 
@@ -170,12 +170,12 @@ fn codex(homes: &Homes, project: Option<&Path>, found: &mut Found) {
         for (id, plugin) in table_of(&config, "plugins") {
             let enabled = plugin.get("enabled").and_then(toml::Value::as_bool).unwrap_or(true);
             let name = id.split('@').next().unwrap_or(id);
-            found.add(agent, ExtKind::Plugin, ExtScope::User, id, name, String::new(), Some(enabled));
+            found.add((agent, ExtKind::Plugin, ExtScope::User), id, name, String::new(), Some(enabled));
         }
         for (name, market) in table_of(&config, "marketplaces") {
             let source = market.get("source").and_then(toml::Value::as_str).unwrap_or_default();
             let kind = market.get("source_type").and_then(toml::Value::as_str).unwrap_or_default();
-            found.add(agent, ExtKind::Marketplace, ExtScope::User, name, name, format!("{kind} {source}").trim().to_owned(), None);
+            found.add((agent, ExtKind::Marketplace, ExtScope::User), name, name, format!("{kind} {source}").trim().to_owned(), None);
         }
         for (name, server) in table_of(&config, "mcp_servers") {
             let detail = match server.get("url").and_then(toml::Value::as_str) {
@@ -186,7 +186,7 @@ fn codex(homes: &Homes, project: Option<&Path>, found: &mut Found) {
                     std::iter::once(command).chain(args).collect::<Vec<_>>().join(" ")
                 }
             };
-            found.add(agent, ExtKind::McpServer, ExtScope::User, name, name, detail, None);
+            found.add((agent, ExtKind::McpServer, ExtScope::User), name, name, detail, None);
         }
     }
     for scope in [ExtScope::User, ExtScope::Project] {
@@ -210,7 +210,7 @@ fn mcp_json(found: &mut Found, agent: ExtAgent, scope: ExtScope, servers: Option
                 std::iter::once(command).chain(args).collect::<Vec<_>>().join(" ")
             }
         };
-        found.add(agent, ExtKind::McpServer, scope, name, name, detail, None);
+        found.add((agent, ExtKind::McpServer, scope), name, name, detail, None);
     }
 }
 
@@ -249,7 +249,7 @@ fn skills(found: &mut Found, agent: ExtAgent, scope: ExtScope, dir: &Path) {
         }
         let Some(head) = read_head(&path.join("SKILL.md")) else { continue };
         let (name, description) = front_matter(&head);
-        found.add(agent, ExtKind::Skill, scope, &folder, &name.unwrap_or_else(|| folder.clone()), description.unwrap_or_default(), None);
+        found.add((agent, ExtKind::Skill, scope), &folder, &name.unwrap_or_else(|| folder.clone()), description.unwrap_or_default(), None);
     }
 }
 

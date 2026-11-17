@@ -69,10 +69,10 @@ impl Previews {
         let mut kept = self.kept.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
         let now = Instant::now();
         kept.retain(|_, (made, _)| now.duration_since(*made) < TOKEN_LIFETIME);
-        if kept.len() >= PREVIEWS_MAX {
-            if let Some(oldest) = kept.iter().min_by_key(|(_, (made, _))| *made).map(|(token, _)| token.clone()) {
-                kept.remove(&oldest);
-            }
+        if kept.len() >= PREVIEWS_MAX
+            && let Some(oldest) = kept.iter().min_by_key(|(_, (made, _))| *made).map(|(token, _)| token.clone())
+        {
+            kept.remove(&oldest);
         }
         kept.insert(token.clone(), (now, add));
         Ok(token)
