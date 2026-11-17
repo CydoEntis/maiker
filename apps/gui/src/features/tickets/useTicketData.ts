@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { loadTicket, loadTicketGroups, loadTicketPage, TICKETS_PAGE_MAX, type TicketFailure, type TicketsResult, type TicketSummary } from '@/api/tickets'
+import { loadTicketGroups, loadTicketPage, TICKETS_PAGE_MAX, type TicketFailure, type TicketsResult, type TicketSummary } from '@/api/tickets'
 
 /** A read that could not be done, kept as the error of its query so the last good answer stays on screen. */
 export class TicketReadError extends Error {
@@ -54,17 +54,6 @@ export function useTicketList(source: string | null, group: string | null, searc
     retry: false,
     staleTime: TICKETS_REFRESH_MS,
     refetchInterval: TICKETS_REFRESH_MS,
-  })
-}
-
-/** One ticket whole, read when it is opened (or its blockers are wanted) and kept while the window runs. */
-export function useTicketDetail(source: string | null, id: string | null) {
-  return useQuery({
-    queryKey: ['tickets', 'detail', source, id],
-    queryFn: async () => unwrap(await loadTicket(source ?? '', id ?? '')),
-    enabled: source !== null && id !== null,
-    retry: false,
-    staleTime: TICKETS_REFRESH_MS,
   })
 }
 

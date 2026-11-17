@@ -16,7 +16,6 @@ import './components/menu.css'
 import './components/dialogs.css'
 import './components/frame.css'
 import '@/features/chat/chat.css'
-import '@/features/work/work.css'
 
 export function DesktopApp() {
   const workspace = useWorkspaceState()

@@ -6,7 +6,6 @@ import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
 import { chatAvailability, type PaneView } from '../model/chatView'
 import { toast } from '@/lib/toast'
-import { sendAgentMessage } from '../model/agentMessage'
 import { answerHelpers, dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
 import { errorMessage } from '@/lib/error-message'
 import { isChatSession } from '../model/chatSession'
@@ -20,17 +19,12 @@ import { RunningSubagents } from '@/features/chat/components/RunningSubagents'
 import { ChatPane } from '@/features/chat/components/ChatPane'
 import { NoTerminalNote } from '@/features/chat/components/NoTerminalNote'
 import { type Arrangement, focusPane, type PaneSlot, toggleMaximize } from '../model/layout'
-import { folderNameOf } from '../model/session'
-import { LOCAL_HEAD, machineTitle } from '../model/machines'
 import { runningBarShown, toSubagentView } from '../model/subagents'
 import { isShell } from '../model/sidebar'
 import { moveRefusal } from '../model/moveToWorktree'
 import { guardLocal } from '@/lib/localOnly'
 import type { RewindPlace } from '@/features/chat/editFromHere'
 import { fileSearchOf } from '@/features/chat/fileMention'
-import { WorkBoard } from '@/features/work/components/WorkBoard'
-import { WorkSetup } from '@/features/work/components/WorkSetup'
-import { factoryChatsOf } from '@/features/work/factoryChats'
 import { ShowSidebarButton } from './ShowSidebarButton'
 
 /** Whether a session can show a chat at all: an agent the app reads. A shell or another program has none, so it gets no switch. */
@@ -50,7 +44,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, sessions, setTicketsOpen, showSessionById } = useWorkspace()
+  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -59,30 +53,10 @@ export function WorkspacePane({ shown, pane, kept }: {
   const focused = pane.id === shown.focus && !kept
   const chat = chatOf(session)
   const chatOnly = isChatSession(session.conversation)
-  // Every subagent the session reported, not only those the sidebar lists, so a workflow step can open a finished one.
+  // Every subagent the session reported, not only those the sidebar lists, so a finished one can still be opened.
   const helpers = (session.conversation.details?.subagents ?? []).map(toSubagentView)
   const opened = openSubagent?.sessionId === session.id ? openSubagent : null
   const subagent = opened === null ? undefined : helpers.find((child) => child.id === opened.subagentId)
-  const workOpen = paneViews.work.has(session.id)
-  const remoteHead = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
-  const runWhere = { machine: machineTitle(remoteHead ?? LOCAL_HEAD), remote: session.machine !== LOCAL_MACHINE, project: folderNameOf(session), branch: session.branch }
-  // A chat that runs no factory still has Work: it says where one runs in this project and how to set one up.
-  const work = {
-    going: session.workflows.filter((run) => run.active).length,
-    needsYou: session.workflows.some((run) => run.active && run.needsYou),
-    open: workOpen,
-    onOpen: () => { paneViews.showWork(session.id) },
-    board: session.workflows.length > 0
-      ? <WorkBoard runs={session.workflows} helpers={helpers} onOpenHelper={(id) => { showSubagent(session.id, id) }} onAnswer={(text) => sendAgentMessage(session, text)} where={runWhere} />
-      : (
-        <WorkSetup
-          others={workOpen ? factoryChatsOf(session, sessions).filter((other) => other.id !== session.id) : []}
-          onOpenOther={(id) => { paneViews.hideWork(session.id); showSessionById(id); paneViews.showWork(id) }}
-          onOpenTickets={() => { paneViews.hideWork(session.id); setTicketsOpen(true) }}
-          onBack={() => { paneViews.hideWork(session.id) }}
-        />
-      ),
-  }
   const typeInto = chatOnly ? undefined : (text: string) => sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, text)
   // A pane's daemon holds what is sent while its agent works; a chat session's own daemon queue is its conversation's.
   const paneQueue = chatOnly ? undefined : {
@@ -136,8 +110,7 @@ export function WorkspacePane({ shown, pane, kept }: {
       dropWord={dragId === null ? 'Drop to show it here' : 'Drop to swap'}
       view={chat.view}
       {...(chatOnly || !hasChat(chat.availability) ? {} : { onViewChange: (view: PaneView) => { if (view === 'terminal') showTerminal(); else paneViews.choose(session.id, view) } })}
-      work={work}
-      chat={chat.view === 'chat' && !kept && !workOpen ? (
+      chat={chat.view === 'chat' && !kept ? (
         <OpenSubagentContext.Provider value={openHelperChat}>
         <ChatPane
           availability={chat.availability}
@@ -173,7 +146,7 @@ export function WorkspacePane({ shown, pane, kept }: {
         />
         </OpenSubagentContext.Provider>
       ) : undefined}
-      overlay={!runningBarShown({ kept, hasWorkflows: session.workflows.length > 0, asking: session.status === 'needs' }) ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
+      overlay={!runningBarShown({ kept, asking: session.status === 'needs' }) ? undefined : <RunningSubagents subagents={session.subagents} onOpen={(id) => { showSubagent(session.id, id) }} />}
       panelOpen={inspectOpen && focused}
       {...(hasPanel ? { onPanel: () => { togglePanel(pane.id, session.id) } } : {})}
       changed={{ added: session.diffAdded, removed: session.diffRemoved }}
@@ -190,8 +163,8 @@ export function WorkspacePane({ shown, pane, kept }: {
           label={`Shell in ${session.cwdLabel}`}
           inputDisabled={!online}
           ended={session.ended}
-          focused={focused && !modalOpen && chat.view === 'terminal' && !workOpen && !dockFocused}
-          paused={kept || chat.view === 'chat' || workOpen}
+          focused={focused && !modalOpen && chat.view === 'terminal' && !dockFocused}
+          paused={kept || chat.view === 'chat'}
           onInput={(data) => { mirrorInput(session.id, data) }}
           onOpenPath={(path, line) => { openPath(session, path, line) }}
           onPasteImage={(image) => { pasteImage(session.id, image) }}

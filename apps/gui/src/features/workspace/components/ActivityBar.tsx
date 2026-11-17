@@ -6,7 +6,6 @@ import { useWorkspace } from '../workspaceContext'
 
 /** The 24px stroke paths of the bar's icons (layout 2h). */
 const PATHS = {
-  work: 'M4 5h4v14H4zM10 5h4v9h-4zM16 5h4v6h-4z',
   changes: 'M7 3v12a3 3 0 0 0 3 3h7M17 21l3-3-3-3M7 3a2 2 0 1 0 0 4 2 2 0 0 0 0-4',
   files: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
   history: 'M3 12a9 9 0 1 0 3-6.7L3 8M3 3v5h5M12 7v5l3 2',
@@ -37,13 +36,12 @@ const PANEL_TOOLS: readonly { view: InspectView; label: string; more?: true }[] 
 /**
  * The tools bar down the window's right edge (layout 2h §3): Changes, Files, History and Checks open the side panel on
  * that view and close it when it already shows it; Tickets opens over the chat area; Terminal, at the foot, shows and
- * hides the focused session's terminal. Work, at the top, shows the chat's factory runs, or how to set a factory up when
- * it runs none. Every tool works on a project,
+ * hides the focused session's terminal. Every tool works on a project,
  * so the bar shows only while a session is in front.
  */
 export function ActivityBar() {
   const tip = useTipWithKeys()
-  const { preferences, focusedSession, inspectOpen, inspectView, setInspectView, setInspectOpen, inspectRefusal, setTurnDiff, diffStat, ticketsOpen, setTicketsOpen, paneViews, newChatOpen, terminalShown, canDock, toggleTerminal } = useWorkspace()
+  const { preferences, focusedSession, inspectOpen, inspectView, setInspectView, setInspectOpen, inspectRefusal, setTurnDiff, diffStat, ticketsOpen, setTicketsOpen, terminalShown, canDock, toggleTerminal } = useWorkspace()
   if (focusedSession === undefined) return null
   const session = focusedSession
   const pick = (view: InspectView) => {
@@ -67,31 +65,8 @@ export function ActivityBar() {
     if (view === 'checks' && failing > 0) return { text: String(failing), tone: 'danger' }
     return null
   }
-  const runs = session.workflows
-  const workOn = paneViews.work.has(session.id)
-  const live = runs.filter((run) => run.active).length
-  const needs = runs.some((run) => run.active && run.needsYou)
   return (
     <nav className="mx-tools" aria-label="Tools">
-      {!newChatOpen && (
-        <>
-          <ToolButton
-            label="Work"
-            tip={workOn ? 'Back to the chat' : runs.length === 0 ? 'Work: no factory runs in this chat. Set one up' : `Work: ${String(live)} ${live === 1 ? 'ticket' : 'tickets'} running`}
-            path={PATHS.work}
-            on={workOn}
-            badge={needs ? { text: '!', tone: 'needs' } : live > 0 ? { text: String(live), tone: 'plain' } : null}
-            onClick={() => {
-              if (workOn) paneViews.hideWork(session.id)
-              else {
-                setInspectOpen(false)
-                paneViews.showWork(session.id)
-              }
-            }}
-          />
-          <span className="mx-tools-divider" aria-hidden="true" />
-        </>
-      )}
       {PANEL_TOOLS.filter((tool) => tool.more !== true || preferences.morePanelTools).map((tool) => (
         <ToolButton key={tool.view} label={tool.label} path={PATHS[tool.view as keyof typeof PATHS]} on={inspectOpen && inspectView === tool.view} badge={badgeOf(tool.view)} onClick={() => { pick(tool.view) }} {...(tool.view === 'changes' ? { tip: tip('Changes', 'inspect') } : {})} />
       ))}

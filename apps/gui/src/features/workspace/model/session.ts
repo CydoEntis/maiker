@@ -4,7 +4,6 @@ import type { Conversation, PermissionAsk, TerminalDetails } from '@/data/previe
 import type { Check } from '@/features/inspect/checks'
 import type { PullRequest } from './pullRequest'
 import { listedSubagents, runningSubagents, toSubagentView, type SubagentView } from './subagents'
-import { toWorkflowView, type WorkflowView } from './workflows'
 
 /** The status vocabulary of the desktop app. Each one has its own shape, never colour alone. */
 export type SessionStatus = 'working' | 'needs' | 'limited' | 'done' | 'error' | 'idle' | 'unknown'
@@ -85,8 +84,6 @@ export type SessionView = {
    * message meanwhile. Zero while the agent itself works, or when nothing runs.
    */
   helpersOnly: number
-  /** The workflow runs the session reported, newest first (ADR 0010). */
-  workflows: readonly WorkflowView[]
   status: SessionStatus
   /** The status before the daemon disconnected. */
   lastKnownStatus: SessionStatus | null
@@ -319,7 +316,6 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     // Which helpers a row lists (`listedSubagents`): not one that finished, nor one that stopped once the turn is over.
     subagents: listedSubagents((conversation.details?.subagents ?? []).map(toSubagentView), status === 'working'),
     helpersOnly: helpersOnly(conversation, status),
-    workflows: (conversation.details?.workflows ?? []).map(toWorkflowView),
     status,
     lastKnownStatus: lastKnown,
     conversation,

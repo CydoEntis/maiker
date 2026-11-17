@@ -53,9 +53,8 @@ describe('a subagent as the window shows it', () => {
 
 describe('the running-helpers bar over a pane', () => {
   it('floats over a chat or a terminal, and steps aside while the agent asks something', () => {
-    expect(barShown({ kept: false, hasWorkflows: false, asking: false })).toBe(true)
-    expect(barShown({ kept: false, hasWorkflows: false, asking: true })).toBe(false)
-    expect(barShown({ kept: true, hasWorkflows: false, asking: false })).toBe(false)
-    expect(barShown({ kept: false, hasWorkflows: true, asking: false })).toBe(false)
+    expect(barShown({ kept: false, asking: false })).toBe(true)
+    expect(barShown({ kept: false, asking: true })).toBe(false)
+    expect(barShown({ kept: true, asking: false })).toBe(false)
   })
 })
