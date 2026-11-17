@@ -4,6 +4,7 @@
 //! scanner, background git work and client connections talk to it through a single
 //! channel, so there is no locking around the model.
 
+mod agent_sign_in;
 mod approvals;
 mod branch_agent;
 mod check;
@@ -464,6 +465,8 @@ struct Daemon {
     secrets: secrets::Secrets,
     /// When each project's ticket setup was last opened for an agent.
     ticket_setups: ticket_setup::Shown,
+    /// The agents' sign-ins this daemon runs on a window's request.
+    sign_ins: agent_sign_in::SignIns,
     prs: pr::Prs,
     last_secret_files: Instant,
     git_busy: bool,
@@ -1334,6 +1337,7 @@ impl Daemon {
             questions: Vec::new(),
             secrets: secrets::Secrets::default(),
             ticket_setups: ticket_setup::Shown::default(),
+            sign_ins: agent_sign_in::SignIns::default(),
             prs: pr::Prs::default(),
             last_secret_files: Instant::now(),
             git_busy: false,
@@ -3156,6 +3160,13 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can clone a repository".into())
                     }
+                    Query::AgentSignIn { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can sign an agent in".into())
+                    }
                     Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
@@ -3269,6 +3280,14 @@ impl Daemon {
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
+                    }
+                    Query::AgentSignIn { agent, request, tag } => {
+                        let state = match request {
+                            SignInRequest::Start => self.sign_ins.start(agent, agent_sign_in::cli_for(agent)),
+                            SignInRequest::Cancel => self.sign_ins.cancel(agent),
+                            SignInRequest::Read => self.sign_ins.read(agent),
+                        };
+                        ServerMsg::Reply(Reply::AgentSignIn { tag, agent, state })
                     }
                     Query::GitHubAccounts { tag } => {
                         let tx = self.tx.clone();

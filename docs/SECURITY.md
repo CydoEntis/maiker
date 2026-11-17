@@ -899,6 +899,28 @@ off the UI thread, with the user's permissions. What was pasted never reaches gi
 - Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses
   the credentials git already has. Maitty stores no GitHub token.
 
+## Project-specific: signing an agent in from the desktop
+
+`Query::AgentSignIn` makes the daemon run `claude auth login` or `codex login --device-auth` and show the
+person a link and a code (`daemon/agent_sign_in.rs`). What it may do:
+
+- The program is the agent's own, found on the login PATH. Every argument is a constant; the window sends
+  only which agent and `Start`, `Cancel` or `Read`, as enum values the daemon decodes. Nothing the command
+  prints is ever run, passed to a command or written anywhere.
+- Only a link and a code leave the process. The link must be `https://` with a host, no user name, no
+  whitespace or control character, at most 2 KiB; anything else is dropped, not repaired. The code is letters,
+  digits and dashes, at most 24 characters. The window shows the link's host beside Open link and opens it
+  through the same `open_link` path as every other address. The host is not on a list: the command's own
+  output is the source, so the check is the shape, and the person sees where it goes.
+- No credential passes through Maitty. The tokens a login obtains go to the agent's own files, as when it is
+  run in a terminal; the daemon reads none and logs none. The output is read up to 16 KiB, scanned once, and
+  dropped; the rest is read and discarded so the command never stalls. Status text is never logged.
+- One login per agent, a 15-minute limit, killed on cancel, on timeout and when the daemon drops it. Human
+  clients only: an agent's connection is refused, and a reply from another machine is ignored, so another
+  computer's output can never put a link in this window.
+- Claude's paste-a-code flow is not supported on purpose: a code typed into the window would be a credential
+  in a text box (ADR 0006).
+
 ## Project-specific: the message the daemon sends by itself
 
 With `restore.continue_turn` on, the daemon sends one fixed message, `Continue where you left off.`,
