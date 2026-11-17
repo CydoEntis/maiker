@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { switchBranch } from '@/api/daemon'
 import { toast } from '@/lib/toast'
-import { errorMessage } from '@/lib/error-message'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { ChipMenu, type ChipItem } from '@/features/workspace/components/NewChatMenus'
 import { useFolderBranches } from '@/features/workspace/model/newChatHost'
@@ -32,7 +31,7 @@ export function BranchMenu({ spec, branch, worktree, project }: { spec: BranchMe
     setBusy(true)
     switchBranch(spec.folder, name, false)
       .then(() => { toast.success(`Now working on ${name}`); reload(); return queryClient.invalidateQueries({ queryKey: ['conversations'] }) })
-      .catch((error: unknown) => { toast.error(errorMessage(error, `Could not switch to ${name}`)) })
+      .catch((error: unknown) => { toast.failure(error, `Could not switch to ${name}`) })
       .finally(() => { setBusy(false) })
   }
   const rows: ChipItem[] = (read?.branches ?? [{ name: branch, when: null }]).map((entry) => ({

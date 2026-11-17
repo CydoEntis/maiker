@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@/lib/toast'
 import { machineNameOf } from '@/api/machines'
 import { oversizeMessage, saveImageLocally } from '@/api/imagePaste'
-import { errorMessage } from '@/lib/error-message'
 import { formatDroppedPaths } from './droppedPaths'
 
 type Options = {
@@ -12,7 +11,7 @@ type Options = {
   typeInto: (sessionId: string, text: string) => boolean
   /** Whether the machine with this name is `connected`. */
   isConnected: (machine: string) => boolean
-  /** The Maitty service is reachable: typing into a pane of this computer needs it. */
+  /** The Maiker service is reachable: typing into a pane of this computer needs it. */
   online: boolean
   /** The path is written the way this computer's shell reads it. */
   windows: boolean
@@ -42,7 +41,7 @@ export function useImagePaste(options: Options): (sessionId: string, image: Blob
     const machine = machineNameOf(sessionId)
     if (machine === null) {
       if (!online) {
-        toast.error('Reconnect to the Maitty service before pasting an image')
+        toast.error('Reconnect to the Maiker service before pasting an image')
         return
       }
       toast.loading('Saving the image…', { id: LOCAL_TOAST })
@@ -55,7 +54,7 @@ export function useImagePaste(options: Options): (sessionId: string, image: Blob
           }
           toast.success('Pasted the image', { id: LOCAL_TOAST, duration: 2000 })
         })
-        .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not paste the image'), { id: LOCAL_TOAST }) })
+        .catch((error: unknown) => { toast.failure(error, 'Could not paste the image', { id: LOCAL_TOAST }) })
       return
     }
     if (!isConnected(machine)) {
@@ -64,7 +63,7 @@ export function useImagePaste(options: Options): (sessionId: string, image: Blob
     }
     readBytes(image)
       .then((bytes) => { sendImage(sessionId, machine, bytes) })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not read the image')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not read the image') })
   }, [])
 }
 

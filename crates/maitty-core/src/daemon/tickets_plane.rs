@@ -422,7 +422,7 @@ mod tests {
         }
     }
 
-    const PROJECT: &str = r#"{"id":"p1","identifier":"MAITTY","name":"Maitty"}"#;
+    const PROJECT: &str = r#"{"id":"p1","identifier":"MAITTY","name":"Maiker"}"#;
     const STATES: &str = r#"{"results":[
         {"id":"s-todo","name":"Todo","group":"unstarted"},
         {"id":"s-doing","name":"In Progress","group":"started"},
@@ -461,7 +461,7 @@ mod tests {
             .on(
                 "/projects/?per_page",
                 200,
-                r#"{"results":[{"id":"p1","name":"Maitty"},{"id":"p2","name":"Old","archived_at":null},{"id":"p3","name":"Gone","archived_at":"2026-01-01"},{"id":"a/b","name":"odd"}]}"#,
+                r#"{"results":[{"id":"p1","name":"Maiker"},{"id":"p2","name":"Old","archived_at":null},{"id":"p3","name":"Gone","archived_at":"2026-01-01"},{"id":"a/b","name":"odd"}]}"#,
             );
         let found = groups(&http).unwrap();
         let shown: Vec<_> = found.iter().map(|g| (g.id.as_str(), g.kind, g.parent.as_deref(), g.ticket_count)).collect();
@@ -699,7 +699,7 @@ mod tests {
         // The projects, then the modules of the one project, each on its own connection.
         let server = std::thread::spawn(move || {
             let mut first = String::new();
-            for answer in [r#"{"results":[{"id":"p1","name":"Maitty"}]}"#, "[]"] {
+            for answer in [r#"{"results":[{"id":"p1","name":"Maiker"}]}"#, "[]"] {
                 let (mut stream, _) = listener.accept().unwrap();
                 let mut seen = vec![0u8; 4096];
                 let n = stream.read(&mut seen).unwrap();

@@ -29,9 +29,9 @@ export function daemonConnectionError(error: unknown): string {
         : ''
   const mismatch = daemonProtocolMismatch(error)
   if (mismatch) {
-    return `The Maitty service uses protocol v${String(mismatch.daemonProtocol)}, but this GUI needs v${String(mismatch.guiProtocol)}. This GUI will leave the service running while it owns sessions.`
+    return `The Maiker service uses protocol v${String(mismatch.daemonProtocol)}, but this GUI needs v${String(mismatch.guiProtocol)}. This GUI will leave the service running while it owns sessions.`
   }
   return message
-    ? `Could not connect to the local Maitty service: ${message}`
-    : 'Could not connect to the local Maitty service. Check that Maitty is installed, then retry.'
+    ? `Could not connect to the local Maiker service: ${message}`
+    : 'Could not connect to the local Maiker service. Check that Maiker is installed, then retry.'
 }

@@ -6,7 +6,6 @@ import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { toast } from '@/lib/toast'
-import { errorMessage } from '@/lib/error-message'
 import { linkOf, placeOf, useTicketLinks, type ProjectLink } from './model/ticketLinks'
 import { TicketSetup } from './TicketSetup'
 import { parseTicketLink } from './model/pastedLink'
@@ -65,14 +64,14 @@ function bannerFor(provider: Provider, failure: TicketFailure | null, hasData: b
   if (failure === null) return null
   const name = PROVIDER_LOOK[provider].name
   if (failure.kind === 'signed-out' && provider === 'github') {
-    return { tone: 'plain', glyph: '○', title: 'GitHub: not signed in', sub: 'Maitty uses your gh login. Run gh auth login in a terminal, then refresh.', button: { label: 'Open terminal', run: actions.signIn } }
+    return { tone: 'plain', glyph: '○', title: 'GitHub: not signed in', sub: 'Maiker uses your gh login. Run gh auth login in a terminal, then refresh.', button: { label: 'Open terminal', run: actions.signIn } }
   }
   if (failure.kind === 'signed-out') {
     return { tone: 'danger', glyph: '✕', title: `${name} refused the key`, sub: `The key may have been revoked. ${name} tickets are hidden until you add a new one.`, button: { label: 'Replace key', run: actions.settings } }
   }
   if (failure.kind === 'rate-limited') {
     const at = new Date(retryAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    return { tone: 'plain', glyph: '■', title: `${name} rate limit reached`, sub: hasData ? `${name} tickets are from ${minutesAgo(readAt, now)}. Maitty refreshes them at ${at}.` : `Maitty asks again at ${at}.`, button: null }
+    return { tone: 'plain', glyph: '■', title: `${name} rate limit reached`, sub: hasData ? `${name} tickets are from ${minutesAgo(readAt, now)}. Maiker refreshes them at ${at}.` : `Maiker asks again at ${at}.`, button: null }
   }
   if (failure.kind === 'unreachable') {
     return hasData
@@ -95,7 +94,7 @@ function suggestedProvider(link: string | undefined): Provider | null {
  * Tickets, over the whole chat area: a picker that starts an agent on one of the current chat's project's tickets from
  * GitHub, Plane or Linear. A tab per provider ("Not linked" when the project has none), a search and a scope, and the
  * open tickets; picking one reads it whole and opens the dialog that shows exactly what the agent is sent. It only reads
- * tickets: Maitty is not a tracker, so they are browsed and changed in the tracker itself. Ticket text is other people's
+ * tickets: Maiker is not a tracker, so they are browsed and changed in the tracker itself. Ticket text is other people's
  * and is shown as plain text everywhere.
  */
 export function TicketsPage({ project, host, leaving = false, suggestedLink, setupAsk = null }: {
@@ -192,7 +191,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
       queryFn: async () => { const told = await loadTicket(source, id); if (!told.ok) throw new Error(told.failure.kind); return told.value },
       staleTime: TICKETS_REFRESH_MS,
     }).then(setDialogTicket, (error: unknown) => {
-      toast.error(errorMessage(error, "Couldn't read the whole ticket"))
+      toast.failure(error, "Couldn't read the whole ticket")
       setStarting(null)
     })
   }
@@ -346,7 +345,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
           onGo={(choice) => {
             const ticket = dialogTicket
             stopStarting()
-            void host.onStart(ticket, choice).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not start the agent')) })
+            void host.onStart(ticket, choice).catch((error: unknown) => { toast.failure(error, 'Could not start the agent') })
           }}
         />
       )}

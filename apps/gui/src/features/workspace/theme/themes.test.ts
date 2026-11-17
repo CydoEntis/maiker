@@ -5,24 +5,24 @@ import type { ThemeEntry } from './themes'
 import { findTheme, generateTheme, MIN_TEXT_CONTRAST, onDanger, paletteTheme, terminalMinimumContrast, themeStyle, THEMES, xtermTheme } from './themes'
 
 const PALETTES = new Map(themeManifest.themes.flatMap((theme) => ('palette' in theme ? [[theme.name, theme.palette] as const] : [])))
-const MAITTY = ['Maitty Night', 'Maitty Day', 'Maitty Dark', 'Maitty Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Maitty Retro Dark', 'Maitty Retro Light']
+const MAITTY = ['Maiker Night', 'Maiker Day', 'Maiker Dark', 'Maiker Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Maiker Retro Dark', 'Maiker Retro Light']
 
 describe('themes', () => {
-  it("ships fifty-five themes, twenty-six light: Maitty's eleven, then twenty-two families with a dark and a light each", () => {
+  it("ships fifty-five themes, twenty-six light: Maiker's eleven, then twenty-two families with a dark and a light each", () => {
     expect(THEMES).toHaveLength(55)
     expect(THEMES.filter((theme) => theme.light)).toHaveLength(26)
     expect(THEMES.slice(0, MAITTY.length).map((theme) => theme.name)).toEqual(MAITTY)
     expect(findTheme('Catppuccin Mocha').family).toBe('Catppuccin · dark')
-    expect(findTheme('Maitty Retro Light').family).toBe('Maitty · light')
-    expect(findTheme('Paper').family).toBe('Maitty · light')
-    // Every family after Maitty's own has exactly one dark and one light.
+    expect(findTheme('Maiker Retro Light').family).toBe('Maiker · light')
+    expect(findTheme('Paper').family).toBe('Maiker · light')
+    // Every family after Maiker's own has exactly one dark and one light.
     const sides = new Map<string, boolean[]>()
     for (const theme of THEMES.slice(MAITTY.length)) sides.set(theme.family.split(' · ')[0] ?? '', [...(sides.get(theme.family.split(' · ')[0] ?? '') ?? []), theme.light])
     expect(sides.size).toBe(22)
     for (const [family, lights] of sides) expect([family, [...lights].sort()]).toEqual([family, [false, true]])
     expect(new Set(THEMES.map((theme) => theme.id)).size).toBe(55)
     expect(findTheme('Gruvbox Light').light).toBe(true)
-    expect(findTheme('No such theme').name).toBe('Maitty Night')
+    expect(findTheme('No such theme').name).toBe('Maiker Night')
   })
 
   it("draws the design's nine themes exactly as written, shading included", () => {
@@ -33,7 +33,7 @@ describe('themes', () => {
       const style = themeStyle(theme)
       expect([style['--hk'], style['--sk']], name).toEqual([palette.hk, palette.sk])
     }
-    const night = themeStyle(findTheme('Maitty Night'))
+    const night = themeStyle(findTheme('Maiker Night'))
     expect(night['--bg']).toBe('#071318')
     expect(night['--main']).toBe('#0f2026')
     expect(night['--pane']).toBe(night['--main'])
@@ -42,7 +42,7 @@ describe('themes', () => {
     expect(night['--working']).toBe('#3dd6c6')
     expect(night['--warn']).toBe('#ff7a5c')
     expect(night['--m-or']).toBe('#f0964a')
-    const day = themeStyle(findTheme('Maitty Day'))
+    const day = themeStyle(findTheme('Maiker Day'))
     expect(day['--bg']).toBe('#e9f0ed')
     expect(day['--accent-text']).toBe('#8a5a00')
     expect(day['--warn']).toBe('#9e2e12')
@@ -94,7 +94,7 @@ describe('themes', () => {
   })
 
   it('maps the ANSI palette for xterm from the theme tokens', () => {
-    const { tokens } = findTheme('Maitty Night')
+    const { tokens } = findTheme('Maiker Night')
     const palette = xtermTheme(tokens)
     expect(palette.cyan).toBe('#e0ab45')
     expect(palette.magenta).toBe('#C3A6F2')
@@ -200,8 +200,8 @@ describe('contrast audit', () => {
   })
 
   it('asks xterm to lift the colours a program picks itself on light themes only', () => {
-    expect(terminalMinimumContrast(findTheme('Maitty Day'))).toBe(MIN_TEXT_CONTRAST)
-    expect(terminalMinimumContrast(findTheme('Maitty Night'))).toBe(1)
+    expect(terminalMinimumContrast(findTheme('Maiker Day'))).toBe(MIN_TEXT_CONTRAST)
+    expect(terminalMinimumContrast(findTheme('Maiker Night'))).toBe(1)
   })
 
   it('raises a generated theme\'s derived text until it passes (Tokyo Night Day foreground and dim)', () => {

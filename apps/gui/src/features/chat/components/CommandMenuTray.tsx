@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
-import { errorMessage } from '@/lib/error-message'
 import { KEY_ESCAPE } from '../terminalKeys'
 import { TerminalPrompt } from './TerminalPrompt'
 import { WaitingCard } from './WaitingCard'
@@ -26,7 +25,7 @@ export function CommandMenuTray({ agent, topic, readScreen, sendKeys, onClose }:
   const close = () => {
     setBusy(true)
     sendKeys(KEY_ESCAPE)
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not close the menu')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not close the menu') })
       .finally(() => { setBusy(false); onClose() })
   }
   return (

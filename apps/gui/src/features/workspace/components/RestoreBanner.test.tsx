@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { SessionView } from '../model/session'
 import { RestoreBanner } from './RestoreBanner'
 
-const session = { id: 't7', name: 'api', title: 'maitty', interrupted: { agent: 'codex', resume: 'codex resume --last' } } as unknown as SessionView
+const session = { id: 't7', name: 'api', title: 'maiker', interrupted: { agent: 'codex', resume: 'codex resume --last' } } as unknown as SessionView
 
 describe('RestoreBanner', () => {
   it('shows nothing when no agent was interrupted', () => {

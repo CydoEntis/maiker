@@ -36,7 +36,7 @@ fleets-and-ships redesign below; nothing after v0.66.0 has been released.
   four stages, not bytes.
 - **Dead code left on purpose:** none known. The `Proj`/`Wt` types are the TUI's live model for menus.
 - **Open, not fixed:** Stop in the chat can lag behind the agent winding down; old daemons from earlier test servers still
-  run on the dev box (`ps -eo pid,args | grep "maitty.* daemon"`, stop with `maitty kill-server`); Codex chat user messages
+  run on the dev box (`ps -eo pid,args | grep "maiker.* daemon"`, stop with `maiker kill-server`); Codex chat user messages
   and its mode chip are parked.
 - **Closed without merging:** PRs #281, #271 and #287 (their fixes were already in `dev`).
 - **Branches:** `dev` and `main` only, plus `backup/remote-image-paste-before-rewrite` and `feat/remote-image-paste-stacked`
@@ -71,7 +71,7 @@ fleets-and-ships redesign below; nothing after v0.66.0 has been released.
   `apps/gui/RELEASE-HOLD`; its last good version is 0.64.0.
 - **The design to build from** is the revised v18 handoff the owner supplied this evening:
   `docs/features/chat-gui/design-handoff/v18/` (read `README.md` section D first; D.6 to D.9 are
-  new). Its screens are in `.maitty/references/`. Build each screen whole from it, and put a
+  new). Its screens are in `.maiker/references/`. Build each screen whole from it, and put a
   screenshot of the build beside the design's before calling the screen done.
 - **Next, in order.** Phase 1 (tickets 35, 40, 36, 37, 38), then tickets 48, 49 and 50 from the
   revised handoff, then the rest of phase 4. Ticket 51 (terminal app) is small and can go at any
@@ -135,13 +135,13 @@ fleets-and-ships redesign below; nothing after v0.66.0 has been released.
 
 | Order | Ticket | What | Needs |
 | --- | --- | --- | --- |
-| 16 | 39 | Review every screen with the owner: keep, change or cut. Agree the smallest window. Put the reference designs in `.maitty/references/` | **owner**, throughout |
+| 16 | 39 | Review every screen with the owner: keep, change or cut. Agree the smallest window. Put the reference designs in `.maiker/references/` | **owner**, throughout |
 | 17 | 48, 49, 50 | What the revised handoff changed, cuts first: the removals (D.6), usage in Settings (D.7), sidebar sessions keep their place (D.8) | nothing: the handoff says what |
 | 17a | from 39 | The other cuts and changes. The list so far is under *Design changes the owner asked for* | **owner** where the handoff is silent |
 | 18 | ADR | Chat on any session reverses ADR 0052 | **owner** |
 
 **Phase 5. Borrowed from a read of GG Coder.** Added by the owner on 2026-11-06; it follows phase 4.
-Ideas only, written fresh: that project is AGPL-3.0 and Maitty is MIT, so nothing is copied from it.
+Ideas only, written fresh: that project is AGPL-3.0 and Maiker is MIT, so nothing is copied from it.
 
 | Order | Ticket | What | Needs |
 | --- | --- | --- | --- |
@@ -185,7 +185,7 @@ the other preferences; apply in place like font size.
 ## Brief for ticket 1
 
 ```text
-Redesign the "Glass" window style of the Maitty desktop app (apps/gui). Read
+Redesign the "Glass" window style of the Maiker desktop app (apps/gui). Read
 docs/DESIGN.md (the current visual language), docs/PERFORMANCE.md (what was
 measured and why), and apps/gui/src/features/workspace/workspace.css (where
 the styles live) before proposing anything. Keep Flat and Tiled as they are;
@@ -511,8 +511,8 @@ the test, and fix its timing instead of retrying. The three slow `maitty-termina
 
 ## 22. Update a machine from the GUI and the TUI (feature, `client`, `ssh`)
 
-Asked for 2026-11-05. Today a machine whose Maitty is older than this computer's shows
-"run `maitty machine update <name>`" as text, and the update exists only as that command
+Asked for 2026-11-05. Today a machine whose Maiker is older than this computer's shows
+"run `maiker machine update <name>`" as text, and the update exists only as that command
 (ADR 0047, D8; `crates/maitty-terminal-client/src/cli/machine_update.rs`). The owner wants an
 **Update** action on each machine instead of having to type the command.
 
@@ -537,7 +537,7 @@ Asked for 2026-11-05. Today a machine whose Maitty is older than this computer's
 - Tests with the scripted-ssh fixtures. Real ssh is checked by hand.
 
 **Notes**
-- Blocked in practice until a release exists, because only a release carries a protocol-72 `maitty`
+- Blocked in practice until a release exists, because only a release carries a protocol-72 `maiker`
   to push to a machine whose platform differs from this computer's.
 - Needs an ADR amendment to 0047 or 0048 (the desktop app may now change another machine).
 
@@ -682,7 +682,7 @@ to 473 seconds between packages. The step normally takes under a minute, and it 
 ## 26. Intermittent Windows failure in the three-machines hub test (bug, `client`, `windows`)
 
 On #270, `test (windows-latest)` failed once
-(https://github.com/CydoEntis/maitty/actions/runs/42055392461/job/127360803248):
+(https://github.com/CydoEntis/maiker/actions/runs/42055392461/job/127360803248):
 
 ```text
 hub::tests::end_to_end::three_machines_snapshots_typing_and_a_replay_after_one_reconnects
@@ -759,24 +759,24 @@ Both were built without access to Plane, so neither has a ticket there. Record t
 reachable; what is left over from them is below.
 
 **Ticket 22 (update a machine), the TUI half.** #275 added **Update…** to a machine's right-click
-menu in the sidebar and `u` in the Machines dialog. It runs `maitty machine update <name>` (with
+menu in the sidebar and `u` in the Machines dialog. It runs `maiker machine update <name>` (with
 `--install` when the app is not there at all) in a popup pane and dials the machine again when the
 popup closes. That is the command's own look-first, ask-first flow, not the shared flow ticket 22
 asks for. Still open from ticket 22: the GUI button, the one shared flow, and the ADR amendment.
 
 **Ticket 24, seen again.** On #275 `desktop GUI (macOS host)` was cancelled after 15 minutes with no
 runner and no step run
-(https://github.com/CydoEntis/maitty/actions/runs/42086501798/job/127453010943); the re-run passed
+(https://github.com/CydoEntis/maiker/actions/runs/42086501798/job/127453010943); the re-run passed
 in 1m28s.
 
 **Ticket 26, seen again.** On #275's first run
-(https://github.com/CydoEntis/maitty/actions/runs/42080268185/job/127431252289) the same test
+(https://github.com/CydoEntis/maiker/actions/runs/42080268185/job/127431252289) the same test
 failed with `ECHO_BETA_93 reached machine 0`. #275 does not touch the desktop app.
 
 ## 28. Intermittent Windows failure when a machine is removed (bug, `client`, `windows`)
 
 On #276's first run `test (windows-latest)` failed once
-(https://github.com/CydoEntis/maitty/actions/runs/42080810487/job/127433096613):
+(https://github.com/CydoEntis/maiker/actions/runs/42080810487/job/127433096613):
 
 ```text
 client::machine_flow::tests::removing_forgets_the_machine_here_and_leaves_its_sessions_and_the_saved_layout_alone
@@ -804,7 +804,7 @@ no retry added. Still to see: ten passes in a row on `windows-latest`.
 ## 29. Intermittent Windows failure closing a worktree's last pane (bug, `daemon`, `windows`)
 
 On #275's second run `test (windows-latest)` failed once
-(https://github.com/CydoEntis/maitty/actions/runs/42080268185/job/127439731421):
+(https://github.com/CydoEntis/maiker/actions/runs/42080268185/job/127439731421):
 
 ```text
 daemon::logic_tests::closing_a_worktrees_last_pane_removes_it_only_when_nothing_lives_only_there
@@ -871,10 +871,10 @@ were removed, still loads and is ignored.
 - The desktop updater no longer offers 0.65.0: `latest.json` on the v0.65.0 release is the v0.64.0
   manifest, and the release page opens with a warning. The 0.65.0 desktop installers are still
   attached to the release. To remove them:
-  `for f in $(gh release view v0.65.0 --json assets --jq '.assets[].name' | grep '^Maitty'); do gh release delete-asset v0.65.0 "$f" -y; done`
-- `~/.claude/settings.json` on the work machine holds dead Maitty hooks (ticket 36). A script that
+  `for f in $(gh release view v0.65.0 --json assets --jq '.assets[].name' | grep '^Maiker'); do gh release delete-asset v0.65.0 "$f" -y; done`
+- `~/.claude/settings.json` on the work machine holds dead Maiker hooks (ticket 36). A script that
   repairs it was written but not run (`fix-maitty-hooks.py`, in that Claude session's scratchpad
-  on the work machine): it keeps one Maitty hook an event and points it at `~/.local/bin/maitty`.
+  on the work machine): it keeps one Maiker hook an event and points it at `~/.local/bin/maiker`.
   Until then every Claude session there prints hook errors.
 - A v0.65.0 desktop window was left open on the work machine's second monitor. Closing it makes
   the hook path it wrote dead as well.
@@ -930,7 +930,7 @@ out (the output reaching xterm). Read so far without finding it: the host loop i
 `TerminalView.tsx`.
 
 **What**
-1. Reproduce outside the owner's window: a dev build on a nested socket (`MAITTY_SOCKET=<name>`).
+1. Reproduce outside the owner's window: a dev build on a nested socket (`MAIKER_SOCKET=<name>`).
 2. Time one key at each hop: xterm `onData`, the `terminal_input` command, the daemon's `Output`,
    `Streams::flush`, the channel message in the window, `emulator.write`. The hop where the time
    goes is the bug.
@@ -972,7 +972,7 @@ through `onData` as input to whatever is in the pane now. In a menu those are ke
 ## 36. Agent hooks point into the AppImage's temporary mount (bug, `agents`, `client`)
 
 The desktop app's daemon installs the Claude Code hooks and status line with its own path, which
-for an AppImage is `/tmp/.mount_Maitty<random>/usr/bin/maitty-gui-daemon`. The folder changes on
+for an AppImage is `/tmp/.mount_Maitty<random>/usr/bin/maiker-gui-daemon`. The folder changes on
 every launch and is gone when the app exits. `~/.claude/settings.json` is global, so every Claude
 session on the machine runs those hooks, in the terminal app too.
 
@@ -980,27 +980,27 @@ session on the machine runs those hooks, in the terminal app too.
 - Every hook event listed twice, one path dead: `SessionStart:startup hook error … Transport
   endpoint is not connected`, the same on `UserPromptSubmit`, `Stop` and `SessionEnd`.
 - Old entries are never replaced: `runs_our_hook` (`crates/adapters/maitty-provider-claude/src/hooks.rs`)
-  takes the program's file stem and looks for `maitty`, and the bundled daemon's is
-  `maitty-gui-daemon`. The groups in the file carry no `_maitty` tag either.
+  takes the program's file stem and looks for `maiker`, and the bundled daemon's is
+  `maiker-gui-daemon`. The groups in the file carry no `_maitty` tag either.
 - Once the window closes, no hook path is left that works, and no session can report its state.
 
 **What (owner to confirm the first point)**
 - Keep a copy of the bundled daemon at a fixed path under the app's data folder
-  (`~/.local/share/maitty/`), refreshed when the version changes, and name that path in the hooks
+  (`~/.local/share/maiker/`), refreshed when the version changes, and name that path in the hooks
   and the status line.
 - Treat the bundled daemon's name as this app's when replacing hook groups, so a launch replaces
   the old groups and does not add to them. Remove groups whose program is under `/tmp/.mount_`.
 - The same for every other agent `integrate` writes to.
 
 **Acceptance**
-- After two launches and a quit, `~/.claude/settings.json` has one Maitty group per event, its
+- After two launches and a quit, `~/.claude/settings.json` has one Maiker group per event, its
   program exists, and a Claude session started with the app closed reports no hook error.
 
 ## 37. Restart and restore cannot stop a daemon the desktop app started (bug, `client`)
 
 On Linux `is_app_daemon` (`crates/maitty-desktop-client/src/lib.rs`) accepted only a program whose
-name ends in `maitty`; the bundled daemon is `maitty-gui-daemon`, so the button answered "couldn't
-identify the local Maitty (maitty) daemon process". Windows and macOS skip the check.
+name ends in `maiker`; the bundled daemon is `maiker-gui-daemon`, so the button answered "couldn't
+identify the local Maiker (maiker) daemon process". Windows and macOS skip the check.
 
 **State.** Fixed in one commit on the branch `fix/desktop-upgrade-path` (not on `dev`):
 `is_daemon_command_line` accepts the terminal app's program or the bundled one, started with
@@ -1022,14 +1022,14 @@ not be there. Fixing these one complaint at a time is how it drifted, so review 
 parts of the v18 handoff and does not match it as a whole. The owner supplied a revised v18 the
 same evening and confirmed it is the design to build from. It is in
 `docs/features/chat-gui/design-handoff/v18/` (the README and the prototype changed; D.6 to D.9 of
-the README are new), with its screens in `.maitty/references/`. That settles step 1 below. A
+the README are new), with its screens in `.maiker/references/`. That settles step 1 below. A
 screen counts as done only when a screenshot of the build sits beside the design's.
 
 **What**
-1. Agree the source of truth with the owner before anything else. `.maitty/references/` is empty,
+1. Agree the source of truth with the owner before anything else. `.maiker/references/` is empty,
    so the candidates are `docs/DESIGN.md`, the v17 and v18 handoffs under `docs/features/`, and for
    the machines section the terminal app's Local and Remote sidebar (ADR 0050). Ask which; put the
-   reference images in `.maitty/references/` so every agent opens the same ones.
+   reference images in `.maiker/references/` so every agent opens the same ones.
 2. Walk every screen and panel with the owner and mark each element **keep**, **change** or
    **cut**. Start with the list under *Design changes the owner asked for* below.
 3. Decide the smallest window the app supports and what gives way below each width (sidebar to
@@ -1039,7 +1039,7 @@ screen counts as done only when a screenshot of the build sits beside the design
 
 **Acceptance**
 - One table in `docs/DESIGN.md` or a linked doc: screen, element, verdict, ticket.
-- The references are in `.maitty/references/`.
+- The references are in `.maiker/references/`.
 - No UI ticket is started before the owner has marked its screen.
 
 **Notes**
@@ -1085,7 +1085,7 @@ Where the revised handoff stands on this list, from its README:
   before changing anything; the build may be off the design.
 - **Not found in its new sections:** the title bar's colour, the terminal and its panel as one
   surface, chat on any session, small windows, the remote machines section. Look in the prototype
-  (`Maitty Desktop v18.dc.html`) and the older sections; where they are silent, ask the owner.
+  (`Maiker Desktop v18.dc.html`) and the older sections; where they are silent, ask the owner.
 
 ## Added 2026-11-05 (evening): found while fixing the intermittent Windows tests
 
@@ -1106,8 +1106,8 @@ developer's real PowerShell history. Do with ticket 26, once it has a lever that
 
 ## 43. `tests/fake_ssh.rs` can leave a daemon running (bug, `tooling`, `windows`)
 
-Seen once: a left-over daemon (`fakessh-<pid>-<n>`) held `target\debug\maitty.exe` open, and 40
-desktop tests then failed with `building the maitty binary failed`.
+Seen once: a left-over daemon (`fakessh-<pid>-<n>`) held `target\debug\maiker.exe` open, and 40
+desktop tests then failed with `building the maiker binary failed`.
 
 ## 44. Intermittent hub test failures under load (bug, `client`, `windows`)
 
@@ -1244,7 +1244,7 @@ Found by the owner on 2026-11-05, right after updating a machine from the sideba
 no sessions is one line in the sidebar, and its right-click menu has Reconnect, Update…, Edit… and
 Remove: nothing starts a session there. The guide says adding a machine lets you "create the first
 session from this computer", but the only way is the command line:
-`maitty new --on <machine> <folder> -- claude`.
+`maiker new --on <machine> <folder> -- claude`.
 
 **What**
 - **New session…** on a machine's right-click menu and in the Machines dialog, asking for the
@@ -1410,12 +1410,12 @@ this way; it is how the list was first written.
 **Not this ticket:** keeping the view still when rows above it are measured; a count of new
 messages on the button.
 
-## P5-6. `maitty hook` reports a fingerprint of each tool call (feature, `daemon`) — built, merged to test/integration (branch feat/hook-call-fingerprint)
+## P5-6. `maiker hook` reports a fingerprint of each tool call (feature, `daemon`) — built, merged to test/integration (branch feat/hook-call-fingerprint)
 
 Intent: [a working agent that repeats itself says so](features/repeating-agent/intent.md).
 
 The daemon knows that a tool ran, not which: `ClientMsg::Hook` carries the event name only
-(`ClientMsg::Hook` in `crates/maitty-shared/src/protocol.rs`), though the agent gives `maitty hook` the tool's
+(`ClientMsg::Hook` in `crates/maitty-shared/src/protocol.rs`), though the agent gives `maiker hook` the tool's
 name and input on stdin.
 
 **What**
@@ -1466,7 +1466,7 @@ Blocked by P5-6
 
 **Not this ticket:** failed calls in a row (Later); stopping or nudging the agent.
 
-## P5-8. The terminal app, `ls`, `maitty_list` and `wait` say when an agent is repeating itself (feature, `client`) — built, merged to test/integration (branch feat/repeating-display)
+## P5-8. The terminal app, `ls`, `maiker_list` and `wait` say when an agent is repeating itself (feature, `client`) — built, merged to test/integration (branch feat/repeating-display)
 
 Blocked by P5-7
 
@@ -1474,8 +1474,8 @@ Blocked by P5-7
 - The sidebar row's second line reads `repeating 6x` in the muted colour, beside `N agents`
   (`status_words` in `crates/maitty-terminal-client/src/client/screen/side.rs`).
 - `ls` reads `claude: working · repeating 6x` (`agent_tag` in `cli.rs`); `ls --json` has
-  `repeats` while working (`pane_json`); `maitty_list` shows it on the row
-  (where `cli/mcp.rs` adds `quiet_since`); `wait` and `maitty_wait` say `still working, but repeating itself
+  `repeats` while working (`pane_json`); `maiker_list` shows it on the row
+  (where `cli/mcp.rs` adds `quiet_since`); `wait` and `maiker_wait` say `still working, but repeating itself
   (6x)` when they time out (it can be two calls taking turns, so not "the same call") (the `Waited::TimedOut` messages in `cli.rs` and `cli/mcp.rs`).
 - Nothing in the Inbox, no popup, no sound, nothing in the desktop app.
 
@@ -1496,10 +1496,10 @@ bundled daemon, is only found by hand: the package checks of 2026-10-29 recorded
 
 **What**
 - `scripts/smoke-desktop-linux.sh <deb>` unpacks the `.deb` with `dpkg-deb -x` (nothing is
-  installed), starts the app under `xvfb-run` and `dbus-run-session` with `MAITTY_DATA_DIR`,
-  `MAITTY_CONFIG`, `MAITTY_SOCKET` and `XDG_RUNTIME_DIR` set to fresh temporary values, and waits
+  installed), starts the app under `xvfb-run` and `dbus-run-session` with `MAIKER_DATA_DIR`,
+  `MAIKER_CONFIG`, `MAIKER_SOCKET` and `XDG_RUNTIME_DIR` set to fresh temporary values, and waits
   15 s. It passes when the app is still running and `<data folder>/<socket id>.pid` names a live
-  process started as `maitty-gui-daemon… daemon`. Pass or fail, it stops both and removes the
+  process started as `maiker-gui-daemon… daemon`. Pass or fail, it stops both and removes the
   temporary folders; on a failure it prints `daemon.log`.
 - The `desktop package (Linux)` job runs it after the build, in a step with `timeout-minutes: 3`.
 

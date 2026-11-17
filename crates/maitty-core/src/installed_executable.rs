@@ -35,8 +35,8 @@ mod tests {
     #[test]
     fn removes_the_deleted_suffix_from_a_running_exe() {
         assert_eq!(
-            installed_path(Path::new("/opt/maitty (deleted)")),
-            Path::new("/opt/maitty")
+            installed_path(Path::new("/opt/maiker (deleted)")),
+            Path::new("/opt/maiker")
         );
     }
 }

@@ -1,4 +1,4 @@
-//! The one daemon file per PC (ADR 0004). The terminal install puts `maitty` in a per-user
+//! The one daemon file per PC (ADR 0004). The terminal install puts `maiker` in a per-user
 //! folder; the desktop app keeps that same file current instead of running a private copy.
 
 use anyhow::{Context, Result, bail};
@@ -7,20 +7,27 @@ use std::process::Command;
 
 const APP_COMMAND: &str = env!("MAITTY_APP_COMMAND");
 const APP_ENV: &str = env!("MAITTY_APP_ENV");
+/// The commands the app had before, newest first.
+const APP_PREVIOUS: &str = env!("MAITTY_APP_PREVIOUS");
 
 /// Where `install.ps1`, `install.sh` and this module all keep the executable.
 pub fn shared_daemon_path() -> Result<PathBuf> {
+    shared_path_for(APP_COMMAND)
+}
+
+/// Where the shared file of the app named `command` is kept.
+fn shared_path_for(command: &str) -> Result<PathBuf> {
     let file = if cfg!(windows) {
-        format!("{APP_COMMAND}.exe")
+        format!("{command}.exe")
     } else {
-        APP_COMMAND.to_string()
+        command.to_string()
     };
     if let Some(directory) = std::env::var_os(format!("{APP_ENV}_INSTALL_DIR")) {
         return Ok(PathBuf::from(directory).join(file));
     }
     #[cfg(windows)]
     let directory = std::env::var_os("LOCALAPPDATA")
-        .map(|local| PathBuf::from(local).join("Programs").join(APP_COMMAND));
+        .map(|local| PathBuf::from(local).join("Programs").join(command));
     #[cfg(not(windows))]
     let directory = std::env::var_os("HOME")
         .map(|home| PathBuf::from(home).join(".local").join("bin"));
@@ -105,11 +112,29 @@ pub fn ensure_shared_daemon(bundled: &Path, app_version: &str) -> Result<PathBuf
             target.display()
         ),
     }
+    keep_previous_names_current(bundled);
     // A convenience for typing the command in a terminal: it must not stop the app starting.
     if let Err(error) = put_folder_on_path(&target) {
         tracing::warn!("couldn't add the install folder to your PATH: {error:#}");
     }
     Ok(target)
+}
+
+/// After a rename, agents' hooks and MCP entries, scripts and habits still run the old command. Its shared file,
+/// where one is installed, gets this release too, so the old name runs the current app (which goes by the new
+/// name) instead of an old copy that never updates. A name with no file is not created.
+fn keep_previous_names_current(bundled: &Path) {
+    for old in APP_PREVIOUS.split(',').filter(|name| !name.is_empty()) {
+        let Ok(path) = shared_path_for(old) else {
+            continue;
+        };
+        if !path.is_file() {
+            continue;
+        }
+        if let Err(error) = replace_file(bundled, &path) {
+            tracing::warn!("couldn't bring {} up to date: {error:#}", path.display());
+        }
+    }
 }
 
 /// The user PATH with `directory` added, or `None` when it is already there. Windows compares
@@ -133,7 +158,7 @@ fn path_with(existing: &str, directory: &str) -> Option<String> {
     })
 }
 
-/// Like `install.ps1`: add the folder to the user's PATH so `maitty` works in a new terminal.
+/// Like `install.ps1`: add the folder to the user's PATH so `maiker` works in a new terminal.
 /// `<APP>_NO_PATH=1` leaves PATH alone. Other systems keep their shell startup files to
 /// themselves; `install.sh` tells the person what to add.
 fn put_folder_on_path(target: &Path) -> Result<()> {
@@ -348,10 +373,10 @@ mod tests {
     #[test]
     fn the_folder_is_added_once_and_matched_loosely() {
         assert_eq!(
-            path_with(r"C:\bin;C:\tools\", r"C:\Apps\maitty"),
-            Some(r"C:\bin;C:\tools\;C:\Apps\maitty".to_string())
+            path_with(r"C:\bin;C:\tools\", r"C:\Apps\maiker"),
+            Some(r"C:\bin;C:\tools\;C:\Apps\maiker".to_string())
         );
-        assert_eq!(path_with(r"C:\bin;c:\apps\MAITTY\", r"C:\Apps\maitty"), None);
-        assert_eq!(path_with("", r"C:\Apps\maitty"), Some(r"C:\Apps\maitty".to_string()));
+        assert_eq!(path_with(r"C:\bin;c:\apps\MAIKER\", r"C:\Apps\maiker"), None);
+        assert_eq!(path_with("", r"C:\Apps\maiker"), Some(r"C:\Apps\maiker".to_string()));
     }
 }

@@ -78,6 +78,18 @@ pub struct SharedSettings {
     /// The inverse of `ui.motion`.
     pub reduce_motion: bool,
     pub window_style: WindowStyle,
+    /// The agents switched off in `[permissions.bypass]`: the app starts them asking for permission.
+    /// Every other one that has a bypass flag starts without (ADR 0005). Absent from an older daemon.
+    #[serde(default)]
+    pub bypass_off: Vec<String>,
+    /// `updates.machines`: remote machines update themselves after this computer does. Absent from an older
+    /// daemon, which reads as on, its default.
+    #[serde(default = "on")]
+    pub update_machines: bool,
+}
+
+fn on() -> bool {
+    true
 }
 
 /// Which shared setting `Command::SetSetting` changes.
@@ -93,6 +105,11 @@ pub enum SettingKey {
     StartDir,
     ReduceMotion,
     WindowStyle,
+    /// Takes `SettingValue::List`: the agents to switch off; the rest are switched on.
+    /// Sent only to a daemon from `BYPASS_SETTING_SINCE` on.
+    BypassOff,
+    /// Takes `SettingValue::Bool`. Sent only to a daemon from `UPDATE_MACHINES_SINCE` on.
+    UpdateMachines,
 }
 
 /// The new value; it must be the kind the key takes or the daemon refuses it.

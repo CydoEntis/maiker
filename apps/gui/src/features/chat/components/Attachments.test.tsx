@@ -136,7 +136,7 @@ describe('the file picker', () => {
   })
 
   it('names the host\'s refusal and keeps the files that were accepted', async () => {
-    const error = vi.spyOn(toast, 'error')
+    const failure = vi.spyOn(toast, 'failure')
     fake.chooseFilesToAttach.mockResolvedValue(['/x/folder', '/x/ok.txt'])
     fake.attachLocalFile.mockImplementation((path) => (path === '/x/folder' ? Promise.reject(new Error('folder is not a file; folders cannot be attached')) : Promise.resolve(kept('ok.txt'))))
     const { user } = await open()
@@ -144,7 +144,7 @@ describe('the file picker', () => {
     await user.click(paperclip())
     await settle()
 
-    expect(error).toHaveBeenCalledWith('folder is not a file; folders cannot be attached')
+    expect(failure).toHaveBeenCalledWith(new Error('folder is not a file; folders cannot be attached'), 'Could not attach folder')
     expect(screen.getByText('ok.txt')).toBeInTheDocument()
   })
 })
@@ -239,14 +239,14 @@ describe('pasting an image', () => {
   })
 
   it('tells why when the host refuses the bytes, and adds no chip', async () => {
-    const error = vi.spyOn(toast, 'error')
+    const failure = vi.spyOn(toast, 'failure')
     fake.saveImageLocally.mockRejectedValue(new Error('the clipboard holds something that is not a PNG'))
     const { box } = await open()
 
     fireEvent.paste(box, { clipboardData: clipboard('', [PNG]) })
     await settle()
 
-    expect(error).toHaveBeenCalledWith('the clipboard holds something that is not a PNG', expect.anything())
+    expect(failure).toHaveBeenCalledWith(new Error('the clipboard holds something that is not a PNG'), 'Could not attach the image', expect.anything())
     expect(screen.queryByRole('list', { name: 'Attached files' })).not.toBeInTheDocument()
   })
 })
@@ -348,7 +348,7 @@ describe('a sent message of a chat on another machine', () => {
     fake.attachmentsExist.mockResolvedValue([false])
     render(
       <FilesHereContext.Provider value={false}>
-        <SentAttachments files={[{ path: '/home/dev/.cache/maitty/pastes/paste-1-0a1b2c3d-image.png', name: 'Pasted image.png', kind: 'image' }]} />
+        <SentAttachments files={[{ path: '/home/dev/.cache/maiker/pastes/paste-1-0a1b2c3d-image.png', name: 'Pasted image.png', kind: 'image' }]} />
       </FilesHereContext.Provider>,
     )
     await act(async () => { await Promise.resolve() })

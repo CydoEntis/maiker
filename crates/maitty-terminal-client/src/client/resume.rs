@@ -186,7 +186,7 @@ fn agent_name(agent: &str) -> &str {
 }
 
 /// The agent's own resume command (`claude --resume <id>`, `codex resume <id>`), from its
-/// definition in the config. The id came from files on disk, so only plain ids are put in a
+/// definition in the config, without permission prompts while its switch is on (a new start from the app). The id came from files on disk, so only plain ids are put in a
 /// command line.
 fn resume_command(cfg: &Config, agent: &str, id: &str) -> Result<String, String> {
     // The first character is a letter or digit so the id is never read as an option.
@@ -205,6 +205,6 @@ fn resume_command(cfg: &Config, agent: &str, id: &str) -> Result<String, String>
         .into_iter()
         .find(|d| d.name == agent)
         .and_then(|d| d.resume)
-        .map(|tpl| tpl.replace("{session}", id))
+        .map(|tpl| cfg.with_bypass(agent, &tpl.replace("{session}", id)))
         .ok_or_else(|| format!("{} has no resume command in your config", agent_name(agent)))
 }

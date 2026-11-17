@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 /**
  * Pulling a file from a session's machine to this computer (ADR 0007). The host checks the machine
- * and the path, pulls the file over the machine's own ssh line into Downloads/maitty/<machine>/,
+ * and the path, pulls the file over the machine's own ssh line into Downloads/maiker/<machine>/,
  * and tells the window how it goes. `transfer` is an id this window makes up, so the events of a
  * pull are known before the host has answered. Stopping one uses `cancelFileSend`: the host keeps
  * one list of running transfers.

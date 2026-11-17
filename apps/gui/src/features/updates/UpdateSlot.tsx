@@ -58,7 +58,7 @@ export function UpdateSlot({ variant, state, version, skipped, portalContainer, 
         const lines = noteLines(offer.notes)
         return (
           <>
-            <h3>Maitty {offer.version} is available</h3>
+            <h3>Maiker {offer.version} is available</h3>
             {version && <p className="mx-upd-sub">You have {version}</p>}
             {lines.length > 0 && <ul className="mx-upd-notes">{lines.map((line) => <li key={line}>{line}</li>)}</ul>}
             <div className="mx-upd-actions">
@@ -72,16 +72,16 @@ export function UpdateSlot({ variant, state, version, skipped, portalContainer, 
       case 'downloading':
         return (
           <>
-            <h3>Downloading Maitty {offer.version}</h3>
+            <h3>Downloading Maiker {offer.version}</h3>
             <DownloadProgress progress={offer.progress} transfer={offer.transfer} />
           </>
         )
       case 'ready':
         return (
           <>
-            <h3>Maitty {offer.version} is ready</h3>
+            <h3>Maiker {offer.version} is ready</h3>
             <ul className="mx-upd-notes is-safe">
-              <li>Your sessions keep running in maittyd.</li>
+              <li>Your sessions keep running in maikerd.</li>
               <li>Your tabs and splits reopen.</li>
               <li>Agents in the middle of a turn are not interrupted.</li>
             </ul>

@@ -1,5 +1,5 @@
 //! Resume a conversation here: the lists asked of the daemon, the menu, and what a pick starts.
-//! `MAITTY_SHOW=1 cargo test resume_tests -- --nocapture` prints the frames.
+//! `MAIKER_SHOW=1 cargo test resume_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::MachineId;
@@ -174,7 +174,10 @@ fn a_pick_starts_that_agent_in_the_folder_with_the_conversation() {
         .collect();
     assert_eq!(
         started,
-        [(Some(dir), Some("codex resume 019a-codex_id".to_string()))]
+        [(
+            Some(dir),
+            Some("codex --dangerously-bypass-approvals-and-sandbox resume 019a-codex_id".to_string())
+        )]
     );
 }
 

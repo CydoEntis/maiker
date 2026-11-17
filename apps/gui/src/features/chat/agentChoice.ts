@@ -28,13 +28,16 @@ export type ModelOption = {
 
 /**
  * The models each agent's command line accepts by name, as a fixed list: the daemon does not report
- * them. Claude takes these aliases or a full model id (`claude --model`); an alias follows the newest model of its family. The account's extra models (Fable) are read from Claude Code's config and added after these. Codex's models depend on the account and the
+ * them. Claude takes these aliases or a full model id (`claude --model`); an alias follows the newest model of its family
+ * (`CLAUDE_MODEL_ALIASES` in maitty-shared, which the terminal app offers too). The rest of the account's models are read from
+ * Claude Code and added after these. Codex's models depend on the account and the
  * installed version, so only the account's own default is offered until the daemon can list them.
  * The first of each list is "Default", which sends nothing; the rest run strongest first.
  */
 export const KNOWN_MODELS: Readonly<Record<ChatAgent, readonly ModelOption[]>> = {
   claude: [
     { id: DEFAULT_PICK, label: 'Default', blurb: 'Whatever Claude Code picks for your account' },
+    { id: 'fable', label: 'Fable', blurb: 'The strongest, for the toughest problems' },
     { id: 'opus', label: 'Opus', blurb: 'The most capable, for hard problems' },
     { id: 'sonnet', label: 'Sonnet', blurb: 'Fast and capable for everyday work' },
     { id: 'haiku', label: 'Haiku', blurb: 'The quickest, for small tasks' },
@@ -208,11 +211,16 @@ function table(): Stored {
   return loaded
 }
 
-/** The choice stored for a chat, with the agent's defaults where nothing was chosen or the stored model is unknown. */
+/**
+ * The choice stored for a chat, with the agent's defaults where nothing was chosen or the stored model is unknown. Until
+ * the agent's own list has come, a stored model is kept: it was picked from that list, and the fixed one lacks it.
+ */
 export function readChoice(conversation: number, agent: ChatAgent): AgentChoice {
   const fallback = defaultChoice()
   const saved = table()[String(conversation)]
-  const model = modelsFor(agent).some((option) => option.id === saved?.model) ? (saved?.model ?? fallback.model) : fallback.model
+  const listed = discovered[agent] !== undefined || !hasAbility(agent, 'discoversModels')
+  const stored = saved?.model
+  const model = stored !== undefined && (!listed || modelsFor(agent).some((option) => option.id === stored)) ? stored : fallback.model
   const reasoning = REASONING_PICKS.find((level) => level === saved?.reasoning) ?? fallback.reasoning
   return { model, reasoning }
 }

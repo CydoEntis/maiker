@@ -2,6 +2,8 @@ import { createElement, type ReactNode } from 'react'
 import { toast as sonner } from 'sonner'
 import { DEFAULT_TOAST_MS, PlainToast, type ToastKind } from '@/features/notifications/PlainToast'
 import { saysNotConnected } from '@/lib/serviceLine'
+import { explainError } from '@/lib/error-message'
+import { copyText } from '@/lib/clipboard'
 
 export type ToastAction = {
   label: string
@@ -29,6 +31,23 @@ function showError(title: string, options?: ToastOptions): string | number {
   return saysNotConnected(title) ? NOT_SHOWN : show('error', title, options)
 }
 
+/**
+ * A failure of `action` ("Could not save the setting"): the action is the title and the reason in plain words is under
+ * it, with Copy details when the tool's own text says more (docs/CODE-STANDARDS.md#errors).
+ */
+function showFailure(error: unknown, action: string, options: ToastOptions = {}): string | number {
+  const { title, reason, details } = explainError(error, action)
+  if (saysNotConnected(details ?? reason)) return NOT_SHOWN
+  const copy: ToastAction | undefined = details === null ? undefined : {
+    label: 'Copy details',
+    onClick: (event) => {
+      event.preventDefault()
+      void copyText(`${title}\n${details}`).catch((failure: unknown) => { console.warn('Could not copy the error details', failure) })
+    },
+  }
+  return show('error', title, { description: reason, ...(copy === undefined ? {} : { action: copy }), ...options })
+}
+
 function show(kind: ToastKind, title: string, options: ToastOptions = {}): string | number {
   const duration = options.duration ?? (kind === 'loading' ? Infinity : DEFAULT_TOAST_MS)
   return sonner.custom((id) => createElement(PlainToast, { id, kind, title, options }), { ...(options.id === undefined ? {} : { id: options.id }), duration })
@@ -45,6 +64,7 @@ export const toast = Object.assign(
     message: (title: string, options?: ToastOptions) => show('message', title, options),
     success: (title: string, options?: ToastOptions) => show('success', title, options),
     error: showError,
+    failure: showFailure,
     warning: (title: string, options?: ToastOptions) => show('warning', title, options),
     loading: (title: string, options?: ToastOptions) => show('loading', title, options),
     custom: sonner.custom,

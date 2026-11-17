@@ -31,7 +31,7 @@ export function useTicketSetupAsks({ sessions, ticketsOpen, showSessionById, set
     setInspectOpen(false)
     setAsk({ source: asked.source, link: asked.link })
     setTicketsOpen(true)
-    toast.message('Your agent opened the ticket setup. Finish it here: keys go only in Maitty, never in the chat.')
+    toast.message('Your agent opened the ticket setup. Finish it here: keys go only in Maiker, never in the chat.')
   })
   useEffect(() => {
     let stop: (() => void) | null = null

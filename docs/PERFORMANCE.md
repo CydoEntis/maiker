@@ -207,7 +207,7 @@ What the numbers are and where they come from (`apps/gui/src/lib/perf-meter.ts`,
 
 Two things seen on the user's Linux machine that look like app bugs and are not:
 
-- **Another window shows faintly through Maitty.** Omarchy gives every window 98.5% opacity when
+- **Another window shows faintly through Maiker.** Omarchy gives every window 98.5% opacity when
   focused and 96% otherwise (`/usr/share/omarchy/default/hypr/windows.lua`, tag
   `default-opacity`). Bright terminal text behind a dark window reads as a ghost. The fix is a
   window rule for `maitty-gui` in the user's Hyprland config, not a change here.
@@ -338,8 +338,8 @@ Nothing is a step behind up to the point where the host calls `channel.send`.
 **2. In the real window, output does not arrive while nobody touches it.** With the v0.65.0
 AppImage open on a second monitor and another window focused:
 
-- `maitty send -p <pane> --no-enter x` (the terminal app's CLI, on the same daemon) typed a key
-  into a shell pane the window shows. `maitty read <pane>` had the key at once.
+- `maiker send -p <pane> --no-enter x` (the terminal app's CLI, on the same daemon) typed a key
+  into a shell pane the window shows. `maiker read <pane>` had the key at once.
 - A screenshot of the window every half second (`grim -g "<x>,<y> <w>x<h>"`) showed **no change for
   25 s, three times out of three**, and again for 8 s four times after the window had been given
   focus for a moment and lost it. Single keys, so frames far under 1,024 bytes.
@@ -414,8 +414,8 @@ letters on time. Every platform now starts on WebGL; the setting stays for a mac
 ```sh
 # The window: open, on a monitor, not focused. Its geometry:
 hyprctl clients -j | jq -r '.[] | select(.class=="maitty-gui") | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"'
-# A shell pane it shows (find its number with `maitty read <n>`), then for each key:
-MAITTY_SOCKET=default maitty send -p <pane> --no-enter x
+# A shell pane it shows (find its number with `maiker read <n>`), then for each key:
+MAIKER_SOCKET=default maiker send -p <pane> --no-enter x
 grim -g "<geometry>" shot.png     # every half second; compare with the shot before the key
 ```
 
@@ -433,7 +433,7 @@ app and in the harness, before anything is fixed.
 Measure first, change second. No fix goes in on a theory.
 
 1. **Reproduce away from the owner's window.** A dev build on a nested socket
-   (`MAITTY_SOCKET=<name>`), on the same machine. Also start the v0.64.0 AppImage on that machine
+   (`MAIKER_SOCKET=<name>`), on the same machine. Also start the v0.64.0 AppImage on that machine
    and note whether it is one step behind: that says whether the cause arrived in v0.65.0.
 2. **Add the probe.** Stamp one key at each hop and log the six times:
    xterm `onData` → the `terminal_input` command received by the host → `Output` from the daemon
@@ -482,7 +482,7 @@ From a read of both repositories on that date: T3 Code (`pingdotgg/t3code` at `b
 PandaCode (`aicodeking/pandacode` at `78f77a0`). Neither app was run, and the links were not
 re-checked after the read.
 
-| | Maitty desktop | T3 Code | PandaCode |
+| | Maiker desktop | T3 Code | PandaCode |
 | --- | --- | --- | --- |
 | Shell | Tauri 2 | Electron 44 | Tauri 2 |
 | Engine on Linux | WebKitGTK | Chromium | WebKitGTK 4.1; Linux builds are "previews", the AppImage forces X11 |
@@ -556,7 +556,7 @@ and once out of once on 2.54.1. Omarchy sets the variable for the whole session.
 **Fix.** On Linux the host sets both variables before the web view starts, only for NVIDIA under
 Wayland (`apps/gui/src-tauri/src/linux_gpu.rs`). It adds nothing when the person set a WebKit
 drawing variable themselves, set explicit sync to stay on, or opted out with
-`MAITTY_NO_GPU_FORCE=1` ([ENVIRONMENT](ENVIRONMENT.md#project-specific-variables)).
+`MAIKER_NO_GPU_FORCE=1` ([ENVIRONMENT](ENVIRONMENT.md#project-specific-variables)).
 
 **The report read 0% CPU throughout.** `performance.rs` refreshed the process table twice a
 sample, and `sysinfo` moves a process's CPU mark on every refresh, so the share was always the work
@@ -577,7 +577,7 @@ app closes, forced or not; not investigated.
 ## Starting a chat (2026-11-08)
 
 A new chat used to wait on five steps one after another: start a shell, list the sessions, run
-`maitty integrate <agent>` (a process), type the agent's name into the shell once it was ready, then
+`maiker integrate <agent>` (a process), type the agent's name into the shell once it was ready, then
 wait for the agent's first report. Now the agent is the new session's first command
 (`start_agent_session`, which accepts only a known agent and plain flag words), the status hooks are
 connected once per run of the window and ahead of time (when the new chat page opens), and an open
@@ -589,7 +589,7 @@ is closed rather than tried (`KEPT_FOR`), and one that has not answered within 8
 on a new line (`KEPT_ANSWER_WITHIN`) (only a question that changes nothing goes out on a kept line, `safe_to_ask_twice`: a
 commit, push or pull request asked again could act twice): a line to another machine that died quietly (sleep, a network change) otherwise
 held a chat's reads until ssh's own check ended it, 45 s later.
-What is left is the shell's own startup and the agent's own startup, which Maitty does not control.
+What is left is the shell's own startup and the agent's own startup, which Maiker does not control.
 Measure it on Windows with a screen recording at 30 fps: count frames from Enter to the first
 "thinking" line.
 

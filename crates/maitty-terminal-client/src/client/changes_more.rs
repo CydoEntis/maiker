@@ -365,7 +365,7 @@ impl App {
             return;
         }
         let why = format!(
-            "{} did not answer: update maitty there to see and commit its changes from here",
+            "{} did not answer: update maiker there to see and commit its changes from here",
             remote.machine
         );
         remote.asked = None;

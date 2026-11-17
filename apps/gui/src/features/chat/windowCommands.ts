@@ -6,7 +6,7 @@ import type { SlashCommand } from './slashCommands'
 
 /**
  * Where the window answers a Claude command itself, instead of the menu Claude Code would draw in its terminal:
- * - `settings`: one of Maitty's Settings pages.
+ * - `settings`: one of Maiker's Settings pages.
  * - `panel`: a tab of the session's side panel.
  * - `recent`: the agent sessions closed on this computer, to reopen one with its conversation.
  * - `commands`: every command the box offers, as `/` alone lists them.
@@ -17,7 +17,7 @@ import type { SlashCommand } from './slashCommands'
  * - `note`: a card above the box that says where the thing is, for a command that only shows a web page's address.
  * - `complete`: the box is filled in, for a command that is nothing without what follows it.
  * - `signIn`: a card above the box runs the agent's own sign-in and shows its link and code.
- * - `rename`: the Maitty session takes the name too, and the command still goes to Claude Code, so both agree.
+ * - `rename`: the Maiker session takes the name too, and the command still goes to Claude Code, so both agree.
  * - `card`: a card built from what the chat already holds (`commandCards.ts`), with nothing asked of the agent.
  * - `copy`: the agent's last message goes to the clipboard.
  * - `export`: the conversation is saved as a Markdown file in the export folder.
@@ -70,7 +70,7 @@ const aside = (command: SideCommand, title: string): WindowRoute => ({ kind: 'as
 const note = (title: string, text: string): WindowRoute => ({ kind: 'note', title, text })
 
 const END: WindowRoute = { kind: 'confirm', ask: { title: 'End this session?', body: 'Claude Code quits and the session ends. Its conversation is kept, so Recent sessions can reopen it.', confirmLabel: 'End session' } }
-const BACKGROUND: WindowRoute = { kind: 'confirm', ask: { title: 'Send this session to the background?', body: 'Claude Code hands it to its own background service and leaves this pane. Maitty does not list sessions running there.', confirmLabel: 'Send to background' } }
+const BACKGROUND: WindowRoute = { kind: 'confirm', ask: { title: 'Send this session to the background?', body: 'Claude Code hands it to its own background service and leaves this pane. Maiker does not list sessions running there.', confirmLabel: 'Send to background' } }
 const CLEAR: WindowRoute = { kind: 'confirm', ask: { title: 'Start a new conversation?', body: 'Claude Code starts over with empty context. The current conversation stays on disk and can be reopened.', confirmLabel: 'Clear' } }
 // The Permissions page lists the commands approved for each project, the window's view of Claude Code's allow rules.
 const SETTINGS_PERMISSIONS: WindowRoute = { kind: 'settings', section: 'permissions' }

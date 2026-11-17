@@ -29,8 +29,8 @@ describe('the chat card of a shell pane', () => {
     expect(onStartChat).toHaveBeenCalledWith('codex', false)
     await user.click(screen.getByRole('button', { name: 'Start a Gemini chat' }))
     expect(onStartChat).toHaveBeenCalledWith('gemini', false)
-    // The full-access switch is labelled, warns when on, and goes with the start.
-    await user.click(screen.getByRole('checkbox', { name: 'Full access (skip permission prompts)' }))
+    // The Bypass Permissions switch is labelled, warns when on, and goes with the start.
+    await user.click(screen.getByRole('checkbox', { name: 'Bypass permissions (skip permission prompts)' }))
     expect(screen.getByRole('note')).toHaveTextContent(/No sandbox and no approval prompts/)
     await user.click(screen.getByRole('button', { name: 'Start a Claude chat' }))
     expect(onStartChat).toHaveBeenLastCalledWith('claude', true)

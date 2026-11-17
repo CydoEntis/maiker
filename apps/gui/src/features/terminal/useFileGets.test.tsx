@@ -24,7 +24,7 @@ vi.mock('@/api/fileSends', async (importOriginal) => ({
   cancelFileSend: host.cancel,
 }))
 
-const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn(), message: vi.fn() }))
+const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn(), failure: vi.fn(), message: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -59,13 +59,13 @@ describe('pulling a file from a machine', () => {
 
   it('says where the file was saved and opens that folder from the toast', async () => {
     const transfer = await start()
-    emit({ kind: 'done', transfer, file: 'out.log', path: '/d/maitty/devbox/out.log', folder: '/d/maitty/devbox' })
+    emit({ kind: 'done', transfer, file: 'out.log', path: '/d/maiker/devbox/out.log', folder: '/d/maiker/devbox' })
     const [title, options] = toasts.success.mock.calls[0] as [string, { description: string; action: { label: string; onClick: () => void } }]
     expect(title).toBe('Saved out.log from devbox')
-    expect(options.description).toBe('/d/maitty/devbox')
+    expect(options.description).toBe('/d/maiker/devbox')
     expect(options.action.label).toBe('Open folder')
     options.action.onClick()
-    expect(host.open).toHaveBeenCalledWith('/d/maitty/devbox')
+    expect(host.open).toHaveBeenCalledWith('/d/maiker/devbox')
   })
 
   it("shows the host's own words when the pull fails, and when the host refuses it", async () => {
@@ -77,7 +77,7 @@ describe('pulling a file from a machine', () => {
     await flush()
     result.current.getFile('devbox', '/x')
     await flush()
-    expect(toasts.error).toHaveBeenCalledWith('files are already being sent; wait for them or cancel', expect.anything())
+    expect(toasts.failure).toHaveBeenCalledWith(new Error('files are already being sent; wait for them or cancel'), expect.stringMatching(/^Could not/), expect.anything())
   })
 
   it('says a stopped pull was stopped, and ignores an event it did not start', async () => {

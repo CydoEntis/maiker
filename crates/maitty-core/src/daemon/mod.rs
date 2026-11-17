@@ -28,6 +28,7 @@ mod helpers;
 mod identity;
 mod keychain;
 mod last_lines;
+mod machine_updates;
 mod pane_terminal;
 mod permission_ask;
 mod persist;
@@ -85,7 +86,7 @@ type ClientId = u64;
 const LAGGED_REASON: &str = "This window fell too far behind the service and was let go; it connects again for a fresh copy.";
 /// How often the daemon looks at its timers (statuses, saves and git).
 /// What a window from before tickets became read-only is told when it asks to change one.
-const TICKET_WRITE_RETIRED: &str = "Maitty no longer changes tickets; change it in the tracker";
+const TICKET_WRITE_RETIRED: &str = "Maiker no longer changes tickets; change it in the tracker";
 
 const TICK: Duration = Duration::from_millis(250);
 const INTEGRATION_STARTUP_GRACE: Duration = Duration::from_secs(3);
@@ -681,6 +682,7 @@ pub fn run(on_start: impl FnOnce()) -> Result<()> {
         if let Some(e) = err {
             tracing::warn!("config: {e}");
         }
+        machine_updates::start_after_update(&cfg, &crate::config::data_dir());
         let mut d = Daemon::new(cfg, tx, on_start);
         match approvals::Approvals::load(&d.approvals_file) {
             Ok(a) => d.approvals = a,
@@ -3189,7 +3191,7 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can keep a ticket provider's key".into())
                     }
-                    // Retired: Maitty only reads tickets. The request stays on the wire so a window from
+                    // Retired: Maiker only reads tickets. The request stays on the wire so a window from
                     // before is told so, rather than losing its connection over an unknown message.
                     Query::TicketWrite { tag, .. } => ServerMsg::Reply(Reply::TicketWrite {
                         tag,
@@ -3576,7 +3578,7 @@ impl Daemon {
                 parent: session,
                 helper: helper.to_string(),
             }),
-            _ => Err("Only Claude and Codex helpers keep a record Maitty can read"),
+            _ => Err("Only Claude and Codex helpers keep a record Maiker can read"),
         }
     }
 

@@ -1,3 +1,8 @@
+/* Every menu, picker, popover and tooltip opens on this layer, over the window's panels, drawers and dialogs (the
+   narrow window's drawer is 54, centred dialogs 61): one at the old 50 opened from inside one of them was drawn behind
+   it. Only the pointer's hint, the right-click menu and the restart veil sit higher. */
+:root { --layer-pop: 88; }
+
 .app-shell {
   display: flex;
   flex-direction: column;
@@ -547,7 +552,7 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
   .composer-box textarea { min-height: 40px; }
 }
 
-/* Maitty Desktop v5: two planes (window + one main card); separation comes from spacing and hairlines. */
+/* Maiker Desktop v5: two planes (window + one main card); separation comes from spacing and hairlines. */
 .workspace-shell { gap: 0; padding: 0; }
 .session-sidebar { background: var(--bg); border-right: 0; flex: 0 0 256px; padding: 12px 8px 0; }
 .main-card { background: var(--main); border: 1px solid var(--line); border-radius: 12px; display: flex; flex: 1; margin: 8px 8px 8px 0; min-width: 0; overflow: hidden; position: relative; }
@@ -881,7 +886,7 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .project-heading:hover .project-menu, .project-heading:focus-within .project-menu { opacity: 1; }
 .project-menu[data-state="open"] { opacity: 1; }
 
-/* ===== v5 exact values, copied from Maitty-Desktop-v5.dc.html (this block wins over the earlier approximations) ===== */
+/* ===== v5 exact values, copied from Maiker-Desktop-v5.dc.html (this block wins over the earlier approximations) ===== */
 :root { --font-sans: "Geist Variable", "Segoe UI", sans-serif; }
 
 /* Sidebar */

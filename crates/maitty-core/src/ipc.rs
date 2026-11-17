@@ -125,11 +125,16 @@ pub fn providers_file() -> std::path::PathBuf {
 
 /// Server identity. `<APP>_SOCKET` picks a separate server (like `tmux -L`).
 pub fn socket_id() -> String {
+    socket_id_for(APP_COMMAND)
+}
+
+/// The server identity the app had under the command `app` (an older name, for the rename handover).
+fn socket_id_for(app: &str) -> String {
     let label = std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).ok();
     let username = std::env::var("USERNAME").ok();
     let user = std::env::var("USER").ok();
     maitty_ipc_transport::socket_id(
-        APP_COMMAND,
+        app,
         label.as_deref(),
         username.as_deref(),
         user.as_deref(),
@@ -140,9 +145,13 @@ pub fn socket_id() -> String {
 /// Unix: a socket file in a folder only this user can open, so no other local user can
 /// reach the daemon (an abstract socket would have no permissions at all).
 fn name() -> Result<Name<'static>> {
-    let id = socket_id();
+    name_for(APP_COMMAND)
+}
+
+fn name_for(app: &str) -> Result<Name<'static>> {
+    let id = socket_id_for(app);
     #[cfg(unix)]
-    let directory = Some(socket_dir()?);
+    let directory = Some(socket_dir_for(app)?);
     #[cfg(windows)]
     let directory: Option<std::path::PathBuf> = None;
     maitty_ipc_transport::socket_name(&id, directory.as_deref())
@@ -151,10 +160,10 @@ fn name() -> Result<Name<'static>> {
 /// `$XDG_RUNTIME_DIR/<app>-<uid>` (or the temp folder's), created 0700 and checked to be
 /// ours and private before use.
 #[cfg(unix)]
-fn socket_dir() -> Result<std::path::PathBuf> {
+fn socket_dir_for(app: &str) -> Result<std::path::PathBuf> {
     let runtime_dir = std::env::var_os("XDG_RUNTIME_DIR").map(std::path::PathBuf::from);
     maitty_ipc_transport::private_socket_dir(
-        APP_COMMAND,
+        app,
         &format!("start {APP_COMMAND} again"),
         runtime_dir.as_deref(),
         &std::env::temp_dir(),
@@ -240,10 +249,50 @@ pub async fn proxy(attach_only: bool) -> Result<()> {
 const CONNECT_WITHIN: std::time::Duration = std::time::Duration::from_secs(3);
 
 pub async fn connect() -> Result<Stream> {
+    connect_named(name()?).await
+}
+
+async fn connect_named(name: Name<'static>) -> Result<Stream> {
     let options = ConnectOptions::new()
-        .name(name()?)
+        .name(name)
         .wait_mode(interprocess::ConnectWaitMode::Timeout(CONNECT_WITHIN));
     Ok(options.connect_tokio().await?)
+}
+
+/// How long a daemon still running under an older name gets to save its sessions and let go.
+const PREVIOUS_STOPS_WITHIN: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Stop a daemon still running under the app's older command `app`, so the sessions it saves on the way out are
+/// the ones brought over with its data, and the new name's daemon restores them with their agents resumed.
+/// Nothing running under that name, or one too old to be asked, is left as it is (`false`); the caller still
+/// brings the data over.
+pub async fn stop_previous_daemon(app: &str) -> Result<bool> {
+    let Ok(stream) = connect_named(name_for(app)?).await else {
+        return Ok(false);
+    };
+    let hello = maitty_machines::hello(&Machine::current(), terminal_dial(false)?);
+    let (mut r, mut w) = framed(stream);
+    send(&mut w, &hello).await?;
+    let daemon = maitty_ipc_transport::welcome_version(&mut r).await?;
+    anyhow::ensure!(
+        daemon.speaks_with_us(),
+        "the {app} service is too old to be asked to stop (protocol {}); stop it, then start {APP_COMMAND} again",
+        daemon.version
+    );
+    send(
+        &mut w,
+        &ClientMsg::Command(protocol::Command::KillServer { forget: false }),
+    )
+    .await?;
+    // It says goodbye, then lets go of its socket a moment later.
+    let deadline = std::time::Instant::now() + PREVIOUS_STOPS_WITHIN;
+    while std::time::Instant::now() < deadline {
+        if connect_named(name_for(app)?).await.is_err() {
+            return Ok(true);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+    }
+    anyhow::bail!("the {app} service did not stop within {} seconds", PREVIOUS_STOPS_WITHIN.as_secs())
 }
 
 /// Proof that this process is the one daemon for its socket. The OS releases it when the process
@@ -289,7 +338,7 @@ pub fn listen() -> Result<interprocess::local_socket::tokio::Listener> {
     // that no daemon answers first.)
     #[cfg(unix)]
     {
-        let _ = std::fs::remove_file(socket_dir()?.join(socket_id()));
+        let _ = std::fs::remove_file(socket_dir_for(APP_COMMAND)?.join(socket_id()));
     }
     ListenerOptions::new()
         .name(name()?)

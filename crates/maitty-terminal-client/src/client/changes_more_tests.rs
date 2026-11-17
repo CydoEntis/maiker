@@ -1,5 +1,5 @@
 //! Changes for a pane on another machine (its daemon reads and commits), ticked commits, and
-//! comments on diff lines. `MAITTY_SHOW=1 cargo test changes_more -- --nocapture` prints the frames.
+//! comments on diff lines. `MAIKER_SHOW=1 cargo test changes_more -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::{MachineId, Remote};

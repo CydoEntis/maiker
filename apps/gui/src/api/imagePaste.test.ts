@@ -14,9 +14,9 @@ beforeEach(() => {
 
 describe('image paste commands', () => {
   it('hands the host the bytes themselves, not an encoding of them', async () => {
-    shell.invoke.mockResolvedValue('/home/me/.cache/maitty/pastes/paste-1-a.png')
+    shell.invoke.mockResolvedValue('/home/me/.cache/maiker/pastes/paste-1-a.png')
     const bytes = new Uint8Array([1, 2, 3])
-    await expect(saveImageLocally(bytes)).resolves.toBe('/home/me/.cache/maitty/pastes/paste-1-a.png')
+    await expect(saveImageLocally(bytes)).resolves.toBe('/home/me/.cache/maiker/pastes/paste-1-a.png')
     expect(shell.invoke).toHaveBeenCalledWith('save_pasted_image', bytes)
   })
 

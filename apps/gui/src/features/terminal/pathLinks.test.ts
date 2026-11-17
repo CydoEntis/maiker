@@ -31,7 +31,7 @@ describe('web addresses in terminal output', () => {
     expect(links.map((link) => link.url)).toEqual(['https://app.hubspot.com', 'https://example.com/a?b=1&c=2'])
     expect(links.map((link) => line.slice(link.start, link.end))).toEqual(['app.hubspot.com', 'https://example.com/a?b=1&c=2'])
     expect(findWebLinks('docs.rs/tokio/latest.').map((link) => link.url)).toEqual([])
-    expect(findWebLinks('see github.com/CydoEntis/maitty, then go').map((link) => link.url)).toEqual(['https://github.com/CydoEntis/maitty'])
+    expect(findWebLinks('see github.com/CydoEntis/maiker, then go').map((link) => link.url)).toEqual(['https://github.com/CydoEntis/maiker'])
   })
 
   it('leaves file names, emails and versions alone', async () => {

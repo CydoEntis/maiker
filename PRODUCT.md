@@ -19,10 +19,10 @@ the right session, and keep work running when the interface closes.
 
 ## Product Purpose
 
-Maitty is a terminal multiplexer for running many coding agents at once. It
+Maiker is a terminal multiplexer for running many coding agents at once. It
 shows which agents are working, need attention, are done or idle; makes it easy
 to switch between them; and keeps their sessions alive when the UI closes.
-Success means Maitty does not lose or misreport an agent's state.
+Success means Maiker does not lose or misreport an agent's state.
 
 ## Positioning
 
@@ -55,7 +55,7 @@ initial GUI release.
 
 ## Brand Commitments
 
-Use the Maitty name and the tagline “All agents on deck.” Keep the current
+Use the Maiker name and the tagline “All agents on deck.” Keep the current
 navy/teal identity and amber-for-attention meaning across the desktop GUI.
 Product copy is direct and calm; statuses use plain words.
 

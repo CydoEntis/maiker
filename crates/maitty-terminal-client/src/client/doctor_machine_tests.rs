@@ -60,7 +60,7 @@ fn a_good_machine_passes_every_check() {
         marks(checks),
         [
             (Some(true), "reachable"),
-            (Some(true), "maitty version"),
+            (Some(true), "maiker version"),
             (Some(true), "protocol"),
             (Some(true), "login PATH"),
             (Some(true), "ssh options"),
@@ -77,7 +77,7 @@ fn a_good_machine_passes_every_check() {
             .contains(&format!("protocol {PROTOCOL_VERSION}")),
         "{checks:?}"
     );
-    assert_eq!(checks[3].detail, "maitty found at /fake/bin/maitty");
+    assert_eq!(checks[3].detail, "maiker found at /fake/bin/maiker");
     assert!(checks[4].detail.contains("BatchMode=yes"), "{checks:?}");
     assert!(
         checks[4].detail.contains("your ssh_args: --mode=proxy"),
@@ -101,7 +101,7 @@ fn a_daemon_of_another_protocol_fails_the_protocol_check_with_the_update_hint() 
         "{protocol:?}"
     );
     assert!(
-        protocol.detail.contains("`maitty machine update skew`"),
+        protocol.detail.contains("`maiker machine update skew`"),
         "{protocol:?}"
     );
 }

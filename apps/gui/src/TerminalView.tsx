@@ -13,7 +13,6 @@ import { brightBlackGround, type Channels } from '@/features/terminal/brightBlac
 import { isPasteChord, listenForImagePaste } from '@/features/terminal/clipboardImage'
 import { COPY_TOAST_ID, COPY_TOAST_MS } from '@/features/terminal/copyToast'
 import { findPathLinks, findWebLinks } from '@/features/terminal/pathLinks'
-import { errorMessage } from '@/lib/error-message'
 import { appendToScreen, cachedScreen, replaceScreen, screenKey } from '@/features/terminal/screenCache'
 import { isWindowActive, useWindowActive } from '@/lib/window-activity'
 import { hasWebgl2 } from '@/lib/gpu'
@@ -164,7 +163,7 @@ const NEW_LINE_KEYS = '\x1b\r'
 
 export function TerminalView({ conversation, desktop, fontSize, look = {}, label, inputDisabled = false, ended = false, focused = false, paused = false, onInput, onOpenPath, onHandle, onPasteImage }: TerminalViewProps) {
   if (!desktop) return null
-  if (!isDesktop()) return <div className="panel-empty"><TerminalSquare size={18} /><h2>Native terminal is not available</h2><p>Open Maitty Desktop to use the daemon-owned terminal.</p></div>
+  if (!isDesktop()) return <div className="panel-empty"><TerminalSquare size={18} /><h2>Native terminal is not available</h2><p>Open Maiker Desktop to use the daemon-owned terminal.</p></div>
   if (!hasNativeTerminal(conversation)) return <NativeHandoffView conversation={conversation} />
 
   return <ConnectedTerminalView conversation={conversation} fontSize={fontSize} look={look} label={label ?? `Native ${conversation.provider} terminal`} inputDisabled={inputDisabled || ended} ended={ended} focused={focused} paused={paused} onInput={onInput} onOpenPath={onOpenPath} onHandle={onHandle} onPasteImage={onPasteImage} />
@@ -396,7 +395,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
                 if (!event.metaKey && !event.ctrlKey) return
                 openLink(link.url).then(
                   () => { toast.message('Opened in your browser') },
-                  (error: unknown) => { toast.error(errorMessage(error, 'Could not open the link')) },
+                  (error: unknown) => { toast.failure(error, 'Could not open the link') },
                 )
               },
             }))

@@ -173,6 +173,50 @@ describe('a conversation list that follows its newest row', () => {
     expect(latest()).toBeNull()
   })
 
+  it('puts a message just sent at the top of the view, with room under it for the reply, and holds it there as the reply grows', () => {
+    const sent = (items: readonly string[], pin: number) => <VirtualList items={items} getKey={(key) => key} estimate={ROW} label="Conversation" renderItem={(key) => <p>{key}</p>} pinNewest={pin} isPinTarget={(key) => key.startsWith('me-')} />
+    const history = [...rows(20), 'me-0']
+    const { rerender } = render(sent(history, 0))
+    const element = scroller()
+
+    rerender(sent([...history, 'me-1'], 1))
+
+    // me-1 is the 22nd row; the room under it lets it reach the top of a 600px view.
+    expect(element.scrollTop).toBe(21 * ROW)
+    expect((element.firstElementChild as HTMLElement | null)?.style.height).toBe(`${String(21 * ROW + 600)}px`)
+
+    rerender(sent([...history, 'me-1', ...rows(30).map((key) => `reply-${key}`)], 1))
+
+    expect(element.scrollTop).toBe(21 * ROW)
+    expect(latest()).not.toBeNull()
+  })
+
+  it('follows the message from its echo to the history row that replaces it', () => {
+    const sent = (items: readonly string[], pin: number) => <VirtualList items={items} getKey={(key) => key} estimate={ROW} label="Conversation" renderItem={(key) => <p>{key}</p>} pinNewest={pin} isPinTarget={(key) => key.startsWith('me-')} />
+    const { rerender } = render(sent(rows(20), 0))
+    const element = scroller()
+    rerender(sent([...rows(20), 'me-echo'], 1))
+    expect(element.scrollTop).toBe(20 * ROW)
+
+    rerender(sent([...rows(20), 'extra', 'me-real'], 1))
+
+    expect(element.scrollTop).toBe(21 * ROW)
+  })
+
+  it('lets go of the message when the reader scrolls, and keeps the view where they left it', () => {
+    const sent = (items: readonly string[], pin: number) => <VirtualList items={items} getKey={(key) => key} estimate={ROW} label="Conversation" renderItem={(key) => <p>{key}</p>} pinNewest={pin} isPinTarget={(key) => key.startsWith('me-')} />
+    const { rerender } = render(sent(rows(20), 0))
+    const element = scroller()
+    rerender(sent([...rows(20), 'me-1'], 1))
+
+    fireEvent.wheel(element, { deltaY: -3 })
+    act(() => { element.scrollTop = 15 * ROW })
+    fireEvent.scroll(element)
+    rerender(sent([...rows(20), 'me-1', 'reply'], 1))
+
+    expect(element.scrollTop).toBe(15 * ROW)
+  })
+
   it('places a row that has just come in at its measured height in the same commit, not a frame later', () => {
     const measured = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(30)
     render(list(3))

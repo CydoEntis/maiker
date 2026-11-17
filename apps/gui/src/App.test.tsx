@@ -14,7 +14,7 @@ describe('conversation workspace', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maitty$/i }))
+    await user.click(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maiker$/i }))
 
     expect(screen.getByRole('heading', { name: 'Add a conversation reconnect test' })).toBeInTheDocument()
     expect(screen.getByRole('status', { name: 'Current status: Working' })).toBeInTheDocument()
@@ -38,7 +38,7 @@ describe('conversation workspace', () => {
     const user = userEvent.setup()
     renderApp()
 
-    await user.click(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maitty$/i }))
+    await user.click(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maiker$/i }))
     expect(screen.getByRole('tab', { name: /Add a conversation reconnect test/ })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('tab', { name: /Tighten the branch view navigation/ })).toBeInTheDocument()
 
@@ -47,7 +47,7 @@ describe('conversation workspace', () => {
 
     await user.click(screen.getByRole('button', { name: 'Close Add a conversation reconnect test tab' }))
     expect(screen.queryByRole('tab', { name: /Add a conversation reconnect test/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maitty$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maiker$/i })).toBeInTheDocument()
   })
 
   it('labels Claude replies as Claude in the conversation timeline', async () => {
@@ -56,7 +56,7 @@ describe('conversation workspace', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: /^Review the daemon restore flow, Done, maitty$/i,
+        name: /^Review the daemon restore flow, Done, maiker$/i,
       }),
     )
 
@@ -224,11 +224,11 @@ describe('conversation workspace', () => {
     localStorage.clear()
     const app = renderApp()
 
-    await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maitty$/i }))
+    await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maiker$/i }))
     await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'Keep this draft')
     app.unmount()
     renderApp()
-    await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maitty$/i }))
+    await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maiker$/i }))
 
     expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveValue('Keep this draft')
   })
@@ -237,7 +237,7 @@ describe('conversation workspace', () => {
     const user = userEvent.setup()
     const app = renderApp()
 
-    await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maitty$/i }))
+    await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maiker$/i }))
     expect(screen.getByRole('heading', { name: 'Review the daemon restore flow' })).toBeInTheDocument()
 
     app.unmount()
@@ -295,13 +295,13 @@ describe('conversation workspace', () => {
     localStorage.clear()
     const app = renderApp()
 
-    await user.click(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maitty$/i }))
+    await user.click(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maiker$/i }))
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Add a conversation reconnect test,/ }))
     expect(screen.getByRole('menuitem', { name: 'Close session' })).toBeInTheDocument()
     await user.click(screen.getByRole('menuitem', { name: 'Pin conversation' }))
-    expect(screen.getByRole('region', { name: 'maitty project' })).toContainElement(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maitty$/i }))
+    expect(screen.getByRole('region', { name: 'maiker project' })).toContainElement(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maiker$/i }))
 
-    await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maitty$/i }))
+    await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maiker$/i }))
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Review the daemon restore flow,/ }))
     await user.click(screen.getByRole('menuitem', { name: 'Rename' }))
     const renameField = screen.getByRole('textbox', { name: 'Rename Review the daemon restore flow' })
@@ -316,7 +316,7 @@ describe('conversation workspace', () => {
 
     app.unmount()
     renderApp()
-    expect(screen.getByRole('region', { name: 'maitty project' })).toContainElement(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maitty$/i }))
+    expect(screen.getByRole('region', { name: 'maiker project' })).toContainElement(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maiker$/i }))
     expect(screen.queryByRole('button', { name: /^Review daemon recovery,/ })).not.toBeInTheDocument()
   })
 
@@ -324,7 +324,7 @@ describe('conversation workspace', () => {
     async function openTabRename(user: ReturnType<typeof userEvent.setup>) {
       localStorage.clear()
       renderApp()
-      await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maitty$/i }))
+      await user.click(screen.getByRole('button', { name: /^Review the daemon restore flow, Done, maiker$/i }))
       fireEvent.contextMenu(screen.getByRole('tab', { name: /Review the daemon restore flow/ }))
       await user.click(screen.getByRole('menuitem', { name: 'Rename' }))
       const field = await screen.findByRole('textbox', { name: 'Tab name' })
@@ -379,7 +379,7 @@ describe('conversation workspace', () => {
   it('opens the next conversation that needs attention with Ctrl+Shift+A', async () => {
     const user = userEvent.setup()
     renderApp()
-    await user.click(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maitty$/i }))
+    await user.click(screen.getByRole('button', { name: /^Add a conversation reconnect test, Working, maiker$/i }))
 
     await user.keyboard('{Control>}{Shift>}a{/Shift}{/Control}')
 

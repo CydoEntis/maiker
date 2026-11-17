@@ -11,7 +11,7 @@ type Props = {
 export function ResumeList({ read, disabled, now, onPick }: Props) {
   if (read.kind === 'none') return <p role="status">Looking for saved conversations…</p>
   if (read.kind === 'failed') return <p role="status">Could not read the saved conversations.</p>
-  if (read.kind === 'older') return <p role="status">Restart the Maitty service to see saved conversations.</p>
+  if (read.kind === 'older') return <p role="status">Restart the Maiker service to see saved conversations.</p>
   if (read.list.length === 0) return <p role="status">No conversation saved for this folder yet.</p>
   return (
     <ul className="mx-recent-list" aria-label="Saved conversations">

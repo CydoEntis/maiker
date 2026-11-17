@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@/lib/toast'
 import { listenFileSends, newTransferId, sendFilesToMachine, type SendEvent } from '@/api/fileSends'
 import { sendImageToMachine } from '@/api/imagePaste'
-import { errorMessage } from '@/lib/error-message'
 import { remotePathText } from './dropRoute'
 import { PLAIN_TOAST, showSendProgress } from './sendToast'
 
@@ -49,7 +48,7 @@ export function useFileSends({ typeInto }: Options) {
     showProgress(transfer, send, 0, null)
     start(transfer).catch((error: unknown) => {
       sends.current.delete(transfer)
-      toast.error(errorMessage(error, `Could not send to ${machine}`), { ...PLAIN_TOAST, id: transfer })
+      toast.failure(error, `Could not send to ${machine}`, { ...PLAIN_TOAST, id: transfer })
     })
   }, [showProgress])
 
@@ -95,7 +94,7 @@ export function useFileSends({ typeInto }: Options) {
     listenFileSends(onEvent).then((unlisten) => {
       if (gone) unlisten()
       else stop = unlisten
-    }, (error: unknown) => { toast.error(errorMessage(error, 'Could not follow file sends')) })
+    }, (error: unknown) => { toast.failure(error, 'Could not follow file sends') })
     return () => {
       gone = true
       stop?.()

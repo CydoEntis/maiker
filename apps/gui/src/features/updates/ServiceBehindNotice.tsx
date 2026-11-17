@@ -6,9 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadDaemonUpdateStatus, restartStaleDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
+import { serviceStep, WAIT_POLL_MS } from './finishUpdate'
+import { SERVICE_STATUS_KEY } from './serviceUpdateStatus'
 
 const TOAST_ID = 'service-behind'
-const STATUS_KEY = ['daemon-update-status']
+const STATUS_KEY = SERVICE_STATUS_KEY
 
 type ServiceBehindNoticeProps = {
   sessionsQuery: UseQueryResult<Conversation[]>
@@ -17,12 +19,10 @@ type ServiceBehindNoticeProps = {
    * agent is working or waiting, so each one comes back as it was (Settings › General › Install updates when idle).
    */
   restartWhenIdle?: boolean
+  /** This launch is the app restarted into an update: the service's restart is part of that update, never a second question. */
+  afterAppUpdate?: boolean
 }
 
-/** Whether restarting the service now interrupts nobody: it can be restarted, and it says no agent is mid-turn. */
-function restartsUnasked(status: { behind: boolean; canRestart: boolean; activeTurnCount: number | null } | undefined, restartWhenIdle: boolean): boolean {
-  return restartWhenIdle && status !== undefined && status.behind && status.canRestart && status.activeTurnCount === 0
-}
 
 const plural = (count: number, word: string) => `${String(count)} ${word}${count === 1 ? '' : 's'}`
 
@@ -32,7 +32,7 @@ const plural = (count: number, word: string) => `${String(count)} ${word}${count
  * agent is mid-turn the service is restarted at once (idle agents come back resumed); otherwise this says so and
  * offers the restart, which asks first.
  */
-export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false }: ServiceBehindNoticeProps) {
+export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false, afterAppUpdate = false }: ServiceBehindNoticeProps) {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -43,41 +43,50 @@ export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false }: 
     enabled: sessionsQuery.isSuccess,
     retry: false,
     staleTime: Infinity,
+    // Waiting for the agents at work to finish: asked again until they have, then restarted.
+    refetchInterval: (query) => {
+      const data = query.state.data
+      return data !== undefined && serviceStep({ afterAppUpdate, restartWhenIdle, canRestart: data.canRestart, activeTurnCount: data.activeTurnCount }) === 'wait' && data.behind ? WAIT_POLL_MS : false
+    },
   })
   const status = statusQuery.data
   const version = status?.behind ? status.daemonVersion : null
   const canRestart = Boolean(status?.canRestart)
-  const unasked = restartsUnasked(status, restartWhenIdle)
+  const step = status?.behind === true ? serviceStep({ afterAppUpdate, restartWhenIdle, canRestart: status.canRestart, activeTurnCount: status.activeTurnCount }) : null
+  // Restarted without a question, now or once the agents finish: nothing is asked meanwhile.
+  const unasked = step === 'restart' || step === 'wait'
   const sessionCount = status?.sessionCount ?? 0
   const refetchSessions = sessionsQuery.refetch
 
   // Tried once for each version found behind: a restart that failed leaves the notice and its button.
   const tried = useRef<string | null>(null)
   useEffect(() => {
-    if (!version || !unasked || tried.current === version) return
+    if (!version || step !== 'restart' || tried.current === version) return
     tried.current = version
     restartStaleDaemon(version).then(
       async () => {
         await refetchSessions()
         await queryClient.invalidateQueries({ queryKey: STATUS_KEY })
-        toast.success('Maitty service updated', { description: sessionCount === 0 ? 'It was restarted to finish the update.' : `It was restarted to finish the update. ${plural(sessionCount, 'session')} came back.` })
+        // Part of an app update, the app's own notice already says it was updated.
+        if (afterAppUpdate) return
+        toast.success('Maiker service updated', { description: sessionCount === 0 ? 'It was restarted to finish the update.' : `It was restarted to finish the update. ${plural(sessionCount, 'session')} came back.` })
       },
       (error: unknown) => {
-        console.warn('Could not restart the older Maitty service', error)
+        console.warn('Could not restart the older Maiker service', error)
         setAutoFailed(true)
       },
     )
-  }, [version, unasked, sessionCount, refetchSessions, queryClient])
+  }, [version, step, sessionCount, refetchSessions, queryClient, afterAppUpdate])
 
   useEffect(() => {
     // While the unasked restart runs there is nothing to ask.
     if (!version || (unasked && !autoFailed)) return
-    toast.warning(`The Maitty service is still on ${version}`, {
+    toast.warning(`The Maiker service is still on ${version}`, {
       id: TOAST_ID,
       duration: Infinity,
       description: canRestart
         ? 'This app is newer. Restart the service to finish updating.'
-        : 'This app is newer, but its sessions are not saved, so Maitty is leaving it running.',
+        : 'This app is newer, but its sessions are not saved, so Maiker is leaving it running.',
       action: canRestart ? { label: 'Restart…', onClick: () => { setDialogOpen(true) } } : undefined,
     })
     return () => {
@@ -103,7 +112,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false }: 
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Restart the Maitty service?</DialogTitle>
+          <DialogTitle>Restart the Maiker service?</DialogTitle>
           <DialogDescription>{`It is on ${version}, and this app is newer. ${description}`}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -128,7 +137,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false }: 
                   await queryClient.invalidateQueries({ queryKey: STATUS_KEY })
                 })
                 .catch((error: unknown) => {
-                  toast.error(error instanceof Error ? error.message : typeof error === 'string' ? error : 'Could not restart the Maitty service')
+                  toast.error(error instanceof Error ? error.message : typeof error === 'string' ? error : 'Could not restart the Maiker service')
                   void queryClient.invalidateQueries({ queryKey: STATUS_KEY })
                 })
                 .finally(() => {

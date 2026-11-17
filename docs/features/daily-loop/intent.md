@@ -6,7 +6,7 @@ Date: 2026-11-12 · Plan: Plane modules *Daily loop 1* to *Daily loop 4*
 
 ## Problem
 
-"It just feels like we are missing features that should work… I want Maitty to be a
+"It just feels like we are missing features that should work… I want Maiker to be a
 tool I can reliably use for all my day-to-day work." Sessions sometimes vanish from
 the desktop sidebar. A status does not say where it came from. Reviewing what an agent
 did in one turn, steering it, and starting several agents each take more steps than

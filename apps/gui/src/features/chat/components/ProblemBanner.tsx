@@ -17,7 +17,7 @@ export function ProblemBanner({ problem, summarize }: { problem: ChatProblem; /*
     return (
       <section className="mx-problem is-danger" aria-label="Agent stopped">
         <span className="mx-problem-tile" aria-hidden="true">×</span>
-        <span className="mx-problem-text"><strong>{problem.agent} stopped unexpectedly</strong><small>{exitWords(problem.code)} Your branch and changes are kept.</small></span>
+        <span className="mx-problem-text"><strong>{problem.agent} stopped unexpectedly</strong><small>{exitWords(problem.code)} Your branch and changes are kept. {problem.onRestart === null ? 'View the log to see why.' : 'Restart it to go on, or view the log to see why.'}</small></span>
         <Button size="sm" variant="soft" onClick={problem.onViewLog}>View log</Button>
         {problem.onRestart !== null && <Button size="sm" onClick={problem.onRestart}>Restart</Button>}
       </section>
@@ -28,7 +28,7 @@ export function ProblemBanner({ problem, summarize }: { problem: ChatProblem; /*
     return (
       <section className="mx-problem is-warn" role="status" aria-label="Machine offline">
         <span className="mx-problem-tile" aria-hidden="true">!</span>
-        <span className="mx-problem-text"><strong>{problem.machine} is offline</strong><small>{ago === null ? 'Lost the connection.' : `Lost the connection ${ago} ago.`} Trying again. The agent keeps running on {problem.machine}.</small></span>
+        <span className="mx-problem-text"><strong>{problem.machine} is offline</strong><small>{ago === null ? 'Lost the connection.' : `Lost the connection ${ago} ago.`} Trying again on its own; the agent keeps running on {problem.machine}, and nothing is lost.</small></span>
         <Button size="sm" variant="soft" onClick={problem.onRetry}>Retry now</Button>
       </section>
     )
@@ -36,7 +36,7 @@ export function ProblemBanner({ problem, summarize }: { problem: ChatProblem; /*
   return (
     <section className="mx-problem is-warn" aria-label="Context almost full">
       <span className="mx-problem-tile" aria-hidden="true">!</span>
-      <span className="mx-problem-text"><strong>Context is almost full · {problem.percent}%</strong><small>{problem.agent} will start forgetting the earliest messages soon.</small></span>
+      <span className="mx-problem-text"><strong>Context is almost full · {problem.percent}%</strong><small>{problem.agent} will soon start forgetting the earliest messages. Compact it to keep going{summarize === undefined ? '' : ', or start a new chat from a summary'}.</small></span>
       {summarize !== undefined && <Button size="sm" variant="soft" onClick={() => { problem.onNewWithSummary(summarize()) }}>New chat with summary</Button>}
       <Button size="sm" onClick={problem.onCompact}>Compact</Button>
     </section>

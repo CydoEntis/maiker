@@ -6,7 +6,7 @@ export function readSplitShells(): ReadonlySet<string> {
     const value: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
     return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [])
   } catch (error) {
-    console.warn('Ignoring invalid Maitty split terminals', error)
+    console.warn('Ignoring invalid Maiker split terminals', error)
     return new Set()
   }
 }

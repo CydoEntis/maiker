@@ -48,7 +48,7 @@ type StartProps = {
 
 /**
  * Start an agent on a ticket, showing **exactly what will be sent** before anything starts:
- * Maitty's words, then the ticket's words as a separate, tinted quote. A blocked ticket warns in red; starting is
+ * Maiker's words, then the ticket's words as a separate, tinted quote. A blocked ticket warns in red; starting is
  * still allowed. Nothing starts without the button or Enter.
  */
 export function StartTicketDialog({ container, provider, ticket, blockers, blockerState, defaultAgent, folder, project, machineName = null, onCancel, onGo }: StartProps) {

@@ -20,14 +20,14 @@ const DEFAULTS: SettingsPreferences = {
   startFolder: '',
   exportFolder: '',
   themeMode: 'system',
-  darkTheme: 'Maitty Night',
-  lightTheme: 'Maitty Day',
+  darkTheme: 'Maiker Night',
+  lightTheme: 'Maiker Day',
   cursorStyle: 'block',
   scrollback: 10000, scrollSpeed: 1,
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, morePanelTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, morePanelTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -178,7 +178,7 @@ describe('settings preferences', () => {
   })
 
   it('ignores per-project colours saved by an older version, without an error', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ density: 'spacious', projectColors: { '/code/maitty': 'violet' } }))
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ density: 'spacious', projectColors: { '/code/maiker': 'violet' } }))
 
     const read = readSettingsPreferences()
 
@@ -186,26 +186,32 @@ describe('settings preferences', () => {
     expect(read).not.toHaveProperty('projectColors')
   })
 
+  it('keeps a theme saved under the old name Maitty', () => {
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'light', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Day' }))
+
+    expect(readSettingsPreferences()).toMatchObject({ darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day' })
+  })
+
   it('carries over the theme chosen before the theme browser', () => {
     localStorage.setItem('maitty.gui.theme.v1', 'day')
 
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Maitty Day', darkTheme: 'Maitty Night' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Maiker Day', darkTheme: 'Maiker Night' })
   })
 
   it('moves a single saved theme into its dark or light slot and keeps using it', () => {
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ theme: 'Tokyo Night' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Tokyo Night', lightTheme: 'Maitty Day' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Tokyo Night', lightTheme: 'Maiker Day' })
 
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ theme: 'Gruvbox Light' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Gruvbox Light', darkTheme: 'Maitty Night' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Gruvbox Light', darkTheme: 'Maiker Night' })
   })
 
   it('keeps each slot to its own kind of theme and the mode to its three values', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'dark', darkTheme: 'Maitty Day', lightTheme: 'Tokyo Night' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day' })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'dark', darkTheme: 'Maiker Day', lightTheme: 'Tokyo Night' }))
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Maiker Night', lightTheme: 'Maiker Day' })
 
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'auto', darkTheme: 'Maitty Dark' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'system', darkTheme: 'Maitty Dark' })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'auto', darkTheme: 'Maiker Dark' }))
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'system', darkTheme: 'Maiker Dark' })
   })
 
   it('has no monthly budget by default and keeps only a positive amount in range', () => {

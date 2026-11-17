@@ -438,7 +438,7 @@ fn service_log() -> PathBuf {
     crate::config::data_dir().join("daemon.log")
 }
 
-/// The socket this window and its service share: `MAITTY_SOCKET`, else the default one.
+/// The socket this window and its service share: `MAIKER_SOCKET`, else the default one.
 fn socket_label() -> String {
     std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into())
 }

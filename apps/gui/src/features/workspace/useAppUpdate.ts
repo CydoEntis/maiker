@@ -6,7 +6,7 @@ import { useIdleUpdate } from '@/features/updates/useIdleUpdate'
 import { useUpdater } from '@/features/updates/useUpdater'
 import type { SessionView } from './model/session'
 
-/** How long "Restarting Maitty" shows before the window relaunches. */
+/** How long "Restarting Maiker" shows before the window relaunches. */
 const RESTART_SCREEN_MS = 1200
 
 /** Fetching and installing an app update: by hand, as soon as one is found, or when the app is idle. */

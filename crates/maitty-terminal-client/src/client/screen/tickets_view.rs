@@ -35,7 +35,7 @@ const FULL_ROW_FROM: u16 = 44;
 const KEY_BULLETS: usize = 12;
 const COMMANDS_HINT: &str = "gh auth login";
 /// Said where links would be when this computer's daemon is older than keeping them.
-const OLD_LINKS: &str = "The Maitty service on this computer is older than ticket links. Restart it (Restart maitty, in Search commands) to link Plane, Linear or another repo.";
+const OLD_LINKS: &str = "The Maiker service on this computer is older than ticket links. Restart it (Restart maiker, in Search commands) to link Plane, Linear or another repo.";
 /// Where a link is kept, said wherever one is set.
 fn saved_for(name: &str) -> String {
     format!("Saved for {name} and every worktree of it: every session in this project shows these tickets.")
@@ -569,7 +569,7 @@ impl App {
                 app.tickets_reload(v);
             }
         });
-        self.notify(format!("{} opened the ticket setup for {}: finish it here; keys go only in Maitty", project.session, project.name), false);
+        self.notify(format!("{} opened the ticket setup for {}: finish it here; keys go only in Maiker", project.session, project.name), false);
     }
 
     /// Open Tickets on `project` (None: no session in front, nothing to read for).
@@ -1556,7 +1556,7 @@ pub(in crate::client) fn draw_tickets(app: &mut App, buf: &mut Buffer, body: Rec
     let r = Rect { x: body.x + 1, width: body.width.saturating_sub(2), ..body };
     let inner = Rect { x: r.x + 1, width: r.width.saturating_sub(2), ..r };
     if v.old_daemon {
-        let lines = wrapped("The Maitty service on this computer is older than tickets. Restart it to read them: Restart maitty, in Search commands (Ctrl+K).", inner.width, c.fg(t.muted));
+        let lines = wrapped("The Maiker service on this computer is older than tickets. Restart it to read them: Restart maiker, in Search commands (Ctrl+K).", inner.width, c.fg(t.muted));
         draw_lines(buf, Rect { y: inner.y + 1, ..inner }, &lines, 0);
         return;
     }
@@ -1781,7 +1781,7 @@ fn setup_lines(v: &TicketsView, p: &TicketsProject, why: Unlinked, w: u16, c: St
     let enter = match v.provider.keyed() {
         None => {
             lines.push(step("1", true, "GitHub uses your gh login".into()));
-            hint(&mut lines, "There is no key to paste: Maitty reads issues with the GitHub command line's own sign-in.");
+            hint(&mut lines, "There is no key to paste: Maiker reads issues with the GitHub command line's own sign-in.");
             let off = v.link().github.as_deref() == Some("");
             lines.push(step("2", false, if off { format!("GitHub is off for {}", p.name) } else { format!("Which repository are {}'s issues in?", p.name) }));
             hint(&mut lines, if off { "Type the repository to read, or follow the folder's origin again in Sources (,)." } else { "The folder has no GitHub origin. Type the repository as owner/name." });
@@ -1791,7 +1791,7 @@ fn setup_lines(v: &TicketsView, p: &TicketsProject, why: Unlinked, w: u16, c: St
             let connected = why != Unlinked::NoKey;
             let word = v.provider.top_word();
             lines.push(step("1", connected, if connected { format!("{name} is connected on this computer") } else { format!("Connect {name}") }));
-            hint(&mut lines, if connected { "For every project. Replace or remove the key in Sources (,)." } else { "You do this once on this computer: the key is kept by the Maitty service, used for every project, and never shown again." });
+            hint(&mut lines, if connected { "For every project. Replace or remove the key in Sources (,)." } else { "You do this once on this computer: the key is kept by the Maiker service, used for every project, and never shown again." });
             lines.push(step("2", false, format!("Pick the {name} {word} for {}", p.name)));
             hint(&mut lines, &format!("Then every session in {} shows that {word}'s tickets.", p.name));
             if connected { "pick it" } else { "connect" }
@@ -2093,7 +2093,7 @@ fn draw_sources(app: &mut App, buf: &mut Buffer, r: Rect, inner: Rect, c: Style,
         lines.push((None, vec![seg(tk::read_failure(v.provider, e), c.fg(t.err))]));
     }
     lines.push((None, vec![]));
-    lines.push(say("Keys stay with the Maitty service on this computer and are never shown again. It keeps the links and your Plane and Linear names too, so every window shows a project the same tickets."));
+    lines.push(say("Keys stay with the Maiker service on this computer and are never shown again. It keeps the links and your Plane and Linear names too, so every window shows a project the same tickets."));
     // Long lines wrap; the selected row stays in sight.
     let mut drawn: Vec<(Option<usize>, Vec<Seg>)> = Vec::new();
     for (row, segs) in lines {
@@ -2182,9 +2182,9 @@ fn draw_key_form(buf: &mut Buffer, room: Rect, c: Style, t: &Theme, f: &KeyForm)
         lines.push(vec![]);
     }
     let how = if f.provider == TicketProvider::Plane {
-        "Your Plane server's address (https://…), the workspace's slug, and an API key from Plane's profile settings. Paste the key: it is sent to the Maitty service on this computer, which keeps it in its data folder. You do this once on this computer, for every project; the key is never shown again."
+        "Your Plane server's address (https://…), the workspace's slug, and an API key from Plane's profile settings. Paste the key: it is sent to the Maiker service on this computer, which keeps it in its data folder. You do this once on this computer, for every project; the key is never shown again."
     } else {
-        "A personal API key from Linear's settings. Paste it: it is sent to the Maitty service on this computer, which keeps it in its data folder. You do this once on this computer, for every project; the key is never shown again."
+        "A personal API key from Linear's settings. Paste it: it is sent to the Maiker service on this computer, which keeps it in its data folder. You do this once on this computer, for every project; the key is never shown again."
     };
     lines.extend(wrapped(how, room.width, c.fg(t.muted)));
     draw_lines(buf, Rect { y, height: room.bottom().saturating_sub(y), ..room }, &lines, 0);

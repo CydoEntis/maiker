@@ -154,7 +154,7 @@ export function ConversationTabStrip({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    Close tab · the session keeps running in maittyd
+                    Close tab · the session keeps running in maikerd
                   </TooltipContent>
                 </Tooltip>
               </div>

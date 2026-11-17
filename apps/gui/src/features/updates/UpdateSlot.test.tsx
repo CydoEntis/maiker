@@ -29,7 +29,7 @@ describe('update slot', () => {
     await user.click(screen.getByRole('button', { name: 'Update to 0.61.0' }))
 
     const card = screen.getByRole('dialog', { name: 'Update' })
-    expect(card).toHaveTextContent('Maitty 0.61.0 is available')
+    expect(card).toHaveTextContent('Maiker 0.61.0 is available')
     expect(card).toHaveTextContent('You have 0.60.2')
     expect(card).toHaveTextContent('Faster start')
     await user.click(screen.getByRole('button', { name: 'Download' }))
@@ -72,7 +72,7 @@ describe('update slot', () => {
     const actions = setup({ status: 'ready', version: '0.61.0' })
 
     await user.click(screen.getByRole('button', { name: 'Restart to update' }))
-    expect(screen.getByRole('dialog', { name: 'Update' })).toHaveTextContent('Your sessions keep running in maittyd')
+    expect(screen.getByRole('dialog', { name: 'Update' })).toHaveTextContent('Your sessions keep running in maikerd')
     await user.click(screen.getByRole('button', { name: 'Restart now' }))
 
     expect(actions.onRestartNow).toHaveBeenCalledTimes(1)

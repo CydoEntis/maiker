@@ -50,6 +50,23 @@ export function isAtBottom(scrollTop: number, viewport: number, total: number): 
   return total - scrollTop - viewport <= FOLLOW_THRESHOLD_PX
 }
 
+/**
+ * The empty room under the last row that lets the row at `offset` sit at the top of the view, as the person's newest
+ * message does just after they send it while the reply under it is still shorter than the view. `padding` is the
+ * scroller's own padding, top and bottom together.
+ */
+export function roomToPin(offset: number, viewport: number, padding: number, total: number): number {
+  return Math.max(0, offset + viewport - padding - total)
+}
+
+/**
+ * The room kept once nothing is pinned: only what is still on screen under the last row, so the view never moves when
+ * it goes. It shrinks as the reader scrolls up past it and as new rows fill it, and never grows back.
+ */
+export function keptRoom(room: number, scrollTop: number, viewport: number, padding: number, total: number): number {
+  return Math.min(room, Math.max(0, scrollTop + viewport - padding - total))
+}
+
 /** Where the list was last seen, so the next scroll has a direction. */
 export type FollowState = {
   readonly following: boolean

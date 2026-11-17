@@ -201,8 +201,8 @@ export function ConversationSidebar({
             {previewMode
               ? 'Local preview · sample data'
               : disconnected
-                ? 'Reconnecting to maittyd…'
-                : `maittyd · ${String(sessionCount)} ${sessionCount === 1 ? 'session' : 'sessions'}`}
+                ? 'Reconnecting to maikerd…'
+                : `maikerd · ${String(sessionCount)} ${sessionCount === 1 ? 'session' : 'sessions'}`}
           </span>
         </div>
         <Button

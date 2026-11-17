@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import { isWindowShown, subscribeWindowActivity } from './window-activity'
 
-/** The Maitty TUI's spinners: a few Braille characters stepped by the shared clock. */
+/** The Maiker TUI's spinners: a few Braille characters stepped by the shared clock. */
 export type TuiSpinner = 'braille' | 'snake' | 'bars' | 'blocks' | 'line'
 /** Inline SVG spinners drawn in the text colour and moved by CSS (`.mx-wspin`), so they need no clock. */
 export type WebSpinner = 'circle' | 'dots' | 'equalizer' | 'spokes' | 'ping'

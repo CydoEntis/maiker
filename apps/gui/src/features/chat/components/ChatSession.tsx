@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { toast } from '@/lib/toast'
 import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen } from '@/api/daemon'
 import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/machines'
-import { errorMessage } from '@/lib/error-message'
 import { readConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
@@ -16,7 +15,7 @@ import { useChatFeed } from '../useChatFeed'
 import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } from '../useChatComposer'
 import { countUserMessages } from '../workPhase'
 import { sentTexts } from '../promptRecall'
-import { startedWithYolo } from '../yoloSessions'
+import { startedBypassed } from '../bypassSessions'
 import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
@@ -87,6 +86,8 @@ function announcement(feed: ChatFeed, agent: ChatAgent, working: boolean): strin
   return ''
 }
 
+/** The rows a message the person sent is drawn as: its echo, then the history's own row. */
+const isSentRow = (row: ChatRow) => row.kind === 'echo' || row.kind === 'user'
 const rowKey = (row: ChatRow) => row.key
 
 /** A pending request is asked in the tray over the message box, so it is not also a row of the list. */
@@ -157,7 +158,7 @@ export type WindowActions = {
   readonly openSettings: (section: DesktopSettingsSection) => void
   readonly openPanel: (view: InspectView) => void
   readonly openRecent: () => void
-  /** Gives the session a new name in Maitty, as the sidebar's rename does. */
+  /** Gives the session a new name in Maiker, as the sidebar's rename does. */
   readonly renameSession: (name: string) => void
 }
 
@@ -209,7 +210,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const pickChoices = typeKeys === undefined ? undefined : (answers: readonly FormAnswer[]) => typeKeys(answerKeys(formQuestions(ask), answers))
   const answerOwn = typeKeys === undefined ? undefined : (text: string) => typeKeys(ownAnswerKeys(ask?.choices?.length ?? 0, text))
   // A chat that follows the agent's own terminal changes its mode, model and reasoning the way its user would: by typing the agent's commands
-  // (Shift+Tab, /model, /effort). Offered for Claude, and not while it works, when the keys would land in its turn.
+  // (Shift+Tab, /model, /effort). A mode picked while it works is held and typed once the turn ends, so no key lands in the turn.
   // What it shows meanwhile is read back from its screen (mode) or taken from what was picked (model, effort), until the agent's own file says it.
   // The agent's files are the one record of what it runs, so a terminal command and a pick here always show the same.
   const [liveMode, setLiveMode] = useState<{ base: string | null; value: string } | null>(null)
@@ -237,6 +238,9 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const chipsLocked = !online ? 'The daemon is offline' : working ? `${agent} is working. Change this when it finishes.` : null
   // Picked commands are typed one after another: each waits for its Enter, so a model and an effort picked together do not interleave.
   const commandChain = useRef<Promise<void>>(Promise.resolve())
+  // A mode picked while the agent works, typed in once the turn ends; numbered, so each is typed once.
+  const [heldMode, setHeldMode] = useState<{ mode: string; pick: number } | null>(null)
+  const appliedPick = useRef(0)
   // A menu the agent's own command opened (Codex's /model), drawn in the chat until it is closed.
   const [menuOpen, setMenuOpen] = useState(false)
   const agentControls = useMemo(() => {
@@ -249,7 +253,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           const typed = commandChain.current.then(() => typeMessage(typeInto, agent, '/model')).then(refresh)
           commandChain.current = typed.catch((error: unknown) => {
             setMenuOpen(false)
-            toast.error(errorMessage(error, 'Could not open the model menu'))
+            toast.failure(error, 'Could not open the model menu')
           })
         },
         modelMenuLocked: pickerLocked ?? chipsLocked,
@@ -258,10 +262,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         onPickMode: (target: string) => {
           const command = CODEX_MODE_COMMAND[target]
           if (sessionId === undefined || command === undefined) return
-          if (chipsLocked !== null) {
-            toast.error(chipsLocked)
-            return
-          }
           // Codex has no file that says its mode, so the pick stands unless its screen says the command was refused.
           const before = shownMode
           setLiveMode({ base: metaMode, value: target })
@@ -278,7 +278,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           }
           void step().catch((error: unknown) => {
             setLiveMode(before === null ? null : { base: metaMode, value: before })
-            toast.error(errorMessage(error, 'Could not change the permission mode'))
+            toast.failure(error, 'Could not change the permission mode')
           })
         },
       }
@@ -288,7 +288,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       // The model and the effort can be picked while the agent works: the pick is typed in at once, as it would be in
       // the terminal, and the agent takes it as soon as it can. Only a question it is asking holds the picker, since
       // typed text would answer the question.
-      agentChips: { locked: chipsLocked, pickerLocked, remote },
+      agentChips: { locked: pickerLocked, pickerLocked, remote },
       onCommand: (text: string) => {
         if (pickerLocked !== null) return
         const model = /^\/model (\S+)/.exec(text)?.[1]
@@ -301,11 +301,11 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         commandChain.current = typed.catch((error: unknown) => {
           if (model !== undefined) setLiveModel(null)
           if (level !== undefined) setLiveEffort(null)
-          toast.error(errorMessage(error, 'Could not type the command'))
+          toast.failure(error, 'Could not type the command')
         })
       },
       ...(remote ? {} : { onPickMode: (target: string) => {
-        if (sessionId === undefined || chipsLocked !== null) return
+        if (sessionId === undefined) return
         const before = shownMode
         // Shift+Tab only cycles, so press it until the screen shows the picked mode; a mode that never comes up is not allowed in this session.
         // The chip shows the pick at once and the presses happen behind it; the screen has the last word when they end.
@@ -328,17 +328,39 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         }
         void step().catch((error: unknown) => {
           setLiveMode(before === null ? null : { base: metaMode, value: before })
-          toast.error(errorMessage(error, 'Could not change the permission mode'))
+          toast.failure(error, 'Could not change the permission mode')
         })
       } }),
     }
   }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, effort, shownMode, pickerLocked, remote])
+  // The mode is picked at any time but typed only between turns: a pick while the agent works shows at once and is held.
+  const applyNow = 'onPickMode' in agentControls ? agentControls.onPickMode : undefined
+  const pickHeld = useCallback((target: string) => {
+    if (applyNow === undefined) return
+    if (pickerLocked !== null) {
+      toast.message(pickerLocked)
+      return
+    }
+    if (!working) {
+      applyNow(target)
+      return
+    }
+    setHeldMode((was) => ({ mode: target, pick: (was?.pick ?? 0) + 1 }))
+    setLiveMode({ base: metaMode, value: target })
+    toast.message(`${modeLabel(target) ?? target} from the next turn`, { description: `${agent} is working, so the mode changes once this turn ends.` })
+  }, [applyNow, pickerLocked, working, metaMode, agent])
+  const pickMode = applyNow === undefined ? undefined : pickHeld
+  useEffect(() => {
+    if (applyNow === undefined || heldMode === null || heldMode.pick <= appliedPick.current || working || pickerLocked !== null) return
+    appliedPick.current = heldMode.pick
+    applyNow(heldMode.mode)
+  }, [applyNow, heldMode, working, pickerLocked])
   const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
     toast.message(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so it opened in the terminal.`)
-    void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.error(errorMessage(error, `Could not run ${command}`)) })
+    void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.failure(error, `Could not run ${command}`) })
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
@@ -365,7 +387,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const bareRows = useMemo(() => buildRows(events, false, root, echoText, false), [events, root, echoText])
   // A command the window answers from what the chat holds, or by a control it already has. Nothing here changes a permission
   // mode without a click: /plan asks first, and /permissions only says what the modes are.
-  const pickMode = 'onPickMode' in agentControls ? agentControls.onPickMode : undefined
   const runInWindow = windowActions === undefined ? undefined : (route: WindowRoute, typed: string) => {
     switch (route.kind) {
       case 'settings': windowActions.openSettings(route.section); return
@@ -395,7 +416,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       case 'plan':
         if (shownMode === PLAN_MODE) aside.show('Plan mode', `${agent} is already in plan mode. It reads and plans, and changes nothing until you approve the plan.`)
         else if (pickMode === undefined) aside.show('Plan mode', 'This chat cannot change its permission mode from here.')
-        else if (chipsLocked !== null) toast.message(chipsLocked)
         else setConfirming({ ask: { title: 'Switch to plan mode?', body: `${agent} will read and plan and change nothing until you approve the plan. You can pick another mode with the shield button.`, confirmLabel: 'Plan mode' }, typed, then: () => { pickMode(PLAN_MODE) } })
         return
       case 'commands':
@@ -502,7 +522,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     approveRequest({ id: String(link.conversation), generation: link.generation }, requestId, decision)
       .then(() => { recordAnswer(requestId, decision); refresh() })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not send your answer')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not send your answer') })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, recordAnswer, refresh])
   // "Always in this project": this one is allowed now, and the daemon allows the same command in this project from then on.
@@ -510,7 +530,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     allowAlways({ id: String(link.conversation), generation: link.generation }, requestId)
       .then(() => { recordAnswer(requestId, 'Accept'); refresh() })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not remember your answer')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not remember your answer') })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, recordAnswer, refresh])
   // A user-input answer is relayed once and recorded nowhere: it can be a secret.
@@ -518,7 +538,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     answerUserInput({ id: String(link.conversation), generation: link.generation }, requestId, answers)
       .then(refresh)
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not send your answer')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not send your answer') })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, refresh])
   // A chat that follows a terminal pane is answered in that terminal (ADR 0003), so it offers no buttons.
@@ -526,14 +546,17 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   // An approval's link to its tool step scrolls the list there; the nonce makes a second click on the same link scroll again.
   const [scrollTarget, setScrollTarget] = useState<{ key: string; nonce: number } | null>(null)
-  // A message sent, or queued behind the running turn, takes the chat back to its newest row.
+  // A message sent goes to the top of the view with the reply drawn under it; one queued behind the running turn takes
+  // the chat back to its newest row.
   const [sentCount, setSentCount] = useState(0)
+  const [queuedCount, setQueuedCount] = useState(0)
   // A message is its words and how often they were said before it, so the same words sent again count, and the echo
   // going quiet does not.
   const sentKey = echo === null ? null : `${echo.text}\u0000${String(echo.baseline)}`
   const [seenSend, setSeenSend] = useState({ sentKey, queued: composer.queue.length })
   if (seenSend.sentKey !== sentKey || seenSend.queued !== composer.queue.length) {
-    if ((sentKey !== null && sentKey !== seenSend.sentKey) || composer.queue.length > seenSend.queued) setSentCount(sentCount + 1)
+    if (sentKey !== null && sentKey !== seenSend.sentKey) setSentCount(sentCount + 1)
+    else if (composer.queue.length > seenSend.queued) setQueuedCount(queuedCount + 1)
     setSeenSend({ sentKey, queued: composer.queue.length })
   }
   const goToStep = useCallback((key: string) => { setScrollTarget((current) => ({ key, nonce: (current?.nonce ?? 0) + 1 })) }, [])
@@ -632,7 +655,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       {(notices.length > 0 || fullAccess) && (
         <div className="mx-chat-notices" role={offline ? 'status' : undefined}>
           {notices.map((notice) => <span key={notice}>{notice}</span>)}
-          {fullAccess && <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Full access</span>}
+          {fullAccess && <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Bypass permissions</span>}
         </div>
       )}
       {/* Politely announces a change of state only; the log itself is not a live region, so streaming text never floods a screen reader. */}
@@ -648,7 +671,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
         <KnownRowsContext.Provider value={known}>
           <OpenFileContext.Provider value={openFile}>
-          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={sentCount} />
+          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={queuedCount} pinNewest={sentCount} isPinTarget={isSentRow} />
           </OpenFileContext.Provider>
         </KnownRowsContext.Provider>
       ) : (
@@ -665,7 +688,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         question={question}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
       />
     </div>

@@ -4,7 +4,7 @@ import type { DraftAttachment } from '@/features/chat/composerStore'
 import type { NewChatRequest } from './components/NewChatPage'
 import { useBackgroundStarts } from './useBackgroundStarts'
 
-const toast = vi.hoisted(() => ({ error: vi.fn() }))
+const toast = vi.hoisted(() => ({ error: vi.fn(), failure: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast }))
 
 const picture: DraftAttachment = { id: '1', path: '/data/attach-1.png', name: 'shot.png', size: 10, kind: 'image', preview: 'blob:shot' }
@@ -32,7 +32,7 @@ describe('starts in the background', () => {
     unmount()
     fail(new Error('boom'))
 
-    await waitFor(() => { expect(toast.error).toHaveBeenCalledWith('Could not start “fix the login”: boom') })
+    await waitFor(() => { expect(toast.failure).toHaveBeenCalledWith(new Error('boom'), 'Could not start “fix the login”') })
     expect(revoke).toHaveBeenCalledWith('blob:shot')
   })
 

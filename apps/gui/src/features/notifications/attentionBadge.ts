@@ -1,7 +1,7 @@
 import { sectionOf } from '@/features/workspace/model/sidebar'
 import type { SessionView } from '@/features/workspace/model/session'
 
-const APP_NAME = 'Maitty'
+const APP_NAME = 'Maiker'
 
 /** How many sessions wait on the person: those the sidebar lists under Needs you (asking, stopped, held by a limit). */
 export function needingYou(sessions: readonly SessionView[]): number {

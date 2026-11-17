@@ -1,6 +1,6 @@
 # Tauri clipboard
 
-> **Use for:** Reading a picture from, and writing text to, the system clipboard in the Maitty desktop GUI.
+> **Use for:** Reading a picture from, and writing text to, the system clipboard in the Maiker desktop GUI.
 > **Requires:** Tauri 2
 > **Fills:** SECURITY § desktop capabilities
 

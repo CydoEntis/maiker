@@ -9,7 +9,7 @@ vi.mock('@/api/imagePaste', async (importOriginal) => ({
   saveImageLocally: host.save,
 }))
 
-const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn() }))
+const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn(), failure: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -25,7 +25,7 @@ function setup(overrides: Partial<Parameters<typeof useImagePaste>[0]> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  host.save.mockResolvedValue('/home/me/.cache/maitty/pastes/paste-1-0000000a.png')
+  host.save.mockResolvedValue('/home/me/.cache/maiker/pastes/paste-1-0000000a.png')
 })
 
 describe('pasting an image into a pane of this computer', () => {
@@ -34,7 +34,7 @@ describe('pasting an image into a pane of this computer', () => {
     paste('t3', image)
     await flush()
     expect(host.save).toHaveBeenCalledWith(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
-    expect(typeInto).toHaveBeenCalledWith('t3', '/home/me/.cache/maitty/pastes/paste-1-0000000a.png ')
+    expect(typeInto).toHaveBeenCalledWith('t3', '/home/me/.cache/maiker/pastes/paste-1-0000000a.png ')
     expect(toasts.success).toHaveBeenCalledWith('Pasted the image', expect.objectContaining({ id: 'image-paste' }))
     expect(sendImage).not.toHaveBeenCalled()
   })
@@ -52,7 +52,7 @@ describe('pasting an image into a pane of this computer', () => {
     const { paste, typeInto } = setup()
     paste('t3', image)
     await flush()
-    expect(toasts.error).toHaveBeenCalledWith('the clipboard holds something that is not a PNG, JPEG, GIF or WebP image', expect.objectContaining({ id: 'image-paste' }))
+    expect(toasts.failure).toHaveBeenCalledWith(expect.anything(), 'Could not paste the image', expect.objectContaining({ id: 'image-paste' }))
     expect(typeInto).not.toHaveBeenCalled()
   })
 
@@ -68,7 +68,7 @@ describe('pasting an image into a pane of this computer', () => {
     paste('t3', image)
     await flush()
     expect(host.save).not.toHaveBeenCalled()
-    expect(toasts.error).toHaveBeenCalledWith('Reconnect to the Maitty service before pasting an image')
+    expect(toasts.error).toHaveBeenCalledWith('Reconnect to the Maiker service before pasting an image')
   })
 })
 

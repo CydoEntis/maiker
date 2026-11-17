@@ -1,6 +1,5 @@
 import { isDesktop, openLink } from '@/api/daemon'
 import { copyText } from '@/lib/clipboard'
-import { errorMessage } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 
 function copyLink(href: string): void {
@@ -21,6 +20,6 @@ export function followLink(href: string): void {
   }
   openLink(href).then(
     () => { toast.message('Opened in your browser', { action: { label: 'Copy link', onClick: () => { copyLink(href) } } }) },
-    (error: unknown) => { toast.error(errorMessage(error, 'Could not open the link'), { action: { label: 'Copy link', onClick: () => { copyLink(href) } } }) },
+    (error: unknown) => { toast.failure(error, 'Could not open the link', { action: { label: 'Copy link', onClick: () => { copyLink(href) } } }) },
   )
 }

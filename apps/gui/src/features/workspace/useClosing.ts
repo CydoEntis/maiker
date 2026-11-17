@@ -4,7 +4,6 @@ import { type Dispatch, type SetStateAction, useCallback, useState } from 'react
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { closeSessionWithUndo, undoCloseSession } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { useLatest } from '@/lib/useLatest'
 import { runsProgram } from './components/runsProgram'
 import { type Layout, removePane, removeSessions, showSession } from './model/layout'
@@ -48,7 +47,7 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         setLayout((current) => (current === closed.after ? closed.before : closed.sessions.reduce((layoutNow, session) => showSession(layoutNow, session.id, makeId), current)))
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not bring the session back')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not bring the session back') })
   }, [lastClose, setLayout, queryClient])
   // The toast's button outlives the render that made it, so it calls whichever undo is current.
   const undoNow = useLatest(undoLastClose)
@@ -76,7 +75,7 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         if (failed.length > 0) {
           unmarkClosed(failed.map((session) => session.id))
           const reason: unknown = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')?.reason
-          toast.error(errorMessage(reason, failed.length === 1 && failed[0] ? `Could not end ${displayName(failed[0])}` : `Could not end ${String(failed.length)} sessions`))
+          toast.failure(reason, failed.length === 1 && failed[0] ? `Could not end ${displayName(failed[0])}` : `Could not end ${String(failed.length)} sessions`)
         }
         if (terminals.length === 0) return
         const closed = new Set(terminals.map((session) => session.id))
@@ -93,7 +92,7 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         window.setTimeout(() => { setLastClose((current) => (current?.toastId === toastId ? null : current)) }, UNDO_CLOSE_MS)
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not end the session')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not end the session') })
   }, [sessions, setLayout, layoutNow, queryClient, undoNow, agentTerminals])
 
   /**

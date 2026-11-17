@@ -95,7 +95,7 @@ pub(super) fn parse(text: &str, keys: &[TicketKeyState]) -> Named {
     let shape: Shape = match toml::from_str(text) {
         Ok(shape) => shape,
         Err(_) => {
-            note(&mut named.notes, format!("{REPO_TICKETS_FILE} is not read: it is not the shape Maitty reads"));
+            note(&mut named.notes, format!("{REPO_TICKETS_FILE} is not read: it is not the shape Maiker reads"));
             return named;
         }
     };

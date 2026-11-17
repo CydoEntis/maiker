@@ -38,6 +38,9 @@ pub struct AgentDef {
     pub resume_last: Option<String>,
     /// Set to false to disable a built-in agent.
     pub enabled: Option<bool>,
+    /// The agent's own flag that starts it without permission prompts (`--dangerously-skip-permissions`),
+    /// added when `[permissions.bypass]` has it on. None: the agent has no such flag, and nothing is added.
+    pub bypass_flag: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -590,6 +593,73 @@ impl Default for Recipe {
     }
 }
 
+/// The built-in agents' own flags that start them without permission prompts, as their CLIs document
+/// them, and so the agents with a Bypass Permissions switch (ADR 0005). Claude's starts in bypass mode (its
+/// `--allow-…` form only lets you switch to it); Codex's drops its sandbox and its approvals; Gemini's
+/// approves every tool.
+pub const BYPASS_FLAGS: [(&str, &str); 3] = [
+    ("claude", "--dangerously-skip-permissions"),
+    ("codex", "--dangerously-bypass-approvals-and-sandbox"),
+    ("gemini", "--yolo"),
+];
+
+/// The agents with a Bypass Permissions switch, in `BYPASS_FLAGS`'s order.
+pub fn bypass_agents() -> impl Iterator<Item = &'static str> {
+    BYPASS_FLAGS.iter().map(|(agent, _)| *agent)
+}
+
+/// `[updates]`: what the app updates without a click.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Updates {
+    /// After this computer updates, each `[[machines]]` entry that is behind is updated too, once no agent there is
+    /// working or waiting. Off: each machine waits for its Update click.
+    pub machines: bool,
+}
+
+impl Default for Updates {
+    fn default() -> Self {
+        Updates { machines: true }
+    }
+}
+
+/// `[permissions]`: how much the agents the app starts may do without asking.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Permissions {
+    /// Per agent, whether the app starts it with its `bypass_flag`. An agent not named here does, so a
+    /// file that names only some keeps the others on (and the settings rows still show them).
+    #[serde(deserialize_with = "bypass_with_defaults")]
+    pub bypass: BTreeMap<String, bool>,
+}
+
+fn bypass_defaults() -> BTreeMap<String, bool> {
+    bypass_agents().map(|agent| (agent.to_string(), true)).collect()
+}
+
+fn bypass_with_defaults<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<BTreeMap<String, bool>, D::Error> {
+    let mut bypass = bypass_defaults();
+    bypass.extend(BTreeMap::<String, bool>::deserialize(deserializer)?);
+    Ok(bypass)
+}
+
+impl Default for Permissions {
+    fn default() -> Self {
+        Permissions {
+            bypass: bypass_defaults(),
+        }
+    }
+}
+
+impl Permissions {
+    /// Whether the app starts `agent` with its flag: on unless switched off.
+    pub fn bypasses(&self, agent: &str) -> bool {
+        self.bypass.get(agent).copied().unwrap_or(true)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Quick {
@@ -629,7 +699,7 @@ impl Default for Quick {
                 a(
                     "claude",
                     "claude {prompt}",
-                    &["opus", "sonnet", "haiku"],
+                    &maitty_shared::conversation::CLAUDE_MODEL_ALIASES,
                     "--model",
                 ),
                 a("codex", "codex {prompt}", &[], "-m"),

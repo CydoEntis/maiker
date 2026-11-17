@@ -1,8 +1,8 @@
 //! Giving a folder its own GitHub account and commit identity, when a person's client asks
 //! (`Query::GitIdentityRule`): a preview of the exact config lines, writing exactly those lines,
-//! or taking a rule away. A rule is one file in Maitty's own `git-identities` folder and one
+//! or taking a rule away. A rule is one file in Maiker's own `git-identities` folder and one
 //! `includeIf` entry in the global git config that points at it. Both are written with
-//! `git config`, never by editing a config file as text, and a rule set outside Maitty is never
+//! `git config`, never by editing a config file as text, and a rule set outside Maiker is never
 //! changed.
 //!
 //! git signs in to github.com inside the folder as the rule's login: the file names that login and
@@ -71,12 +71,12 @@ impl Rule {
         include_key(CONDITION, &self.folder)
     }
 
-    /// Refuses a folder that already has a rule Maitty did not write: it is changed only where it was set.
+    /// Refuses a folder that already has a rule Maiker did not write: it is changed only where it was set.
     fn check_unclaimed(&self, place: &Place) -> Result<(), String> {
         let ours = path_text(&self.file)?;
         let set = all_values(place, &self.key())?;
         if set.iter().any(|value| value != ours) {
-            return Err(format!("{} has a rule set outside Maitty: change it in your git config", self.folder));
+            return Err(format!("{} has a rule set outside Maiker: change it in your git config", self.folder));
         }
         Ok(())
     }
@@ -107,7 +107,7 @@ impl Rule {
     fn write(&self, place: &Place) -> Result<(), String> {
         let file = path_text(&self.file)?;
         std::fs::create_dir_all(place.rules_folder()).map_err(|error| format!("couldn't make {}: {error}", shown(place.rules_folder())))?;
-        // The file is Maitty's own and rewritten whole, so a changed rule keeps nothing of the old one.
+        // The file is Maiker's own and rewritten whole, so a changed rule keeps nothing of the old one.
         match std::fs::remove_file(&self.file) {
             Ok(()) => {}
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -121,8 +121,8 @@ impl Rule {
     }
 }
 
-/// Takes away the rule Maitty wrote for `folder`, as the report names it: its entry and its file,
-/// nothing else. A folder whose only rules were set outside Maitty is refused.
+/// Takes away the rule Maiker wrote for `folder`, as the report names it: its entry and its file,
+/// nothing else. A folder whose only rules were set outside Maiker is refused.
 fn remove(place: &Place, folder: &str) -> Result<Vec<GitConfigWrite>, String> {
     let folder = folder.trim_end_matches('/');
     if folder.is_empty() || folder.chars().any(char::is_control) {
@@ -143,7 +143,7 @@ fn remove(place: &Place, folder: &str) -> Result<Vec<GitConfigWrite>, String> {
     }
     if removed.is_empty() {
         return Err(if outside {
-            format!("the rule for {folder} was set outside Maitty: change it in your git config")
+            format!("the rule for {folder} was set outside Maiker: change it in your git config")
         } else {
             format!("{folder} has no rule")
         });
@@ -225,7 +225,7 @@ fn said(problem: Problem) -> String {
 }
 
 fn path_text(path: &Path) -> Result<&str, String> {
-    path.to_str().ok_or_else(|| "Maitty's data folder cannot be written in git's config".to_owned())
+    path.to_str().ok_or_else(|| "Maiker's data folder cannot be written in git's config".to_owned())
 }
 
 fn shown(path: &Path) -> String {
@@ -398,9 +398,9 @@ mod tests {
         let before = home.global_text();
 
         let refused = apply(&home, &work, "work-me").expect_err("not ours");
-        assert!(refused.contains("set outside Maitty"), "{refused}");
+        assert!(refused.contains("set outside Maiker"), "{refused}");
         let refused = change(&home.place, &GitRuleChange::Remove { folder: folder_text(&work) }, |_| true).expect_err("not ours");
-        assert!(refused.contains("set outside Maitty"), "{refused}");
+        assert!(refused.contains("set outside Maiker"), "{refused}");
         assert_eq!(home.global_text(), before);
     }
 

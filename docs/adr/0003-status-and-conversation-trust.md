@@ -5,7 +5,7 @@
 
 ## Context
 
-Status (working, needs you, done, idle) is the one thing Maitty must get right. It had several
+Status (working, needs you, done, idle) is the one thing Maiker must get right. It had several
 writers (hooks, a screen scan, user actions, check results, chat state) and several readers that
 derived their own view (the TUI, the GUI poll). Every fix added a time-window guard to one copy,
 and the same bugs came back.
@@ -13,7 +13,7 @@ and the same bugs came back.
 ## Decision
 
 1. **A status is accepted only from the runtime that owns the pane or conversation.** For a pane,
-   a hook report verified by the pane's process tree or `MAITTY_PANE_TOKEN`. For a structured
+   a hook report verified by the pane's process tree or `MAIKER_PANE_TOKEN`. For a structured
    conversation, an event on the daemon-owned connection at the current generation. An
    unverified or superseded source cannot change status.
 2. **The daemon alone decides status and alerts.** Clients display what it sends. A client never

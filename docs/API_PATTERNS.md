@@ -101,7 +101,7 @@ entry point (handler / route / command / consumer)
 ## Project-specific: API style
 
 Not HTTP. A private IPC protocol between client and daemon over a local socket
-(or `ssh host maitty proxy`): length-delimited frames carrying msgpack-encoded
+(or `ssh host maiker proxy`): length-delimited frames carrying msgpack-encoded
 `ClientMsg` / `ServerMsg` enums (`crates/maitty-shared/src/protocol.rs`). The first exchange is
 `Hello { version }` → `Welcome { version, compatible_since }`. The client decides whether
 the two talk (`protocol::speaks_with`): the same `PROTOCOL_VERSION` always does, and another
@@ -121,7 +121,7 @@ too, but a hook or usage report is also accepted by an older daemon back to
 `REPORTS_READ_SINCE` (`ipc::open_for_report`), so an update does not stop hooked panes
 reporting before the daemon restarts. When `Hook`, `Usage` or `HookStatus` changes in a way an
 older daemon cannot read, set `REPORTS_READ_SINCE` to the new version in the same change; the
-test `todays_reports_are_read_by_the_oldest_daemon_they_are_sent_to` holds the shapes. The CLI subcommands and the MCP server (`maitty mcp`, JSON-RPC over stdio)
+test `todays_reports_are_read_by_the_oldest_daemon_they_are_sent_to` holds the shapes. The CLI subcommands and the MCP server (`maiker mcp`, JSON-RPC over stdio)
 are thin wrappers that send the same commands.
 
 A conversation that changed is announced to the desktop app's attached clients as
@@ -194,7 +194,7 @@ setup hook may take ten, and says the service is from an older release instead o
 answer. It is this computer's daemon only. Structured runtimes may not ask for it.
 
 Protocol 113 removes `ClientMsg::WorkflowReport` and `TermInfo.workflows` (ADR 0011). An older
-`maitty workflow report` is a one-shot connection whose frame the daemon cannot read, so that call
+`maiker workflow report` is a one-shot connection whose frame the daemon cannot read, so that call
 fails and nothing else does; an older window reading a pane without `workflows` defaults it to none.
 `COMPATIBLE_SINCE` stays 78.
 
@@ -291,14 +291,14 @@ window's scrollback holds. Any replay of a pane on the alternate screen repaints
 switches, then repaints the alternate one, so the view is on the right screen even when the
 program's own switch is older than the ring.
 
-Over ssh, `maitty proxy` writes `STREAM_MARKER` (`maitty-ipc-transport`) to stdout once, after it
+Over ssh, `maiker proxy` writes `STREAM_MARKER` (`maitty-ipc-transport`) to stdout once, after it
 reaches the daemon and before it relays a byte. The marker sits outside the frames, so it is
 not a protocol change. The client sends its Hello, then discards stdout up to the marker (a
 remote login that prints text, such as `.bashrc`, would otherwise corrupt the frames) and
 reads frames from the first byte after it. At most 64 KiB is discarded and the wait is 30 s,
 longer than ssh's `ConnectTimeout` so a slow login is not cut off. If text arrived and the
-marker did not, the connection fails with "the remote login printed text before maitty
-started (or it runs an older maitty: update it)". If nothing arrived, the error is what ssh
+marker did not, the connection fails with "the remote login printed text before maiker
+started (or it runs an older maiker: update it)". If nothing arrived, the error is what ssh
 said. A remote from before the marker is not refused: when the first four bytes of its
 output are a plausible frame length (up to `MAX_FRAME_BYTES`), the client reads them as the
 first frame and the usual version check applies. Text never passes as a length. An old remote
@@ -356,12 +356,12 @@ and exit non-zero.
 ## Project-specific: auth model
 
 Socket access is the auth (see `docs/SECURITY.md`); pane status reports also need
-the pane's process tree or `MAITTY_PANE_TOKEN`.
+the pane's process tree or `MAIKER_PANE_TOKEN`.
 
 ## Project-specific: feature/module structure
 
 Saved role profiles and sequenced planner/worker/reviewer workflows are not part
-of Maitty's interface, and neither is a fleet commander (`maitty brief`, `[team]`): old
+of Maiker's interface, and neither is a fleet commander (`maiker brief`, `[team]`): old
 config keys for them are read and ignored. Sessions, ordinary agent launches, helpers, and
 MCP session controls remain supported. The wire protocol version is `PROTOCOL_VERSION` in `crates/maitty-shared/src/protocol.rs`.
 Conversation tool-history entries carry a bounded provider-supplied `label` for
@@ -379,8 +379,8 @@ tool-use id when Claude names it, so it links to the tool step; an edit tool is 
 `SwapPanes { a, b }` trades the places of two panes of one tab (the split ratios stay with
 their slots). Panes in different tabs, or one that isn't there, are an error.
 
-`maitty_answer` takes the `prompt` id that `maitty_list` (`prompt` on a session that needs you) or
-`maitty_wait` (`prompt <id>`) gave. It hashes the question and its choices, whitespace aside. If the
+`maiker_answer` takes the `prompt` id that `maiker_list` (`prompt` on a session that needs you) or
+`maiker_wait` (`prompt <id>`) gave. It hashes the question and its choices, whitespace aside. If the
 prompt on screen has a different id, nothing is sent and the error shows the current question,
 choices and id.
 
@@ -395,7 +395,7 @@ starts (`daemon/last_lines.rs`). `TermInfo.helper_ask`
 lists the recorded tasks (not empty: the pane needs you, and `TermInfo.status` reads Blocked
 whatever its hooks report), and the request is announced like any needs-you. Only you answer
 it, with `Command::AnswerHelpers { term, choice }`: `Allow` (this session may from now on),
-`Always` (and every session in its project; kept in `helper-projects.json` in Maitty's data
+`Always` (and every session in its project; kept in `helper-projects.json` in Maiker's data
 folder), or `No` (its starts are refused for the rest of its run). A pane may not send it, and
 it is an error unless the pane is asking. `always` and `never` skip the question; `never`
 refuses with an error the agent can read. `sessions.helpers_at_once` (2, 3 or 4) bounds the
@@ -406,7 +406,7 @@ person's shell (no agent in the pane) is never asked. Sessions saved before a re
 **Pull requests.** The daemon polls `gh` off the event loop for each pane's branch, or the URL
 set by `Command::LinkPr { term, url }`; `None` returns to branch discovery. A pane may only link
 its own PR. `TermInfo.pr` holds the latest checks, review, conflict, title and URL. When a new
-reading has a failed check, review request or merge conflict, Maitty queues a short follow-up
+reading has a failed check, review request or merge conflict, Maiker queues a short follow-up
 for the pane's next idle turn when `[sessions] pr_wake` is enabled. It never types into a question.
 
 **Secrets.** A pane asks through `Command::RequestSecret { term, label, reason }` on its
@@ -531,12 +531,12 @@ completion uses the soft completion sound; helper completion stays quiet. Helper
 questions may ring after the same blocked delay.
 
 A session whose project has a check is not finished until the check settles. While it
-runs, no finished alert (desktop or phone) rings and `maitty wait`, `maitty send --wait` and
-MCP `maitty_wait` / `maitty_send` with `wait` stay blocked, bounded by their timeout. A
+runs, no finished alert (desktop or phone) rings and `maiker wait`, `maiker send --wait` and
+MCP `maiker_wait` / `maiker_send` with `wait` stay blocked, bounded by their timeout. A
 passed check lets the normal finished alert ring. A failed check raises a blocked
 attention alert and a notice saying "check failed", rings no finished alert (desktop or
 phone), and the waiter returns with the result: `Waited::Turn` carries the check's
-`CheckInfo`, MCP replies end with its one-line result, and `maitty wait` prints that line
+`CheckInfo`, MCP replies end with its one-line result, and `maiker wait` prints that line
 to stderr and exits 4 (2 is timed out, 3 needs you). A check that could not run gives a
 notice and then the normal finished alert. Queued follow-ups still send when the turn
 ends, and `sessions.helpers_at_once` still counts only working sessions. A session with no check
@@ -550,19 +550,19 @@ run and a stale pass all exit 0. Waiting for approval raises a blocked attention
 the notice `<place>: approve check: <command>` once a turn; it is never a finish.
 
 A working agent the daemon marks quiet (`TermInfo::quiet_since`) reads `[claude: working · quiet
-12m]` in `maitty ls`; `ls --json` and `maitty_list` add `quiet_since` (unix seconds) only then. A
-`maitty wait` or `maitty_wait` that times out on one says `still working, but quiet for 12m`.
+12m]` in `maiker ls`; `ls --json` and `maiker_list` add `quiet_since` (unix seconds) only then. A
+`maiker wait` or `maiker_wait` that times out on one says `still working, but quiet for 12m`.
 A working agent the daemon marks repeating (`TermInfo::repeats`, the calls the repeat has reached)
-reads `[claude: working · repeating 6x]` in `maitty ls`; `ls --json` and `maitty_list` add `repeats`
+reads `[claude: working · repeating 6x]` in `maiker ls`; `ls --json` and `maiker_list` add `repeats`
 only then; and a wait that times out on one says `still working, but repeating itself (6x)`. A quiet
 agent says so first. The count is a hint, never a status: nothing waits on it or rings for it.
 
-`maitty ls`, `maitty ls --json` and MCP `maitty_list` report a check next to the status, never in
+`maiker ls`, `maiker ls --json` and MCP `maiker_list` report a check next to the status, never in
 place of it: `status` keeps its value (`done`) and `TermInfo::reported_check` decides whether a
 result is shown (not while the agent is working or asking, as in the sidebar). `cli::check_note`
 is the one wording for both text surfaces: `check failed (exit 1)`, `checking`, `check passed`,
 `check could not run`, `check overridden`. `ls` prints it in the agent tag
-(`[claude: done · check failed (exit 1)]`); `maitty_list` adds it as a `check` string. `ls --json`
+(`[claude: done · check failed (exit 1)]`); `maiker_list` adds it as a `check` string. `ls --json`
 adds a `check` object (`state` as `checking`, `passed`, `failed`, `overridden` or
 `could_not_run`; `command`; `exit_code`; `duration_ms`; `first_failing_line`; `rerun_queued`;
 `overridden_at`). A pane with no check has no `check` key and its output is unchanged.
@@ -745,6 +745,11 @@ gets `ServerMsg::SettingsChanged`. Keys, values and limits are in
 [ENVIRONMENT](ENVIRONMENT.md#project-specific-settings-both-apps-share). A value of the wrong kind or
 out of range answers `ServerMsg::Error` and leaves the file as it was. A peer that predates the
 variants cannot decode them (a test), and another machine's `SettingsChanged` is ignored.
+Protocol 114 adds `SharedSettings.bypass_off` (defaulted, so an older reply reads as every agent on; a
+test) and `SettingKey::BypassOff`, which a client sends only to a daemon at `BYPASS_SETTING_SINCE` or
+later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays. It also adds `SharedSettings.update_machines`
+(defaulted to true, the setting's default; a test) and `SettingKey::UpdateMachines`, sent only from
+`UPDATE_MACHINES_SINCE`.
 
 Protocol 76 adds `Provider::Gemini` (a conversation's provider on the wire). A Gemini CLI agent in a pane gets the same read-only, transcript-following conversation as Claude and Codex (`follow_transcript.rs`, `Format::Gemini`); the file is the one its hook's `transcript_path` names, and its name must start `session-` and end with the first 8 characters of the hook's session id. Gemini has no structured runtime: starting one is refused. A peer that predates the variant cannot decode it (a test decodes the old provider names).
 
@@ -1028,9 +1033,9 @@ cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 se
 `work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
 inverse `blocks` relations.
 
-`Query::TicketWrite` and `Reply::TicketWrite` (protocol 107, `TICKET_WRITE_SINCE`) are retired: Maitty only
+`Query::TicketWrite` and `Reply::TicketWrite` (protocol 107, `TICKET_WRITE_SINCE`) are retired: Maiker only
 reads tickets (ADR 0011). They stay on the wire so a window from 107 to 112 that still asks gets `Reply::TicketWrite`
-with `Err(Invalid)` ("Maitty no longer changes tickets; change it in the tracker") and keeps its connection. The
+with `Err(Invalid)` ("Maiker no longer changes tickets; change it in the tracker") and keeps its connection. The
 daemon writes nothing, and no client of protocol 113 asks.
 
 Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
@@ -1057,7 +1062,7 @@ Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two mess
   you did not (`daemon/ticket_repo_file.rs`); the flags say which parts came from the file and `notes` (at most 4,
   160 characters each) why any part was not used. `projects` lists only what was linked here, never the file.
 - `Command::OpenTicketSetup { term, folder, source, link }`, from a pane's agent (`<app>_tickets_setup` in
-  `maitty mcp`). Allowed only for the pane's own client (`client.from == Some(term)`), for its own project
+  `maiker mcp`). Allowed only for the pane's own client (`client.from == Some(term)`), for its own project
   (`folder`, when given, must be in it). The daemon reads the project's links and key states off the loop, then
   broadcasts `ServerMsg::TicketSetup(TicketSetupAsk { term, folder, source, link })` to attached human clients
   (not panes, not structured runtimes), at most once per project every 5 seconds, and replies `Reply::Text` with
@@ -1109,7 +1114,7 @@ the `owner/name` a folder of this computer pushes to (`git remote get-url origin
 Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
 (`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`
 answers the lines `Apply` would write and writes nothing; `Apply { folder, identity }` writes them;
-`Remove { folder }` takes away the rule Maitty wrote for a folder (named as the report names it). `outcome`
+`Remove { folder }` takes away the rule Maiker wrote for a folder (named as the report names it). `outcome`
 is the lines by file (`GitConfigWrite { file, lines }`, each line `key = value`) or one line saying why not.
 A rule is a file `<data dir>/git-identities/<16 hex digits of the folder's SHA-256>.gitconfig` holding
 `user.name`, `user.email`, `credential.https://github.com.username`, an empty
@@ -1119,7 +1124,7 @@ A rule is a file `<data dir>/git-identities/<16 hex digits of the folder's SHA-2
 it. `gh auth git-credential` is not used because it only answers for the active account. The folder must
 exist, is made absolute with `/` separators, and may not hold `* ? [ \ "`; the name and email are one
 line each; the login must be signed in on the machine (`gh auth status`). A folder whose entry points
-anywhere else (a rule set outside Maitty) is refused, both to write and to remove. Applying twice leaves
+anywhere else (a rule set outside Maiker) is refused, both to write and to remove. Applying twice leaves
 one entry. Everything is written with `git config --global` and `--file`, never as text; the desktop host
 sends it with `git_identity_rule(machine, change)`, and an answer from another machine is cleaned and cut
 to 4 files of 16 lines (`remote_policy::vet_rule_reply`). Human clients only.
@@ -1128,7 +1133,7 @@ Protocol 101 adds `Query::GitIdentities { tag }` with `Reply::GitIdentities { ta
 (`GIT_IDENTITIES_SINCE`; `COMPATIBLE_SINCE` stays). The report is the machine's global `user.name`
 and `user.email` (each absent when not set) and its folder rules: every
 `includeIf "gitdir:<folder>/"` (or `gitdir/i:`) entry of the global git config, in git's order, the
-last one for a folder standing for it, at most `GIT_IDENTITY_RULES_MAX` (100). A rule Maitty wrote
+last one for a folder standing for it, at most `GIT_IDENTITY_RULES_MAX` (100). A rule Maiker wrote
 has an `identity` (`name`, `email`, GitHub `login`): its entry points at a file directly inside
 `<data dir>/git-identities/` whose `maitty.folder` names that folder, and the login is that file's
 `credential.https://github.com.username`. Any other rule has `identity: None` and only its folder is
@@ -1313,7 +1318,7 @@ secret is inserted into provider config, persisted thread settings or metadata.
 MCP references revalidate authenticated read access before filesystem listing.
 
 Start targets are Create with explicit launch settings, Session with an exact
-Codex `Thread.id`, or Conversation with a Maitty ID and expected generation.
+Codex `Thread.id`, or Conversation with a Maiker ID and expected generation.
 Paths are resolved in background before admission. Explicit resume never uses
 latest, a picker, a fork, alternate history or a missing-thread fallback. Native
 profile-v2 remains unsupported. Effective cwd/model/provider/approval reviewer
@@ -1426,7 +1431,7 @@ and one of three fixed tokens in stderr (`Permission denied`, `Host key verifica
 Everything else is `Unreachable` with ssh's last stderr line, control characters removed and
 cut to 200 characters. The fix text of each class is one constant in `maitty-machines` (`link_failure.rs`)
 (`FIX_LOGIN`, `FIX_UPDATE`, `FIX_INSTALL`, `FIX_NO_DAEMON`); `FIX_UPDATE` and `FIX_INSTALL` name
-`maitty machine update <name>` (and `--install`), with `<name>` as written, one text for every machine.
+`maiker machine update <name>` (and `--install`), with `<name>` as written, one text for every machine.
 
 **Custom transport.** A machine with `via` is reached by running the user's program
 (`Route::Command`, `ssh_command::command_argv`, both in `maitty-machines`) in place of ssh: the same pipes, stream marker skipping,
@@ -1541,7 +1546,7 @@ the rest are dropped silently. Nothing blocks and nothing is queued.
 pane address `machine/id`, else `--on`, else the `--remote` adapter (`ipc::Machine::current()`),
 else this computer. Each command is handed that `Target` and opens its connection with
 `ipc::open_to` (for another machine, `maitty_machines::open_remote`); nothing reads the environment for the machine after that. A configured machine only
-attaches. The pane a command runs in (`$MAITTY_TERM_ID`) is a pane of this computer's daemon, so it is
+attaches. The pane a command runs in (`$MAIKER_TERM_ID`) is a pane of this computer's daemon, so it is
 the default pane only when the target is this computer or the ad-hoc `--remote` route; a command
 aimed at a named machine needs an explicit `--pane machine/id`. `ls` is unchanged for this computer;
 named at a machine it heads the list with `machine <name>`, writes panes as `name/id`, and
@@ -1550,7 +1555,7 @@ machine at the same time and prints those that answer; each that does not gets a
 `<name>: unreachable (<why>)` (or `needs a login`, `is another version`, ...) on stderr, and the command
 fails only when none answered.
 
-**MCP tools.** `maitty_list`, `_read`, `_send`, `_wait` and `_start` take an optional `machine`; a
+**MCP tools.** `maiker_list`, `_read`, `_send`, `_wait` and `_start` take an optional `machine`; a
 session of another machine is written `machine/id` in a list and accepted as an `id` by every pane
 tool (the `machine` argument may then be left out; if both are given and differ, the call is an
 error). Omitted, a call is exactly as before. `machine = "all"` is for the list only. Errors that

@@ -1,4 +1,4 @@
-//! The fake-ssh harness (`examples/fake-ssh.rs`): `MAITTY_SSH` points at it, so the whole
+//! The fake-ssh harness (`examples/fake-ssh.rs`): `MAIKER_SSH` points at it, so the whole
 //! remote path (spawn, framing, handshake, failure) runs against a real daemon on a private
 //! socket with no ssh and no server. Each test gets its own socket, data folder and daemon.
 
@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use maitty_test_support::{fake_ssh, output_within, text};
 
-const MAITTY: &str = env!("CARGO_BIN_EXE_maitty");
+const MAITTY: &str = env!("CARGO_BIN_EXE_maiker");
 const WAIT: Duration = Duration::from_secs(60);
 
 /// A private daemon's worth of environment: its own socket, data folder and config.
@@ -45,29 +45,29 @@ impl Sandbox {
     fn local(&self, program: impl AsRef<std::ffi::OsStr>) -> Command {
         let mut command = Command::new(program);
         command
-            .env("MAITTY_SOCKET", &self.socket)
-            .env("MAITTY_DATA_DIR", self.data())
-            .env("MAITTY_CONFIG", self.dir.join("config.toml"))
-            .env_remove("MAITTY_REMOTE")
-            .env_remove("MAITTY_REMOTE_CMD")
-            // Run inside a maitty pane, the suite would speak as that pane and be refused.
-            .env_remove("MAITTY_TERM_ID")
-            .env_remove("MAITTY_PANE_TOKEN");
+            .env("MAIKER_SOCKET", &self.socket)
+            .env("MAIKER_DATA_DIR", self.data())
+            .env("MAIKER_CONFIG", self.dir.join("config.toml"))
+            .env_remove("MAIKER_REMOTE")
+            .env_remove("MAIKER_REMOTE_CMD")
+            // Run inside a maiker pane, the suite would speak as that pane and be refused.
+            .env_remove("MAIKER_TERM_ID")
+            .env_remove("MAIKER_PANE_TOKEN");
         command
     }
 
-    /// `program` as above, with the fake ssh in `mode` as `MAITTY_SSH`.
+    /// `program` as above, with the fake ssh in `mode` as `MAIKER_SSH`.
     fn command(&self, program: impl AsRef<std::ffi::OsStr>, mode: &str) -> Command {
         let mut command = self.local(program);
         command
-            .env("MAITTY_SSH", fake_ssh())
-            .env("MAITTY_FAKE_SSH_MAITTY", MAITTY)
-            .env("MAITTY_FAKE_SSH_MODE", mode)
-            .env("MAITTY_FAKE_SSH_LOG", self.log());
+            .env("MAIKER_SSH", fake_ssh())
+            .env("MAIKER_FAKE_SSH_MAIKER", MAITTY)
+            .env("MAIKER_FAKE_SSH_MODE", mode)
+            .env("MAIKER_FAKE_SSH_LOG", self.log());
         command
     }
 
-    /// `maitty --remote box <args>` through the fake ssh in `mode`.
+    /// `maiker --remote box <args>` through the fake ssh in `mode`.
     fn remote(&self, mode: &str, args: &[&str]) -> Output {
         let mut command = self.command(MAITTY, mode);
         command.args(["--remote", "box"]).args(args);
@@ -141,7 +141,7 @@ fn the_shim_is_called_the_way_the_client_calls_ssh() {
     assert_eq!(args[dashes + 1], "box", "the host follows `--`: {args:?}");
     assert_eq!(
         args[dashes + 2],
-        r#"sh -c 'PATH="$HOME/.local/bin:$PATH"; export PATH; exec "$@"' sh 'maitty' proxy"#,
+        r#"sh -c 'PATH="$HOME/.local/bin:$PATH"; export PATH; exec "$@"' sh 'maiker' proxy"#,
         "one quoted remote command: {args:?}"
     );
     assert_eq!(
@@ -171,7 +171,7 @@ fn a_host_that_is_an_ssh_option_never_reaches_ssh() {
     let sandbox = Sandbox::new();
     let mut command = sandbox.command(MAITTY, "proxy");
     command
-        .env("MAITTY_REMOTE", "-oProxyCommand=touch pwned")
+        .env("MAIKER_REMOTE", "-oProxyCommand=touch pwned")
         .args(["ls", "--json"]);
     let out = output_within(command, WAIT);
     assert!(
@@ -193,9 +193,9 @@ fn hello_sent_to_a_remote_from_a_pane(sandbox: &Sandbox) -> runtime::protocol::C
     let hello = sandbox.dir.join("hello.bin");
     let mut command = sandbox.command(MAITTY, "capture-hello");
     command
-        .env("MAITTY_FAKE_SSH_HELLO", &hello)
-        .env("MAITTY_TERM_ID", "7")
-        .env("MAITTY_PANE_TOKEN", "local-pane-secret")
+        .env("MAIKER_FAKE_SSH_HELLO", &hello)
+        .env("MAIKER_TERM_ID", "7")
+        .env("MAIKER_PANE_TOKEN", "local-pane-secret")
         .args(["--remote", "box", "ls", "--json"]);
     let _ = output_within(command, WAIT);
     let bytes = std::fs::read(&hello).expect("the shim captured the Hello");
@@ -213,7 +213,7 @@ fn a_local_pane_token_never_reaches_another_machine_s_daemon() {
     assert_eq!(from, None, "the remote daemon is told no pane id or token");
 }
 
-/// `maitty <args>` in this sandbox, which configures no machine, with the fake ssh in `proxy`.
+/// `maiker <args>` in this sandbox, which configures no machine, with the fake ssh in `proxy`.
 fn usage(sandbox: &Sandbox, args: &[&str]) -> Output {
     let mut command = sandbox.command(MAITTY, "proxy");
     command.args(args);
@@ -478,13 +478,13 @@ fn text_with_no_marker_fails_with_the_login_error_instead_of_hanging() {
         );
         let said = text(&out.stderr);
         assert!(
-            said.contains("the remote login printed text before maitty started"),
+            said.contains("the remote login printed text before maiker started"),
             "{mode}: stderr was:
 {said}"
         );
         assert!(
             said.contains("update it"),
-            "{mode}: the older-maitty hint is given:
+            "{mode}: the older-maiker hint is given:
 {said}"
         );
     }
@@ -518,17 +518,17 @@ fn ssh_errors_belong_to_their_own_connection() {
         vec![
             shim.clone(),
             "--mode=proxy".into(),
-            format!("--maitty={MAITTY}"),
-            format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-            format!("--env=MAITTY_DATA_DIR={}", sandbox.data().display()),
+            format!("--maiker={MAITTY}"),
+            format!("--env=MAIKER_SOCKET={}", sandbox.socket),
+            format!("--env=MAIKER_DATA_DIR={}", sandbox.data().display()),
             format!(
-                "--env=MAITTY_CONFIG={}",
+                "--env=MAIKER_CONFIG={}",
                 sandbox.dir.join("config.toml").display()
             ),
         ],
-        "maitty",
+        "maiker",
     );
-    let bad = Machine::ssh("bad", vec![shim, "--mode=auth-fail".into()], "maitty");
+    let bad = Machine::ssh("bad", vec![shim, "--mode=auth-fail".into()], "maiker");
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -565,15 +565,15 @@ fn machine_in_mode(name: &str, sandbox: &Sandbox, mode: &str) -> runtime::ipc::M
         vec![
             fake_ssh().to_string_lossy().into_owned(),
             format!("--mode={mode}"),
-            format!("--maitty={MAITTY}"),
-            format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-            format!("--env=MAITTY_DATA_DIR={}", sandbox.data().display()),
+            format!("--maiker={MAITTY}"),
+            format!("--env=MAIKER_SOCKET={}", sandbox.socket),
+            format!("--env=MAIKER_DATA_DIR={}", sandbox.data().display()),
             format!(
-                "--env=MAITTY_CONFIG={}",
+                "--env=MAIKER_CONFIG={}",
                 sandbox.dir.join("config.toml").display()
             ),
         ],
-        "maitty",
+        "maiker",
     )
 }
 
@@ -984,21 +984,21 @@ mod supervised {
         let ssh = vec![
             fake_ssh().to_string_lossy().into_owned(),
             format!("--mode={mode}"),
-            format!("--maitty={MAITTY}"),
+            format!("--maiker={MAITTY}"),
             calls,
             format!("--argv-log={}", argv_log(sandbox).display()),
-            format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-            format!("--env=MAITTY_DATA_DIR={}", sandbox.data().display()),
+            format!("--env=MAIKER_SOCKET={}", sandbox.socket),
+            format!("--env=MAIKER_DATA_DIR={}", sandbox.data().display()),
             format!(
-                "--env=MAITTY_CONFIG={}",
+                "--env=MAIKER_CONFIG={}",
                 sandbox.dir.join("config.toml").display()
             ),
         ];
-        Machine::ssh("box", ssh, "maitty").attach_only()
+        Machine::ssh("box", ssh, "maiker").attach_only()
     }
 
     /// The sandbox's daemon, running: a configured machine never starts one, so the test does,
-    /// the way `maitty --remote` does.
+    /// the way `maiker --remote` does.
     fn start_daemon(sandbox: &Sandbox) {
         let runtime = runtime();
         let opened = runtime.block_on(runtime::ipc::open_to(&machine("starter", sandbox), true));
@@ -1501,7 +1501,7 @@ mod custom_transport {
     use runtime::ipc::{Machine, open_to};
     use runtime::link_failure::{FailureClass, classify};
 
-    const LOGIN_TEXT: &str = "the remote login printed text before maitty started";
+    const LOGIN_TEXT: &str = "the remote login printed text before maiker started";
 
     /// The shim as `fly`'s `via`, in `mode`, with `extra` arguments and, when asked, the
     /// `{command}` placeholder last.
@@ -1509,11 +1509,11 @@ mod custom_transport {
         let mut words = vec![
             fake_ssh().to_string_lossy().into_owned(),
             format!("--mode={mode}"),
-            format!("--maitty={MAITTY}"),
-            format!("--env=MAITTY_SOCKET={}", sandbox.socket),
-            format!("--env=MAITTY_DATA_DIR={}", sandbox.data().display()),
+            format!("--maiker={MAITTY}"),
+            format!("--env=MAIKER_SOCKET={}", sandbox.socket),
+            format!("--env=MAIKER_DATA_DIR={}", sandbox.data().display()),
             format!(
-                "--env=MAITTY_CONFIG={}",
+                "--env=MAIKER_CONFIG={}",
                 sandbox.dir.join("config.toml").display()
             ),
         ];
@@ -1608,7 +1608,7 @@ mod custom_transport {
             let args: Vec<&str> = logged.lines().filter(|l| *l != "--").collect();
             assert_eq!(
                 args.last(),
-                Some(&r#"sh -c 'PATH="$HOME/.local/bin:$PATH"; export PATH; exec "$@"' sh 'maitty' proxy --attach-only"#),
+                Some(&r#"sh -c 'PATH="$HOME/.local/bin:$PATH"; export PATH; exec "$@"' sh 'maiker' proxy --attach-only"#),
                 "{args:?}"
             );
             for ssh_only in ["-o", "-a", "-T", "BatchMode=yes", "ForwardAgent=no"] {
@@ -1675,7 +1675,9 @@ mod custom_transport {
         let failed = failure(&via(&sandbox, "unreachable", &[], false));
         assert_eq!(
             failed.class,
-            FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into())
+            FailureClass::Unreachable(
+                "It refused the connection, so its ssh server may be off. Start ssh on it, then retry. (ssh: connect to host box port 22: Connection refused)".into()
+            )
         );
     }
 

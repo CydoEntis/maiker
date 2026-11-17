@@ -26,15 +26,15 @@ describe('parseTicketLink', () => {
   })
 
   it('reads GitHub https and ssh links for owner/name', () => {
-    const repo = { ok: true, link: { kind: 'github', repo: 'CydoEntis/maitty' } }
-    expect(parseTicketLink('https://github.com/CydoEntis/maitty/issues/12')).toEqual(repo)
-    expect(parseTicketLink('https://github.com/CydoEntis/maitty.git')).toEqual(repo)
-    expect(parseTicketLink('git@github.com:CydoEntis/maitty.git')).toEqual(repo)
+    const repo = { ok: true, link: { kind: 'github', repo: 'CydoEntis/maiker' } }
+    expect(parseTicketLink('https://github.com/CydoEntis/maiker/issues/12')).toEqual(repo)
+    expect(parseTicketLink('https://github.com/CydoEntis/maiker.git')).toEqual(repo)
+    expect(parseTicketLink('git@github.com:CydoEntis/maiker.git')).toEqual(repo)
     expect(parseTicketLink('https://github.com/CydoEntis').ok).toBe(false)
   })
 
   it('refuses anything else with a reason', () => {
-    for (const text of ['', 'maitty', 'ftp://x/y', 'https://', 'https://user:pw@host/ws', 'https://host/ws/projects/not-an-id', 'https://host/projects', 'https://host/w%20s', 'http://x/\u0007', `https://h/${'a'.repeat(PASTED_LINK_MAX_CHARS)}`]) {
+    for (const text of ['', 'maiker', 'ftp://x/y', 'https://', 'https://user:pw@host/ws', 'https://host/ws/projects/not-an-id', 'https://host/projects', 'https://host/w%20s', 'http://x/\u0007', `https://h/${'a'.repeat(PASTED_LINK_MAX_CHARS)}`]) {
       const read = parseTicketLink(text)
       expect(read.ok, text).toBe(false)
       if (!read.ok) expect(read.reason).not.toBe('')

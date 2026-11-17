@@ -7,7 +7,7 @@ import { toSessionView, type SessionView } from './model/session'
 import { usePutAway } from './usePutAway'
 
 vi.mock('@/api/daemon', () => ({ archiveSessionOnDaemon: vi.fn(() => Promise.resolve()), snoozeSessionOnDaemon: vi.fn(() => Promise.resolve()), terminalOf: (id: string) => Number(id.slice(1)) }))
-vi.mock('@/lib/toast', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }))
+vi.mock('@/lib/toast', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), failure: vi.fn() }) }))
 
 const finished = toSessionView({ id: 't1', kind: 'terminal', title: 'Parser fix', named: true, project: '', folder: '/home/me/app', cwd: '/home/me/app', repo: null, branch: '', provider: 'Claude', status: 'done', updated: null, model: '', permission: '', context: null, nativePane: 1, hasDiff: false, agent: 'claude' }, '/home/me')
 
@@ -68,7 +68,7 @@ describe('putting a session away', () => {
     vi.mocked(archiveSessionOnDaemon).mockRejectedValueOnce(new Error('pipe closed'))
     const { hook } = render()
     hook.result.current.putAway('t1')
-    await waitFor(() => { expect(toast.error).toHaveBeenCalledWith('pipe closed') })
+    await waitFor(() => { expect(toast.failure).toHaveBeenCalledWith(expect.anything(), 'Could not put the session away') })
     expect(toast).not.toHaveBeenCalled()
   })
 })
@@ -122,7 +122,7 @@ describe('snoozing a session', () => {
     vi.mocked(snoozeSessionOnDaemon).mockRejectedValueOnce(new Error('it needs you now: answer it before you snooze it'))
     const { hook } = render()
     hook.result.current.snooze('t1', 1_800_000_000)
-    await waitFor(() => { expect(toast.error).toHaveBeenCalledWith('it needs you now: answer it before you snooze it') })
+    await waitFor(() => { expect(toast.failure).toHaveBeenCalledWith(expect.anything(), 'Could not snooze the session') })
     expect(toast).not.toHaveBeenCalled()
   })
 })

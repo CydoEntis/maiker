@@ -2,7 +2,7 @@ import { TitleBar } from '@/components/TitleBar'
 
 /**
  * The window's title bar as the workspace fills it (layout 2h): the logo and name at the left, the window buttons at the
- * right. What the old Maitty menu started is in the command palette; the view toggles moved to the tools bar.
+ * right. What the old Maiker menu started is in the command palette; the view toggles moved to the tools bar.
  */
 export function AppTitleBar() {
   const start = (

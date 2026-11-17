@@ -8,6 +8,6 @@ describe('the gallery hash', () => {
 
   it('reads the theme and corners it links to, falling back to Night and square', () => {
     expect(galleryParams(galleryHash('Paper', 'rounded'))).toEqual({ theme: 'Paper', corners: 'rounded' })
-    expect(galleryParams('#gallery?corners=wavy')).toEqual({ theme: 'Maitty Night', corners: 'square' })
+    expect(galleryParams('#gallery?corners=wavy')).toEqual({ theme: 'Maiker Night', corners: 'square' })
   })
 })

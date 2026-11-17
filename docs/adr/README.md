@@ -29,10 +29,10 @@ holds the history; an ADR states only what is true now.
 | [0002](0002-terminal-substrate-and-wire-protocol.md) | portable-pty and vt100; msgpack over local sockets, versioned |
 | [0003](0003-status-and-conversation-trust.md) | Status comes only from the owning runtime, and one writer decides it |
 | [0004](0004-client-split-and-desktop-host.md) | Clients are views: TUI, CLI and an optional desktop app, sharing one installed daemon |
-| [0005](0005-provider-adapters-and-permissions.md) | Provider adapters sit behind the daemon; Maitty never widens permissions |
+| [0005](0005-provider-adapters-and-permissions.md) | Provider adapters sit behind the daemon; Maiker never widens permissions |
 | [0006](0006-secrets-never-enter-chat.md) | Secrets never enter chat |
 | [0007](0007-multiple-machines.md) | One connection per machine, held by the client |
 | [0008](0008-windows-first-and-one-product-name.md) | Windows is first-class; the product name lives in one place |
 | [0009](0009-usage-is-provider-reported-never-estimated.md) | Usage is what the provider reported, never estimated |
-| [0010](0010-workflows-and-specialist-agents-stay-outside-maitty.md) | Workflows and specialist agents stay outside Maitty; Maitty shows the specialists |
-| [0011](0011-maitty-reads-tickets-and-shows-no-workflow-runs.md) | Maitty only reads tickets and shows no workflow runs |
+| [0010](0010-workflows-and-specialist-agents-stay-outside-maitty.md) | Workflows and specialist agents stay outside Maiker; Maiker shows the specialists |
+| [0011](0011-maitty-reads-tickets-and-shows-no-workflow-runs.md) | Maiker only reads tickets and shows no workflow runs |

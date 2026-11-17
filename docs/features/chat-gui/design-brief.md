@@ -1,4 +1,4 @@
-# Maitty desktop GUI design brief
+# Maiker desktop GUI design brief
 
 ## Approved design handoff
 
@@ -43,7 +43,7 @@ stops the agent and keeps its history) and start a new one.
 - Syntax colors are a small built-in tokenizer (keywords, strings, numbers,
   comments), not a full grammar; unknown file types stay plain.
 
-Design a polished Windows, macOS and Linux desktop app for Maitty, a terminal
+Design a polished Windows, macOS and Linux desktop app for Maiker, a terminal
 multiplexer for people running several coding agents at once. This is a real
 developer tool, not a marketing page or generic chatbot. Users need to see which
 agents need attention, open the right conversation quickly, inspect agent work,
@@ -95,7 +95,7 @@ Design these areas:
 ## Visual direction
 
 Implement the approved handoff directly. Treat shadcn/ui as primitives; keep
-Maitty's focused developer-workspace character and do not add unrelated project
+Maiker's focused developer-workspace character and do not add unrelated project
 management or cloud-agent features. Honor reduced motion, visible keyboard
 focus, screen-reader status announcements and WCAG AA text contrast. Keep the
 final layout and compact states usable at 1440×900, 1024×700 and 800×600.
@@ -112,7 +112,7 @@ or unrelated features:
 - [Linear triage](https://linear.app/changelog/2021-06-29-linear-release-and-issue-triage):
   keyboard-friendly navigation and scannable work lists.
 
-Do not assume Maitty needs cloud agents, team collaboration or project
+Do not assume Maiker needs cloud agents, team collaboration or project
 management features.
 
 ## Deliverables

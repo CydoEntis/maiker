@@ -1,5 +1,5 @@
 import { movePanes } from './components/paneTransition'
-import { type Dispatch, type RefObject, type SetStateAction, useCallback, useMemo, useRef, useState } from 'react'
+import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef, useState } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
@@ -10,7 +10,6 @@ import { startGitHubSignIn } from '@/api/githubAccounts'
 import { useSessionsEnded } from './useSessionsEnded'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
-import { errorMessage } from '@/lib/error-message'
 import { newWorktreeSession } from '@/features/worktrees/api'
 import { rememberConversationPermissions } from '@/data/conversationPermissions'
 import { reserveOperation } from '@/features/chat/sendOperation'
@@ -23,8 +22,9 @@ import type { ChatAgent, PaneView, StructuredAgent } from './model/chatView'
 import { rememberShellStart } from './model/shellStarts'
 import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import type { WireChoice } from '@/features/chat/agentChoice'
-import { rememberYoloSession } from '@/features/chat/yoloSessions'
-import { launchFlags, yoloFlags } from './model/newChatHost'
+import { rememberBypassSession } from '@/features/chat/bypassSessions'
+import { bypasses } from '@/features/settings/preferences'
+import { launchFlags, startsBypassed, withBypass } from './model/newChatHost'
 import { CODEX_FULL_MODE } from '@/features/chat/chatMeta'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
@@ -179,7 +179,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       })
       .catch((error: unknown) => {
         if (background) throw error
-        toast.error(errorMessage(error, 'Could not start a shell'))
+        toast.failure(error, 'Could not start a shell')
         return false
       })
       .finally(() => { endStart(mode) })
@@ -191,9 +191,10 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // The agent is the new session's first command, so it starts as soon as the shell does instead of being typed in once the
   // shell is ready. Its status hooks are connected first: an agent already running never loads them, and its chat would
   // wait on them until it was restarted.
-  const yolo = useMemo(() => ({ claude: preferences.yoloClaude, codex: preferences.yoloCodex, gemini: preferences.yoloGemini }), [preferences.yoloClaude, preferences.yoloCodex, preferences.yoloGemini])
-  // The words an agent is started with. A warm agent is taken only for exactly these, so both ask through here.
-  const startWords = useCallback((agent: ChatAgent, flags: string) => `${flags}${yoloFlags(agent, yolo)}`.split(' ').filter((word) => word !== ''), [yolo])
+  const bypassOff = preferences.bypassOff
+  // The words an agent is started with, its Bypass Permissions switch taken into account. A warm agent is taken only for
+  // exactly these, so both ask through here.
+  const startWords = useCallback((agent: ChatAgent, flags: string) => withBypass(agent, flags.split(' ').filter((word) => word !== ''), bypasses({ bypassOff }, agent)), [bypassOff])
   const launchAgent = useCallback((agent: ChatAgent, flags: string) => async (folder: string): Promise<void> => {
     await connectAgentOnce(agent).catch((error: unknown) => { console.warn(`Could not connect ${agent}'s status hooks`, error) })
     await launchAgentSession(folder, agent, startWords(agent, flags))
@@ -226,7 +227,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       // The daemon learns which agent runs from the agent's own hook, a moment after it starts; until then the
       // session is known to be this agent, so it never shows as a shell.
       setExpectedAgents((current) => ({ ...current, [id]: agent }))
-      if (yoloFlags(agent, yolo) !== '') rememberYoloSession(id)
+      if (startsBypassed(agent, startWords(agent, flags))) rememberBypassSession(id)
       window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
       if (placed.background) setStartedFrom((current) => (current === null ? null : new Set([...current, id])))
       else movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
@@ -235,7 +236,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       // In the same update as the new session opens, so the window never shows the page between the two.
       placed.afterPlace?.(id)
     }, launchAgent(agent, flags), placed.background ? 'background' : placed.alongside ? 'alongside' : 'alone')
-  }, [runStart, launchAgent, setExpectedAgents, yolo, setLayout, setStartedFrom, paneViews])
+  }, [runStart, launchAgent, setExpectedAgents, startWords, setLayout, setStartedFrom, paneViews])
 
   // Signing an agent's account in is the agent's own interactive command, so it runs in a terminal of its own, in
   // the home folder: a browser opens from it, or it asks for a code. The session is a terminal, never a chat.
@@ -263,7 +264,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!beginStart('alone')) return
     startChat(from.cwd, agent, fullAccess)
-      .catch((error: unknown) => { toast.error(errorMessage(error, `Could not start a ${agent} chat`)) })
+      .catch((error: unknown) => { toast.failure(error, `Could not start a ${agent} chat`) })
       .finally(() => { endStart('alone') })
   }, [online, starting, beginStart, endStart, startChat, startAgentSession])
 
@@ -278,7 +279,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     try {
       await startAgentSession(() => Promise.resolve(from.cwd), to, preferences.chatViewDefault[to], await handoffBrief(from))
     } catch (error: unknown) {
-      toast.error(errorMessage(error, `Could not hand off to ${to}`))
+      toast.failure(error, `Could not hand off to ${to}`)
     }
   }, [online, starting, startAgentSession, preferences.chatViewDefault])
 
@@ -319,10 +320,12 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
     paneViews.choose(id, request.view ?? 'chat')
     if (request.name !== undefined) void renameConversationOnDaemon({ id }, request.name).catch((error: unknown) => { console.warn('Could not name the new session', error) })
-    await sendTerminalInput({ id, generation: 0 }, `${request.agent}${launchFlags(request.agent, everywhereModel(request.agent, request.model), request.reasoning, request.mode)}\r`)
+    const words = startWords(request.agent, launchFlags(request.agent, everywhereModel(request.agent, request.model), request.reasoning, request.mode))
+    if (startsBypassed(request.agent, words)) rememberBypassSession(id)
+    await sendTerminalInput({ id, generation: 0 }, `${[request.agent, ...words].join(' ')}\r`)
     if (!background) setNewChatOpen(false)
     onPlaced?.(id)
-  }, [startOnMachine, setExpectedAgents, paneViews, setNewChatOpen])
+  }, [startOnMachine, setExpectedAgents, paneViews, setNewChatOpen, startWords])
 
   // The new chat is the agent in a terminal the daemon owns, shown as its chat: one session whose view
   // switches to the terminal at any time (ADR 0003), the same for every agent. Starts from the page run alongside each
@@ -340,13 +343,13 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the
     // empty window (or the last chat) for a moment between the two.
     await startAgentSession(() => Promise.resolve(folder), request.agent, request.view ?? 'chat', request.message, flags, { alongside: true, background, ...(request.name === undefined ? {} : { name: request.name }), afterPlace: (id) => {
-      // Codex has no file that says its mode, so what it was started in is what its chat shows: Full access under its Yolo setting.
-      const codexMode = yolo.codex ? CODEX_FULL_MODE : request.mode === 'default' ? null : request.mode
+      // Codex has no file that says its mode, so what it was started in is what its chat shows: Full access under Bypass Permissions.
+      const codexMode = bypasses({ bypassOff }, 'codex') ? CODEX_FULL_MODE : request.mode === 'default' ? null : request.mode
       holdStartChoice(id, { model: request.model, reasoning: request.reasoning, mode: request.agent === 'claude' ? request.mode : request.agent === 'codex' ? codexMode : null })
       if (!background) setNewChatOpen(false)
       onPlaced?.(id)
     } })
-  }, [online, setNewChatOpen, startAgentSession, startRemoteChat, yolo.codex])
+  }, [online, setNewChatOpen, startAgentSession, startRemoteChat, bypassOff])
 
   // New session (the shortcut, the palette, the sidebar's chat button): the new chat page, on the machine asked for or the
   // focused session's.
@@ -388,7 +391,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     if (machine !== LOCAL_MACHINE) {
       void startOnMachine({ machine, name }, REMOTE_HOME, () => startGitHubSignIn(machine)).then(
         (id) => { if (id !== null) started(id) },
-        (error: unknown) => { toast.error(errorMessage(error, `Could not start the sign-in on ${name}`)) },
+        (error: unknown) => { toast.failure(error, `Could not start the sign-in on ${name}`) },
       )
       return
     }

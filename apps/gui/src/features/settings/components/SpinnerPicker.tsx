@@ -3,7 +3,7 @@ import { WebSpinner } from '@/components/WebSpinner'
 import { PickerSelect, type PickerGroup } from './PickerSelect'
 import { isSpinnerStyle, isWebSpinner, spinnerDefinition, SPINNER_TICK_MS, TUI_SPINNERS, WEB_SPINNERS, type SpinnerStyle, type TuiSpinner } from '@/lib/spinner-clock'
 
-const TUI_SOURCE = 'From the Maitty TUI'
+const TUI_SOURCE = 'From the Maiker TUI'
 const WEB_SOURCE = 'Web icon'
 
 /** One TUI spinner, stepping on its own timer written straight into the element, so the page never re-renders for a frame. */
@@ -46,7 +46,7 @@ export function SpinnerPicker({ value, reduced, onPick }: { value: SpinnerStyle;
     <PickerSelect
       label="Working spinner"
       value={value}
-      groups={[groupOf('Maitty TUI', TUI_SPINNERS, TUI_SOURCE, reduced), groupOf('Web', WEB_SPINNERS, WEB_SOURCE, reduced)]}
+      groups={[groupOf('Maiker TUI', TUI_SPINNERS, TUI_SOURCE, reduced), groupOf('Web', WEB_SPINNERS, WEB_SOURCE, reduced)]}
       onPick={(next) => { if (isSpinnerStyle(next)) onPick(next) }}
     />
   )

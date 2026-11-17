@@ -1,6 +1,5 @@
 import { toast } from '@/lib/toast'
 import { listenFileSends, newTransferId, type SendEvent } from '@/api/fileSends'
-import { errorMessage } from '@/lib/error-message'
 import { typablePath } from '@/features/terminal/dropRoute'
 import { PLAIN_TOAST, showSendProgress } from '@/features/terminal/sendToast'
 
@@ -80,7 +79,7 @@ export async function sendAttachments({ machine, label, image, count, start, onL
     // Listening comes first, so no event of the send is missed.
     unlisten = await listenFileSends(onEvent)
   } catch (error) {
-    toast.error(errorMessage(error, 'Could not follow the file send'))
+    toast.failure(error, 'Could not follow the file send')
     return
   }
   showSendProgress(transfer, shown, 0, null)
@@ -88,7 +87,7 @@ export async function sendAttachments({ machine, label, image, count, start, onL
     await start(transfer)
   } catch (error) {
     unlisten()
-    toast.error(errorMessage(error, `Could not send to ${machine}`), { ...PLAIN_TOAST, id: transfer })
+    toast.failure(error, `Could not send to ${machine}`, { ...PLAIN_TOAST, id: transfer })
     return
   }
   await ended

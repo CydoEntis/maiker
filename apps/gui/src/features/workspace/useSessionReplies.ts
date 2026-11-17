@@ -2,7 +2,6 @@ import { type Dispatch, type SetStateAction, useCallback } from 'react'
 import { displayName, type SessionView } from './model/session'
 import { toast } from '@/lib/toast'
 import { sendTerminalInput } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { isChatSession } from './model/chatSession'
 import { abilitiesOf } from './model/agentAbilities'
 
@@ -38,7 +37,7 @@ export function useSessionReplies({ sessionMap, flash, showSessionById, setDismi
     }
     void sendTo(target, keys)
       .then(() => { flash(`Sent “${answer}” to ${displayName(target)}`) })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not answer the session')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not answer the session') })
   }, [sessionMap, sendTo, flash])
 
 
@@ -50,7 +49,7 @@ export function useSessionReplies({ sessionMap, flash, showSessionById, setDismi
     void sendTo(target, `${command}
 `)
       .then(() => { setDismissedRestores((current) => new Set(current).add(target.id)) })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not resume the agent')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not resume the agent') })
   }, [sendTo, setDismissedRestores, showSessionById])
 
   return { answerSession, sendTo, resumeInterrupted }

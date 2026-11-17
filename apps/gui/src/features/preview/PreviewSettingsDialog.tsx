@@ -42,7 +42,7 @@ export function PreviewSettingsDialog({ settingsDialogOpen, setSettingsDialogOpe
         showNotice({
           kind: 'info',
           title: 'Test notification',
-          body: 'Maitty notifications are working.',
+          body: 'Maiker notifications are working.',
         })
         if (settingsPreferences.notificationSound) playNotificationSound()
       }}

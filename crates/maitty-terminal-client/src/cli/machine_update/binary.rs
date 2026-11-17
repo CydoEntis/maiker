@@ -265,7 +265,7 @@ mod tests {
     use super::*;
     use sha2::{Digest, Sha256};
 
-    const MEMBER: &str = "maitty-x86_64-unknown-linux-musl/maitty";
+    const MEMBER: &str = "maitty-x86_64-unknown-linux-musl/maiker";
 
     fn listing(entries: &[(&str, char)]) -> (String, String) {
         let names = entries
@@ -330,9 +330,9 @@ mod tests {
     #[test]
     fn the_wrong_name_or_another_folder_is_refused() {
         assert!(check(&[("maitty-x86_64-unknown-linux-musl/other", '-')]).is_err());
-        assert!(check(&[("maitty-aarch64-apple-darwin/maitty", '-')]).is_err());
+        assert!(check(&[("maitty-aarch64-apple-darwin/maiker", '-')]).is_err());
         assert!(check(&[(MEMBER, '-'), ("elsewhere/file", '-')]).is_err());
-        assert!(check(&[("maitty-x86_64-unknown-linux-musl-evil/maitty", '-')]).is_err());
+        assert!(check(&[("maitty-x86_64-unknown-linux-musl-evil/maiker", '-')]).is_err());
     }
 
     #[test]

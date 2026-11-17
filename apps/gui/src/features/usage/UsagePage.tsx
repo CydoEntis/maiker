@@ -240,7 +240,7 @@ function Empty({ retentionDays }: { retentionDays: number }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-2 py-12 text-center">
       <h2 className="text-[15px] font-semibold">Nothing recorded yet</h2>
-      <p className="max-w-sm text-[12.5px] text-dim">Usage appears here as agent sessions run. Maitty keeps what the agents report for {String(retentionDays)} days and never estimates a figure they did not.</p>
+      <p className="max-w-sm text-[12.5px] text-dim">Usage appears here as agent sessions run. Maiker keeps what the agents report for {String(retentionDays)} days and never estimates a figure they did not.</p>
     </div>
   )
 }
@@ -261,7 +261,7 @@ function LoadFailed({ onRetry, retrying }: { onRetry: () => void; retrying: bool
   return (
     <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 py-12 text-center">
       <h2 className="text-[15px] font-semibold">Could not load usage</h2>
-      <p className="max-w-sm text-[12.5px] text-dim">Maitty could not read the usage figures from maittyd. Your sessions are not affected.</p>
+      <p className="max-w-sm text-[12.5px] text-dim">Maiker could not read the usage figures from maikerd. Your sessions are not affected.</p>
       <button type="button" disabled={retrying} className="rounded-(--r-control) bg-raise px-3 py-1.5 text-[12.5px] font-medium hover:bg-hover" onClick={onRetry}>Retry</button>
     </div>
   )

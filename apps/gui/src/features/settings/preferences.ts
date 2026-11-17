@@ -81,7 +81,7 @@ export type SettingsPreferences = {
   darkTheme: string
   lightTheme: string
   cursorStyle: CursorStyle
-  /** Lines each pane keeps; maittyd keeps the full history. */
+  /** Lines each pane keeps; maikerd keeps the full history. */
   scrollback: ScrollbackLines
   scrollSpeed: ScrollSpeed
   /** Mirror the terminal's text into the page for screen readers. It makes every pane much heavier to draw. */
@@ -114,12 +114,13 @@ export type SettingsPreferences = {
   hideSuccessfulTools: boolean
   /** The tools bar also has Files and History, beside Changes and Checks. Off: the bar keeps to reviewing what agents did. */
   morePanelTools: boolean
-  /** Yolo mode per agent, off by default: Claude may pick Bypass permissions; Codex and Gemini start with approvals and sandbox off. */
-  yoloClaude: boolean
-  yoloCodex: boolean
-  yoloGemini: boolean
-  /** New chats start with the agent's skip-permissions mode ticked: no sandbox and no approval prompts. Off by default. */
-  fullAccessNewChats: boolean
+  /**
+   * The agents switched off in Settings › Permissions › Bypass Permissions. Every other agent starts without permission
+   * prompts (its own flag; a chat with its skip-permissions mode). Shared with the terminal app (`[permissions.bypass]`).
+   */
+  bypassOff: readonly ChatAgent[]
+  /** Remote machines update themselves after this computer does, once their agents are idle. Shared with the terminal app (`[updates] machines`). */
+  updateMachines: boolean
   /** A small readout of frames and process load over the window, for finding what lags. */
   perfOverlay: boolean
   /** Draw terminals with xterm's DOM renderer instead of WebGL; for a web view that shows typed text late. */
@@ -207,10 +208,8 @@ function defaults(): SettingsPreferences {
     defaultAgent: 'claude',
     hideSuccessfulTools: false,
     morePanelTools: false,
-    yoloClaude: false,
-    yoloCodex: false,
-    yoloGemini: false,
-    fullAccessNewChats: false,
+    bypassOff: [],
+    updateMachines: true,
     perfOverlay: false,
     // WebGL everywhere. The late letters it once showed on Linux came from a page drawn on the CPU, which the host now prevents (docs/PERFORMANCE.md).
     terminalPlainDrawing: false,
@@ -235,6 +234,20 @@ function readStored(): string | null {
   } catch {
     return null
   }
+}
+
+/** The agents a Bypass Permissions switch can name. */
+export const BYPASS_AGENTS: readonly ChatAgent[] = ['claude', 'codex', 'gemini']
+
+/** The agents named, when this is a list of them; null otherwise. */
+export function bypassOffOf(value: unknown): ChatAgent[] | null {
+  if (!Array.isArray(value)) return null
+  return BYPASS_AGENTS.filter((agent) => value.includes(agent))
+}
+
+/** Whether `agent` starts without permission prompts: on unless switched off. */
+export function bypasses(preferences: Pick<SettingsPreferences, 'bypassOff'>, agent: ChatAgent): boolean {
+  return !preferences.bypassOff.includes(agent)
 }
 
 export function readSettingsPreferences(): SettingsPreferences {
@@ -287,10 +300,9 @@ export function readSettingsPreferences(): SettingsPreferences {
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
       morePanelTools: bool(preferences.morePanelTools, fallback.morePanelTools),
-      yoloClaude: bool(preferences.yoloClaude, fallback.yoloClaude),
-      yoloCodex: bool(preferences.yoloCodex, fallback.yoloCodex),
-      yoloGemini: bool(preferences.yoloGemini, fallback.yoloGemini),
-      fullAccessNewChats: bool(preferences.fullAccessNewChats, fallback.fullAccessNewChats),
+      // The old Yolo and Full access switches are not read: they were off by default, not a choice to keep.
+      bypassOff: bypassOffOf(preferences.bypassOff) ?? fallback.bypassOff,
+      updateMachines: bool(preferences.updateMachines, fallback.updateMachines),
       perfOverlay: bool(preferences.perfOverlay, fallback.perfOverlay),
       terminalPlainDrawing: bool(preferences.terminalPlainDrawing, fallback.terminalPlainDrawing),
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
@@ -301,7 +313,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       keyOverrides: readKeyOverrides(preferences.keyOverrides),
     }
   } catch {
-    console.warn('Ignoring invalid Maitty settings')
+    console.warn('Ignoring invalid Maiker settings')
     return fresh
   }
 }
@@ -337,8 +349,13 @@ function isAccent(value: unknown): value is SettingsPreferences['accent'] {
 const isThemeMode = (value: unknown): value is ThemeMode => value === 'system' || value === 'dark' || value === 'light'
 
 /** A saved theme name, if it is a known theme of the wanted kind. */
-const themeOfKind = (value: unknown, light: boolean): string | null =>
-  typeof value === 'string' && THEMES.some((theme) => theme.name === value && theme.light === light) ? value : null
+/** The app was called Maitty: a theme saved under that name ("Maitty Night") is the same theme under the new one. */
+const RENAMED_THEME = /^Maitty /
+
+const themeOfKind = (saved: unknown, light: boolean): string | null => {
+  const value = typeof saved === 'string' ? saved.replace(RENAMED_THEME, 'Maiker ') : saved
+  return typeof value === 'string' && THEMES.some((theme) => theme.name === value && theme.light === light) ? value : null
+}
 
 /** The mode and both slots. Settings saved with one theme keep it: it fills its own slot and the mode pins to it. */
 function themeChoice(saved: Partial<Record<string, unknown>>, fallback: SettingsPreferences): Pick<SettingsPreferences, 'themeMode' | 'darkTheme' | 'lightTheme'> {

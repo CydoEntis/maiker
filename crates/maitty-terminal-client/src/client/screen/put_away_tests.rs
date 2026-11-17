@@ -1,5 +1,5 @@
 //! Put away and Bring back: the row action, the lists that leave a put-away session out, and the
-//! Put away list. `MAITTY_SHOW=1 cargo test put_away_tests -- --nocapture` prints the frames.
+//! Put away list. `MAIKER_SHOW=1 cargo test put_away_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::Outgoing;

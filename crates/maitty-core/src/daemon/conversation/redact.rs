@@ -1,6 +1,6 @@
 //! Keeps secrets out of what the daemon stores and serves as conversation history.
 //!
-//! Two things happen here, both only to Maitty's copy; the agent itself still sees everything:
+//! Two things happen here, both only to Maiker's copy; the agent itself still sees everything:
 //!
 //! - token- and key-shaped strings are masked by pattern ([`redact_text`], [`redact_input`]);
 //! - the content of obviously secret files (a `.env`, a private key, a credentials file) is left

@@ -64,7 +64,7 @@ Phase 1, filed in Plane (project MAITTY, module "Moving files"), in this order:
 
 1. MAITTY-227 the fixed script and ssh line that read one file
 2. MAITTY-228 stream a remote file into a local file, checked and capped (blocked by 1)
-3. MAITTY-229 `maitty machine get` (blocked by 2)
+3. MAITTY-229 `maiker machine get` (blocked by 2)
 4. MAITTY-230 the desktop host command to get a file (blocked by 2)
 5. MAITTY-231 a Get dialog on a remote session (blocked by 4)
 6. MAITTY-232 how to move text between machines (docs, no blockers)

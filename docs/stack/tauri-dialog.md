@@ -1,6 +1,6 @@
 # Tauri dialog
 
-> **Use for:** Native folder selection in the Maitty desktop GUI.
+> **Use for:** Native folder selection in the Maiker desktop GUI.
 > **Requires:** Tauri 2
 > **Fills:** SECURITY § desktop capabilities
 

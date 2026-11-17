@@ -1,4 +1,4 @@
-/* Maitty Desktop v8, terminal-first. Values are lifted from the design prototype; theme colours
+/* Maiker Desktop v8, terminal-first. Values are lifted from the design prototype; theme colours
    arrive as custom properties on .mx-app (see theme/themes.ts). */
 
 @keyframes v7fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

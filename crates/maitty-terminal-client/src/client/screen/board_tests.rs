@@ -1,5 +1,5 @@
 //! The status log, broadcasting, even pane widths and
-//! Recent sessions, drawn and driven as a person would. `MAITTY_SHOW=1 cargo test board_tests --
+//! Recent sessions, drawn and driven as a person would. `MAIKER_SHOW=1 cargo test board_tests --
 //! --nocapture` prints the frames.
 use super::*;
 use crate::client::reference_fixture::{self, Stage};

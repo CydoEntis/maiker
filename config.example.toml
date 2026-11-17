@@ -1,6 +1,6 @@
-# maitty configuration
-# Location: %APPDATA%\maitty\config.toml on Windows, ~/.config/maitty/config.toml elsewhere
-# (override with MAITTY_CONFIG). Every key is optional; reload with <prefix> Ctrl+R.
+# maiker configuration
+# Location: %APPDATA%\maiker\config.toml on Windows, ~/.config/maiker/config.toml elsewhere
+# (override with MAIKER_CONFIG). Every key is optional; reload with <prefix> Ctrl+R.
 
 prefix = "ctrl+a"
 
@@ -37,7 +37,7 @@ replay_bytes = 2097152      # output kept per pane by the daemon, replayed on re
 # sidebar_bg = "#16161e"
 
 [ui]
-start_dir = ""              # where plain `maitty` opens, e.g. "~/code" (empty: where you run it)
+start_dir = ""              # where plain `maiker` opens, e.g. "~/code" (empty: where you run it)
 sidebar_tabs = "all"        # all | busy | off: a session's tabs as lines under its row
 alt_keys = true             # Alt+n shell, Alt+a session, Alt+x close, Alt+s / Alt+d split side by side / down, without the leader
 sidebar = true              # <leader> z collapses it
@@ -61,9 +61,9 @@ subagent_count = true       # show "· N agents" on a working session row when t
 # spinner = []              # static icons.working; at most 64 custom frames
 workspace_colors = ["#89b4fa", "#a6e3a1", "#cba6f7", "#fab387", "#94e2d5", "#f5c2e7", "#f9e2af", "#f38ba8"]
 
-# Settings > Sessions. `helpers`: may a session start helpers (other agents through `maitty mcp`)?
+# Settings > Sessions. `helpers`: may a session start helpers (other agents through `maiker mcp`)?
 # ask puts the question on the session's row the first time; Always in this project is
-# remembered in helper-projects.json in Maitty's data folder. `helpers_at_once` is per session.
+# remembered in helper-projects.json in Maiker's data folder. `helpers_at_once` is per session.
 # (An old [mcp] helpers_at_once is used until this is set.)
 [sessions]
 agent = "last used"         # last used | claude | codex | gemini
@@ -106,7 +106,7 @@ branch = "\ue0a0 "          # Nerd Font branch glyph; use "" or "on " without on
 enabled = true              # keep a checkout's files as they were when an agent's turn begins and ends; restore from its menu
 
 [notify]
-sound = true                # maitty's own sounds, all of them; off silences the two below
+sound = true                # maiker's own sounds, all of them; off silences the two below
 # sound_on_needs = true     # two rising notes when an agent you're not looking at needs you
 # sound_on_done = true      # one soft note when one finishes (once per thing you asked for)
 # volume = "normal"         # quiet, normal or loud
@@ -153,7 +153,7 @@ pattern_rows = 12
 # built-ins by name: claude, codex, gemini, opencode, cursor, copilot, amp, qwen, aider,
 # goose, crush, droid, pi, kiro, grok, auggie, kimi, deepseek, devin, agy, cline, omp,
 # mastracode, hermes, kilo, qodercli, letta, maki, muse. Patterns are case-insensitive regexes
-# matched against the bottom of the screen; hooks (`maitty integrate claude`)
+# matched against the bottom of the screen; hooks (`maiker integrate claude`)
 # override them with exact lifecycle events.
 # [[agents]]
 # name = "my-agent"
@@ -169,23 +169,39 @@ pattern_rows = 12
 # enabled = false
 
 
+# Bypass Permissions: agents start without permission prompts (Claude
+# --dangerously-skip-permissions, Codex --dangerously-bypass-approvals-and-sandbox,
+# Gemini --yolo). On for every agent unless switched off here, or in Settings in
+# either app. Only sessions started afterwards change; a custom [[agents]] entry
+# can name its own `bypass_flag`.
+# [permissions.bypass]
+# claude = true
+# codex = false
+# gemini = true
+
+# Updates: after this computer updates, each [[machines]] entry that is behind
+# updates too, once no agent there is working or waiting. Off: click Update on
+# each machine yourself.
+# [updates]
+# machines = true
+
 # [[recipes]]
 # name = "feature"
 # worktree = true
 # run = ["claude", "npm run dev", "lazygit"]
 
-# Per-repo settings go in the repo, in a .maitty.toml file (commit it to share them):
+# Per-repo settings go in the repo, in a .maiker.toml file (commit it to share them):
 #   [hooks]
-#   on_create = "npm install"        # runs in each new worktree ($MAITTY_BRANCH, $MAITTY_WORKTREE, ...)
+#   on_create = "npm install"        # runs in each new worktree ($MAIKER_BRANCH, $MAIKER_WORKTREE, ...)
 #   on_remove = ""                   # runs before a worktree is removed
 
-# Checks: when an agent's turn ends in a project listed here, Maitty runs `command` through
+# Checks: when an agent's turn ends in a project listed here, Maiker runs `command` through
 # your shell in that session's worktree and records the result. `project` is the repo's
 # main checkout. A project may list several
 # checks (checkpoints), each with its own `name` (default: the command's last word, so
 # "npm test" is `test`); two in one project may not share a name.
 # `timeout_s` (default 600) stops a run that hangs, and its whole process tree with it.
-# The command does not get the pane's MAITTY_PANE_TOKEN, and its output stays on the daemon.
+# The command does not get the pane's MAIKER_PANE_TOKEN, and its output stays on the daemon.
 # Several run in the order listed, each whatever the one before it returned; the session
 # reads done only when every one passed (or you overrode it).
 # [[check]]
@@ -199,12 +215,12 @@ pattern_rows = 12
 # timeout_s = 600
 # Settings > Check edits this table for the project you are in and keeps your comments.
 #
-# A repo can name its own checks in .maitty/checks.toml (same keys, no `project`). Maitty
+# A repo can name its own checks in .maiker/checks.toml (same keys, no `project`). Maiker
 # reads it only for a project with no [[check]] here: yours win and the file is then ignored.
-# None of its commands runs until you approve it from a Maitty window (once, always, or never
+# None of its commands runs until you approve it from a Maiker window (once, always, or never
 # for this repo); an Always holds for that exact command, so a changed command asks again.
-# Your answers are kept in check-approvals.json in Maitty's data folder, not in the repo.
-#   # .maitty/checks.toml
+# Your answers are kept in check-approvals.json in Maiker's data folder, not in the repo.
+#   # .maiker/checks.toml
 #   [[check]]
 #   name = "build"
 #   command = "cargo build"
@@ -219,14 +235,14 @@ pattern_rows = 12
 # sync shares this file. `name` is 1-32 letters, digits, `-`, `_` or `.` (not only digits, not
 # `local`); `target` is a host, `user@host` or an ssh `Host` alias, and may not start with `-`
 # or hold spaces. `ssh_args` is a list, one argument per entry. `remote_cmd` is the app's
-# command on that machine (default `maitty`). A listed machine is only attached to: the app
-# must be installed and its daemon running there (`maitty machine update <name>` installs it).
+# command on that machine (default `maiker`). A listed machine is only attached to: the app
+# must be installed and its daemon running there (`maiker machine update <name>` installs it).
 # A remote machine's clipboard writes, notices
 # (which include bringing the window to the front) and sounds are off unless you turn them on
 # here; a toast it causes starts with `[name]`. `mcp = true` lets an agent in a pane on this
 # computer list, read, send to and wait on that machine's panes through its MCP tools (`machine`
 # argument, or an id written `name/4`), only if the agent's own pane holds the read / write grant
-# (`maitty grant`); off, an MCP call naming the machine is refused and never dials it. Starting
+# (`maiker grant`); off, an MCP call naming the machine is refused and never dials it. Starting
 # agents there stays local-only. The Machines dialog (leader, then `w`) adds and
 # removes entries here for you, writing `name` and `target`. `via` replaces ssh with a program
 # you name (not on Windows): a list, the program then its arguments, with `{command}` where the
@@ -237,7 +253,7 @@ pattern_rows = 12
 # name = "box"
 # target = "me@10.0.0.2"
 # ssh_args = ["-p", "2222", "-i", "~/.ssh/box"]
-# remote_cmd = "~/.cargo/bin/maitty"
+# remote_cmd = "~/.cargo/bin/maiker"
 # clipboard = true          # default: a copy made there reaches your clipboard; false stops it
 # notices = false
 # sounds = false
@@ -265,5 +281,5 @@ pattern_rows = 12
 # where = "worktree"
 
 [mcp]
-approve = "never"       # may agents (through `maitty mcp`) answer "yes" to prompts? never | safe | always
+approve = "never"       # may agents (through `maiker mcp`) answer "yes" to prompts? never | safe | always
 scope = "project"       # project | all

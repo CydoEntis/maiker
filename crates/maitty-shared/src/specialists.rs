@@ -1,5 +1,5 @@
 //! A project's specialist agent files, as Claude Code and Codex keep them, listed read-only (ADR
-//! 0010). Maitty never creates, edits or runs them; the providers' own tools do.
+//! 0010). Maiker never creates, edits or runs them; the providers' own tools do.
 
 use crate::protocol::TermId;
 use serde::{Deserialize, Serialize};

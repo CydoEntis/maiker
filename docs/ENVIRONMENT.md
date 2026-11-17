@@ -64,10 +64,10 @@ they are: on a host that keeps Rust in a container, from inside that container.
 ## Project-specific: setup
 
 ```sh
-git clone https://github.com/CydoEntis/maitty && cd maitty
+git clone https://github.com/CydoEntis/maiker && cd maiker
 cargo build
 cargo test
-cargo install --path apps/tui   # then run: maitty
+cargo install --path apps/tui   # then run: maiker
 ```
 
 To work on the optional desktop preview, from `apps/gui/` run:
@@ -81,7 +81,7 @@ pnpm desktop:build     # create platform installer packages
 Desktop commands build the Rust CLI sidecar for the current host platform. In dev,
 Tauri's `beforeDevCommand` rebuilds it (`pnpm bundle:daemon:dev`) on every start, so
 `pnpm tauri dev` never runs a stale service copy. A packaged app instead installs that
-file as the shared `maitty` on first start and after each update (see
+file as the shared `maiker` on first start and after each update (see
 [ADR 0004](adr/0004-client-split-and-desktop-host.md)).
 The packaged GUI uses that sidecar to start the separate daemon when needed;
 closing the GUI leaves the daemon and its sessions running. `pnpm dev` opens
@@ -95,13 +95,13 @@ The dev server and the window use port 1420 (`server.port` in `vite.config.ts`, 
 `tauri.conf.json`) with `strictPort`: if something else holds 1420, `pnpm desktop:dev` stops with
 an error instead of letting the window load that other server. To try a build without touching
 the sessions of a running daemon, give it its own server, as for any nested test:
-`MAITTY_INSTALL_DIR=/tmp/maitty-try-bin MAITTY_DATA_DIR=/tmp/maitty-try-data MAITTY_SOCKET=try pnpm desktop:dev`. The install folder matters: the app runs the one shared `maitty` file (ADR 0004) and keeps an installed file that is newer than the app, so without its own `MAITTY_INSTALL_DIR` a build from a checkout runs the daemon you installed, a release behind it, and asks to restart it. On NVIDIA under
+`MAIKER_INSTALL_DIR=/tmp/maitty-try-bin MAIKER_DATA_DIR=/tmp/maitty-try-data MAIKER_SOCKET=try pnpm desktop:dev`. The install folder matters: the app runs the one shared `maiker` file (ADR 0004) and keeps an installed file that is newer than the app, so without its own `MAIKER_INSTALL_DIR` a build from a checkout runs the daemon you installed, a release behind it, and asks to restart it. On NVIDIA under
 Wayland, WebKitGTK can die with `Error 71 (Protocol error) dispatching to Wayland display`; start
 with `WEBKIT_DISABLE_DMABUF_RENDERER=1` (verified on Hyprland, RTX 4060, WebKitGTK 2.52.6).
 
 Two things to know when building on Windows while a desktop daemon is running:
 
-- `cargo build` fails with "Access is denied" if a `maitty-gui-daemon.exe` that
+- `cargo build` fails with "Access is denied" if a `maiker-gui-daemon.exe` that
   was started from `target\debug` is still running, because Windows will not let
   cargo replace the running file. Don't kill it (it owns your sessions); build into
   another folder instead: `CARGO_TARGET_DIR=C:/dev/maitty-gate-target cargo build`.
@@ -113,7 +113,7 @@ Two more, on Linux:
 
 - A fresh checkout or worktree has no `apps/gui/src-tauri/binaries/` sidecar, and `cargo build`
   fails in `maitty-gui`'s build script until there is one. `node apps/gui/scripts/bundle-daemon.ts`
-  builds `maitty` and copies it there (the desktop commands do this themselves).
+  builds `maiker` and copies it there (the desktop commands do this themselves).
 - `cargo check --target aarch64-apple-darwin` cannot build `maitty-gui` without a macOS C compiler
   (its Objective-C does not compile). Cross-check the rest with `--workspace --exclude maitty-gui`.
 
@@ -127,13 +127,13 @@ reinstall by hand once. To rotate it, publish a release signed by the old key th
 public key, then switch the secret. Local `pnpm desktop:build` does not need the key; only releases
 do. See [`docs/stack/tauri-updater.md`](stack/tauri-updater.md).
 
-Settings live in `config.toml` (`%APPDATA%\maitty\` on Windows,
-`~/.config/maitty/` elsewhere), with `config.local.toml` beside it for
+Settings live in `config.toml` (`%APPDATA%\maiker\` on Windows,
+`~/.config/maiker/` elsewhere), with `config.local.toml` beside it for
 machine-only values. `config.example.toml` documents every key.
 
-Your Always / Never answers to a repo's `.maitty/checks.toml` commands live in
-`check-approvals.json` in Maitty's data folder (`%LOCALAPPDATA%\maitty\data\` on
-Windows, `~/.local/share/maitty/` on Linux, `~/Library/Application Support/maitty/`
+Your Always / Never answers to a repo's `.maiker/checks.toml` commands live in
+`check-approvals.json` in Maiker's data folder (`%LOCALAPPDATA%\maiker\data\` on
+Windows, `~/.local/share/maiker/` on Linux, `~/Library/Application Support/maiker/`
 on macOS), never in the repo and never synced. The daemon reads it once when it
 starts; Settings › Check forgets an answer.
 
@@ -146,7 +146,7 @@ offers presets and a custom editor. Preserve explicit custom frames on reload.
 `[[machines]]` names other computers reached over ssh. It is read only from
 `config.local.toml` (beside `config.toml`), which is per computer and never synced. A
 `[[machines]]` entry in `config.toml`, the file sync shares, is a load error that says where
-to move it; the file is left as it was. With `MAITTY_CONFIG` set, that file is the whole
+to move it; the file is left as it was. With `MAIKER_CONFIG` set, that file is the whole
 config and is held to the same rule.
 
 | Key | Meaning |
@@ -154,20 +154,20 @@ config and is held to the same rule.
 | `name` | required; 1-32 of letters, digits, `-`, `_`, `.`, starting with a letter or digit; unique ignoring case; not `local`; not only digits (those are pane ids) |
 | `target` | required; the ssh destination; may not start with `-` or contain whitespace or control characters |
 | `ssh_args` | list of extra ssh arguments, one per entry; none empty, none with control characters; never split on spaces |
-| `remote_cmd` | the app's command on the far side; unset, `maitty`; not empty, no control characters |
+| `remote_cmd` | the app's command on the far side; unset, `maiker`; not empty, no control characters |
 | `via` | optional custom transport: a list, the program then its arguments, run in place of ssh (`["fly", "ssh", "console", "-C", "{command}"]`). It must carry stdin and stdout unchanged, allocate no pty and not prompt. The element `{command}` (alone, at most once) is replaced by the remote command `'<remote_cmd>' proxy --attach-only`; without it the command is the last argument. Not empty; the program is not empty, not `{command}` and does not start with `-`; no control characters; `{command}` inside a longer entry is refused. `ssh_args` beside `via` is refused (it would be ignored). Refused on Windows. It is a program this app runs, so it is read only from `config.local.toml`. `target` stays required: it is the machine's label |
 | `clipboard`, `notices`, `sounds` | `notices` and `sounds` default `false` (clipboard is on); in the terminal app the Machines dialog turns `notices` and `sounds` on or off with `n` and `s`, and in the desktop app Settings › Machines does. They let that machine's panes write the clipboard, raise notices (and bring the window to the front) or play sounds. A machine's own worktree prompts, replies and workspace announcements are never acted on. See [SECURITY](SECURITY.md) |
 | `mcp` | default `false`; lets an agent in a pane on this computer reach this machine through its MCP tools (`machine` argument or a `machine/id` id): list, read, send, wait. Off, a call naming the machine is refused with `machine_not_enabled` and the machine is not dialled. On, the agent's own pane still needs the `read` or `write` grant. Starting, answering and interrupting stay local-only. See [SECURITY](SECURITY.md) |
 
 Validation runs when the config loads. `--remote host` is an ad-hoc machine named after the
-host, with no table entry: `MAITTY_SSH` is its ssh program and leading arguments (split on
-whitespace), `MAITTY_REMOTE_CMD` its remote command. A `[[machines]]` entry uses `ssh_args` and
+host, with no table entry: `MAIKER_SSH` is its ssh program and leading arguments (split on
+whitespace), `MAIKER_REMOTE_CMD` its remote command. A `[[machines]]` entry uses `ssh_args` and
 `remote_cmd` instead, and does not read those two variables.
 
 A machine with a `via` is connected, redialled and checked like any other, with these differences.
-`maitty machine update <name>` is refused (`installing over a custom transport is not supported;
-install maitty on <name> yourself`) and nothing is run. The Machines dialog only adds ssh machines, so
-it has no probe or first-login step for a `via` entry; the entry connects when the app starts. `maitty
+`maiker machine update <name>` is refused (`installing over a custom transport is not supported;
+install maiker on <name> yourself`) and nothing is run. The Machines dialog only adds ssh machines, so
+it has no probe or first-login step for a `via` entry; the entry connects when the app starts. `maiker
 doctor` shows `custom transport` with the program's name (never its arguments), runs the protocol
 check, and marks the steps that need ssh `not available over a custom transport`. `--on <name>` works.
 A failure is `NeedsInstall` on exit 127, `Unreachable` with the program's last stderr line otherwise,
@@ -176,11 +176,11 @@ never `NeedsLogin` (that reads ssh's words).
 Each `[[machines]]` entry is connected when the app starts, and kept connected: a line that
 drops is redialled at once and then at growing intervals (states and timings:
 [API_PATTERNS](API_PATTERNS.md#project-specific-connections-to-other-machines)). The machine's daemon must
-already be running only after the first connection: maitty starts it there on a machine's first
+already be running only after the first connection: maiker starts it there on a machine's first
 connection and when you retry, because it exits when nothing is attached; a redial after a lost
 connection only attaches and never starts it (`--remote host` always starts it). The window says, in a toast, when a machine
 is reconnecting, connected again, unreachable (with why), needs a login (make plain `ssh` to it
-work without a prompt) or needs maitty updated or installed there. Typing sent to a machine while
+work without a prompt) or needs maiker updated or installed there. Typing sent to a machine while
 it was down is dropped, and the toast on reconnect says how much. A machine added or removed in the
 Machines dialog (leader `w`) takes effect at once: the dialog appends or deletes the `[[machines]]` entry
 in `config.local.toml` (`name` and `target` only, comments and the rest kept, written atomically) and
@@ -195,12 +195,12 @@ machine, and a pane there is written `machine/id` (`--pane build/4`, `read build
 case, is this computer. Names compare ignoring case, as the config check does. `--on` works with `ls`,
 `read`, `send`, `wait`, `split`, `handoff`, `new`, `focus`, `close`, `grant`, `teach`, `popup` and
 `kill-server`; any other command refuses it rather than act here. The machine of a command is the
-address's, else `--on`, else `--remote` (and `MAITTY_REMOTE`), else this computer. `--on X` with
+address's, else `--on`, else `--remote` (and `MAIKER_REMOTE`), else this computer. `--on X` with
 `--pane Y/4` for another machine, `--on` with `--remote`, and an address with `--remote` are usage
 errors (exit 2), as are `ls --all` beside `--on`, `--remote` or a pane address, and an unknown name, which lists the names that work. `--remote host` is the ad-hoc
 route and behaves as it always did; a configured machine is only attached to by `--on` (it never starts a remote daemon).
 
-`$MAITTY_TERM_ID` and `$MAITTY_PANE_TOKEN` name a pane of the daemon on this computer. They stay the
+`$MAIKER_TERM_ID` and `$MAIKER_PANE_TOKEN` name a pane of the daemon on this computer. They stay the
 default pane and the identity of a command that talks to this computer (`--on local` included). A
 command given `--on build` or `build/..` never takes them: it needs `--pane build/<id>`, and the other
 machine is told no pane id or token. `kill-server --on build` stops every session on that machine and
@@ -208,15 +208,15 @@ needs `--yes`.
 
 ### Installing the app on a machine
 
-`maitty machine update <name> [--install] [--yes] [--force]` puts this version on a configured machine
+`maiker machine update <name> [--install] [--yes] [--force]` puts this version on a configured machine
 (see the guide). The destination is `remote_cmd` when it is an absolute path or begins with `~/` (the `~`
 is expanded on the far side, from its `$HOME`, never here); a `remote_cmd` that is only a name (the
-default, `maitty`) installs to `~/.local/bin/maitty`, and the default name is run on the far side with
+default, `maiker`) installs to `~/.local/bin/maiker`, and the default name is run on the far side with
 `~/.local/bin` first on its PATH (`FIND_INSTALLED_SCRIPT`), so a fresh install is found whatever PATH a
 non-interactive ssh gets. Only Linux and macOS on x86_64 or aarch64 are
 supported as a remote; a Windows machine is refused. The release assets are named
 `maitty-<target>.tar.gz` (see `cli/update.rs`) and the fetch uses the same `gh` or `curl` path as
-`maitty update`, on this computer only.
+`maiker update`, on this computer only.
 
 ## Project-specific: PATH on the daemon's host
 
@@ -275,29 +275,30 @@ daemon's automatic clean-up does not read inactivity at all.
 
 ## Project-specific: variables
 
-No `.env` file: Maitty is configured through `config.toml`. Environment variables
-it reads:
+No `.env` file: Maiker is configured through `config.toml`. Environment variables
+it reads (a name the app had before still counts, `MAITTY_SOCKET` for `MAIKER_SOCKET`, until the new
+one is set; [ADR 0008](adr/0008-windows-first-and-one-product-name.md)):
 
 | Variable | Purpose | Set by |
 | --- | --- | --- |
-| `MAITTY_CONFIG` | use this config file instead of the default | user |
-| `MAITTY_DATA_DIR` | absolute directory for saved state, logs and approval settings; validated and captured at startup | developer / user |
-| `MAITTY_SOCKET` | name of a separate server (like `tmux -L`); used for nested test servers | user |
-| `MAITTY_REMOTE` | the SSH host this client works on (from `--remote`) | maitty |
-| `MAITTY_SSH`, `MAITTY_REMOTE_CMD` | replace `ssh` / the remote `maitty` command (`MAITTY_REMOTE_CMD` is one program path); removed from every pane's environment, like `MAITTY_REMOTE` | user |
-| `MAITTY_UPDATE_PROGRESS` | `1` makes `maitty machine update` print a `progress: N` line on stderr as each stage ends (the desktop app sets it; a person at a terminal never sees it) | desktop app |
-| `MAITTY_TERM_ID`, `MAITTY_PANE_TOKEN` | the pane's id and secret, set inside every pane | daemon |
-| `MAITTY_SHOW` | tests print rendered frames | developer |
-| `MAITTY_NO_INTEGRATE` | `1`: the installers and `maitty update` leave agents' config alone instead of running `maitty integrate`, and `maitty uninstall` leaves it alone too | user |
-| `MAITTY_NO_GPU_FORCE` | `1`: the desktop app on Linux leaves the web view's drawing variables alone (it otherwise sets `WEBKIT_FORCE_DMABUF_RENDERER=1` and `__NV_DISABLE_EXPLICIT_SYNC=1` for NVIDIA under Wayland; see [PERFORMANCE](PERFORMANCE.md#the-page-was-drawn-on-the-cpu-2026-11-10)) | user |
+| `MAIKER_CONFIG` | use this config file instead of the default | user |
+| `MAIKER_DATA_DIR` | absolute directory for saved state, logs and approval settings; validated and captured at startup | developer / user |
+| `MAIKER_SOCKET` | name of a separate server (like `tmux -L`); used for nested test servers | user |
+| `MAIKER_REMOTE` | the SSH host this client works on (from `--remote`) | maiker |
+| `MAIKER_SSH`, `MAIKER_REMOTE_CMD` | replace `ssh` / the remote `maiker` command (`MAIKER_REMOTE_CMD` is one program path); removed from every pane's environment, like `MAIKER_REMOTE` | user |
+| `MAIKER_UPDATE_PROGRESS` | `1` makes `maiker machine update` print a `progress: N` line on stderr as each stage ends (the desktop app sets it; a person at a terminal never sees it) | desktop app |
+| `MAIKER_TERM_ID`, `MAIKER_PANE_TOKEN` | the pane's id and secret, set inside every pane | daemon |
+| `MAIKER_SHOW` | tests print rendered frames | developer |
+| `MAIKER_NO_INTEGRATE` | `1`: the installers and `maiker update` leave agents' config alone instead of running `maiker integrate`, and `maiker uninstall` leaves it alone too | user |
+| `MAIKER_NO_GPU_FORCE` | `1`: the desktop app on Linux leaves the web view's drawing variables alone (it otherwise sets `WEBKIT_FORCE_DMABUF_RENDERER=1` and `__NV_DISABLE_EXPLICIT_SYNC=1` for NVIDIA under Wayland; see [PERFORMANCE](PERFORMANCE.md#the-page-was-drawn-on-the-cpu-2026-11-10)) | user |
 | `PI_CODING_AGENT_DIR` | Pi/OMP native agent configuration directory; do not share between the two apps | user / agent app |
 | `PI_CONFIG_DIR` | OMP config folder below the user's home, default `.omp` | user / OMP |
 | `KIMI_CODE_HOME` | Kimi config directory, default `~/.kimi-code` | user / Kimi |
 | `XDG_CONFIG_HOME`, `XDG_STATE_HOME` | native OpenCode configuration/state roots; Kilo's config also uses the config root | user / OS |
 | `EDITOR`, `VISUAL`, `SHELL`, `COMSPEC` | editor and shell defaults | OS / user |
 
-For isolated tests, set `MAITTY_DATA_DIR`, `MAITTY_CONFIG` and a unique
-`MAITTY_SOCKET` together. Keep the data directory outside the test repository:
+For isolated tests, set `MAIKER_DATA_DIR`, `MAIKER_CONFIG` and a unique
+`MAIKER_SOCKET` together. Keep the data directory outside the test repository:
 it contains approval decisions that repository files must not control. The data
 override skips legacy-name migration; it does not redirect config files or
 provider-native history. Empty or relative paths and existing non-directories
@@ -320,6 +321,8 @@ only for these keys. Secrets, `[[machines]]` and `[keys]` are not reachable that
 | start folder | `ui.start_dir` | | a path or `~...`; at most 4096 bytes, no control characters |
 | reduce motion | `ui.motion` (inverted) | `ui.reduce_motion` | true when `motion = false`; `motion` wins if both are set |
 | window style | `ui.window_style` | | `flat` (default), `glass` |
+| Bypass Permissions | `permissions.bypass.<agent>` | | the agents switched off (`claude`, `codex`, `gemini`); each is written as `true` or `false`, and an agent not listed is on |
+| update remote machines | `updates.machines` | | `true` (default) or `false`: after this computer updates, each machine is updated once its agents are idle |
 
 A change edits the one key in place (comments and other keys stay), swaps the file in
 atomically, reloads, and sends `ServerMsg::SettingsChanged` to attached windows. A write
@@ -336,7 +339,7 @@ without pane colours.
 
 ## Project-specific: environments
 
-Local only: Maitty is a desktop tool. Development builds use `cargo install --path apps/tui`;
+Local only: Maiker is a desktop tool. Development builds use `cargo install --path apps/tui`;
 release archives and installers are published through the GitHub release workflow.
 `dev` is the working branch.
 
@@ -370,7 +373,7 @@ The structured cache derives `session-<socket>.history/` beside the
 existing private session file, with numeric conversation/page directories. It adds
 no settings, environment variables or dependencies. Its cache owner accepts the
 existing `restore.enabled` and `restore.output` policy at initialization and
-reload: either false removes/prevents all Maitty structured history content.
+reload: either false removes/prevents all Maiker structured history content.
 Cleanup errors surface; native provider history is untouched. Attachment-scoped
 memory hydration remains available while disk retention is disabled.
 Structured mutations require `restore.enabled=true` so delivery metadata can be
@@ -380,8 +383,8 @@ are explicit CLI launch inputs; the actor sets `CODEX_HOME` to that root. No new
 provider credential setting is introduced.
 
 Structured provider children receive four internal, runtime-scoped variables:
-`MAITTY_CONVERSATION_ID`, `MAITTY_CONVERSATION_GENERATION`,
-`MAITTY_CONVERSATION_CONNECTION`, and secret `MAITTY_CONVERSATION_AUTH`.
+`MAIKER_CONVERSATION_ID`, `MAIKER_CONVERSATION_GENERATION`,
+`MAIKER_CONVERSATION_CONNECTION`, and secret `MAIKER_CONVERSATION_AUTH`.
 The daemon owns these values; do not set or log them. All four are required when
 any is present. They identify a live runtime without a terminal pane. Provider
 launch strips inherited pane/structured claims, and configured MCP subprocess

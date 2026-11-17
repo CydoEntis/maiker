@@ -83,7 +83,7 @@ mod tests {
     #[test]
     fn a_remote_names_its_github_repository_and_nothing_else() {
         for (remote, repo) in [
-            ("https://github.com/CydoEntis/maitty.git", "CydoEntis/maitty"),
+            ("https://github.com/CydoEntis/maiker.git", "CydoEntis/maiker"),
             ("https://github.com/o/r", "o/r"),
             ("git@github.com:my-org/my.repo_1.git", "my-org/my.repo_1"),
             ("ssh://git@github.com/o/r.git\n", "o/r"),

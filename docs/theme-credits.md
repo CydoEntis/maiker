@@ -1,14 +1,14 @@
 # Theme sources
 
-> The built-in list is fifty themes: Maitty's six and a dark and a light of twenty-two families
+> The built-in list is fifty themes: Maiker's six and a dark and a light of twenty-two families
 > (`crates/maitty-settings/themes.json` names them). This page records where the palettes came from, including themes
 > that were built in earlier and no longer ship. Three palettes are newer than the research below: Alucard is Dracula's
 > own light theme (draculatheme.com, MIT), Nord Light uses Nord's Snow Storm ground with its Polar Night text
-> (nordtheme.com, MIT), and the Maitty Retro pair is Maitty's own.
+> (nordtheme.com, MIT), and the Maiker Retro pair is Maiker's own.
 
 Research checked on 2026-10-14 against the creators' source repositories. The
 catalog covers all 25 requested families with 42 palettes. Before this expansion,
-Maitty already included Dracula, Gruvbox Dark, Nord, Tokyo Night Night, and
+Maiker already included Dracula, Gruvbox Dark, Nord, Tokyo Night Night, and
 Catppuccin Mocha/Latte. These are six palettes across five families.
 
 A second pass on 2026-10-25 added the families from Cyberdream on in the table,
@@ -124,24 +124,24 @@ Source links pin the researched revision. Preserve the existing `gruvbox` and
 | Eldar | Added | Standard | [agude/vim-eldar](https://github.com/agude/vim-eldar/blob/35ef01e99f9bc1432cafbe7a87ac989e9ff503cd/colors/eldar.vim) | [MIT](https://github.com/agude/vim-eldar/blob/35ef01e99f9bc1432cafbe7a87ac989e9ff503cd/LICENSE.md) |
 | Turtles | Added | Standard | [kxzk/turtles](https://github.com/kxzk/turtles/blob/eb228e49f98e8631bcbc84b8fe090e37a87fb3cf/colors/turtles.vim) | [MIT](https://github.com/kxzk/turtles/blob/eb228e49f98e8631bcbc84b8fe090e37a87fb3cf/colors/turtles.vim) |
 
-## Mapping to Maitty
+## Mapping to Maiker
 
-These are terminal palettes adapted to Maitty's UI roles, rather than editor
+These are terminal palettes adapted to Maiker's UI roles, rather than editor
 syntax themes reproduced verbatim. Keep the original background, foreground,
 and ANSI accent identities; derive surfaces, borders, muted labels, and status
-roles for Maitty's contrast and semantic checks. Upstream terminal bright-black
+roles for Maiker's contrast and semantic checks. Upstream terminal bright-black
 colors are frequently unsuitable for small UI labels. A selection background
 may assume dark selected text, so it is not automatically a valid menu fill.
 
 - Catppuccin supplies four distinct flavors; Latte's source foreground is
-  `#4c4f69`. The older Maitty Latte foreground was not the canonical Latte text.
+  `#4c4f69`. The older Maiker Latte foreground was not the canonical Latte text.
 - Tokyo Night includes the official Moon terminal variant as well as Night,
   Storm, and Day. Its Day foreground needs the UI's strongest-text contrast
   adjustment on derived surfaces.
 - Gruvbox uses the source's bright accents in dark mode and faded accents in
   light mode; both use its default medium background contrast.
 - Solarized uses Ethan Schoonover's canonical sRGB base and accent colors.
-  Its precise palette does not imply that every accent passes Maitty's UI
+  Its precise palette does not imply that every accent passes Maiker's UI
   contrast thresholds unchanged.
 - Kanagawa includes Wave, Dragon, and the light Lotus variant. Everforest uses
   the default medium contrast for its dark and light variants.
@@ -163,7 +163,7 @@ may assume dark selected text, so it is not automatically a valid menu fill.
   it over its terminal background `#1e1e3f` to obtain opaque `#e43937`.
 - Zenbones is primarily a contrast and font-variation theme. Its terminal
   extras supply explicit dark/light backgrounds; the upstream theme is not
-  inherently transparent. Keep Maitty's existing `mono` choice for inherited
+  inherently transparent. Keep Maiker's existing `mono` choice for inherited
   terminal colors.
 
 From the 2026-10-25 pass on, each new palette maps the same way: the source's
@@ -189,7 +189,7 @@ color where ANSI 8 is missing or sits on the background (contrast under 1.5).
 - Nightfox's comment colors come from each variant's
   `lua/nightfox/palette/<variant>.lua`; Carbonfox computes its comment as
   `bg:blend(fg, 0.4)`, `#6e6f70`. Carbonfox's terminal yellow slot is teal, so
-  its needs-you amber is Maitty's own.
+  its needs-you amber is Maiker's own.
 - Gruvbox Material takes the medium background and the default material
   foreground; its terminal mapping is in `colors/gruvbox-material.vim`.
 - Doom One's light palette is `extras/alacritty-light.toml`; both comment
@@ -253,7 +253,7 @@ color where ANSI 8 is missing or sits on the background (contrast under 1.5).
 
 ## Attribution and license notices
 
-The color values are adapted from the projects above. Maitty's derived UI roles,
+The color values are adapted from the projects above. Maiker's derived UI roles,
 contrast adjustments, and status mappings are local adaptations. Retain these
 notices with distributed copies containing the corresponding palettes.
 
@@ -367,7 +367,7 @@ Tokyo Night by Folke Lemaitre, Ayu by Konstantin Pschera, Solarized Osaka
 Neovim contributors; its colors are Neovim's own Apache-2.0 contribution, not
 Vim-licensed code) and Oceanic Next by Mike Hartington (which ships Neovim's
 Apache-2.0 license text without a project copyright line) use Apache-2.0.
-Their source palette values are adapted to Maitty UI roles as described above.
+Their source palette values are adapted to Maiker UI roles as described above.
 The shared Apache license text follows; see their linked original license files
 for each project's application appendix.
 
@@ -588,7 +588,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 A third pass on 2026-11-01 added five light themes, written from each project's published
 palette (not copied from a file): Vim's default colours on a white ground, PaperColor Light,
-Flexoki Light, Selenized Light and Modus Operandi. Maitty keeps their ground, text and
+Flexoki Light, Selenized Light and Modus Operandi. Maiker keeps their ground, text and
 accent and lets the contrast audit adjust the rest. Check a palette against its source before
 treating it as exact.
 

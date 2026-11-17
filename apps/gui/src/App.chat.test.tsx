@@ -179,7 +179,7 @@ describe('the Terminal | Chat view of a pane', () => {
     expect(within(pane).getByRole('heading', { name: 'Chat view is for agent sessions' })).toBeInTheDocument()
 
     await user.click(within(pane).getByRole('button', { name: 'Start claude here' }))
-    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude\r')
+    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude --dangerously-skip-permissions\r')
     expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
 
     await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
@@ -284,7 +284,7 @@ describe('the Terminal | Chat view of a pane', () => {
     expect(daemon.submitMessage).toHaveBeenCalledWith(
       { id: '42', generation: 1 },
       1,
-      'what is wrong here?\n\nAttached files (kept by Maitty; read them with your file tools):\n- /cache/attachments/attach-1730000000000-0a1b2c3d-shot.png',
+      'what is wrong here?\n\nAttached files (kept by Maiker; read them with your file tools):\n- /cache/attachments/attach-1730000000000-0a1b2c3d-shot.png',
     )
   })
 

@@ -1,7 +1,7 @@
 //! Tickets in the side panel: what is asked of this computer's daemon, every state it draws, that
 //! links are the daemon's (set up in place, once per project), and that nothing is written or sent
 //! without its review and `y`.
-//! `MAITTY_SHOW=1 cargo test tickets_tests -- --nocapture` prints the frames.
+//! `MAIKER_SHOW=1 cargo test tickets_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::Outgoing;

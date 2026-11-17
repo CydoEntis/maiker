@@ -6,7 +6,6 @@ import { renameConversationOnDaemon } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { DesktopSettingsSection, UsageInfo } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
-import { errorMessage } from '@/lib/error-message'
 import { guardLocal } from '@/lib/localOnly'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import { repoLocate } from '@/features/inspect/api'
@@ -40,7 +39,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
     setRenameId(null)
     void renameConversationOnDaemon({ id: sessionId }, name)
       .then(async () => { await queryClient.invalidateQueries({ queryKey: ['conversations'] }) })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not rename the session')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not rename the session') })
   }, [queryClient, setRenameId])
 
   // Showing a session shows its own chat: a subagent's chat is left by picking any session, its parent too. It shows
@@ -72,7 +71,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
   const copyText = useCallback((text: string, what: string) => {
     writeClipboard(text).then(
       () => { flash(`${what} copied`) },
-      (error: unknown) => { toast.error(errorMessage(error, `Could not copy the ${what.toLowerCase()}`)) },
+      (error: unknown) => { toast.failure(error, `Could not copy the ${what.toLowerCase()}`) },
     )
   }, [flash])
 
@@ -116,7 +115,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
         setInspectView('files')
         setInspectOpen(true)
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open that file')) })
+      .catch((error: unknown) => { toast.failure(error, 'Could not open that file') })
   }, [setInspectOpen, setInspectView, setLookAt, showSessionById])
   return { showSessionById, openPath, copyPathOf, showSubagent, saveName, openInSplit, copyText, usageInfo }
 }

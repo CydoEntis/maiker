@@ -79,7 +79,7 @@ impl App {
     }
 
     /// The prompt's answer: the path, quotes a terminal adds on a drop taken off, a relative one
-    /// starting where maitty was started.
+    /// starting where maiker was started.
     pub(super) fn start_send(&mut self, term: ClientTerm, input: &str) {
         if self.sending.is_some() {
             self.notify("a file is already being sent".into(), true);

@@ -33,13 +33,14 @@ import type { NewChatRequest } from './components/NewChatPage'
 
 const ID = '0d0f5c1e-1111-4222-8333-444455556666'
 
-type Watch = { setLayout?: () => void; setNewChatOpen?: (open: boolean) => void; setStartedFrom?: (change: unknown) => void }
+type Watch = { /** Bypass Permissions off for these; every agent unless a test says otherwise. */ bypassOff?: readonly string[]; setLayout?: () => void; setNewChatOpen?: (open: boolean) => void; setStartedFrom?: (change: unknown) => void }
 function starts(watch: Watch = {}) {
+  const { bypassOff } = watch
   const setter = vi.fn()
   const props = {
     queryClient: new QueryClient(), sessions: [], setWorktreeFrom: setter, setLayout: watch.setLayout ?? setter, flash: setter, focusedSession: undefined,
     setNewChatOpen: watch.setNewChatOpen ?? setter, online: true, starting: false, setStarting: setter, setStartedFrom: watch.setStartedFrom ?? setter, sessionMap: new Map([['old', {}]]),
-    preferences: { yoloClaude: false, yoloCodex: false, yoloGemini: false }, setExpectedAgents: setter, paneViews: { choose: setter },
+    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'] }, setExpectedAgents: setter, paneViews: { choose: setter },
     setSettingsSection: setter, setNewChatMachine: setter, setNewChatSeed: setter, home: '/home/me', machinesRef: { current: remote.machines },
   } as unknown as Parameters<typeof useSessionStarts>[0]
   return renderHook(() => useSessionStarts(props)).result.current
@@ -59,6 +60,13 @@ describe('starting a new chat that resumes a saved conversation', () => {
   it('puts Claude\'s resume option first, then the picked flags', async () => {
     await starts().startNewChat(request({ resume: ID }))
     expect(daemon.startAgentSession).toHaveBeenCalledWith('/dev/app', 'claude', ['--resume', ID, '--effort', 'medium'])
+  })
+
+  it('starts each agent with its Bypass Permissions flag first while its switch is on', async () => {
+    await starts({ bypassOff: [] }).startNewChat(request({ agent: 'codex', resume: ID }))
+    expect(daemon.startAgentSession).toHaveBeenCalledWith('/dev/app', 'codex', ['--dangerously-bypass-approvals-and-sandbox', 'resume', ID, '-c', 'model_reasoning_effort=medium'])
+    await starts({ bypassOff: ['codex'] }).startNewChat(request({ agent: 'claude' }))
+    expect(daemon.startAgentSession).toHaveBeenLastCalledWith('/dev/app', 'claude', ['--dangerously-skip-permissions', '--effort', 'medium'])
   })
 
   it('puts Codex\'s resume subcommand first, then the picked flags', async () => {
