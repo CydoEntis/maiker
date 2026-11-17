@@ -32,9 +32,9 @@ describe('the usage strip under the message box', () => {
     expect([30, 12 * 60, 3600, 3 * 3600 + 600, 86_400, 2 * 86_400 + 4 * 3600 + 59].map(waitWords)).toEqual(['now', '12m', '1h', '3h 10m', '1d', '2d 4h'])
   })
 
-  it('always draws the context, 5-hour and weekly meters for an agent that reports them, a missing one as not reported', () => {
-    const items = usageItems({ context: 16, limits: [{ name: 'week', used: 0, resetsAt: 0 }, { name: 'opus', used: 3, resetsAt: 0 }] }, NOW, true)
-    expect(items.map((item) => [item.key, item.percent])).toEqual([['context', 16], ['limit-5h', null], ['limit-week', 0], ['limit-opus', 3]])
-    expect(usageItems({ context: null, limits: [] }, NOW, true).map((item) => item.percent)).toEqual([null, null, null])
+  it('draws the context from the start at 0% for an agent that reports it, and a limit only once it is reported', () => {
+    const items = usageItems({ context: 16, limits: [{ name: 'opus', used: 3, resetsAt: 0 }, { name: 'week', used: 0, resetsAt: 0 }] }, NOW, true)
+    expect(items.map((item) => [item.key, item.percent])).toEqual([['context', 16], ['limit-week', 0], ['limit-opus', 3]])
+    expect(usageItems({ context: null, limits: [] }, NOW, true).map((item) => [item.key, item.percent, item.tone])).toEqual([['context', 0, 'ok']])
   })
 })

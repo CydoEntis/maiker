@@ -33,7 +33,7 @@ describe('the status card', () => {
 
     expect(card).toContain('- **Context:** 42% used')
     expect(card).toContain('- **5-hour limit:** 30% used, starts over in 2h')
-    expect(card).toContain('- **Weekly limit:** not reported yet')
+    expect(card).not.toContain('Weekly limit')
   })
 
   it('cannot be cut short by a backtick in a folder name', () => {
