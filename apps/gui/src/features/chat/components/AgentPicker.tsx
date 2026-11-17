@@ -31,12 +31,10 @@ function MiniMeter({ level }: { level: string }) {
  */
 function AgentSelect({ agent, onAgent }: { agent: ChatAgent; onAgent: (agent: ChatAgent) => void }) {
   return (
-    <Segmented aria-label="Agent" value={agent} className="mx-mm-agents" style={{ gridTemplateColumns: `repeat(${String(CHAT_AGENTS.length)}, 1fr)` }}
+    <Segmented aria-label="Agent" full value={agent} className="mx-mm-agents"
       onValueChange={(value) => { const next = CHAT_AGENTS.find((name) => name === value); if (next !== undefined) onAgent(next) }}>
       {CHAT_AGENTS.map((name) => (
-        <SegmentedItem key={name} value={name} className="mx-mm-agent">
-          <AppIcon process={name} size={14} />{AGENT_LABEL[name]}
-        </SegmentedItem>
+        <SegmentedItem key={name} value={name} icon={<AppIcon process={name} size={14} />}>{AGENT_LABEL[name]}</SegmentedItem>
       ))}
     </Segmented>
   )

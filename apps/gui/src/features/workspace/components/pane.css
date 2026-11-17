@@ -77,6 +77,7 @@
 
 /* The Chat | Terminal toggle: the shared segmented frame (folded under Folded corners), 13px mark and word in each choice. */
 .mx-view-switch { margin-right: 6px; }
+.mx-tdock-docks { margin: 0 2px; }
 .mx-view-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
 .mx-view-needs { width: 7px; height: 7px; border-radius: 2px; background: var(--needs); }
 
@@ -136,6 +137,8 @@
 .mx-tdock {
   position: relative; flex: none; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
   background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel);
+  /* The terminal's inset from the dock's edge, inside its own opaque ground: the ground itself runs edge to edge. */
+  --tdock-pad: 8px 12px;
   container: tdock / inline-size;
 }
 .mx-tdock[data-dock="bottom"] { height: var(--tdock-h, clamp(120px, calc(100vh - 480px), 260px)); animation: mx-dock-from-bottom var(--panel-in); }
@@ -159,12 +162,14 @@
 .mx-tdock-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
 .mx-tdock-tab { position: relative; flex: none; height: 26px; display: flex; align-items: center; color: var(--muted); }
 .mx-tdock-tab:hover { color: var(--fg); }
-.mx-tdock-tab.is-on { color: var(--fg); background: var(--m-hover); box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-tdock-pick { height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 10px; font: 500 12px var(--mono); color: inherit; white-space: nowrap; }
+.mx-tdock-tab.is-on { color: var(--fg); background: var(--m-hover); box-shadow: inset 0 0 0 1px var(--line2); --fold-line: var(--line2); }
+.mx-tdock-pick { height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; font: 500 12px var(--mono); color: inherit; white-space: nowrap; }
 .mx-tdock-prompt { color: var(--accent-text); }
 /* Closing a tab ends its shells, so its × waits for the pointer instead of sitting on every tab. */
-.mx-tdock-tab-close { width: 0; height: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: 0; transition: opacity .12s ease; }
-.mx-tdock-tab:hover .mx-tdock-tab-close, .mx-tdock-tab-close:focus-visible { width: 18px; margin-right: 4px; opacity: 1; }
+/* The × owns its slot in every tab at all times, so a tab never changes width when it is picked, hovered or focused; only
+   its opacity does. It stays focusable while hidden, and focus shows it. */
+.mx-tdock-tab-close { width: 18px; height: 18px; margin-right: 4px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: 0; transition: opacity .12s ease; }
+.mx-tdock-tab.is-on .mx-tdock-tab-close, .mx-tdock-tab:hover .mx-tdock-tab-close, .mx-tdock-tab:focus-within .mx-tdock-tab-close { opacity: 1; }
 .mx-tdock-tab-close:not(:disabled):hover { color: var(--fg); background: var(--m-hover); }
 .mx-tdock-tool { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); }
 .mx-tdock-tool.is-menu { width: auto; height: 28px; gap: 4px; padding: 0 6px; color: var(--muted); }
@@ -175,21 +180,24 @@
 .mx-tdock-rule { flex: none; width: 1px; height: 16px; margin: 0 4px; background: var(--line2); }
 .mx-tdock-inline { display: contents; }
 .mx-tdock-menu { display: none; }
-.mx-tdock .mx-tdock-docks { flex: none; height: 28px; display: flex; align-items: center; gap: 2px; padding: 2px; margin: 0 2px; background: var(--m-well); border: 1px solid var(--line); box-shadow: none; border-radius: var(--r-control); }
-.mx-tdock-docks .mx-tdock-dock { width: 26px; height: 22px; padding: 0; justify-content: center; }
-.mx-tdock-dock svg, .mx-tdock-menu-list svg { width: 14px; height: 14px; }
+.mx-tdock-menu-list svg { width: 14px; height: 14px; }
 .mx-tdock-menu-list { min-width: 200px; }
 /* A narrow dock drops its path first, then folds its split and dock buttons into one menu. */
 @container tdock (max-width: 600px) { .mx-tdock-path { display: none; } }
 @container tdock (max-width: 380px) { .mx-tdock-inline { display: none; } .mx-tdock-menu { display: block; } }
 
-.mx-tdock-body { flex: 1; min-height: 0; display: flex; gap: 6px; padding: 0 6px 6px; }
-.mx-tdock-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: 9px 12px; font-family: var(--mono); line-height: 1.6; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); cursor: text; transition: box-shadow .15s ease; }
-.mx-tdock-split.is-focus { box-shadow: inset 0 0 0 1px var(--line2); }
+/* The terminal fills the dock edge to edge on one opaque ground (--term; a see-through ground costs a blend per repaint,
+   docs/PERFORMANCE.md). A split is told from its neighbour by one hairline, never by a frame of its own. */
+.mx-tdock-body { flex: 1; min-height: 0; display: flex; background: var(--term); border-top: 1px solid var(--line); }
+.mx-tdock-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.mx-tdock-column + .mx-tdock-column { border-left: 1px solid var(--line); }
+.mx-tdock-column > .mx-tdock-split + .mx-tdock-split { border-top: 1px solid var(--line); }
+.mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: var(--tdock-pad); font-family: var(--mono); line-height: 1.6; background: var(--term); cursor: text; }
+/* The focused split of several: a 2px accent line along its top edge, drawn inside it so nothing moves. */
+.mx-tdock-split.is-focus { box-shadow: inset 0 2px 0 var(--accent); }
 .mx-tdock-split > :first-child { flex: 1; min-width: 0; min-height: 0; }
 .mx-tdock-split .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
-.mx-tdock-split .terminal-screen { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; padding: 0; }
+.mx-tdock-split .terminal-screen, .mx-tdock-split .terminal-screen:focus-within { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
 .mx-tdock-split-close { position: absolute; top: 5px; right: 5px; z-index: 1; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
 .mx-tdock-split-close:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
 .mx-tdock-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; font-size: 12.5px; line-height: 1.5; color: var(--dim); text-align: center; }

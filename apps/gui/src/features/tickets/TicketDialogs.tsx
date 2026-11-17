@@ -13,7 +13,7 @@ type Segment<T extends string> = { value: T; label: string }
 
 function Segments<T extends string>({ label, value, items, onChange }: { label: string; value: T; items: ReadonlyArray<Segment<T>>; onChange: (value: T) => void }) {
   return (
-    <Segmented aria-label={label} tall className="mx-tk-seg is-tall" value={value} onValueChange={(next) => { const picked = items.find((item) => item.value === next); if (picked) onChange(picked.value) }}>
+    <Segmented aria-label={label} value={value} onValueChange={(next) => { const picked = items.find((item) => item.value === next); if (picked) onChange(picked.value) }}>
       {items.map((item) => <SegmentedItem key={item.value} value={item.value}>{item.label}</SegmentedItem>)}
     </Segmented>
   )

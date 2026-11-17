@@ -618,7 +618,7 @@ describe('the top of the sidebar', () => {
     const onShowSession = vi.fn()
     const sessions = [session(1, { agent: 'claude', named: true, title: 'Waiting', status: 'needs-you' }), session(2, { agent: 'claude', named: true, title: 'Busy', status: 'working' })]
     show(sessions, { mode: 'rail', onShowSession, focusedId: sessions[0]?.id ?? null })
-    for (const name of ['Expand sidebar', 'Search', 'New session', 'Settings']) expect(screen.getByRole('button', { name })).toBeTruthy()
+    for (const name of ['Expand sidebar', 'Search', 'New terminal', 'New session', 'Settings']) expect(screen.getByRole('button', { name })).toBeTruthy()
     // No tile, no initials, no connection dot and no Recent sessions button (it is in the palette).
     expect(screen.queryByRole('button', { name: 'Recent sessions' })).toBeNull()
     expect(document.querySelector('.mx-daemon-dot, .mx-app-icon')).toBeNull()
@@ -630,6 +630,28 @@ describe('the top of the sidebar', () => {
     expect(onShowSession).toHaveBeenCalledWith(sessions[1]?.id)
     await user.pointer({ keys: '[MouseRight]', target: screen.getByRole('button', { name: /^Busy/ }) })
     expect(await screen.findByRole('menuitem', { name: 'Open' })).toBeTruthy()
+  })
+
+  it('has a New terminal button between the filter and New chat that starts the existing shell action', async () => {
+    const user = userEvent.setup()
+    const onNewShell = vi.fn()
+    show([], { onNewShell })
+    const names = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')).filter((name) => name !== null)
+    const terminal = names.findIndex((name) => name === 'New terminal')
+    expect(names[terminal - 1]).toMatch(/^Filter and group/)
+    expect(names[terminal + 1]).toBe('New chat')
+    await user.click(screen.getByRole('button', { name: 'New terminal' }))
+    expect(onNewShell).toHaveBeenCalledWith(0)
+  })
+
+  it('has the same New terminal button in the rail, off while nothing can start', async () => {
+    const user = userEvent.setup()
+    const onNewShell = vi.fn()
+    const view = show([], { mode: 'rail', onNewShell })
+    await user.click(screen.getByRole('button', { name: 'New terminal' }))
+    expect(onNewShell).toHaveBeenCalledWith(0)
+    view.again({ mode: 'rail', canStart: false, onNewShell })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'New terminal' }).disabled).toBe(true)
   })
 
   it('offers a shell and a remote machine from a right-click on New chat', async () => {

@@ -263,6 +263,28 @@ palette takes literal colours). Don't widen the exemptions to pass a change.
 `listbox` or `option`, or a `createPortal` import, outside `components/ui/` is an
 error. There are no exempt files.
 
+**One segmented control.** Every row of choices with one picked (Chat | Terminal, the agent switch, Appearance, Group
+and Sort, the dock position) is `Segmented` / `SegmentedItem` from `components/ui/radio-group.tsx`, drawn by
+`components/ui/segmented.css` and by nothing else. A caller gives the choices and, as props, an `icon` (a mark before the
+word, or alone for an icon-only choice with an `aria-label`), `compact` (a choice shows its mark alone until it is
+picked) and `full` (the row fills the width it is given). It does not set a size, padding, colour or picked look; a
+class on it places it (a margin, `align-self`) and nothing more. A look that is missing is added to the one stylesheet,
+for every instance. `src/segmented.test.ts` fails on a stylesheet or source file outside `components/ui/` that styles a
+`.mx-seg*` class or paints a picked `--m-sel` pill, or that builds a `radiogroup` by hand.
+
+**Reserve the space; reveal with opacity, never by growing.** A tab, row, chip, menu item or button never changes its
+width, height or place to show a close ×, a pin, a count, a shortcut or a label when the pointer, the focus, the
+selection or a state reaches it. The part owns its slot at all times (the terminal dock's tab holds its 18px × whether or
+not it shows) and only its `opacity` changes; it stays focusable while hidden, and focus shows it. A part that must appear
+over a row without a slot is `position: absolute` (the sidebar row's ×). A selected tab that turns bold keeps its width with
+a hidden bold twin of its label (`.mx-tk-tab-name`). Panels that open (a drawer, a disclosure) are the exception: growing
+is what they are for. `src/revealSpace.test.ts` fails on a hover, focus or selection rule that sets `display: none` or
+`width: 0`, and on a close-button rule that sets `width: 0`; the few deliberate cases are listed in it with the reason.
+
+**The terminal is edge to edge.** A terminal (the dock, a pane's Terminal view) sits on one opaque `--term` ground that
+fills its card, with a text inset from a token and no frame, ring or card of its own inside the card that holds it. The
+card carries the focus; the terminal never draws a second box (see [DESIGN](DESIGN.md#desktop-app), the terminal dock).
+
 ## Project-specific: desktop window sizes and sidebar order
 
 Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).

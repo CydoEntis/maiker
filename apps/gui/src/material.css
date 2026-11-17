@@ -142,8 +142,8 @@
    message box, 14px floats, 10px chat bubbles. A shape inside another is smaller and cut only on its outer corners (a
    segmented control: 8px frame, 6px on the first button's top-left and the last's bottom-right). */
 :root[data-corners="folded"] .mx-app * { border-radius: 0 !important; corner-shape: bevel; }
-:root[data-corners="folded"] .mx-app :is(button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip) { border-radius: 5px 0 5px 0 !important; }
-:root[data-corners="folded"] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card) { border-radius: 12px 0 12px 0 !important; }
+:root[data-corners="folded"] .mx-app :is(button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-tdock-tab) { border-radius: 5px 0 5px 0 !important; }
+:root[data-corners="folded"] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card, .mx-tdock) { border-radius: 12px 0 12px 0 !important; }
 :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card) { border-radius: 14px 0 14px 0 !important; }
 :root[data-corners="folded"] .mx-app :is(.mx-bubble, [data-fold]) { border-radius: 10px 0 10px 0 !important; }
 :root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] { border-radius: 8px 0 8px 0 !important; }
@@ -182,19 +182,19 @@
      - the fold flaps: 16px here (14px above) so the flap's long edge lies on the cut, and the flap draws the hairline too. */
 @supports not (corner-shape: bevel) {
   :root[data-corners="folded"][data-corners] .mx-app :is(.mx-badge, .mx-status-icon) { --fold: 4px; --fold-bleed: 4px; }
-  :root[data-corners="folded"][data-corners] .mx-app :is(button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip) { --fold: 5px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is(button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip, .mx-tdock-tab) { --fold: 5px; --fold-bleed: 4px; }
   :root[data-corners="folded"][data-corners] .mx-app :is(.mx-bubble, [data-fold], .mx-live, .mx-work, .mx-step-card, .mx-answered) { --fold: 10px; --fold-bleed: 4px; }
   :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] { --fold: 8px; --fold-bleed: 4px; }
   :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] > * { --fold: 6px; --fold-bleed: 4px; --fold-tl: 0px; --fold-br: 0px; }
   :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] > :first-child { --fold-tl: 6px; }
   :root[data-corners="folded"][data-corners] .mx-app [role="radiogroup"][data-fold] > :last-child { --fold-br: 6px; }
-  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card) { --fold: 12px; --fold-bleed: 4px; }
+  :root[data-corners="folded"][data-corners] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card, .mx-tdock) { --fold: 12px; --fold-bleed: 4px; }
   :root[data-corners="folded"][data-corners] .mx-app :is([role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting) { --fold: 14px; --fold-bleed: var(--float-bleed, 48px); }
 
   /* A custom property inherits, so every cut surface starts with no edge and no one-corner override of its own; the rules
      after this one (more specific by one :is) say otherwise. */
-  :root[data-corners="folded"][data-corners] .mx-app :where(.mx-badge, .mx-status-icon, button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip,
-    [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-step-card, .mx-answered, .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card,
+  :root[data-corners="folded"][data-corners] .mx-app :where(.mx-badge, .mx-status-icon, button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip, .mx-tdock-tab,
+    [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-step-card, .mx-answered, .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card, .mx-tdock,
     [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting) {
     --fold-line: transparent; --fold-tl: initial; --fold-br: initial;
   }
@@ -202,7 +202,7 @@
   /* The edge colours the surfaces draw: structural surfaces and chat blocks in --line, controls and floats in --line2. */
   :root[data-corners="folded"][data-corners] .mx-app :is(input, textarea, select, kbd, .mx-chip, .mx-file-chip, .mx-box, .mx-field, .mx-live, .mx-work, .mx-step-card, .mx-answered,
     [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting,
-    .mx-settings-search, .mx-settings-update-button, .mx-picker-button, .mx-switch) { --fold-line: var(--line2); }
+    .mx-settings-search, .mx-settings-update-button, .mx-picker-button, .mx-switch, .mx-tdock) { --fold-line: var(--line2); }
   :root[data-corners="folded"][data-corners] .mx-app :is(.mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-card, .mx-bubble, [data-fold], [role="radiogroup"][data-fold],
     .mx-settings-nav-item.is-current) { --fold-line: var(--line); }
   /* An input inside a field that draws the edge itself has none of its own. */
@@ -211,9 +211,9 @@
   :root[data-corners="folded"][data-corners] .mx-app .mx-box:focus-within { --fold-line: var(--accent); }
 
   :root[data-corners="folded"][data-corners] .mx-app :is(
-    .mx-badge, .mx-status-icon, button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip,
+    .mx-badge, .mx-status-icon, button, input, textarea, select, kbd, label, [role="option"], [role="menuitem"], [role="radio"], .mx-chip, .mx-file-chip, .mx-tdock-tab,
     [role="radiogroup"][data-fold], .mx-bubble, [data-fold], .mx-live, .mx-work, .mx-step-card, .mx-answered,
-    .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card,
+    .mx-sidebar, .mx-main, .mx-inspect, .mx-settings, .mx-box, .mx-field, .mx-card, .mx-tdock,
     [role="dialog"], [role="alertdialog"], [role="menu"], [role="tooltip"], [data-float], .mx-pop, .mx-ctx, .mx-palette, .mx-find, .mx-ns-dialog, .mx-rename, .mx-welcome, .mx-notice, .mx-menu, .mx-picker-menu, .mx-tip, .mx-upd-card, .mx-hover-card, .mx-subs-card, .mx-waiting
   ):not([role="radiogroup"][data-fold] > :not(:first-child, :last-child), .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-head, .mx-agents-head, .mx-qd-clear, .mx-dock-marker) {
     border-radius: 0 !important;

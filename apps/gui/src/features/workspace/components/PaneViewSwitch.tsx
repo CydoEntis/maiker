@@ -26,10 +26,7 @@ export function PaneViewSwitch({ views, view, onChange }: Props) {
   return (
     <Segmented aria-label="Pane view" value={view} onValueChange={(next) => { if (isView(next)) onChange(next) }} className="mx-view-switch" onMouseDown={(event) => { event.stopPropagation() }}>
       {ORDER.filter((value) => views.includes(value)).map((value) => (
-        <SegmentedItem key={value} value={value} aria-label={label(value)} title={label(value)} className="mx-view-option">
-          <Icon name={MARK[value]} />
-          {WORD[value]}
-        </SegmentedItem>
+        <SegmentedItem key={value} value={value} icon={<Icon name={MARK[value]} />} aria-label={label(value)} title={label(value)}>{WORD[value]}</SegmentedItem>
       ))}
     </Segmented>
   )

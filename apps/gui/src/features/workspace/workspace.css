@@ -382,12 +382,6 @@
 .mx-switch:disabled { cursor: default; }
 /* The segmented control, as the design draws it (Chat | Terminal): a 28px frame on --well with a 1px --line edge and 2px of
    room, 22px choices (12px/500, --dim; --fg on --sel while picked), 13px marks 6px from the word. */
-.mx-segmented { display: inline-flex; gap: 2px; padding: 3px; box-sizing: border-box; height: 30px; border-radius: var(--r-control); background: var(--c-track-bg); box-shadow: var(--c-track-sh); flex: none; }
-.mx-segmented button { height: 24px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border-radius: var(--r-control); font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--dim); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-segmented button:hover { color: var(--fg); }
-.mx-segmented button[aria-checked="true"] { background: var(--m-sel); box-shadow: inset 0 0 0 1px var(--line2); color: var(--fg); }
-.mx-segmented.is-tall { height: 32px; }
-.mx-segmented.is-tall button { height: 26px; }
 .mx-folder-field { height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: 9px; background: var(--c-field-bg); box-shadow: var(--c-field-sh); }
 .mx-folder-field.is-invalid { box-shadow: inset 0 0 0 1px var(--danger-line); }
 .mx-folder-field input, .mx-search-field input { all: unset; flex: 1; min-width: 0; color: var(--fg); }

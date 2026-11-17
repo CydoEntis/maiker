@@ -377,11 +377,11 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   text size is Ctrl+= and Ctrl+− (and Settings › Terminal), and the shortcuts open with their own key.
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; the whole-app mock). Agents only: no fleets, ships
   or tabs. A 264px card on `--card` with a `--line` hairline, 8px from the window's edges. Its header reads **Chats**
-  (12px 600 `--muted`) after a **Hide sidebar** button (Ctrl+Shift+B / ⌘B), then three 26px buttons: **Search** (the command palette; there is no filter field), the **≡ menu**
+  (12px 600 `--muted`) after a **Hide sidebar** button (Ctrl+Shift+B / ⌘B), then four 26px buttons: **Search** (the command palette; there is no filter field), the **≡ menu**
   (`SidebarFilterMenu`: a 264px popover that grows from the button's bottom-left corner. **Group** Status | Project | Machine and **Sort** Recent | Oldest | A–Z
   as segmented toggles; then a project search ("Find one of N projects" above six) over the projects, busiest first, each with its count, six rows
   before it scrolls, **All projects** first while the search is empty; **Reset** appears when anything differs from Status, Recent and All projects.
-  A choice applies at once and the menu stays open. Recent puts the session whose state changed last first, Oldest is creation order; the sort is the sidebar's own and is not remembered) and **New chat** `+` (an agent chat on this computer; a right-click offers New agent chat,
+  A choice applies at once and the menu stays open. Recent puts the session whose state changed last first, Oldest is creation order; the sort is the sidebar's own and is not remembered), **New terminal** (the terminal glyph; a plain shell in the start folder, the same action as New shell and its key, shown in the tooltip) and **New chat** `+` (an agent chat on this computer; a right-click offers New agent chat,
   New shell and Add a remote machine…). The grouping is `sidebarGroup`, also Settings › Appearance › Group sessions by.
   **By status** (`statusSections`): **Needs you** (in `--needs`; an agent that stopped is here too, and so is one held
   by its plan limit), **Working**, **Finished**, **Idle** (a session the daemon cannot read is here) and **Terminals** (a session with no agent in it, a shell that exited included), each a heading
@@ -435,7 +435,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   The foot holds the update button (nothing while there is nothing to do: the version lives only in Settings; or "Reconnecting to maikerd…") and the Settings gear; Recent sessions is in the command palette.
   Hidden (Ctrl+Shift+B, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
   sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (the collapsed sidebar, or a narrow
-  window's; `Rail` in `Sidebar.tsx`) is 52px: expand, search and new session (32px buttons) on top, then one 30px row per
+  window's; `Rail` in `Sidebar.tsx`) is 52px: expand, new session, search and new terminal (32px buttons) on top, then one 30px row per
   chat holding only its 14px `StatusIcon`, in the full list's order and groups with a 20px divider between groups; the
   open chat has the `--sel` fill and a 2px `--fg` bar on its left edge. Hovering a row shows the same hover card as the
   full list, a click opens the chat and a right-click gives the same menu. The foot has the update button and Settings.
@@ -712,8 +712,15 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   260px)` tall), on the **right** (`min(440px, 45%)` wide) or **full** (the chat steps aside), picked by the three
   icons in its bar or Settings › Terminal › Panes › Terminals open in; a dragged edge keeps its own size
   (`model/terminalDock.ts`, at most 60% of the room) and a double-click puts the design's back. It slides in from its
-  side on `--panel-in` and out on `--panel-out`. Its 44px bar: mono tabs "shell", "shell 2" with an accent `>_`
-  (× on hover ends the tab's shells), **+** for another tab, the folder in mono, Split right, Split down, the dock
+  side on `--panel-in` and out on `--panel-out`. The dock is a card in the shell's shape (`.mx-tdock` in `material.css`: 12px
+  cut top-left and bottom-right in Folded, with the WebKit clip-path fallback and its full border along the cuts; rounded or
+  square otherwise), and **the terminal fills it edge to edge**: the bar sits on `--main`, one `--line` hairline under it,
+  and everything below is one opaque `--term` ground (a see-through ground costs a blend per repaint, PERFORMANCE) with
+  `--tdock-pad` (8px 12px) of text inset. No frame, ring or inner box around a terminal; shells of a split are told apart by
+  one hairline between them, and the focused one of several by a 2px accent line along its top. Its 44px bar: mono tabs
+  "shell", "shell 2" with an accent `>_` (each tab is a 5px-cut control; the picked one has the `--m-hover` fill and a `--line2`
+  edge). Every tab holds the room of its × at all times: the × is 18px, always there, and only its opacity changes (shown on the
+  picked tab, on hover and on focus; it stays reachable by keyboard), so no tab changes width when picked or hovered; × ends the tab's shells), **+** for another tab, the folder in mono, Split right, Split down, the dock
   choice, then hide and close; under 600px wide the folder goes, and under 380px the split and dock buttons fold into
   one **Split and dock** menu. A tab splits into up to four shells in columns and rows (`model/terminalTabs.ts`),
   each a shell of its own with a focus ring and its own ×; the keys go to the dock's focused shell from a click in it

@@ -376,9 +376,9 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
         <div className="mx-nsd-foot">
           {!terminal && (
             <>
-              <Segmented aria-label="Agent" value={agent} className="mx-nsd-seg" data-agents={CHAT_AGENTS.length} onValueChange={(next) => { const chosen = chatAgentOf(next); if (chosen !== null) pickAgent(chosen) }}>
+              <Segmented aria-label="Agent" value={agent} onValueChange={(next) => { const chosen = chatAgentOf(next); if (chosen !== null) pickAgent(chosen) }}>
                 {CHAT_AGENTS.map((name) => (
-                  <SegmentedItem key={name} value={name} title={AGENT_LABEL[name]} className="mx-nsd-seg-option"><AppIcon process={name} size={14} /><span className="mx-nsd-seg-word">{AGENT_LABEL[name]}</span></SegmentedItem>
+                  <SegmentedItem key={name} value={name} icon={<AppIcon process={name} size={14} />} compact title={AGENT_LABEL[name]}>{AGENT_LABEL[name]}</SegmentedItem>
                 ))}
               </Segmented>
               <AgentPicker compact fixedModels={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} />
@@ -386,9 +386,9 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
           )}
           <span className="mx-nsd-grow" />
           {onNewShell !== undefined && (
-            <Segmented aria-label="Opens as" value={kind} className="mx-nsd-seg" onValueChange={(next) => { if (next === 'chat' || next === 'terminal') setKind(next) }}>
-              <SegmentedItem value="chat" className="mx-nsd-seg-option"><Icon name="chat" size={13} />Chat</SegmentedItem>
-              <SegmentedItem value="terminal" className="mx-nsd-seg-option"><Icon name="terminal" size={13} />Terminal</SegmentedItem>
+            <Segmented aria-label="Opens as" value={kind} onValueChange={(next) => { if (next === 'chat' || next === 'terminal') setKind(next) }}>
+              <SegmentedItem value="chat" icon={<Icon name="chat" size={13} />}>Chat</SegmentedItem>
+              <SegmentedItem value="terminal" icon={<Icon name="terminal" size={13} />}>Terminal</SegmentedItem>
             </Segmented>
           )}
           <button type="button" className="mx-nsd-start" aria-label={terminal ? 'Open terminal' : 'Start'} aria-keyshortcuts="Control+Enter" disabled={off} title={folder === '' && !terminal ? 'Pick a folder first' : `Ctrl+Shift+Enter starts it in the background${remote ? ' (on another machine it starts and opens)' : ''}`} onClick={() => { start() }}>

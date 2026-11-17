@@ -380,11 +380,10 @@ export function Row({ label, detail, children }: { label: string; detail?: strin
   )
 }
 
-function SegmentedChoice<T extends string | number>({ label, value, options, onChange, tall = false }: { label: string; value: T; options: ReadonlyArray<readonly [T, ReactNode]>; onChange: (value: T) => void; tall?: boolean }) {
+function SegmentedChoice<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: ReadonlyArray<readonly [T, ReactNode]>; onChange: (value: T) => void }) {
   return (
     <Segmented
       aria-label={label}
-      tall={tall}
       value={String(value)}
       onValueChange={(next) => {
         const picked = options.find(([option]) => String(option) === next)

@@ -843,7 +843,9 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .terminal-pane-header { align-items: center; border-bottom: 1px solid var(--line); color: var(--dim); cursor: grab; display: flex; flex: 0 0 36px; gap: 8px; padding: 0 8px; }
 .terminal-pane-header select { background: transparent; border: 0; color: var(--fg); font-size: 12.5px; max-width: 220px; min-width: 0; }
 .terminal-pane-path { flex: 1; font: 11.5px var(--font-mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.terminal-pane-focus { color: var(--primary); font-size: 11.5px; }
+/* The word keeps its room in every pane header; only its opacity says which pane has the focus. */
+.terminal-pane-focus { color: var(--primary); font-size: 11.5px; opacity: 0; }
+.terminal-pane-focus.is-on { opacity: 1; }
 .terminal-pane-close { background: transparent; border: 0; border-radius: 5px; color: var(--muted-text); height: 22px; width: 22px; }
 .terminal-pane-close:disabled { opacity: .3; }
 .terminal-pane-body { display: flex; flex: 1; min-height: 0; min-width: 0; }

@@ -49,13 +49,13 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
       <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Group, sort and filter" className="mx-grp-menu">
         <div className="mx-grp-row">
           <span className="mx-grp-label">Group</span>
-          <Segmented aria-label="Group" value={grouping} onValueChange={(next) => { if (isGrouping(next)) onGrouping(next) }}>
+          <Segmented aria-label="Group" full value={grouping} onValueChange={(next) => { if (isGrouping(next)) onGrouping(next) }}>
             {SIDEBAR_GROUPINGS.map(([key, name]) => <SegmentedItem key={key} value={key}>{name}</SegmentedItem>)}
           </Segmented>
         </div>
         <div className="mx-grp-row">
           <span className="mx-grp-label">Sort</span>
-          <Segmented aria-label="Sort" value={sort} onValueChange={(next) => { if (isSort(next)) onSort(next) }}>
+          <Segmented aria-label="Sort" full value={sort} onValueChange={(next) => { if (isSort(next)) onSort(next) }}>
             {SIDEBAR_SORTS.map(([key, name]) => <SegmentedItem key={key} value={key}>{name}</SegmentedItem>)}
           </Segmented>
         </div>

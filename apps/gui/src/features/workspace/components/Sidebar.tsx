@@ -291,6 +291,7 @@ function Expanded(props: SidebarProps) {
         <span className="mx-spacer" />
         <button type="button" className="mx-head-button" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={14} /></button>
         <SidebarFilterMenu grouping={props.grouping} onGrouping={props.onGrouping} sort={sort} onSort={setSort} projects={projects} project={project} onProject={setPickedProject} />
+        <button type="button" className="mx-head-button" aria-label="New terminal" title={tip('New terminal', 'new-terminal')} disabled={!props.canStart} onClick={() => { props.onNewShell(localMachine) }}><Icon name="terminal" size={14} /></button>
         <button type="button" className="mx-head-button" aria-label="New chat" title={tip('New chat', 'new-agent-chat')} disabled={!props.canStart} onClick={() => { props.onNewAgentChat(localMachine) }} onContextMenu={(event) => { openMenu(event, 'Start', startMenu()) }}><Icon name="plus" size={15} /></button>
       </div>
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
@@ -541,6 +542,7 @@ function Rail(props: SidebarProps) {
         <button type="button" className="mx-head-button is-rail" aria-label="Expand sidebar" title={tip('Expand sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="expand" /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="New session" title={tip('New session', 'new-agent-chat')} disabled={!props.canStart} onClick={() => { props.onNewAgentChat(props.machines[0]?.machine ?? 0) }}><Icon name="plus" size={15} /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={15} /></button>
+        <button type="button" className="mx-head-button is-rail" aria-label="New terminal" title={tip('New terminal', 'new-terminal')} disabled={!props.canStart} onClick={() => { props.onNewShell(props.machines[0]?.machine ?? 0) }}><Icon name="terminal" size={15} /></button>
       </div>
       <div className="mx-rail-rule" aria-hidden="true" />
       <div className="mx-rail-list mx-no-scrollbar" role="list" aria-label="Sessions">

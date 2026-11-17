@@ -269,7 +269,7 @@ export function TicketsPage({ project, host, leaving = false, suggestedLink, set
             const each_ = PROVIDER_LOOK[each]
             return (
               <button key={each} type="button" role="tab" aria-selected={on} className={`mx-tk-tab${on ? ' is-on' : ''}`} onClick={() => { switchProvider(each) }}>
-                <span className="mx-tk-tab-mark" style={{ color: each_.color }}>{each_.mark}</span>{each_.name}<span className={`mx-tk-tab-n${sources[each].linked ? '' : ' is-unlinked'}`}>{openCount(each)}</span>
+                <span className="mx-tk-tab-mark" style={{ color: each_.color }}>{each_.mark}</span><span className="mx-tk-tab-name" data-text={each_.name}>{each_.name}</span><span className={`mx-tk-tab-n${sources[each].linked ? '' : ' is-unlinked'}`}>{openCount(each)}</span>
               </button>
             )
           })}
