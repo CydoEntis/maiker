@@ -22,6 +22,7 @@ import { asSkills, commandText, matchCommands, skillQuery, slashQuery, useSlashC
 import { CLAUDE_HIDDEN_COMMANDS, CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
 import { terminalOnlyNote, typedCommand, windowRouteOf, withWindowRoutes, type WindowRoute } from '../windowCommands'
 import { CODEX_COMMANDS } from '../codexCommands'
+import { GEMINI_COMMANDS, geminiRouteOf, withGeminiRoutes } from '../geminiCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
 import { usageItems, type SessionUsage } from '../usageStrip'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
@@ -166,12 +167,13 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     if (windowList) {
       const skills = asSkills(slash.commands)
       if (skillsOnly) return skills
-      return [...(inTerminal === undefined ? CODEX_COMMANDS.filter((command) => command.terminal !== true) : CODEX_COMMANDS), ...skills]
+      const own = agent === 'gemini' ? withGeminiRoutes(GEMINI_COMMANDS) : CODEX_COMMANDS
+      return [...(inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own), ...skills]
     }
     const listed = withTerminalCommands(slash.commands, CLAUDE_TERMINAL_COMMANDS, CLAUDE_HIDDEN_COMMANDS)
     const own = inWindow === undefined ? listed : withWindowRoutes(listed)
     return inTerminal === undefined ? own.filter((command) => command.terminal !== true) : own
-  }, [slash.commands, inTerminal, inWindow, windowList, skillsOnly])
+  }, [slash.commands, inTerminal, inWindow, windowList, skillsOnly, agent])
   const matches = useMemo(() => (query === null ? [] : matchCommands(offered, query)), [offered, query])
   // The keys start at the closest match each time the typed name changes.
   const [cursor, setCursor] = useState({ query: '', index: 0 })
@@ -185,9 +187,11 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   // agent works, as the terminal's are; a side answer may go then, as it leaves the conversation alone.
   const routeOf = (typed: string): WindowRoute | null => {
     // The routes are Claude Code's commands by its names; another agent's are its own.
-    if (inWindow === undefined || agent !== 'claude' || windowList || attachments.length > 0) return null
+    if (inWindow === undefined || attachments.length > 0) return null
     const parts = typedCommand(typed)
     if (parts === null) return null
+    if (agent === 'gemini') return geminiRouteOf(parts.name, parts.args)
+    if (agent !== 'claude' || windowList) return null
     const route = windowRouteOf(parts.name, parts.args)
     if (route !== null || inTerminal !== undefined) return route
     // With no terminal, a command only the terminal runs gets a card saying so instead of going nowhere.

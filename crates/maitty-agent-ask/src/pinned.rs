@@ -109,6 +109,17 @@ export const LIST = [
     }
 
     #[test]
+    fn the_gemini_list_pins_its_release_and_names_its_commands() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/gui/src/features/chat/geminiCommands.ts");
+        let list = std::fs::read_to_string(&path).unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()));
+        let pinned = pinned_version(&list, "GEMINI_COMMANDS_PINNED_FOR").expect("geminiCommands.ts must pin GEMINI_COMMANDS_PINNED_FOR");
+        assert!(version_in(&pinned).is_some(), "{pinned} is not x.y.z");
+        let names = pinned_names(&list, &["shown"]);
+        assert!(names.len() > 20, "found only {} commands: has the list's format changed?", names.len());
+        assert!(names.iter().any(|name| name == "model") && names.iter().any(|name| name == "help"));
+    }
+
+    #[test]
     fn only_the_terminal_only_answer_means_the_command_still_exists() {
         assert!(claude_knows("/release-notes isn't available in this environment."));
         assert!(!claude_knows("Not logged in · Please run /login"));
@@ -129,6 +140,7 @@ mod installed {
 
     const CLAUDE_LIST: &str = "../../apps/gui/src/features/chat/terminalCommands.ts";
     const CODEX_LIST: &str = "../../apps/gui/src/features/chat/codexCommands.ts";
+    const GEMINI_LIST: &str = "../../apps/gui/src/features/chat/geminiCommands.ts";
     const PROBE_LIMIT: Duration = Duration::from_secs(60);
 
     fn source(relative: &str) -> String {
@@ -221,6 +233,24 @@ mod installed {
             !is_newer(&installed, &pinned),
             "Codex {installed} is newer than the {pinned} that {CODEX_LIST} was written from. Open its terminal, compare / with the {} pinned commands, and update CODEX_COMMANDS_PINNED_FOR.",
             pinned_names(&list, &["said", "shown"]).len()
+        );
+    }
+
+    #[test]
+    #[ignore = "needs Gemini CLI installed; run with --ignored"]
+    fn installed_gemini_is_not_newer_than_the_list_pinned_for_it() {
+        let Some(executable) = on_path("gemini") else {
+            eprintln!("skipped: Gemini CLI is not installed here");
+            return;
+        };
+        let list = source(GEMINI_LIST);
+        let pinned = pinned_version(&list, "GEMINI_COMMANDS_PINNED_FOR").expect("geminiCommands.ts must pin GEMINI_COMMANDS_PINNED_FOR");
+        let installed = installed_version(&executable).expect("gemini --version printed no version");
+        // Gemini CLI lists its commands only inside its terminal, so a newer build is the one signal that the list may have drifted.
+        assert!(
+            !is_newer(&installed, &pinned),
+            "Gemini CLI {installed} is newer than the {pinned} that {GEMINI_LIST} was written from. Open its terminal, compare / with the {} pinned commands, and update GEMINI_COMMANDS_PINNED_FOR.",
+            pinned_names(&list, &["shown"]).len()
         );
     }
 }
