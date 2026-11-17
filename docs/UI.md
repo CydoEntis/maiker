@@ -1251,7 +1251,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   mouse let go (`SelectionBar`, `selectionActions.ts`; never for the message box, and only for a selection that
   started in that chat) with **Copy**, which copies with the same toast, and **Quote**, which adds the text to the
   message box as a Markdown quote under what is already written and puts the caret after it. The bar goes when the
-  selection does, on Esc, and when the chat scrolls. A program that handles the mouse itself (a full-screen agent) copies what was
+  selection does, on Esc, and when the chat scrolls. It is drawn in the window root over everything, like a menu, and
+  kept inside the window, never under a code block or cut off at the chat's edge. A program that handles the mouse itself (a full-screen agent) copies what was
   selected in it with OSC 52; the daemon passes that on as `Clipboard` and the window puts it on the clipboard with the
   same toast (`useMachines.ts`), for this computer and for a machine that was allowed to.
 - **A program's "bright black" background** is drawn as the hovered row's ground (`terminalSlab`), not the palette's

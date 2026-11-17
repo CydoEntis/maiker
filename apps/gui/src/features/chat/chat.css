@@ -248,7 +248,7 @@ button.mx-step-row:focus-visible { box-shadow: inset 0 0 0 2px var(--focus); }
 .mx-thought-text p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* The bar over text selected in the chat: Copy and Quote, just above where the mouse let go. */
-.mx-select-bar { position: absolute; z-index: 4; display: flex; gap: 2px; padding: 3px; border-radius: 9px; border: 1px solid var(--line2); background: var(--main); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); transform: translate(-50%, calc(-100% - 10px)); animation: v7fade .12s var(--ease-out); }
+.mx-select-bar { position: fixed; z-index: 50; display: flex; gap: 2px; padding: 3px; border-radius: 9px; border: 1px solid var(--line2); background: var(--main); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); transform: translate(-50%, calc(-100% - 10px)); animation: v7fade .12s var(--ease-out); }
 .mx-select-action { display: inline-flex; height: 26px; align-items: center; gap: 6px; padding: 0 9px; border-radius: 6px; font-size: 12.5px; color: var(--fg2); cursor: pointer; }
 .mx-select-action:hover { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
 @media (prefers-reduced-motion: reduce) { .mx-select-bar { animation: none; } }
