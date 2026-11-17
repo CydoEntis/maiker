@@ -153,7 +153,7 @@ pub enum TicketsReply {
     Ticket(Box<Ticket>),
 }
 
-/// What a window from versions 107 to 111 may still ask to change in a ticket. Retired (ADR 0011):
+/// What a window from versions 107 to 112 may still ask to change in a ticket. Retired (ADR 0011):
 /// the daemon refuses every one, so this only keeps that request readable.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TicketWrite {

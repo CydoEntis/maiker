@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 112;
+pub const PROTOCOL_VERSION: u32 = 113;
 
 /// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
 pub const SIDE_ANSWER_SINCE: u32 = 104;
@@ -194,7 +194,7 @@ pub const TICKETS_SINCE: u32 = 105;
 /// (`Query::TicketKeys`).
 pub const TICKET_KEYS_SINCE: u32 = 106;
 
-/// The first version whose daemon answered `Query::TicketWrite`. Since 112 the answer is always
+/// The first version whose daemon answered `Query::TicketWrite`. Since 113 the answer is always
 /// that tickets are read-only (ADR 0011).
 pub const TICKET_WRITE_SINCE: u32 = 107;
 
@@ -1349,7 +1349,7 @@ pub enum Query {
         tag: u64,
     },
     /// Retired (ADR 0011): Maitty only reads tickets. It stays on the wire so a window from
-    /// versions 107 to 111, which may still ask, gets `Reply::TicketWrite` with an error instead
+    /// versions 107 to 112, which may still ask, gets `Reply::TicketWrite` with an error instead
     /// of losing its connection. The daemon writes nothing; no client of this version asks.
     TicketWrite {
         source: String,
@@ -3107,7 +3107,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 112);
+        assert_eq!(PROTOCOL_VERSION, 113);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3597,7 +3597,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 112);
+        assert_eq!(PROTOCOL_VERSION, 113);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4785,7 +4785,7 @@ mod tests {
             let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
             assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
         }
-        const { assert!(AGENT_COMMANDS_SINCE > COMPATIBLE_SINCE && AGENT_COMMANDS_SINCE == PROTOCOL_VERSION) };
+        const { assert!(AGENT_COMMANDS_SINCE > COMPATIBLE_SINCE && AGENT_COMMANDS_SINCE < PROTOCOL_VERSION) };
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never

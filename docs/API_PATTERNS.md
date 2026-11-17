@@ -193,7 +193,7 @@ command is `add_branch_worktree` (`maitty_desktop_client::branch_worktree`); it 
 setup hook may take ten, and says the service is from an older release instead of asking a daemon that would never
 answer. It is this computer's daemon only. Structured runtimes may not ask for it.
 
-Protocol 112 removes `ClientMsg::WorkflowReport` and `TermInfo.workflows` (ADR 0011). An older
+Protocol 113 removes `ClientMsg::WorkflowReport` and `TermInfo.workflows` (ADR 0011). An older
 `maitty workflow report` is a one-shot connection whose frame the daemon cannot read, so that call
 fails and nothing else does; an older window reading a pane without `workflows` defaults it to none.
 `COMPATIBLE_SINCE` stays 78.
@@ -1029,9 +1029,9 @@ cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 se
 inverse `blocks` relations.
 
 `Query::TicketWrite` and `Reply::TicketWrite` (protocol 107, `TICKET_WRITE_SINCE`) are retired: Maitty only
-reads tickets (ADR 0011). They stay on the wire so a window from 107 to 111 that still asks gets `Reply::TicketWrite`
+reads tickets (ADR 0011). They stay on the wire so a window from 107 to 112 that still asks gets `Reply::TicketWrite`
 with `Err(Invalid)` ("Maitty no longer changes tickets; change it in the tracker") and keeps its connection. The
-daemon writes nothing, and no client of protocol 112 asks.
+daemon writes nothing, and no client of protocol 113 asks.
 
 Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
 (`TICKET_LINKS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm).

@@ -23,7 +23,7 @@ of them helps tell which agent needs you. The app was losing focus.
    work; its helpers still show live as subagents ([0010](0010-workflows-and-specialist-agents-stay-outside-maitty.md)).
 3. **Nothing sends work to a factory.** A factory is a separate tool; Maitty does not start one.
 4. **Old peers are refused, never misread.** `Query::TicketWrite` and `Reply::TicketWrite` stay on
-   the wire so a window from protocol 107 to 111 that still asks is answered with an error and keeps
+   the wire so a window from protocol 107 to 112 that still asks is answered with an error and keeps
    its connection. `ClientMsg::WorkflowReport` is gone: an older `maitty workflow report` is a
    one-shot call whose frame the daemon cannot read, so that call fails and nothing else does.
    `TermInfo.workflows` and a pane's saved runs are dropped; files saved with them still load.
@@ -34,7 +34,7 @@ of them helps tell which agent needs you. The app was losing focus.
   still have to be kept working on three platforms for a feature few use.
 - **Keep `maitty workflow report` as a no-op**: a command that quietly does nothing misleads the
   workflow that calls it.
-- **Close the compatibility window (`COMPATIBLE_SINCE` = 112)**: every running daemon would refuse
+- **Close the compatibility window (`COMPATIBLE_SINCE` = 113)**: every running daemon would refuse
   updated windows until restarted, for messages only one-shot calls and old windows send.
 
 ## Consequences
