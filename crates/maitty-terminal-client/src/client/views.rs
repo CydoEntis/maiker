@@ -28,6 +28,8 @@ pub struct ChangesView {
     pub confirm: Option<(String, char)>,
     /// Files you've marked reviewed (and that haven't changed since).
     pub reviewed: HashSet<String>,
+    /// Ticks, the commit message, line comments, and a pane on another machine.
+    pub extra: super::changes_more::ChangesExtra,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1550,6 +1552,7 @@ mod tests {
     #[test]
     fn change_tree_groups_folders() {
         let mut v = ChangesView {
+            extra: Default::default(),
             dir: PathBuf::new(),
             review: Some(review(&[
                 "src/rate.ts",

@@ -8,6 +8,8 @@
 #   <APP>_VERSION      a tag such as v0.1.0 (default: the latest release)
 #   <APP>_INSTALL_DIR  where the binary goes (default: ~/.local/bin)
 #   <APP>_NO_INTEGRATE set to 1 to leave your agents' config alone (no `<app> integrate`)
+#   <APP>_FROM         a folder holding a release's files, used in place of downloading them (the
+#                      release workflow tries a release this way before publishing it)
 set -eu
 
 # The app's command and where it is released: the only place this script names it (ADR 0008).
@@ -18,6 +20,7 @@ ENV_PREFIX="$(printf '%s' "$APP" | tr 'a-z-' 'A-Z_')"
 eval "VERSION=\${${ENV_PREFIX}_VERSION:-}"
 eval "DIR=\${${ENV_PREFIX}_INSTALL_DIR:-\$HOME/.local/bin}"
 eval "NO_INTEGRATE=\${${ENV_PREFIX}_NO_INTEGRATE:-}"
+eval "FROM=\${${ENV_PREFIX}_FROM:-}"
 
 say() { printf '%s\n' "$*"; }
 fail() { say "$APP install: $*" >&2; exit 1; }
@@ -40,6 +43,10 @@ trap 'rm -rf "$tmp"' EXIT
 # A private repo needs the GitHub CLI (signed in); a public one downloads directly. A gh call
 # that fails (an expired sign-in, one that cannot see this repo) falls back to the direct download.
 fetch() {
+  if [ -n "$FROM" ]; then
+    cp "$FROM/$1" "$tmp/$1" || fail "no $1 in $FROM"
+    return 0
+  fi
   if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     if [ -n "$VERSION" ]; then
       gh release download "$VERSION" -R "$REPO" -p "$1" -D "$tmp" --clobber && return 0

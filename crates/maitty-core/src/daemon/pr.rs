@@ -8,7 +8,7 @@
 //! doesn't announce what was already known.
 
 use super::{Daemon, Ev};
-use crate::protocol::{PrChecks, PrInfo, PrReview, PrState, TermId};
+use crate::protocol::{PrChecks, PrInfo, PrReview, PrState, Status, TermId};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -71,8 +71,8 @@ pub(crate) fn pull_request_url(raw: &str) -> Result<String> {
 /// What one `gh` call came to.
 #[derive(Debug)]
 pub(crate) enum Read {
-    /// The pull request's JSON.
-    Found(String),
+    /// The pull request's JSON, and the commits on the branch after it when it is merged.
+    Found(String, u32),
     /// The branch has no pull request.
     NoPr,
     /// `gh` couldn't answer (not installed, not logged in, no network, a rate limit).
@@ -242,6 +242,7 @@ pub(super) fn parse(json: &str) -> Result<Reading> {
         checks,
         review,
         conflicting: raw.mergeable == "CONFLICTING",
+        commits_after_merge: 0,
     };
     Ok(Reading {
         info,
@@ -318,10 +319,41 @@ pub(super) fn read(place: &Place) -> Read {
         .env("GH_PROMPT_DISABLED", "1")
         .env("NO_COLOR", "1");
     match crate::proc::run(&mut cmd) {
-        Ok(json) => Read::Found(json),
+        Ok(json) => {
+            let after = match place {
+                Place::Branch(top, _) => commits_after_merge(top, &json),
+                Place::Link(_) => 0,
+            };
+            Read::Found(json, after)
+        }
         Err(e) if e.contains("no pull requests found") => Read::NoPr,
         Err(e) => Read::Problem(e),
     }
+}
+
+/// How many commits the checkout at `top` has after the merged pull request `json` describes:
+/// the branch's work going on after its merge. 0 when the pull request is not merged, or the
+/// merged commit is not in this checkout (nothing to count from). Blocks.
+fn commits_after_merge(top: &std::path::Path, json: &str) -> u32 {
+    #[derive(Deserialize)]
+    struct Merged {
+        #[serde(default)]
+        state: String,
+        #[serde(default, rename = "headRefOid")]
+        head: String,
+    }
+    let Ok(pr) = serde_json::from_str::<Merged>(json) else { return 0 };
+    if pr.state != "MERGED" || !is_commit_id(&pr.head) {
+        return 0;
+    }
+    let mut cmd = std::process::Command::new("git");
+    cmd.current_dir(top).args(["rev-list", "--count", &format!("{}..HEAD", pr.head)]);
+    crate::proc::run(&mut cmd).ok().and_then(|count| count.trim().parse().ok()).unwrap_or(0)
+}
+
+/// A full commit id (SHA-1 or SHA-256 hex), so what GitHub said is never read by git as an option.
+fn is_commit_id(text: &str) -> bool {
+    matches!(text.len(), 40 | 64) && text.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// One line of at most `limit` characters of somebody's words. Hidden characters can say what
@@ -549,13 +581,14 @@ impl Daemon {
                     }
                     known.fingerprint = None;
                 }
-                Read::Found(json) => {
-                    let print = fingerprint(&json);
+                Read::Found(json, after) => {
+                    let print = fingerprint(&format!("{after}:{json}"));
                     if known.fingerprint == Some(print) {
                         continue;
                     }
                     match parse(&json) {
-                        Ok(new) => {
+                        Ok(mut new) => {
+                            new.info.commits_after_merge = after;
                             if known
                                 .reading
                                 .as_ref()
@@ -579,6 +612,7 @@ impl Daemon {
                 }
             }
         }
+        self.put_away_merged();
         if limited {
             self.prs.hold_until = Some(Instant::now() + self.prs.backoff);
             self.prs.backoff = (self.prs.backoff * 2).min(BACKOFF_LONGEST);
@@ -597,6 +631,32 @@ impl Daemon {
             }
             None => self.prs.said = None,
             Some(_) => {}
+        }
+    }
+
+    /// With `sessions.put_away_merged`, put away each finished or idle session whose pull request
+    /// reads merged. Read from the state rather than the moment of the merge, so a session that
+    /// finishes after it, or a merge first seen after a restart, still goes.
+    fn put_away_merged(&mut self) {
+        if !self.cfg.sessions.put_away_merged {
+            return;
+        }
+        let merged: Vec<(TermId, String)> = self
+            .terms
+            .values()
+            .filter(|t| !t.archived && matches!(t.status, Status::Done | Status::Idle))
+            .filter_map(|t| {
+                // A branch still being worked on after its merge is not put away.
+                let pr = self.pr_of(t).filter(|pr| pr.state == PrState::Merged && pr.commits_after_merge == 0)?;
+                (t.put_away_for.as_deref() != Some(pr.url.as_str())).then_some((t.id, pr.url))
+            })
+            .collect();
+        for (term, url) in merged {
+            if let Some(t) = self.terms.get_mut(&term) {
+                t.archived = true;
+                t.put_away_for = Some(url);
+                self.dirty = true;
+            }
         }
     }
 
@@ -647,6 +707,53 @@ impl Daemon {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn git(dir: &std::path::Path, args: &[&str]) -> String {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(["-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false"])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8(out.stdout).unwrap().trim().to_string()
+    }
+
+    #[test]
+    fn commits_made_after_the_merged_pull_request_are_counted() {
+        let root = crate::daemon::persist::scratch_dir();
+        let top = root.path();
+        std::fs::create_dir_all(top).unwrap();
+        git(top, &["init", "-q"]);
+        git(top, &["commit", "-q", "--allow-empty", "-m", "merged work"]);
+        let merged = git(top, &["rev-parse", "HEAD"]);
+        let json = |state: &str, head: &str| format!(r#"{{"number":7,"state":"{state}","headRefOid":"{head}"}}"#);
+
+        assert_eq!(commits_after_merge(top, &json("MERGED", &merged)), 0);
+        git(top, &["commit", "-q", "--allow-empty", "-m", "more"]);
+        git(top, &["commit", "-q", "--allow-empty", "-m", "and more"]);
+        assert_eq!(commits_after_merge(top, &json("MERGED", &merged)), 2);
+        // Open, unknown here, or not a commit id: nothing to count from.
+        assert_eq!(commits_after_merge(top, &json("OPEN", &merged)), 0);
+        assert_eq!(commits_after_merge(top, &json("MERGED", &"a".repeat(40))), 0);
+        assert_eq!(commits_after_merge(top, &json("MERGED", "--output=x")), 0);
+    }
+
+    #[test]
+    fn a_merged_pull_request_with_work_after_it_says_so_and_is_not_green() {
+        use crate::protocol::PrTone;
+        let mut pr = PrInfo { number: 45, state: PrState::Merged, ..Default::default() };
+        assert_eq!((pr.headline().as_str(), pr.tone()), ("#45 merged", PrTone::Good));
+        pr.commits_after_merge = 1;
+        assert_eq!((pr.headline().as_str(), pr.tone()), ("#45 merged · 1 new commit", PrTone::Waiting));
+        pr.commits_after_merge = 3;
+        assert_eq!(pr.headline(), "#45 merged · 3 new commits");
+        // What an older daemon sends has no count: plain merged.
+        let old: PrInfo = serde_json::from_str(r#"{"number":45,"url":"","title":"","state":"Merged","draft":false,
+            "checks":{"passed":0,"pending":0,"failed":[]},"review":"None","conflicting":false}"#).unwrap();
+        assert_eq!(old.commits_after_merge, 0);
+    }
 
     const FAILING: &str = r#"{"number":42,"url":"https://github.com/o/r/pull/42","title":"Add x","state":"OPEN","isDraft":false,
         "mergeable":"CONFLICTING","reviewDecision":"CHANGES_REQUESTED","headRefOid":"abc",

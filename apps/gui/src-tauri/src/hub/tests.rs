@@ -144,8 +144,14 @@ async fn killing_the_ssh_process_shows_reconnecting_then_connected_and_the_pane_
         })
         .await;
     let before = watch.snapshots(BOX);
+    assert!(watch.hub.handle().takes_requests(BOX), "its daemon said who it is");
 
     sandbox.kill_last_connection();
+    watch.until("the line ended", |w| w.ended.contains(&BOX)).await;
+    assert!(
+        watch.hub.handle().takes_requests(BOX),
+        "a chat's reads, on lines of their own, go on while the long line is made again"
+    );
     watch
         .until("reconnecting and connected again", |w| {
             w.kinds(BOX).ends_with(&["reconnecting", "connected"])
@@ -212,6 +218,22 @@ fn a_fix_names_the_machine_so_the_command_can_be_run_as_it_stands() {
 }
 
 #[tokio::test]
+async fn a_machine_one_version_behind_needs_its_update_though_it_could_still_talk() {
+    const { assert!(maitty_shared::protocol::COMPATIBLE_SINCE < maitty_shared::protocol::PROTOCOL_VERSION) };
+    let sandbox = Sandbox::new();
+    let mut watch = Watch::new(&[machine("box", &sandbox, "older")], &sandbox, quick(WAIT));
+    watch
+        .until("needs-update", |w| w.is(BOX, "needs-update"))
+        .await;
+    assert_eq!(
+        watch.state_of(BOX),
+        Some(&ConnectionState::NeedsUpdate {
+            why: FIX_UPDATE.into()
+        })
+    );
+}
+
+#[tokio::test]
 async fn a_daemon_of_another_version_needs_an_update_with_the_fix() {
     let sandbox = Sandbox::new();
     let mut watch = Watch::new(
@@ -271,6 +293,7 @@ async fn a_different_daemon_at_a_known_name_is_turned_away_and_says_nothing_that
         watch.hub.handle().is_refused(BOX),
         "the window is told refused, not just unreachable"
     );
+    assert!(!watch.hub.handle().takes_requests(BOX), "nothing is asked of a daemon that is not the one");
     assert_eq!(
         watch.snapshots(BOX),
         0,
@@ -886,4 +909,14 @@ async fn a_chat_request_reaches_a_machines_daemon_on_a_line_of_its_own() {
         wire.daemon(None, || Ok(PathBuf::from("maitty"))),
         Ok(Daemon::Local(_))
     ));
+}
+
+/// A request line only asks: attached, the daemon would stream it every pane's output until it
+/// dropped it, and could send it, not the window, an agent's alert.
+#[test]
+fn a_request_line_to_another_machine_does_not_attach_but_the_long_line_does() {
+    assert!(dial().unwrap().attach);
+    let request = request_dial().unwrap();
+    assert!(!request.attach);
+    assert!(request.newest_only, "it still refuses an older daemon");
 }

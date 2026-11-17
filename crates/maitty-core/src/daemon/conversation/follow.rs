@@ -9,7 +9,7 @@
 //! can change it. Nothing is persisted; the provider's file is the record.
 
 use super::follow_transcript::{Format, Note, Transcript};
-use super::history::{Completeness, Cursor, History, IncompleteReason, MAX_READ_BYTES};
+use super::history::{Completeness, Content, Cursor, History, IncompleteReason, MAX_READ_BYTES};
 use crate::conversation::{ConversationId, Provider};
 use crate::daemon::{Daemon, Ev};
 use crate::protocol::{Status, Surface, TermId};
@@ -40,6 +40,14 @@ const MAX_FIRST_READ_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_LINE_BYTES: usize = 1024 * 1024;
 /// A followed history stops growing here and says it is cut off.
 const MAX_ENTRIES: usize = 20_000;
+/// What a followed history keeps of the agent's thinking, in all. Reasoning does not count toward
+/// `MAX_ENTRIES`, so a long session of thinking cannot push out the messages and tool steps; once this
+/// is spent, further reasoning is not kept (the oldest stays).
+const MAX_REASONING_BYTES: usize = 4 * 1024 * 1024;
+/// Counted for each reasoning entry besides its text, so a run of tiny ones is bounded too.
+const REASONING_ENTRY_OVERHEAD: usize = 256;
+/// The longest text one reasoning entry keeps (as the projection cuts it).
+const REASONING_ENTRY_MAX: usize = 64 * 1024;
 
 /// One followed pane.
 pub(in crate::daemon) struct Followed {
@@ -61,6 +69,10 @@ pub(in crate::daemon) struct Followed {
     error: Option<String>,
     /// The mode and model the file last said.
     meta: crate::conversation::SessionMeta,
+    /// The name Claude Code last gave the session (`/rename`), as read so far.
+    title: Option<String>,
+    /// The file was not there when following began: everything in it is new, names included.
+    born_empty: bool,
 }
 
 impl Followed {
@@ -89,6 +101,8 @@ impl Followed {
             last_read: None,
             error: None,
             meta: crate::conversation::SessionMeta::default(),
+            title: None,
+            born_empty: false,
         }
     }
 
@@ -106,6 +120,12 @@ impl Followed {
         self.error.clone()
     }
 
+    /// What a side answer resumes, from what the hook and the file said: the agent's session id,
+    /// the transcript the hook named, and the model the file last named.
+    pub fn side_parts(&self) -> (&str, Option<&std::path::Path>, Option<&str>) {
+        (&self.session, self.hint.as_deref(), self.meta.model.as_deref())
+    }
+
     fn reset(&mut self, generation: u64, session: &str, hint: Option<PathBuf>) {
         let mut history = History::new(self.id);
         history.completeness = Completeness::Loading;
@@ -119,6 +139,8 @@ impl Followed {
         self.parser = Some(Transcript::new(format_of(self.provider), session));
         self.last_read = None;
         self.error = None;
+        self.title = None;
+        self.born_empty = false;
         // A read still in flight belongs to the old session; its result is dropped on arrival
         // because the session no longer matches.
     }
@@ -157,6 +179,7 @@ pub struct Done {
     result: Result<Chunk, ReadFailure>,
 }
 
+#[derive(Debug)]
 pub(in crate::daemon) enum ReadFailure {
     /// The file is not one this pane's session may be read from (path, name or place).
     Refused(&'static str),
@@ -165,7 +188,7 @@ pub(in crate::daemon) enum ReadFailure {
 }
 
 impl ReadFailure {
-    fn words(&self) -> &'static str {
+    pub(in crate::daemon) fn words(&self) -> &'static str {
         match self {
             Self::Refused(why) => why,
             Self::NotFound => "The agent's transcript file was not found",
@@ -214,15 +237,40 @@ impl Daemon {
             .collect()
     }
 
+    /// Whether a pane already followed is still the same agent's: the pane is there, still the
+    /// desktop app's and awake, and still runs the provider it was followed for. Starting to follow
+    /// needs more (`followable`: a verified hook, a session and its file), but a lapse of those
+    /// while the agent runs is not the agent leaving. Dropping on it made the chat vanish, the pane
+    /// fall back to its terminal, and the chat come back under a new id a moment later.
+    fn still_followed(&self, follower: &Followed) -> bool {
+        self.terms.get(&follower.term).is_some_and(|t| {
+            t.owner == Surface::Desktop
+                && t.remote.is_none()
+                && !t.popup
+                && !t.spare
+                && !t.asleep
+                && !t.process_exited
+                && t.conversation_id.is_none()
+                && provider_of(t.agent.as_deref()) == Some(follower.provider)
+        })
+    }
+
     /// Adds, resets and removes followed conversations to match the panes, and starts a
     /// background read of each file that is due. Called on the daemon's tick.
     pub(in crate::daemon) fn follow_tick(&mut self) {
         let wanted = self.followable();
         let before = self.followed.len();
+        let kept: Vec<ConversationId> = self
+            .followed
+            .iter()
+            .filter(|f| self.still_followed(f))
+            .map(|f| f.id)
+            .collect();
         self.followed.retain(|f| {
-            wanted
-                .iter()
-                .any(|(term, provider, _)| *term == f.term && *provider == f.provider)
+            kept.contains(&f.id)
+                || wanted
+                    .iter()
+                    .any(|(term, provider, _)| *term == f.term && *provider == f.provider)
         });
         let mut changed = self.followed.len() != before;
         for (term, provider, session) in wanted {
@@ -334,11 +382,13 @@ impl Daemon {
             return;
         };
         follower.in_flight = false;
+        let mut renamed = None;
         match done.result {
             // Nothing has been read yet and there is no file: the agent has not been given its first
             // prompt, which is where it writes it. That is an empty chat, not a fault.
             Err(ReadFailure::NotFound) if follower.offset.is_none() => {
                 follower.error = None;
+                follower.born_empty = true;
                 if follower.parser.is_none() {
                     follower.parser = Some(Transcript::new(
                         format_of(follower.provider),
@@ -375,11 +425,26 @@ impl Daemon {
                     history.revision = follower.history.revision.saturating_add(1);
                     follower.history = history;
                 }
+                // A name given while the pane is followed renames it, `/rename` typed in the chat or the
+                // terminal alike. The names already in the file when it is first read are history: a
+                // name given in the window since must not be put back by a restart.
+                let title = chunk.parser.custom_title().map(str::to_owned);
+                let first_read = (follower.offset.is_none() && !follower.born_empty) || chunk.restarted;
+                if !first_read && title.is_some() && title != follower.title {
+                    renamed = title.clone().map(|title| (follower.term, title));
+                }
+                follower.title = title;
                 follower.offset = Some(chunk.offset);
                 follower.meta = chunk.parser.meta().clone();
                 follower.parser = Some(chunk.parser);
                 apply_notes(follower, chunk.notes, chunk.start_missing);
             }
+        }
+        if let Some((term, title)) = renamed
+            && let Some(pane) = self.terms.get_mut(&term)
+        {
+            pane.label = title;
+            self.dirty = true;
         }
     }
 
@@ -432,18 +497,56 @@ impl Daemon {
     }
 }
 
+/// How many reasoning entries `history` holds and what they take of the reasoning budget.
+fn reasoning_totals(history: &History) -> (usize, usize) {
+    history
+        .entries
+        .iter()
+        .filter_map(|entry| match &entry.content {
+            Content::Reasoning { text } => Some(text.len() + REASONING_ENTRY_OVERHEAD),
+            _ => None,
+        })
+        .fold((0, 0), |(count, bytes), cost| (count + 1, bytes + cost))
+}
+
+/// What a reasoning note will take of the reasoning budget, `None` for any other note. The text is
+/// measured before masking and the cut, so the cost is never below what is kept.
+fn reasoning_cost(note: &Note) -> Option<usize> {
+    let item = note.params.get("item")?;
+    if note.method != "item/completed" || item.get("type")?.as_str()? != "reasoning" {
+        return None;
+    }
+    let text: usize = item
+        .get("summary")?
+        .as_array()?
+        .iter()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::len)
+        .sum();
+    Some(text.min(REASONING_ENTRY_MAX) + REASONING_ENTRY_OVERHEAD)
+}
+
 /// Puts notes into a followed history. History is capped, and a cap or a problem with a note is
 /// said in its completeness, never hidden.
 fn apply_notes(follower: &mut Followed, notes: Vec<Note>, start_missing: bool) {
     let id = follower.id;
     let session = follower.session.clone();
     let history = &mut follower.history;
+    let (mut reasoning_entries, mut reasoning_bytes) = reasoning_totals(history);
     for note in notes {
-        if history.entries.len() >= MAX_ENTRIES {
+        let cost = reasoning_cost(&note);
+        if let Some(cost) = cost {
+            // Past its own budget a thought is dropped; it never takes a message's place. A later,
+            // smaller one may still fit.
+            if reasoning_bytes + cost > MAX_REASONING_BYTES {
+                continue;
+            }
+        } else if history.entries.len().saturating_sub(reasoning_entries) >= MAX_ENTRIES {
             let _ =
                 history.set_completeness(Completeness::Incomplete(IncompleteReason::MissingPages));
             return;
         }
+        let before = history.entries.len();
         match super::history_provider::notification(id, &session, note.method, &note.params) {
             Ok(Some(update)) => {
                 if history.apply(update).is_err() {
@@ -453,6 +556,16 @@ fn apply_notes(follower: &mut Followed, notes: Vec<Note>, start_missing: bool) {
             Ok(None) => {}
             Err(reason) => {
                 let _ = history.set_completeness(Completeness::Incomplete(reason));
+            }
+        }
+        if let Some(cost) = cost {
+            if history.entries.len() > before {
+                reasoning_entries += 1;
+                reasoning_bytes += cost;
+            } else {
+                // Nothing was added: the note failed or replaced an entry in place, so read the
+                // totals from the history rather than guess.
+                (reasoning_entries, reasoning_bytes) = reasoning_totals(history);
             }
         }
     }
@@ -569,7 +682,7 @@ fn read_new(
 const GEMINI_ID_CHARS: usize = 8;
 
 /// The user's home folder, the only place a followed transcript may be read from.
-fn user_home() -> Option<PathBuf> {
+pub(in crate::daemon) fn user_home() -> Option<PathBuf> {
     directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf())
 }
 
@@ -585,7 +698,7 @@ fn find_by_session(provider: Provider, session: &str) -> Option<PathBuf> {
 /// The path came from a hook report, so it is not trusted: it must be a regular `.jsonl` file
 /// whose real path (symbolic links followed) is inside the user's home folder, and whose name
 /// carries the session id the hook reported, so a pane cannot point the daemon at another file.
-fn checked_path(
+pub(super) fn checked_path(
     path: &Path,
     provider: Provider,
     session: &str,

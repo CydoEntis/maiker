@@ -72,6 +72,13 @@ pub fn status(dir: &Path) -> Option<GitInfo> {
     })
 }
 
+/// The main checkout of the repository `dir` is in (`None` outside git): what every worktree of
+/// one repository shares.
+pub(super) fn main_checkout(dir: &Path) -> Option<PathBuf> {
+    let common = abs(dir, git(dir, &["rev-parse", "--git-common-dir"]).ok()?.trim());
+    repo_root_of_common(&common).map(crate::daemon::clean_path)
+}
+
 /// The main checkout's root: the parent of the common `.git` directory.
 fn repo_root_of_common(common: &Path) -> Option<PathBuf> {
     let c = common.canonicalize().ok()?;
@@ -603,7 +610,14 @@ pub(super) fn resolve_conversation_path(root: &Path, relative: &str) -> Result<P
             unreachable!()
         };
         path.push(name);
-        let metadata = std::fs::symlink_metadata(&path).context("reading project path")?;
+        let metadata = match std::fs::symlink_metadata(&path) {
+            Ok(metadata) => metadata,
+            // Moved or deleted since the tree was listed: said in words, not as the system's error.
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                bail!("{} is no longer there: it was moved or deleted. Refresh the file list.", relative.display())
+            }
+            Err(error) => return Err(error).context("reading project path"),
+        };
         if metadata.file_type().is_symlink() {
             bail!("Symbolic links cannot be opened in the file browser");
         }

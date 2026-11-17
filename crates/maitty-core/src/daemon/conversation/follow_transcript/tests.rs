@@ -84,7 +84,7 @@ fn a_claude_turn_becomes_messages_tool_steps_and_a_finished_turn() {
         claude_user("u1", "fix the build"),
         claude_assistant(
             "a1",
-            json!({ "type": "thinking", "thinking": "", "signature": "x" }),
+            json!({ "type": "thinking", "thinking": "Build first, then look.", "signature": "x" }),
         ),
         claude_assistant("a2", json!({ "type": "text", "text": "I will run cargo." })),
         claude_assistant(
@@ -111,9 +111,15 @@ fn a_claude_turn_becomes_messages_tool_steps_and_a_finished_turn() {
 
     let items = items(&history);
     assert_eq!(message(items[0]), (&Role::User, "fix the build"));
-    assert_eq!(message(items[1]), (&Role::Assistant, "I will run cargo."));
     assert_eq!(
-        items[2].content,
+        items[1].content,
+        Content::Reasoning {
+            text: "Build first, then look.".into()
+        }
+    );
+    assert_eq!(message(items[2]), (&Role::Assistant, "I will run cargo."));
+    assert_eq!(
+        items[3].content,
         Content::Tool {
             kind: "commandExecution".into(),
             output: "Finished dev".into(),
@@ -123,21 +129,21 @@ fn a_claude_turn_becomes_messages_tool_steps_and_a_finished_turn() {
             duration_ms: None,
         }
     );
-    assert_eq!(items[2].state, ItemState::Completed);
+    assert_eq!(items[3].state, ItemState::Completed);
     // The label is the tool's name for a tool that has no command, as the structured adapter's.
     let Content::Tool {
         label,
         input,
         output,
         ..
-    } = &items[3].content
+    } = &items[4].content
     else {
         panic!("not a tool step")
     };
     assert_eq!(label, "Edit ");
     assert_eq!(input.as_ref().unwrap()["file_path"], "/w/a.rs");
     assert_eq!(output, "edited");
-    assert_eq!(message(items[4]), (&Role::Assistant, "Done."));
+    assert_eq!(message(items[5]), (&Role::Assistant, "Done."));
     let turns = turns(&history);
     assert_eq!(turns.len(), 1);
     assert_eq!(turns[0].state, ItemState::Completed);
@@ -220,9 +226,9 @@ fn claude_lines_that_are_not_the_conversation_are_left_out() {
     assert_eq!(said, ["/clear", "real prompt"]);
 }
 
-const SLASH_COMMAND: &str = "<command-name>/plugin</command-name>\n            <command-message>plugin</command-message>\n            <command-args>marketplace add CydoEntis/Kitchen</command-args>";
+const SLASH_COMMAND: &str = "<command-name>/plugin</command-name>\n            <command-message>plugin</command-message>\n            <command-args>marketplace add acme/factory</command-args>";
 const SLASH_OUTPUT: &str =
-    "<local-command-stdout>Added the \u{1b}[1mKitchen\u{1b}[0m marketplace</local-command-stdout>";
+    "<local-command-stdout>Added the \u{1b}[1mfactory\u{1b}[0m marketplace</local-command-stdout>";
 
 fn claude_local_command(uuid: &str, text: &str) -> String {
     line(json!({
@@ -236,14 +242,14 @@ fn assert_slash_command_and_output(history: &History) {
     assert_eq!(items.len(), 2);
     assert_eq!(
         message(items[0]),
-        (&Role::User, "/plugin marketplace add CydoEntis/Kitchen")
+        (&Role::User, "/plugin marketplace add acme/factory")
     );
     assert_eq!(
         items[1].content,
         Content::Tool {
             kind: "commandExecution".into(),
-            label: "/plugin marketplace add CydoEntis/Kitchen".into(),
-            output: "Added the Kitchen marketplace".into(),
+            label: "/plugin marketplace add acme/factory".into(),
+            output: "Added the factory marketplace".into(),
             input: None,
             exit_code: None,
             duration_ms: None,
@@ -388,7 +394,7 @@ fn command_output_whose_command_was_not_read_leaves_the_agents_turn_running() {
     let Content::Tool { output, .. } = &items(&history)[2].content else {
         panic!("not a tool step")
     };
-    assert_eq!(output, "Added the Kitchen marketplace");
+    assert_eq!(output, "Added the factory marketplace");
 }
 
 #[test]
@@ -405,6 +411,39 @@ fn a_claude_system_line_that_is_no_command_is_not_something_said() {
         .map(|e| message(e).1.to_string())
         .collect();
     assert_eq!(said, ["real prompt"]);
+}
+
+#[test]
+fn claudes_summary_of_a_full_conversation_is_a_step_and_not_something_the_person_said() {
+    let lines = vec![
+        claude_user("u1", "fix the build"),
+        claude_assistant("a1", json!({ "type": "text", "text": "Working on it." })),
+        line(json!({ "type": "system", "subtype": "compact_boundary", "content": "Conversation compacted" })),
+        line(json!({
+            "type": "user", "uuid": "s1", "isSidechain": false, "isCompactSummary": true,
+            "timestamp": "2026-11-04T09:30:06.000Z",
+            "message": { "role": "user", "content": "This session is being continued.\n## Summary" },
+        })),
+        claude_assistant("a2", json!({ "type": "text", "text": "Done." })),
+    ];
+
+    let history = history_of(Format::Claude, &lines);
+
+    let items = items(&history);
+    assert_eq!(items.len(), 4);
+    assert_eq!(
+        items[2].content,
+        Content::Tool {
+            kind: "contextSummary".into(),
+            output: "This session is being continued.\n## Summary".into(),
+            label: String::new(),
+            input: None,
+            exit_code: None,
+            duration_ms: None,
+        }
+    );
+    assert_eq!(items[2].state, ItemState::Completed);
+    assert_eq!(turns(&history).len(), 1);
 }
 
 #[test]
@@ -472,6 +511,26 @@ fn a_claude_transcript_says_its_permission_mode_and_the_model_answering() {
     feed(&mut transcript, json!({ "type": "user", "uuid": "u3", "permissionMode": "plan", "isSidechain": false,
         "timestamp": "2026-11-06T10:01:00.000Z", "message": { "role": "user", "content": "again" } }));
     assert_eq!(transcript.meta().mode.as_deref(), Some("plan"));
+}
+
+#[test]
+fn a_model_picked_in_the_terminal_is_the_model_before_any_reply_says_so() {
+    let mut transcript = Transcript::new(Format::Claude, SESSION);
+    transcript.feed(0, &claude_user("c1", "<command-name>/model</command-name>"));
+    transcript.feed(0, &claude_user("o1", "<local-command-stdout>Set model to `Haiku 5.5` and saved as your default for new sessions</local-command-stdout>"));
+    assert_eq!(transcript.meta().model.as_deref(), Some("Haiku 5.5"));
+
+    let mut transcript = Transcript::new(Format::Claude, SESSION);
+    transcript.feed(0, &claude_user("c1", "<command-name>/model</command-name><command-args>opus</command-args>"));
+    transcript.feed(0, &claude_user("o1", "<local-command-stdout>Set model to \u{1b}[1mOpus 5.5\u{1b}[22m (default)</local-command-stdout>"));
+    assert_eq!(transcript.meta().model.as_deref(), Some("Opus 5.5"));
+
+    // Keeping the model, or the same words from another command, changes nothing.
+    transcript.feed(0, &claude_user("c2", "<command-name>/model</command-name>"));
+    transcript.feed(0, &claude_user("o2", "<local-command-stdout>Kept model as `Opus 5.5`</local-command-stdout>"));
+    transcript.feed(0, &claude_user("c3", "<command-name>/help</command-name>"));
+    transcript.feed(0, &claude_user("o3", "<local-command-stdout>Set model to `Nope 1`</local-command-stdout>"));
+    assert_eq!(transcript.meta().model.as_deref(), Some("Opus 5.5"));
 }
 
 /// Codex 0.156 writes the person's words as a user-role response item, with no `user_message` event.
@@ -583,7 +642,7 @@ fn a_codex_turn_becomes_messages_commands_a_patch_and_a_finished_turn() {
             "response_item:message",
             json!({ "role": "user", "content": [{ "type": "input_text", "text": "<environment_context>" }] }),
         ),
-        codex(at, "response_item:reasoning", json!({ "summary": [] })),
+        codex(at, "response_item:reasoning", json!({ "summary": [{ "type": "summary_text", "text": "Look at the files." }], "encrypted_content": "gAAAA" })),
         codex(
             at,
             "response_item:message",
@@ -643,9 +702,15 @@ fn a_codex_turn_becomes_messages_commands_a_patch_and_a_finished_turn() {
 
     let items = items(&history);
     assert_eq!(message(items[0]), (&Role::User, "list files"));
-    assert_eq!(message(items[1]), (&Role::Assistant, "Listing."));
     assert_eq!(
-        items[2].content,
+        items[1].content,
+        Content::Reasoning {
+            text: "Look at the files.".into()
+        }
+    );
+    assert_eq!(message(items[2]), (&Role::Assistant, "Listing."));
+    assert_eq!(
+        items[3].content,
         Content::Tool {
             kind: "commandExecution".into(),
             output: "a\nb".into(),
@@ -660,7 +725,7 @@ fn a_codex_turn_becomes_messages_commands_a_patch_and_a_finished_turn() {
         duration_ms,
         output,
         ..
-    } = &items[3].content
+    } = &items[4].content
     else {
         panic!("not a tool step")
     };
@@ -668,13 +733,13 @@ fn a_codex_turn_becomes_messages_commands_a_patch_and_a_finished_turn() {
         (*exit_code, *duration_ms, output.as_str()),
         (Some(2), Some(1500), "boom")
     );
-    assert_eq!(items[3].state, ItemState::Failed);
+    assert_eq!(items[4].state, ItemState::Failed);
     let Content::Tool {
         kind,
         label,
         output,
         ..
-    } = &items[4].content
+    } = &items[5].content
     else {
         panic!("not a file change")
     };
@@ -683,11 +748,35 @@ fn a_codex_turn_becomes_messages_commands_a_patch_and_a_finished_turn() {
         ("fileChange", "Edited src/a.rs")
     );
     assert!(output.contains("+new") && output.contains("src/a.rs (update)"));
-    assert_eq!(items[4].state, ItemState::Completed);
+    assert_eq!(items[5].state, ItemState::Completed);
     let turns = turns(&history);
     assert_eq!(turns.len(), 1);
     assert_eq!(turns[0].source.turn, "turn-a");
     assert_eq!(turns[0].state, ItemState::Completed);
+}
+
+#[test]
+fn a_claude_turn_the_person_stopped_is_interrupted_and_its_note_is_not_something_said() {
+    let lines = vec![
+        claude_user("u1", "go"),
+        claude_user("i", "[Request interrupted by user for tool use]"),
+        line(json!({
+            "type": "user", "uuid": "i2",
+            "message": { "content": [{ "type": "text", "text": "[Request interrupted by user]" }] },
+        })),
+        claude_user("u2", "next"),
+    ];
+
+    let history = history_of(Format::Claude, &lines);
+
+    let said: Vec<_> = items(&history)
+        .into_iter()
+        .map(|e| message(e).1.to_string())
+        .collect();
+    assert_eq!(said, ["go", "next"]);
+    let turns = turns(&history);
+    assert_eq!(turns.len(), 2);
+    assert_eq!(turns[0].state, ItemState::Interrupted);
 }
 
 #[test]
@@ -927,4 +1016,278 @@ fn the_markers_claude_puts_around_a_paste_are_not_shown_as_said() {
     assert_eq!(without_paste_tags(said), "Errors occurred\nretry it\n");
     assert_eq!(without_paste_tags("plain words"), "plain words");
     assert_eq!(without_paste_tags("keep <pasted_content oops"), "keep <pasted_content oops");
+}
+
+#[test]
+fn a_codex_custom_tools_output_in_text_parts_is_shown_without_its_header() {
+    let at = "2026-11-13T19:44:40.000Z";
+    let lines = [
+        codex(at, "event_msg:task_started", json!({ "turn_id": "turn-a" })),
+        codex(
+            at,
+            "response_item:custom_tool_call",
+            json!({ "name": "exec", "call_id": "c1", "input": "cat a.txt" }),
+        ),
+        // As Codex 0.166 writes it: the output is a list of text parts, a header then the output.
+        codex(
+            at,
+            "response_item:custom_tool_call_output",
+            json!({ "call_id": "c1", "output": [
+                { "type": "input_text", "text": "Script completed\nWall time 0.2 seconds\nOutput:\n" },
+                { "type": "input_text", "text": "alpha\n" },
+            ] }),
+        ),
+    ];
+    let history = history_of(Format::Codex, &lines);
+    let tool = items(&history)
+        .into_iter()
+        .find_map(|item| match &item.content {
+            Content::Tool { output, duration_ms, .. } => Some((output.clone(), *duration_ms)),
+            _ => None,
+        })
+        .expect("the tool call is shown");
+    assert_eq!(tool, ("alpha\n".to_string(), Some(200)));
+}
+
+fn reasoning_texts(history: &History) -> Vec<&str> {
+    history
+        .entries
+        .iter()
+        .filter_map(|e| match &e.content {
+            Content::Reasoning { text } => Some(text.as_str()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn claude_thinking_without_text_or_redacted_is_not_kept() {
+    let lines = vec![
+        claude_user("u1", "go"),
+        claude_assistant(
+            "a1",
+            json!({ "type": "thinking", "thinking": "  ", "signature": "x" }),
+        ),
+        claude_assistant("a2", json!({ "type": "redacted_thinking", "data": "gAAAA" })),
+    ];
+
+    assert!(reasoning_texts(&history_of(Format::Claude, &lines)).is_empty());
+}
+
+#[test]
+fn a_codex_reasoning_with_no_summary_text_is_not_kept() {
+    let at = "2026-11-04T10:00:00.000Z";
+    let lines = vec![
+        codex(at, "event_msg:user_message", json!({ "message": "go" })),
+        codex(
+            at,
+            "response_item:reasoning",
+            json!({ "summary": [], "encrypted_content": "gAAAA" }),
+        ),
+        codex(
+            at,
+            "response_item:reasoning",
+            json!({ "summary": [{ "type": "summary_text", "text": " " }], "content": null }),
+        ),
+    ];
+
+    assert!(reasoning_texts(&history_of(Format::Codex, &lines)).is_empty());
+}
+
+#[test]
+fn followed_reasoning_is_masked_cleaned_and_cut_and_its_signature_is_dropped() {
+    let token = fake_token();
+    let huge = "y".repeat(MAX_MESSAGE_BYTES * 2);
+    let lines = vec![
+        claude_user("u1", "go"),
+        claude_assistant(
+            "a1",
+            json!({ "type": "thinking", "thinking": format!("use \u{1b}[31m{token}\u{1b}[0m"), "signature": "SIGNATURE-BYTES" }),
+        ),
+        claude_assistant(
+            "a2",
+            json!({ "type": "thinking", "thinking": huge, "signature": "x" }),
+        ),
+    ];
+
+    let history = history_of(Format::Claude, &lines);
+
+    let texts = reasoning_texts(&history);
+    assert_eq!(texts.len(), 2);
+    assert!(texts[0].contains("[redacted]") && !texts[0].contains(&token));
+    assert!(!texts[0].contains('\u{1b}'));
+    assert!(texts[1].len() < 64 * 1024 + 64 && texts[1].ends_with("cut off"));
+    assert!(!format!("{history:?}").contains("SIGNATURE-BYTES"));
+}
+
+#[test]
+fn a_secret_with_an_escape_inside_it_is_not_in_the_stored_reasoning() {
+    let token = fake_token();
+    let (head, tail) = token.split_at(10);
+    let lines = vec![
+        claude_user("u1", "go"),
+        claude_assistant(
+            "a1",
+            json!({ "type": "thinking", "thinking": format!("key {head}\u{1b}[0m{tail} end"), "signature": "x" }),
+        ),
+    ];
+
+    let mut history = history_of(Format::Claude, &lines);
+    for entry in &mut history.entries {
+        crate::daemon::conversation::redact::redact_entry(entry);
+    }
+
+    let texts = reasoning_texts(&history);
+    assert_eq!(texts.len(), 1);
+    assert!(!texts[0].contains(&token) && !texts[0].contains(head), "{}", texts[0]);
+    assert!(texts[0].contains("[redacted]"));
+}
+
+/// A synthetic Claude transcript with the shape of a real one: a summary and a snapshot line, a
+/// side-chain line, a thinking block, two tool calls, an edit and a question.
+const CLAUDE_TRANSCRIPT: &str = include_str!("../fixtures/claude_transcript.jsonl");
+
+#[test]
+fn a_recorded_claude_transcript_replays_to_its_history_in_order() {
+    // `lines()` drops a CRLF too, so a Windows checkout replays the same as a Linux one.
+    let lines: Vec<String> = CLAUDE_TRANSCRIPT.lines().map(str::to_owned).collect();
+
+    let history = history_of(Format::Claude, &lines);
+
+    let items = items(&history);
+    assert_eq!(items.len(), 7, "{items:#?}");
+    assert_eq!(
+        message(items[0]),
+        (&Role::User, "add a greeting function to the demo project")
+    );
+    assert_eq!(
+        items[1].content,
+        Content::Reasoning {
+            text: "I should look at the project files before editing.".into()
+        }
+    );
+    assert_eq!(
+        message(items[2]),
+        (&Role::Assistant, "I will list the project files first.")
+    );
+    assert_eq!(
+        items[3].content,
+        Content::Tool {
+            kind: "commandExecution".into(),
+            output: "main.py\nutil.py".into(),
+            label: "ls /home/user/demo/src".into(),
+            input: Some(json!({
+                "command": "ls /home/user/demo/src",
+                "description": "List the source files",
+            })),
+            exit_code: None,
+            duration_ms: None,
+        }
+    );
+    assert_eq!(
+        items[4].content,
+        Content::Tool {
+            kind: "commandExecution".into(),
+            output: "The file /home/user/demo/src/util.py has been updated.".into(),
+            label: "Edit ".into(),
+            input: Some(json!({
+                "file_path": "/home/user/demo/src/util.py",
+                "old_string": "# greetings go here",
+                "new_string": "def greet(name):\n    return f\"Hello, {name}!\"",
+            })),
+            exit_code: None,
+            duration_ms: None,
+        }
+    );
+    // The transcript follower has no question model (the structured Claude adapter does): a question is a tool step carrying the question and its
+    // options as input, and the answer as output.
+    assert_eq!(
+        items[5].content,
+        Content::Tool {
+            kind: "commandExecution".into(),
+            output: "User has answered your questions: \"Which greeting style should it use?\"=\"Casual\".".into(),
+            label: "AskUserQuestion ".into(),
+            input: Some(json!({ "questions": [{
+                "question": "Which greeting style should it use?",
+                "header": "Style",
+                "multiSelect": false,
+                "options": [
+                    { "label": "Formal", "description": "Hello, Name." },
+                    { "label": "Casual", "description": "Hi Name!" },
+                ],
+            }] })),
+            exit_code: None,
+            duration_ms: None,
+        }
+    );
+    assert_eq!(
+        message(items[6]),
+        (&Role::Assistant, "The greeting function is added in util.py.")
+    );
+    assert!(items[3..=5].iter().all(|e| e.state == ItemState::Completed));
+    let turns = turns(&history);
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].state, ItemState::Completed);
+    assert_eq!(turns[0].started_at_ms, Some(1_767_261_601_000));
+    assert_eq!(turns[0].completed_at_ms, Some(1_767_261_614_000));
+}
+
+const CODEX_ROLLOUT: &str = include_str!("../fixtures/codex_rollout.jsonl");
+
+#[test]
+fn a_recorded_codex_rollout_replays_to_its_history_in_order() {
+    let lines: Vec<String> = CODEX_ROLLOUT.lines().map(str::to_owned).collect();
+
+    let history = history_of(Format::Codex, &lines);
+
+    // The rollout holds an `exec_approval_request` event, and the follower makes no history item
+    // of it: the Codex arm reads only turn events, messages, reasoning, calls and outputs. The
+    // approval shows as the command step it asks about. The rollout's session_meta, turn_context,
+    // item_completed, token_count lines and the reasoning with no summary add no item either.
+    let items = items(&history);
+    assert_eq!(items.len(), 6, "{items:#?}");
+    assert_eq!(
+        message(items[0]),
+        (&Role::User, "add a greeting function to the demo project")
+    );
+    assert_eq!(
+        items[1].content,
+        Content::Reasoning {
+            text: "I should look at the project files before editing.".into()
+        }
+    );
+    assert_eq!(
+        message(items[2]),
+        (&Role::Assistant, "I will list the project files first.")
+    );
+    assert_eq!(
+        items[3].content,
+        Content::Tool {
+            kind: "commandExecution".into(),
+            output: "main.py\nutil.py".into(),
+            label: "ls /home/user/demo/src".into(),
+            input: None,
+            exit_code: Some(0),
+            duration_ms: Some(200),
+        }
+    );
+    let Content::Tool { kind, label, output, .. } = &items[4].content else {
+        panic!("not a file change: {:?}", items[4].content)
+    };
+    assert_eq!(
+        (kind.as_str(), label.as_str()),
+        ("fileChange", "Edited /home/user/demo/src/util.py")
+    );
+    assert!(output.contains("+def greet(name):"), "{output}");
+    assert_eq!(
+        message(items[5]),
+        (&Role::Assistant, "The greeting function is added in util.py.")
+    );
+    assert!(items[3..=4].iter().all(|e| e.state == ItemState::Completed));
+    let turns = turns(&history);
+    assert_eq!(turns.len(), 1);
+    assert_eq!(turns[0].source.turn, "00000000-0000-4000-8000-000000000301");
+    assert_eq!(turns[0].state, ItemState::Completed);
+    assert_eq!(turns[0].started_at_ms, Some(1_767_261_601_000));
+    assert_eq!(turns[0].completed_at_ms, Some(1_767_261_611_000));
 }

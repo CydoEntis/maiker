@@ -139,6 +139,7 @@ mod design_tests {
             diff_removed: 0,
             subagents: Vec::new(),
             subagent_activity: Vec::new(),
+            workflows: Vec::new(),
             session: None,
             effort: None,
             started_by: None,
@@ -146,6 +147,7 @@ mod design_tests {
             helper_ask: Vec::new(),
             pr: None,
             queued: Vec::new(),
+            own_turn_over: false,
             root: None,
             top: None,
             since: 0,
@@ -3176,7 +3178,7 @@ mod screen_tests {
         let labels: Vec<&str> = rows.iter().take(3).map(|(l, _)| *l).collect();
         assert_eq!(
             labels,
-            ["Shell here", "Pane beside this", "Files"],
+            ["Shell here", "Pane beside this", "Clone a repository…"],
             "Shell first, and no dialog row: New session is a shell too"
         );
         assert!(!rows.iter().any(|(l, _)| *l == "Session..."));
@@ -6435,6 +6437,7 @@ second line
             ws,
             cmd: None,
             items: Some(vec![entry]),
+            branches: None,
             query: String::new(),
             sel: 0,
         };
@@ -6446,6 +6449,7 @@ second line
             ws,
             cmd: None,
             items: Some(Vec::new()),
+            branches: None,
             query: "fresh".into(),
             sel: 0,
         };
@@ -6786,12 +6790,12 @@ second line
         (
             "changes",
             true,
-            "CHANGES  · ↑↓ file · c commit · x reviewed · e editor · shortcut mode waits · Esc close",
+            "CHANGES  · ↑↓ file · c commit · t tick · l diff · x reviewed · shortcut mode waits · Esc close",
         ),
         (
             "changes",
             false,
-            "CHANGES  · ↑↓ file · c commit · x reviewed · e editor · Esc close",
+            "CHANGES  · ↑↓ file · c commit · t tick · l diff · x reviewed · Esc close",
         ),
         (
             "branch",
@@ -6859,6 +6863,7 @@ second line
                     app.mode = Mode::Normal;
                 }
                 app.show_view(View::Changes(Box::new(views::ChangesView {
+                    extra: Default::default(),
                     dir: PathBuf::from("/repo"),
                     review: None,
                     error: None,
@@ -8032,7 +8037,7 @@ second line
             since: crate::clock::ago(std::time::Duration::from_secs(10)),
             acted: false,
         };
-        tap(&mut app, 'p');
+        tap(&mut app, 'v');
         assert!(
             matches!(app.mode, Mode::KeyMap(_)),
             "before any shortcut, a letter with the map up searches it"
@@ -8041,7 +8046,7 @@ second line
             since: crate::clock::ago(std::time::Duration::from_secs(10)),
             acted: true,
         };
-        tap(&mut app, 'p');
+        tap(&mut app, 'v');
         assert!(
             matches!(app.mode, Mode::Prefix { .. }),
             "after one, the mode just stays"
@@ -12534,6 +12539,7 @@ mod side_panel_width_tests {
 
     fn changes_view() -> View {
         View::Changes(Box::new(views::ChangesView {
+            extra: Default::default(),
             dir: PathBuf::from("/repo"),
             review: None,
             error: None,
@@ -14847,16 +14853,16 @@ mod drawer_tab_tests {
     }
 
     #[test]
-    fn tab_and_shift_tab_cycle_files_changes_branch_and_references() {
+    fn tab_and_shift_tab_cycle_files_changes_branch_references_and_tickets() {
         let (mut app, dir) = in_repo("cycle");
         app.act(Action::Files);
-        use screen::SheetKind::{Branch, Changes, Files, References};
-        for want in [Changes, Branch, References, Files] {
+        use screen::SheetKind::{Branch, Changes, Files, References, Tickets};
+        for want in [Changes, Branch, References, Tickets, Files] {
             key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
             assert_eq!(open(&app), Some(want), "Tab");
             assert!(app.view_has_keys(), "the new view has the keys");
         }
-        for want in [References, Branch, Changes, Files] {
+        for want in [Tickets, References, Branch, Changes, Files] {
             key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT);
             assert_eq!(open(&app), Some(want), "Shift+Tab");
         }
@@ -15030,35 +15036,48 @@ mod drawer_tab_tests {
     }
 
     #[test]
-    fn c_in_changes_asks_before_committing_and_y_commits() {
+    fn c_in_changes_asks_for_the_message_and_enter_commits_with_it() {
         let (mut app, dir, mut rx) = changes_with_a_new_file("commit");
         key(&mut app, KeyCode::Char('c'), KeyModifiers::NONE);
+        let written = match &app.view {
+            Some(View::Changes(v)) => v.extra.message.clone().unwrap_or_default(),
+            _ => String::new(),
+        };
+        assert!(!written.is_empty(), "c opens the message, written for you");
+        let shown = text(&draw(&mut app));
         assert!(
-            matches!(&app.view, Some(View::Changes(v)) if v.confirm.as_ref().is_some_and(|(q, _)| q.starts_with("Commit 1 file on "))),
-            "c asks first"
-        );
-        assert!(
-            text(&draw(&mut app)).contains("Commit 1 file on "),
-            "the question is on screen"
+            shown.contains("Commit all 1 file on ") && shown.contains(&written),
+            "the message and what it commits are on screen: {shown}"
         );
         assert!(
             rx.try_recv().is_err() && commits(&dir) == 1,
             "nothing is committed yet"
         );
-        key(&mut app, KeyCode::Char('y'), KeyModifiers::NONE);
+        key(&mut app, KeyCode::Char('!'), KeyModifiers::NONE);
+        key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
         let b = next_bg(&mut rx);
         app.on_bg(b);
-        assert_eq!(commits(&dir), 2, "y commits");
+        assert_eq!(commits(&dir), 2, "Enter commits");
+        let subject = crate::proc::git(&dir, &["log", "-1", "--format=%s"]).unwrap();
+        assert_eq!(subject.trim(), format!("{written}!"), "with the message as written");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn tab_answers_no_to_a_changes_question_instead_of_switching() {
         let (mut app, dir, mut rx) = changes_with_a_new_file("ask-tab");
+        // Writing the message, Tab is not a drawer key; Esc drops the message.
         key(&mut app, KeyCode::Char('c'), KeyModifiers::NONE);
         key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
         assert!(
-            matches!(&app.view, Some(View::Changes(v)) if v.confirm.is_none()),
+            matches!(&app.view, Some(View::Changes(v)) if v.extra.message.is_some()),
+            "still writing in Changes"
+        );
+        key(&mut app, KeyCode::Esc, KeyModifiers::NONE);
+        key(&mut app, KeyCode::Char('M'), KeyModifiers::NONE);
+        key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
+        assert!(
+            matches!(&app.view, Some(View::Changes(v)) if v.confirm.is_none() && v.extra.message.is_none()),
             "still Changes, the question answered no"
         );
         assert!(

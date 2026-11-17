@@ -1,5 +1,6 @@
 ﻿pub mod clock;
 pub mod conversation;
+pub mod github;
 pub mod handoff;
 pub mod hidden;
 pub mod host_env;
@@ -9,4 +10,9 @@ pub mod overlap;
 pub mod protocol;
 pub mod repo;
 pub mod settings_view;
+pub mod specialists;
+pub mod ticket_links;
+pub mod ticket_paste;
+pub mod tickets;
 pub mod usage_report;
+pub mod workflow;

@@ -7,7 +7,7 @@
 
 use crate::remote_snapshot::{ITEMS_MAX, NODES_MAX};
 use maitty_shared::hidden::{is_invisible, sanitize};
-use maitty_shared::protocol::Reply;
+use maitty_shared::protocol::{Reply, SIDE_ANSWER_MAX_BYTES, SideAnswer};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -29,7 +29,51 @@ pub fn vet_chat_reply(reply: Reply) -> Result<Reply, String> {
     }
 }
 
-fn cleaned<T: Serialize + DeserializeOwned>(answer: T) -> Result<T, String> {
+/// A side answer (`/btw`) from another machine's daemon, made safe, or why it is refused. Only a
+/// side answer passes, its text cut to what a side answer may hold and every string cleaned like a
+/// chat's.
+pub fn vet_side_answer(reply: Reply) -> Result<Reply, String> {
+    match reply {
+        Reply::SideAnswer { tag, answer } => {
+            let answer = match cleaned(answer)? {
+                SideAnswer::Answered { text } => SideAnswer::Answered { text: cut_to(text, SIDE_ANSWER_MAX_BYTES) },
+                SideAnswer::Failed { reason } => SideAnswer::Failed { reason: cut_to(reason, SIDE_ANSWER_MAX_BYTES) },
+                SideAnswer::NotSupported => SideAnswer::NotSupported,
+            };
+            Ok(Reply::SideAnswer { tag, answer })
+        }
+        _ => Err("it is not a side answer".into()),
+    }
+}
+
+/// Longest worktree folder taken from another machine, in bytes.
+const WORKTREE_PATH_MAX: usize = 4096;
+
+/// The folder of a worktree another machine's daemon made (`Command::BranchWorktree`), or why it
+/// is refused. It becomes the folder a session starts in there, so it must be one plain absolute
+/// path: a single line, no control or hidden characters, not too long. It is never read here.
+pub fn vet_worktree_reply(reply: Reply) -> Result<Reply, String> {
+    let Reply::Text(folder) = reply else { return Err("it is not a worktree's folder".into()) };
+    let plain = !folder.is_empty()
+        && folder.len() <= WORKTREE_PATH_MAX
+        && folder.starts_with('/')
+        && !folder.chars().any(|c| c.is_control() || is_invisible(c));
+    if plain { Ok(Reply::Text(folder)) } else { Err("its folder is not a plain absolute path".into()) }
+}
+
+/// `text` cut to at most `max` bytes, on a character boundary.
+fn cut_to(mut text: String, max: usize) -> String {
+    let mut end = max.min(text.len());
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    text.truncate(end);
+    text
+}
+
+/// `answer` with every string in it made safe to draw and its lists cut to what an answer may
+/// hold, or why it cannot be.
+pub(crate) fn cleaned<T: Serialize + DeserializeOwned>(answer: T) -> Result<T, String> {
     let mut value = serde_json::to_value(&answer).map_err(|_| "it could not be inspected")?;
     drop(answer);
     let mut nodes = 0;
@@ -50,13 +94,11 @@ fn clean(value: &mut Value, nodes: &mut usize) -> Result<(), String> {
                 clean(item, nodes)?;
             }
         }
+        // The names are another machine's text as much as the values (a tool's input is any JSON).
         Value::Object(map) => {
-            let extra: Vec<String> = map.keys().skip(ITEMS_MAX).cloned().collect();
-            for key in extra {
-                map.remove(&key);
-            }
-            for item in map.values_mut() {
-                clean(item, nodes)?;
+            for (key, mut item) in std::mem::take(map).into_iter().take(ITEMS_MAX) {
+                clean(&mut item, nodes)?;
+                map.insert(clean_text(&key), item);
             }
         }
         Value::Null | Value::Bool(_) | Value::Number(_) => {}
@@ -83,6 +125,40 @@ mod tests {
     use maitty_shared::conversation::{ConversationId, QueuedReceipt};
 
     #[test]
+    fn a_side_answer_from_another_machine_is_cleaned_and_cut() {
+        let long = format!("hi\x1b[2J\u{202e}\n{}", "é".repeat(SIDE_ANSWER_MAX_BYTES));
+        let Ok(Reply::SideAnswer { tag: 4, answer: SideAnswer::Answered { text } }) =
+            vet_side_answer(Reply::SideAnswer { tag: 4, answer: SideAnswer::Answered { text: long } })
+        else {
+            panic!("a side answer passes");
+        };
+        assert!(text.len() <= SIDE_ANSWER_MAX_BYTES);
+        assert!(text.starts_with("hi"));
+        assert!(text.contains('\n'));
+        assert!(!text.chars().any(|c| c == '\x1b' || c == '\u{202e}'));
+    }
+
+    #[test]
+    fn a_worktree_folder_from_another_machine_is_one_plain_absolute_path() {
+        let folder = |text: &str| vet_worktree_reply(Reply::Text(text.into()));
+        assert!(matches!(folder("/home/me/.maitty/worktrees/app/quiet-otter"), Ok(Reply::Text(_))));
+        for bad in ["", "relative/path", "/a\nrm -rf ~", "/a\u{202e}b", "/a\x1b[2J"] {
+            assert!(folder(bad).is_err(), "{bad:?}");
+        }
+        assert!(folder(&format!("/{}", "a".repeat(5000))).is_err());
+        assert!(vet_worktree_reply(Reply::Ok).is_err());
+    }
+
+    #[test]
+    fn only_a_side_answer_answers_a_side_question() {
+        assert!(vet_side_answer(Reply::Ok).is_err());
+        assert!(matches!(
+            vet_side_answer(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported }),
+            Ok(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported })
+        ));
+    }
+
+    #[test]
     fn chat_text_keeps_lines_and_tabs_and_loses_escapes_and_hidden_characters() {
         let said = "fn main() {\n\tprintln!(\"hi\");\x1b[31m\x07\u{202e}\n}\r\n";
         assert_eq!(clean_text(said), "fn main() {\n\tprintln!(\"hi\");[31m\n} \n");
@@ -92,6 +168,13 @@ mod tests {
     fn a_string_past_the_limit_is_cut() {
         let long = "a".repeat(CHAT_TEXT_MAX + 10);
         assert_eq!(clean_text(&long).chars().count(), CHAT_TEXT_MAX);
+    }
+
+    #[test]
+    fn the_names_in_an_answer_are_cleaned_too() {
+        let mut value = serde_json::json!({ "input": { "pa\u{202e}th\x1b": "x" } });
+        clean(&mut value, &mut 0).unwrap();
+        assert_eq!(value, serde_json::json!({ "input": { "path": "x" } }));
     }
 
     #[test]

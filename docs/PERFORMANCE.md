@@ -134,7 +134,7 @@ Tier 3 (waste; not felt as lag with one session):
 Follow-ups done on the same day, after a second look:
 
 8. [x] The one-second clock is a shared store only the text showing a time subscribes to (`lib/clock.ts`; `components/times.tsx`: `Ago`, `ElapsedSince`), and a move highlight ends through `useRecent`, so a working session ticks a few small spans, not the window; the Settings spinner preview steps outside React; terminal output goes over one raw `tauri::ipc::Channel` instead of base64 events.
-9. [x] Glass on a web view without WebGL 2 (`data-gpu="software"`, set by `lib/gpu.ts`) drops its resting shadows, card gradient and popup blur, the three things the audit measured at 18, 10 and more points on software WebKitGTK; colours, radii and layout stay.
+9. [x] Resting shadows, card gradients and popup blur, the three things the audit measured at 18, 10 and more points on software WebKitGTK, are gone: the desktop has one flat finish. A web view without WebGL 2 (`data-gpu="software"`, set by `lib/gpu.ts`) also draws a popup's shadow as a hairline (`--sh-pop`); colours, radii and layout stay.
 10. [x] State deltas: when only panes changed, the daemon sends `ServerMsg::TermsChanged` (compared as encoded bytes against what that surface's clients last got) and nothing at all when nothing visible changed; `PROTOCOL_VERSION` 69. The TUI and the desktop host merge deltas into the snapshot they hold.
 11. [x] Replays only for viewed panes: the desktop stream attaches with `Hello.replays: false` and asks `WantReplay` per pane when a view opens; a desktop replay is the last 1 MiB of the ring plus the screen; the host keeps no history for a pane until its replay arrived.
 12. [x] The process scan runs every 5 s instead of every second while no client is attached.
@@ -217,8 +217,7 @@ Two things seen on the user's Linux machine that look like app bugs and are not:
   cells in the colour it was told. `TerminalView.tsx` now answers OSC 10 and 11 queries with the
   theme's own foreground and background and leaves everything else to xterm. The boxes that
   remained were ANSI black backgrounds (SGR 40), which Claude Code paints under its prompt and
-  status line: the palette's black is now the terminal ground and the pane is opaque unless
-  Settings › Appearance › See-through terminal is on, where any painted background is a box.
+  status line: the palette's black is now the terminal ground and the pane is always opaque.
 
 ## What the measurement did not cover
 
@@ -384,7 +383,10 @@ keys nobody pressed. Ticket 40.
    `eval`. T3 Code carries its terminal the same way. This needs an ADR (a new local listener,
    the token, `connect-src` in the CSP) and the security checklist.
 3. **Stop answering queries in replayed output** (ticket 40): while a view writes history or a
-   replay, what xterm sends through `onData` is dropped; only live output may be answered.
+   replay, what xterm sends through `onData` is dropped; only live output may be answered. Live
+   output's colour, cursor, status and device-attribute queries are not xterm's to answer either: the
+   daemon answers them at once (`process_answering_queries`), and the window's late second answer
+   landed on the shell prompt as `11;rgb:…` (`lib/daemonAnswers.ts`).
 4. **Then the probe and the budgets below**, so the next release is measured.
 
 **Keys no longer wait for replies (2026-11-06).** With step 2 built, a release build on the owner's
@@ -582,7 +584,11 @@ connected once per run of the window and ahead of time (when the new chat page o
 chat that is working asks the daemon for news every 300 ms (`ACTIVE_POLL_MS`), not every second.
 The daemon also says when a conversation changed (`ServerMsg::ConversationChanged`), so the chat
 reads then and, once told, polls only every second (`TOLD_ACTIVE_POLL_MS`); its reads go out on a
-connection kept open between them (`IDLE_CONNECTIONS` in `maitty-desktop-client`).
+connection kept open between them (`IDLE_CONNECTIONS` in `maitty-desktop-client`). A kept line unused for 30 s
+is closed rather than tried (`KEPT_FOR`), and one that has not answered within 8 s is given up and the question asked
+on a new line (`KEPT_ANSWER_WITHIN`) (only a question that changes nothing goes out on a kept line, `safe_to_ask_twice`: a
+commit, push or pull request asked again could act twice): a line to another machine that died quietly (sleep, a network change) otherwise
+held a chat's reads until ssh's own check ended it, 45 s later.
 What is left is the shell's own startup and the agent's own startup, which Maitty does not control.
 Measure it on Windows with a screen recording at 30 fps: count frames from Enter to the first
 "thinking" line.

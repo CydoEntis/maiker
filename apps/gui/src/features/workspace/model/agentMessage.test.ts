@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendTerminalInput, submitMessage } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
-import { agentName, sendAgentMessage, suggestedCommitMessage } from './agentMessage'
+import { agentName, sendAgentMessage, suggestedCommitMessage, takesAgentMessages } from './agentMessage'
 import { toSessionView } from './session'
 
 vi.mock('@/api/daemon', () => ({
@@ -24,6 +24,15 @@ describe('a message to an agent from outside its message box', () => {
     await sendAgentMessage(session(), 'About a.ts, line 3:\n> x\n\nrename it')
     expect(sendTerminalInput).toHaveBeenCalledWith({ id: 't1', generation: 0 }, '\x1b[200~About a.ts, line 3:\n> x\n\nrename it\x1b[201~\r')
     expect(submitMessage).not.toHaveBeenCalled()
+  })
+
+  it('is never typed into a shell or another program, which would run it as a command', async () => {
+    for (const shell of [session({ agent: null, process: 'bash' }), session({ agent: null, process: 'vim' })]) {
+      expect(takesAgentMessages(shell)).toBe(false)
+      await expect(sendAgentMessage(shell, 'rm -rf build')).rejects.toThrow('No agent runs here')
+    }
+    expect(sendTerminalInput).not.toHaveBeenCalled()
+    expect(takesAgentMessages(session())).toBe(true)
   })
 
   it('is not typed into an agent that is asking something', async () => {

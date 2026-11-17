@@ -1,39 +1,41 @@
-/* The repository drawer (v19 §9): over the panes from beside the activity bar, over a scrim, never pushing them. */
-.mx-inspect-scrim { position: absolute; inset: 0; z-index: 49; background: rgba(4, 6, 9, .45); animation: mx-inspect-fade .2s ease-out; }
-.mx-inspect-scrim.is-leaving { animation: mx-inspect-fade-out .19s cubic-bezier(.4, 0, 1, 1) forwards; }
-.mx-inspect { position: absolute; top: 12px; right: 24px; bottom: 12px; z-index: 50; max-width: calc(100% - 24px); display: flex; flex-direction: column; border-radius: var(--r16); background: linear-gradient(180deg, rgba(var(--hl), calc(.035 * var(--hk))), rgba(255, 255, 255, 0) 160px), var(--m-pane); border: 1px solid var(--pane-line); box-shadow: var(--sh); overflow: visible; animation: mx-inspect-in .24s cubic-bezier(.2, .8, .2, 1); }
-.mx-app[data-side="right"] .mx-inspect { right: auto; left: 24px; animation-name: mx-inspect-in-left; }
-.mx-app.is-narrow .mx-inspect { left: 12px; right: 12px; width: auto !important; }
-.mx-inspect.is-leaving { animation: mx-inspect-out .19s cubic-bezier(.4, 0, 1, 1) forwards; }
+/* The side panel (layout 2h): docked between the chat column and the tools bar, which narrows the chat to make room.
+   No scrim: the chat stays usable beside it. It slides in from the window's edge and out again. */
+.mx-inspect { --inspect-max: 58%; position: relative; flex: 0 1 auto; min-width: 300px; margin: 0 8px 8px 0; display: flex; flex-direction: column; background: var(--main); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: visible; animation: mx-panel-from-right var(--panel-in); }
+.mx-app[data-side="right"] .mx-inspect { margin: 0 0 8px 8px; animation-name: mx-panel-from-left; }
+.mx-inspect.is-leaving { animation: mx-inspect-out var(--panel-out) forwards; pointer-events: none; }
 .mx-app[data-side="right"] .mx-inspect.is-leaving { animation-name: mx-inspect-out-left; }
-.mx-inspect-grip { position: absolute; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; z-index: 2; }
+.mx-app.is-narrow .mx-inspect { position: absolute; top: 0; right: 56px; bottom: 0; z-index: 30; max-width: calc(100% - 72px); }
+/* The panel shrinks to its 300px before the chat's 400px gives; where even both do not fit beside the sidebar's rail
+   and the tools bar, it lies over the chat instead of pushing the tools bar off the window. */
+@media (max-width: 899px) {
+  .mx-app .mx-inspect { position: absolute; top: 0; right: 56px; bottom: 0; z-index: 30; max-width: calc(100% - 72px); }
+}
+.mx-inspect-grip { position: absolute; top: 0; bottom: 0; left: -6px; width: 8px; cursor: col-resize; z-index: 2; }
+.mx-app[data-side="right"] .mx-inspect-grip { left: auto; right: -6px; }
 .mx-inspect-grip::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 3px; width: 2px; border-radius: 2px; background: transparent; transition: background .15s; }
 .mx-inspect-grip:hover::after, .mx-inspect-grip:focus-visible::after { background: var(--accent); }
 .mx-app.is-narrow .mx-inspect-grip { display: none; }
-.mx-inspect-head { flex: none; height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 10px 0 8px; border-bottom: 1px solid var(--pane-line); }
-.mx-inspect-head > .mx-icon-button { flex: none; }
-/* The views are one segmented control: the open one is a raised pill, as in the layout's design. */
-.mx-inspect-tabs { min-width: 0; display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); overflow-x: auto; scrollbar-width: none; }
-.mx-inspect-tabs button { flex: none; height: 28px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border-radius: 7px; font-size: 12.5px; font-weight: 500; color: var(--muted); white-space: nowrap; transition: background-color .14s ease, color .14s ease; }
-.mx-inspect-tabs button:hover { color: var(--fg); }
-.mx-inspect-tabs button.is-current { color: var(--fg); font-weight: 600; background: rgba(var(--hl), calc(.09 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); }
-.mx-inspect-count { min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; font-size: 10.5px; line-height: 16px; text-align: center; color: var(--muted); background: rgba(var(--hl), calc(.06 * var(--hk))); font-variant-numeric: tabular-nums; }
-.mx-inspect-tabs button.is-current .mx-inspect-count { color: var(--accent-text); background: var(--accent-soft); }
-@keyframes mx-inspect-fade { from { opacity: 0; } to { opacity: 1; } }
-@keyframes mx-inspect-fade-out { to { opacity: 0; } }
-@keyframes mx-inspect-in { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
-@keyframes mx-inspect-in-left { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
-@keyframes mx-inspect-out { to { opacity: 0; transform: translateX(36px); } }
-@keyframes mx-inspect-out-left { to { opacity: 0; transform: translateX(-36px); } }
-:root[data-motion="reduced"] .mx-inspect, :root[data-motion="reduced"] .mx-inspect-scrim, .mx-app[data-motion="reduced"] .mx-inspect, .mx-app[data-motion="reduced"] .mx-inspect-scrim { animation: none; }
-@media (prefers-reduced-motion: reduce) { .mx-inspect, .mx-inspect-scrim { animation: none; } }
+/* Its header names the view the tools bar picked, with that view's count, and a close button. */
+.mx-inspect-head { flex: none; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.mx-inspect-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }
+.mx-inspect-count { font: 500 11px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
+.mx-inspect-count.is-bad { color: var(--danger); }
+.mx-inspect-close { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
+.mx-inspect-close:hover { background: var(--m-hover); color: var(--fg); }
+.mx-inspect-close:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+@keyframes mx-inspect-out { to { opacity: 0; transform: translateX(28px); } }
+@keyframes mx-inspect-out-left { to { opacity: 0; transform: translateX(-28px); } }
+:root[data-motion="reduced"] .mx-inspect, .mx-app[data-motion="reduced"] .mx-inspect { animation: none; }
+@media (prefers-reduced-motion: reduce) { .mx-inspect { animation: none; } }
 .mx-inspect-scroll { flex: 1; min-height: 0; overflow: auto; padding: 10px; }
 /* Changes: the files and the commit down the left, the picked file's diff beside; each side scrolls on its own. */
 .mx-inspect-scroll:has(.mx-changes) { overflow: hidden; padding: 0; }
-.mx-changes { height: 100%; min-height: 0; display: grid; grid-template-columns: minmax(170px, 244px) minmax(0, 1fr); }
+.mx-changes { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.mx-changes-split { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(170px, 244px) minmax(0, 1fr); }
 .mx-changes-side { min-height: 0; display: flex; flex-direction: column; border-right: 1px solid var(--pane-line); }
-.mx-changes-branch { flex: none; margin: 0; display: flex; align-items: center; gap: 6px; padding: 12px 12px 6px; font-family: var(--mono); font-size: 11.5px; color: var(--branch); min-width: 0; }
-.mx-changes-branch span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-changes-branch { flex: none; min-width: 0; height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: var(--r-control); font: 500 12px var(--mono); color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-changes-branch.is-button:hover:not(:disabled) { background: var(--m-hover); }
+.mx-changes-branch > span[aria-hidden] { color: var(--dim); font-size: 10px; }
 .mx-changes-list { flex: 1; min-height: 0; overflow: auto; list-style: none; margin: 0; padding: 4px 6px; display: flex; flex-direction: column; gap: 2px; }
 .mx-changes-row { width: 100%; min-height: 38px; display: flex; align-items: center; gap: 9px; padding: 4px 8px; border-radius: 8px; text-align: left; color: var(--fg2); }
 .mx-changes-row:hover { background: var(--m-hover); color: var(--fg); }
@@ -46,10 +48,6 @@
 .mx-changes-name b { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-changes-name small { font-size: 10.5px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-changes-count { flex: none; display: flex; gap: 6px; font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
-.mx-changes-side .mx-commit { flex: none; margin: 0; padding: 8px; border: 0; border-top: 1px solid var(--pane-line); border-radius: 0; background: transparent; }
-.mx-changes-side .mx-commit-message { padding: 8px 10px; border-radius: 9px; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); font-size: 12.5px; resize: none; }
-.mx-changes-side .mx-commit-actions { flex-wrap: nowrap; }
-.mx-changes-side .mx-commit-actions .is-primary { flex: 1; min-width: 0; }
 .mx-changes-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .mx-changes-file { flex: none; min-height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--pane-line); }
 .mx-changes-path { flex: 1; min-width: 0; font-family: var(--mono); font-size: 12px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -58,7 +56,6 @@
 .mx-changes-hint { flex: none; font-size: 11.5px; color: var(--dim); white-space: nowrap; }
 .mx-changes-main .mx-patch { flex: 1; min-height: 0; padding: 8px 0; font-size: 12.5px; line-height: 1.75; }
 .mx-changes-none { margin: auto; padding: 24px; font-size: 12.5px; color: var(--dim); text-align: center; }
-.mx-inspect-terminals { flex: 1; min-height: 0; display: flex; }
 .mx-inspect-body, .mx-inspect-split { display: flex; flex-direction: column; gap: 10px; }
 .mx-inspect-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-inspect-row { width: 100%; min-height: 28px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 4px 8px; border-radius: 8px; font-size: 12.5px; color: var(--fg2); text-align: left; }
@@ -83,7 +80,7 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-inspect-confirm { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px; border-radius: 8px; background: var(--m-well); font-size: 12px; }
 .mx-inspect-confirm span { flex: 1; min-width: 180px; }
 .mx-inspect-confirm button { height: 26px; padding: 0 10px; border-radius: 7px; background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg2); }
-.mx-inspect-confirm button.is-danger { background: var(--danger); color: #fff; }
+.mx-inspect-confirm button.is-danger { background: var(--danger); color: var(--on-danger); }
 .mx-inspect-confirm button:disabled { opacity: .5; }
 .mx-patch, .mx-preview { margin: 0; padding: 8px 0; border-radius: 0; background: transparent; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; overflow: auto; }
 .mx-patch-line, .mx-preview > span { display: block; padding: 0 10px; white-space: pre; }
@@ -91,12 +88,20 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-patch-line.is-remove { background: color-mix(in oklab, var(--danger) 16%, transparent); }
 .mx-patch-line.is-hunk { color: var(--accent-text); }
 .mx-patch-line.is-meta { color: var(--dim); }
-.mx-commit { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--pane-line); border-radius: 12px; background: var(--m-well); }
-.mx-commit-message { width: 100%; resize: vertical; border: 0; background: transparent; color: var(--fg); font: inherit; font-size: 13px; outline: none; }
-.mx-commit-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.mx-commit-error { margin: 0; font-size: 12.5px; color: var(--danger); }
-.mx-commit-link { margin: 0; font-size: 12.5px; color: var(--muted); }
-.mx-commit-link span { color: var(--accent-text); user-select: text; overflow-wrap: anywhere; }
+.mx-commit { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
+.mx-commit-message { width: 100%; min-height: 84px; max-height: 200px; box-sizing: border-box; resize: vertical; padding: 8px 10px; border: 1px solid var(--line2); border-radius: var(--r-control); background: var(--m-well); color: var(--fg); font-family: inherit; font-size: 12.5px; line-height: 1.5; outline: none; }
+.mx-commit-message:focus { border-color: var(--accent-line); }
+.mx-commit-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.mx-commit-go { height: 30px; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
+.mx-commit-go:disabled { opacity: .5; cursor: default; }
+.mx-commit-go kbd { font: 500 10.5px var(--mono); opacity: .75; }
+.mx-commit-soft { height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg); background: var(--m-raise); border: 1px solid var(--line2); }
+.mx-commit-soft:hover:not(:disabled) { background: var(--m-hover); }
+.mx-commit-text { height: 30px; padding: 0 4px; font-size: 12px; color: var(--dim); }
+.mx-commit-text:hover:not(:disabled) { color: var(--fg); }
+.mx-commit-done { margin: 0; font-size: 12px; color: var(--ok); }
+.mx-commit-done span { color: var(--accent-text); user-select: text; overflow-wrap: anywhere; }
+.mx-commit-error { margin: 0; padding: 0 10px 8px; font-size: 12.5px; color: var(--danger); }
 /* Line numbers are drawn, not written, so copying a diff copies only its text. */
 .mx-patch-no { font-style: normal; color: var(--dim); user-select: none; }
 .mx-patch-no::before { content: attr(data-old); }
@@ -118,7 +123,7 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-inspect .is-add { color: var(--ok); }
 .mx-inspect .is-remove { color: var(--danger); }
 
-.mx-app[data-side="right"] .mx-inspect { right: auto; left: var(--edge); animation-name: v14inspL; }
+.mx-app[data-side="right"] .mx-inspect { right: auto; left: var(--edge); animation-name: mx-inspect-in-left; }
 
 /* A failed tab: one calm, centred screen. Amber is a wait, red needs you, the accent is not an error. */
 .mx-inspect-fail { --tone: var(--warn); display: flex; flex-direction: column; align-items: center; gap: 10px; max-width: 320px; margin: 0 auto; padding: 32px 28px; text-align: center; }
@@ -150,7 +155,8 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-files-view .mx-patch { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .mx-files-heading { margin: 8px 8px 4px; font-size: 11px; font-weight: 600; color: var(--dim); }
 .mx-files-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mx-files-tag { flex: none; min-width: 26px; padding: 0 3px; border-radius: 4px; font: 600 9.5px var(--mono); line-height: 15px; text-align: center; color: var(--muted); background: rgba(var(--hl), calc(.07 * var(--hk))); }
+/* The tag itself is the shared TypeTag, in its type's tone; this only keeps the names lined up. */
+.mx-files-tag { flex: none; min-width: 26px; display: flex; justify-content: center; }
 .mx-files-mark { flex: none; width: 14px; font: 600 10.5px var(--mono); text-align: center; }
 .mx-files-mark.is-add { color: var(--ok); }
 .mx-files-mark.is-edit { color: var(--warn); }
@@ -163,7 +169,7 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-files-row.is-current { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); color: var(--fg); }
 .mx-files-row.is-folder { color: var(--fg); font-weight: 500; }
 .mx-files-wait { display: flex; flex-direction: column; gap: 14px; padding: 10px 10px; }
-.mx-files-wait > span { width: 58%; height: 10px; border-radius: 4px; background: var(--raise); }
+.mx-files-wait > span { width: 58%; height: 10px; border-radius: 4px; background: var(--m-raise); }
 .mx-files-wait > span:nth-of-type(3n + 1) { width: 42%; }
 .mx-files-wait > span:nth-of-type(4n + 2) { width: 72%; }
 .mx-files-wait > span:nth-of-type(5n) { width: 34%; }
@@ -191,3 +197,39 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-changes-tick { flex: none; margin: 0 0 0 6px; accent-color: var(--accent, currentColor); }
 .mx-changes-scope { flex: none; margin: 0; display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px; color: var(--fg2); min-width: 0; overflow-wrap: anywhere; }
 .mx-changes-scope h3 { flex: 1; min-width: 0; margin: 0; font: inherit; }
+
+/* The Changes view's top bar: the branch menu, how far it is from origin, and the remote as a split button. */
+.mx-changes-bar { flex: none; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 6px; border-bottom: 1px solid var(--line); }
+.mx-changes-sync { flex: none; font: 500 11.5px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.mx-split { flex: none; display: inline-flex; border: 1px solid var(--line2); border-radius: var(--r-control); background: var(--m-raise); overflow: hidden; }
+.mx-split-main, .mx-split-more { height: 26px; padding: 0 10px; font-size: 12.5px; font-weight: 500; color: var(--fg); }
+.mx-split-more { padding: 0 7px; border-left: 1px solid var(--line2); color: var(--muted); font-size: 10px; }
+.mx-split-main:hover:not(:disabled), .mx-split-more:hover:not(:disabled) { background: var(--m-hover); }
+.mx-split-main:disabled, .mx-split-more:disabled { opacity: .55; cursor: default; }
+.mx-changes-menu { min-width: 220px; padding: 4px; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--sh-pop); color: var(--fg); z-index: 80; }
+.mx-changes-menu-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-control); font-size: 12.5px; outline: none; cursor: default; }
+.mx-changes-menu-item[data-highlighted] { background: var(--m-hover); }
+.mx-changes-menu-item[data-disabled] { color: var(--fg); }
+.mx-changes-menu-item.is-two-line { flex-direction: column; align-items: flex-start; gap: 1px; }
+.mx-changes-menu-name { flex: 1; min-width: 0; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-changes-menu-item.is-two-line .mx-changes-menu-name { font-family: inherit; font-weight: 600; }
+.mx-changes-menu-sub { font-size: 11.5px; color: var(--muted); }
+.mx-changes-menu-check { color: var(--accent-text); }
+.mx-changes-menu-note { margin: 4px 0 0; padding: 6px 10px 4px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--dim); }
+/* Select all: one tick for every changed file, how many there are, and the totals. */
+.mx-changes-all { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 6px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.mx-changes-all-count { flex: 1; min-width: 0; }
+.mx-changes-tick { flex: none; width: 14px; height: 14px; accent-color: var(--accent); }
+/* History: Snapshots or the status log, picked above the list. */
+.mx-history { display: flex; flex-direction: column; gap: 10px; }
+.mx-history-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mx-history-sub { font-size: 12px; color: var(--dim); }
+/* Files: References opens from the top of the tree. */
+.mx-files-refs { width: 100%; min-height: 28px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); text-align: left; }
+.mx-files-refs:hover { background: var(--m-hover); color: var(--fg); }
+/* Checks: how often they run and how many, with Run all, above the list. */
+.mx-checks-view { display: flex; flex-direction: column; gap: 8px; }
+.mx-checks-bar { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 12px; color: var(--fg2); }
+.mx-checks-run { height: 28px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg); background: var(--m-raise); border: 1px solid var(--line2); }
+.mx-checks-run:hover:not(:disabled) { background: var(--m-hover); }
+.mx-checks-run:disabled { opacity: .55; cursor: default; }

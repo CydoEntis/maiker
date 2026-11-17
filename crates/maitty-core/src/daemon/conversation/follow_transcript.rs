@@ -7,6 +7,7 @@
 //! Every string that reaches a note is cleaned and bounded here or by that projection, because a
 //! transcript holds whatever the agent was working on.
 
+use super::history_provider::CONTEXT_SUMMARY_ITEM;
 use super::tool_input::{bound_input, clean_text};
 use maitty_provider_claude::bounded_content_text;
 use serde_json::{Value, json};
@@ -62,12 +63,35 @@ pub(in crate::daemon) struct Transcript {
     tools: HashMap<String, PendingTool>,
     /// The command Claude ran itself and has not printed for yet: it names the row its output gets.
     local_command: Option<String>,
+    /// The name the session was last given in Claude Code (`/rename`, a `custom-title` line).
+    custom_title: Option<String>,
+    /// The file is a helper's own record, not a session's (ADR 0010).
+    helper: Helper,
 }
+
+/// How much of a helper's own file is the helper's.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Helper {
+    /// A session's file: a helper's lines in it are not this conversation.
+    No,
+    /// A helper's file whose own part has begun: Claude's are all side-chain lines.
+    Own,
+    /// A Codex helper's file before its own task: a copy of its parent's history.
+    ParentCopy,
+}
+
+/// The longest session name taken from a transcript, as a pane's name is cut.
+pub(super) const TITLE_MAX_CHARS: usize = 60;
 
 impl Transcript {
     /// What the file has said about the agent's mode and model so far.
     pub fn meta(&self) -> &crate::conversation::SessionMeta {
         &self.meta
+    }
+
+    /// The name the session was last given in Claude Code, if it was given one.
+    pub fn custom_title(&self) -> Option<&str> {
+        self.custom_title.as_deref()
     }
 
     pub fn new(format: Format, thread: &str) -> Self {
@@ -82,6 +106,21 @@ impl Transcript {
             meta: crate::conversation::SessionMeta::default(),
             tools: HashMap::new(),
             local_command: None,
+            custom_title: None,
+            helper: Helper::No,
+        }
+    }
+
+    /// A reader for a helper's own record: Claude's side-chain file, or a Codex helper's rollout,
+    /// read from where its own task begins.
+    pub fn helper(format: Format, thread: &str) -> Self {
+        let helper = match format {
+            Format::Codex => Helper::ParentCopy,
+            Format::Claude | Format::Gemini => Helper::Own,
+        };
+        Self {
+            helper,
+            ..Self::new(format, thread)
         }
     }
 
@@ -167,6 +206,34 @@ impl Transcript {
         notes.push(self.note("item/completed", item_params(&turn, item, at_ms)));
     }
 
+    /// The agent's own account of its thinking, as the reasoning item a structured runtime
+    /// publishes. Nothing is kept when there is no text (Claude's redacted blocks and Codex's
+    /// encrypted-only reasoning); the projection masks secrets, strips escapes and cuts the text.
+    fn reasoning(&mut self, id: &str, parts: &[&str], at_ms: Option<u64>, notes: &mut Vec<Note>) {
+        let parts: Vec<&str> = parts
+            .iter()
+            .map(|part| part.trim())
+            .filter(|part| !part.is_empty())
+            .collect();
+        if parts.is_empty() {
+            return;
+        }
+        let turn = self.turn_id(at_ms, notes);
+        let item = json!({ "id": id, "type": "reasoning", "summary": parts });
+        notes.push(self.note("item/completed", item_params(&turn, item, at_ms)));
+    }
+
+    /// Claude's own summary of the conversation so far, written when it ran out of room. Nobody
+    /// typed it, so it is a step of the turn it happened in and starts no turn of its own.
+    fn context_summary(&mut self, id: &str, text: &str, at_ms: Option<u64>, notes: &mut Vec<Note>) {
+        if text.trim().is_empty() {
+            return;
+        }
+        let turn = self.turn_id(at_ms, notes);
+        let item = json!({ "id": id, "type": CONTEXT_SUMMARY_ITEM, "text": bounded_text(text) });
+        notes.push(self.note("item/completed", item_params(&turn, item, at_ms)));
+    }
+
     fn remember(&mut self, id: &str, tool: PendingTool) {
         if self.tools.len() >= MAX_PENDING_TOOLS {
             self.tools.clear();
@@ -179,7 +246,7 @@ impl Transcript {
     fn claude(&mut self, offset: u64, line: &Value, notes: &mut Vec<Note>) {
         // A helper agent's own conversation is a separate file in current Claude, and an older
         // one wrote it into this file marked as a side chain; it is not this conversation.
-        if line.get("isSidechain").and_then(Value::as_bool) == Some(true) {
+        if self.helper == Helper::No && line.get("isSidechain").and_then(Value::as_bool) == Some(true) {
             return;
         }
         self.note_claude_setup(line);
@@ -200,6 +267,10 @@ impl Transcript {
                 let Some(content) = line.pointer("/message/content") else {
                     return;
                 };
+                if line.get("isCompactSummary").and_then(Value::as_bool) == Some(true) {
+                    self.context_summary(&uuid, &claude_text(content), at_ms, notes);
+                    return;
+                }
                 match content {
                     Value::String(text) => self.claude_user_text(&uuid, text, at_ms, notes),
                     Value::Array(blocks) => self.claude_user_blocks(&uuid, blocks, at_ms, notes),
@@ -248,6 +319,10 @@ impl Transcript {
             ClaudeLine::CommandOutput(output) => {
                 self.claude_command_output(uuid, &output, at_ms, notes);
             }
+            ClaudeLine::Interrupted => {
+                self.close_turn("interrupted", at_ms, notes);
+                self.last_user_text = None;
+            }
             ClaudeLine::Hidden => {}
         }
     }
@@ -262,6 +337,12 @@ impl Transcript {
         notes: &mut Vec<Note>,
     ) {
         let command = self.local_command.take();
+        // A model picked in the terminal is the model from here on, before any reply says so.
+        if command.as_deref().is_some_and(|command| command.split_whitespace().next() == Some("/model"))
+            && let Some(model) = model_set_to(output)
+        {
+            self.meta.model = Some(model);
+        }
         if !output.trim().is_empty() {
             let turn = self.turn_id(at_ms, notes);
             let item = json!({
@@ -284,6 +365,16 @@ impl Transcript {
     /// The permission mode and the model, when this line says them. A placeholder model name (Claude
     /// writes `<synthetic>` for a message it made itself) is not a model.
     fn note_claude_setup(&mut self, line: &Value) {
+        if line.get("type").and_then(Value::as_str) == Some("custom-title")
+            && let Some(title) = line.get("customTitle").and_then(Value::as_str)
+        {
+            // One clean line: it becomes the pane's name, which every window shows.
+            let title: String = title.chars().filter(|c| !c.is_control()).take(TITLE_MAX_CHARS).collect();
+            let title = title.trim();
+            if !title.is_empty() {
+                self.custom_title = Some(title.to_owned());
+            }
+        }
         if let Some(mode) = line.get("permissionMode").and_then(Value::as_str) {
             self.meta.mode = Some(mode.to_owned());
         }
@@ -332,6 +423,11 @@ impl Transcript {
             Some("text") => {
                 if let Some(text) = block.get("text").and_then(Value::as_str) {
                     self.agent_message(id, text, at_ms, notes);
+                }
+            }
+            Some("thinking") => {
+                if let Some(text) = block.get("thinking").and_then(Value::as_str) {
+                    self.reasoning(id, &[text], at_ms, notes);
                 }
             }
             Some("tool_use") => {
@@ -481,6 +577,14 @@ impl Transcript {
     // ---- Codex: response items and event messages ----
 
     fn codex(&mut self, offset: u64, line: &Value, notes: &mut Vec<Note>) {
+        // A helper's rollout opens with a copy of its parent's history; its own task starts at the
+        // line that hands it over.
+        if self.helper == Helper::ParentCopy {
+            if line.get("type").and_then(Value::as_str) == Some("inter_agent_communication_metadata") {
+                self.helper = Helper::Own;
+            }
+            return;
+        }
         let at_ms = line
             .get("timestamp")
             .and_then(Value::as_str)
@@ -518,6 +622,18 @@ impl Transcript {
                     }
                     _ => {}
                 }
+            }
+            (Some("response_item"), Some("reasoning")) => {
+                // The rollout's summary parts are objects (`summary_text`); only their text is read,
+                // never `content` or `encrypted_content`.
+                let parts: Vec<&str> = payload
+                    .get("summary")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|part| part.get("text").and_then(Value::as_str))
+                    .collect();
+                self.reasoning(&format!("o{offset}"), &parts, at_ms, notes);
             }
             (Some("response_item"), Some("function_call" | "local_shell_call")) => {
                 self.codex_call(payload, at_ms, notes);
@@ -637,6 +753,11 @@ impl Transcript {
             .get("output")
             .map_or_else(String::new, |output| match output {
                 Value::String(text) => text.clone(),
+                // Codex 0.166 writes a custom tool's output as a list of text parts.
+                Value::Array(parts) => parts
+                    .iter()
+                    .filter_map(|part| part.get("text").and_then(Value::as_str))
+                    .collect(),
                 other => other
                     .get("content")
                     .and_then(Value::as_str)
@@ -692,6 +813,18 @@ fn item_params(turn: &str, mut item: Value, at_ms: Option<u64>) -> Value {
     params
 }
 
+/// The text of a Claude message, whether it is written as one string or as text blocks.
+fn claude_text(content: &Value) -> String {
+    match content {
+        Value::String(text) => text.clone(),
+        Value::Array(blocks) => blocks
+            .iter()
+            .filter_map(|block| block.get("text").and_then(Value::as_str))
+            .collect(),
+        _ => String::new(),
+    }
+}
+
 /// What the text of a Claude "user" line is. Claude writes more there than what was typed.
 pub(super) enum ClaudeLine {
     Said,
@@ -701,12 +834,21 @@ pub(super) enum ClaudeLine {
     CommandOutput(String),
     /// Notes for the agent (`<system-reminder>`, `<local-command-caveat>`), not the conversation.
     Hidden,
+    /// Claude's own record that the person stopped the turn: it ends the turn, nobody said it.
+    Interrupted,
 }
 
 const COMMAND_OUTPUT_TAGS: [&str; 2] = ["local-command-stdout", "local-command-stderr"];
 
+/// How Claude Code begins the line it writes when the person stops a turn, followed by
+/// `]` or ` for tool use]`.
+const INTERRUPTED_PREFIX: &str = "[Request interrupted by user";
+
 pub(super) fn claude_line(text: &str) -> ClaudeLine {
     let start = text.trim_start();
+    if start.starts_with(INTERRUPTED_PREFIX) && start.trim_end().ends_with(']') {
+        return ClaudeLine::Interrupted;
+    }
     if start.starts_with("<command-name>") || start.starts_with("<command-message>") {
         return slash_command(start).map_or(ClaudeLine::Hidden, ClaudeLine::Command);
     }
@@ -741,6 +883,37 @@ fn slash_command(text: &str) -> Option<String> {
     } else {
         format!("{name} {args}")
     })
+}
+
+/// How Claude Code's `/model` says which model it switched to: "Set model to `Haiku 5.5` and saved
+/// as your default for new sessions" (older builds leave out the backticks).
+const MODEL_SET_PREFIX: &str = "Set model to ";
+
+/// The model a `/model` command's output says it switched to, by the name it gave ("Haiku 5.5").
+/// None when it kept the model or said something else.
+fn model_set_to(output: &str) -> Option<String> {
+    let plain = clean_text(output);
+    let (_, after) = plain.split_once(MODEL_SET_PREFIX)?;
+    let name = match after.strip_prefix('`') {
+        Some(quoted) => quoted.split_once('`')?.0,
+        None => first_words(after),
+    };
+    let name = name.trim();
+    (!name.is_empty() && name.chars().count() <= MAX_MODEL_NAME_CHARS).then(|| name.to_owned())
+}
+
+/// The longest model name kept from a command's output: a real one is a few words.
+const MAX_MODEL_NAME_CHARS: usize = 60;
+
+/// The words of an unquoted model name: everything up to the first word that starts the rest of the
+/// sentence ("and saved…", "with high effort") or the end of the line.
+fn first_words(text: &str) -> &str {
+    let line = text.split(['\n', '(', '…']).next().unwrap_or_default();
+    [" and ", " with ", " for "]
+        .iter()
+        .filter_map(|stop| line.find(stop))
+        .min()
+        .map_or(line, |end| &line[..end])
 }
 
 /// The text between `<tag>` and `</tag>`, when the text has both.
@@ -821,6 +994,9 @@ struct CodexResult {
     duration_ms: Option<u64>,
 }
 
+/// The lines Codex puts before `Output:` in a command's text result.
+const RESULT_HEADERS: [&str; 5] = ["Exit code", "Wall time", "Script ", "Chunk ID", "Original token count"];
+
 /// Codex writes a command's result either as JSON (`{"output", "metadata": {"exit_code",
 /// "duration_seconds"}}`) or as text (`Exit code: N`, `Wall time: S seconds`, `Output:`, …).
 fn codex_result(raw: &str) -> CodexResult {
@@ -840,6 +1016,29 @@ fn codex_result(raw: &str) -> CodexResult {
                 .and_then(Value::as_f64)
                 .and_then(seconds),
         };
+    }
+    // A custom tool's result: a header of known lines ("Script completed", "Wall time 0.2 seconds"),
+    // then `Output:` and the output.
+    if let Some((head, body)) = raw.split_once("Output:\n")
+        && !head.is_empty()
+        && head.lines().all(|line| RESULT_HEADERS.iter().any(|known| line.starts_with(known)))
+    {
+        let mut result = CodexResult { text: bounded_output(body), exit_code: None, duration_ms: None };
+        for line in head.lines() {
+            if let Some(code) = line.strip_prefix("Exit code:") {
+                result.exit_code = code.trim().parse().ok();
+            } else if let Some(wall) = line.strip_prefix("Wall time") {
+                result.duration_ms = wall
+                    .trim_start_matches(':')
+                    .trim()
+                    .trim_end_matches("seconds")
+                    .trim()
+                    .parse::<f64>()
+                    .ok()
+                    .and_then(seconds);
+            }
+        }
+        return result;
     }
     let mut exit_code = None;
     let mut duration_ms = None;

@@ -13,6 +13,7 @@ struct Kept {
     label: String,
     pinned: bool,
     archived: bool,
+    put_away_for: Option<String>,
     snoozed_until: Option<u64>,
     name: String,
     first_prompt: String,
@@ -22,6 +23,9 @@ struct Kept {
     tab_of: Option<TermId>,
     queue: std::collections::VecDeque<String>,
     held_message: Option<String>,
+    /// Its helpers' records and workflow runs: the history of the same conversation.
+    subagent_activity: Vec<SubagentActivity>,
+    workflows: Vec<maitty_shared::workflow::WorkflowRun>,
 }
 
 impl Kept {
@@ -33,6 +37,7 @@ impl Kept {
             label: t.label.clone(),
             pinned: t.pinned,
             archived: t.archived,
+            put_away_for: t.put_away_for.clone(),
             snoozed_until: t.snoozed_until,
             name: t.name.clone(),
             first_prompt: t.first_prompt.clone(),
@@ -42,6 +47,8 @@ impl Kept {
             tab_of: t.tab_of,
             queue: t.queue.clone(),
             held_message: t.held_message.as_ref().map(|held| held.text.clone()),
+            subagent_activity: t.subagent_activity.clone(),
+            workflows: t.workflows.clone(),
         }
     }
 
@@ -49,10 +56,12 @@ impl Kept {
         (t.agent, t.session, t.cmd) = (self.agent, self.session, self.cmd);
         (t.label, t.name, t.first_prompt) = (self.label, self.name, self.first_prompt);
         (t.pinned, t.archived, t.snoozed_until) = (self.pinned, self.archived, self.snoozed_until);
+        t.put_away_for = self.put_away_for;
         (t.model, t.grants, t.started_by, t.tab_of) =
             (self.model, self.grants, self.started_by, self.tab_of);
         t.queue = self.queue;
         t.held_message = self.held_message.as_deref().map(term::HeldMessage::new);
+        (t.subagent_activity, t.workflows) = (self.subagent_activity, self.workflows);
     }
 }
 
@@ -275,7 +284,10 @@ impl Daemon {
             agent: term.agent.clone(),
             session: term.agent.as_ref().and(term.session.clone()),
             unseen: term.status == Status::Done,
-            was_working: term.status == Status::Working,
+            // A question left unanswered is a turn cut short too: resumed silently, the agent
+            // would sit at its prompt as if it had been answered.
+            was_working: matches!(term.status, Status::Working | Status::Blocked),
+            interrupted: term.interrupted.clone().filter(|_| term.agent.is_none()),
             name: if term.name.is_empty() {
                 term.first_prompt.clone()
             } else {
@@ -285,6 +297,7 @@ impl Daemon {
             label: term.label.clone(),
             pinned: term.pinned,
             archived: term.archived,
+            put_away_for: term.put_away_for.clone(),
             snoozed_until: term.snoozed_until,
             started_by: term.started_by,
             owner: term.owner,
@@ -293,6 +306,7 @@ impl Daemon {
             held_message: term.held_message.as_ref().map(|held| held.text.clone()),
             account: term.account.clone(),
             subagent_activity: term.subagent_activity.clone(),
+            workflows: term.workflows.clone(),
             checks: term.checks.infos(),
             checks_overridden: term
                 .checks
@@ -572,7 +586,8 @@ impl Daemon {
                         .was_working
                         .then(|| pane.agent.clone().zip(cmd.clone()))
                         .flatten()
-                        .map(|(agent, resume)| Interrupted { agent, resume });
+                        .map(|(agent, resume)| Interrupted { agent, resume })
+                        .or_else(|| pane.interrupted.clone());
                     let cmd = cmd.filter(|_| interrupted.is_none());
                     match self.spawn(cmd.as_deref(), &cwd, 120, 32) {
                         Ok(new) => {
@@ -595,12 +610,14 @@ impl Daemon {
                                 t.label = pane.label.clone();
                                 (t.pinned, t.archived, t.snoozed_until) =
                                     (pane.pinned, pane.archived, pane.snoozed_until);
+                                t.put_away_for = pane.put_away_for.clone();
                                 t.owner = pane.owner;
                                 t.queue = pane.queue.iter().cloned().collect();
                                 t.held_message =
                                     pane.held_message.as_deref().map(term::HeldMessage::new);
                                 t.restore_checks(&check_dir, old, &pane);
                                 let now = term::unix_now();
+                                t.workflows = pane.workflows;
                                 t.subagent_activity = pane.subagent_activity.into_iter().map(|mut activity| {
                                     if activity.state.active() {
                                         activity.state = SubagentState::ConnectionLost;

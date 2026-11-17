@@ -18,9 +18,9 @@ describe('the usage strip under the message box', () => {
     expect(usageItems({ context: null, limits: [{ name: 'week', used: 5, resetsAt: 0 }] }, NOW).map((item) => [item.label, item.resetsIn])).toEqual([['Weekly limit', null]])
   })
 
-  it('turns a meter amber from four fifths and red from nine tenths', () => {
-    const tones = [10, 79, 80, 89, 90, 140].map((used) => usageItems({ context: used, limits: [] }, NOW)[0]?.tone)
-    expect(tones).toEqual(['plain', 'plain', 'warn', 'warn', 'danger', 'danger'])
+  it('steps a meter through the theme\'s four colours by quarters', () => {
+    const tones = [10, 24, 25, 49, 50, 74, 75, 140].map((used) => usageItems({ context: used, limits: [] }, NOW)[0]?.tone)
+    expect(tones).toEqual(['ok', 'ok', 'mid', 'mid', 'high', 'high', 'max', 'max'])
     expect(usageItems({ context: 140, limits: [] }, NOW)[0]?.percent).toBe(100)
   })
 
@@ -30,5 +30,11 @@ describe('the usage strip under the message box', () => {
 
   it('says a wait in its two largest parts', () => {
     expect([30, 12 * 60, 3600, 3 * 3600 + 600, 86_400, 2 * 86_400 + 4 * 3600 + 59].map(waitWords)).toEqual(['now', '12m', '1h', '3h 10m', '1d', '2d 4h'])
+  })
+
+  it('always draws the context, 5-hour and weekly meters for an agent that reports them, a missing one as not reported', () => {
+    const items = usageItems({ context: 16, limits: [{ name: 'week', used: 0, resetsAt: 0 }, { name: 'opus', used: 3, resetsAt: 0 }] }, NOW, true)
+    expect(items.map((item) => [item.key, item.percent])).toEqual([['context', 16], ['limit-5h', null], ['limit-week', 0], ['limit-opus', 3]])
+    expect(usageItems({ context: null, limits: [] }, NOW, true).map((item) => item.percent)).toEqual([null, null, null])
   })
 })

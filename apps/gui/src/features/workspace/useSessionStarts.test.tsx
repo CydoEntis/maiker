@@ -14,7 +14,15 @@ const daemon = vi.hoisted(() => ({
   switchBranch: vi.fn(() => Promise.resolve()),
   renameConversationOnDaemon: vi.fn<(session: { id: string }, name: string) => Promise<void>>(() => Promise.resolve()),
   sendWhenAgentReady: vi.fn(() => Promise.resolve()),
+  sendTerminalInput: vi.fn(() => Promise.resolve()),
 }))
+// Another machine: a session started there shows in its next list.
+const remote = vi.hoisted(() => ({ machines: new Map<number, { conversations: { id: string; kind: 'terminal' }[] }>() }))
+const startSessionOnMachine = vi.hoisted(() => vi.fn<(machine: number, folder: string) => Promise<void>>((machine) => {
+  remote.machines.get(machine)?.conversations.push({ id: `m${String(machine)}-1`, kind: 'terminal' })
+  return Promise.resolve()
+}))
+vi.mock('@/api/machines', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/machines')>()), startSessionOnMachine }))
 vi.mock('@/api/daemon', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/daemon')>()), ...daemon, loadConversations: () => Promise.resolve([...listed.sessions]) }))
 const toast = vi.hoisted(() => ({ error: vi.fn(), message: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast }))
@@ -32,7 +40,7 @@ function starts(watch: Watch = {}) {
     queryClient: new QueryClient(), sessions: [], setWorktreeFrom: setter, setLayout: watch.setLayout ?? setter, flash: setter, focusedSession: undefined,
     setNewChatOpen: watch.setNewChatOpen ?? setter, online: true, starting: false, setStarting: setter, setStartedFrom: watch.setStartedFrom ?? setter, sessionMap: new Map([['old', {}]]),
     preferences: { yoloClaude: false, yoloCodex: false, yoloGemini: false }, setExpectedAgents: setter, paneViews: { choose: setter },
-    setSettingsSection: setter, setNewChatMachine: setter, setNewChatSeed: setter, home: '/home/me', machinesRef: { current: new Map() },
+    setSettingsSection: setter, setNewChatMachine: setter, setNewChatSeed: setter, home: '/home/me', machinesRef: { current: remote.machines },
   } as unknown as Parameters<typeof useSessionStarts>[0]
   return renderHook(() => useSessionStarts(props)).result.current
 }
@@ -170,5 +178,25 @@ describe('what a start in the background says, and what it hides', () => {
     await starts({ setStartedFrom }).startNewChat(request({ message: 'open it' }))
     expect(seen[0]).toEqual(new Set(['old']))
     expect(seen.at(-1)).toBeNull()
+  })
+})
+
+describe('starting a chat on another machine', () => {
+  beforeEach(() => {
+    remote.machines.clear()
+    remote.machines.set(2, { conversations: [] })
+    startSessionOnMachine.mockClear()
+  })
+
+  it('has that machine make the new worktree and starts the agent in it', async () => {
+    await starts().startNewChat(request({ machine: 2, machineName: 'kingdom', folder: '/srv/app', branch: { name: 'quiet-otter', create: true, worktree: true } }))
+    expect(daemon.addWorktree).toHaveBeenCalledWith('/srv/app', 'quiet-otter', 2)
+    expect(startSessionOnMachine).toHaveBeenCalledWith(2, '/srv/app-quiet-otter')
+  })
+
+  it('refuses to switch that checkout\'s branch, and starts nothing', async () => {
+    await expect(starts().startNewChat(request({ machine: 2, machineName: 'kingdom', branch: { name: 'dev', create: false, worktree: false } }))).rejects.toThrow(/new worktree/)
+    expect(daemon.addWorktree).not.toHaveBeenCalled()
+    expect(startSessionOnMachine).not.toHaveBeenCalled()
   })
 })

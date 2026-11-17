@@ -7,7 +7,7 @@
 //! (`machine_ids`). Nothing here knows about Tauri, so the whole of it is tested without a
 //! window, against the fake `ssh` shim.
 
-use crate::routing::{ReplyAllowance, expects_answer};
+use crate::routing::{ReplyAllowance, answer_window};
 use maitty_ipc_transport::{Reader, Writer};
 use maitty_machines::connections::{Burst, Connections, NotConnected, SERVER_BURST};
 use maitty_machines::link::{
@@ -40,7 +40,8 @@ const LOCAL_REDIAL: Duration = Duration::from_secs(1);
 
 /// What a connection says about the host in its Hello: it attaches to the panes this app owns
 /// (ADR 0004) and asks for a pane's replay when a view opens on it. A desktop has no pane of
-/// its own, so there is no claim to make.
+/// its own, so there is no claim to make. A machine on an older version is not used as it is:
+/// it shows as needing its update, which the window offers.
 pub(crate) fn dial() -> anyhow::Result<Dial> {
     Ok(Dial {
         attach: true,
@@ -49,7 +50,15 @@ pub(crate) fn dial() -> anyhow::Result<Dial> {
         term: None,
         token: None,
         structured: None,
+        newest_only: true,
     })
+}
+
+/// What a request line to another machine says in its Hello: `dial` without attaching. A request
+/// line asks and goes; attached, the daemon would also send it every pane's output and a whole
+/// state, fill it until it drops it, and pick it, not the window's long line, for an alert.
+pub(crate) fn request_dial() -> anyhow::Result<Dial> {
+    Ok(Dial { attach: false, ..dial()? })
 }
 
 /// What the host asks of the hub about a machine, by name.
@@ -91,11 +100,20 @@ pub struct HubHandle {
     shared: Arc<Shared>,
 }
 
+/// Numbers each hub made in this process.
+static NEXT_HUB: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
 /// What the hub and the host's commands both look at.
 #[derive(Default)]
 struct Shared {
+    /// Which hub this is, so lines kept for its machines are never another hub's (`RemoteKey`).
+    id: u64,
     /// Machines with a line.
     up: Mutex<BTreeSet<MachineId>>,
+    /// Machines whose daemon said who it is on a line and was the one recorded for the name. It
+    /// outlasts a line that drops, so requests, on lines of their own, go on while the long line is
+    /// made again; a new line's first word that names another daemon refuses the machine instead.
+    verified: Mutex<BTreeSet<MachineId>>,
     /// Machines a different daemon answered for: told to the window as `refused`, not `unreachable`.
     refused: Mutex<BTreeSet<MachineId>>,
     /// Each machine's name, for saying which one a refusal is about.
@@ -114,26 +132,44 @@ struct Shared {
     down_since: Mutex<BTreeMap<MachineId, u64>>,
 }
 
+fn is_typing(msg: &ClientMsg) -> bool {
+    matches!(msg, ClientMsg::Input { .. })
+}
+
+impl Shared {
+    /// Count typing for another machine that its line could not take, so the person is told
+    /// when the machine is back.
+    fn count_unsent(&self, outgoing: &Outgoing) {
+        self.count_unsent_typing(outgoing.machine, is_typing(&outgoing.msg));
+    }
+
+    fn count_unsent_typing(&self, machine: MachineId, typing: bool) {
+        if typing
+            && machine != MachineId::LOCAL
+            && lock(&self.names).contains_key(&machine)
+        {
+            *lock(&self.unsent).entry(machine).or_default() += 1;
+        }
+    }
+}
+
 impl HubHandle {
     /// Hand a message to its machine's line. Never waits. Refused when the machine has no line;
     /// typing a machine could not take is counted, so the person is told when it is back.
     pub fn send(&self, outgoing: Outgoing) -> Result<(), NotConnected> {
         let machine = outgoing.machine;
         if !self.is_up(machine) {
-            if matches!(outgoing.msg, ClientMsg::Input { .. })
-                && machine != MachineId::LOCAL
-                && lock(&self.shared.names).contains_key(&machine)
-            {
-                *lock(&self.shared.unsent).entry(machine).or_default() += 1;
-            }
+            self.shared.count_unsent(&outgoing);
             return Err(NotConnected(machine));
         }
         // What the machine says to this request may be taken as its answer.
-        if machine != MachineId::LOCAL && expects_answer(&outgoing.msg) {
+        if machine != MachineId::LOCAL
+            && let Some(window) = answer_window(&outgoing.msg)
+        {
             lock(&self.shared.allowance)
                 .entry(machine)
                 .or_default()
-                .asked(Instant::now());
+                .asked(Instant::now(), window);
         }
         self.outbox
             .send(outgoing)
@@ -217,6 +253,17 @@ impl HubHandle {
 
     pub fn is_up(&self, machine: MachineId) -> bool {
         lock(&self.shared.up).contains(&machine)
+    }
+
+    /// Whether requests may go to `machine` on lines of their own: its daemon has said who it is
+    /// and it is not refused. A long line being made again does not stop them.
+    pub fn takes_requests(&self, machine: MachineId) -> bool {
+        lock(&self.shared.verified).contains(&machine) && !self.is_refused(machine)
+    }
+
+    /// How kept request lines name `machine`: by this hub and its number here.
+    pub fn line_key(&self, machine: MachineId) -> maitty_desktop_client::RemoteKey {
+        (self.shared.id, machine.0)
     }
 
     /// The machine's name, as it is configured.
@@ -358,6 +405,7 @@ impl Hub {
                 outbox: outbox_tx,
                 commands: commands_tx,
                 shared: Arc::new(Shared {
+                    id: NEXT_HUB.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
                     names: Mutex::new(names),
                     opts: Mutex::new(opts),
                     routes: Mutex::new(routes),
@@ -407,8 +455,13 @@ impl Hub {
                 Some(event) = self.local_events.recv() => self.on_link_event(event),
                 Some(command) = self.commands.recv() => self.on_command(command),
                 Some(outgoing) = self.outbox.recv() => {
-                    // A line that went since the handle looked has nowhere to take it.
-                    let _ = self.connections.send(outgoing);
+                    // A line that went since the handle looked has nowhere to take it: typing is
+                    // counted as not sent, as it is when the handle sees no line.
+                    let machine = outgoing.machine;
+                    let typing = is_typing(&outgoing.msg);
+                    if self.connections.send(outgoing).is_err() {
+                        self.handle.shared.count_unsent_typing(machine, typing);
+                    }
                 }
                 burst = self.connections.recv_burst(SERVER_BURST) => self.on_burst(burst),
             }
@@ -457,6 +510,7 @@ impl Hub {
                 lock(&shared.opts).remove(&machine);
                 lock(&shared.routes).remove(&machine);
                 lock(&shared.up).remove(&machine);
+                lock(&shared.verified).remove(&machine);
                 lock(&shared.refused).remove(&machine);
                 lock(&shared.unsent).remove(&machine);
                 lock(&shared.allowance).remove(&machine);
@@ -550,9 +604,14 @@ impl Hub {
         // A list becomes the machine's sessions as a state does, so it says who answers too.
         if let ServerMsg::State(snapshot) | ServerMsg::Reply(Reply::List(snapshot)) = &msg {
             match check_daemon_id(&mut self.ids, &name, snapshot.daemon_id.as_deref()) {
-                Ok(IdCheck::Recorded) => self.ids.save(&self.ids_file),
-                Ok(_) => {}
+                Ok(checked) => {
+                    if checked == IdCheck::Recorded {
+                        self.ids.save(&self.ids_file);
+                    }
+                    lock(&self.handle.shared.verified).insert(machine);
+                }
                 Err(mismatch) => {
+                    lock(&self.handle.shared.verified).remove(&machine);
                     tracing::warn!("{mismatch}");
                     let reason = mismatch.to_string();
                     self.control.refuse(machine, reason.clone());

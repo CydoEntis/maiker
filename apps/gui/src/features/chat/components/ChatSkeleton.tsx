@@ -6,7 +6,7 @@
  */
 import { useAppearsAfter } from '@/lib/useAppearsAfter'
 
-const BLOCK = 'rounded-md bg-raise'
+const BLOCK = 'rounded-md bg-(--line2)'
 
 export function ChatSkeleton() {
   const shown = useAppearsAfter()

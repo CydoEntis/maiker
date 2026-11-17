@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { activeThemeName, findTheme, terminalMinimumContrast, terminalSlab, themeStyle, xtermTheme } from './theme/themes'
-import { withWindowStyle } from './theme/windowStyles'
+import { withLook } from './theme/corners'
 
 /** A theme previews once the pointer rests on it, not as it passes over every row (each one repaints every terminal). */
 const THEME_PREVIEW_DELAY_MS = 140
@@ -25,7 +25,7 @@ export function useWindowTheme({ preferences, systemReducedMotion, systemDark }:
   }, [])
   const reducedMotion = preferences.reduceMotion || systemReducedMotion
   const themeName = previewTheme ?? activeThemeName(preferences, systemDark)
-  const theme = useMemo(() => withWindowStyle(findTheme(themeName), preferences.style), [themeName, preferences.style])
+  const theme = useMemo(() => withLook(findTheme(themeName)), [themeName])
   // The theme's tokens are on the page root as well as on the window: a menu or popover that renders outside the window
   // (Radix portals to the page) then reads the same colours, and the shadcn names mapped on `:root` resolve to the theme.
   useEffect(() => {
@@ -34,6 +34,6 @@ export function useWindowTheme({ preferences, systemReducedMotion, systemDark }:
     for (const name of names) document.documentElement.style.setProperty(name, values[name] ?? '')
     return () => { for (const name of names) document.documentElement.style.removeProperty(name) }
   }, [theme])
-  const look = useMemo(() => ({ fontFamily: preferences.terminalFontFamily, fontWeight: preferences.terminalFontWeight, fontWeightBold: preferences.terminalFontWeightBold, cursorStyle: preferences.cursorStyle, scrollback: preferences.scrollback, scrollSpeed: preferences.scrollSpeed, screenReader: preferences.terminalScreenReader, seeThrough: preferences.terminalSeeThrough, cursorBlink: preferences.cursorBlink, plainDrawing: preferences.terminalPlainDrawing, theme: xtermTheme(theme.tokens), slab: terminalSlab(theme.tokens), minimumContrast: terminalMinimumContrast(theme) }), [preferences.terminalFontFamily, preferences.terminalFontWeight, preferences.terminalFontWeightBold, preferences.cursorStyle, preferences.cursorBlink, preferences.scrollback, preferences.scrollSpeed, preferences.terminalScreenReader, preferences.terminalSeeThrough, preferences.terminalPlainDrawing, theme])
+  const look = useMemo(() => ({ fontFamily: preferences.terminalFontFamily, fontWeight: preferences.terminalFontWeight, fontWeightBold: preferences.terminalFontWeightBold, cursorStyle: preferences.cursorStyle, scrollback: preferences.scrollback, scrollSpeed: preferences.scrollSpeed, screenReader: preferences.terminalScreenReader, cursorBlink: preferences.cursorBlink, plainDrawing: preferences.terminalPlainDrawing, theme: xtermTheme(theme.tokens), slab: terminalSlab(theme.tokens), minimumContrast: terminalMinimumContrast(theme) }), [preferences.terminalFontFamily, preferences.terminalFontWeight, preferences.terminalFontWeightBold, preferences.cursorStyle, preferences.cursorBlink, preferences.scrollback, preferences.scrollSpeed, preferences.terminalScreenReader, preferences.terminalPlainDrawing, theme])
   return { reducedMotion, theme, previewThemeSoon, setPreviewTheme, look }
 }

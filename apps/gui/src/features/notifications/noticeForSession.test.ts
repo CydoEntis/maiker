@@ -15,7 +15,7 @@ describe('session notice', () => {
 
   it('offers Allow, then Open session, for a session stopped on a choice, and waits for you', () => {
     const allow = vi.fn()
-    const notice = sessionNoticeFor(session('needs', '$ git push'), project, { open: vi.fn(), allow })
+    const notice = sessionNoticeFor(session('needs', '$ git push', { ask: { tool: 'Bash', detail: 'git push', answerable: true } }), project, { open: vi.fn(), allow })
     expect(notice?.actions.map((action) => action.label)).toEqual(['Allow', 'Open session'])
     expect(notice?.actions[0]?.primary).toBe(true)
     expect(notice?.countdownMs).toBeUndefined()
@@ -31,6 +31,14 @@ describe('session notice', () => {
     const notice = sessionNoticeFor(session('needs', '', { process: 'claude', ask }), project, { open: vi.fn(), allow: vi.fn() })
     expect(notice?.body).toBe('Wants to run Write · src/notes.txt')
     expect(notice?.actions.map((action) => action.label)).toEqual(['Allow', 'Open session'])
+  })
+
+  it('offers Codex Allow only while the daemon marks its ask answerable', () => {
+    const labels = (ask: { tool: string; detail: string; answerable: boolean } | null) =>
+      sessionNoticeFor(session('needs', '$ git push', { process: 'codex', ask }), project, { open: vi.fn(), allow: vi.fn() })?.actions.map((action) => action.label)
+    expect(labels({ tool: 'Bash', detail: 'git push', answerable: true })).toEqual(['Allow', 'Open session'])
+    expect(labels({ tool: 'Bash', detail: 'git push', answerable: false })).toEqual(['Open session'])
+    expect(labels(null)).toEqual(['Open session'])
   })
 
   it('never shows Claude\'s screen text, and offers no Allow for a question that is not a permission prompt', () => {

@@ -1,7 +1,7 @@
-import { act, cleanup, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
-import { ACTIVE_POLL_MS, forgetChatFeeds, IDLE_POLL_MS } from '../useChatFeed'
+import { ACTIVE_POLL_MS, forgetChatFeeds, IDLE_POLL_MS, RETRY_READ_MS } from '../useChatFeed'
 import { forgetComposers } from '../composerStore'
 import { ChatSession } from './ChatSession'
 
@@ -129,7 +129,24 @@ describe('the chat history', () => {
     expect(screen.getAllByText(/claude is working/).length).toBeGreaterThan(0)
   })
 
-  it('says it is reconnecting when a read fails, keeps what it showed, and resumes without duplicates', async () => {
+  it('tries a failed read again at once, and says nothing when that one works', async () => {
+    const daemon = conversation(2)
+    render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    daemon.failure = new Error('the kept line went stale')
+    await settle(IDLE_POLL_MS)
+    expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
+    daemon.failure = null
+    await settle(RETRY_READ_MS)
+
+    expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
+    expect(screen.getByText('message 1')).toBeInTheDocument()
+    warn.mockRestore()
+  })
+
+  it('says it is reconnecting when reads keep failing, keeps what it showed, and resumes without duplicates', async () => {
     const daemon = conversation(2)
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
@@ -137,6 +154,7 @@ describe('the chat history', () => {
 
     daemon.failure = new Error('maittyd is not running')
     await settle(IDLE_POLL_MS)
+    await settle(RETRY_READ_MS)
     expect(screen.getByText(/Reconnecting to the daemon/)).toBeInTheDocument()
     // The reason is on screen, so a window that cannot read its chat says why instead of only waiting.
     expect(screen.getByText(/maittyd is not running/)).toBeInTheDocument()
@@ -199,6 +217,8 @@ describe('the chat history', () => {
     daemon.upsert({ source: { conversation: FAKE_CONVERSATION, turn: 't1', item: 'e' }, content: { Tool: { kind: 'commandExecution', label: 'Edit ', output: '' } }, state: 'Completed' })
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
+    // Steps start folded: open it as the person would.
+    fireEvent.click(within(screen.getByRole('group', { name: /^Edit/ })).getByRole('button', { expanded: false }))
 
     expect(screen.getByText(/didn.t keep this diff/)).toBeInTheDocument()
   })
@@ -212,9 +232,11 @@ describe('a subagent’s own chat', () => {
     render(<ChatSession link={link()} agent="claude" online subagent={subagent} />)
     await settle()
 
-    expect(screen.getAllByRole('status').some((node) => node.textContent.startsWith('Subagent'))).toBe(true)
+    const bar = screen.getAllByRole('status').find((node) => node.textContent.includes('Subagent'))
+    expect(bar).toBeDefined()
     expect(screen.getByText('Write drafts tests', { selector: 'strong' })).toBeInTheDocument()
-    expect(screen.getByText('· done in 1m 10s')).toBeInTheDocument()
+    expect(bar).toHaveTextContent('done in 1m 10s')
+    expect(bar).toHaveTextContent('read-only')
     const log = screen.getByRole('log', { name: 'Subagent Write drafts tests' })
     expect(within(log).getByText('Write drafts tests for the routes.')).toBeInTheDocument()
     expect(within(log).getByText('Wrote 12 tests.')).toBeInTheDocument()

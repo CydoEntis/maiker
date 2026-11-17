@@ -3,7 +3,7 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, u
 import { ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ReducedMotionContext } from '@/features/workspace/components/motion'
-import { anchorAt, anchoredTop, buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, visibleRange, type FollowState, type ScrollAnchor } from './windowing'
+import { buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, visibleRange, type FollowState } from './windowing'
 
 type Props<T> = {
   items: readonly T[]
@@ -17,6 +17,8 @@ type Props<T> = {
   overscan?: number
   /** Scrolls the row with this key to the top of the view; a new `nonce` scrolls again to the same row. */
   scrollTarget?: { key: string; nonce: number } | null
+  /** Each new value takes the view back to the newest row and follows it again (the person just sent something). */
+  toLatest?: number
 }
 
 /** Used until the list has been laid out, and where there is no layout (tests). */
@@ -35,7 +37,7 @@ const READER_SCROLL_MS = 1200
  * heights are measured as they are drawn, and the list follows its newest row until the reader
  * moves up; then it offers a way back to it.
  */
-export function VirtualList<T>({ items, getKey, estimate, renderItem, label, overscan = DEFAULT_OVERSCAN, scrollTarget = null }: Props<T>) {
+export function VirtualList<T>({ items, getKey, estimate, renderItem, label, overscan = DEFAULT_OVERSCAN, scrollTarget = null, toLatest = 0 }: Props<T>) {
   const scroller = useRef<HTMLDivElement>(null)
   // Whether the list follows its newest row, and where it was last seen (`followAfterScroll`).
   const follow = useRef<FollowState>({ following: true, top: 0, total: 0 })
@@ -71,10 +73,28 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
   // frame and then moved: the ref callbacks note heights while React commits and the layout effect below applies them;
   // the observer's reports (a row that grew) are applied at once, outside React's commit.
   const pending = useRef(new Map<string, number>())
+  // What the rows were last laid out as, for `apply` to tell which measured rows sit above the view.
+  const indexOf = useMemo(() => new Map(keys.map((key, index) => [key, index])), [keys])
+  const laidOut = useRef({ indexOf, layout, heights })
+  useLayoutEffect(() => { laidOut.current = { indexOf, layout, heights } })
+  // How far rows above the view grew or shrank as they were measured, for the view to move by as much.
+  const anchor = useRef(0)
   const apply = useCallback(() => {
     const batch = pending.current
     if (batch.size === 0) return
     pending.current = new Map()
+    // Reading up, rows come into the drawn range above the view and their measured height replaces the estimate:
+    // without moving the view by the difference, what is being read jumps.
+    const top = scroller.current?.scrollTop ?? 0
+    if (!follow.current.following) {
+      const { indexOf: index, layout: was, heights: measured } = laidOut.current
+      for (const [key, height] of batch) {
+        const at = index.get(key)
+        const offset = at === undefined ? undefined : was.offsets[at]
+        const before = measured.get(key) ?? estimate
+        if (offset !== undefined && offset + before <= top) anchor.current += height - before
+      }
+    }
     setHeights((current) => {
       let changed = false
       const next = new Map(current)
@@ -85,7 +105,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
       }
       return changed ? next : current
     })
-  }, [])
+  }, [estimate])
   useLayoutEffect(() => { apply() })
 
   const record = useCallback((element: HTMLElement) => {
@@ -98,6 +118,8 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
 
   // One observer for every drawn row; a row reports its own height when it changes (an expanded card, a streamed message).
   const observer = useRef<ResizeObserver | null>(null)
+  // A row that leaves the drawn range stops being observed (the ref's cleanup), so a long read does not keep every row
+  // it ever drew under the observer.
   const measure = useCallback((element: HTMLDivElement | null) => {
     if (element === null) return
     if (observer.current === null && typeof ResizeObserver !== 'undefined') {
@@ -106,8 +128,10 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
         flushSync(apply)
       })
     }
-    observer.current?.observe(element)
+    const watching = observer.current
+    watching?.observe(element)
     record(element)
+    return () => { watching?.unobserve(element) }
   }, [record, apply])
   useEffect(() => () => {
     observer.current?.disconnect()
@@ -133,23 +157,26 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     setScrollTop(element.scrollTop)
   }, [])
 
-  // The row a reader who moved up is looking at. Rows above it are measured as they are drawn, and a card above can grow:
-  // without this the text being read slid down under the reader.
-  const anchor = useRef<ScrollAnchor | null>(null)
+  // Rows above the view were measured: the view moves with them, so the row being read stays where it was.
+  useLayoutEffect(() => {
+    const element = scroller.current
+    const delta = anchor.current
+    anchor.current = 0
+    if (!element || delta === 0 || follow.current.following) return
+    place(element, element.scrollTop + delta, layout.total)
+  }, [layout.total, place])
 
-  // Keep the newest row in view while the list follows it; keep the reader's row still while it does not.
+  // Keep the newest row in view while the list follows it.
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) return
     if (!follow.current.following) {
       follow.current = { ...follow.current, total: layout.total }
-      const top = anchor.current === null ? null : anchoredTop(layout, keys, anchor.current)
-      if (top !== null && Math.abs(top - element.scrollTop) >= 1) place(element, top, layout.total)
       return
     }
     place(element, layout.total, layout.total)
     // The view's own height is a dependency too: a message box that grows must not leave the newest row under it.
-  }, [layout, keys, viewport, place])
+  }, [layout.total, viewport, place])
 
   // A link to a row (an approval's step) moves the view there and stops following the newest row.
   const handled = useRef<number | null>(null)
@@ -168,7 +195,6 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     const element = scroller.current
     if (!element) return
     setScrollTop(element.scrollTop)
-    anchor.current = anchorAt(layout, keys, element.scrollTop)
     const ownWrite = wrote.current === element.scrollTop
     const byReader = held.current || performance.now() - touchedAt.current < READER_SCROLL_MS
     wrote.current = null
@@ -234,6 +260,14 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     glide.current = requestAnimationFrame(step)
   }
 
+  // Sending is asking to see the answer: a reader scrolled up is taken back down.
+  const handledLatest = useRef(toLatest)
+  useEffect(() => {
+    if (handledLatest.current === toLatest) return
+    handledLatest.current = toLatest
+    jumpToLatest()
+  })
+
   const drawn = items.slice(range.start, range.end)
   return (
     <div className="relative flex min-h-0 flex-1 flex-col" onWheel={onWheel}>
@@ -251,7 +285,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
         </div>
       </div>
       {!following && layout.total > viewport && (
-        <Button type="button" variant="outline" size="icon" className="mx-chat-jump size-8 rounded-full bg-raise" aria-label="Jump to the latest message" onClick={jumpToLatest}>
+        <Button type="button" variant="soft" size="icon" className="mx-chat-jump size-8 rounded-full bg-raise" aria-label="Jump to the latest message" onClick={jumpToLatest}>
           <ArrowDown className="size-4" aria-hidden="true" />
         </Button>
       )}

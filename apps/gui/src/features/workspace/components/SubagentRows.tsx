@@ -1,63 +1,63 @@
-import type { MouseEvent } from 'react'
 import type { SubagentStatus, SubagentView } from '../model/subagents'
-import { AppIcon, Icon, Spinner } from './glyphs'
+import { Icon, Spinner } from './glyphs'
 
 const STATUS_WORDS: Record<SubagentStatus, string> = { working: 'working', needs: 'needs you', done: 'done', stopped: 'stopped' }
 
-/** A subagent's tile and its corner mark: a spinner while it works, an amber square when it needs you, a check when done. */
-function SubagentIcon({ process, status }: { process: string; status: SubagentStatus }) {
+/** At most this many helpers are named under a session; the rest are counted, so a busy agent does not push the list away. */
+export const SUBAGENT_ROWS_MAX = 4
+
+/** A helper's mark, a shape for each state and never colour alone: a spinner, an amber square, a check, a cross. */
+function SubagentMark({ status }: { status: SubagentStatus }) {
   return (
-    <span className="mx-sub-icon">
-      <AppIcon process={process} size={14} />
-      {status === 'working' && <span className="mx-sub-mark is-working"><Spinner className="" /></span>}
-      {status === 'needs' && <span className="mx-sub-mark is-needs" />}
-      {status === 'done' && <span className="mx-sub-mark is-done"><Icon name="check" size={6} strokeWidth={4} /></span>}
+    <span className={`mx-sub-mark is-${status}`} aria-hidden="true">
+      {status === 'working' && <Spinner />}
+      {status === 'done' && <Icon name="check" size={7} strokeWidth={3.5} />}
+      {status === 'stopped' && <Icon name="close" size={7} strokeWidth={3.5} />}
     </span>
   )
 }
 
-/** Under a session that is not selected: an elbow line and one small icon per subagent, with no text. */
-export function SubagentPeek({ process, subagents }: { process: string; subagents: readonly SubagentView[] }) {
-  const said = subagents.map((subagent) => `${subagent.name} ${STATUS_WORDS[subagent.status]}`).join(', ')
-  return (
-    <div className="mx-sub-peek" role="img" aria-label={`Subagents: ${said}`}>
-      <span className="mx-sub-elbow" aria-hidden="true" />
-      <span className="mx-sub-peek-icons">
-        {subagents.map((subagent) => <SubagentIcon key={subagent.id} process={process} status={subagent.status} />)}
-      </span>
-    </div>
-  )
-}
-
-type ListProps = {
-  process: string
+type Props = {
   subagents: readonly SubagentView[]
-  /** The subagent whose chat the pane shows, if one is. */
+  /** The helper whose chat its pane shows, if one is. */
   openId: string | null
+  /** Opens a helper's own chat, read-only, in its session's pane. */
   onOpen: (id: string) => void
-  onContextMenu: (subagent: SubagentView, event: MouseEvent) => void
+  /** Shows the session itself, for the helpers past `SUBAGENT_ROWS_MAX`. */
+  onShowSession: () => void
 }
 
-/** Under the selected session: one row per subagent on a guide line. Clicking one opens its own chat. */
-export function SubagentList({ process, subagents, openId, onOpen, onContextMenu }: ListProps) {
+/**
+ * Under every session with helpers running, selected or not: one short row each on a guide line, so what runs is in view
+ * from anywhere. A click opens the helper's own chat; a helper cannot be written to, only its session can.
+ */
+export function SubagentRows({ subagents, openId, onOpen, onShowSession }: Props) {
+  const named = subagents.slice(0, SUBAGENT_ROWS_MAX)
+  const more = subagents.length - named.length
   return (
     <div className="mx-sub-list" role="group" aria-label="Subagents">
-      {subagents.map((subagent) => (
+      <span className="mx-sub-guide" aria-hidden="true" />
+      {named.map((subagent) => (
         <button
           key={subagent.id}
           type="button"
           className={`mx-sub-row${subagent.id === openId ? ' is-open' : ''}`}
           aria-label={`${subagent.name}, ${STATUS_WORDS[subagent.status]}`}
           aria-current={subagent.id === openId ? 'page' : undefined}
+          title={subagent.latest ?? subagent.task ?? subagent.name}
           onClick={() => { onOpen(subagent.id) }}
-          onContextMenu={(event) => { onContextMenu(subagent, event) }}
         >
-          <span className="mx-sub-guide" aria-hidden="true" />
           <span className="mx-sub-bend" aria-hidden="true" />
-          <SubagentIcon process={process} status={subagent.status} />
+          <SubagentMark status={subagent.status} />
           <span className="mx-sub-name">{subagent.name}</span>
         </button>
       ))}
+      {more > 0 && (
+        <button type="button" className="mx-sub-row is-more" onClick={onShowSession}>
+          <span className="mx-sub-bend" aria-hidden="true" />
+          <span className="mx-sub-name">+{more} more</span>
+        </button>
+      )}
     </div>
   )
 }

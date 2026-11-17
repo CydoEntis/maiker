@@ -1,6 +1,6 @@
-import { machineLabel } from '@/data/machineNicknames'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { CircleAlert, LoaderCircle, TerminalSquare } from 'lucide-react'
+import { CircleAlert, TerminalSquare } from 'lucide-react'
+import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import type { ITheme, Terminal as XtermTerminal } from '@xterm/xterm'
 import type { WebglAddon } from '@xterm/addon-webgl'
@@ -17,7 +17,7 @@ import { errorMessage } from '@/lib/error-message'
 import { appendToScreen, cachedScreen, replaceScreen, screenKey } from '@/features/terminal/screenCache'
 import { isWindowActive, useWindowActive } from '@/lib/window-activity'
 import { hasWebgl2 } from '@/lib/gpu'
-import { oscColor } from '@/lib/osc-color'
+import { leaveQueriesToDaemon } from '@/lib/daemonAnswers'
 import { beginFlush, countKeyReply, forgetRenderer, reportRenderer } from '@/lib/perf-meter'
 import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, fontStackFor, type TerminalFontWeight } from '@/lib/terminalFont'
 import { saysNotConnected } from '@/lib/serviceLine'
@@ -61,7 +61,6 @@ async function loadReplayOnceConnected(binding: Parameters<typeof loadTerminalRe
 }
 
 const DEFAULT_THEME: ITheme = { background: '#060d16', foreground: '#c9d6e3', cursor: '#3dd6c6' }
-const TRANSPARENT = 'rgba(0,0,0,0)'
 /**
  * Writes land at most this often: every write redraws the terminal, and under a steady stream the
  * host sends a batch every 12 ms, so without a gap the pane would redraw on every frame. A key's
@@ -69,29 +68,6 @@ const TRANSPARENT = 'rgba(0,0,0,0)'
  */
 const FLUSH_GAP_MS = 32
 const NO_MINIMUM_CONTRAST = 1
-
-type Renderer = 'webgl' | 'dom'
-
-/**
- * The pane's colours. A see-through pane (Settings › Appearance, WebGL only) lets the card show
- * behind the text; otherwise the theme's opaque terminal ground, which the DOM renderer needs
- * since each row it repaints would blend through the card's gradient and shadow
- * (docs/PERFORMANCE.md).
- */
-function terminalTheme(look: TerminalLook, seeThrough: boolean): ITheme {
-  const theme = look.theme ?? DEFAULT_THEME
-  return seeThrough ? { ...theme, background: TRANSPARENT } : theme
-}
-
-/** Only WebGL can afford a see-through canvas; the DOM renderer always sits on the opaque ground. */
-function seeThroughOf(look: TerminalLook, renderer: Renderer): boolean {
-  return renderer === 'webgl' && (look.seeThrough ?? false)
-}
-
-/** The slots a program's colour query names (`ESC ] 11 ; ? ST` asks for the background). */
-const OSC_FOREGROUND = 10
-const OSC_BACKGROUND = 11
-const OSC_QUERY = '?'
 
 /**
  * Draws the terminal with WebGL, which paints rows on the GPU instead of rebuilding them as DOM
@@ -127,8 +103,6 @@ export type TerminalLook = {
   scrollback?: number
   /** Lines per wheel notch as a multiple of xterm's default. */
   scrollSpeed?: number
-  /** The card shows behind the text (WebGL only); programs' own backgrounds then show as boxes. */
-  seeThrough?: boolean
   /** xterm's own cursor blink, for the focused pane only. Off unless asked for. */
   cursorBlink?: boolean
   /** Draw with the DOM renderer even where WebGL 2 exists (Settings › Performance). Read when the view opens. */
@@ -174,10 +148,10 @@ const INPUT_RETRY_MS = 1500
 /** How long a view waits for the replay the host asked the daemon for before it fetches one itself. */
 const REPLAY_WAIT_MS = 3000
 
-/** A remote attach slower than this shows the "Catching up" strip; a local one never shows anything. */
-const CATCH_UP_DELAY_MS = 300
-/** How often the strip's milliseconds update while it shows. */
-const CATCH_UP_TICK_MS = 100
+/** An attach slower than this shows placeholder lines over the screen; a quicker one shows nothing at all. */
+const ATTACH_SKELETON_DELAY_MS = 300
+/** How many placeholder lines stand in for the screen while it attaches. */
+const ATTACH_SKELETON_LINES = 6
 
 /**
  * Full reset (RIS) sent in the output itself. xterm's `reset()` takes effect at once, ahead of
@@ -228,7 +202,6 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
   const inputDisabledRef = useRef(inputDisabled)
   const focusedRef = useRef(focused)
   const windowActive = useWindowActive()
-  const rendererRef = useRef<Renderer>('dom')
   const endedRef = useRef(ended)
   useEffect(() => { endedRef.current = ended })
   const onInputRef = useRef(onInput)
@@ -245,11 +218,10 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
   const pausedRef = useRef(paused)
   const showMissed = useRef<(() => void) | null>(null)
   const [connecting, setConnecting] = useState(true)
-  const [catchUpMs, setCatchUpMs] = useState<number | null>(null)
+  const [slowAttach, setSlowAttach] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [inputFailed, setInputFailed] = useState(false)
   const [resizeError, setResizeError] = useState('')
-  const [transparent, setTransparent] = useState(() => hasWebgl2() && !(look.plainDrawing ?? false) && (look.seeThrough ?? false))
 
   const send = useCallback((data: string | Uint8Array) => {
     if (!data || inputDisabledRef.current) return
@@ -377,10 +349,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         if (!stillMounted()) return
 
         const wantsWebgl = hasWebgl2() && !(lookRef.current.plainDrawing ?? false)
-        const startRenderer: Renderer = wantsWebgl ? 'webgl' : 'dom'
-        const startSeeThrough = seeThroughOf(lookRef.current, startRenderer)
         emulator = new TerminalEmulator({
-          allowTransparency: startSeeThrough,
           cursorBlink: (lookRef.current.cursorBlink ?? false) && focusedRef.current && isWindowActive(),
           cursorStyle: lookRef.current.cursorStyle ?? 'block',
           disableStdin: inputDisabledRef.current,
@@ -392,7 +361,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
           scrollback: lookRef.current.scrollback ?? DEFAULT_SCROLLBACK_LINES,
           scrollSensitivity: lookRef.current.scrollSpeed ?? DEFAULT_SCROLL_SPEED,
           screenReaderMode: lookRef.current.screenReader ?? false,
-          theme: terminalTheme(lookRef.current, startSeeThrough),
+          theme: lookRef.current.theme ?? DEFAULT_THEME,
           minimumContrastRatio: lookRef.current.minimumContrast ?? NO_MINIMUM_CONTRAST,
         })
         const terminalInstance = emulator
@@ -403,15 +372,10 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         terminalInstance.open(hostElement)
         terminal.current = terminalInstance
         const fallBackToDomRenderer = () => {
-          rendererRef.current = 'dom'
           reportRenderer(terminalInstance, 'dom')
-          terminalInstance.options.allowTransparency = false
-          terminalInstance.options.theme = terminalTheme(lookRef.current, false)
-          if (isMounted) setTransparent(false)
         }
         if (wantsWebgl) {
           if (await loadWebglRenderer(terminalInstance, fallBackToDomRenderer)) {
-            rendererRef.current = 'webgl'
             reportRenderer(terminalInstance, 'webgl')
           } else {
             fallBackToDomRenderer()
@@ -420,20 +384,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         } else {
           reportRenderer(terminalInstance, 'dom')
         }
-        // On a see-through canvas xterm's own answer to a program's colour query would be black
-        // (it drops the alpha): a program that paints with the colour it was told, as Claude Code
-        // does, would then leave black bars on the glass. Answer with the theme's colours instead;
-        // anything but a query falls through to xterm.
-        const answerColorQuery = (slot: 'foreground' | 'background') => (data: string) => {
-          if (data !== OSC_QUERY) return false
-          if (replayWrites > 0) return true
-          const color = oscColor((lookRef.current.theme ?? DEFAULT_THEME)[slot] ?? '')
-          if (color === null) return false
-          send(`\x1b]${String(slot === 'background' ? OSC_BACKGROUND : OSC_FOREGROUND)};${color}\x1b\\`)
-          return true
-        }
-        terminalInstance.parser.registerOscHandler(OSC_FOREGROUND, answerColorQuery('foreground'))
-        terminalInstance.parser.registerOscHandler(OSC_BACKGROUND, answerColorQuery('background'))
+        leaveQueriesToDaemon(terminalInstance.parser)
         // Cmd/Ctrl-click on a web address opens it in the person's own browser, through the host (`open_link`).
         terminalInstance.registerLinkProvider({
           provideLinks: (y, callback) => {
@@ -738,12 +689,9 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     if (look.scrollback && emulator.options.scrollback !== look.scrollback) emulator.options.scrollback = look.scrollback
     if (look.scrollSpeed && emulator.options.scrollSensitivity !== look.scrollSpeed) emulator.options.scrollSensitivity = look.scrollSpeed
     if (look.screenReader !== undefined && emulator.options.screenReaderMode !== look.screenReader) emulator.options.screenReaderMode = look.screenReader
-    const seeThrough = seeThroughOf(look, rendererRef.current)
-    if (emulator.options.allowTransparency !== seeThrough) emulator.options.allowTransparency = seeThrough
-    if (look.theme) emulator.options.theme = terminalTheme(look, seeThrough)
+    if (look.theme) emulator.options.theme = look.theme
     const minimumContrast = look.minimumContrast ?? NO_MINIMUM_CONTRAST
     if (emulator.options.minimumContrastRatio !== minimumContrast) emulator.options.minimumContrastRatio = minimumContrast
-    setTransparent(seeThrough)
   }, [look])
 
   useEffect(() => {
@@ -757,20 +705,13 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     if (emulator) emulator.options.disableStdin = inputDisabled
   }, [inputDisabled])
 
-  // Only another machine can be slow to attach; this computer's panes show nothing while they connect.
+  // The screen stays hidden while it attaches, so its history is never seen redrawing; only a slow attach shows the
+  // placeholder lines, so a quick one does not flash them.
   useEffect(() => {
-    if (machine === 0 || !connecting) return
-    const started = performance.now()
-    let tick = 0
-    const show = window.setTimeout(() => {
-      setCatchUpMs(Math.round(performance.now() - started))
-      tick = window.setInterval(() => { setCatchUpMs(Math.round(performance.now() - started)) }, CATCH_UP_TICK_MS)
-    }, CATCH_UP_DELAY_MS)
-    return () => {
-      window.clearTimeout(show)
-      window.clearInterval(tick)
-    }
-  }, [machine, connecting])
+    if (!connecting) return
+    const show = window.setTimeout(() => { setSlowAttach(true) }, ATTACH_SKELETON_DELAY_MS)
+    return () => { window.clearTimeout(show) }
+  }, [connecting])
 
   useEffect(() => {
     focusedRef.current = focused
@@ -783,17 +724,12 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     if (terminal.current) terminal.current.options.cursorBlink = (look.cursorBlink ?? false) && focused && windowActive
   }, [focused, windowActive, connecting, look.cursorBlink])
 
-  return <div className={`terminal-view${transparent ? ' is-transparent' : ''}`}>
-    {machine !== 0 && connecting && catchUpMs !== null && !loadError && (
-      <div className="terminal-catch-up" role="status">
-        <LoaderCircle size={13} aria-hidden="true" />
-        <span>Catching up from {machineLabel(conversation.machineName ?? null) ?? 'the machine'} · {catchUpMs} ms</span>
-      </div>
-    )}
+  return <div className="terminal-view">
+    {connecting && slowAttach && !loadError && <SkeletonLines className="terminal-attaching" label={`Opening ${label}`} lines={ATTACH_SKELETON_LINES} />}
     {loadError && <div className="terminal-input-error" role="status"><p>Could not load the terminal. Check the daemon connection and reopen this session.</p></div>}
-    <div className="terminal-screen" ref={terminalHost} role="region" aria-label={label} />
-    {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the daemon could not be reached.</p><Button variant="outline" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
-    {resizeError && <div className="terminal-input-error" role="status"><p>{resizeError}</p><Button variant="outline" size="sm" onClick={() => { refitTerminal.current?.() }}>Retry resize</Button></div>}
+    <div className={`terminal-screen${connecting && !loadError ? ' is-attaching' : ''}`} ref={terminalHost} role="region" aria-label={label} />
+    {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the daemon could not be reached.</p><Button variant="soft" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
+    {resizeError && <div className="terminal-input-error" role="status"><p>{resizeError}</p><Button variant="soft" size="sm" onClick={() => { refitTerminal.current?.() }}>Retry resize</Button></div>}
   </div>
 }
 

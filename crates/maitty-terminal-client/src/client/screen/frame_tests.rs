@@ -19,6 +19,7 @@ fn world(stage: Stage) -> App {
         owner,
         used: 0,
         name: String::new(),
+        broadcast: false,
     });
     app
 }

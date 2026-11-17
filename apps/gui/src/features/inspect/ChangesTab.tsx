@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { Icon } from '@/features/workspace/components/glyphs'
+import { SkeletonLines } from '@/components/ui/skeleton'
+import { LOCAL_MACHINE } from '@/api/machines'
 import { repoDiff, repoDiffRange, repoSnapshots, repoStatus, type RepoDiff } from './api'
 import { changeKind } from './changeKind'
+import { ChangesBar } from './ChangesBar'
 import { CommitBar, type ChangeActions } from './CommitBar'
 import { PatchView, type PatchComments, type SentComment } from './PatchView'
 import { RepoError } from './RepoError'
@@ -29,21 +31,24 @@ export type TurnScope = { turn: TurnSpan | null; onAllChanges: () => void }
  * The diff to list: the working tree against HEAD, or, for a turn, the diff between the snapshots around it. A turn
  * whose snapshots cannot be picked falls back to the working tree and says why.
  */
-function useScopedDiff(term: number, scope: TurnScope | undefined) {
-  const turn = scope?.turn ?? null
+function useScopedDiff(term: number, scope: TurnScope | undefined, machine: number) {
+  const local = machine === LOCAL_MACHINE
+  // The daemon's snapshots are read on this computer only, so a turn on another machine shows its working tree.
+  const turn = local ? scope?.turn ?? null : null
   // Keyed by the turn: a list read before a later turn ended would not hold that turn's end snapshot.
   const snapshots = useRepoQuery(term, ['snapshots', 'turn', turn?.startedAtMs, turn?.endedAtMs], () => repoSnapshots(term), false, turn !== null)
   const picked = turn !== null && snapshots.data ? turnRange(snapshots.data, turn) : null
   const range = picked !== null && 'from' in picked ? picked : null
   const query = useRepoQuery(
     term,
-    range ? ['range', range.from, range.to] : ['diff'],
-    () => (range ? repoDiffRange(term, range.from, range.to) : repoDiff(term)),
+    range ? ['range', range.from, range.to] : ['diff', ...(local ? [] : [machine])],
+    () => (range ? repoDiffRange(term, range.from, range.to) : repoDiff(term, null, machine)),
     range ? false : CHANGES_REFRESH_MS,
   )
   const waiting = turn !== null && (snapshots.isPending || snapshots.isFetching)
   if (scope === undefined || waiting || range !== null) return { query, waiting, shown: range === null ? 'tree' as const : 'turn' as const, why: null }
-  return { query, waiting, shown: 'tree' as const, why: fallbackReason(turn, snapshots.isError ? snapshots.error : null, picked) }
+  const why = local ? fallbackReason(turn, snapshots.isError ? snapshots.error : null, picked) : "a turn's changes are only read on this computer"
+  return { query, waiting, shown: 'tree' as const, why }
 }
 
 /** Why a turn's changes row shows the whole working tree instead. */
@@ -65,10 +70,12 @@ function ScopeLine({ shown, why, onAllChanges }: { shown: 'tree' | 'turn'; why: 
 
 type Props = {
   term: number
+  /** The machine the pane is on (0: this computer), whose daemon is asked. */
+  machine?: number
   /** The branch the checkout is on, shown above the files. */
   branch?: string
   comments?: Omit<PatchComments, 'path' | 'sent' | 'onSent'>
-  /** Commit and Create PR, for a checkout on this computer; absent elsewhere. */
+  /** The commit bar: Commit, the remote button and Create PR, run where the checkout is. */
   actions?: ChangeActions
   /** A turn's changes row opened the tab: show what that turn changed. */
   scope?: TurnScope
@@ -97,18 +104,20 @@ function FileRow({ file, current, ticked, onTick, onPick }: { file: ChangedFile;
 }
 
 /** The session's uncommitted changes: the files down the left with the commit under them, the picked file's diff beside. */
-export function ChangesTab({ term, branch, comments, actions: treeActions, scope, onNotice }: Props) {
-  const { query, waiting, shown, why } = useScopedDiff(term, scope)
+export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, comments, actions: treeActions, scope, onNotice }: Props) {
+  // Each machine numbers its own panes, so another machine's answers are kept under its number too.
+  const elsewhere = machine === LOCAL_MACHINE ? [] : [machine]
+  const { query, waiting, shown, why } = useScopedDiff(term, scope, machine)
   // A commit takes the working tree, so it is not offered beside one turn's changes.
   const actions = shown === 'turn' ? undefined : treeActions
   // How far the branch is from its upstream, for the remote button; without it (an error, no upstream) the branch reads as level.
-  const status = useRepoQuery(term, ['status'], () => repoStatus(term), CHANGES_REFRESH_MS)
+  const status = useRepoQuery(term, ['status', ...elsewhere], () => repoStatus(term, machine), CHANGES_REFRESH_MS)
   const [picked, setPicked] = useState<string | null>(null)
   // Files unticked, so left out of the commit; every changed file starts ticked.
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set())
   // Comments sent in this look at the changes, by file: a comment stays pinned on its line while other files are read.
   const [sent, setSent] = useState<ReadonlyMap<string, readonly SentComment[]>>(() => new Map())
-  if (waiting || query.isPending) return <p className="mx-inspect-note">Loading…</p>
+  if (waiting || query.isPending) return <SkeletonLines label="Reading changes" lines={5} className="mx-inspect-note" />
   if (query.isError) return <RepoError error={query.error} tab="changes" onRetry={() => { void query.refetch() }} retrying={query.isFetching} />
   const { files } = query.data
   const chosen = files.filter((file) => !skipped.has(file.path))
@@ -117,18 +126,31 @@ export function ChangesTab({ term, branch, comments, actions: treeActions, scope
   const selected = files.find((file) => file.path === picked) ?? files[0]
   const kind = selected ? changeKind(selected.patch) : null
   const where = selected ? splitPath(selected.path) : null
+  const ticked = actions ? (everything ? 'all' : chosen.length === 0 ? 'none' : 'some') : null
+  const tickAll = () => { setSkipped(everything ? new Set(files.map((file) => file.path)) : new Set()) }
+  const reread = () => { void query.refetch(); void status.refetch() }
   return (
     <div className="mx-changes">
+      <ChangesBar term={term} machine={machine} branch={status.data?.branch ?? branch} ahead={status.data?.ahead ?? 0} behind={status.data?.behind ?? 0} actions={treeActions} onChanged={reread} onNotice={onNotice} />
+      {scope && <ScopeLine shown={shown} why={why} onAllChanges={scope.onAllChanges} />}
+      <div className="mx-changes-split">
       <div className="mx-changes-side">
-        {branch !== undefined && branch !== '' && <p className="mx-changes-branch" title={`Branch ${branch}`}><Icon name="branch" size={11} /><span>{branch}</span></p>}
-        {scope && <ScopeLine shown={shown} why={why} onAllChanges={scope.onAllChanges} />}
+        {files.length > 0 && (
+          <div className="mx-changes-all">
+            {ticked !== null && <input type="checkbox" className="mx-changes-tick" aria-label="Commit every changed file" checked={ticked === 'all'} ref={(box) => { if (box) box.indeterminate = ticked === 'some' }} onChange={tickAll} />}
+            <span className="mx-changes-all-count">{files.length} changed</span>
+            <span className="mx-changes-count">
+              {query.data.additions > 0 && <span className="is-add">+{query.data.additions}</span>}
+              {query.data.deletions > 0 && <span className="is-remove">−{query.data.deletions}</span>}
+            </span>
+          </div>
+        )}
         <ul className="mx-changes-list" aria-label="Changed files">
           {files.map((file) => (
             <li key={file.path}><FileRow file={file} current={file.path === selected?.path} ticked={actions ? !skipped.has(file.path) : null} onTick={() => { tick(file.path) }} onPick={() => { setPicked(file.path) }} /></li>
           ))}
           {query.data.truncated && <li className="mx-inspect-note">Showing {files.length} of {query.data.total_files} files.</li>}
         </ul>
-        {actions && <CommitBar {...actions} files={files.length} chosen={chosen} everything={everything} ahead={status.data?.ahead ?? 0} behind={status.data?.behind ?? 0} onChanged={() => { void query.refetch(); void status.refetch() }} onNotice={onNotice} />}
       </div>
       <div className="mx-changes-main">
         {selected && kind && where ? (
@@ -145,9 +167,14 @@ export function ChangesTab({ term, branch, comments, actions: treeActions, scope
             {selected.binary ? <p className="mx-inspect-note">Binary file; no diff to show.</p> : <PatchView key={selected.path} patch={selected.patch} {...(comments ? { comments: { ...comments, path: selected.path, sent: sent.get(selected.path) ?? [], onSent: (comment) => { setSent((current) => new Map(current).set(selected.path, [...(current.get(selected.path) ?? []), comment])) } } } : {})} />}
           </>
         ) : (
-          <p className="mx-changes-none">{shown === 'turn' ? 'This turn left the files in the checkout as they were.' : 'No changes. The working tree matches the last commit.'}</p>
+          <div className="mx-changes-none">
+            <strong>{shown === 'turn' ? 'This turn left the files as they were' : 'No changes yet'}</strong>
+            <span>Files the agent edits show up here with their diffs. You can comment on any line.</span>
+          </div>
         )}
       </div>
+      </div>
+      {actions && <CommitBar {...actions} files={files.length} chosen={chosen} everything={everything} onChanged={reread} onNotice={onNotice} />}
     </div>
   )
 }

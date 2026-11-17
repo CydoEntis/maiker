@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { SessionStatus, SessionView } from '@/features/workspace/model/session'
+import { SHELL_PROCESS, type SessionStatus, type SessionView } from '@/features/workspace/model/session'
 import { noticeForAttention, noticesFor, type NotifySwitches } from './transitions'
 
 const ALL: NotifySwitches = { needs: true, finished: true, error: true }
@@ -17,6 +17,12 @@ describe('noticesFor', () => {
   it('notifies when a session starts needing you, naming it and where it is but never what it asked', () => {
     const notices = noticesFor(seen([['t1', 'working']]), [session('t1', 'needs')], ALL, null)
     expect(notices).toEqual([{ sessionId: 't1', title: 'maitty needs you', body: 'codex in ~/code/maitty' }])
+  })
+
+  it('says nothing when a command in a running shell fails: the shell did not exit', () => {
+    const shell = { ...session('s', 'error'), process: SHELL_PROCESS, ended: false } as SessionView
+    expect(noticesFor(seen([['s', 'idle']]), [shell], ALL, null)).toEqual([])
+    expect(noticesFor(seen([['s', 'idle']]), [{ ...shell, ended: true }], ALL, null)).toHaveLength(1)
   })
 
   it('notifies for finished and for an error, each by its own switch', () => {

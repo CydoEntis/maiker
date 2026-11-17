@@ -61,6 +61,14 @@ impl Daemon {
                 self.conversation_dequeue(client, id, generation, operation)?;
                 return Ok(false);
             }
+            Command::ConversationSendNow {
+                id,
+                generation,
+                operation,
+            } => {
+                self.conversation_send_now(client, id, generation, operation)?;
+                return Ok(false);
+            }
             Command::ForgetAllowedCommand { project, command_sha256 } => {
                 self.chat_allowed.forget(&project, &command_sha256);
                 let file = self.chat_allowed_file.clone();
@@ -451,8 +459,20 @@ impl Daemon {
                 }
             }
             Command::ArchivePane { term, archived } => {
+                // Bringing a session back also settles any merged PR it has now, however it was
+                // put away, so put_away_merged does not put it away again for that merge.
+                let merged_url = (!archived)
+                    .then(|| self.terms.get(&term))
+                    .flatten()
+                    .and_then(|t| self.pr_of(t))
+                    .filter(|pr| pr.state == PrState::Merged)
+                    .map(|pr| pr.url);
                 if let Some(t) = self.terms.get_mut(&term) {
                     t.archived = archived;
+                    if merged_url.is_some() {
+                        t.put_away_for = merged_url;
+                        self.dirty = true;
+                    }
                 }
             }
             Command::SnoozePane { term, until } => self.snooze_pane(term, until, term::unix_now())?,
@@ -660,9 +680,9 @@ impl Daemon {
                     anyhow::bail!("{problem}");
                 }
                 // The same limit as a chat on a branch: no checkout (and no setup hook) in a
-                // repository the app has never been shown.
+                // repository the app has never been shown, unless a person picked the folder.
                 let project = Some(clean_path(project))
-                    .filter(|dir| dir.is_absolute() && dir.is_dir() && self.is_known_project(dir))
+                    .filter(|dir| dir.is_absolute() && dir.is_dir() && self.may_name_checkout(client, dir))
                     .ok_or_else(|| {
                         anyhow::anyhow!(
                             "that is not a project in the app: open a session in it first"
@@ -1065,7 +1085,7 @@ impl Daemon {
                     .ok_or_else(|| anyhow::anyhow!("no pane {term}"))?;
                 let index = index as usize;
                 // It went to the agent, or the queue moved, since the asker last saw it.
-                if t.queue.get(index).map(String::as_str) != Some(text.as_str()) {
+                if !t.queue.get(index).is_some_and(|held| names_follow_up(held, &text)) {
                     anyhow::bail!("that follow-up is no longer queued there");
                 }
                 t.queue.remove(index);
@@ -1114,6 +1134,10 @@ impl Daemon {
                 return Ok(false);
             }
             Command::AnswerSecret { id, value } => self.answer_secret(id, value)?,
+            Command::OpenTicketSetup { term, folder, source, link } => {
+                self.open_ticket_setup(client, term, folder, source, link)?;
+                return Ok(false);
+            }
             Command::LinkPr { term, url } => self.link_pr(term, url.as_deref())?,
             Command::SpendSecret { reference } => {
                 self.spend_secret(client, &reference)?;
@@ -1406,4 +1430,12 @@ impl Daemon {
         self.poll_git_soon();
         Ok(())
     }
+}
+
+/// Whether `asked` names the queued follow-up `held`. Another machine's window sees the text made
+/// safe to draw and cut to a length (`maitty-machines`' snapshot cleaning), so the words it names
+/// back may be that cleaned text, or the start of it, rather than the text itself.
+fn names_follow_up(held: &str, asked: &str) -> bool {
+    held == asked
+        || (!asked.is_empty() && maitty_shared::hidden::sanitize(held, true).starts_with(asked))
 }

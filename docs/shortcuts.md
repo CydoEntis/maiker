@@ -59,6 +59,7 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `Ctrl`+arrows | Resize the pane |
 | `Alt`+arrows | Swap the pane with the one that way |
 | `PgUp` / `PgDn` | Scroll half a pane |
+| `a` | Broadcast: what you type into the focused pane goes to every pane of the tab (the mode bar reads `BROADCAST · N PANES` in red); again stops it |
 
 ### Sidebar
 
@@ -76,6 +77,7 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `g` | Branches (in the side panel; its first row switches branch) |
 | `h` | History: what happened |
 | `e` | References (in the side panel) |
+| `p` | Tickets: the project's GitHub, Plane and Linear tickets (in the side panel) |
 | `o` | Find a file |
 | `l` | Worktrees: new, clean up, merge, delete (a second step) |
 | `y` | Copy mode: select text in the pane |
@@ -96,7 +98,19 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `Ctrl+R` | Reload the config |
 
 **Search only** (`Ctrl+K`, then type): new tab, Updates, find in the pane, previous / next
-command in history, send the prefix itself to the program.
+command in history, send the prefix itself to the program, Work board, Status log, Recent
+sessions…, Reset pane widths.
+
+## Work board, run and status log
+
+| Key | Action |
+|---|---|
+| `↑` `↓` (`k` `j`) | The card before / after, column by column |
+| `←` `→` (`h` `l`) | The first card of the column before / after |
+| `Enter` or a click | Open the card's run: its steps; `Esc` goes back to the board on that card |
+| `Esc` | Close the board |
+
+The status log scrolls with `↑` `↓` and `PgUp` `PgDn`; `Esc` closes it.
 
 ## How key mode works
 
@@ -122,6 +136,8 @@ To send `Ctrl+Space` itself to the pane, search commands for "Send the leader ke
 - **Search commands** (`Ctrl+K`, `Space` after the prefix, `Tab` from the map, or typing a letter
   that is not a key): every command, including ones with no key, and your sessions. Matching is
   an in-order subsequence (`spld` finds Split down). With nothing typed it lists the commands you ran last.
+  From three characters it also lists, under IN SESSIONS, a line each session printed that holds
+  them; Enter goes to that line in copy mode.
 - **Keys help** (`?` after the prefix, or the sidebar's menu → Keys): three columns, sessions, panes
   and window, each key as it is bound now; under them "Keys only work in key mode (Ctrl+Space).
   Everything else goes to the pane." `esc close` on its top border closes it.
@@ -188,7 +204,7 @@ menu runs its items by letter while it is open.
 | Menu key (`.` after the prefix), right-click | The session's menu |
 | `+` on a machine heading | A shell on that machine at once |
 | `install` / `update` on a machine heading | Shown instead of `+` while the machine needs maitty installed or updated: runs it in a popup that asks first |
-| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Reconnect, Machines… |
+| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Open a folder…, Clone a repository…, Details…, Reconnect, Machines… |
 | Enter on a row of an agent a restart stopped | Types its resume command, then opens the session |
 | Esc | Return keyboard focus to the active pane |
 
@@ -203,8 +219,43 @@ Leader `w`, or a click on a remote machine's heading in the sidebar. These keys 
 | `r` or Enter | On one of your machines: reconnect |
 | `u` | Install or update maitty there (the bar says which) |
 | `n`, `s` | Turn that machine's toasts, then its alert sounds, on or off. Both are off until you turn them on; the line under the chosen machine says where they stand |
+| `c` | Turn copying to your clipboard from that machine off, or on (asked first: Enter allows, Esc keeps it off) |
+| `i` | That machine's details (below) |
 | `e` | Edit where it is |
 | `x` or Delete | Remove it (Enter confirms, Esc keeps it) |
+| Esc | Close |
+
+## Machine details
+
+`i` on a machine in Machines, or Details… on a machine heading's right-click menu.
+
+| Keys | Action |
+| --- | --- |
+| `g` | Start GitHub's sign-in (`gh auth login`) in a new session on that machine |
+| `a` | Add a folder rule: Tab between Folder, Name, Email and GitHub account (Left, Right pick the account); Enter previews the lines it writes, Enter again writes them, Esc goes back |
+| Up, Down | Choose a folder rule |
+| `x` or Delete | Remove the chosen rule Maitty wrote (Enter confirms, Esc keeps it) |
+| `o`, `y` | This computer only: open the service log, copy its path |
+| `r` | Read it all again |
+| Esc | Close |
+
+## Usage and cost
+
+| Keys | Action |
+| --- | --- |
+| Tab, Shift+Tab, Left, Right | Step through `now`, `today`, `7 days`, `30 days` |
+| Up, Down | Choose a session |
+| Enter | Go to the chosen session while it is open |
+| Esc, `u`, `q` | Close |
+
+## Approved commands
+
+Settings › Agents › Approved commands…
+
+| Keys | Action |
+| --- | --- |
+| Up, Down | Choose a command |
+| `x` or Delete | Forget it (Enter confirms, Esc keeps it); the chat asks again before it runs it |
 | Esc | Close |
 
 ## Text prompts and worktree picker
@@ -212,10 +263,40 @@ Leader `w`, or a click on a remote machine's heading in the sidebar. These keys 
 | Keys | Action |
 | --- | --- |
 | Type, Backspace | Edit text |
-| Up / Shift+Tab / Ctrl+P, Down / Tab / Ctrl+N | Move through worktree-picker results |
+| Up / Shift+Tab / Ctrl+P, Down / Tab / Ctrl+N | Move through worktree-picker results (worktrees, then branches with none, offered as "add a worktree on …") |
 | Ctrl+U in text prompts | Clear prompt text |
 | Enter, Esc | Open the selected result / submit prompt, or cancel |
 | y / Y / Enter in close-group or remove-worktree prompt | Confirm; f / F forces worktree removal when offered; other keys cancel |
+
+## Clone a repository
+
+Search commands' **Clone a repository…**, the Menu's NEW section, or a machine heading's right-click menu (that machine). The address has the keys first.
+
+| Keys | Action |
+| --- | --- |
+| Type, paste, Backspace | Edit the line that has the keys (one line of a paste) |
+| Tab, Shift+Tab, Down, Up | The next or previous line: address, your GitHub repositories, the folder it goes in |
+| Up, Down in the repositories | Choose one |
+| Enter in the repositories | Use its address, then go to the folder |
+| Ctrl+O in the repositories | The next owner (your account, then its organisations) |
+| Enter in the address or the folder | Clone |
+| Esc | Close; a clone that has started goes on and ends in a toast |
+
+## Open a folder on another machine
+
+Search commands' **Open a folder on a machine…** (a menu of this computer and each connected machine), or a machine heading's right-click **Open a folder…**. The keys are the folder picker's; paths are written with `/`.
+
+## Specialist agents
+
+Search commands' **Specialist agents…**, or the pane's right-click Project… menu.
+
+| Keys | Action |
+| --- | --- |
+| Up / k, Down / j | Choose a file |
+| Enter, Right | Read it |
+| Up, Down, PgUp, PgDn, Space while reading | Scroll |
+| Esc, Backspace, Left while reading | Back to the list |
+| Esc, q | Close |
 
 ## New session
 
@@ -223,6 +304,8 @@ There is no dialog. Leader `n`, leader `t`, `Alt+N`, `Ctrl+T`, the ` n new sessi
 
 In the desktop app's New chat page, `Enter` starts the chat and opens it; `Ctrl+Enter` (`⌘Enter` on
 macOS) starts it in the background, empties the message box and keeps the page open for the next one.
+
+The desktop app's window keys are changed in its Settings › Hotkeys: **Change** on a row, then press the new keys (Esc cancels). It refuses a key the terminal uses, such as a plain Ctrl+letter on Windows and Linux or any key without ⌘ on macOS, and a key another action already has. **Reset** puts one back, and **Reset all** puts them all back.
 
 ## A session wants to start helpers
 
@@ -250,7 +333,7 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Drag its left edge | Resize it (not the Inbox) |
 | Click a pane | Type into that pane; the view stays open, unlit |
 | Click the panel | Give the view the keys again |
-| Tab, Shift+Tab | Files, Changes, Branch, References: the next or previous tab, for the same checkout (not while Files filters or edits) |
+| Tab, Shift+Tab | Files, Changes, Branch, References, Tickets: the next or previous tab, for the same checkout (not while Files filters or edits, or while Tickets types into a field) |
 | Click a tab | Switch to it |
 
 ## Inbox
@@ -327,6 +410,17 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Enter, Ctrl+E, Ctrl+Y | Put path/line into prompt, open in editor, copy path |
 | Esc | Close search |
 
+## Find in every session
+
+Search commands → **Find in every session**.
+
+| Keys | Action |
+| --- | --- |
+| Type, Backspace, Ctrl+U | Edit the words (three or more search) |
+| Up, Down, PgUp, PgDn | Choose a line |
+| Enter | Go to the session, in copy mode at that line (`n` / `N` next and previous match) |
+| Esc | Close |
+
 ## Changes and shared-file diffs
 
 | Keys | Action |
@@ -334,13 +428,21 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Up / k, Down / j | Previous or next changed file |
 | PgUp, PgDn, Space | Read diff; Space pages down |
 | x, e, r | Mark reviewed, open editor, return to agent |
-| c, p | Ask to commit every changed file; ask to push and open a pull request (y or Enter says yes) |
+| t | Tick the file for the next commit (none ticked: the commit takes every change) |
+| c | Write the commit message (Enter commits the ticked files, or all; Esc cancels) |
+| p | Ask to push and open a pull request (y or Enter says yes) |
+| f, u, P | Fetch, pull (fast-forward only), push |
+| l or → | The diff takes the keys: ↑↓ / j k move the line cursor, Enter comments on the line, h, ← or Esc back to the files |
+| s | Hand the comments to the agent's message box (Enter there sends them) |
 | M | Ask to squash-merge the branch's pull request with `gh` (queued to merge when its checks pass; now if the repository doesn't allow that) |
 | m, d | Linked worktree: ask to merge, ask to discard |
 | Enter / y in confirmation | Confirm the requested action; other keys cancel |
 | Up, Down, PgUp, PgDn in shared-file diffs | Scroll both checkout diffs together |
 | m, M, k in shared-file diffs | Message first agent, message second agent, dismiss warning |
 | Esc | Close Changes or shared-file diffs |
+
+On a pane of another machine Changes reads and commits through that machine: c, t, p, f, u, P, x,
+l and s work as here; m, M, d and e are local-only.
 
 ## Check evidence sheet
 
@@ -410,6 +512,35 @@ In `[keys.prefix]` its action is `references`. It has the keys while open.
 | d, Delete | Remove it (asks first) |
 | y | Copy its absolute path |
 | e, Esc | Close it |
+
+## Tickets view
+
+Leader + `p` opens the tickets of the project the session in front works in. In `[keys.prefix]` its
+action is `tickets`. It has the keys while open. Nothing is written to a ticket without `y` on a
+review page (or a click on its confirm button); Enter never writes.
+
+| Keys | Action |
+| --- | --- |
+| Up / k, Down / j, PgUp, PgDn, Home, End | Choose a ticket (the next page is read at the end) |
+| Left / h, Right / l | GitHub, Plane, Linear |
+| / | Search: type, Enter asks the provider, Esc stops typing |
+| m | Only yours (asks your name at that provider the first time) |
+| a | Show closed tickets too |
+| g | Narrow to a milestone, module or cycle |
+| r | Read again |
+| , | Sources: your accounts (keys, names) and the linked projects |
+| t | Signed out of GitHub: a shell running `gh auth login` |
+| Enter, o | Open the ticket; on a source not set up, its next setup step |
+| s | Start an agent on it (review first) |
+| Esc, p | Clear the search, then close |
+
+On a ticket: Up / Down scroll, `s` start an agent in a new worktree, `t` send it to the session in
+front, `c` comment, `d` mark done, `o` open its link, `y` copy its link, `r` read again, Esc back.
+The start and send pages show exactly what will be sent; Left / Right picks the agent; `y` starts or
+sends. The comment page takes text (Enter is a new line); Tab reviews it, and on the review `y`
+posts it, `e` edits it, Esc cancels. Sources: Enter changes the row, `x` turns GitHub off, removes
+a key (asks first) or unlinks another project; in the key form Tab moves between fields and Enter
+connects. Setting up from a tab, Esc goes back to the list.
 
 ## Branches and worktree cleanup
 

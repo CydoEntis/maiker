@@ -23,7 +23,7 @@ conflict.
 | [`docs/PERFORMANCE.md`](docs/PERFORMANCE.md) | animations, timers, rendering, polling, output path | measured causes of lag, how to re-measure |
 | [`docs/COMMIT-STANDARDS.md`](docs/COMMIT-STANDARDS.md) | committing, branching, opening a PR | message format, git safety |
 | [`docs/stack/`](docs/stack/) | touching a technology with a stack doc | per-technology rules |
-| [`docs/adr/`](docs/adr/README.md) | changing a recorded decision | the nine decisions that are expensive to reverse |
+| [`docs/adr/`](docs/adr/README.md) | changing a recorded decision | the decisions that are expensive to reverse |
 | the Plane project (see *Planning*) | starting, finishing, scoping work | what is in, out, and in what order |
 
 ## How the docs are structured
@@ -58,6 +58,8 @@ Scope and order live in **Plane**, not a repo file (see *Project-specific: plann
   respect "blocked by" links.
 - Mark a ticket Done only after its acceptance criteria are met and the verification gate passed
   in the real worktree; the `done` comment names the commands and results.
+- Update the ticket in the same step that merges its work: merged work never stays In Progress.
+  Only an on-screen check nobody has made yet may hold it back (see *Project-specific: planning*).
 - File follow-ups as new Backlog tickets. Reordering, adding or cutting planned work is the
   user's decision; propose it.
 - A bug fix needs no ticket or plan to start.
@@ -154,15 +156,16 @@ runs a nested server with `MAITTY_SOCKET=<name> maitty`. What to look at is the
 - **Plan:** Plane, project `MAITTY` (see *Project-specific: planning (Plane)*). The shipped, declined and deferred feature lists are in [`docs/FEATURES.md`](docs/FEATURES.md). `docs/ROADMAP.md` is the legacy phase history, to be removed once the sessions editing it have landed; don't add new planned work to either. The current design is [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Branches:** work lands on `dev` at https://github.com/CydoEntis/maitty; one
   commit per logical change, pushed after the gate passes.
-- **Run the current worktree:** `.\scripts\dev.ps1 tui` or `gui` builds and runs this folder's code, never an old install. The TUI's sidebar foot shows `v<version> <commit>[*] <age>` for any build that is not a clean release tag (`*` = uncommitted changes), so a stale build is visible at a glance.
+- **Run the current worktree:** `.\scripts\dev.ps1 tui` or `gui` builds and runs this folder's code, never an old install, and stops if the build fails; the TUI runs on its own service (`MAITTY_SOCKET=dev-<folder>` unless set), apart from your installed one. The TUI's sidebar foot shows `v<version> <commit>[*] <age>` for any build that is not a clean release tag (`*` = uncommitted changes), so a stale build is visible at a glance.
 - **Install locally:** `cargo install --path apps/tui` (stop a running `maitty` first on
   Windows, or the binary is locked).
 - **Releases:** run `scripts/release.sh X.Y.Z` (`--dry-run` prints what it would do). It refuses
   unless `dev`'s head passed CI, then sets the version in `apps/tui/Cargo.toml` and
   `apps/gui/src-tauri/tauri.conf.json`, brings `main` up to `dev`, tags `vX.Y.Z` on `main` and
   pushes the three together. `.github/workflows/release.yml` builds Windows, macOS
-  (Apple Silicon and Intel) and Linux (x64, ARM; static musl) archives with checksums and
-  publishes the GitHub Release that `install.sh` / `install.ps1` download from. While
+  (Apple Silicon and Intel) and Linux (x64, ARM; static musl) archives with checksums, tries
+  `install.sh` / `install.ps1` on those files on each OS (Windows PowerShell 5.1 too, through
+  `<APP>_FROM`), and only then publishes the GitHub Release they download from. While
   `apps/gui/RELEASE-HOLD` exists a release leaves the desktop app out; see
   [`docs/stack/tauri-updater.md`](docs/stack/tauri-updater.md#project-specific-updater).
 - **Tickets:** Plane work items `MAITTY-N` (see the next section). Older GitHub issues on CydoEntis/maitty (labelled `phase-5`, …) are history; don't file new planned work there.
@@ -174,11 +177,16 @@ runs a nested server with `MAITTY_SOCKET=<name> maitty`. What to look at is the
 - **Structure:** a *module* is a feature and acts as its phase (cycles are off). A
   *label* is an area (`ssh`, `client`, `daemon`, `docs`, `adr`, `windows`,
   `tooling`) or a type (`feature`, `bug`, `chore`, `spike`). States are Backlog,
-  Todo, In Progress, Done, Cancelled.
+  Todo, In Progress, Needs test, Done, Cancelled.
+- **Closing a ticket:** once its work is merged and the gate passed, a ticket whose acceptance
+  criteria ask for a "Seen on screen" check nobody has made goes to **Needs test** (`ready`, with
+  what to look at). The user's on-screen test moves it to Done, or a failure becomes a bug ticket.
+  Every other ticket (daemon, tests, docs, refactors, a small change, a screen already seen) goes
+  straight to Done.
 - **Access:** the `plan-pull` skill (`~/.claude/skills/plan-pull/`). It reads
   `PLANE_URL`, `PLANE_WORKSPACE` and `PLANE_TOKEN_FILE` from the environment.
   The token never goes in the repo, fixtures, logs or output.
 - **Commands:** `brief MAITTY-N`, `start MAITTY-N`, `done MAITTY-N --gate "<results>"`,
-  `list MAITTY [--state …]`. If the skill isn't installed, say so and ask the
+  `ready MAITTY-N --gate "<results>" --check "<what to look at>"`, `list MAITTY [--state …]`. If the skill isn't installed, say so and ask the
   user; don't call the API by hand with a guessed token.
 - **Dependencies:** a ticket's "blocked by" links are real. Finish blockers first.

@@ -23,7 +23,9 @@ use maitty_machines::link::Timing;
 use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
-use maitty_shared::protocol::{ClientMsg, Command, FolderListing, Query, Snapshot, Status, TermId};
+use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, Snapshot, Status, TermId, TicketKeyChange};
+use maitty_shared::ticket_links::{TicketLinkChange, TicketLinks, TicketPlace};
+use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWrite, TicketWritten, TicketsReply, TicketsRequest};
 use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -48,8 +50,33 @@ const MACHINE_CLIPBOARD_EVENT: &str = "machine-clipboard";
 const SESSION_ATTENTION_EVENT: &str = "session-attention";
 /// Says a conversation of this computer's daemon changed: `{conversation, generation}`.
 const CONVERSATION_CHANGED_EVENT: &str = "conversation-changed";
+/// An agent of this computer asked for its project's ticket setup: `{term, folder, source, link}`.
+const TICKET_SETUP_EVENT: &str = "ticket-setup";
 const MACHINE_ERROR_EVENT: &str = "machine-error";
 const FOLDER_LISTING_EVENT: &str = "folder-listing";
+/// How a clone a window asked for ended.
+const REPOSITORY_CLONED_EVENT: &str = "repository-cloned";
+/// Who a machine says is signed in to GitHub there: `{machine, tag, report}`.
+const GITHUB_ACCOUNTS_EVENT: &str = "github-accounts";
+/// The repositories a machine's GitHub account can clone: `{machine, tag, state, why, listed}`.
+const GITHUB_REPOS_EVENT: &str = "github-repos";
+/// Whose repositories a machine can list: the same shape, `listed` a list of logins.
+const GITHUB_OWNERS_EVENT: &str = "github-owners";
+/// Longer than any owner or search the daemon takes.
+const MOST_GITHUB_WORD_BYTES: usize = 256;
+/// What this computer's daemon read of a ticket source: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
+const TICKETS_EVENT: &str = "tickets";
+/// Where the ticket providers' keys stand: `{machine, tag, answer}`, never a key.
+const TICKET_KEYS_EVENT: &str = "ticket-keys";
+const TICKET_WRITE_EVENT: &str = "ticket-write";
+/// Which sources each project reads: `{machine, tag, answer}`, `answer` `{Ok}` (the asked project, every linked one, your names) or `{Err}`.
+const TICKET_LINKS_EVENT: &str = "ticket-links";
+/// A machine's home folder, as its daemon reads it.
+const REMOTE_HOME: &str = "~";
+/// Longest repository address the daemon accepts.
+const MOST_ADDRESS_BYTES: usize = 2048;
+/// Longer than any ticket source the daemon takes (`owner/name`, `plane` or `linear`).
+const MOST_TICKET_SOURCE_BYTES: usize = 256;
 /// The shared settings, whenever the daemon says them: the answer to a question, or a change.
 const SHARED_SETTINGS_EVENT: &str = "shared-settings";
 
@@ -233,25 +260,104 @@ impl Wire {
         machine: Option<u16>,
         local: impl FnOnce() -> Result<std::path::PathBuf, String>,
     ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_chat_reply)
+    }
+
+    /// Where a side question (`/btw`) about a chat goes: `daemon`, taking only a side answer from
+    /// another machine.
+    pub fn side_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_side_answer)
+    }
+
+    /// Where a request for a branch's worktree goes: `daemon`, taking only the new folder, one
+    /// plain absolute path, from another machine.
+    pub fn worktree_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_worktree_reply)
+    }
+
+    /// Where a question about a pane's repository goes. This computer's daemon answers any of
+    /// them; another machine's is asked only what `remote_repo::may_ask` allows (what changed and
+    /// its diff), and any other question is refused here in the words the window uses for a
+    /// feature that needs the files.
+    pub fn repo_daemon(
+        &self,
+        machine: Option<u16>,
+        question: &maitty_shared::repo::RepoRequest,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        if routing::is_remote(machine) && !maitty_machines::remote_repo::may_ask(question) {
+            self.require_local(machine, "Inspect")?;
+        }
+        self.daemon_vetting(machine, local, maitty_machines::remote_repo::vet_repo_reply)
+    }
+
+    /// Where `request` for a pane's checkout on another machine is asked: that machine's daemon,
+    /// whose answer is one cleaned line of the kind `request` has. This computer runs its own git
+    /// instead.
+    pub fn git_daemon(
+        &self,
+        machine: Option<u16>,
+        request: &maitty_shared::protocol::GitRequest,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        let not_here = || Err("This computer's checkouts are not asked of its daemon".to_string());
+        let asked = request.clone();
+        self.daemon_vetting(machine, not_here, move |reply| maitty_machines::remote_repo::vet_git_reply(&asked, reply))
+    }
+
+    /// Where "who commits on this machine" is asked: this computer's daemon, or another machine's,
+    /// whose answer is that report and nothing else, cleaned.
+    pub fn identities_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_policy::vet_identities_reply)
+    }
+
+    /// Where a folder's rule is previewed, written or removed: this computer's daemon, or another
+    /// machine's, whose answer is the lines of that rule and nothing else, cleaned.
+    pub fn rule_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_policy::vet_rule_reply)
+    }
+
+    /// `daemon`, with `vet` deciding what another machine's daemon may answer.
+    fn daemon_vetting(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+        vet: impl Fn(maitty_shared::protocol::Reply) -> Result<maitty_shared::protocol::Reply, String> + Send + Sync + 'static,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
         use maitty_desktop_client::{Daemon, RemoteDaemon};
         if !routing::is_remote(machine) {
             return local().map(Daemon::Local);
         }
         let id = machine_of(machine);
         let handle = self.handle()?;
-        if !handle.is_up(id) || handle.is_refused(id) {
+        if !handle.takes_requests(id) {
             return Err(refusal(handle, id));
         }
         let route = handle.route(id).ok_or_else(|| refusal(handle, id))?;
         let name = handle.name_of(id).ok_or_else(|| refusal(handle, id))?;
         Ok(Daemon::Remote(RemoteDaemon::new(
-            id.0,
+            handle.line_key(id),
             name,
             move || {
                 let route = route.clone();
-                Box::pin(async move { maitty_machines::open_remote(&route, crate::hub::dial()?).await })
+                Box::pin(async move { maitty_machines::open_remote(&route, crate::hub::request_dial()?).await })
             },
-            maitty_machines::remote_chat::vet_chat_reply,
+            vet,
         )))
     }
 
@@ -272,6 +378,18 @@ impl Wire {
         handle
             .send(Outgoing { machine, msg })
             .map_err(|_| refusal(handle, machine))
+    }
+
+    /// Start GitHub's own sign-in in a terminal session on another machine, in its home folder. The
+    /// machine is the only thing chosen here: the command is `GITHUB_SIGN_IN_COMMAND`.
+    pub fn github_sign_in(&self, machine: u16) -> Result<(), String> {
+        if !routing::is_remote(Some(machine)) {
+            return Err("This computer starts its own sessions".to_string());
+        }
+        self.send(
+            MachineId(machine),
+            maitty_desktop_client::github_sign_in_message(std::path::PathBuf::from(REMOTE_HOME)),
+        )
     }
 
     /// A fleet request for another machine's daemon: the machine's line takes it without waiting.
@@ -341,6 +459,96 @@ impl Wire {
         )
     }
 
+    /// Ask a machine's daemon (this computer's when none is named) to clone the repository at
+    /// `address` into a new folder inside `parent`. The daemon decides whether the address is one it
+    /// will clone; only what could not be a request at all is refused here. The answer comes back
+    /// as a `repository-cloned` event carrying `tag`.
+    pub fn clone_repository(&self, machine: Option<u16>, address: &str, parent: &str, tag: u64) -> Result<(), String> {
+        let (address, parent) = (address.trim(), parent.trim());
+        if address.is_empty() || address.len() > MOST_ADDRESS_BYTES || address.chars().any(char::is_control) {
+            return Err("Give the address of the repository to clone".to_string());
+        }
+        if parent.is_empty() || parent.len() > MOST_FOLDER_BYTES || parent.chars().any(char::is_control) {
+            return Err("Choose the folder to clone into".to_string());
+        }
+        self.send(
+            machine_of(machine),
+            ClientMsg::Query(Query::CloneRepo {
+                address: address.to_string(),
+                parent: parent.to_string(),
+                tag,
+            }),
+        )
+    }
+
+    /// Ask a machine's daemon (this computer's when none is named) who is signed in to GitHub there.
+    /// The answer comes back as a `github-accounts` event carrying `tag`.
+    pub fn github_accounts(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
+        self.send(machine_of(machine), ClientMsg::Query(Query::GitHubAccounts { tag }))
+    }
+
+    /// Ask a machine's daemon (this computer's when none is named) for the repositories its GitHub
+    /// account can clone: `owner`'s, or its own when none is named, narrowed by `search`. The
+    /// daemon judges both; only what could not be a request is refused here. The answer comes back
+    /// as a `github-repos` event carrying `tag`.
+    pub fn github_repos(&self, machine: Option<u16>, owner: Option<&str>, search: Option<&str>, tag: u64) -> Result<(), String> {
+        let word = |text: Option<&str>| -> Result<Option<String>, String> {
+            match text.map(str::trim).filter(|text| !text.is_empty()) {
+                Some(text) if text.len() > MOST_GITHUB_WORD_BYTES || text.chars().any(char::is_control) => {
+                    Err("That owner or search cannot be sent".to_string())
+                }
+                text => Ok(text.map(str::to_owned)),
+            }
+        };
+        let (owner, search) = (word(owner)?, word(search)?);
+        self.send(machine_of(machine), ClientMsg::Query(Query::GitHubRepos { owner, search, tag }))
+    }
+
+    /// Ask this computer's daemon to read a ticket source: `owner/name` for GitHub (its own `gh`), or `plane` or
+    /// `linear` (the key it keeps). The daemon checks the source and the request and cleans the answer; only what
+    /// could not be a source is refused here. The answer comes back as a `tickets` event carrying `tag`.
+    pub fn tickets(&self, source: &str, request: TicketsRequest, tag: u64) -> Result<(), String> {
+        let source = source.trim();
+        if source.is_empty() || source.len() > MOST_TICKET_SOURCE_BYTES || source.chars().any(char::is_control) {
+            return Err("That ticket source cannot be sent".to_string());
+        }
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::Tickets { source: source.to_owned(), request, tag }))
+    }
+
+    /// Ask this computer's daemon to keep, remove or report a ticket provider's key. The key goes to the daemon
+    /// and nowhere else; the answer, a `ticket-keys` event carrying `tag`, says only whether one is set.
+    pub fn ticket_keys(&self, change: TicketKeyChange, tag: u64) -> Result<(), String> {
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketKeys { change, tag }))
+    }
+
+    /// Ask this computer's daemon to write one change to a ticket: a comment, or closing it. `confirmed` is the
+    /// person's click on the confirm step, passed on as it is; the daemon writes nothing without it and refuses
+    /// an agent's connection. The answer comes back as a `ticket-write` event carrying `tag`.
+    /// Ask this computer's daemon which sources a project reads, or change them. The answer is a `ticket-links`
+    /// event carrying `tag`.
+    pub fn ticket_links(&self, place: Option<TicketPlace>, change: TicketLinkChange, tag: u64) -> Result<(), String> {
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketLinks { place, change, tag }))
+    }
+
+    pub fn ticket_write(&self, source: &str, id: &str, write: TicketWrite, confirmed: bool, tag: u64) -> Result<(), String> {
+        let (source, id) = (source.trim(), id.trim());
+        for text in [source, id] {
+            if text.is_empty() || text.len() > MOST_TICKET_SOURCE_BYTES || text.chars().any(char::is_control) {
+                return Err("That ticket cannot be written to".to_string());
+            }
+        }
+        self.send(
+            MachineId::LOCAL,
+            ClientMsg::Query(Query::TicketWrite { source: source.to_owned(), id: id.to_owned(), write, confirmed, tag }),
+        )
+    }
+
+    /// Ask a machine's daemon (this computer's when none is named) whose repositories it can list.
+    /// The answer comes back as a `github-owners` event carrying `tag`.
+    pub fn github_owners(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
+        self.send(machine_of(machine), ClientMsg::Query(Query::GitHubOwners { tag }))
+    }
+
     /// Ask this computer's daemon for the shared settings. The answer comes back as a
     /// `shared-settings` event, the same one a change anywhere raises.
     pub fn shared_settings(&self) -> Result<(), String> {
@@ -408,10 +616,85 @@ pub fn list_folders(
     wire.list_folders(machine, &path, tag)
 }
 
+/// Asks this computer's daemon to read a ticket source. The answer arrives as a `tickets` event with the same `tag`.
+#[tauri::command]
+pub fn tickets(wire: tauri::State<'_, Wire>, source: String, request: TicketsRequest, tag: u64) -> Result<(), String> {
+    wire.tickets(&source, request, tag)
+}
+
+/// Asks this computer's daemon to keep, remove or report a ticket provider's key. The answer arrives as a
+/// `ticket-keys` event with the same `tag`, and never holds a key.
+#[tauri::command]
+pub fn ticket_keys(wire: tauri::State<'_, Wire>, change: TicketKeyChange, tag: u64) -> Result<(), String> {
+    wire.ticket_keys(change, tag)
+}
+
+/// Asks this computer's daemon which ticket sources a project reads, or changes them (`place` is the folder in
+/// front, resolved by the daemon to its project). The answer arrives as a `ticket-links` event with the same `tag`.
+#[tauri::command]
+pub fn ticket_links(wire: tauri::State<'_, Wire>, place: Option<TicketPlace>, change: TicketLinkChange, tag: u64) -> Result<(), String> {
+    wire.ticket_links(place, change, tag)
+}
+
+/// Asks this computer's daemon to add a comment to a ticket or close it, after the person confirmed exactly what
+/// is shown. The answer arrives as a `ticket-write` event with the same `tag`.
+#[tauri::command]
+pub fn ticket_write(
+    wire: tauri::State<'_, Wire>,
+    source: String,
+    id: String,
+    write: TicketWrite,
+    confirmed: bool,
+    tag: u64,
+) -> Result<(), String> {
+    wire.ticket_write(&source, &id, write, confirmed, tag)
+}
+
 /// Asks another machine for its whole list; it arrives as `machine-sessions-changed`.
 #[tauri::command]
 pub fn ask_machine_list(wire: tauri::State<'_, Wire>, machine: u16) -> Result<(), String> {
     wire.ask_machine_list(machine)
+}
+
+/// Clones the repository at `address` into a new folder inside `parent` on a machine (this
+/// computer when `machine` is left out). Nothing is returned here: how it ended arrives as a
+/// `repository-cloned` event with the same `tag`.
+#[tauri::command]
+pub fn clone_repository(
+    wire: tauri::State<'_, Wire>,
+    machine: Option<u16>,
+    address: String,
+    parent: String,
+    tag: u64,
+) -> Result<(), String> {
+    wire.clone_repository(machine, &address, &parent, tag)
+}
+
+/// Asks a machine (this computer when `machine` is left out) who is signed in to GitHub there. The
+/// answer arrives as a `github-accounts` event with the same `tag`.
+#[tauri::command]
+pub fn github_accounts(wire: tauri::State<'_, Wire>, machine: Option<u16>, tag: u64) -> Result<(), String> {
+    wire.github_accounts(machine, tag)
+}
+
+/// Asks a machine (this computer when `machine` is left out) for the repositories its GitHub account
+/// can clone. The answer arrives as a `github-repos` event with the same `tag`.
+#[tauri::command]
+pub fn github_repos(
+    wire: tauri::State<'_, Wire>,
+    machine: Option<u16>,
+    owner: Option<String>,
+    search: Option<String>,
+    tag: u64,
+) -> Result<(), String> {
+    wire.github_repos(machine, owner.as_deref(), search.as_deref(), tag)
+}
+
+/// Asks a machine (this computer when `machine` is left out) whose repositories it can list. The
+/// answer arrives as a `github-owners` event with the same `tag`.
+#[tauri::command]
+pub fn github_owners(wire: tauri::State<'_, Wire>, machine: Option<u16>, tag: u64) -> Result<(), String> {
+    wire.github_owners(machine, tag)
 }
 
 /// Asks the daemon for the shared settings; the answer arrives as a `shared-settings` event.
@@ -605,7 +888,8 @@ pub enum Reaction {
         status: Status,
     },
     /// A machine was taken out of the list.
-    Removed { machine: MachineId },
+    /// `lines` names the request lines kept for it, closed with it.
+    Removed { machine: MachineId, lines: maitty_desktop_client::RemoteKey },
     /// The shared settings of this computer's daemon.
     Settings(SharedSettings),
     /// A conversation of this computer's daemon changed.
@@ -616,6 +900,56 @@ pub enum Reaction {
         tag: u64,
         listing: FolderListing,
     },
+    /// How a machine's clone ended, for the window that asked.
+    Cloned {
+        machine: MachineId,
+        tag: u64,
+        outcome: Result<String, String>,
+    },
+    /// Who a machine says is signed in to GitHub there, for the window that asked.
+    GitHubAccounts {
+        machine: MachineId,
+        tag: u64,
+        report: GitHubReport,
+    },
+    /// The repositories a machine's GitHub account can clone, for the window that asked.
+    GitHubRepos {
+        machine: MachineId,
+        tag: u64,
+        answer: GitHubAnswer<GitHubRepoList>,
+    },
+    /// Whose repositories a machine can list, for the window that asked.
+    GitHubOwners {
+        machine: MachineId,
+        tag: u64,
+        answer: GitHubAnswer<Vec<String>>,
+    },
+    /// What a ticket source gave, for the window that asked.
+    Tickets {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketsReply, TicketError>,
+    },
+    /// Where the ticket providers' keys stand, for the window that asked.
+    TicketKeys {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<Vec<TicketKeyState>, TicketError>,
+    },
+    /// What a confirmed write to a ticket did, for the window that asked.
+    TicketWrite {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketWritten, TicketError>,
+    },
+    /// The projects' ticket links, for the window that asked.
+    TicketLinks {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketLinks, TicketError>,
+    },
+    /// An agent asked for its project's ticket setup.
+    TicketSetup(maitty_shared::ticket_links::TicketSetupAsk),
     /// A machine's whole snapshot, or none when this computer's line ended.
     Sessions {
         machine: MachineId,
@@ -660,7 +994,7 @@ pub fn react(
         }
         Update::Removed { machine } => {
             streams.forget(machine);
-            return vec![Reaction::Removed { machine }];
+            return vec![Reaction::Removed { machine, lines: handle.line_key(machine) }];
         }
         Update::LineUp { machine } => {
             // Panes a view was watching are asked for again; the replay that comes puts each
@@ -701,6 +1035,15 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
                 Some(Reaction::ConversationChanged { conversation, generation })
             }
             Out::Folders { machine, tag, listing } => Some(Reaction::Folders { machine, tag, listing }),
+            Out::Cloned { machine, tag, outcome } => Some(Reaction::Cloned { machine, tag, outcome }),
+            Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
+            Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
+            Out::GitHubOwners { machine, tag, answer } => Some(Reaction::GitHubOwners { machine, tag, answer }),
+            Out::Tickets { machine, tag, answer } => Some(Reaction::Tickets { machine, tag, answer }),
+            Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
+            Out::TicketWrite { machine, tag, answer } => Some(Reaction::TicketWrite { machine, tag, answer }),
+            Out::TicketLinks { machine, tag, answer } => Some(Reaction::TicketLinks { machine, tag, answer }),
+            Out::TicketSetup(ask) => Some(Reaction::TicketSetup(ask)),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
                 let _ = handle.send(Outgoing {
@@ -749,6 +1092,57 @@ struct FolderAnswer {
     machine: u16,
     tag: u64,
     listing: FolderListing,
+}
+
+/// One of `folder` and `refused` is set: where the clone is, or why there is none.
+#[derive(Clone, Serialize)]
+struct CloneAnswer {
+    machine: u16,
+    tag: u64,
+    folder: Option<String>,
+    refused: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+struct GitHubAccountsAnswer {
+    machine: u16,
+    tag: u64,
+    report: GitHubReport,
+}
+
+/// A GitHub list as the window reads it: `state` is `listed`, `not-installed`, `not-signed-in` or
+/// `failed`; `why` is set for `failed` and `listed` for `listed`.
+#[derive(Clone, Serialize, Debug, PartialEq)]
+struct GitHubListAnswer<T> {
+    machine: u16,
+    tag: u64,
+    state: &'static str,
+    why: Option<String>,
+    listed: Option<T>,
+}
+
+/// An answer to a tagged question as the window reads it: the machine, the question's tag and what came back.
+#[derive(Clone, Serialize, Debug, PartialEq)]
+struct TaggedAnswer<T> {
+    machine: u16,
+    tag: u64,
+    answer: T,
+}
+
+fn github_list_answer<T>(machine: MachineId, tag: u64, answer: GitHubAnswer<T>) -> GitHubListAnswer<T> {
+    let (state, why, listed) = match answer {
+        GitHubAnswer::Listed(listed) => ("listed", None, Some(listed)),
+        GitHubAnswer::NotInstalled => ("not-installed", None, None),
+        GitHubAnswer::NotSignedIn => ("not-signed-in", None, None),
+        GitHubAnswer::Failed(why) => ("failed", Some(why), None),
+    };
+    GitHubListAnswer {
+        machine: machine.0,
+        tag,
+        state,
+        why,
+        listed,
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -821,8 +1215,54 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
                     },
                 );
             }
-            Reaction::Removed { machine } => {
-                maitty_desktop_client::forget_remote(machine.0);
+            Reaction::Cloned { machine, tag, outcome } => {
+                let (folder, refused) = match outcome {
+                    Ok(folder) => (Some(folder), None),
+                    Err(why) => (None, Some(why)),
+                };
+                let _ = app.emit(
+                    REPOSITORY_CLONED_EVENT,
+                    CloneAnswer {
+                        machine: machine.0,
+                        tag,
+                        folder,
+                        refused,
+                    },
+                );
+            }
+            Reaction::GitHubAccounts { machine, tag, report } => {
+                let _ = app.emit(
+                    GITHUB_ACCOUNTS_EVENT,
+                    GitHubAccountsAnswer {
+                        machine: machine.0,
+                        tag,
+                        report,
+                    },
+                );
+            }
+            Reaction::GitHubRepos { machine, tag, answer } => {
+                let _ = app.emit(GITHUB_REPOS_EVENT, github_list_answer(machine, tag, answer));
+            }
+            Reaction::GitHubOwners { machine, tag, answer } => {
+                let _ = app.emit(GITHUB_OWNERS_EVENT, github_list_answer(machine, tag, answer));
+            }
+            Reaction::Tickets { machine, tag, answer } => {
+                let _ = app.emit(TICKETS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
+            Reaction::TicketKeys { machine, tag, answer } => {
+                let _ = app.emit(TICKET_KEYS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
+            Reaction::TicketWrite { machine, tag, answer } => {
+                let _ = app.emit(TICKET_WRITE_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
+            Reaction::TicketLinks { machine, tag, answer } => {
+                let _ = app.emit(TICKET_LINKS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
+            Reaction::TicketSetup(ask) => {
+                let _ = app.emit(TICKET_SETUP_EVENT, ask);
+            }
+            Reaction::Removed { machine, lines } => {
+                maitty_desktop_client::forget_remote(lines);
                 if let Ok(mut states) = app.state::<MachineStates>().0.lock() {
                     states.remove(&machine.0);
                 }
@@ -880,6 +1320,61 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
 mod tests {
     use super::*;
     use maitty_shared::protocol::ServerMsg;
+
+    #[test]
+    fn a_github_list_reaches_the_window_as_one_of_four_named_states() {
+        let said = |answer: GitHubAnswer<Vec<String>>| serde_json::to_value(github_list_answer(MachineId(3), 9, answer)).unwrap();
+        assert_eq!(
+            said(GitHubAnswer::Listed(vec!["me".into()])),
+            serde_json::json!({"machine": 3, "tag": 9, "state": "listed", "why": null, "listed": ["me"]})
+        );
+        assert_eq!(said(GitHubAnswer::NotInstalled)["state"], "not-installed");
+        assert_eq!(said(GitHubAnswer::NotSignedIn)["state"], "not-signed-in");
+        let failed = said(GitHubAnswer::Failed("rate limited".into()));
+        assert_eq!((failed["state"].as_str(), failed["why"].as_str()), (Some("failed"), Some("rate limited")));
+    }
+
+    #[test]
+    fn the_window_s_ticket_questions_and_answers_keep_their_shapes() {
+        let list: TicketsRequest = serde_json::from_value(serde_json::json!({"List": {"group": "plane:p1", "state": null, "assignee": null, "label": null, "search": "cart", "page": 2}})).unwrap();
+        assert!(matches!(list, TicketsRequest::List(_)));
+        assert_eq!(serde_json::from_value::<TicketsRequest>(serde_json::json!("Groups")).unwrap(), TicketsRequest::Groups);
+        let set: TicketKeyChange = serde_json::from_value(serde_json::json!({"Set": {"provider": "Linear", "address": "", "workspace": "", "key": "lin_api_x"}})).unwrap();
+        assert!(!format!("{set:?}").contains("lin_api_x"));
+        let refused = TaggedAnswer { machine: 0, tag: 4, answer: Err::<Vec<TicketKeyState>, _>(TicketError::SignedOut) };
+        assert_eq!(serde_json::to_value(refused).unwrap(), serde_json::json!({"machine": 0, "tag": 4, "answer": {"Err": "SignedOut"}}));
+        let none = TaggedAnswer { machine: 0, tag: 5, answer: Ok::<_, TicketError>(Vec::<TicketKeyState>::new()) };
+        assert_eq!(serde_json::to_value(none).unwrap(), serde_json::json!({"machine": 0, "tag": 5, "answer": {"Ok": []}}));
+    }
+
+    #[test]
+    fn a_ticket_write_and_its_answer_keep_their_shapes() {
+        let comment: TicketWrite = serde_json::from_value(serde_json::json!({"Comment": {"text": "done"}})).unwrap();
+        assert_eq!(comment, TicketWrite::Comment { text: "done".into() });
+        assert_eq!(serde_json::from_value::<TicketWrite>(serde_json::json!("Close")).unwrap(), TicketWrite::Close);
+        assert!(serde_json::from_value::<TicketWrite>(serde_json::json!({"Delete": {}})).is_err());
+        let done = TaggedAnswer { machine: 0, tag: 6, answer: Ok::<_, TicketError>(TicketWritten::Commented) };
+        assert_eq!(serde_json::to_value(done).unwrap(), serde_json::json!({"machine": 0, "tag": 6, "answer": {"Ok": "Commented"}}));
+    }
+
+    #[test]
+    fn a_ticket_link_change_and_its_answer_keep_their_shapes() {
+        use maitty_shared::ticket_links::{GitHubLink, LinkedProject, TicketLink, TicketPick};
+        let place: TicketPlace = serde_json::from_value(serde_json::json!({"machine": null, "folder": "/home/me/shop"})).unwrap();
+        assert_eq!(place.folder, "/home/me/shop");
+        let set: TicketLinkChange = serde_json::from_value(serde_json::json!({"Set": {"place": {"machine": null, "folder": "/home/me/shop"}, "link": {"github": "Off", "plane": null, "linear": {"id": "linear:team.1", "name": "Core"}}}})).unwrap();
+        let TicketLinkChange::Set { link, .. } = set else { panic!("a set") };
+        assert_eq!(link.github, GitHubLink::Off);
+        assert_eq!(serde_json::from_value::<GitHubLink>(serde_json::json!({"Repo": "me/shop"})).unwrap(), GitHubLink::Repo("me/shop".into()));
+        assert_eq!(serde_json::from_value::<TicketLinkChange>(serde_json::json!("Read")).unwrap(), TicketLinkChange::Read);
+        let found = TicketLinks {
+            project: Some(LinkedProject { machine: None, folder: "/shop".into(), link: TicketLink { plane: Some(TicketPick { id: "plane:p".into(), name: "P".into() }), ..TicketLink::default() } }),
+            ..TicketLinks::default()
+        };
+        let told = serde_json::to_value(TaggedAnswer { machine: 0, tag: 7, answer: Ok::<_, TicketError>(found) }).unwrap();
+        assert_eq!(told["answer"]["Ok"]["project"]["link"]["github"], serde_json::json!("Origin"));
+        assert_eq!(told["answer"]["Ok"]["me"], serde_json::json!({"plane": "", "linear": ""}));
+    }
 
     fn state(machine: u16, name: &str, kind: &'static str) -> MachineState {
         MachineState {

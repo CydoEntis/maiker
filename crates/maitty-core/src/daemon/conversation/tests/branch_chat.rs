@@ -263,7 +263,8 @@ async fn a_chat_on_a_branch_is_refused_before_anything_is_made_when_a_part_is_wr
         for (client, (message, wanted)) in (400..).zip([
             (start_on(known.clone(), "bad name"), "letters, digits"),
             (start_on(known.clone(), "-x"), "dash"),
-            (start_on(unknown, "chat/x"), "not a project"),
+            // A person may pick a folder no session is in yet, but it still has to be a repository.
+            (start_on(unknown, "chat/x"), "not in a git repository"),
             (
                 ClientMsg::Command(Command::ConversationStart {
                     target: crate::conversation::StartTarget::Session {

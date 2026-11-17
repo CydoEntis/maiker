@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import { displayName, folderNameOf, inCreationOrder, keepLabels, limitedWord, nextResumeAt, processName, rowName, statusText, tildePath, toSessionView, truncatePrompt } from './session'
+import { displayName, folderNameOf, helpersOnly, inCreationOrder, keepLabels, limitedWord, nextResumeAt, processName, rowName, statusText, tildePath, toSessionView, truncatePrompt } from './session'
 import { formatAgo, formatElapsed, markSeen, trackSessions } from './tracking'
 import { folderExists, resolveStartFolder } from './startFolder'
 
@@ -18,6 +18,14 @@ function conversation(pane: number, cwd: string, extra: Partial<Conversation> = 
 const repo = (pane: number, root: string, cwd: string, extra: Partial<Conversation> = {}) => conversation(pane, cwd, { folder: root, repo: root.split('/').at(-1) ?? null, branch: 'main', ...extra })
 
 describe('session view', () => {
+  it('counts the helpers that keep a session working only once the agent itself is at its prompt', () => {
+    const helper = (id: string, state: 'Working' | 'Completed') => ({ id, name: 'maiker:builder', state, task: null, startedAt: 1, updatedAt: 1, latest: null, result: null })
+    const pane = (ownTurnOver: boolean) => conversation(1, HOME, { agent: 'claude', details: { ownTurnOver, subagents: [helper('a', 'Working'), helper('b', 'Working'), helper('c', 'Completed')] } } as Partial<Conversation>)
+    expect(helpersOnly(pane(true), 'working')).toBe(2)
+    expect(helpersOnly(pane(false), 'working')).toBe(0)
+    expect(helpersOnly(pane(true), 'done')).toBe(0)
+  })
+
   it('writes the home folder as ~', () => {
     expect(tildePath(HOME, HOME)).toBe('~')
     expect(tildePath(`${HOME}/code/`, HOME)).toBe('~/code')
@@ -257,11 +265,16 @@ describe('labels that stay put', () => {
   const root = `${HOME}/maitty`
   const shown = toSessionView(repo(1, root, root, { branch: 'dev' }), HOME)
 
-  it('keeps the branch and title while a pull blanks or switches the branch', () => {
+  it('keeps the branch and title while a pull blanks it or a rebase passes a bare commit', () => {
     const during = toSessionView(repo(1, root, root, { branch: 'working tree' }), HOME)
     expect(keepLabels(during, shown)).toMatchObject({ title: 'dev', branch: 'dev', repoName: 'maitty' })
+    const rebasing = toSessionView(repo(1, root, root, { branch: '4ad0632' }), HOME)
+    expect(keepLabels(rebasing, shown)).toMatchObject({ title: 'dev', branch: 'dev' })
+  })
+
+  it('follows a switch to another branch in the same folder', () => {
     const switched = toSessionView(repo(1, root, root, { branch: 'other' }), HOME)
-    expect(keepLabels(switched, shown)).toMatchObject({ title: 'dev', branch: 'dev' })
+    expect(keepLabels(switched, shown)).toMatchObject({ title: 'other', branch: 'other' })
   })
 
   it('follows the session into another folder', () => {

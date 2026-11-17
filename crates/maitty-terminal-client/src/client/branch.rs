@@ -483,7 +483,7 @@ impl App {
                             }
                         }
                     }
-                    KeyCode::Char(c) if !ctrl => {
+                    KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) => {
                         v.query.push(c);
                         v.sel = 0;
                     }
@@ -509,7 +509,7 @@ impl App {
                     m.pop();
                     v.step = Step::Message(m);
                 }
-                KeyCode::Char(c) if !ctrl => {
+                KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) => {
                     m.push(c);
                     v.step = Step::Message(m);
                 }

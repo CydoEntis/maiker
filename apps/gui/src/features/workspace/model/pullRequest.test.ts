@@ -10,6 +10,7 @@ const open: PullRequest = {
   checks: { passed: 0, pending: 0, failed: [] },
   review: 'None',
   conflicting: false,
+  commitsAfterMerge: 0,
 }
 
 describe('a pull request headline', () => {
@@ -22,6 +23,13 @@ describe('a pull request headline', () => {
     const merged = { ...open, state: 'Merged' as const }
     expect(pullRequestHeadline(merged)).toBe('#45 merged')
     expect(pullRequestTone(merged)).toBe('good')
+  })
+
+  it('says how many commits came after the merge and is no longer good', () => {
+    const goingOn = { ...open, state: 'Merged' as const, commitsAfterMerge: 3 }
+    expect(pullRequestHeadline(goingOn)).toBe('#45 merged · 3 new commits')
+    expect(pullRequestHeadline({ ...goingOn, commitsAfterMerge: 1 })).toBe('#45 merged · 1 new commit')
+    expect(pullRequestTone(goingOn)).toBe('waiting')
   })
 
   it('puts failing checks before everything else and is bad', () => {

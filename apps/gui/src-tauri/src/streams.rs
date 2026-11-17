@@ -14,8 +14,9 @@
 
 use maitty_machines::MachineId;
 use maitty_machines::remote_snapshot::sanitize_snapshot;
-use maitty_shared::protocol::{FolderListing, Reply, ServerMsg, Snapshot, Status, TermId};
+use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, Snapshot, Status, TermId};
 use maitty_shared::settings_view::SharedSettings;
+use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWritten, TicketsReply};
 use std::collections::{BTreeMap, HashMap};
 use std::time::{Duration, Instant};
 
@@ -101,6 +102,56 @@ pub enum Out {
         tag: u64,
         listing: FolderListing,
     },
+    /// How a machine's clone ended, already cleaned: the new folder, or why there is none.
+    Cloned {
+        machine: MachineId,
+        tag: u64,
+        outcome: Result<String, String>,
+    },
+    /// Who a machine says is signed in to GitHub there, already cleaned.
+    GitHubAccounts {
+        machine: MachineId,
+        tag: u64,
+        report: GitHubReport,
+    },
+    /// The repositories a machine's GitHub account can clone, already cleaned.
+    GitHubRepos {
+        machine: MachineId,
+        tag: u64,
+        answer: GitHubAnswer<GitHubRepoList>,
+    },
+    /// Whose repositories a machine can list, already cleaned.
+    GitHubOwners {
+        machine: MachineId,
+        tag: u64,
+        answer: GitHubAnswer<Vec<String>>,
+    },
+    /// What a machine read of a ticket source, already cleaned by the daemon (and vetted for another machine's).
+    Tickets {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketsReply, TicketError>,
+    },
+    /// Where this computer's ticket provider keys stand. Never a key.
+    TicketKeys {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<Vec<TicketKeyState>, TicketError>,
+    },
+    /// What a confirmed write to a ticket did, or why it did nothing.
+    TicketWrite {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<TicketWritten, TicketError>,
+    },
+    /// Which sources each project reads on this computer, or why a change was refused.
+    TicketLinks {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<maitty_shared::ticket_links::TicketLinks, TicketError>,
+    },
+    /// An agent of this computer asked for its project's ticket setup, cleaned.
+    TicketSetup(maitty_shared::ticket_links::TicketSetupAsk),
 }
 
 #[derive(Default)]
@@ -211,6 +262,34 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::Folders { tag, listing }) => {
                 out.push(Out::Folders { machine, tag, listing });
+            }
+            ServerMsg::Reply(Reply::Cloned { tag, outcome }) => {
+                out.push(Out::Cloned { machine, tag, outcome });
+            }
+            ServerMsg::Reply(Reply::GitHubAccounts { tag, report }) => {
+                out.push(Out::GitHubAccounts { machine, tag, report });
+            }
+            ServerMsg::Reply(Reply::GitHubRepos { tag, answer }) => {
+                out.push(Out::GitHubRepos { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::GitHubOwners { tag, answer }) => {
+                out.push(Out::GitHubOwners { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::Tickets { tag, answer }) => {
+                out.push(Out::Tickets { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::TicketKeys { tag, answer }) => {
+                out.push(Out::TicketKeys { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::TicketWrite { tag, answer }) => {
+                out.push(Out::TicketWrite { machine, tag, answer });
+            }
+            ServerMsg::Reply(Reply::TicketLinks { tag, answer }) => {
+                out.push(Out::TicketLinks { machine, tag, answer });
+            }
+            // This computer's only: another machine's agent never opens a setup here.
+            ServerMsg::TicketSetup(ask) if machine == MachineId::LOCAL => {
+                out.push(Out::TicketSetup(ask.cleaned()));
             }
             ServerMsg::State(snapshot) => self.publish(machine, snapshot, &mut out),
             // What the host asked for after a missed update; nothing else asks on this line.

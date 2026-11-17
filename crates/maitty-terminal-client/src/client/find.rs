@@ -296,7 +296,7 @@ impl App {
                     self.find_search(&mut v);
                 }
             }
-            KeyCode::Char(c) if !ctrl => {
+            KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) => {
                 v.query.push(c);
                 v.sel = 0;
                 if v.tab == 1 {

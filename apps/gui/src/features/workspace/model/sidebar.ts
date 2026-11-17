@@ -1,6 +1,6 @@
 import { isChatSession } from './chatSession'
 import type { MachineHead } from './machines'
-import { folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, type SessionStatus, type SessionView } from './session'
+import { folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView } from './session'
 
 /**
  * The most urgent first: what needs you, an agent that stopped, one held by its plan limit, what is
@@ -69,6 +69,7 @@ export function rowTitle(session: SessionView): string {
 
 /** The words at the right of a row: only a stopped agent, an exited shell or a session held by its plan limit says anything. */
 export function rowWord(session: SessionView, now: number = Date.now()): string {
+  if (session.snoozedUntil !== null) return untilWord(session.snoozedUntil, now)
   if (session.status === 'limited') return limitedWord(session.resumeAt, now)
   // Its machine or the daemon is out of reach, or the list just missed it: the last status is not known to be true.
   if (session.status === 'unknown') return 'offline'
@@ -94,16 +95,11 @@ export type SidebarGrouping = 'status' | 'project' | 'machine'
 export const SIDEBAR_GROUPINGS: ReadonlyArray<readonly [SidebarGrouping, string]> = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']]
 
 /**
- * A session listed under Terminals: one with no agent in it (a shell, or a program running in one, such as `pnpm dev`).
- * One that needs you stays with the agents, because what needs you is never at the bottom of the list.
+ * A terminal: a session with no agent in it (a shell, or a program running in one, such as `pnpm dev`). One that needs
+ * you counts as an agent here, because what needs you is never folded out of sight.
  */
 export function isTerminal(session: Pick<SessionView, 'conversation' | 'status'>): boolean {
   return !session.conversation.agent && session.status !== 'needs'
-}
-
-/** The terminals, as created: the last section of the status and project lists, so agents are never sorted among dev servers. */
-export function terminalSessions(sessions: readonly SessionView[]): SessionView[] {
-  return inCreationOrder(sessions.filter(isTerminal))
 }
 
 export function isSidebarGrouping(value: unknown): value is SidebarGrouping {
@@ -124,7 +120,8 @@ const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint
 export function sectionOf(session: SessionView): StatusSectionKey {
   switch (session.status) {
     case 'needs': return 'needs'
-    case 'error':
+    // A shell that exited has nothing to ask: it rests with the idle rows, and its row says "exited".
+    case 'error': return session.conversation.agent ? 'needs' : 'idle'
     case 'limited': return 'needs'
     case 'working': return 'working'
     case 'done': return 'done'
@@ -139,13 +136,13 @@ export type StatusSection = { key: StatusSectionKey; name: string; hint: string;
 export type HeldRow = { readonly id: string; readonly section: StatusSectionKey }
 
 /**
- * The agents under the status each has, as created within a section; a section with nothing in it is left out. Terminals
- * have their own section (`terminalSessions`). The `held` row stays where it was picked: looking at a finished agent
- * makes it idle, and a row that jumps away from under the pointer the moment it is clicked reads as the app fighting you.
- * Its mark still shows its status.
+ * The sessions under the status each has, as created within a section; a section with nothing in it is left out. Shells
+ * are ordinary rows here (layout 2h). The `held` row stays where it was picked: looking at a finished agent makes it
+ * idle, and a row that jumps away from under the pointer the moment it is clicked reads as the app fighting you. Its
+ * mark still shows its status.
  */
 export function statusSections(sessions: readonly SessionView[], held: HeldRow | null = null): StatusSection[] {
-  const created = inCreationOrder(sessions.filter((session) => !isTerminal(session)))
+  const created = inCreationOrder(sessions)
   const placed = (session: SessionView): StatusSectionKey => (session.id === held?.id ? held.section : sectionOf(session))
   return STATUS_SECTIONS
     .map((section) => ({ ...section, sessions: created.filter((session) => placed(session) === section.key) }))
@@ -159,7 +156,7 @@ export function statusSections(sessions: readonly SessionView[], held: HeldRow |
  * back under Put away, where the person left it. Only Bring back clears it.
  */
 function isPutAway(session: SessionView): boolean {
-  return session.archived && (isTerminal(session) || sectionOf(session) !== 'needs')
+  return (session.archived || session.snoozedUntil !== null) && (isTerminal(session) || sectionOf(session) !== 'needs')
 }
 
 /** The sessions the sections list, and the ones put away (as created), which only the Put away section lists. */
@@ -175,7 +172,17 @@ export function splitPutAway(sessions: readonly SessionView[]): { listed: Sessio
  * a chat is closed, which stops its agent.
  */
 export function canPutAway(session: SessionView): boolean {
-  return !session.archived && !session.ended && (session.status === 'done' || session.status === 'idle') && !isChatSession(session.conversation)
+  return !session.archived && session.snoozedUntil === null && !session.ended && (session.status === 'done' || session.status === 'idle') && !isChatSession(session.conversation)
+}
+
+/**
+ * Snoozing (`TermInfo.snoozed_until`) puts a session away until a time. A finished, idle or limited session in a terminal the
+ * daemon owns can be snoozed, once; one that works, asks or failed is not out of the way yet, and a chat cannot (the daemon
+ * refuses it). The daemon wakes it by itself, and also when it comes to need you.
+ */
+export function canSnooze(session: SessionView): boolean {
+  const resting = session.status === 'done' || session.status === 'idle' || session.status === 'limited'
+  return resting && !session.archived && session.snoozedUntil === null && !session.ended && !isChatSession(session.conversation)
 }
 
 export type ProjectChoice = { name: string; color: string; count: number }
@@ -199,11 +206,10 @@ export type ProjectSection = ProjectGroup & { key: string; head: MachineHead }
 /**
  * Every project as one heading, by name. A project that is on two machines gets a heading for each,
  * this computer's first, because the same folder name on another machine is another checkout.
- * Agents only: terminals have their own section (`terminalSessions`).
  */
 export function projectSections(sessions: readonly SessionView[], heads: readonly MachineHead[]): ProjectSection[] {
   return heads
-    .flatMap((head) => projectGroups(inCreationOrder(sessions.filter((session) => session.machine === head.machine && !isTerminal(session))))
+    .flatMap((head) => projectGroups(inCreationOrder(sessions.filter((session) => session.machine === head.machine)))
       .map((group) => ({ ...group, key: `${head.key}:${group.name}`, head })))
     .sort((a, b) => a.name.localeCompare(b.name))
 }

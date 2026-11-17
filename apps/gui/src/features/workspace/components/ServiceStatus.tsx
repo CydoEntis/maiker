@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { RECONNECT_TRIES, serviceStateOf, tryNumber } from '../model/serviceState'
 import { OfflineBanner, type AppBehindOffer, type RestartOffer } from './states'
 
@@ -38,45 +38,79 @@ function ReconnectingBar({ failures, retryAt, onRetry }: { failures: number; ret
 
 const POWER = <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v9" /><path d="M6.3 7.3a8 8 0 1 0 11.4 0" /></svg>
 const RESTART = <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7" /><path d="M21 4v5h-5" /></svg>
-const CHEVRON = <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m9 6 6 6-6 6" /></svg>
 
 /** The veil over the main card, and the glass card centred on it. The chat behind stays faintly visible but cannot be used. */
-function ServiceLayer({ children }: { children: ReactNode }) {
+/**
+ * A card over a veil behaves as a modal one: Tab stays among its buttons and Esc is Later. `labelledBy` is its heading's id.
+ * It stays in the chat column rather than in the shared Dialog's window-wide portal, which would cover the sidebar too.
+ */
+function ServiceLayer({ children, labelledBy, onLater }: { children: ReactNode; labelledBy: string; onLater: () => void }) {
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      onLater()
+      return
+    }
+    if (event.key !== 'Tab') return
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'))
+    const [first, last] = [buttons[0], buttons[buttons.length - 1]]
+    if (first === undefined || last === undefined) return
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
   return (
     <>
       <div className="mx-service-veil" aria-hidden="true" />
-      <div className="mx-service-layer">{children}</div>
+      <section className="mx-service-layer" aria-labelledby={labelledBy} onKeyDown={onKeyDown}>{children}</section>
     </>
   )
 }
 
 const plural = (count: number, one: string, many: string): string => `${String(count)} ${count === 1 ? one : many}`
 
-/** After every try failed: the service stopped. A line on what is saved, the technical details tucked away, and how to start it again. */
-function ServiceDownCard({ detail, sessions, onStart, onRetry, onOpenLog }: { detail: string | null; sessions: number; onStart: () => void; onRetry: () => void; onOpenLog: () => void }) {
-  const first = useRef<HTMLButtonElement>(null)
-  useEffect(() => { first.current?.focus() }, [])
+/**
+ * After every try failed: the service stopped (layout 2h). A banner at the top of the chat column, not a card over it,
+ * because nothing is lost: it says so, and Restart service starts it again. Details holds the technical words and the log.
+ */
+function ServiceDownBanner({ detail, onStart, onRetry, onOpenLog }: { detail: string | null; onStart: () => void; onRetry: () => void; onOpenLog: () => void }) {
+  // Not focused when it shows: it sits beside what you were typing in, and your next Enter must not restart the service.
+  const [details, setDetails] = useState(false)
   return (
-    <ServiceLayer>
-      <section className="mx-service-card" aria-labelledby="mx-service-down-title">
-        <div className="mx-service-head">
-          <span className="mx-service-tile is-danger" aria-hidden="true">{POWER}</span>
-          <div className="mx-service-copy">
-            <h2 id="mx-service-down-title">Maitty service stopped</h2>
-            <p>{sessions === 1 ? 'Your session is saved. Start the service to pick up where it left off.' : `${sessions > 1 ? `Your ${String(sessions)} sessions are` : 'Your sessions are'} saved. Start the service to pick up where they left off.`}</p>
-          </div>
+    <section className="mx-banner is-danger" aria-label="Maitty service stopped">
+      <div className="mx-banner-row">
+        <span className="mx-banner-icon" aria-hidden="true">{POWER}</span>
+        <p className="mx-banner-text"><strong>Maitty service stopped.</strong> <span>Chats are paused and nothing is lost. Restart to pick up where they left off.</span></p>
+        <button type="button" className="mx-banner-primary" onClick={onStart}>Restart service</button>
+        <button type="button" className="mx-banner-ghost" aria-expanded={details} onClick={() => { setDetails(!details) }}>Details</button>
+      </div>
+      {details && (
+        <div className="mx-banner-details">
+          <span className="mono">{RECONNECT_TRIES} tries over 30s · no answer from the service{detail !== null && <><br />{detail}</>}</span>
+          <span className="mx-spacer" />
+          <button type="button" className="mx-banner-ghost" onClick={onRetry}>Try again</button>
+          <button type="button" className="mx-banner-ghost" onClick={onOpenLog}>Open log</button>
         </div>
-        <details className="mx-service-details">
-          <summary>{CHEVRON}Details</summary>
-          <div className="mx-service-detail mono">{RECONNECT_TRIES} tries over 30s · no answer from the service{detail !== null && <><br />{detail}</>}</div>
-        </details>
-        <div className="mx-service-actions">
-          <button ref={first} type="button" className="mx-svc-primary" onClick={onStart}>Start service</button>
-          <button type="button" className="mx-svc-secondary" onClick={onRetry}>Try again</button>
-          <button type="button" className="mx-svc-text" onClick={onOpenLog}>Open log</button>
-        </div>
-      </section>
-    </ServiceLayer>
+      )}
+    </section>
+  )
+}
+
+/** A downloaded app update waits for a restart (layout 2h): a banner at the top of the chat column until Later. */
+export function UpdateReadyBanner({ version, onRestart, onLater }: { version: string; onRestart: () => void; onLater: () => void }) {
+  return (
+    <section className="mx-banner is-accent" aria-label="Update ready">
+      <div className="mx-banner-row">
+        <span className="mx-banner-icon" aria-hidden="true">{RESTART}</span>
+        <p className="mx-banner-text"><strong>Maitty {version} is ready.</strong> <span>Restart to update. Running chats keep going in the service.</span></p>
+        <button type="button" className="mx-banner-primary" onClick={onRestart}>Restart now</button>
+        <button type="button" className="mx-banner-ghost" onClick={onLater}>Later</button>
+      </div>
+    </section>
   )
 }
 
@@ -98,8 +132,8 @@ function ServiceUpdateCard({ restart, onLater }: { restart: RestartOffer | null;
   useEffect(() => { first.current?.focus() }, [])
   const facts = restart ? restartFacts(restart) : []
   return (
-    <ServiceLayer>
-      <section className="mx-service-card" aria-labelledby="mx-service-update-title">
+    <ServiceLayer labelledBy="mx-service-update-title" onLater={onLater}>
+      <div className="mx-service-card">
         <div className="mx-service-head">
           <span className="mx-service-tile is-accent" aria-hidden="true">{RESTART}</span>
           <div className="mx-service-copy">
@@ -134,7 +168,7 @@ function ServiceUpdateCard({ restart, onLater }: { restart: RestartOffer | null;
           <button type="button" className="mx-svc-secondary" onClick={onLater}>Later</button>
           {restart && <span className="mx-service-versions mono">protocol {restart.from} → {restart.to}</span>}
         </div>
-      </section>
+      </div>
     </ServiceLayer>
   )
 }
@@ -144,8 +178,8 @@ function AppBehindCard({ offer, sessions, onLater }: { offer: AppBehindOffer; se
   const first = useRef<HTMLButtonElement>(null)
   useEffect(() => { first.current?.focus() }, [])
   return (
-    <ServiceLayer>
-      <section className="mx-service-card" aria-labelledby="mx-service-behind-title">
+    <ServiceLayer labelledBy="mx-service-behind-title" onLater={onLater}>
+      <div className="mx-service-card">
         <div className="mx-service-head">
           <span className="mx-service-tile is-accent" aria-hidden="true">{RESTART}</span>
           <div className="mx-service-copy">
@@ -158,14 +192,14 @@ function AppBehindCard({ offer, sessions, onLater }: { offer: AppBehindOffer; se
           <button type="button" className="mx-svc-secondary" onClick={onLater}>Later</button>
           <span className="mx-service-versions mono">protocol {offer.appProtocol} → {offer.serviceProtocol}</span>
         </div>
-      </section>
+      </div>
     </ServiceLayer>
   )
 }
 
 /**
  * What the window shows while maittyd cannot be reached: a reconnecting bar for the first tries, the
- * Service down card after the last one, or the update card (then a bar) when the service is another
+ * Service stopped banner after the last one, or the update card (then a bar) when the service is another
  * version. Nothing when it is connected.
  */
 export function ServiceStatus({ online, failures, mismatch, retryAt, detail, restart, appBehind, sessions, onRetry, onOpenLog }: {
@@ -177,7 +211,7 @@ export function ServiceStatus({ online, failures, mismatch, retryAt, detail, res
   restart: RestartOffer | null
   /** Set when the service is newer than this app; replaces the restart card with an update one. */
   appBehind: AppBehindOffer | null
-  /** The sessions this window last knew of, for "your N sessions are saved". */
+  /** The sessions this window last knew of, for "your N sessions keep running". */
   sessions: number
   /** Tries to reach maittyd again now. The window's connection starts the service when it is not running, so this is also how it is started. */
   onRetry: () => void
@@ -188,7 +222,7 @@ export function ServiceStatus({ online, failures, mismatch, retryAt, detail, res
   const state = serviceStateOf({ online, failures, mismatch })
   if (state === 'ok') return null
   if (state === 'reconnecting') return <ReconnectingBar failures={failures} retryAt={retryAt} onRetry={onRetry} />
-  if (state === 'down') return <ServiceDownCard detail={detail} sessions={sessions} onStart={onRetry} onRetry={onRetry} onOpenLog={onOpenLog} />
+  if (state === 'down') return <ServiceDownBanner detail={detail} onStart={onRetry} onRetry={onRetry} onOpenLog={onOpenLog} />
   if (notNow) return <OfflineBanner retryAt={retryAt} detail={detail} restart={restart} appBehind={appBehind !== null} onRetry={onRetry} />
   if (appBehind) return <AppBehindCard offer={appBehind} sessions={sessions} onLater={() => { setNotNow(true) }} />
   return <ServiceUpdateCard restart={restart} onLater={() => { setNotNow(true) }} />

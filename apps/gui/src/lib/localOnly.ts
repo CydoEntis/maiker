@@ -11,6 +11,7 @@ export const LOCAL_FEATURES = {
   changes: 'Changes',
   find: 'Find',
   branches: 'Branches',
+  history: 'History',
   references: 'References',
   'agent-status': 'Connecting an agent',
   worktrees: 'Worktrees',
@@ -20,6 +21,7 @@ export const LOCAL_FEATURES = {
   'screen-text': 'The screen text',
   replay: 'A fresh replay',
   rewind: 'Edit from here',
+  'check-output': "A check's output",
 } as const
 
 export type LocalFeature = keyof typeof LOCAL_FEATURES

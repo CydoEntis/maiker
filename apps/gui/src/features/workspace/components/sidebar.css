@@ -1,11 +1,9 @@
-/* The sidebar (README: Sidebar). Sizes are the prototype's; light and shade come from the theme's
-   glass tokens (--hl/--hk highlight, --sd/--sk shadow), and --gk turns the glass gradients off for Flat. */
+/* The sidebar (README: Sidebar). Sizes are the prototype's; its fill and edge are the panel role (material.css). */
 
 .mx-sidebar {
-  background: linear-gradient(180deg, rgba(var(--hl), calc(.035 * var(--hk) * var(--gk))), rgba(var(--hl), calc(.012 * var(--hk) * var(--gk))) 120px), var(--main);
+  background: var(--main);
   border: 1px solid rgba(var(--hl), calc(.09 * var(--hk)));
   border-radius: var(--r14);
-  box-shadow: inset 0 1px 0 rgba(var(--hl), calc(.05 * var(--hk) * var(--gk))), 0 10px 30px -12px rgba(var(--sd), calc(.7 * var(--sk) * var(--gk)));
 }
 /* The top of the sidebar: New chat with the rest of what can start beside it, then Search. Rows, not a toolbar. */
 .mx-sidebar-top { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 10px 8px 6px; }
@@ -115,8 +113,12 @@
 .mx-row-wrap { position: relative; display: flex; flex-direction: column; gap: 2px; }
 /* The close button sits at the right of the row's first line and only shows while the row is hovered or has the keys. */
 .mx-row-close { position: absolute; bottom: 5px; right: 6px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); background: var(--main); opacity: 0; pointer-events: none; transition: opacity .12s ease, color .12s ease, background-color .12s ease; }
-.mx-row-wrap:hover > .mx-row-close, .mx-row-close:focus-visible { opacity: 1; pointer-events: auto; }
-.mx-row-close:hover:not(:disabled) { color: var(--danger); background: var(--hover); }
+/* The × waits a moment under a resting pointer, so a pass over the list never offers to stop a session; focus shows it at once. */
+@keyframes mx-row-close-in { from { opacity: 0; pointer-events: none; } to { opacity: 1; pointer-events: auto; } }
+.mx-row-wrap:hover > .mx-row-close { animation: mx-row-close-in .12s ease 450ms both; }
+.mx-row-close:focus-visible { opacity: 1; pointer-events: auto; animation: none; }
+:root:has(.mx-app[data-motion="reduced"]) .mx-row-wrap:hover > .mx-row-close { animation-duration: 0s; }
+.mx-row-close:hover:not(:disabled) { color: var(--danger); background: var(--m-hover); }
 .mx-row-close.is-bring-back:hover:not(:disabled) { color: var(--fg); }
 .mx-row-close:disabled { cursor: default; }
 .mx-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: calc(40px * var(--pad, 1)); padding: 4px 6px 4px 10px; border-radius: 8px; text-align: left; transition: background-color .12s ease; }
@@ -125,7 +127,7 @@
 .mx-row-icon { position: relative; flex: none; display: flex; }
 .mx-row-icon .mx-badge { right: -4px; bottom: -4px; width: 12px; height: 12px; border-radius: calc(3.5px * var(--rk)); font-size: 9px; font-weight: 800; line-height: 1; }
 .mx-row-icon .mx-badge.is-working { background: var(--bg); overflow: hidden; color: var(--working); font-family: var(--mono); }
-.mx-row-icon .mx-badge.is-working .mx-spin, .mx-sub-mark .mx-spin { font-size: 9px; line-height: 1; }
+.mx-row-icon .mx-badge.is-working .mx-spin { font-size: 9px; line-height: 1; }
 .mx-row-icon .mx-badge.is-unknown { width: 11px; height: 11px; background: var(--bg); border: 1.5px dashed var(--dim); box-shadow: none; }
 /* A shell's tile in the sidebar is a flat raised square, so agents stand out among shells. */
 .mx-row.is-shell .mx-app-icon.is-shell, .mx-rail-session .mx-app-icon.is-shell { background: var(--m-raise); color: var(--accent-text); box-shadow: var(--c-tile-ring); }
@@ -154,28 +156,8 @@
 /* The close button takes this corner on hover and focus. */
 .mx-row-wrap:hover .mx-row-when, .mx-row-wrap:focus-within .mx-row-when { opacity: 0; }
 
-/* Subagents: an elbow and small icons under a session that is not selected, a row each under the one that is. */
-.mx-sub-peek { display: flex; align-items: center; gap: 6px; margin: 0 0 2px 40px; padding-top: 2px; height: 20px; }
-.mx-sub-elbow { width: 8px; height: 9px; margin-top: -6px; border-left: 1px solid var(--line2); border-bottom: 1px solid var(--line2); border-bottom-left-radius: 4px; }
-.mx-sub-peek-icons { display: flex; gap: 7px; }
-.mx-sub-icon { position: relative; flex: none; display: flex; }
-.mx-sub-icon .mx-app-icon { box-shadow: 0 0 0 1.5px var(--card-ring); }
-.mx-sub-icon .mx-app-icon svg { width: 70%; height: 70%; }
-.mx-sub-mark { position: absolute; right: -4px; bottom: -4px; width: 10px; height: 10px; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 1.5px var(--card-ring); overflow: hidden; }
-.mx-sub-mark.is-working { border-radius: calc(3px * var(--rk)); background: var(--bg); color: var(--working); font-family: var(--mono); }
-.mx-sub-mark.is-working .mx-spin { font-size: 7px; }
-.mx-sub-mark.is-needs { right: -3px; bottom: -3px; width: 8px; height: 8px; border-radius: 2.5px; background: var(--warn); }
-.mx-sub-mark.is-done { border-radius: 3px; background: color-mix(in oklab, var(--ok) 24%, var(--bg)); }
-.mx-sub-list { position: relative; display: flex; flex-direction: column; margin: 0 0 4px; }
-.mx-sub-row { position: relative; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px 0 40px; border-radius: 7px; text-align: left; }
-.mx-sub-row:hover { background: rgba(var(--hl), calc(.05 * var(--hk))); }
-.mx-sub-row.is-open { background: rgba(var(--hl), calc(.07 * var(--hk))); }
-.mx-sub-guide { position: absolute; left: 19px; top: 0; bottom: 0; width: 1px; background: var(--line2); }
-.mx-sub-bend { position: absolute; left: 19px; top: 7px; width: 12px; height: 7px; border-left: 1px solid var(--line2); border-bottom: 1px solid var(--line2); border-bottom-left-radius: 5px; }
-.mx-sub-name { flex: 1; min-width: 0; font-size: 12px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* The Terminals section: pinned over the foot, with a share of the height at most, past which it scrolls on its own. */
-.mx-sidebar-terminals { flex: none; max-height: 34%; overflow-y: auto; padding: 4px 8px 6px; border-top: 1px solid var(--pane-line); }
 .mx-sidebar-foot { flex: none; padding: 10px 12px 12px; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--pane-line); }
 
 /* The rail of a narrow window: the starters, then a tile per session. */
@@ -183,17 +165,11 @@
 .mx-rail-session:hover { background: rgba(var(--hl), calc(.045 * var(--hk))); }
 .mx-rail-session.is-selected { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); }
 
-/* A chat that is still a draft: a grey box on its machine with three dots bouncing one after the other, like a wave. */
-/* A draft is a session row's twin: the same box and icon square, with bars where the name and project go. */
-.mx-draft { pointer-events: none; }
-.mx-draft-tile { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 8px; background: var(--c-track-bg, var(--raise)); }
-.mx-draft-line { display: block; height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--fg) 14%, transparent); }
-.mx-draft-line.is-name { width: 62%; margin-bottom: 7px; }
-.mx-draft-line.is-sub { width: 38%; height: 6px; opacity: .7; }
-@keyframes mx-draft-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
-.mx-draft-tile, .mx-draft-line { animation: mx-draft-pulse 1.4s ease-in-out infinite; }
-:root:has(.mx-app[data-motion="reduced"]) :is(.mx-draft-tile, .mx-draft-line) { animation: none; }
-@media (prefers-reduced-motion: reduce) { :is(.mx-draft-tile, .mx-draft-line) { animation: none; } }
+/* A chat that is still a draft: a session row's twin, named "New chat" in italics with a "draft" tag at its right. */
+.mx-draft { pointer-events: none; align-items: center; }
+.mx-draft .mx-row-text { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
+.mx-draft-name { font-style: italic; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-draft-tag { flex: none; font: 400 11px/15px var(--mono, ui-monospace, monospace); color: var(--dim); }
 
 /* While a machine updates: its percentage replaces the Update button, and a 2px line runs under the header. */
 .mx-machine-pct { flex: none; padding: 0 4px; font-size: 11px; color: var(--dim); }
@@ -209,3 +185,19 @@
 .mx-section-key { flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--dim); }
 .mx-row.is-offline { opacity: .5; }
 .mx-row.is-offline .mx-row-word, .mx-row.is-limited .mx-row-word { color: var(--muted); }
+
+/* Helpers under each session that has any running: a guide line and one short row each (`SubagentRows`). */
+.mx-sub-list { position: relative; display: flex; flex-direction: column; margin: 0 0 4px; }
+.mx-sub-guide { position: absolute; left: 19px; top: 0; bottom: 14px; width: 1px; background: var(--line2); }
+.mx-sub-row { position: relative; display: flex; align-items: center; gap: 7px; height: 26px; padding: 0 8px 0 36px; border-radius: 7px; text-align: left; color: var(--fg2); }
+.mx-sub-row:hover { background: rgba(var(--hl), calc(.05 * var(--hk))); }
+.mx-sub-row.is-open { background: rgba(var(--hl), calc(.07 * var(--hk))); color: var(--fg); }
+.mx-sub-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mx-sub-bend { position: absolute; left: 19px; top: 6px; width: 11px; height: 7px; border-left: 1px solid var(--line2); border-bottom: 1px solid var(--line2); border-bottom-left-radius: 5px; }
+.mx-sub-mark { flex: none; width: 12px; height: 12px; display: flex; align-items: center; justify-content: center; }
+.mx-sub-mark.is-working { color: var(--working); font-family: var(--mono); }
+.mx-sub-mark.is-working .mx-spin { font-size: 10px; line-height: 1; }
+.mx-sub-mark.is-needs::before { content: ''; width: 8px; height: 8px; border-radius: 2.5px; background: var(--warn); }
+.mx-sub-mark.is-stopped { color: var(--dim); }
+.mx-sub-name { flex: 1; min-width: 0; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-sub-row.is-more .mx-sub-name { color: var(--dim); }

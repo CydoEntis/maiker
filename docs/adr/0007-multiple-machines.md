@@ -46,7 +46,9 @@ People run agents on more than one computer and want one window over all of them
   attach only). Nothing changes on the remote side and `PROTOCOL_VERSION` does not move. What the
   remote supplies is data: cleaned before display, links confirmed, nothing fetched on its own, and
   the remote daemon alone decides its status (0003). Anything that reads a disk (Changes, Files,
-  Find, opening a path) stays local-only. See [the spec](../features/remote-chat/spec.md).
+  Find, opening a path) stays local-only. One change is asked of that machine: a new chat may start in a new
+  worktree, which its own daemon makes in its checkout (`Command::BranchWorktree`, the same checks as for a local
+  one), answering only the new folder. Its checkout's branch is never switched from here. See [the spec](../features/remote-chat/spec.md).
 - A Windows client may reach Linux and macOS remotes. A Windows remote is out.
 
 ## Alternatives considered

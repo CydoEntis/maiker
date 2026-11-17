@@ -45,15 +45,25 @@ export function describeWork(events: readonly ChatEvent[], root: string | null):
         if (event.role === 'user') continue
         return 'writing a reply'
       case 'todo':
-        // A checklist is not something the agent is doing.
+      case 'summary':
+      case 'note':
+        // A checklist, a summary, or what a command printed is not something the agent is doing.
+        continue
+      case 'reasoning':
+        // With no step running the line already says "thinking"; a thought has no phrase of its own.
         continue
     }
   }
   return THINKING
 }
 
-/** How many times the person said exactly this, so a message just sent can be told from the same words said before. */
+/**
+ * How many of the person's messages hold these words, so a message just sent can be told from the same words said
+ * before. Held, not equal: an agent can take two sends as one message (the first left unsent in its box), and the
+ * second is still said.
+ */
 export function countUserMessages(events: readonly ChatEvent[], text: string): number {
   const wanted = text.trim()
-  return events.filter((event) => event.kind === 'message' && event.role === 'user' && event.text.trim() === wanted).length
+  if (wanted === '') return 0
+  return events.filter((event) => event.kind === 'message' && event.role === 'user' && event.text.includes(wanted)).length
 }

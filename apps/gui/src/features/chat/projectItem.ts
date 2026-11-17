@@ -13,6 +13,8 @@ const FILE_CHANGE_ITEM = 'fileChange'
 // a history cached by an older daemon holds them by name only, so the fallback below stays.
 const CODEX_PLAN_ITEM = 'plan'
 const CODEX_HELPER_ITEM = 'collabAgentToolCall'
+// The daemon's name for an agent's own summary of the earlier conversation; the text is the output.
+const CONTEXT_SUMMARY_ITEM = 'contextSummary'
 
 const STATUS_BY_STATE: Record<HistoryEntry['state'], ItemStatus> = {
   Running: 'running',
@@ -76,9 +78,20 @@ function codexTool(tool: ToolContent, base: ItemFields): ChatEvent[] {
   }))
 }
 
+/**
+ * A slash command's output, as the daemon reads it from Claude's transcript: a command item named by the slash command
+ * and carrying no tool input, which every tool the agent itself runs (Bash included) has.
+ */
+function isSlashCommandOutput(tool: ToolContent): boolean {
+  return (tool.input === undefined || tool.input === null) && SLASH_COMMAND.test(tool.label ?? '')
+}
+
+const SLASH_COMMAND = /^\/[\w:-]+(\s|$)/
+
 function claudeTool(tool: ToolContent, base: ItemFields): ChatEvent[] {
   const label = tool.label ?? ''
   if (tool.kind !== COMMAND_ITEM) return [genericTool(tool, tool.kind, base)]
+  if (isSlashCommandOutput(tool)) return [{ ...base, kind: 'note', text: tool.output.trim() }]
   const name = claudeToolName(label)
   // No tool name in the label means the label is the Bash command.
   if (name === null) return [commandEvent(tool, label, base)]
@@ -111,7 +124,13 @@ export function projectItem(provider: ChatProvider, content: ItemContent, base: 
     return [{ ...base, kind: 'message', role: role === 'User' ? 'user' : 'agent', text }]
   }
   if ('Tool' in content) {
+    if (content.Tool.kind === CONTEXT_SUMMARY_ITEM) return [{ ...base, kind: 'summary', text: content.Tool.output }]
     return provider === 'claude' ? claudeTool(content.Tool, base) : codexTool(content.Tool, base)
+  }
+  if ('Reasoning' in content) {
+    const { text } = content.Reasoning
+    // A summary with nothing in it has nothing to open, so it gets no row.
+    return text.trim() === '' ? [] : [{ ...base, kind: 'reasoning', text }]
   }
   return unsupportedItem(provider, content.Unsupported.kind, base)
 }

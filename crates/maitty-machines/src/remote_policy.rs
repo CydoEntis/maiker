@@ -13,7 +13,9 @@
 use crate::def::MachineDef;
 use crate::remote_snapshot::{ITEMS_MAX, PANE_DIM_MAX, sanitize_snapshot, sanitize_terms};
 use maitty_shared::hidden::sanitize;
-use maitty_shared::protocol::{Reply, ServerMsg};
+use maitty_shared::github::{clone_address, is_login, is_time};
+use maitty_shared::protocol::{GitHubAnswer, GitHubRepoList, Reply, ServerMsg};
+use maitty_shared::tickets::TicketError;
 
 /// Most bytes of a remote clipboard write that are honoured.
 pub const CLIPBOARD_MAX_BYTES: usize = 64 * 1024;
@@ -85,6 +87,12 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::Reply(Reply::SavedConversations { .. }) => {
             Verdict::Ignore("saved conversations are listed for this computer's folders only")
         }
+        // Another person's words about a repository this window asked that machine for; cleaned
+        // in `vet` and only while the question is out.
+        ServerMsg::Reply(Reply::Tickets { .. } | Reply::TicketKeys { .. }) => Verdict::Answer,
+        ServerMsg::Reply(Reply::TicketWrite { .. }) => {
+            Verdict::Ignore("ticket writes are asked of this computer only")
+        }
         ServerMsg::Error(_) | ServerMsg::Reply(_) => Verdict::Answer,
         ServerMsg::AskRemoveWorktree { .. } => {
             Verdict::Ignore("a worktree prompt names a folder on this computer")
@@ -97,6 +105,9 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         }
         ServerMsg::ConversationChanged { .. } => {
             Verdict::Ignore("the chats read here are this computer's, not another machine's")
+        }
+        ServerMsg::TicketSetup(_) => {
+            Verdict::Ignore("the ticket setup opened here is for this computer's projects")
         }
     }
 }
@@ -178,8 +189,155 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
         ServerMsg::Reply(Reply::ClosedSessions(sessions)) => {
             ServerMsg::Reply(Reply::ClosedSessions(sanitize_closed(sessions)))
         }
+        ServerMsg::Reply(Reply::Cloned { tag, outcome }) => ServerMsg::Reply(Reply::Cloned {
+            tag,
+            outcome: match outcome {
+                Ok(path) => Ok(sanitize(&cut_bytes(path, PATH_MAX), false)),
+                Err(why) => Err(sanitize(&cut_bytes(why, NAME_MAX), false)),
+            },
+        }),
+        ServerMsg::Reply(Reply::GitDone { tag, outcome }) => {
+            let line = |text: String| sanitize(&cut_bytes(text, NAME_MAX), false);
+            ServerMsg::Reply(Reply::GitDone {
+                tag,
+                outcome: outcome.map(line).map_err(line),
+            })
+        }
+        ServerMsg::Reply(Reply::GitIdentities { tag, report }) => ServerMsg::Reply(Reply::GitIdentities {
+            tag,
+            report: sanitize_identities(report),
+        }),
+        ServerMsg::Reply(Reply::GitHubAccounts { tag, report }) => ServerMsg::Reply(Reply::GitHubAccounts {
+            tag,
+            report: sanitize_github(report),
+        }),
+        ServerMsg::Reply(Reply::GitHubRepos { tag, answer }) => ServerMsg::Reply(Reply::GitHubRepos {
+            tag,
+            answer: sanitize_answer(answer, sanitize_repos),
+        }),
+        ServerMsg::Reply(Reply::GitHubOwners { tag, answer }) => ServerMsg::Reply(Reply::GitHubOwners {
+            tag,
+            answer: sanitize_answer(answer, |mut owners: Vec<String>| {
+                owners.truncate(maitty_shared::protocol::GITHUB_OWNERS_MAX);
+                owners.retain(|owner| is_login(owner));
+                owners
+            }),
+        }),
+        ServerMsg::Reply(Reply::Tickets { tag, answer }) => ServerMsg::Reply(Reply::Tickets {
+            tag,
+            answer: match answer {
+                Ok(reply) => reply.cleaned().ok_or_else(|| TicketError::Invalid("that machine sent a ticket that is not one".into())),
+                Err(error) => Err(error.cleaned()),
+            },
+        }),
+        // Only whether a key is set and where it points; the words are cleaned, the list capped.
+        ServerMsg::Reply(Reply::TicketKeys { tag, answer }) => ServerMsg::Reply(Reply::TicketKeys {
+            tag,
+            answer: answer
+                .map(|states| states.into_iter().take(maitty_shared::tickets::TicketProvider::ALL.len()).map(|state| state.cleaned()).collect())
+                .map_err(|error| error.cleaned()),
+        }),
+        // A repository file's notes are that repository's words.
+        ServerMsg::Reply(Reply::TicketLinks { tag, answer }) => ServerMsg::Reply(Reply::TicketLinks {
+            tag,
+            answer: answer
+                .map(|links| maitty_shared::ticket_links::TicketLinks { repo_file: links.repo_file.map(|file| file.cleaned()), ..links })
+                .map_err(|error| error.cleaned()),
+        }),
         other => other,
     })
+}
+
+/// The answer to "who commits on that machine" made safe, or why it is refused: only that report
+/// passes, cleaned as `vet` cleans it.
+pub fn vet_identities_reply(reply: Reply) -> Result<Reply, String> {
+    match reply {
+        Reply::GitIdentities { tag, report } => Ok(Reply::GitIdentities { tag, report: sanitize_identities(report) }),
+        _ => Err("it is not an answer about who commits there".into()),
+    }
+}
+
+/// The answer about a folder's rule made safe, or why it is refused: only that answer passes, with
+/// no more files and lines than a rule has and each of them one clean line.
+pub fn vet_rule_reply(reply: Reply) -> Result<Reply, String> {
+    use maitty_shared::protocol::{GIT_IDENTITY_TEXT_MAX_CHARS, GIT_RULE_FILES_MAX, GIT_RULE_LINES_MAX};
+    let Reply::GitIdentityRuleDone { tag, outcome } = reply else {
+        return Err("it is not an answer about a folder's rule".into());
+    };
+    let line = |text: String| sanitize(&text, false).chars().take(GIT_IDENTITY_TEXT_MAX_CHARS * 2).collect::<String>();
+    let outcome = outcome
+        .map(|mut files| {
+            files.truncate(GIT_RULE_FILES_MAX);
+            for written in &mut files {
+                written.file = line(std::mem::take(&mut written.file));
+                written.lines.truncate(GIT_RULE_LINES_MAX);
+                written.lines = std::mem::take(&mut written.lines).into_iter().map(line).collect();
+            }
+            files
+        })
+        .map_err(line);
+    Ok(Reply::GitIdentityRuleDone { tag, outcome })
+}
+
+/// What another machine says about who commits there: no more rules than a report carries, every
+/// name, email and folder one clean line of a report's length, and a rule's identity kept only
+/// with a login GitHub could have given out.
+fn sanitize_identities(mut report: maitty_shared::protocol::GitIdentityReport) -> maitty_shared::protocol::GitIdentityReport {
+    use maitty_shared::protocol::{GIT_IDENTITY_RULES_MAX, GIT_IDENTITY_TEXT_MAX_CHARS};
+    let line = |text: String| sanitize(&text, false).chars().take(GIT_IDENTITY_TEXT_MAX_CHARS).collect::<String>();
+    report.name = report.name.map(line);
+    report.email = report.email.map(line);
+    report.problem = report.problem.map(line);
+    report.rules.truncate(GIT_IDENTITY_RULES_MAX);
+    for rule in &mut report.rules {
+        rule.folder = line(std::mem::take(&mut rule.folder));
+        rule.identity = rule.identity.take().filter(|identity| is_login(&identity.login)).map(|mut identity| {
+            identity.name = line(std::mem::take(&mut identity.name));
+            identity.email = line(std::mem::take(&mut identity.email));
+            identity
+        });
+    }
+    report
+}
+
+/// A GitHub report from another machine: no more accounts than a report carries, every login one
+/// that GitHub could have given out, and the problem one clean line.
+fn sanitize_github(mut report: maitty_shared::protocol::GitHubReport) -> maitty_shared::protocol::GitHubReport {
+    report.accounts.truncate(maitty_shared::protocol::GITHUB_ACCOUNTS_MAX);
+    report.accounts.retain(|account| is_login(&account.login));
+    report.problem = report.problem.map(|why| sanitize(&cut_bytes(why, NAME_MAX), false));
+    report
+}
+
+/// A GitHub answer from another machine: its list cleaned by `clean`, or its reason one clean line.
+fn sanitize_answer<T>(answer: GitHubAnswer<T>, clean: impl FnOnce(T) -> T) -> GitHubAnswer<T> {
+    match answer {
+        GitHubAnswer::Listed(list) => GitHubAnswer::Listed(clean(list)),
+        GitHubAnswer::Failed(why) => GitHubAnswer::Failed(sanitize(&cut_bytes(why, NAME_MAX), false)),
+        other => other,
+    }
+}
+
+/// Repositories from another machine: no more than an answer carries, each named as GitHub names
+/// one, its clone address built here from that name and never taken from the machine, and its
+/// description and time what those can be.
+fn sanitize_repos(mut list: GitHubRepoList) -> GitHubRepoList {
+    list.repos.truncate(maitty_shared::protocol::GITHUB_REPOS_MAX);
+    list.repos.retain_mut(|repo| {
+        let Some(address) = clone_address(&repo.name) else {
+            return false;
+        };
+        repo.clone_url = address;
+        repo.description = sanitize(&repo.description, false)
+            .chars()
+            .take(maitty_shared::protocol::GITHUB_DESCRIPTION_MAX_CHARS)
+            .collect();
+        if !is_time(&repo.pushed_at) {
+            repo.pushed_at.clear();
+        }
+        true
+    });
+    list
 }
 
 /// A folder listing from another machine: every name and branch one clean line, no more entries
@@ -290,6 +448,59 @@ mod tests {
     }
 
     #[test]
+    fn a_queued_follow_up_from_another_machine_keeps_its_lines() {
+        use maitty_shared::protocol::TermInfo;
+        let pane: TermInfo = serde_json::from_value(serde_json::json!({
+            "id": 3, "cols": 80, "rows": 24, "title": "", "process": "", "agent": "claude",
+            "status": "Working", "cwd": "/code", "summary": "", "name": "", "model": "", "said": "",
+            "branch": null, "linked": false, "subagents": [], "root": null, "top": null,
+            "since": 0, "asleep": false, "win32_input": false,
+            "queued": ["first line\n\nAttached files:\n- a.png\u{1b}[2J"],
+        }))
+        .expect("a pane");
+        let Some(ServerMsg::TermsChanged { changed, .. }) = vet(
+            &nothing_on(),
+            false,
+            "box",
+            ServerMsg::TermsChanged { changed: vec![pane], removed: Vec::new(), reasons: Default::default(), revision: 0 },
+        ) else {
+            panic!("a pane delta is applied");
+        };
+        assert_eq!(changed[0].queued, ["first line\n\nAttached files:\n- a.png[2J"]);
+        assert!(!changed[0].own_turn_over, "a daemon that predates it never says the turn is over");
+    }
+
+    #[test]
+    fn a_remote_step_offers_only_a_few_short_answers() {
+        use maitty_shared::protocol::TermInfo;
+        use maitty_shared::workflow::{CHOICE_MAX_CHARS, CHOICES_MAX};
+        let step = |state: &str| serde_json::json!({
+            "name": state, "state": state,
+            "choices": ["Approve", "x".repeat(CHOICE_MAX_CHARS + 9), "c", "d", "e", "f"],
+        });
+        let pane: TermInfo = serde_json::from_value(serde_json::json!({
+            "id": 3, "cols": 80, "rows": 24, "title": "", "process": "", "agent": "claude",
+            "status": "Working", "cwd": "/code", "summary": "", "name": "", "model": "", "said": "",
+            "branch": null, "linked": false, "subagents": [], "root": null, "top": null,
+            "since": 0, "asleep": false, "win32_input": false,
+            "workflows": [{ "workflow": "factory", "run": "1", "steps": [step("needs_you"), step("passed")] }],
+        }))
+        .expect("a pane");
+        let Some(ServerMsg::TermsChanged { changed, .. }) = vet(
+            &nothing_on(),
+            false,
+            "box",
+            ServerMsg::TermsChanged { changed: vec![pane], removed: Vec::new(), reasons: Default::default(), revision: 0 },
+        ) else {
+            panic!("a pane delta is applied");
+        };
+        let steps = &changed[0].workflows[0].steps;
+        assert_eq!(steps[0].choices.len(), CHOICES_MAX);
+        assert_eq!(steps[0].choices[1].chars().count(), CHOICE_MAX_CHARS);
+        assert!(steps[1].choices.is_empty(), "a step that does not wait on you offers nothing");
+    }
+
+    #[test]
     fn the_question_another_machines_agent_asks_is_cleaned_before_it_is_shown() {
         use maitty_shared::protocol::TermInfo;
         let pane: TermInfo = serde_json::from_value(serde_json::json!({
@@ -381,6 +592,189 @@ mod tests {
                 .is_none(),
             "nor is one nobody asked for"
         );
+    }
+
+    #[test]
+    fn what_another_machine_says_of_a_clone_is_one_clean_line() {
+        for outcome in [Ok("Pushed ma\u{1b}[31min\nx".to_string()), Err("fatal: no\u{7}\nway".to_string())] {
+            let Some(ServerMsg::Reply(Reply::GitDone { tag: 6, outcome })) =
+                vet(&nothing_on(), true, "box", ServerMsg::Reply(Reply::GitDone { tag: 6, outcome }))
+            else {
+                panic!("how a fetch, pull or push ended is let through");
+            };
+            let line = outcome.unwrap_or_else(|why| why);
+            assert!(!line.contains(['\u{1b}', '\u{7}', '\n']), "{line:?}");
+        }
+        {
+            use maitty_shared::protocol::{GIT_IDENTITY_RULES_MAX, GitIdentity, GitIdentityReport, GitIdentityRule};
+            let rule = |login: &str| GitIdentityRule {
+                folder: "/code/a\u{1b}[31m\nb".into(),
+                identity: Some(GitIdentity { name: "A\u{7}".into(), email: "a@example.invalid".into(), login: login.into() }),
+            };
+            let mut rules = vec![rule("login-a"), rule("<b>not a login</b>")];
+            rules.extend(std::iter::repeat_with(|| rule("login-a")).take(GIT_IDENTITY_RULES_MAX));
+            let report = GitIdentityReport { installed: true, name: Some("Casey\nExample".into()), email: None, rules, problem: None };
+            let Some(ServerMsg::Reply(Reply::GitIdentities { tag: 8, report })) =
+                vet(&nothing_on(), true, "box", ServerMsg::Reply(Reply::GitIdentities { tag: 8, report }))
+            else {
+                panic!("who commits on a machine is let through");
+            };
+            assert_eq!(report.name.as_deref(), Some("Casey Example"));
+            assert_eq!(report.rules.len(), GIT_IDENTITY_RULES_MAX);
+            assert_eq!(report.rules[0].folder, "/code/a[31m b");
+            assert_eq!(report.rules[0].identity.as_ref().map(|identity| identity.name.as_str()), Some("A"));
+            assert_eq!(report.rules[1].identity, None, "a login that is not one takes the identity with it");
+            let asked = Reply::GitIdentities { tag: 2, report: GitIdentityReport { name: Some("A\u{1b}[0m".into()), ..GitIdentityReport::default() } };
+            assert!(matches!(vet_identities_reply(asked), Ok(Reply::GitIdentities { report, .. }) if report.name.as_deref() == Some("A[0m")));
+            assert!(vet_identities_reply(Reply::Ok).is_err());
+
+            use maitty_shared::protocol::GitConfigWrite;
+            let lines = vec![GitConfigWrite { file: "/x\n.gitconfig".into(), lines: vec!["user.name = A\u{1b}[31m".into(); 40] }; 9];
+            let Ok(Reply::GitIdentityRuleDone { outcome: Ok(files), .. }) = vet_rule_reply(Reply::GitIdentityRuleDone { tag: 1, outcome: Ok(lines) }) else {
+                panic!("an answer about a rule passes");
+            };
+            assert_eq!((files.len(), files[0].lines.len()), (4, 16));
+            assert_eq!((files[0].file.as_str(), files[0].lines[0].as_str()), ("/x .gitconfig", "user.name = A[31m"));
+            assert!(vet_rule_reply(Reply::Ok).is_err());
+            assert!(vet_identities_reply(Reply::Text("the global config".into())).is_err());
+        }
+        let cloned = |outcome| ServerMsg::Reply(Reply::Cloned { tag: 4, outcome });
+        let Some(ServerMsg::Reply(Reply::Cloned { tag: 4, outcome: Ok(path) })) =
+            vet(&nothing_on(), true, "box", cloned(Ok("/home/dev/wid\u{1b}[31mgets\nx".into())))
+        else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert!(!path.contains(['\u{1b}', '\n']), "{path:?}");
+        let Some(ServerMsg::Reply(Reply::Cloned { outcome: Err(why), .. })) =
+            vet(&nothing_on(), true, "box", cloned(Err("fatal: no\u{7}\nsecond line".repeat(100))))
+        else {
+            panic!("a refusal that was asked for is kept");
+        };
+        assert!(!why.contains(['\u{7}', '\n']) && why.len() <= NAME_MAX, "{why:?}");
+        assert!(vet(&nothing_on(), false, "box", cloned(Ok("/x".into()))).is_none());
+    }
+
+    #[test]
+    fn a_github_report_from_another_machine_keeps_only_real_logins_and_one_clean_line() {
+        use maitty_shared::protocol::{GitHubAccount, GitHubReport};
+        let account = |login: &str| GitHubAccount { login: login.into(), active: false };
+        let report = GitHubReport {
+            installed: true,
+            accounts: vec![account("me"), account("<img src=x>"), account(""), account(&"a".repeat(40))],
+            problem: Some("gh said\u{1b}[31m no\nsecond".into()),
+        };
+        let Some(ServerMsg::Reply(Reply::GitHubAccounts { tag: 6, report })) =
+            vet(&nothing_on(), true, "box", ServerMsg::Reply(Reply::GitHubAccounts { tag: 6, report }))
+        else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(report.accounts, vec![account("me")]);
+        assert!(report.problem.is_some_and(|why| !why.contains(['\u{1b}', '\n'])));
+    }
+
+    #[test]
+    fn repositories_from_another_machine_are_named_cleaned_and_given_an_address_built_here() {
+        use maitty_shared::protocol::{GITHUB_DESCRIPTION_MAX_CHARS, GitHubAnswer, GitHubRepo, GitHubRepoList};
+        let repo = |name: &str| GitHubRepo {
+            name: name.into(),
+            description: format!("a\u{1b}[31mb\n{}", "d".repeat(400)),
+            private: true,
+            pushed_at: "<img>".into(),
+            clone_url: "ext::sh -c evil".into(),
+        };
+        let answer = GitHubAnswer::Listed(GitHubRepoList { repos: vec![repo("me/widgets"), repo("me/--upload-pack=x"), repo("../../etc")], more: true });
+        let Some(ServerMsg::Reply(Reply::GitHubRepos { tag: 4, answer: GitHubAnswer::Listed(list) })) =
+            vet(&nothing_on(), true, "box", ServerMsg::Reply(Reply::GitHubRepos { tag: 4, answer }))
+        else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert!(list.more);
+        let [only] = &list.repos[..] else { panic!("{:?}", list.repos) };
+        assert_eq!((only.name.as_str(), only.clone_url.as_str(), only.pushed_at.as_str()), ("me/widgets", "https://github.com/me/widgets.git", ""));
+        assert_eq!(only.description.chars().count(), GITHUB_DESCRIPTION_MAX_CHARS);
+        assert!(!only.description.contains(['\u{1b}', '\n']));
+
+        let failed = ServerMsg::Reply(Reply::GitHubRepos { tag: 5, answer: GitHubAnswer::Failed("no\u{1b}[0m\nway".into()) });
+        let Some(ServerMsg::Reply(Reply::GitHubRepos { answer: GitHubAnswer::Failed(why), .. })) = vet(&nothing_on(), true, "box", failed) else {
+            panic!("a reason is kept");
+        };
+        assert!(!why.contains(['\u{1b}', '\n']));
+    }
+
+    #[test]
+    fn tickets_from_another_machine_are_answers_and_are_cleaned_and_capped() {
+        use maitty_shared::tickets::{
+            StateCategory, TICKET_BODY_MAX_CHARS, TICKET_COMMENTS_MAX, Ticket, TicketComment, TicketState, TicketSummary, TicketsReply,
+        };
+        let summary = |id: &str| TicketSummary {
+            id: id.into(),
+            title: "t\u{1b}[31m\u{202e}x\n".into(),
+            state: TicketState { name: "Open".into(), category: StateCategory::Open },
+            labels: Vec::new(),
+            assignee: None,
+            url: "javascript:alert(1)".into(),
+            groups: Vec::new(),
+            updated_at: "<b>".into(),
+        };
+        let ticket = |id: &str| Ticket {
+            summary: summary(id),
+            body: format!("a\u{1b}[0m\u{200b}b{}", "z".repeat(TICKET_BODY_MAX_CHARS)),
+            comments: (0..TICKET_COMMENTS_MAX + 5).map(|_| TicketComment { author: "a".into(), body: "b".into(), created_at: String::new() }).collect(),
+            comments_more: false,
+            links: vec!["javascript:x".into()],
+            blocked_by: Vec::new(),
+        };
+        let reply = |tag, answer| ServerMsg::Reply(Reply::Tickets { tag, answer });
+
+        // It is an answer: kept while a question is out, dropped when none is.
+        let sent = reply(3, Ok(TicketsReply::Ticket(Box::new(ticket("github:o/r#1")))));
+        assert_eq!(allow(&nothing_on(), &sent), Verdict::Answer);
+        assert!(vet(&nothing_on(), false, "box", sent.clone()).is_none());
+        let Some(ServerMsg::Reply(Reply::Tickets { tag: 3, answer: Ok(TicketsReply::Ticket(clean)) })) = vet(&nothing_on(), true, "box", sent) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(clean.summary.title, "t[31mx");
+        assert_eq!((clean.summary.url.as_str(), clean.summary.updated_at.as_str()), ("", ""));
+        assert!(clean.body.starts_with("a[0mb") && clean.body.chars().count() == TICKET_BODY_MAX_CHARS);
+        assert_eq!((clean.comments.len(), clean.comments_more, clean.links.len()), (TICKET_COMMENTS_MAX, true, 0));
+
+        // A ticket with an id that is not one is refused, and an error is one clean line.
+        let forged = reply(4, Ok(TicketsReply::Ticket(Box::new(ticket("x y")))));
+        let Some(ServerMsg::Reply(Reply::Tickets { answer: Err(TicketError::Invalid(_)), .. })) = vet(&nothing_on(), true, "box", forged) else {
+            panic!("a ticket without an id is refused");
+        };
+        let failed = reply(5, Err(TicketError::Unreachable("no\u{1b}[0m\nway".into())));
+        let Some(ServerMsg::Reply(Reply::Tickets { answer: Err(TicketError::Unreachable(why)), .. })) = vet(&nothing_on(), true, "box", failed) else {
+            panic!("a reason is kept");
+        };
+        assert!(!why.contains(['\u{1b}', '\n']));
+    }
+
+    #[test]
+    fn where_another_machines_keys_stand_is_cleaned_and_capped() {
+        use maitty_shared::tickets::{TicketKeyState, TicketProvider};
+        let state = |provider| TicketKeyState { provider, set: true, address: "https://p\u{1b}[0m.example\u{202e}".into(), workspace: "w\n".into(), stored_in: maitty_shared::tickets::KeyStorage::Keychain };
+        let sent = ServerMsg::Reply(Reply::TicketKeys { tag: 2, answer: Ok(vec![state(TicketProvider::Plane), state(TicketProvider::Linear), state(TicketProvider::Plane)]) });
+        assert_eq!(allow(&nothing_on(), &sent), Verdict::Answer);
+        assert!(vet(&nothing_on(), false, "box", sent.clone()).is_none());
+        let Some(ServerMsg::Reply(Reply::TicketKeys { answer: Ok(states), .. })) = vet(&nothing_on(), true, "box", sent) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(states.len(), TicketProvider::ALL.len());
+        assert_eq!((states[0].address.as_str(), states[0].workspace.as_str()), ("https://p[0m.example", "w"));
+        assert_eq!(states[0].stored_in, maitty_shared::tickets::KeyStorage::Keychain, "where the key is kept comes through");
+    }
+
+    #[test]
+    fn owners_from_another_machine_are_only_logins() {
+        use maitty_shared::protocol::GitHubAnswer;
+        let answer = GitHubAnswer::Listed(vec!["me".to_owned(), "<b>".to_owned(), "my-org".to_owned(), String::new()]);
+        let Some(ServerMsg::Reply(Reply::GitHubOwners { answer: GitHubAnswer::Listed(owners), .. })) =
+            vet(&nothing_on(), true, "box", ServerMsg::Reply(Reply::GitHubOwners { tag: 3, answer }))
+        else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(owners, ["me", "my-org"]);
     }
 
     #[test]
@@ -478,6 +872,12 @@ mod tests {
                 id: maitty_shared::conversation::ConversationId(1),
                 generation: 1,
             },
+            ServerMsg::TicketSetup(maitty_shared::ticket_links::TicketSetupAsk {
+                term: 1,
+                folder: "/srv/app".into(),
+                source: None,
+                link: String::new(),
+            }),
             ServerMsg::Bye,
         ]
     }
@@ -500,6 +900,7 @@ mod tests {
             ServerMsg::SettingsChanged(_) => "SettingsChanged",
             ServerMsg::Raise => "Raise",
             ServerMsg::ConversationChanged { .. } => "ConversationChanged",
+            ServerMsg::TicketSetup(_) => "TicketSetup",
             ServerMsg::Bye => "Bye",
         }
     }
@@ -546,7 +947,8 @@ mod tests {
                 "AutoWorkspace",
                 "SettingsChanged",
                 "Raise",
-                "ConversationChanged"
+                "ConversationChanged",
+                "TicketSetup"
             ]
         );
     }

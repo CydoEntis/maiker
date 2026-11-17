@@ -116,6 +116,7 @@ export function PreviewWorkspace() {
                   selectedId={selected.id}
                   onSelect={selectInCurrentView}
                   onClose={closeConversation}
+                  onRename={renameConversation}
                   onNewTab={() => {
                     openNewSession()
                   }}
@@ -155,7 +156,7 @@ export function PreviewWorkspace() {
                       before sending or approving.
                     </span>
                     <Button
-                      variant="outline"
+                      variant="soft"
                       size="sm"
                       onClick={() => {
                         void sessionsQuery.refetch()
@@ -444,7 +445,7 @@ export function PreviewWorkspace() {
               >
                 Cancel
               </Button>
-              <Button variant="destructive" onClick={confirmEndSession}>
+              <Button variant="danger" onClick={confirmEndSession}>
                 End session
               </Button>
             </DialogFooter>

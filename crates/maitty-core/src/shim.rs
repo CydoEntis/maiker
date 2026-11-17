@@ -416,7 +416,6 @@ mod tests {
     #[cfg(unix)]
     mod run {
         use super::*;
-        use std::os::unix::fs::PermissionsExt;
         use std::process::{Command, Output, Stdio};
 
         struct Rig {
@@ -429,8 +428,7 @@ mod tests {
         }
 
         fn script(path: &Path, body: &str) {
-            std::fs::write(path, format!("#!/bin/sh\n{body}\n")).unwrap();
-            std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+            crate::test_support::write_program(path, &format!("#!/bin/sh\n{body}\n"));
         }
 
         impl Rig {

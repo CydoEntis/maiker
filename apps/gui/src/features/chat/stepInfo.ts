@@ -64,6 +64,9 @@ export function describeStep(event: ChatEvent, root: string | null): string | nu
     case 'subagent':
       return event.title ?? 'A helper agent'
     case 'message':
+    case 'note':
+    case 'reasoning':
+    case 'summary':
     case 'approval':
     case 'turn':
       return null
@@ -88,9 +91,19 @@ export function agentsSummary(agents: readonly SubagentEvent[]): string {
  * reports no exit code is said to have reported none, so a finished command never reads as one that passed.
  */
 export function commandMeta(event: CommandEvent): string {
+  const took = commandTook(event)
+  return took === null ? commandEnded(event) : `${commandEnded(event)} · ${took}`
+}
+
+/** How a finished command ended, in words: its exit code where the history kept one. */
+export function commandEnded(event: CommandEvent): string {
+  return foundNothing(event) ? 'no matches' : event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : 'exit code not reported'
+}
+
+/** How long a finished command took, or null where the history kept no time. */
+export function commandTook(event: CommandEvent): string | null {
   const took = elapsedMs(event, event.durationMs, 0)
-  const ended = foundNothing(event) ? 'no matches' : event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : 'exit code not reported'
-  return took === null ? ended : `${ended} · ${tookText(took)}`
+  return took === null ? null : tookText(took)
 }
 
 /** Whether a request's step id names this event. A Codex patch of several files is one item drawn as `id#0`, `id#1`. */

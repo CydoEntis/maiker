@@ -78,7 +78,7 @@ const optionNames = () => screen.getAllByRole('option').map((option) => option.g
 describe('browsing a machine in the Get a file dialog', () => {
   it('shows a loading state, then the session folder with its folders first', async () => {
     browsing()
-    expect(screen.getByText('Loading…')).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Reading the folder' })).toBeTruthy()
     await screen.findByRole('option', { name: 'docs, folder' })
     expect(optionNames()).toEqual(['docs, folder', 'src, folder', 'Makefile', 'README.md'])
     expect(screen.getByRole('listbox', { name: 'Files in /srv/app' })).toBeTruthy()
@@ -174,6 +174,6 @@ describe('browsing a machine in the Get a file dialog', () => {
     const user = userEvent.setup()
     browsing({ index: vi.fn(() => new Promise<RemoteIndex>(() => undefined)) })
     await user.type(screen.getByRole('textbox', { name: 'Search in /srv/app' }), 'a')
-    expect(screen.getByText('Reading the folder to search it…')).toBeTruthy()
+    expect(screen.getByRole('status', { name: 'Reading the folder to search it' })).toBeTruthy()
   })
 })

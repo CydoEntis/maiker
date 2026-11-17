@@ -12,7 +12,6 @@ doctest = false
 [dependencies]
 maitty-shared = { path = "../maitty-shared" }
 maitty-agent-detection = { path = "../maitty-agent-detection" }
-maitty-agent-integrations = { path = "../maitty-agent-integrations" }
 maitty-ipc-transport = { path = "../maitty-ipc-transport" }
 maitty-machines = { path = "../maitty-machines" }
 maitty-settings = { path = "../maitty-settings" }
@@ -26,6 +25,7 @@ sha2 = "0.10"
 futures-util = { version = "0.3", features = ["sink"] }
 ignore = "0.4"
 interprocess = { version = "2", features = ["tokio"] }
+keyring-core = "1.0.1"
 portable-pty = "0.9"
 regex = "1"
 rmp-serde = "1"
@@ -52,3 +52,17 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# The system keychain the ticket keys are kept in (`daemon/ticket_keys.rs`): one native store per platform.
+[target.'cfg(windows)'.dependencies.windows-native-keyring-store]
+version = "1.1.0"
+default-features = false
+
+[target.'cfg(target_os = "macos")'.dependencies.apple-native-keyring-store]
+version = "1.0.2"
+features = ["keychain"]
+
+# Secret Service over pure-Rust D-Bus, so the static musl build links no C library.
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies.zbus-secret-service-keyring-store]
+version = "1.0.1"
+features = ["rt-async-io-crypto-rust"]

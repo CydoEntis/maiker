@@ -3,7 +3,8 @@ import { terminalOf } from '@/api/daemon'
 import type { Conversation, PermissionAsk, TerminalDetails } from '@/data/preview'
 import type { Check } from '@/features/inspect/checks'
 import type { PullRequest } from './pullRequest'
-import { listedSubagents, toSubagentView, type SubagentView } from './subagents'
+import { listedSubagents, runningSubagents, toSubagentView, type SubagentView } from './subagents'
+import { toWorkflowView, type WorkflowView } from './workflows'
 
 /** The status vocabulary of the desktop app. Each one has its own shape, never colour alone. */
 export type SessionStatus = 'working' | 'needs' | 'limited' | 'done' | 'error' | 'idle' | 'unknown'
@@ -61,6 +62,8 @@ export type SessionView = {
   statusWhy: string
   /** When the daemon tells it to continue after its plan limit, in milliseconds, as the daemon last listed it; null when it was not limited. */
   resumeAt: number | null
+  /** When a snooze ends, in milliseconds; null when it is awake or the time has passed (`TermInfo.snoozed_until`). */
+  snoozedUntil: number | null
   timeline: TerminalDetails['timeline']
   usage: TerminalDetails['usage']
   /** The plan limits of its agent, as last reported; empty when it reported none. */
@@ -77,6 +80,13 @@ export type SessionView = {
   helperAsk: readonly string[]
   /** The agent's subagents, in the order its runtime reported them. */
   subagents: SubagentView[]
+  /**
+   * How many helpers keep the session working after the agent's own turn ended: it is at its prompt and takes a
+   * message meanwhile. Zero while the agent itself works, or when nothing runs.
+   */
+  helpersOnly: number
+  /** The workflow runs the session reported, newest first (ADR 0010). */
+  workflows: readonly WorkflowView[]
   status: SessionStatus
   /** The status before the daemon disconnected. */
   lastKnownStatus: SessionStatus | null
@@ -149,12 +159,24 @@ function heldUntil(conversation: Conversation, now: number): number | null {
   return resumeAt > now ? resumeAt : null
 }
 
+/** When the daemon lets a snoozed session back, in milliseconds; null once the time has passed. The daemon owns the snooze and ends it; the window only reads it. */
+function snoozedUntilOf(conversation: Conversation, now: number): number | null {
+  const until = (conversation.details?.snoozedUntil ?? 0) * MS_PER_SECOND
+  return until > now ? until : null
+}
+
 /**
  * The daemon's status for a session, with one held by its plan limit shown as limited and a failed
  * last command shown as exited. The daemon sets `exit` (a non-zero code from the shell) and clears it
  * when work starts again, so the window only displays it; a session that is working or needs you
  * shows that instead.
  */
+/** The helpers still running once the agent's own turn ended (`TermInfo.own_turn_over`); zero otherwise. */
+export function helpersOnly(conversation: Conversation, status: SessionStatus): number {
+  if (status !== 'working' || conversation.details?.ownTurnOver !== true) return 0
+  return runningSubagents((conversation.details.subagents ?? []).map(toSubagentView)).length
+}
+
 function statusOf(conversation: Conversation, held: boolean): SessionStatus {
   const status = STATUS_FROM_CONVERSATION[conversation.status]
   const failed = conversation.details?.exit != null
@@ -186,11 +208,15 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
  * `limited until Thu 14:05` when that is not today, as a weekly limit resets days away.
  */
 export function limitedWord(resumeAt: number | null, now: number): string {
-  if (resumeAt === null) return STATUS_WORD.limited
-  const at = new Date(resumeAt)
-  const clock = [at.getHours(), at.getMinutes()].map((part) => String(part).padStart(CLOCK_DIGITS, '0')).join(':')
-  const today = at.toDateString() === new Date(now).toDateString()
-  return `${STATUS_WORD.limited} until ${today ? '' : `${WEEKDAYS[at.getDay()] ?? ''} `}${clock}`
+  return resumeAt === null ? STATUS_WORD.limited : `${STATUS_WORD.limited} ${untilWord(resumeAt, now)}`
+}
+
+/** `until 14:05`, or `until Thu 14:05` when that is not today, in this computer's time. */
+export function untilWord(at: number, now: number): string {
+  const time = new Date(at)
+  const clock = [time.getHours(), time.getMinutes()].map((part) => String(part).padStart(CLOCK_DIGITS, '0')).join(':')
+  const today = time.toDateString() === new Date(now).toDateString()
+  return `until ${today ? '' : `${WEEKDAYS[time.getDay()] ?? ''} `}${clock}`
 }
 
 function trimTrailingSeparator(path: string): string {
@@ -220,13 +246,18 @@ export function tildePath(path: string, home: string): string {
   return clean
 }
 
+/** A detached checkout is named by a short commit (a rebase or a bisect passing through), never a branch. */
+const COMMIT_NAME = /^[0-9a-f]{7,40}$/
+
 /**
  * A row's repository, branch and title once a session has shown them, kept while it stays in the same
- * folder. A `git pull` or rebase makes the branch blank or switch for a moment, and a row that follows
- * it jumps; the labels change only when the session moves to another folder.
+ * folder. A `git pull` or rebase makes the branch blank or a bare commit for a moment, and a row that
+ * follows it jumps; a switch to another branch is real and is followed at once (two chats must not
+ * look free to take the same branch).
  */
 export function keepLabels(view: SessionView, before: SessionView | undefined): SessionView {
   if (before === undefined || before.repoName === null || before.branch === null || before.cwd !== view.cwd) return view
+  if (view.branch !== null && !COMMIT_NAME.test(view.branch)) return view
   return { ...view, repoName: before.repoName, branch: before.branch, title: before.title, promptPath: before.promptPath }
 }
 
@@ -276,6 +307,7 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     statusSince: (conversation.details?.since ?? 0) > 0 ? (conversation.details?.since ?? 0) * MS_PER_SECOND : null,
     statusWhy: conversation.details?.statusWhy ?? '',
     resumeAt,
+    snoozedUntil: snoozedUntilOf(conversation, now),
     timeline: conversation.details?.timeline ?? [],
     usage: conversation.details?.usage ?? { context: null, cost: null, tokens: null },
     limits: conversation.details?.limits ?? [],
@@ -286,6 +318,8 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     helperAsk: conversation.details?.helperAsk ?? [],
     // Which helpers a row lists (`listedSubagents`): not one that finished, nor one that stopped once the turn is over.
     subagents: listedSubagents((conversation.details?.subagents ?? []).map(toSubagentView), status === 'working'),
+    helpersOnly: helpersOnly(conversation, status),
+    workflows: (conversation.details?.workflows ?? []).map(toWorkflowView),
     status,
     lastKnownStatus: lastKnown,
     conversation,

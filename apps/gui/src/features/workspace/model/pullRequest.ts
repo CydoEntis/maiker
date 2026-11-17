@@ -8,6 +8,8 @@ export type PullRequest = {
   checks: { passed: number; pending: number; failed: string[] }
   review: 'None' | 'Required' | 'Approved' | 'ChangesRequested'
   conflicting: boolean
+  /** Commits on the branch after the merged pull request: work going on after its merge. */
+  commitsAfterMerge: number
 }
 
 /** How a pull request is going: `bad` needs the person, `waiting` is on checks, `good` can go. */
@@ -18,7 +20,8 @@ export function pullRequestHeadline(pr: PullRequest): string {
   const fails = pr.checks.failed.length
   const open = pr.state === 'Open'
   let what = ''
-  if (pr.state === 'Merged') what = 'merged'
+  const after = pr.commitsAfterMerge
+  if (pr.state === 'Merged') what = after === 0 ? 'merged' : `merged · ${String(after)} new commit${after === 1 ? '' : 's'}`
   else if (pr.state === 'Closed') what = 'closed'
   else if (fails > 0) what = `${String(fails)} failing`
   else if (pr.conflicting) what = 'conflict'
@@ -32,7 +35,7 @@ export function pullRequestHeadline(pr: PullRequest): string {
 
 /** The tone of the headline (`PrInfo::tone`). */
 export function pullRequestTone(pr: PullRequest): PullRequestTone {
-  if (pr.state === 'Merged') return 'good'
+  if (pr.state === 'Merged') return pr.commitsAfterMerge > 0 ? 'waiting' : 'good'
   if (pr.state === 'Closed') return 'bad'
   if (pr.checks.failed.length > 0 || pr.conflicting || pr.review === 'ChangesRequested') return 'bad'
   if (pr.checks.pending > 0) return 'waiting'

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { canPutAway, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, SIDEBAR_GROUPINGS, splitPutAway, statusSections, terminalSessions, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder } from '../model/sidebar'
-import type { SubagentView } from '../model/subagents'
+import { canPutAway, canSnooze, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, SIDEBAR_GROUPINGS, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder } from '../model/sidebar'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
 import { AppIcon, Icon, StatusBadge } from './glyphs'
@@ -10,14 +9,13 @@ import { Collapse } from './Collapse'
 import { useReducedMotion } from './motion'
 import { useFlip } from './useFlip'
 import { useStatusFlash } from './useStatusFlash'
+import { snoozeChoices } from '../model/snooze'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
+import { SubagentRows } from './SubagentRows'
 import { RowHoverCard } from './RowHoverCard'
 import { HOVER_CARD_DELAY_MS, type Box } from '../model/hoverCard'
-import { SubagentList, SubagentPeek } from './SubagentRows'
 
-/** A subagent whose own chat a pane shows. */
-export type OpenSubagent = { sessionId: string; subagentId: string }
 
 export type SidebarProps = {
   /** Every session of every machine. Each machine lists its own, in `order`. */
@@ -33,7 +31,8 @@ export type SidebarProps = {
   /** Opens the search over every session, project and action. */
   onSearch: () => void
   focusedId: string | null
-  openSubagent: OpenSubagent | null
+  /** The helper whose own chat a pane shows, marked in its session's rows. */
+  openSubagent: { sessionId: string; subagentId: string } | null
   mode: 'docked' | 'rail'
   online: boolean
   canStart: boolean
@@ -57,12 +56,12 @@ export type SidebarProps = {
   /** Installs or updates the app on a machine that needs it; the window asks first. */
   onUpdateMachine: (name: string, action: UpdateAction) => void
   onShowSession: (id: string) => void
+  /** Opens a helper's own chat in its session's pane. */
   onShowSubagent: (sessionId: string, subagentId: string) => void
   onRenameSession: (id: string | null) => void
   onSetName: (id: string, name: string) => void
   /** Shows a session beside the pane that has focus. */
   onSplitSession: (id: string, direction: 'right' | 'down') => void
-  onSplitSubagent: (sessionId: string, subagentId: string) => void
   /** Opens a shell in an agent's folder, beside it. */
   onCopyPath: (id: string) => void
   onCopyText: (text: string, what: string) => void
@@ -71,8 +70,13 @@ export type SidebarProps = {
   /** Takes a finished or idle session out of the sections, still running; Bring back puts it back. */
   onPutAway: (id: string) => void
   onBringBack: (id: string) => void
+  /** Snooze a session until `until`, in unix seconds. */
+  onSnooze: (id: string, until: number) => void
+  onUnsnooze: (id: string) => void
   /** Asks for a file to pull from the machine of session `id`. */
   onGetFile: (id: string) => void
+  /** Lists the specialist agent files a session of this computer can see. */
+  onSpecialists?: (id: string) => void
   onEndSession: (id: string) => void
   onOpenSettings: () => void
   /** Opens the list of agent sessions closed on this computer. */
@@ -89,12 +93,28 @@ export type SidebarProps = {
   draft?: DraftChat | null | undefined
 }
 
-export type DraftChat = { machine: number }
+/** The new chat page's chat while it is unsent: where it will start, and the agent picked for it. */
+export type DraftChat = { machine: number; process: string }
 
 /** The gap between a button and the menu that opens under it. */
 const MENU_GAP_PX = 4
 
 type OpenMenu = { title: string; at: { x: number; y: number }; items: MenuEntry[] }
+
+/** The button at a row's right, shown on hover and focus: Bring back a put-away session, Unsnooze a snoozed one, else stop or close it. A sibling of the row, not inside it (a button cannot hold a button). */
+function RowButton({ session, online, onBringBack, onUnsnooze, onEnd }: { session: SessionView; online: boolean; onBringBack: (id: string) => void; onUnsnooze: (id: string) => void; onEnd: (id: string) => void }) {
+  const title = rowTitle(session)
+  if (session.archived) return <button type="button" className="mx-row-close is-bring-back" aria-label={`Bring back ${title}`} title="Bring back" disabled={!online} onClick={() => { onBringBack(session.id) }}><Icon name="arrowUp" size={12} /></button>
+  if (session.snoozedUntil !== null) return <button type="button" className="mx-row-close is-bring-back" aria-label={`Unsnooze ${title}`} title="Unsnooze" disabled={!online} onClick={() => { onUnsnooze(session.id) }}><Icon name="arrowUp" size={12} /></button>
+  const shell = isShell(session)
+  return <button type="button" className="mx-row-close" aria-label={`${shell ? 'Close' : 'Stop'} ${title}`} title={shell ? 'Close shell' : 'Stop session'} disabled={!online} onClick={() => { onEnd(session.id) }}><Icon name="close" size={12} /></button>
+}
+
+/** The menu's Snooze entries, worked out when the menu opens: they name times from now. */
+function snoozeEntries(session: SessionView, online: boolean, onSnooze: (id: string, until: number) => void): MenuEntry[] {
+  if (!canSnooze(session)) return []
+  return snoozeChoices(Date.now(), session.resumeAt).map((choice) => ({ label: choice.label, disabled: !online, run: () => { onSnooze(session.id, choice.until) } }))
+}
 
 export function Sidebar(props: SidebarProps) {
   const [resizing, setResizing] = useState(false)
@@ -107,7 +127,6 @@ export function Sidebar(props: SidebarProps) {
   )
 }
 
-const TERMINALS_SECTION = 'terminals'
 const PUT_AWAY_SECTION = 'put-away'
 
 /** Which headings are folded and which machines are grouped by project. */
@@ -165,16 +184,18 @@ function Expanded(props: SidebarProps) {
   const held = hold.row
   const draft = props.draft ?? null
   const groups = machineGroups(sessions, props.machines, draft !== null, props.order)
-  const terminals = terminalSessions(sessions)
   const groupingLabel = SIDEBAR_GROUPINGS.find(([grouping]) => grouping === props.grouping)?.[1] ?? ''
   const localMachine = props.machines[0]?.machine ?? 0
   const picked = (on: boolean, otherwise = '') => (on ? '✓' : otherwise)
-  const projectMenu = (): MenuEntry[] => [
+  // Group by, then which project's sessions to show: one menu for both, as the header has one button.
+  const filterMenu = (): MenuEntry[] => [
+    { heading: 'Group by' },
+    ...SIDEBAR_GROUPINGS.map(([grouping, label]) => ({ label, hint: picked(props.grouping === grouping), run: () => { props.onGrouping(grouping) } })),
+    'separator' as const,
+    { heading: 'Show' },
     { label: 'All projects', hint: picked(project === null, String(props.sessions.length)), run: () => { setPickedProject(null) } },
-    ...(projects.length > 0 ? ['separator' as const] : []),
     ...projects.map((choice) => ({ label: choice.name, hint: picked(project === choice.name, String(choice.count)), run: () => { setPickedProject(choice.name) } })),
   ]
-  const groupingMenu = (): MenuEntry[] => SIDEBAR_GROUPINGS.map(([grouping, label]) => ({ label, hint: picked(props.grouping === grouping), run: () => { props.onGrouping(grouping) } }))
   const startMenu = (): MenuEntry[] => [
     { label: 'New agent chat', hint: shortcutText('new-agent-chat'), disabled: !props.canStart, run: () => { props.onNewAgentChat(localMachine) } },
     { label: 'New shell', hint: shortcutText('new-terminal'), disabled: !props.canStart, run: () => { props.onNewShell(localMachine) } },
@@ -212,23 +233,18 @@ function Expanded(props: SidebarProps) {
       { label: 'Copy folder path', run: () => { props.onCopyPath(session.id) } },
       ...(session.machineName === null ? [] : [{ label: 'Rename machine…', run: () => { props.onRenameMachine(session.machineName ?? '') } }]),
       ...(session.machineName === null ? [] : [{ label: 'Get a file…', disabled: !props.online, run: () => { props.onGetFile(session.id) } }]),
+      ...(session.machineName === null && session.pane > 0 && props.onSpecialists !== undefined ? [{ label: 'Specialist agents…', disabled: !props.online, run: () => { props.onSpecialists?.(session.id) } }] : []),
       // A finished agent waits under Finished until you look; this files it under Idle without opening it.
       ...(session.status === 'done' ? [{ label: 'Mark as done', disabled: !props.online, run: () => { props.onMarkDone(session.id) } }] : []),
       ...(canPutAway(session) ? [{ label: 'Put away', disabled: !props.online, run: () => { props.onPutAway(session.id) } }] : []),
+      ...snoozeEntries(session, props.online, props.onSnooze),
+      ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
       ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),
       'separator',
       // Stopping an agent asks a second click; a plain shell has nothing running to lose.
       { label: agent ? 'Stop session' : 'Close shell', danger: true, disabled: !props.online, run: () => { props.onEndSession(session.id) } },
     ]
   }
-
-  const subagentMenu = (session: SessionView, subagent: SubagentView): MenuEntry[] => [
-    { label: 'Open', run: () => { props.onShowSubagent(session.id, subagent.id) } },
-    { label: 'Open in split right', run: () => { props.onSplitSubagent(session.id, subagent.id) } },
-    'separator',
-    { label: 'Copy summary', disabled: (subagent.result ?? subagent.latest ?? subagent.task) === null, run: () => { props.onCopyText(subagent.result ?? subagent.latest ?? subagent.task ?? '', 'Summary') } },
-    { label: 'Stop subagent', danger: true, disabled: true, why: `${session.process} stops its own subagents; stop the session to stop them all` },
-  ]
 
   const machineMenu = (head: MachineHead): MenuEntry[] => {
     const open = views.isOpen(head.key)
@@ -250,7 +266,6 @@ function Expanded(props: SidebarProps) {
 
   const renderRow = (session: SessionView, showProject: boolean, showMachine = false) => {
     const selected = session.id === props.focusedId
-    const subagents = session.subagents
     return (
       <div key={session.id} className="mx-row-wrap" role="listitem" data-flip={session.id} onMouseEnter={(event) => { beginHover(session.id, event.currentTarget) }} onMouseLeave={endHover} onMouseDown={endHover}>
         <SessionRow
@@ -266,25 +281,16 @@ function Expanded(props: SidebarProps) {
           onContextMenu={(event) => { openMenu(event, rowTitle(session), sessionMenu(session)) }}
         />
         {/* A sibling of the row, not inside it (a button cannot hold a button): it shows on hover and focus. */}
-        {session.archived
-          ? <button type="button" className="mx-row-close is-bring-back" aria-label={`Bring back ${rowTitle(session)}`} title="Bring back" disabled={!props.online} onClick={() => { props.onBringBack(session.id) }}><Icon name="arrowUp" size={12} /></button>
-          : <button type="button" className="mx-row-close" aria-label={`${isShell(session) ? 'Close' : 'Stop'} ${rowTitle(session)}`} title={isShell(session) ? 'Close shell' : 'Stop session'} disabled={!props.online} onClick={() => { props.onEndSession(session.id) }}><Icon name="close" size={12} /></button>}
-        {/* Both are kept, each folded while the other shows, so choosing another session eases the rows shut and
-            the next session's open, instead of the list under it jumping by their height. */}
-        {subagents.length > 0 && (
-          <>
-            <Collapse open={!selected}><SubagentPeek process={session.process} subagents={subagents} /></Collapse>
-            <Collapse open={selected}>
-              <SubagentList
-                process={session.process}
-                subagents={subagents}
-                openId={props.openSubagent?.sessionId === session.id ? props.openSubagent.subagentId : null}
-                onOpen={(id) => { props.onShowSubagent(session.id, id) }}
-                onContextMenu={(subagent, event) => { openMenu(event, subagent.name, subagentMenu(session, subagent)) }}
-              />
-            </Collapse>
-          </>
-        )}
+        <RowButton session={session} online={props.online} onBringBack={props.onBringBack} onUnsnooze={props.onUnsnooze} onEnd={props.onEndSession} />
+        {/* Kept mounted while it empties, so the last helper's row eases shut instead of the list jumping. */}
+        <Collapse open={session.subagents.length > 0}>
+          <SubagentRows
+            subagents={session.subagents}
+            openId={props.openSubagent?.sessionId === session.id ? props.openSubagent.subagentId : null}
+            onOpen={(id) => { props.onShowSubagent(session.id, id) }}
+            onShowSession={() => { props.onShowSession(session.id) }}
+          />
+        </Collapse>
       </div>
     )
   }
@@ -292,31 +298,19 @@ function Expanded(props: SidebarProps) {
   return (
     <div className="mx-sidebar-expanded">
       <div className="mx-sidebar-top">
-        <div className="mx-top-line">
-          <button type="button" className="mx-top-button is-new" title={tip('New chat', 'new-agent-chat')} disabled={!props.canStart} onClick={() => { props.onNewAgentChat(localMachine) }}>
-            <Icon name="plus" size={14} /><span className="mx-top-label">New chat</span>
-          </button>
-          <button type="button" className="mx-head-button" aria-label="More to start" title="New shell, or add a remote machine" aria-haspopup="menu" onClick={(event) => { openUnder(event, 'Start', startMenu()) }}><Icon name="chevronDown" size={13} /></button>
-          <button type="button" className="mx-head-button" aria-label="Collapse sidebar" title={tip('Collapse sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="collapse" /></button>
-        </div>
-        <button type="button" className="mx-top-button" title={tip('Search', 'palette')} onClick={props.onSearch}>
-          <Icon name="search" size={14} /><span className="mx-top-label">Search</span><span className="mx-top-keys mono" aria-hidden="true">{shortcutText('palette')}</span>
-        </button>
-      </div>
-      <div className="mx-sidebar-filters">
-        <button type="button" className="mx-filter-button is-project" aria-label={`Show sessions from: ${project ?? 'All projects'}`} aria-haspopup="menu" onClick={(event) => { openUnder(event, 'Show sessions from', projectMenu()) }}>
-          <Icon name="folder" size={13} /><span className="mx-filter-label">{project ?? 'All projects'}</span><Icon name="chevronDown" size={10} />
-        </button>
-        <button type="button" className="mx-filter-button" aria-label={`Group by: ${groupingLabel}`} title="Group by" aria-haspopup="menu" onClick={(event) => { openUnder(event, 'Group by', groupingMenu()) }}>
-          <Icon name="layout" size={13} />{groupingLabel}<Icon name="chevronDown" size={10} />
-        </button>
+        <button type="button" className="mx-head-button" aria-label="Hide sidebar" title={tip('Hide sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="panelLeft" size={14} /></button>
+        <span className="mx-sidebar-title">Chats</span>
+        <span className="mx-spacer" />
+        <button type="button" className="mx-head-button" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={14} /></button>
+        <button type="button" className="mx-head-button" aria-label={`Filter and group: ${project ?? 'All projects'}, by ${groupingLabel.toLowerCase()}`} title="Filter and group" aria-haspopup="menu" onClick={(event) => { openUnder(event, 'Filter and group', filterMenu()) }}><Icon name="filter" /></button>
+        <button type="button" className="mx-head-button" aria-label="New chat" title={tip('New chat', 'new-agent-chat')} disabled={!props.canStart} onClick={() => { props.onNewAgentChat(localMachine) }} onContextMenu={(event) => { openMenu(event, 'Start', startMenu()) }}><Icon name="plus" size={15} /></button>
       </div>
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
         {props.grouping !== 'machine' && (
           <section aria-label="Agents" className="mx-sections">
-            {draft !== null && <DraftRow />}
+            {draft !== null && <DraftRow process={draft.process} />}
             {props.grouping === 'status' && statusSections(sessions, held).map((section) => (
-              <ListSection key={section.key} id={`status:${section.key}`} tone={section.key} name={section.name} hint={section.hint} keyHint={section.key === 'needs' ? shortcutText('jump-needs') : undefined} count={section.sessions.length} label={section.name} open={views.isOpen(`status:${section.key}`)} onToggle={() => { views.toggle(`status:${section.key}`) }}>
+              <ListSection key={section.key} id={`status:${section.key}`} tone={section.key} name={section.name} count={section.sessions.length} label={section.name} open={views.isOpen(`status:${section.key}`)} onToggle={() => { views.toggle(`status:${section.key}`) }}>
                 {section.sessions.map((session) => renderRow(session, true, true))}
               </ListSection>
             ))}
@@ -325,7 +319,7 @@ function Expanded(props: SidebarProps) {
                 {section.sessions.map((session) => renderRow(session, false))}
               </ListSection>
             ))}
-            {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'No agents running. New chat starts one.' : 'Looking for your sessions…'}</div>}
+            {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Chats and shells you start appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
             <MachineNotes heads={props.machines} progress={props.updateProgress} onUpdate={props.onUpdateMachine} />
           </section>
         )}
@@ -336,7 +330,7 @@ function Expanded(props: SidebarProps) {
               key={group.head.key}
               group={group}
               open={views.isOpen(group.head.key) || draft?.machine === group.head.machine}
-              draft={draft?.machine === group.head.machine}
+              draft={draft?.machine === group.head.machine ? draft : null}
               progress={group.head.name === null ? undefined : props.updateProgress?.[group.head.name]}
               byProject={views.isByProject(group.head.key)}
               canStart={props.canStart}
@@ -349,30 +343,21 @@ function Expanded(props: SidebarProps) {
               renderRow={renderRow}
             />
           ))}
-          {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'No agents running. New chat starts one.' : 'Looking for your sessions…'}</div>}
+          {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Chats and shells you start appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
         </section>
         )}
         {putAway.length > 0 && (
           <section aria-label="Put away sessions" className="mx-sections">
-            <ListSection id={PUT_AWAY_SECTION} name="Put away" hint="still running" count={putAway.length} label="Put away" open={putAwayOpen} onToggle={() => { setPutAwayOpen(!putAwayOpen) }}>
+            <ListSection id={PUT_AWAY_SECTION} name="Put away" count={putAway.length} label="Put away" open={putAwayOpen} onToggle={() => { setPutAwayOpen(!putAwayOpen) }}>
               {putAway.map((session) => renderRow(session, true, true))}
             </ListSection>
           </section>
         )}
       </div>
-      {/* Terminals keep to the foot of the sidebar, under the agents however many there are, so they are always in the same place. */}
-      {props.grouping !== 'machine' && terminals.length > 0 && (
-        <section aria-label="Terminals" className="mx-sidebar-terminals" onScroll={endHover}>
-          <ListSection id={TERMINALS_SECTION} name="Terminals" count={terminals.length} label="Terminals" open={views.isOpen(TERMINALS_SECTION)} onToggle={() => { views.toggle(TERMINALS_SECTION) }}>
-            {terminals.map((session) => renderRow(session, true, true))}
-          </ListSection>
-        </section>
-      )}
       <div className="mx-sidebar-foot">
         {props.online
           ? <span className="mx-foot-slot">{props.updateSlot}</span>
           : <><span className="mx-daemon-dot is-offline" aria-hidden="true" /><span className="mx-daemon-text is-offline" role="status">{props.serviceText ?? 'Reconnecting to maittyd…'}</span></>}
-        <button type="button" className="mx-head-button mx-settings-button" aria-label="Recent sessions" title="Recent sessions: reopen one closed on this computer" onClick={props.onRecentSessions}><Icon name="history" size={13} /></button>
         <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={15} /></button>
       </div>
       {hovered && hover && <RowHoverCard session={hovered} row={hover.row} portalContainer={props.portalContainer} />}
@@ -390,11 +375,8 @@ type ListSectionProps = {
   open: boolean
   onToggle: () => void
   children: ReactNode
-  /** A status section: its colour, and the few words that say what the status means. */
+  /** A status section: its colour. */
   tone?: string
-  hint?: string
-  /** The key that jumps to the section's first session, shown at the heading's right. */
-  keyHint?: string | undefined
   /** A project section: its colour square, the other machine it is on, and how many of its sessions need you. */
   color?: string
   machine?: MachineHead | null
@@ -402,7 +384,7 @@ type ListSectionProps = {
 }
 
 /** One heading of the status or project list, with the rows under it; the heading folds them away. */
-function ListSection({ id, name, label, count, open, onToggle, children, tone, hint, keyHint, color, machine = null, needs = 0 }: ListSectionProps) {
+function ListSection({ id, name, label, count, open, onToggle, children, tone, color, machine = null, needs = 0 }: ListSectionProps) {
   return (
     <div className="mx-section" data-section={id}>
       <button type="button" className={`mx-section-head${tone === undefined ? '' : ` is-${tone}`}`} data-flip={`head:${id}`} aria-expanded={open} onClick={onToggle}>
@@ -412,10 +394,7 @@ function ListSection({ id, name, label, count, open, onToggle, children, tone, h
         {machine !== null && <span className={`mx-machine-dot${machine.down ? ' is-offline' : ''}`} role="img" aria-label={machine.down ? `${machineTitle(machine)} is ${machine.chip?.word ?? 'not reachable'}` : `${machineTitle(machine)} is connected`} />}
         <span className="mx-section-count mono">{count}</span>
         {needs > 0 && <span className="mx-project-needs" aria-label={`${String(needs)} need you`}>{needs}</span>}
-        {hint !== undefined && <span className="mx-section-hint">{hint}</span>}
         <span className="mx-spacer" />
-        {keyHint !== undefined && <kbd className="mx-section-key">{keyHint}</kbd>}
-        <span className={`mx-caret-wrap${open ? ' is-open' : ''}`}><Icon name="caret" /></span>
       </button>
       <Collapse open={open}>
         <div className="mx-rows" role="list" aria-label={label}>{children}</div>
@@ -450,8 +429,8 @@ function MachineNotes({ heads, progress, onUpdate }: { heads: readonly MachineHe
 }
 
 type SectionProps = {
-  /** A draft chat is listed first in this machine. */
-  draft: boolean
+  /** The draft chat, listed first in this machine; null when it is not on this machine. */
+  draft: DraftChat | null
   /** How far this machine's update has got, while one runs. */
   progress: number | undefined
   group: MachineGroup
@@ -502,24 +481,24 @@ function MachineSection({ draft, progress, group, open, byProject, canStart, onT
           <div className="mx-rows" role="list" aria-label={`Sessions on ${title}`}>{sessions.map((session) => renderRow(session, true))}</div>
         )}
         {/* Last, where the new chat will be (sessions keep creation order), so it fills in without anything moving. */}
-        {draft && <DraftRow />}
+        {draft !== null && <DraftRow process={draft.process} />}
       </Collapse>
     </div>
   )
 }
 
 /**
- * The chat that has not been sent yet: a copy of a session row (its icon, its name line and its project line) drawn as
- * placeholders with a softly pulsing icon square, last in its machine. The real row takes this place when the chat starts.
+ * The chat that has not been sent yet (layout 2h): a row named "New chat" in italics with a "draft" tag and the picked
+ * agent's mark, drawn as a session row draws it, first in the list. The real row takes this place when the chat starts.
  */
-function DraftRow() {
+function DraftRow({ process }: { process: string }) {
   return (
     <div className="mx-row-wrap mx-draft-wrap" role="status" aria-label="New chat, waiting for the first message" data-flip="draft">
       <div className="mx-row mx-draft">
-        <span className="mx-row-icon"><span className="mx-draft-tile" /></span>
-        <span className="mx-row-text" aria-hidden="true">
-          <span className="mx-draft-line is-name" />
-          <span className="mx-draft-line is-sub" />
+        <span className="mx-row-icon"><AppIcon process={process} size={16} flat dimmed /></span>
+        <span className="mx-row-text">
+          <span className="mx-draft-name">New chat</span>
+          <span className="mx-draft-tag">draft</span>
         </span>
       </div>
     </div>

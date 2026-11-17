@@ -424,7 +424,7 @@ impl Copy {
                 KeyCode::Backspace => {
                     input.pop();
                 }
-                KeyCode::Char(c) if !ctrl => input.push(c),
+                KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) => input.push(c),
                 _ => {}
             }
             return Outcome::Stay;

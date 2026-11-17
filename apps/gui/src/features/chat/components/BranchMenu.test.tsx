@@ -15,15 +15,16 @@ import { BranchMenu } from './BranchMenu'
 function menu(onNewWorktree?: () => void, blocked?: string) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <BranchMenu spec={{ folder: '/w/task', ...(onNewWorktree === undefined ? {} : { onNewWorktree }), ...(blocked === undefined ? {} : { newWorktreeBlocked: blocked }) }} branch="task-1" worktree={false} />
+      <BranchMenu spec={{ folder: '/w/task', ...(onNewWorktree === undefined ? {} : { onNewWorktree }), ...(blocked === undefined ? {} : { newWorktreeBlocked: blocked }) }} branch="task-1" worktree={false} project="shop" />
     </QueryClientProvider>,
   )
 }
 
-describe('the tray branch menu', () => {
+describe('the pane header branch menu', () => {
   it('lists the branches with the current one ticked, and switches to another', async () => {
     menu()
-    await userEvent.click(screen.getByRole('button', { name: /This chat works on/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Change branch/ }))
+    expect(await screen.findByText('Branch in shop')).toBeInTheDocument()
     expect(await screen.findByText('Switching changes where the agent\'s next edits go. Work already done stays on its branch.')).toBeInTheDocument()
     await userEvent.click(await screen.findByRole('radio', { name: /main/ }))
     expect(api.switchBranch).toHaveBeenCalledWith('/w/task', 'main', false)
@@ -32,7 +33,7 @@ describe('the tray branch menu', () => {
   it('labels a branch that has a worktree, and offers a new worktree', async () => {
     const onNewWorktree = vi.fn()
     menu(onNewWorktree)
-    await userEvent.click(screen.getByRole('button', { name: /This chat works on/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Change branch/ }))
     expect(await screen.findByText('worktree')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /Move to a new worktree/ }))
     expect(onNewWorktree).toHaveBeenCalled()
@@ -40,7 +41,7 @@ describe('the tray branch menu', () => {
 
   it('keeps the move row off, with the reason, while the move is not possible', async () => {
     menu(vi.fn(), 'Wait until the agent is idle; moving restarts it')
-    await userEvent.click(screen.getByRole('button', { name: /This chat works on/ }))
+    await userEvent.click(screen.getByRole('button', { name: /Change branch/ }))
     const row = await screen.findByRole('button', { name: /Move to a new worktree/ })
     expect(row).toBeDisabled()
     expect(row).toHaveAttribute('title', 'Wait until the agent is idle; moving restarts it')

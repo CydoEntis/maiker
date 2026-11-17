@@ -99,22 +99,3 @@ export function glideTop(from: number, bottom: number, share: number): number {
   const eased = 1 - (1 - Math.min(1, Math.max(0, share))) ** EASE_POWER
   return from + (bottom - from) * eased
 }
-
-/** The row a reader is looking at, and how far into it the view's top is: what stays put when rows above it change. */
-export type ScrollAnchor = { readonly key: string; readonly within: number }
-
-/** The anchor for a view whose top is at `scrollTop`: the first row that ends below it. */
-export function anchorAt(layout: ListLayout, keys: readonly string[], scrollTop: number): ScrollAnchor | null {
-  const index = firstEndingBelow(layout, scrollTop)
-  const key = keys[index]
-  return key === undefined ? null : { key, within: scrollTop - (layout.offsets[index] ?? 0) }
-}
-
-/**
- * Where the view's top goes so the anchored row stays where the reader saw it, after rows above it were measured or
- * grew; `null` when that row is gone.
- */
-export function anchoredTop(layout: ListLayout, keys: readonly string[], anchor: ScrollAnchor): number | null {
-  const index = keys.indexOf(anchor.key)
-  return index === -1 ? null : (layout.offsets[index] ?? 0) + anchor.within
-}

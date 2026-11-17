@@ -321,6 +321,7 @@ pub fn terminal_dial(attach: bool) -> Result<maitty_machines::Dial> {
         term: std::env::var(concat!(env!("APP_ENV"), "_TERM_ID")).ok(),
         token: std::env::var(concat!(env!("APP_ENV"), "_PANE_TOKEN")).ok(),
         structured,
+        newest_only: false,
     })
 }
 
@@ -430,11 +431,35 @@ async fn open_or_spawn_with(
 }
 
 fn spawn_daemon(exe: Option<&std::path::Path>) -> Result<()> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Out of the job the client runs in (an ssh session, some editor terminals, a scheduled
+        // task close theirs with everything in it), so closing the client leaves every pane
+        // running. A job that does not allow it refuses with access denied; then it starts in it.
+        let mut away = daemon_command(exe)?;
+        away.creation_flags(DAEMON_FLAGS | CREATE_BREAKAWAY_FROM_JOB);
+        match away.spawn() {
+            Ok(_) => return Ok(()),
+            Err(e) if e.raw_os_error() == Some(ERROR_ACCESS_DENIED) => {
+                tracing::warn!("the daemon could not leave this window's job, so it starts in it");
+            }
+            Err(e) => return Err(e).context("starting the daemon"),
+        }
+    }
     daemon_command(exe)?
         .spawn()
         .context("starting the daemon")?;
     Ok(())
 }
+
+/// A hidden console of its own, so ConPTY works and closing this window doesn't kill it.
+#[cfg(windows)]
+const DAEMON_FLAGS: u32 = 0x0000_0200 | crate::proc::CREATE_NO_WINDOW; // CREATE_NEW_PROCESS_GROUP
+#[cfg(windows)]
+const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
+#[cfg(windows)]
+const ERROR_ACCESS_DENIED: i32 = 5;
 
 fn daemon_command(exe: Option<&std::path::Path>) -> Result<std::process::Command> {
     let current = std::env::current_exe()?;
@@ -446,9 +471,7 @@ fn daemon_command(exe: Option<&std::path::Path>) -> Result<std::process::Command
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-        // A hidden console of its own, so ConPTY works and closing this window doesn't kill it.
-        cmd.creation_flags(CREATE_NEW_PROCESS_GROUP | crate::proc::CREATE_NO_WINDOW);
+        cmd.creation_flags(DAEMON_FLAGS);
     }
     #[cfg(unix)]
     {

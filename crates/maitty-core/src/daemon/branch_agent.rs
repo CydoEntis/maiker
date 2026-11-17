@@ -21,6 +21,17 @@ impl Daemon {
         self.workspaces.iter().any(|w| same_project(dir, &w.cwd))
             || self.terms.values().any(|t| same_project(dir, &t.cwd))
     }
+
+    /// Whether `client` may name a folder for a checkout (and its setup hook): a person's window,
+    /// which only names a folder the person picked, may name any; an agent in a pane, a structured
+    /// runtime or a rejected client only one the app already shows (`is_known_project`). An unknown
+    /// client is not a person.
+    pub(super) fn may_name_checkout(&self, client: ClientId, dir: &std::path::Path) -> bool {
+        let person = self.clients.get(&client).is_some_and(|c| {
+            c.from.is_none() && c.structured.is_none() && !c.rejected
+        });
+        person || self.is_known_project(dir)
+    }
 }
 
 /// The most characters of a first prompt. A prompt is a command-line argument, and a shell or the

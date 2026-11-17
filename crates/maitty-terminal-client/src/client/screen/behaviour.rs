@@ -590,7 +590,7 @@ impl App {
             KeyCode::Backspace => {
                 self.screen.filter.pop();
             }
-            KeyCode::Char(c) if plain => self.screen.filter.push(c),
+            KeyCode::Char(c) if plain || crate::client::input::alt_gr(k) => self.screen.filter.push(c),
             _ => return false,
         }
         self.screen.side_scroll = 0;
@@ -692,7 +692,7 @@ impl App {
                 self.sidebar = true;
                 self.start_side_filter();
             }
-            Action::Usage => self.mode = Mode::Usage,
+            Action::Usage => self.open_usage(),
             // There is no tab row: a tab key steps through the sidebar's sessions.
             Action::NextTab | Action::PrevTab => self.step_session(*a == Action::NextTab),
             Action::SelectTab(n) => self.jump_to_session(n.saturating_sub(1)),
@@ -1093,6 +1093,9 @@ impl App {
     }
 
     pub(in crate::client) fn finder_enter(&mut self, mut fd: Finder) {
+        if fd.remote() {
+            return self.finder_enter_remote(fd);
+        }
         let sep = std::path::MAIN_SEPARATOR;
         let rows = fd.rows();
         match rows.get(fd.sel).cloned() {
@@ -1123,8 +1126,74 @@ impl App {
         }
     }
 
+    /// Enter in another machine's folders: open the folder, or go into it. A folder there is
+    /// known only from its daemon's listing, so one typed that it did not list is not opened.
+    fn finder_enter_remote(&mut self, mut fd: Finder) {
+        match fd.rows().get(fd.sel).cloned() {
+            None => {
+                let (dir, part) = fd.split();
+                self.notify(format!("no folder {part} in {}", fd.spelled(&dir)), true);
+                self.mode = Mode::Finder(Box::new(fd));
+            }
+            Some((n, p, repo)) if n == "." || repo => {
+                if n == "." && fd.abs.is_none() {
+                    // Not answered yet: its real path is still to come.
+                    self.mode = Mode::Finder(Box::new(fd));
+                    return;
+                }
+                let machine = fd.machine;
+                let name = folder_name(&p);
+                self.screen_new_session_on(machine, p, None, false);
+                self.notify(format!("Opened {name} on {} with a shell", self.machine_name(machine)), false);
+            }
+            Some((_, p, _)) => {
+                fd.q = format!("{}/", fd.spelled(&p).trim_end_matches('/'));
+                fd.sel = 0;
+                fd.refresh();
+                self.mode = Mode::Finder(Box::new(fd));
+            }
+        }
+    }
+
+    /// Open a folder on `machine`: this computer's Finder, or another's through its daemon.
+    pub(in crate::client) fn open_finder_on(&mut self, machine: MachineId) {
+        if machine == MachineId::LOCAL {
+            return self.screen_open_finder();
+        }
+        let up = self
+            .remotes
+            .get(&machine)
+            .is_some_and(|r| matches!(r.state, crate::client::link::ConnectionState::Connected));
+        if !up {
+            let name = self.machine_name(machine).to_string();
+            return self.notify(format!("{name} is not connected: its folders cannot be listed"), true);
+        }
+        self.mode = Mode::Finder(Box::new(Finder::on(machine)));
+    }
+
+    /// Which machine's folders to open: straight to this computer's when no other is
+    /// connected, else a menu of them.
+    pub(in crate::client) fn pick_folder_machine(&mut self) {
+        let up: Vec<(MachineId, String)> = self
+            .remotes
+            .iter()
+            .filter(|(_, r)| matches!(r.state, crate::client::link::ConnectionState::Connected))
+            .map(|(id, r)| (*id, crate::hidden::sanitize(&r.name, false)))
+            .collect();
+        if up.is_empty() {
+            return self.screen_open_finder();
+        }
+        let mut items = vec![("This computer".to_string(), crate::client::menu::Act::MachineFolder(MachineId::LOCAL))];
+        items.extend(up.into_iter().map(|(id, name)| (name, crate::client::menu::Act::MachineFolder(id))));
+        let at = self
+            .focused()
+            .and_then(|term| self.pane_frames.iter().find(|(t, _)| *t == term))
+            .map_or((2, 1), |(_, r)| (r.x + 2, r.y));
+        self.menu("open a folder on".into(), items, at);
+    }
+
     pub(in crate::client) fn on_finder_key(&mut self, mut fd: Finder, k: &KeyEvent) {
-        let sep = std::path::MAIN_SEPARATOR;
+        let sep = fd.sep();
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         match k.code {
             KeyCode::Esc => {
@@ -1139,7 +1208,7 @@ impl App {
                 if let Some((n, p, _)) = fd.rows().get(fd.sel).cloned()
                     && n != "."
                 {
-                    fd.q = format!("{}{sep}", tilde(&p).trim_end_matches(sep));
+                    fd.q = format!("{}{sep}", fd.spelled(&p).trim_end_matches(sep));
                     fd.sel = 0;
                 }
             }
@@ -1149,7 +1218,7 @@ impl App {
                 fd.q.pop();
                 fd.sel = 0;
             }
-            KeyCode::Char(c) if !ctrl => {
+            KeyCode::Char(c) if (!ctrl || crate::client::input::alt_gr(k)) => {
                 fd.q.push(if c == '/' || c == '\\' { sep } else { c });
                 fd.sel = 0;
             }
@@ -1538,7 +1607,7 @@ impl App {
                 self.mode = Mode::GoTo { query, sel };
                 return;
             }
-            KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) => {
+            KeyCode::Char(c) if !k.modifiers.contains(KeyModifiers::CONTROL) || crate::client::input::alt_gr(k) => {
                 query.push(c);
                 // Land on the first session that matches, when there is one.
                 let rows = goto_rows(&model, &query, heads_up(self).len());
@@ -1836,8 +1905,28 @@ impl App {
                 self.ask_restart();
             }
             ScreenHit::Subagent(i) => {
-                if let Some(term) = self.screen.sub_rows.get(i).copied() {
-                    self.screen_focus(term);
+                match (self.screen.sub_rows.get(i).copied(), self.screen.sub_ids.get(i).cloned()) {
+                    (Some(term), Some((id, name))) => self.open_helper(term, id, name),
+                    (Some(term), None) => self.screen_focus(term),
+                    _ => {}
+                }
+            }
+            ScreenHit::SubagentsDone(i) => {
+                if let Some(key) = self.screen.done_rows.get(i).copied()
+                    && !self.screen.subs_opened.remove(&key)
+                {
+                    self.screen.subs_opened.insert(key);
+                }
+            }
+            ScreenHit::Run(i) => {
+                if let Some((term, key)) = self.screen.run_rows.get(i).cloned() {
+                    self.mode = Mode::Run { term, key, board: None };
+                }
+            }
+            ScreenHit::Board(term) => self.open_board_of(term),
+            ScreenHit::BoardCard(i) => {
+                if let Mode::Work { term, .. } = self.mode {
+                    self.open_board_card(term, i);
                 }
             }
             ScreenHit::ReleaseMenu => self.release_menu(),
@@ -1865,6 +1954,9 @@ impl App {
                 self.menu_for_project_tools(term, at);
             }
             ScreenHit::TidyRow(i) => self.tidy_click(i),
+            ScreenHit::ClonePick(i) => self.clone_click(i),
+            ScreenHit::CloneGo => self.clone_click_go(),
+            ScreenHit::SpecialistRow(i) => self.specialists_click(i),
             ScreenHit::TidyGo => {
                 if let Mode::Tidy(v) = std::mem::replace(&mut self.mode, Mode::Normal) {
                     self.tidy_ask(*v);
@@ -2149,6 +2241,7 @@ impl App {
                     }
                 }
             }
+            ScreenHit::SessionFindRow(i) => self.session_find_click(i, double),
             ScreenHit::SideEdge => self.screen.drag = Some(Drag::Side),
             ScreenHit::SheetEdge => self.screen.drag = Some(Drag::Sheet),
             ScreenHit::ToBottom(term) => self.back_to_bottom(term),

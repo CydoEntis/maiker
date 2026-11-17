@@ -15,6 +15,12 @@ export const IDLE_POLL_MS = 3000
 export const TOLD_ACTIVE_POLL_MS = 1000
 /** Reads the daemon's news asks for are at least this far apart: a reply streams in many small changes. */
 export const NEWS_READ_GAP_MS = 100
+/**
+ * A read that fails is tried again this soon, and the chat says it is reconnecting only when that one fails too: a
+ * lone failure (a kept line to another machine that went stale, a busy daemon) is not a lost daemon.
+ */
+export const RETRY_READ_MS = 500
+const FAILURES_BEFORE_OFFLINE = 2
 
 /** The feeds the window has read, so reopening a chat shows its history at once and reads only what changed. */
 // Enough for a day's sessions: going back to a chat read earlier shows it whole at once, and a feed is small next to the
@@ -92,6 +98,7 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
     let told = false
     let lastReadAt = 0
     let unwatched = true
+    let failures = 0
     latest.current = startFeed(provider, conversation, generation)
     const read: ReadPage = (cursor) => readConversationPage(conversation, cursor)
 
@@ -119,6 +126,7 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
           unwatched = false
           setUnwatchedReads((count) => count + 1)
         }
+        failures = 0
         setOffline(false)
         setReadError(null)
       } catch (error) {
@@ -127,14 +135,17 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
         const reason = error instanceof Error ? error.message : String(error)
         console.warn('Could not read the conversation', reason)
         latest.current = afterFailure(latest.current)
-        setOffline(true)
-        setReadError(reason)
+        failures += 1
+        if (failures >= FAILURES_BEFORE_OFFLINE) {
+          setOffline(true)
+          setReadError(reason)
+        }
       } finally {
         running = false
         lastReadAt = Date.now()
       }
       const poll = !isActive(latest.current) ? IDLE_POLL_MS : told ? TOLD_ACTIVE_POLL_MS : ACTIVE_POLL_MS
-      const delay = again === 'now' ? 0 : again === 'soon' ? NEWS_READ_GAP_MS : poll
+      const delay = again === 'now' ? 0 : again === 'soon' ? NEWS_READ_GAP_MS : failures === 1 ? RETRY_READ_MS : poll
       again = null
       timer = window.setTimeout(() => { void tick() }, delay)
     }
@@ -153,9 +164,13 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
       window.clearTimeout(timer)
       void tick()
     }
+    // A hidden window reads only every few seconds: shown again, it reads at once rather than show the old chat.
+    const onVisible = () => { if (!document.hidden) wake.current() }
+    document.addEventListener('visibilitychange', onVisible)
     void tick()
     return () => {
       life.stopped = true
+      document.removeEventListener('visibilitychange', onVisible)
       window.clearTimeout(timer)
       void listening.then((stop) => { stop() })
     }

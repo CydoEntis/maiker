@@ -37,6 +37,19 @@ describe('a link in a message', () => {
     await waitFor(() => { expect(copyText).toHaveBeenCalledExactlyOnceWith('https://example.com/') })
     expect(openLink).not.toHaveBeenCalled()
   })
+
+  it('opens a web address written as code or bare, and leaves other code alone', async () => {
+    vi.mocked(isDesktop).mockReturnValue(true)
+    const user = userEvent.setup()
+    render(<Markdown text="Open `https://entra.microsoft.com` or https://example.com/x, then run `npm test` and `javascript:alert(1)`." />)
+
+    await user.click(screen.getByRole('button', { name: 'https://entra.microsoft.com' }))
+    await user.click(screen.getByRole('button', { name: 'https://example.com/x' }))
+
+    expect(vi.mocked(openLink).mock.calls).toEqual([['https://entra.microsoft.com/'], ['https://example.com/x']])
+    expect(screen.queryByRole('button', { name: 'npm test' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /javascript/ })).toBeNull()
+  })
 })
 
 const TABLE = '| Name | Qty | Note |\n| :--- | ---: | :---: |\n| `a` | **1** | x |\n| b | 22 | y |'
@@ -68,6 +81,16 @@ describe('a table in a message', () => {
     expect(region).toHaveAttribute('tabindex', '0')
     expect(region).toHaveClass('overflow-x-auto', 'max-w-full')
     expect(within(region).getByRole('table')).toBeInTheDocument()
+  })
+
+  it('keeps its Copy and Save in a head above the table, inside the same card, never loose under it', () => {
+    render(<Markdown text={TABLE + '\n\nAfter.'} />)
+
+    const actions = screen.getByRole('group', { name: 'Copy or save this table' })
+    const region = screen.getByRole('region', { name: 'Table' })
+    expect(actions.parentElement).toBe(region.parentElement)
+    expect(actions.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(within(actions).getByRole('button', { name: 'Copy' })).toBeInTheDocument()
   })
 
   it('shows markup in a cell as text', () => {

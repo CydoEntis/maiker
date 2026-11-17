@@ -13,6 +13,7 @@ const fake = vi.hoisted(() => ({
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string, choice?: { model?: string; effort?: string }) => Promise<unknown>>(),
   cancelTurn: vi.fn<(conversation: { id: string; generation: number }) => Promise<void>>(),
   dequeueMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number) => Promise<void>>(),
+  sendQueuedMessageNow: vi.fn<(conversation: { id: string; generation: number }, operation: number) => Promise<void>>(),
   approveRequest: vi.fn<(conversation: { id: string; generation: number }, requestId: number | string, decision: string) => Promise<void>>(),
 }))
 
@@ -21,6 +22,7 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
   submitMessage: fake.submitMessage,
   cancelTurn: fake.cancelTurn,
   dequeueMessage: fake.dequeueMessage,
+  sendQueuedMessageNow: fake.sendQueuedMessageNow,
   approveRequest: fake.approveRequest,
   readConversationPage: (_id: number, cursor: unknown) => {
     if (fake.current === null) throw new Error('no fake daemon')
@@ -38,6 +40,8 @@ beforeEach(() => {
   fake.submitMessage.mockReset()
   fake.cancelTurn.mockReset()
   fake.dequeueMessage.mockReset()
+  fake.sendQueuedMessageNow.mockReset()
+  fake.sendQueuedMessageNow.mockResolvedValue(undefined)
   fake.approveRequest.mockReset()
   fake.submitMessage.mockResolvedValue({})
   fake.cancelTurn.mockResolvedValue(undefined)
@@ -66,7 +70,7 @@ async function open(setup: (daemon: FakeDaemonHistory) => void = () => undefined
 }
 
 describe('the usage strip', () => {
-  it('shows what the agent reported using at the right of the tray: the context, and each plan limit with its window', async () => {
+  it('shows what the agent reported using at the right of the box: the context, and each plan limit with its window', async () => {
     const soon = Math.floor(Date.now() / 1000) + 3 * 3600 + 30
     const daemon = new FakeDaemonHistory()
     fake.current = daemon
@@ -76,14 +80,25 @@ describe('the usage strip', () => {
     const strip = screen.getByRole('group', { name: 'Usage' })
     expect(within(strip).getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '9')
     expect(within(strip).getByRole('meter', { name: '5-hour limit' })).toHaveAttribute('aria-valuenow', '12')
-    expect(strip).toHaveTextContent('Context9%5h12%')
+    expect(strip).toHaveTextContent('Ctx9%5h12%')
     // When a limit starts over is in its tooltip, not on the line.
     expect(within(strip).getByRole('meter', { name: '5-hour limit' }).parentElement).toHaveAttribute('title', '5-hour limit: 12% used · resets in 3h')
   })
 
-  it('is not drawn when the agent reported nothing', async () => {
+  it('always shows context, 5-hour and weekly for Claude, one not reported yet as a dash rather than a zero', async () => {
     fake.current = new FakeDaemonHistory()
-    render(<ChatSession link={LINK} agent="claude" online usage={{ context: null, limits: [] }} />)
+    render(<ChatSession link={LINK} agent="claude" online usage={{ context: null, limits: [{ name: 'week', used: 0, resetsAt: 0 }] }} />)
+    await settle()
+
+    const meters = within(screen.getByRole('group', { name: 'Usage' }))
+    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context', '5-hour limit', 'Weekly limit'])
+    expect(meters.getByRole('meter', { name: '5-hour limit' })).toHaveAttribute('aria-valuetext', 'not reported yet')
+    expect(meters.getByRole('meter', { name: 'Weekly limit' })).toHaveAttribute('aria-valuenow', '0')
+  })
+
+  it('is not drawn for an agent that reports nothing of the kind', async () => {
+    fake.current = new FakeDaemonHistory()
+    render(<ChatSession link={LINK} agent="gemini" online usage={{ context: null, limits: [] }} />)
     await settle()
 
     expect(screen.queryByRole('group', { name: 'Usage' })).not.toBeInTheDocument()
@@ -144,6 +159,19 @@ describe('sending', () => {
     expect(fake.submitMessage).toHaveBeenNthCalledWith(1, TARGET, 1, 'please retry')
     expect(fake.submitMessage).toHaveBeenNthCalledWith(2, TARGET, 1, 'please retry')
     expect(box).toHaveValue('')
+  })
+
+  it('gives a failed message back ahead of what was typed while it was going', async () => {
+    const { user, box } = await open()
+    let fail: (reason: Error) => void = () => undefined
+    fake.submitMessage.mockImplementationOnce(() => new Promise((_resolve, reject) => { fail = reject }))
+
+    await user.type(box, 'first{Enter}')
+    await user.type(box, 'second')
+    act(() => { fail(new Error('the daemon went away')) })
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('the daemon went away')
+    expect(box).toHaveValue('first\n\nsecond')
   })
 
   it('takes typing but sends nothing, with the reason, while the daemon is offline', async () => {
@@ -320,6 +348,90 @@ describe('while the agent works', () => {
     expect(box).toHaveValue('')
   })
 
+  it('sends a queued message now through the daemon, by its operation number', async () => {
+    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
+    daemonQueues(daemon)
+    fake.sendQueuedMessageNow.mockImplementation((_conversation, operation) => {
+      daemon.queued = daemon.queued.filter((message) => message.operation !== operation)
+      return Promise.resolve()
+    })
+    await user.type(box, 'steer left{Enter}')
+    await settle()
+
+    await user.click(screen.getByRole('button', { name: 'Send now' }))
+    await settle(2000)
+
+    expect(fake.sendQueuedMessageNow).toHaveBeenCalledWith(TARGET, 1)
+    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(fake.submitMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the message queued and says why when the daemon refuses to send it now', async () => {
+    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
+    daemonQueues(daemon)
+    fake.sendQueuedMessageNow.mockRejectedValue(new Error('the turn ended a moment ago'))
+    await user.type(box, 'steer left{Enter}')
+    await settle()
+
+    await user.click(screen.getByRole('button', { name: 'Send now' }))
+    await settle(2000)
+
+    expect(screen.getByRole('alert')).toHaveTextContent('the turn ended a moment ago')
+    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('steer left')
+  })
+
+  it('sends a message now once, however often the button is pressed before the daemon answers', async () => {
+    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
+    daemonQueues(daemon)
+    let answer: () => void = () => undefined
+    fake.sendQueuedMessageNow.mockImplementation(() => new Promise<void>((resolve) => { answer = resolve }))
+    await user.type(box, 'steer left{Enter}')
+    await settle()
+
+    const button = screen.getByRole('button', { name: 'Send now' })
+    await user.click(button)
+    await user.click(button)
+    await settle()
+
+    expect(fake.sendQueuedMessageNow).toHaveBeenCalledTimes(1)
+    expect(button).toBeDisabled()
+    answer()
+    await settle()
+    expect(button).toBeEnabled()
+  })
+
+  it('clears the reason of an earlier refusal when the daemon takes the message', async () => {
+    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
+    daemonQueues(daemon)
+    fake.sendQueuedMessageNow.mockRejectedValueOnce(new Error('the turn ended a moment ago'))
+    await user.type(box, 'steer left{Enter}')
+    await settle()
+    await user.click(screen.getByRole('button', { name: 'Send now' }))
+    await settle()
+    expect(screen.getByRole('alert')).toHaveTextContent('the turn ended a moment ago')
+
+    await user.click(screen.getByRole('button', { name: 'Send now' }))
+    await settle()
+
+    expect(fake.sendQueuedMessageNow).toHaveBeenCalledTimes(2)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('offers no Send now while a request waits for an answer', async () => {
+    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
+    daemonQueues(daemon)
+    await user.type(box, 'steer left{Enter}')
+    await settle()
+    expect(screen.getByRole('button', { name: 'Send now' })).toBeInTheDocument()
+
+    daemon.status = 'Blocked'
+    daemon.approvals = [{ request_id: 9, kind: 'Command', turn_id: 't1', command: 'rm -rf build', choices: ['Accept', 'Decline'] }]
+    await settle(5000)
+
+    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('steer left')
+    expect(screen.queryByRole('button', { name: 'Send now' })).not.toBeInTheDocument()
+  })
+
   it('stacks several queued messages behind the first one sent, and spreads them out on a click', async () => {
     const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
     daemonQueues(daemon)
@@ -332,8 +444,8 @@ describe('while the agent works', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(1)
     expect(within(list).getByRole('listitem')).toHaveTextContent('first')
     expect(within(list).getByRole('listitem')).toHaveTextContent('1 of 3')
-    // A chat the daemon runs takes a message only when the turn ends, so its cards offer no way to push one in.
-    expect(screen.queryByRole('button', { name: 'Send now' })).not.toBeInTheDocument()
+    // Every queued message can be sent now, not only one a terminal agent holds.
+    expect(within(list).getByRole('button', { name: 'Send now' })).toBeInTheDocument()
     // The count in its header is what says more wait behind it; nothing sits beside the stack.
     expect(screen.queryByRole('list', { name: 'More queued messages' })).not.toBeInTheDocument()
 

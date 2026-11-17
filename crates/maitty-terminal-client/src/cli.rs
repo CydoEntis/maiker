@@ -20,6 +20,7 @@ pub(crate) mod secret_run;
 pub(crate) mod target;
 pub(crate) mod uninstall;
 pub(crate) mod update;
+pub(crate) mod workflow;
 use crate::layout::Dir;
 use crate::protocol::*;
 use anyhow::{Context, Result, anyhow, bail};
@@ -329,12 +330,38 @@ pub fn agent_launch(cmd: &[String]) -> i32 {
     {
         run.current_dir(dir);
     }
-    match run.status() {
-        Ok(status) => status.code().unwrap_or(1),
+    let mut child = match run.spawn() {
+        Ok(child) => child,
         Err(e) => {
             eprintln!("{APP_COMMAND}: could not start {agent}: {e}");
+            return 1;
+        }
+    };
+    // Ctrl+C on the console reaches every process on it. The agent handles its own; this
+    // launcher must outlive it, or the shell gets its prompt back ("Terminate batch job?")
+    // while the agent still runs and both read the keys.
+    #[cfg(windows)]
+    ignore_console_interrupts();
+    match child.wait() {
+        Ok(status) => status.code().unwrap_or(1),
+        Err(e) => {
+            eprintln!("{APP_COMMAND}: lost {agent}: {e}");
             1
         }
+    }
+}
+
+/// Take Ctrl+C and Ctrl+Break as handled in this process only. A handler of our own, unlike
+/// ignoring them outright, is not inherited, so the agent started before it keeps its own.
+#[cfg(windows)]
+fn ignore_console_interrupts() {
+    use windows_sys::Win32::System::Console::{CTRL_BREAK_EVENT, CTRL_C_EVENT, SetConsoleCtrlHandler};
+    unsafe extern "system" fn handled(event: u32) -> windows_sys::core::BOOL {
+        i32::from(event == CTRL_C_EVENT || event == CTRL_BREAK_EVENT)
+    }
+    // SAFETY: registers a plain function that touches nothing; it lives for the whole process.
+    if unsafe { SetConsoleCtrlHandler(Some(handled), 1) } == 0 {
+        tracing::debug!("could not take Ctrl+C in the launcher: {}", std::io::Error::last_os_error());
     }
 }
 
@@ -1270,8 +1297,7 @@ fn stop_server_process() -> Result<u32> {
 }
 
 /// Whether `pid` is a `<app> daemon` process, so a stale pid file can't point a stop at
-/// something else that took the number. Where the process list can't be read, the pid
-/// file's word stands.
+/// something else that took the number.
 fn is_app_daemon(pid: u32) -> bool {
     #[cfg(target_os = "linux")]
     {
@@ -1285,8 +1311,20 @@ fn is_app_daemon(pid: u32) -> bool {
     }
     #[cfg(not(target_os = "linux"))]
     {
-        let _ = pid;
-        true
+        use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+        let pid = Pid::from_u32(pid);
+        let mut system = System::new();
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[pid]),
+            true,
+            ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always),
+        );
+        system.process(pid).is_some_and(|process| {
+            let command = process.cmd();
+            let program = command.first().map(std::path::Path::new).and_then(|p| p.file_stem());
+            program.is_some_and(|stem| stem.eq_ignore_ascii_case(crate::brand::APP_COMMAND))
+                && command.get(1).is_some_and(|argument| argument == "daemon")
+        })
     }
 }
 
@@ -2087,15 +2125,10 @@ pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<
     let status = match status {
         Some(s) => parse_status(s).ok_or_else(|| anyhow!("unknown status {s}"))?,
         None => {
-            let raw = match payload {
-                Some(p) => p.to_string(),
-                None => {
-                    let mut s = String::new();
-                    std::io::stdin().take(1 << 20).read_to_string(&mut s)?;
-                    s
-                }
+            payload_json = match payload {
+                Some(p) => serde_json::from_str(p).unwrap_or(Value::Null),
+                None => read_hook_payload(std::io::stdin().lock(), HOOK_PAYLOAD_MAX)?,
             };
-            payload_json = serde_json::from_str(&raw).unwrap_or(Value::Null);
             match status_from_hook(&payload_json) {
                 Some(s) => s,
                 None => return Ok(()),
@@ -2259,15 +2292,21 @@ fn hook_message(origin: HookOrigin, payload_json: &Value, status: HookStatus) ->
     {
         event = format!("Notification:{kind}");
     }
-    let (background, background_agents) = if event == "Stop" {
+    // A helper's own stop lists what still runs too: a helper that ends its turn while a shell it
+    // started runs is waiting on that shell, and wakes when it ends.
+    let stopped = matches!(event.as_str(), "Stop" | "SubagentStop");
+    let (background, background_agents) = if stopped {
         (
             running_background_tasks(payload_json, false),
             running_background_tasks(payload_json, true),
         )
+    } else if inner && event == "PostToolUse" {
+        // What a helper just put in the background is its own work: the daemon pairs the two.
+        (background_work_started(payload_json).into_iter().collect(), Vec::new())
     } else {
         (Vec::new(), Vec::new())
     };
-    let background_reported = event == "Stop"
+    let background_reported = stopped
         && payload_json
             .get("background_tasks")
             .is_some_and(Value::is_array);
@@ -2356,13 +2395,10 @@ const MAX_QUESTION_CHOICES: usize = 4;
 /// The most questions one prompt asks at once: Claude's own limit.
 const MAX_QUESTIONS: usize = 4;
 
-/// One question with one answer and its choices: the labels, in the order the menu numbers them.
-/// None for a question that takes several answers, has no text, or has more choices than a key
-/// can name, and for one with a label that is empty (the numbers would no longer match the menu).
-fn question_choices(entry: &Value) -> Option<(String, Vec<String>)> {
-    if entry.get("multiSelect").and_then(Value::as_bool) == Some(true) {
-        return None;
-    }
+/// One question and its choices: the labels, in the order the menu numbers them, and whether it
+/// takes several of them (`multiSelect`). None for a question with no text or more choices than a
+/// key can name, and for one with a label that is empty (the numbers would no longer match the menu).
+fn asked_question(entry: &Value) -> Option<AskQuestion> {
     let question = one_line(entry.get("question")?.as_str()?, 2000);
     let labels: Vec<String> = entry
         .get("options")?
@@ -2370,35 +2406,42 @@ fn question_choices(entry: &Value) -> Option<(String, Vec<String>)> {
         .iter()
         .map(|option| option.get("label").and_then(Value::as_str).map(|label| one_line(label, 200)))
         .collect::<Option<_>>()?;
+    let multi = entry.get("multiSelect").and_then(Value::as_bool) == Some(true);
     (!question.is_empty()
         && (2..=MAX_QUESTION_CHOICES).contains(&labels.len())
         && labels.iter().all(|label| !label.is_empty()))
-    .then_some((question, labels))
+    .then_some(AskQuestion { question, choices: labels, multi })
 }
 
-/// The choices of a prompt that is one question with one answer. A prompt with several answers
-/// is answered in the terminal, since one key cannot answer it.
-fn single_question_choices(input: Option<&Value>) -> Option<(String, Vec<String>)> {
-    let questions = input?.get("questions")?.as_array()?;
-    let [only] = questions.as_slice() else { return None };
-    question_choices(only)
-}
-
-/// A prompt that asks several questions, each with one answer: every question with its choices, in
-/// the order the prompt shows them. All of them or none: one that cannot be answered with a key
-/// leaves the whole prompt to the terminal.
-fn several_questions(input: Option<&Value>) -> Vec<AskQuestion> {
+/// Every question a prompt asks, in the order it shows them. All of them or none: one that cannot
+/// be answered with keys leaves the whole prompt to the terminal.
+fn asked_questions(input: Option<&Value>) -> Vec<AskQuestion> {
     let Some(questions) = input.and_then(|input| input.get("questions")).and_then(Value::as_array) else {
         return Vec::new();
     };
-    if !(2..=MAX_QUESTIONS).contains(&questions.len()) {
+    if !(1..=MAX_QUESTIONS).contains(&questions.len()) {
         return Vec::new();
     }
-    questions
-        .iter()
-        .map(|entry| question_choices(entry).map(|(question, choices)| AskQuestion { question, choices }))
-        .collect::<Option<Vec<_>>>()
-        .unwrap_or_default()
+    questions.iter().map(asked_question).collect::<Option<Vec<_>>>().unwrap_or_default()
+}
+
+/// How a question prompt is put to the chat: one question with one answer as its choices, several
+/// with one answer each as `questions`, and any with a question that takes several answers as
+/// `form` (which a peer from before it does not read, and so leaves to the terminal).
+struct AskedQuestions {
+    single: Option<AskQuestion>,
+    questions: Vec<AskQuestion>,
+    form: Vec<AskQuestion>,
+}
+
+fn sort_questions(asked: Vec<AskQuestion>) -> AskedQuestions {
+    if asked.iter().any(|question| question.multi) {
+        return AskedQuestions { single: None, questions: Vec::new(), form: asked };
+    }
+    match <[AskQuestion; 1]>::try_from(asked) {
+        Ok([only]) => AskedQuestions { single: Some(only), questions: Vec::new(), form: Vec::new() },
+        Err(several) => AskedQuestions { single: None, questions: several, form: Vec::new() },
+    }
 }
 
 /// A question Claude asks with its choices, on one line: `Which? 1 Fast · 2 Safe`. A tool input
@@ -2431,10 +2474,10 @@ fn permission_ask(payload: &Value) -> Option<PermissionAsk> {
         return None;
     }
     let input = payload.get("tool_input");
-    let single = if tool == QUESTION_TOOL { single_question_choices(input) } else { None };
-    let choices = single.as_ref().map(|(_, labels)| labels.clone()).unwrap_or_default();
-    let detail = if let Some((question, _)) = single {
-        question
+    let asked = sort_questions(if tool == QUESTION_TOOL { asked_questions(input) } else { Vec::new() });
+    let choices = asked.single.as_ref().map(|only| only.choices.clone()).unwrap_or_default();
+    let detail = if let Some(only) = asked.single {
+        only.question
     } else if tool == QUESTION_TOOL {
         question_subject(input)
     } else {
@@ -2449,7 +2492,8 @@ fn permission_ask(payload: &Value) -> Option<PermissionAsk> {
         detail,
         answerable: false,
         choices,
-        questions: if tool == QUESTION_TOOL { several_questions(input) } else { Vec::new() },
+        questions: asked.questions,
+        form: asked.form,
     })
 }
 
@@ -2467,6 +2511,24 @@ const BACKGROUND_TASK_OVER: &[&str] = &[
     "cancelled",
     "canceled",
 ];
+
+/// The background task a tool call just started: a shell run in the background
+/// (`backgroundTaskId`) or a helper agent launched without waiting (`isAsync` with its
+/// `agentId`). Its id is the one the agent's later `background_tasks` lists.
+fn background_work_started(payload: &Value) -> Option<String> {
+    let response = payload.get("tool_response")?;
+    let id = response
+        .get("backgroundTaskId")
+        .or_else(|| {
+            response
+                .get("isAsync")
+                .and_then(Value::as_bool)
+                .filter(|launched_async| *launched_async)
+                .and_then(|_| response.get("agentId"))
+        })?
+        .as_str()?;
+    (!id.is_empty()).then(|| id.to_string())
+}
 
 /// The ids of the background tasks Claude's Stop says are still in flight; it wakes itself when
 /// one ends. With `agents_only`, just the helper agents among them (`"type": "subagent"`).
@@ -2697,6 +2759,39 @@ fn back_up_once(path: &std::path::Path, ext: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The most of a hook's input kept. A tool's whole output comes with it, and can be far larger.
+const HOOK_PAYLOAD_MAX: usize = 4 << 20;
+
+/// The top-level text fields a hook's report is made of, read off the start of an input too large
+/// to keep whole: the agent writes them before the tool's input and output.
+const HOOK_HEAD_FIELDS: [&str; 8] = [
+    "session_id", "transcript_path", "cwd", "hook_event_name", "tool_name", "notification_type", "agent_id", "agent_type",
+];
+
+/// A hook's JSON input, all of it read so the agent never blocks writing it. Past `max` bytes the
+/// rest is dropped and the report is made of the fields at its start (`HOOK_HEAD_FIELDS`); cut JSON
+/// does not parse, and a hook that reports nothing left the pane's status stuck.
+fn read_hook_payload(mut input: impl std::io::Read, max: usize) -> Result<Value> {
+    let mut kept = Vec::new();
+    (&mut input).take(max as u64).read_to_end(&mut kept)?;
+    let dropped = std::io::copy(&mut input, &mut std::io::sink())?;
+    if dropped == 0 {
+        return Ok(serde_json::from_slice(&kept).unwrap_or(Value::Null));
+    }
+    let head = String::from_utf8_lossy(&kept);
+    let mut fields = serde_json::Map::new();
+    for name in HOOK_HEAD_FIELDS {
+        let field = regex::Regex::new(&format!(r#""{name}"\s*:\s*("(?:[^"\\]|\\.)*")"#))?;
+        if let Some(text) = field
+            .captures(&head)
+            .and_then(|found| serde_json::from_str::<String>(&found[1]).ok())
+        {
+            fields.insert(name.to_string(), Value::String(text));
+        }
+    }
+    Ok(if fields.is_empty() { Value::Null } else { Value::Object(fields) })
+}
+
 /// The daemon the desktop app bundles: the same program under another name.
 const BUNDLED_DAEMON: &str = concat!(env!("APP_COMMAND"), "-gui-daemon");
 
@@ -2739,9 +2834,30 @@ fn keep_copy(running: &std::path::Path, folder: &std::path::Path) -> Result<Path
     let partial = folder.join(format!("{name}.partial"));
     std::fs::copy(running, &partial)
         .with_context(|| format!("copying {} to {}", running.display(), partial.display()))?;
-    std::fs::rename(&partial, &target)
-        .with_context(|| format!("replacing {}", target.display()))?;
+    replace_file(&partial, &target).with_context(|| format!("replacing {}", target.display()))?;
     Ok(target)
+}
+
+/// `from` renamed over `to`. Windows refuses to replace a program that is running (a hook in
+/// flight), but lets it be renamed: the old copy is moved aside first and removed once nothing
+/// runs it, at the next replacement if not now.
+fn replace_file(from: &std::path::Path, to: &std::path::Path) -> std::io::Result<()> {
+    let Err(refused) = std::fs::rename(from, to) else {
+        return Ok(());
+    };
+    if !cfg!(windows) || !to.exists() {
+        return Err(refused);
+    }
+    let aside = to.with_extension("old");
+    if aside.exists() {
+        std::fs::remove_file(&aside)?;
+    }
+    std::fs::rename(to, &aside)?;
+    std::fs::rename(from, to)?;
+    if let Err(e) = std::fs::remove_file(&aside) {
+        tracing::debug!("{} is still running; removed next time: {e}", aside.display());
+    }
+    Ok(())
 }
 
 /// The copy has the running file's size and is not older than it.
@@ -2810,8 +2926,14 @@ fn apply_statusline_setting(
     kept: &std::path::Path,
     before: &str,
 ) -> Result<()> {
-    let change =
-        maitty_provider_claude::update_statusline(root, exe, &app_hook_names(), uninstall, before)?;
+    let change = maitty_provider_claude::update_statusline(
+        root,
+        exe,
+        claude_hook_shell(),
+        &app_hook_names(),
+        uninstall,
+        before,
+    )?;
     if let Some(previous) = change.previous_command_to_save {
         if let Some(dir) = kept.parent() {
             std::fs::create_dir_all(dir)?;
@@ -2872,30 +2994,54 @@ pub fn statusline() {
     }
 }
 
+/// The Git Bash Claude Code runs command lines through on Windows: the one it is told of, else
+/// Git for Windows' own, at its usual places or beside the `git` on PATH.
+fn git_bash() -> Option<PathBuf> {
+    let beside_git = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path)
+            .map(|dir| dir.join("git.exe"))
+            .find(|git| git.is_file())
+            .and_then(|git| git.parent()?.parent().map(|root| root.join("bin").join("bash.exe")))
+    });
+    std::env::var_os("CLAUDE_CODE_GIT_BASH_PATH")
+        .map(PathBuf::from)
+        .into_iter()
+        .chain(
+            [
+                "C:/Program Files/Git/bin/bash.exe",
+                "C:/Program Files (x86)/Git/bin/bash.exe",
+            ]
+            .map(PathBuf::from),
+        )
+        .chain(beside_git)
+        .find(|p| p.is_file())
+}
+
+/// The shell Claude Code runs this computer's hooks and status line through.
+fn claude_hook_shell() -> maitty_provider_claude::HookShell {
+    use maitty_provider_claude::HookShell;
+    if !cfg!(windows) {
+        HookShell::Posix
+    } else if git_bash().is_some() {
+        HookShell::GitBash
+    } else {
+        HookShell::PowerShell
+    }
+}
+
 /// A command line run the way Claude Code runs its own: by bash (Git Bash on Windows, where
-/// cmd stands in when there's none).
+/// PowerShell stands in when there's none).
 fn shell_line(line: &str) -> std::process::Command {
     if cfg!(windows) {
-        let bash = std::env::var_os("CLAUDE_CODE_GIT_BASH_PATH")
-            .map(PathBuf::from)
-            .or_else(|| {
-                [
-                    "C:/Program Files/Git/bin/bash.exe",
-                    "C:/Program Files (x86)/Git/bin/bash.exe",
-                ]
-                .iter()
-                .map(PathBuf::from)
-                .find(|p| p.is_file())
-            });
-        match bash {
+        match git_bash() {
             Some(b) => {
                 let mut c = std::process::Command::new(b);
                 c.args(["-c", line]);
                 c
             }
             None => {
-                let mut c = std::process::Command::new("cmd");
-                c.args(["/C", line]);
+                let mut c = std::process::Command::new("powershell");
+                c.args(["-NoProfile", "-Command", line]);
                 c
             }
         }
@@ -2965,6 +3111,12 @@ fn json_hooks(
                             agent,
                             timeout,
                             matcher: *matcher,
+                            // Only Claude Code's runs are known; other tools keep the quoted line.
+                            shell: if agent == "claude" {
+                                claude_hook_shell()
+                            } else {
+                                maitty_provider_claude::HookShell::Posix
+                            },
                         },
                     ))
                 }),
@@ -3012,7 +3164,10 @@ pub fn stale_claude_hooks() -> Vec<String> {
     let Some(root) = jsonc::parse_value(&text) else {
         return Vec::new();
     };
-    stale_in(&root, &format!("\"{exe}\" hook claude"))
+    stale_in(
+        &root,
+        &maitty_provider_claude::command_line(&exe, "hook claude", claude_hook_shell()),
+    )
 }
 
 /// The app's Claude hooks are in and run this the app (the check `<app> doctor` makes). Reads a
@@ -3027,7 +3182,8 @@ fn stale_in(root: &Value, want: &str) -> Vec<String> {
     maitty_provider_claude::stale_hooks(root, want, &app_hook_names())
 }
 
-/// The app's Claude hooks are in, but not its status line (installed before there was one).
+/// The app's Claude hooks are in, but not its status line (installed before there was one), or
+/// its status line is written for a shell this computer's Claude Code does not run it through.
 fn needs_statusline() -> bool {
     let Ok(text) = std::fs::read_to_string(claude_settings()) else {
         return false;
@@ -3049,7 +3205,11 @@ fn needs_statusline() -> bool {
         .and_then(|s| s.get("command"))
         .and_then(Value::as_str)
         .unwrap_or_default();
-    hooked && !maitty_provider_claude::is_our_statusline(cmd, &app_hook_names())
+    let ours = maitty_provider_claude::is_our_statusline(cmd, &app_hook_names());
+    let as_written = this_exe().is_ok_and(|exe| {
+        cmd == maitty_provider_claude::command_line(&exe, "statusline", claude_hook_shell())
+    });
+    hooked && (!ours || !as_written)
 }
 
 /// False for a side server (<APP>_SOCKET) or a build in a source checkout: neither may take
@@ -3507,6 +3667,40 @@ pub fn allow(dir: Option<std::path::PathBuf>) -> Result<()> {
     }
     println!("(if the commands change, they won't run until you allow them again)");
     Ok(())
+}
+
+#[cfg(test)]
+mod hook_payload_tests {
+    use super::read_hook_payload;
+    use serde_json::json;
+
+    #[test]
+    fn a_hook_input_is_read_whole_when_it_fits() {
+        let input = json!({ "hook_event_name": "Stop", "session_id": "s1" }).to_string();
+        let read = read_hook_payload(input.as_bytes(), 1 << 10).unwrap();
+        assert_eq!(read, json!({ "hook_event_name": "Stop", "session_id": "s1" }));
+    }
+
+    /// A tool printed more than is kept: the report still says which event it was, so the
+    /// pane's status moves on.
+    #[test]
+    fn a_hook_input_too_large_to_keep_still_reports_its_event() {
+        let input = json!({
+            "session_id": "s1",
+            "cwd": "C:\\work\\\"quoted\"",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_input": { "cwd": "elsewhere" },
+            "tool_response": "x".repeat(4096),
+        })
+        .to_string();
+        let read = read_hook_payload(input.as_bytes(), 1024).unwrap();
+        assert_eq!(read["hook_event_name"], "PostToolUse");
+        assert_eq!(read["tool_name"], "Bash");
+        assert_eq!(read["session_id"], "s1");
+        assert_eq!(read["cwd"], "C:\\work\\\"quoted\"");
+        assert!(read.get("tool_response").is_none());
+    }
 }
 
 #[cfg(test)]
@@ -4087,10 +4281,14 @@ mod tests {
             &kept,
         )
         .unwrap();
-        assert_eq!(
-            root["statusLine"]["command"],
+        // On Windows a path with nothing to quote is left bare, so it runs in Git Bash and in
+        // PowerShell alike; elsewhere it is quoted for sh.
+        let expected = if cfg!(windows) {
+            concat!("C:/x/", env!("APP_COMMAND"), ".exe statusline")
+        } else {
             concat!("\"C:/x/", env!("APP_COMMAND"), ".exe\" statusline")
-        );
+        };
+        assert_eq!(root["statusLine"]["command"], expected);
         assert_eq!(
             root["statusLine"]["padding"], 1,
             "your settings for it stay"
@@ -4367,6 +4565,54 @@ mod tests {
         assert!(reported(json!({"hook_event_name":"Stop","background_tasks":[]})), "an empty list is nothing running");
         assert!(!reported(json!({"hook_event_name":"Stop"})), "no list is nothing said");
         assert!(!reported(json!({"hook_event_name":"PostToolUse","background_tasks":[]})), "only a stop is asked");
+        assert!(
+            reported(json!({"hook_event_name":"SubagentStop","agent_id":"a1","background_tasks":[]})),
+            "a helper's stop lists them too"
+        );
+    }
+
+    /// Claude Code 2.1.325's shapes, as captured from its hooks.
+    #[test]
+    fn a_helper_says_what_it_put_in_the_background_and_what_still_runs_when_it_stops() {
+        let message = |payload: Value| {
+            let origin = super::HookOrigin {
+                term: 1,
+                agent: "claude".into(),
+                pid: 0,
+                token: String::new(),
+            };
+            let status = super::status_from_hook(&payload).unwrap_or(HookStatus::Same);
+            let ClientMsg::Hook {
+                background,
+                background_agents,
+                background_reported,
+                subagent,
+                ..
+            } = super::hook_message(origin, &payload, status)
+            else {
+                panic!("expected hook report")
+            };
+            (background, background_agents, background_reported, subagent.map(|s| s.start))
+        };
+        let shell = json!({"hook_event_name":"PostToolUse","agent_id":"a1","agent_type":"fork","tool_name":"Bash",
+            "tool_input":{"command":"sleep 20","run_in_background":true},
+            "tool_response":{"stdout":"","stderr":"","interrupted":false,"isImage":false,"noOutputExpected":false,"backgroundTaskId":"b1"}});
+        assert_eq!(message(shell), (vec!["b1".to_string()], vec![], false, Some(true)), "the shell is the helper's own work");
+        let helper = json!({"hook_event_name":"PostToolUse","agent_id":"a1","tool_name":"Agent",
+            "tool_response":{"isAsync":true,"status":"async_launched","agentId":"a2"}});
+        assert_eq!(message(helper).0, ["a2"], "so is a helper it launched without waiting");
+        let foreground = json!({"hook_event_name":"PostToolUse","agent_id":"a1","tool_name":"Bash","tool_response":{"stdout":"ok"}});
+        assert!(message(foreground).0.is_empty(), "a call that finished started nothing");
+        let parents_own = json!({"hook_event_name":"PostToolUse","tool_name":"Bash","tool_response":{"backgroundTaskId":"b9"}});
+        assert!(message(parents_own).0.is_empty(), "the session's own shells are listed at its stop");
+        let stop = json!({"hook_event_name":"SubagentStop","agent_id":"a1","agent_type":"fork","stop_hook_active":false,
+            "background_tasks":[{"id":"a1","type":"subagent","status":"running","agent_type":"fork"},
+                                {"id":"b1","type":"shell","status":"running","command":"sleep 20"}]});
+        assert_eq!(
+            message(stop),
+            (vec!["a1".to_string(), "b1".to_string()], vec!["a1".to_string()], true, Some(false)),
+            "its stop lists what still runs"
+        );
     }
 
     #[test]
@@ -4773,7 +5019,8 @@ mod tests {
         .expect("a question");
         assert_eq!(question.detail, "Which database?");
         assert_eq!(question.choices, ["SQLite", "Postgres"]);
-        // Several questions, or several answers, cannot be answered with one key: numbered in the line.
+        // A question with several answers is carried as a form, still numbered in the line for a
+        // peer that reads only that.
         let many = report(json!({
             "hook_event_name": "PermissionRequest",
             "tool_name": "AskUserQuestion",
@@ -4784,6 +5031,7 @@ mod tests {
         .expect("a multi-select question");
         assert_eq!((many.detail.as_str(), many.choices.len()), ("Which? 1 A · 2 B", 0));
         assert!(many.questions.is_empty());
+        assert_eq!(many.form.iter().map(|q| (q.question.as_str(), q.multi)).collect::<Vec<_>>(), [("Which?", true)]);
         // Several questions with one answer each are carried whole, in order, for the chat to answer.
         let several = report(json!({
             "hook_event_name": "PermissionRequest",
@@ -4799,7 +5047,8 @@ mod tests {
             several.questions.iter().map(|q| (q.question.as_str(), q.choices.len())).collect::<Vec<_>>(),
             [("Which database?", 3), ("Which language?", 2)]
         );
-        // One of them takes several answers: the whole prompt stays the terminal's.
+        // One of them takes several answers: the whole prompt is a form, and no peer from before
+        // forms reads it as questions with one answer each.
         let mixed = report(json!({
             "hook_event_name": "PermissionRequest",
             "tool_name": "AskUserQuestion",
@@ -4809,7 +5058,12 @@ mod tests {
             ]},
         }))
         .expect("a mixed prompt");
-        assert!(mixed.questions.is_empty());
+        assert!(mixed.questions.is_empty() && mixed.choices.is_empty());
+        assert_eq!(
+            mixed.form.iter().map(|q| (q.question.as_str(), q.choices.len(), q.multi)).collect::<Vec<_>>(),
+            [("Which?", 2, false), ("Which ones?", 2, true)]
+        );
+        assert!(several.form.is_empty() && question.form.is_empty());
 
         // A tool with no subject field is still a question; one with no tool is not reported.
         let bare = report(json!({"hook_event_name": "PermissionRequest", "tool_name": "ExitPlanMode"}))

@@ -325,9 +325,40 @@ impl Finder {
             here_repo: false,
             wanted: None,
             for_setting: None,
+            machine: MachineId::LOCAL,
+            tag: 0,
+            waiting: false,
+            abs: None,
+            missing: false,
         };
         f.refresh();
         f
+    }
+
+    /// The folders of another machine, from its home folder.
+    pub fn on(machine: MachineId) -> Finder {
+        let mut f = Finder::new(Path::new(""));
+        f.machine = machine;
+        f.q = "~/".into();
+        f.dir = PathBuf::new();
+        f.wanted = None;
+        f.refresh();
+        f
+    }
+
+    /// The folders are another machine's.
+    pub fn remote(&self) -> bool {
+        self.machine != MachineId::LOCAL
+    }
+
+    /// What separates folders in what is typed: `/` on another machine, whatever it runs.
+    pub fn sep(&self) -> char {
+        if self.remote() { '/' } else { std::path::MAIN_SEPARATOR }
+    }
+
+    /// A folder as it is typed back into the box.
+    pub fn spelled(&self, p: &Path) -> String {
+        if self.remote() { p.display().to_string() } else { tilde(p) }
     }
 
     /// The subfolders of `dir` as (name, is a git repo), and whether `dir` is one. Reads the
@@ -360,8 +391,32 @@ impl Finder {
         true
     }
 
+    /// Another machine's answer to listing `tag`, unless a later folder was asked for since.
+    pub(in crate::client) fn listed_remote(&mut self, tag: u64, listing: crate::protocol::FolderListing) -> bool {
+        if !self.remote() || tag != self.tag {
+            return false;
+        }
+        let mut list: Vec<(String, bool)> = listing
+            .entries
+            .into_iter()
+            .map(|e| (crate::hidden::sanitize(&e.name, false), e.git.is_some()))
+            .filter(|(n, _)| !n.is_empty() && !n.contains(['/', '\\']))
+            .collect();
+        list.sort_by_key(|(n, _)| n.to_lowercase());
+        self.list = list;
+        self.here_repo = false;
+        self.waiting = false;
+        self.missing = !listing.exists;
+        self.abs = Some(crate::hidden::sanitize(&listing.path, false)).filter(|p| !p.is_empty());
+        self.sel = self.sel.min(self.rows().len().saturating_sub(1));
+        true
+    }
+
     /// The typed text as (folder, the part being typed in it).
     pub(in crate::client) fn split(&self) -> (PathBuf, String) {
+        if self.remote() {
+            return self.split_remote();
+        }
         let sep = std::path::MAIN_SEPARATOR;
         let mut q = self.q.replace(['/', '\\'], &sep.to_string());
         if let Some(rest) = q.strip_prefix("cd ") {
@@ -384,6 +439,25 @@ impl Finder {
         (normalize(Path::new(dir)), part)
     }
 
+    /// `split` for another machine: its home stays `~` for its daemon to read, a path is
+    /// absolute or under that home, and `..` is worked out in the text.
+    fn split_remote(&self) -> (PathBuf, String) {
+        let mut q = self.q.replace('\\', "/");
+        if let Some(rest) = q.strip_prefix("cd ") {
+            q = rest.to_string();
+        }
+        let full = if q.starts_with('~') || q.starts_with('/') || q.get(1..2) == Some(":") {
+            q
+        } else {
+            format!("~/{q}")
+        };
+        let (dir, part) = match full.rfind('/') {
+            Some(i) => (&full[..=i], full[i + 1..].to_string()),
+            None => (full.as_str(), String::new()),
+        };
+        (PathBuf::from(remote_normalize(dir)), part)
+    }
+
     /// Follow the text to the folder being typed in. A new folder is not listed here: this
     /// runs on every key and the folder can be large or on a slow disk, so it is asked for
     /// (`wanted`) and its subfolders show when they arrive.
@@ -392,6 +466,9 @@ impl Finder {
         if dir != self.dir {
             self.list.clear();
             self.here_repo = false;
+            self.abs = None;
+            self.missing = false;
+            self.waiting = self.remote();
             self.wanted = Some(dir.clone());
             self.dir = dir;
         }
@@ -401,6 +478,24 @@ impl Finder {
     /// Rows shown: "." (open this folder), ".." (up), then matching subfolders.
     pub fn rows(&self) -> Vec<(String, PathBuf, bool)> {
         let (dir, part) = self.split();
+        // Another machine's folder as its daemon spelled it, once it has answered for it.
+        let base = match &self.abs {
+            Some(abs) if self.remote() && dir == self.dir => PathBuf::from(abs),
+            _ => dir.clone(),
+        };
+        let join = |n: &str| -> PathBuf {
+            if self.remote() {
+                let b = base.display().to_string();
+                PathBuf::from(format!("{}/{n}", b.trim_end_matches('/')))
+            } else {
+                base.join(n)
+            }
+        };
+        let parent = if self.remote() {
+            remote_parent(&base.display().to_string()).map(PathBuf::from)
+        } else {
+            base.parent().map(Path::to_path_buf)
+        };
         let p = part.to_lowercase();
         let fuzzy = |n: &str| {
             let mut it = p.chars().peekable();
@@ -413,14 +508,10 @@ impl Finder {
         };
         let mut out = Vec::new();
         if part.is_empty() {
-            out.push((".".to_string(), dir.clone(), self.here_repo && dir == self.dir));
+            out.push((".".to_string(), base.clone(), self.here_repo && dir == self.dir));
         }
-        if dir.parent().is_some() && (part.is_empty() || "..".starts_with(&part)) {
-            out.push((
-                "..".to_string(),
-                dir.parent().map(Path::to_path_buf).unwrap_or_default(),
-                false,
-            ));
+        if let Some(up) = parent.filter(|_| part.is_empty() || "..".starts_with(&part)) {
+            out.push(("..".to_string(), up, false));
         }
         let mut kids: Vec<_> = self
             .list
@@ -428,10 +519,7 @@ impl Finder {
             .filter(|(n, _)| part == ".." || fuzzy(n))
             .collect();
         kids.sort_by_key(|(n, _)| !n.to_lowercase().starts_with(&p));
-        out.extend(
-            kids.into_iter()
-                .map(|(n, repo)| (n.clone(), dir.join(n), *repo)),
-        );
+        out.extend(kids.into_iter().map(|(n, repo)| (n.clone(), join(n), *repo)));
         out
     }
 
@@ -448,6 +536,38 @@ impl Finder {
             _ => String::new(),
         }
     }
+}
+
+/// The questions for other machines' folder listings; each answer names the one it answers.
+static NEXT_LISTING: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+
+pub(in crate::client) fn next_listing_tag() -> u64 {
+    NEXT_LISTING.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Another machine's path with `.` and `..` worked out, its start (`/`, `~`, `C:`) kept.
+pub(in crate::client) fn remote_normalize(p: &str) -> String {
+    let rooted = p.starts_with('/');
+    let mut parts: Vec<&str> = Vec::new();
+    for (i, c) in p.split('/').enumerate() {
+        match c {
+            "" | "." => {}
+            ".." if parts.len() > usize::from(!rooted) => {
+                parts.pop();
+            }
+            ".." if rooted || i > 0 => {}
+            c => parts.push(c),
+        }
+    }
+    let joined = parts.join("/");
+    if rooted { format!("/{joined}") } else { joined }
+}
+
+/// The folder above another machine's `p`; none at its top (`/`, `~` before it is spelled out, `C:`).
+pub(in crate::client) fn remote_parent(p: &str) -> Option<String> {
+    let p = p.trim_end_matches('/');
+    let i = p.rfind('/')?;
+    Some(if i == 0 { "/".to_string() } else { p[..i].to_string() })
 }
 
 /// Resolve `.` and `..` without touching the disk.
@@ -477,11 +597,13 @@ pub(in crate::client) fn draw_finder(
     let buf = f.buffer_mut();
     dim_all(app, buf, area, t);
     let title = if fd.for_setting.is_some() {
-        "Choose the start folder"
+        "Choose the start folder".to_string()
+    } else if fd.remote() {
+        format!("Open a folder on {}", crate::hidden::sanitize(app.machine_name(fd.machine), false))
     } else {
-        "Open a folder"
+        "Open a folder".to_string()
     };
-    let r = panel(app, buf, area, 92, 24, title, &[], t);
+    let r = panel(app, buf, area, 92, 24, &title, &[], t);
     let input = Rect {
         x: r.x + 1,
         y: r.y + 2,
@@ -527,8 +649,8 @@ pub(in crate::client) fn draw_finder(
             seg("type a path, ", c.fg(t.muted)),
             seg("cd ..", c.fg(t.text)),
             seg(" works too · fuzzy: ", c.fg(t.muted)),
-            seg("~\\c\\sa", c.fg(t.text)),
-            seg(" finds ~\\code\\shop-api", c.fg(t.muted)),
+            seg(if fd.remote() { "~/c/sa" } else { "~\\c\\sa" }, c.fg(t.text)),
+            seg(if fd.remote() { " finds ~/code/shop-api" } else { " finds ~\\code\\shop-api" }, c.fg(t.muted)),
         ],
         r.right(),
     );
@@ -537,7 +659,10 @@ pub(in crate::client) fn draw_finder(
         r.x + 3,
         r.y + 5,
         &[seg(
-            tilde(&fd.dir),
+            match &fd.abs {
+                Some(abs) => abs.clone(),
+                None => fd.spelled(&fd.dir),
+            },
             c.fg(t.muted).add_modifier(Modifier::BOLD),
         )],
         r.right(),
@@ -554,7 +679,7 @@ pub(in crate::client) fn draw_finder(
         let open = model.iter().any(|p| path_key(&p.path) == path_key(path));
         let (icon, label) = match n.as_str() {
             "." => ("◇ ", format!("open {} here", folder_name(path))),
-            ".." => ("↰ ", format!(".. (up to {})", tilde(path))),
+            ".." => ("↰ ", format!(".. (up to {})", fd.spelled(path))),
             _ => (if *repo { "◆ " } else { "▸ " }, n.clone()),
         };
         let mut ls = st.fg(if sel { t.strong } else { t.fg });
@@ -607,7 +732,21 @@ pub(in crate::client) fn draw_finder(
             ScreenHit::FinderPick(i),
         );
     }
-    if rows.is_empty() {
+    if fd.remote() && (fd.waiting || fd.missing) {
+        let say = if fd.waiting {
+            format!("reading {}…", crate::hidden::sanitize(app.machine_name(fd.machine), false))
+        } else {
+            "no such folder there".to_string()
+        };
+        let y = r.y + 6 + rows.len().min(max) as u16;
+        put(
+            buf,
+            r.x + 3,
+            y,
+            &[seg(say, c.fg(t.muted).add_modifier(Modifier::ITALIC))],
+            r.right(),
+        );
+    } else if rows.is_empty() {
         put(
             buf,
             r.x + 3,

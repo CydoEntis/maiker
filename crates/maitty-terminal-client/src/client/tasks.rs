@@ -185,12 +185,40 @@ fn commit_all(t: &TaskRow) -> Result<bool, String> {
     Ok(true)
 }
 
-pub fn commit(t: &TaskRow) -> Result<String, String> {
-    Ok(if commit_all(t)? {
-        format!("committed {} on {}", t.name, t.branch)
-    } else {
-        "nothing to commit".into()
-    })
+/// Commit `paths` (every change when None) with `message`. What else is staged stays out of a
+/// commit that names paths, as the daemon's commit does for another machine's checkout.
+pub fn commit_with(t: &TaskRow, paths: Option<&[String]>, message: &str) -> Result<String, String> {
+    let message = message.trim();
+    if message.is_empty() {
+        return Err("a commit needs a message".into());
+    }
+    let Some(paths) = paths.filter(|p| !p.is_empty()) else {
+        if git(&t.dir, &["status", "--porcelain"])?.trim().is_empty() {
+            return Ok("nothing to commit".into());
+        }
+        git(&t.dir, &["add", "-A"])?;
+        git(&t.dir, &["commit", "-m", message])?;
+        return Ok(format!("committed every change on {}", t.branch));
+    };
+    // A path git would read as an option, or one leading out of the checkout, is refused.
+    if paths
+        .iter()
+        .any(|p| p.starts_with('-') || p.split('/').any(|part| part == ".."))
+    {
+        return Err("a file to commit is outside the checkout".into());
+    }
+    let mut add = vec!["add", "-A", "--"];
+    add.extend(paths.iter().map(String::as_str));
+    git(&t.dir, &add)?;
+    let mut commit = vec!["commit", "-m", message, "--"];
+    commit.extend(paths.iter().map(String::as_str));
+    git(&t.dir, &commit)?;
+    let n = paths.len();
+    Ok(format!(
+        "committed {n} file{} on {}",
+        if n == 1 { "" } else { "s" },
+        t.branch
+    ))
 }
 
 /// Commit what's left, then merge the task branch into the main checkout's branch.
@@ -354,6 +382,50 @@ mod tests {
             super::uncommitted_lines(&repo.join("missing")).is_err(),
             "no checkout there"
         );
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn a_commit_of_ticked_files_takes_only_them_with_the_message_written() {
+        let repo = std::env::temp_dir().join(format!("{APP_COMMAND}-ticked-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&repo);
+        std::fs::create_dir_all(&repo).unwrap();
+        let git = |args: &[&str]| crate::proc::git(&repo, args).unwrap();
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(repo.join("a.txt"), "one\n").unwrap();
+        std::fs::write(repo.join("b.txt"), "one\n").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-qm", "one"]);
+        std::fs::write(repo.join("a.txt"), "two\n").unwrap();
+        std::fs::write(repo.join("b.txt"), "two\n").unwrap();
+        std::fs::write(repo.join("new.txt"), "new\n").unwrap();
+        // Staged but not ticked: it stays out.
+        git(&["add", "b.txt"]);
+        let task = super::TaskRow {
+            ws: 0,
+            name: "main".into(),
+            branch: "main".into(),
+            base: "main".into(),
+            stage: super::Stage::Ready,
+            summary: String::new(),
+            dirty: 0,
+            ahead: 0,
+            agent: None,
+            dir: repo.clone(),
+            root: repo.clone(),
+        };
+        let ticked = ["a.txt".to_string(), "new.txt".to_string()];
+        assert_eq!(super::commit_with(&task, Some(&ticked), "  "), Err("a commit needs a message".into()));
+        assert_eq!(super::commit_with(&task, Some(&ticked), "Tick two"), Ok("committed 2 files on main".into()));
+        assert_eq!(git(&["log", "-1", "--format=%s"]).trim(), "Tick two");
+        let shown = git(&["show", "--name-only", "--format=", "HEAD"]);
+        assert_eq!(shown.split_whitespace().collect::<Vec<_>>(), ["a.txt", "new.txt"]);
+        assert!(git(&["status", "--porcelain"]).contains("M  b.txt"), "b.txt still staged, not committed");
+        assert!(super::commit_with(&task, Some(&["../x".to_string()]), "m").is_err());
+        assert_eq!(super::commit_with(&task, None, "The rest"), Ok("committed every change on main".into()));
+        assert_eq!(super::commit_with(&task, None, "Again"), Ok("nothing to commit".into()));
         let _ = std::fs::remove_dir_all(&repo);
     }
 

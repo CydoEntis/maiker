@@ -453,6 +453,23 @@ fn what_the_flooding_machine_gets_through_in_a_flush_is_held_to_its_budget() {
 }
 
 #[test]
+fn a_machines_github_report_is_given_with_its_machine_and_tag() {
+    use maitty_shared::protocol::{GitHubAccount, GitHubReport};
+    let mut streams = Streams::default();
+    let report = GitHubReport {
+        installed: true,
+        accounts: vec![GitHubAccount { login: "me".into(), active: true }],
+        problem: None,
+    };
+    let answer = ServerMsg::Reply(Reply::GitHubAccounts { tag: 7, report: report.clone() });
+    let said = streams.on_message(BOX, answer, Instant::now());
+    assert!(matches!(
+        &said[..],
+        [Out::GitHubAccounts { machine, tag: 7, report: given }] if *machine == BOX && *given == report
+    ));
+}
+
+#[test]
 fn what_another_machine_says_went_wrong_is_given_and_this_computers_is_not() {
     let mut streams = Streams::default();
     let now = Instant::now();
@@ -523,6 +540,17 @@ fn what_a_program_copies_is_given_from_another_machine_and_from_this_computer() 
         &here[..],
         [Out::Clipboard { machine, text }] if *machine == LOCAL && text == "ls"
     ));
+}
+
+#[test]
+fn an_agents_ticket_setup_ask_is_given_from_this_computer_only_and_cleaned() {
+    use maitty_shared::ticket_links::TicketSetupAsk;
+    let mut streams = Streams::default();
+    let now = Instant::now();
+    let msg = || ServerMsg::TicketSetup(TicketSetupAsk { term: 4, folder: "/repo".into(), source: None, link: "https://a.b/\u{1b}[2Jx".into() });
+    assert!(streams.on_message(BOX, msg(), now).is_empty(), "another machine's agent opens nothing here");
+    let here = streams.on_message(LOCAL, msg(), now);
+    assert!(matches!(&here[..], [Out::TicketSetup(ask)] if ask.term == 4 && ask.link == "https://a.b/[2Jx"));
 }
 
 #[test]

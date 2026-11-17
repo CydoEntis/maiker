@@ -393,7 +393,6 @@ mod tests {
 #[cfg(all(test, unix))]
 mod unix_tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     const TIMEOUT: Duration = Duration::from_secs(20);
@@ -423,8 +422,7 @@ mod unix_tests {
             let dir = self.0.join("my tools").join("bin");
             std::fs::create_dir_all(&dir).unwrap();
             let tool = dir.join("tool");
-            std::fs::write(&tool, "#!/bin/sh\nexit 0\n").unwrap();
-            std::fs::set_permissions(&tool, std::fs::Permissions::from_mode(0o755)).unwrap();
+            crate::test_support::write_program(&tool, "#!/bin/sh\nexit 0\n");
             dir
         }
     }

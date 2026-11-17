@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardHead } from '@/components/ui/card'
 import { AppIcon } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
 import type { SubagentEvent } from '../chatEvents'
+import { OpenSubagentContext } from '../openSubagent'
 import { agentsSummary, elapsedMs, tookText } from '../stepInfo'
 import { StepGlyph } from './cardParts'
 
@@ -21,12 +24,16 @@ type AgentRowProps = {
   process: string
 }
 
-/** One helper agent: its tile and status, its title and type, what it was asked, and its report when opened. */
+/**
+ * One helper agent: its tile and status, its title and type, what it was asked, and its report when opened, with
+ * **Open its chat** while it runs.
+ */
 export function AgentRow({ agent, process }: AgentRowProps) {
   const [open, setOpen] = useState(false)
   const report = agent.report.trim()
-  const hasMore = agent.prompt !== null || report !== ''
   const asked = agent.prompt?.split('\n')[0] ?? null
+  const openChat = useContext(OpenSubagentContext)(agent.title, asked)
+  const hasMore = agent.prompt !== null || report !== '' || openChat !== null
   return (
     <li>
       <button type="button" aria-expanded={hasMore ? open : undefined} disabled={!hasMore} className="mx-agent-row" onClick={() => { setOpen((current) => !current) }}>
@@ -47,6 +54,7 @@ export function AgentRow({ agent, process }: AgentRowProps) {
         <div className="mx-agent-detail">
           {agent.prompt !== null && <p className="mx-agent-prompt">{agent.prompt}</p>}
           {report !== '' && <p className="mx-agent-report">{agent.report}</p>}
+          {openChat !== null && <div><Button variant="soft" size="sm" onClick={openChat}>Open its chat</Button></div>}
         </div>
       )}
     </li>
@@ -62,13 +70,12 @@ export function AgentsCard({ agents, process }: AgentsCardProps) {
   const working = agents.filter((agent) => agent.status === 'running').length
   const done = agents.filter((agent) => agent.status === 'completed').length
   return (
-    <div role="group" aria-label={agentsSummary(agents)} className="mx-step-card">
-      <div className="mx-agents-head">
-        <strong>{agents.length} agents</strong>
-        {working > 0 && <span className="is-working">{working} working</span>}
-        {done > 0 && <span>{working > 0 && '· '}{done} done</span>}
-      </div>
+    <Card role="group" aria-label={agentsSummary(agents)}>
+      <CardHead>
+        <span>{agents.length} agents</span>
+        <span className="mx-agents-counts">{[working > 0 ? `${String(working)} working` : null, done > 0 ? `${String(done)} done` : null].filter((part) => part !== null).join(' · ')}</span>
+      </CardHead>
       <ul className="mx-agents is-carded">{rows}</ul>
-    </div>
+    </Card>
   )
 }

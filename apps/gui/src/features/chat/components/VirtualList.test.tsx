@@ -55,6 +55,26 @@ describe('a conversation list that follows its newest row', () => {
     expect(latest()).not.toBeNull()
   })
 
+  it('keeps the row being read in place while rows coming in above it are measured taller than their estimate', () => {
+    const tall = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+      const index = Number(this.dataset.key?.replace('row-', '') ?? Number.NaN)
+      return Number.isNaN(index) ? 0 : index >= 19 && index <= 21 ? ROW + 30 : ROW
+    })
+    // The first draw (from the top) and the follow to the newest row both skip rows 19 to 21.
+    const { rerender } = render(list(40))
+    const element = scroller()
+    rerender(list(40))
+    const reading = 25 * ROW
+
+    fireEvent.pointerDown(element)
+    act(() => { element.scrollTop = reading })
+    fireEvent.scroll(element)
+
+    // Rows 19 to 21 came into the drawn range above the view, each 30px taller than estimated.
+    expect(element.scrollTop).toBe(reading + 3 * 30)
+    tall.mockRestore()
+  })
+
   it('keeps following through a scroll the reader did not make, and comes back to the newest row', () => {
     const { rerender } = render(list(20))
     const element = scroller()
@@ -134,6 +154,22 @@ describe('a conversation list that follows its newest row', () => {
     fireEvent.scroll(element)
     act(() => { element.scrollTop = 21 * ROW })
     fireEvent.scroll(element)
+    expect(latest()).toBeNull()
+  })
+
+  it('goes back to the newest row and follows it when the person sends something, from wherever they had scrolled', () => {
+    const sent = (count: number, toLatest: number) => <VirtualList items={rows(count)} getKey={(key) => key} estimate={ROW} label="Conversation" renderItem={(key) => <p>{key}</p>} toLatest={toLatest} />
+    const { rerender } = render(sent(20, 0))
+    const element = scroller()
+    rerender(sent(21, 0))
+    fireEvent.wheel(element, { deltaY: -3 })
+    act(() => { element.scrollTop = 300 })
+    fireEvent.scroll(element)
+    expect(latest()).not.toBeNull()
+
+    rerender(sent(22, 1))
+
+    expect(element.scrollTop).toBe(22 * ROW)
     expect(latest()).toBeNull()
   })
 

@@ -14,8 +14,8 @@ export type NotificationAction = {
 
 export type NotificationCardProps = {
   tone: NotificationTone
-  /** The agent's icon with its status badge, or any mark that says who this is about. */
-  icon: ReactNode
+  /** The agent's icon with its status badge, or any mark that says who this is about; a plain message has none. */
+  icon?: ReactNode
   title: string
   /** What happened to it, in words ("needs you"), set after the title in the card's colour. */
   state?: string
@@ -31,14 +31,14 @@ export type NotificationCardProps = {
 }
 
 /**
- * The one notification card: who it is about, what happened, what you can do, and when. Every toast in
- * the app (a session that needs you, one that finished, a failure, a plain message) is drawn with it,
- * on the float material, so they cannot drift apart.
+ * The one notification card (layout 2h): who it is about, what happened, when, and what you can do, on a flat card
+ * whose top edge carries its tone. Every toast in the app (a session that needs you, one that finished, a failure, a
+ * plain message) is drawn with it, so they cannot drift apart.
  */
 export function NotificationCard({ tone, icon, title, state, body, actions = [], time, onClose, countdownMs, closable = true }: NotificationCardProps) {
   return (
     <div className={`mx-notice is-${tone}`} role="status">
-      <span className="mx-notice-icon">{icon}</span>
+      {icon !== undefined && <span className="mx-notice-icon">{icon}</span>}
       <div className="mx-notice-main">
         <div className="mx-notice-head">
           <span className="mx-notice-title">{title}</span>
@@ -50,22 +50,24 @@ export function NotificationCard({ tone, icon, title, state, body, actions = [],
           )}
         </div>
         {body !== undefined && <div className="mx-notice-body">{body}</div>}
-        <div className="mx-notice-foot">
-          {actions.map((action) => (
-            <button
-              key={action.label}
-              type="button"
-              className={action.primary ? 'is-primary' : undefined}
-              onClick={() => {
-                action.onClick()
-                if (action.keepOpen?.() !== true) onClose()
-              }}
-            >
-              {action.label}
-            </button>
-          ))}
-          <span className="mx-notice-time">{time}</span>
-        </div>
+        <span className="mx-notice-time">{time}</span>
+        {actions.length > 0 && (
+          <div className="mx-notice-foot">
+            {actions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                className={action.primary ? 'is-primary' : undefined}
+                onClick={() => {
+                  action.onClick()
+                  if (action.keepOpen?.() !== true) onClose()
+                }}
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {countdownMs !== undefined && <span className="mx-notice-countdown" style={{ animationDuration: `${String(countdownMs)}ms` }} />}
     </div>

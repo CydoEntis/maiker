@@ -67,9 +67,13 @@ pub struct SavedPane {
     /// Finished and not looked at yet.
     #[serde(default)]
     pub unseen: bool,
-    /// It was in the middle of a turn when this was saved.
+    /// It was in the middle of a turn, or asking a question, when this was saved.
     #[serde(default)]
     pub was_working: bool,
+    /// The resume it was still offering, an agent cut mid-turn by an earlier restart that nobody
+    /// resumed yet: kept, or a second restart would leave a plain shell and lose the session.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupted: Option<crate::protocol::Interrupted>,
     /// What it was called (its /rename, else its first prompt) and its model.
     #[serde(default)]
     pub name: String,
@@ -83,6 +87,8 @@ pub struct SavedPane {
     pub pinned: bool,
     #[serde(default)]
     pub archived: bool,
+    #[serde(default)]
+    pub put_away_for: Option<String>,
     /// Snoozed until this time (unix seconds).
     #[serde(default)]
     pub snoozed_until: Option<u64>,
@@ -107,6 +113,9 @@ pub struct SavedPane {
     /// Child activity records survive daemon restarts and completed turns.
     #[serde(default)]
     pub subagent_activity: Vec<SubagentActivity>,
+    /// Workflow runs reported from the pane, so a restart keeps showing them.
+    #[serde(default)]
+    pub workflows: Vec<maitty_shared::workflow::WorkflowRun>,
     /// The latest result of each checkpoint; their output tails are kept beside the pane's
     /// output files. A pane saved with a single `check` loads it as one checkpoint.
     #[serde(

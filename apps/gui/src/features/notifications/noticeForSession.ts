@@ -27,7 +27,8 @@ export function sessionNoticeFor(session: SessionView, _project: Project, handle
     kind === 'needs'
       ? asked === '' ? `${session.process} is waiting on you` : `Wants to run ${truncatePrompt(asked)}`
       : kind === 'done' ? `${session.process} finished its work` : `${session.process} exited with an error`
-  const answerable = hooked ? session.ask?.answerable === true : session.asking !== ''
+  // Codex's keys are verified only for the screen shape the daemon marks answerable; Claude's ask is hooked.
+  const answerable = hooked || abilitiesOf(session.process).sidebarNeedsAnswerable ? session.ask?.answerable === true : session.asking !== ''
   const allow = kind === 'needs' && answerable ? handlers.allow : null
   return {
     kind,

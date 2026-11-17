@@ -1,5 +1,6 @@
 import { CODEX_START_MODES, PICKABLE_MODES } from '@/features/chat/chatMeta'
-import { ANSWER_KEYS, type AskChoice } from '@/features/chat/permissionAsk'
+import { isSlashLine } from '@/features/chat/slashCommands'
+import { ANSWER_KEYS, CODEX_ANSWER_KEYS, type AskChoice } from '@/features/chat/permissionAsk'
 import type { ChatAgent, StructuredAgent } from './chatView'
 
 /** Where the composer's slash commands come from, and how Codex's differ. */
@@ -30,10 +31,13 @@ export type AgentAbilities = {
   /** The keys the chat types to answer the agent's permission menu, verified against that agent; null where none are. */
   readonly answerKeys: Readonly<Record<AskChoice, string>> | null
   /**
-   * The keys the sidebar types for its answer buttons. They disagree with `answerKeys`: for Claude the sidebar
-   * sends `n` and `a` as letters, which its menu ignores, and for every other agent it sends unverified letters.
+   * The keys the sidebar and a notification's Allow type. A letter with no key here is never sent. For Claude the
+   * sidebar sends `n` and `a` as letters, which its menu ignores, and for Gemini it sends unverified letters;
+   * Codex gets only its verified keys.
    */
-  readonly sidebarAnswerKeys: Readonly<Record<SidebarAnswer, string>>
+  readonly sidebarAnswerKeys: Readonly<Partial<Record<SidebarAnswer, string>>>
+  /** The sidebar answers only a prompt the daemon marked answerable (its screen matched the verified shape). */
+  readonly sidebarNeedsAnswerable: boolean
   /** A chat that follows the agent's terminal changes its model and effort from the chips, by typing the agent's commands. */
   readonly changeAgent: boolean
   /** The agent's prompt takes a typed `!` line as a command for its own shell, run in its terminal. */
@@ -44,6 +48,14 @@ export type AgentAbilities = {
   readonly discoversModels: boolean
   /** The agent reports what it asks through its own hooks, so its screen is never read for the question. */
   readonly hookedAsks: boolean
+  /** Slash commands (names, no slash) the agent runs at once beside a working turn, so the chat types them in instead of queueing them. */
+  readonly midTurnCommands: readonly string[]
+  /** The models the host reads from the agent are only its extras, so they are added to the fixed ones instead of replacing them. */
+  readonly readModelsAreExtras: boolean
+  /** Max effort is offered for a model only where the agent lists it; where the agent lists nothing, Max is withheld. */
+  readonly maxEffortNeedsListing: boolean
+  /** The agent's yolo flag cannot be combined with a permission mode, so a chat started under it takes no mode. */
+  readonly yoloExcludesMode: boolean
 }
 
 const LETTERS: Readonly<Record<SidebarAnswer, string>> = { y: 'y', a: 'a', n: 'n' }
@@ -55,39 +67,55 @@ const NONE: AgentAbilities = {
   moveToWorktree: false,
   answerKeys: null,
   sidebarAnswerKeys: LETTERS,
+  sidebarNeedsAnswerable: false,
   changeAgent: false,
   bangToTerminal: false,
   resumeSaved: false,
   discoversModels: false,
   hookedAsks: false,
+  midTurnCommands: [],
+  readModelsAreExtras: false,
+  maxEffortNeedsListing: false,
+  yoloExcludesMode: false,
 }
 
 const AGENT_ABILITIES: Readonly<Record<ChatAgent, AgentAbilities>> = {
   claude: {
-    slashCommands: { list: 'agent', skillsAfterDollar: false, enterAfterPause: false },
+    slashCommands: { list: 'agent', skillsAfterDollar: false, enterAfterPause: true },
     permissionModes: { modes: PICKABLE_MODES, switchBy: 'shift-tab' },
     structuredChat: true,
     moveToWorktree: true,
     answerKeys: ANSWER_KEYS,
     sidebarAnswerKeys: { ...LETTERS, y: ANSWER_KEYS.approve },
+    sidebarNeedsAnswerable: false,
     changeAgent: true,
     bangToTerminal: true,
     resumeSaved: true,
     discoversModels: true,
     hookedAsks: true,
+    midTurnCommands: ['btw'],
+    readModelsAreExtras: true,
+    maxEffortNeedsListing: false,
+    yoloExcludesMode: false,
   },
   codex: {
     slashCommands: { list: 'window', skillsAfterDollar: true, enterAfterPause: true },
     permissionModes: { modes: CODEX_START_MODES, switchBy: 'command' },
     structuredChat: true,
     moveToWorktree: true,
-    answerKeys: null,
-    sidebarAnswerKeys: LETTERS,
+    answerKeys: CODEX_ANSWER_KEYS,
+    // Only the verified keys: `a` may pick "don't ask again" and `n` does nothing on Codex's menus.
+    sidebarAnswerKeys: { y: CODEX_ANSWER_KEYS.approve, n: CODEX_ANSWER_KEYS.deny },
+    sidebarNeedsAnswerable: true,
     changeAgent: false,
     bangToTerminal: false,
     resumeSaved: true,
     discoversModels: true,
     hookedAsks: false,
+    midTurnCommands: [],
+    readModelsAreExtras: false,
+    maxEffortNeedsListing: true,
+    yoloExcludesMode: true,
   },
   gemini: { ...NONE, bangToTerminal: true },
 }
@@ -108,4 +136,12 @@ export type StructuredAbility = 'structuredChat' | 'resumeSaved' | 'discoversMod
 /** Whether the agent has the ability, narrowing it to a `StructuredAgent` for the daemon call behind it. */
 export function hasAbility(agent: ChatAgent, ability: StructuredAbility): agent is StructuredAgent {
   return abilitiesOf(agent)[ability]
+}
+
+/**
+ * A one-line slash command that runs beside the agent's working turn: typed in now, because held until the turn ends it
+ * would answer too late. The name must match exactly (`/btwx`, `/BTW` and `/btw:x` are other commands).
+ */
+export function runsMidTurn(agent: string | null | undefined, text: string): boolean {
+  return isSlashLine(text) && abilitiesOf(agent).midTurnCommands.includes(text.slice(1).split(/\s/, 1)[0] ?? '')
 }
