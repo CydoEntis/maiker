@@ -520,3 +520,6 @@ button.mx-queued-text::after { content: ""; position: absolute; inset: 0; border
 .mx-composer-note { margin: 6px 4px 0; font-size: 12px; color: var(--dim); }
 .mx-composer-note-action { border: 0; padding: 0; background: none; font: inherit; color: var(--fg2); text-decoration: underline; cursor: pointer; }
 .mx-composer-note-action:hover { color: var(--fg); }
+
+/* The question tray's slot: no box of its own, so the tray lays out in the column as before; it is only there to find the tray's first control. */
+.mx-question-slot { display: contents; }

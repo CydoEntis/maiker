@@ -19,6 +19,7 @@ import { withRestoreNote } from './editFromHere'
 
 export const PENDING_APPROVAL_NOTE = 'Answer the request above first'
 export const READ_ONLY_NOTE = 'Read-only: talk to the agent in the terminal'
+export const OFFLINE_NOTE = 'The daemon is offline'
 /** Why a chat that types into the agent's terminal is off while the agent is busy or asking. */
 export const TYPING_BUSY_NOTE = 'The agent is working. Stop it to send something else'
 export const TYPING_ASKING_NOTE = 'The agent is asking something in the terminal. Answer it there first'
@@ -155,6 +156,8 @@ export type ChatComposer = {
   sending: boolean
   /** Why the composer is off, or `null` when it takes input. */
   disabledReason: string | null
+  /** The box takes typing, even if it cannot send now (the daemon is offline). */
+  draftable: boolean
   /** The agent can take a message this moment: the box is on and nothing is running (a held message waits for this). */
   ready: boolean
   /** The last send that failed, or `null`. Cleared by the next send. */
@@ -211,8 +214,8 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
   // types it in once the turn is over, so nothing reaches a prompt the agent might be showing meanwhile and nobody waits to type.
   const holding = typing && paneQueue !== undefined && (busy || !waitingForMessage)
   const disabledReason = typing
-    ? (!online ? 'The daemon is offline' : awaitingAnswer || feed.status === 'Blocked' ? (answersPrompt ? PENDING_APPROVAL_NOTE : TYPING_ASKING_NOTE) : null)
-    : readOnly ? READ_ONLY_NOTE : !online ? 'The daemon is offline' : awaitingAnswer ? PENDING_APPROVAL_NOTE : null
+    ? (!online ? OFFLINE_NOTE : awaitingAnswer || feed.status === 'Blocked' ? (answersPrompt ? PENDING_APPROVAL_NOTE : TYPING_ASKING_NOTE) : null)
+    : readOnly ? READ_ONLY_NOTE : !online ? OFFLINE_NOTE : awaitingAnswer ? PENDING_APPROVAL_NOTE : null
   const conversation = link.conversation
   const attach = useAttachmentIntake({ conversation, blocked: disabledReason, machine: link.machine ?? null })
   const queue = useMemo<readonly QueuedItem[]>(() => [...feed.queued.map((message) => ({ id: message.operation, text: message.text })), ...paneQueued.map((text, index) => ({ id: paneQueuedId(index), text }))], [feed.queued, paneQueued])
@@ -421,5 +424,9 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
       .catch((failure: unknown) => { setError(errorMessage(failure, 'Could not interrupt the turn')) })
   }, [running, feed.cancelling, conversation, link.generation, refresh, typeText])
 
-  return { conversationKey: link.conversation, setDraft, attachments, attach, readOnly, attachable: !readOnly || typing, queue, removeQueued, editQueued, sendQueuedNow: typing ? sendQueuedNow : undefined, submit, stop, running, sending, disabledReason, ready: disabledReason === null && !holding, error, sendText: send, echo }
+  return { conversationKey: link.conversation, setDraft, attachments, attach, readOnly, attachable: !readOnly || typing, queue, removeQueued, editQueued, sendQueuedNow: typing ? sendQueuedNow : undefined, submit, stop, running, sending, disabledReason,
+    // Offline, the message cannot go but the person can still write it: a reconnect a few seconds later should not
+    // cost them what they were typing, nor the box its focus.
+    draftable: disabledReason === null || disabledReason === OFFLINE_NOTE,
+    ready: disabledReason === null && !holding, error, sendText: send, echo }
 }

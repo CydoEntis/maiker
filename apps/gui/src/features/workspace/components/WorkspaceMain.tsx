@@ -23,7 +23,7 @@ import { useWorkspace } from '../workspaceContext'
 
 /** The middle of the window: the new chat page, find, the service's state, the panes of each mounted tab and the status bar. */
 export function WorkspaceMain() {
-  const { serviceFooterText, newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, focusMode, focusMachine, theme, shortcutChord, root, setThemeMode, pickTheme, openAppearance, setStyle, setTextSize, resetTextSize, openShortcuts } = useWorkspace()
+  const { sessionsListed, serviceFooterText, newChatOpen, newChatMachine, setNewChatMachine, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, focusMode, focusMachine, theme, shortcutChord, root, setThemeMode, pickTheme, openAppearance, setStyle, setTextSize, resetTextSize, openShortcuts } = useWorkspace()
   return (
     <div className="mx-main-wrap">
               <main className="mx-main" aria-label="Terminals">
@@ -114,8 +114,9 @@ export function WorkspaceMain() {
                 ) : (
                   <EmptyState
                     hasSessions={sessions.length > 0}
+                    listed={sessionsListed}
                     startFolderLabel={startFolderLabel}
-                                  canStart={canStart}
+                    canStart={canStart}
                     onNewSession={() => { newSession(focusedMachineNumber) }}
                     onChangeStartFolder={() => { setSettingsSection('general') }}
                   />

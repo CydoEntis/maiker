@@ -1,15 +1,35 @@
 import { useEffect, useState } from 'react'
+import { useAppearsAfter } from '@/lib/useAppearsAfter'
 import { useShortcutText } from '@/features/shortcuts/platform'
 import { Icon } from './glyphs'
 
-export function EmptyState({ hasSessions, startFolderLabel, canStart, onNewSession, onChangeStartFolder }: {
+/** Before the daemon's first list: says it is looking, once the wait is long enough to notice. */
+function LookingForSessions() {
+  const shown = useAppearsAfter()
+  return (
+    <div className={`mx-empty${shown ? '' : ' invisible'}`} aria-busy="true">
+      <div className="mx-empty-column">
+        <span className="mx-empty-tile"><Icon name="prompt" /></span>
+        <div className="mx-empty-copy">
+          <h1>Looking for your sessions…</h1>
+          <p>Asking maittyd what is running.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function EmptyState({ hasSessions, listed, startFolderLabel, canStart, onNewSession, onChangeStartFolder }: {
   hasSessions: boolean
+  /** The daemon has sent its first list. Until then nothing is said about sessions: there may be some running. */
+  listed: boolean
   startFolderLabel: string
   canStart: boolean
   onNewSession: () => void
   onChangeStartFolder: () => void
 }) {
   const shortcutText = useShortcutText()
+  if (!listed) return <LookingForSessions />
   return (
     <div className="mx-empty">
       <div className="mx-empty-column">
@@ -17,9 +37,9 @@ export function EmptyState({ hasSessions, startFolderLabel, canStart, onNewSessi
         <div className="mx-empty-copy">
           <h1>{hasSessions ? 'No tab open' : 'No sessions running'}</h1>
           {hasSessions ? (
-            <p>Your sessions keep running in the sidebar. Pick one to show it here, or open a new shell in <span className="mono">{startFolderLabel}</span>.</p>
+            <p>Your sessions keep running in the sidebar. Pick one to show it here, or start a new one.</p>
           ) : (
-            <p>A new session opens a shell in <span className="mono">{startFolderLabel}</span>. <span className="mono">cd</span> into a project and it shows up in the sidebar. Start an agent like <span className="mono">codex</span> from any shell.</p>
+            <p>A new session starts an agent in a project you pick, from <span className="mono">{startFolderLabel}</span> if you pick none. An agent you start from any shell shows up in the sidebar too.</p>
           )}
         </div>
         <div className="mx-empty-actions">
@@ -95,6 +115,3 @@ export function OfflineBanner({ retryAt, detail, restart, appBehind = false, onR
   )
 }
 
-export function Toast({ message }: { message: string }) {
-  return <div className="mx-toast" role="status">{message}</div>
-}

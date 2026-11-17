@@ -230,8 +230,12 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    expanding it opens the full sidebar as an overlay; under 800px panes stack in one
    column. The widths are constants in `features/workspace/model/windowSize.ts`; change
    them there and in DESIGN, nowhere else.
-2. The sidebar lists **agents and shells only, grouped by machine** (this computer first). Within a machine the
-   order is the **Session order** setting (`sidebarOrder`): `creation` (the default; the daemon's pane number) so a row
+2. The sidebar lists **agents and shells only**, grouped by **Group by** (`sidebarGroup`): Status (the default:
+   Needs you, Working, Finished, Idle, then Terminals), Project or Machine (this computer first). In Status the session
+   on screen stays in the section it was picked in until another is picked (`statusSections`' `held`), so looking at a
+   finished agent, which makes it idle, does not move its row from under the pointer. Until the daemon's first list
+   arrives the sidebar says "Looking for your sessions…" and the main area the same, never "No agents running".
+   Within a machine the order is the **Session order** setting (`sidebarOrder`): `creation` (the default; the daemon's pane number) so a row
    never moves when its state changes, or `priority`, where a session that needs you goes to the top and the rest keep
    creation order (`model/sidebar.ts`, `bySidebarOrder`). The command palette still lists the most urgent first. A machine can
    be grouped by project and folded. There are no fleets, ships, tabs or tab bar: choosing a session shows the layout it
@@ -239,7 +243,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    (`model/subagents.ts`), shown under their session (small icons when it is not selected, a row each when it is);
    clicking one shows its own chat in the session's pane until you pick a session or **Back to main session**. Rename is
    in place (double-click, F2 or the menu). Right-click menus share `MenuPopup` (focus, arrow keys, Esc, kept inside the
-   window). Split layouts are this window's own state, up to four panes, mixed right and down with draggable dividers; a
+   window). Picking a session shows it at once, with no glide; panes that move (a split, a swap, a close) glide
+   (`movePanes`). Split layouts are this window's own state, up to four panes, mixed right and down with draggable dividers; a
    session closes with a 6 second Undo. **Put away** (the row menu of a finished or idle session in a daemon terminal,
    shells too) sets the pane's `archived` flag (`Command::ArchivePane`) with a 6 second Undo; it closes, stops and moves
    nothing, so the session keeps running, stays in the daemon's list and keeps its worktree in use. Put-away sessions are
@@ -628,6 +633,16 @@ The desktop app keeps one item in the Windows tray or the macOS menu bar (`useTr
 session brings the window forward on it. Hovering says how many need you. The menu is the
 system's, so it takes no theme. Closing the window still closes the app; the item goes with it.
 
+The window says the same count from outside it (`useAttentionBadge`): its title is "Maitty · N need you" (what the
+taskbar and the window switcher show; "Maitty" when nothing does), and the app icon carries the count where the system
+has one (macOS, Linux launchers with a count; Windows has none). The count is the sessions the sidebar lists under Needs
+you. A chat session that starts needing you or finishes rings the same tone a terminal session does (the daemon rings
+for those; the window rings for a chat session), when **Notification sound** is on.
+
+The window opens on its theme's ground: the page and the native window start on Maitty Night's ground, and
+`public/boot-ground.js` paints the ground of the theme last shown before the app's code loads (`data/bootGround.ts`
+keeps it), so starting never flashes white or another theme's colour.
+
 ## Project-specific: closing, service and update states
 
 - **Closing a session** (`client/screen/closing.rs`): closing always asks first, by whatever route: the pane's `×`, the pane
@@ -899,6 +914,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   using.
   Claude offers Sonnet, Opus and Haiku (`KNOWN_MODELS`, a fixed list because the daemon does not report models);
   Codex offers only its account default, because its models depend on the account and version. The agent never changes.
+- **A chat that fails to draw** shows "This chat hit a problem" in its pane only (`PaneErrorBoundary`), with **Try
+  again** and, for a terminal agent, **Show the terminal**; the rest of the window and the session go on.
 - **Switching changes the window, not the session.** The choice is per session (`usePaneViews`), the terminal stays
   mounted and its pane keeps its size, and no daemon command is sent. The shortcut is `chat-toggle`
   (Ctrl+Shift+E, Cmd+Shift+E) on the focused pane.
@@ -924,12 +941,17 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   rebuilt, or the conversation started over) replaces what the feed held. A failed read, or a daemon that predates
   `resume`, falls back to the old way: ask again for the last page read, or read from the start when that cursor is
   stale. Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
-  objects. A new generation shows a fresh projection. Pending approvals come with every page and go to `applyApprovals`. The last
-  feed per conversation is kept (8 at most), so reopening a chat shows it at once.
+  objects. A new generation shows a fresh projection. Pending approvals come with every page and go to `applyApprovals`,
+  which keeps the projection when nothing about them changed; a read that would draw the same chat (`looksTheSame`:
+  the same projection and page facts) does not redraw it, so a working agent's chat is not drawn again several times a
+  second for nothing. The daemon reads a followed agent's transcript every 250 ms while the pane works or asks, and
+  every second at rest (`follow_gap`). The last feed per conversation is kept (32 at most), so reopening a chat shows it
+  at once.
 - **List.** `VirtualList` draws only the rows near the view (`transform` placement, measured heights, stable event
   ids as keys), follows the newest row until the reader moves up (any move up, however small, and a wheel move up at once),
   then offers "Jump to the latest message"; it follows again when the reader scrolls back down to within 48 px of the
-  bottom (`followAfterScroll`). Rows
+  bottom (`followAfterScroll`). While it does not follow, the row at the top of the view stays where the reader saw it
+  when rows above it are measured or grow (`anchorAt`, `anchoredTop`). Rows
   are `buildRows(events)`: one agent message per turn (adjacent agent messages of a turn are joined; a step between
   two messages keeps their order), user bubbles, step cards, approvals, turn dividers, and the working line last.
   Two or more steps that follow each other (edits, commands, tools; never the to-do list) fold into one **work row**
@@ -992,7 +1014,10 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     diff, folded past 12 lines with "Show all N lines" / "Show less", and "Open in side panel" (the Inspect panel's
     Changes view). A diff too large, one the history did not keep and a secret file each say so. A finished Write of a
     Markdown file whose text the history kept is a document card instead (`writtenDocument.ts`).
-  - *Command step:* the command's first line, then the live clock or `exit N · time`; it opens to the whole command
+  - *Command step:* what the command does when it is one plain read-only form (`commandIntent.ts`: "Search
+    `"x"` in src", "Read `a.ts` lines 10–80", "List", "Find files in", "Check git status", "Run tests"; anything piped,
+    chained or redirected is not read), else the command's first line; then the live clock or `exit N · time`. A search
+    that found nothing (exit 1, no output) reads "no matches" and counts as finished, not failed (`foundNothing`); it opens to the whole command
     and the last 3 lines of output with "Show all N lines". The elapsed time is the provider's duration, else the
     daemon's start and completion times; the exit code exists for Codex only, so for Claude it reads "exit code not
     reported". One that failed starts open.
@@ -1022,7 +1047,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   - *Rows* are memoised on their events (`ChatItem`), and the virtual list measures heights, so a card that expands
     resizes its own row only.
 - **While it waits.** The chat never looks stuck. First read of a history: `ChatSkeleton`, the shape of a conversation,
-  static (an endless animation costs a repaint every frame, PERFORMANCE). A new session's chat is `StartingChat`, there
+  static (an endless animation costs a repaint every frame, PERFORMANCE), blank for its first 150 ms
+  (`useAppearsAfter`) so a quick read never flashes it. A new session's chat is `StartingChat`, there
   at once with its message box; what is typed then is held per session (`firstMessage.ts`) and sent when the real chat can
   send, and a half-typed draft carries over. The model, effort and mode picked on the new-chat page are held the same way
   (`holdStartChoice`): the starting chat draws them in the same chips the real chat has (locked), and the real chat takes them as
@@ -1046,7 +1072,13 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   number (the receipt's plus one; a failed send is retried with the same number so the daemon can tell a retry from a
   new message). Enter sends, Shift+Enter adds a line (not while an input method is composing), Esc or Stop interrupts
   the running turn (`cancel_conversation`). It is off, with the reason as its placeholder, while an approval is
-  pending ("Answer the request above first") or the daemon is offline. While the daemon reports the turn working,
+  pending ("Answer the request above first"); the request's first control then has the focus, so `y` / `a` / `n` or
+  Enter answer it at once, and the box has the focus back once it is answered (only when the focus was in this chat's
+  box or nowhere). While the daemon is offline the box still takes typing and says why it cannot send. ↑ in an
+  empty box brings back the last message sent in this chat, ↑ again the one before, ↓ forward and back to an empty box;
+  it steps only while the box holds the recalled message unedited (`promptRecall.ts`). The text of every box is kept
+  in the window's storage, 300 ms after the last key (`data/composerDrafts.ts`: text only, the newest 50, a week at
+  most), so a restart loses no draft. While the daemon reports the turn working,
   Enter still sends: the daemon holds the message (`ReadResult.queued`) and delivers it when the turn ends, in order
   and once each, so it is shown as a dashed pending bubble with remove and Edit (both `dequeue_conversation`; Edit puts the words back in the box only after the daemon has let go of them, so a message sent a moment ago is never sent twice) for as long as the
   daemon holds it, and closing the window loses nothing. The queue is the daemon's memory: a daemon restart drops it,

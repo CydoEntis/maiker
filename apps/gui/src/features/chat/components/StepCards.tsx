@@ -5,6 +5,7 @@ import { ElapsedSince } from '@/features/workspace/components/times'
 import type { CommandEvent, EditEvent, ToolEvent } from '../chatEvents'
 import { isOmitted, redactionNote } from '../redaction'
 import { commandMeta, relativePath } from '../stepInfo'
+import { commandIntent, shownCommandStatus } from '../commandIntent'
 import { toolFacts, type ToolFacts } from '../toolFacts'
 import type { WorkStep } from '../workSummary'
 import { documentOf } from '../writtenDocument'
@@ -106,7 +107,9 @@ type CommandStepProps = { event: CommandEvent; waiting?: boolean }
  * output (all of it on request). One that failed starts open: that is the one worth reading.
  */
 export function CommandStep({ event, waiting = false }: CommandStepProps) {
-  const [open, toggle] = useOpen(event.status === 'failed')
+  const status = shownCommandStatus(event)
+  const intent = commandIntent(event.command)
+  const [open, toggle] = useOpen(status === 'failed')
   const [all, setAll] = useState(false)
   const omitted = isOmitted(event.output)
   const lines = event.output === '' || omitted ? [] : event.output.replace(/\n+$/, '').split('\n')
@@ -117,11 +120,13 @@ export function CommandStep({ event, waiting = false }: CommandStepProps) {
   return (
     <div role="group" aria-label={`Command ${first}`} className="mx-step">
       <StepRow
-        status={event.status}
-        verb="Run"
-        target={<code className="mx-code-chip">{event.command === '' ? 'A command' : typed.length > 1 ? `${first} …` : first}</code>}
+        status={status}
+        verb={intent?.verb ?? 'Run'}
+        target={intent !== null
+          ? (intent.target === null ? undefined : <code className="mx-code-chip">{intent.target}</code>)
+          : <code className="mx-code-chip">{event.command === '' ? 'A command' : typed.length > 1 ? `${first} …` : first}</code>}
         meta={running ? <ElapsedSince since={event.timing.startedAtMs ?? event.observed.firstSeenAtMs} /> : commandMeta(event)}
-        metaTone={running ? 'working' : event.status === 'failed' ? 'danger' : 'dim'}
+        metaTone={running ? 'working' : status === 'failed' ? 'danger' : 'dim'}
         open={open}
         onToggle={toggle}
         waiting={waiting}
@@ -132,7 +137,7 @@ export function CommandStep({ event, waiting = false }: CommandStepProps) {
             <div className="mx-step-head is-command">
               <span className="mx-step-prompt" aria-hidden="true">$</span>
               <span className="mx-step-command">{event.command}</span>
-              {event.status === 'failed' && event.exitCode !== null && <Pill tone="danger">exit {event.exitCode}</Pill>}
+              {status === 'failed' && event.exitCode !== null && <Pill tone="danger">exit {event.exitCode}</Pill>}
             </div>
             {omitted && <p className="mx-step-note">The output shows a secret file, so the history does not keep it.</p>}
             {shown.length > 0 && <pre className="mx-step-output">{shown.join('\n')}</pre>}

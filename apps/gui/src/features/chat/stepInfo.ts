@@ -1,4 +1,5 @@
 import type { ChatEvent, CommandEvent, ItemFields, SubagentEvent, TodoItem } from './chatEvents'
+import { foundNothing } from './commandIntent'
 
 /**
  * Facts the step cards show, computed from the projection's events. Pure: the clock comes in as an
@@ -88,7 +89,7 @@ export function agentsSummary(agents: readonly SubagentEvent[]): string {
  */
 export function commandMeta(event: CommandEvent): string {
   const took = elapsedMs(event, event.durationMs, 0)
-  const ended = event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : 'exit code not reported'
+  const ended = foundNothing(event) ? 'no matches' : event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : 'exit code not reported'
   return took === null ? ended : `${ended} · ${tookText(took)}`
 }
 

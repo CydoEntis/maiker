@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react'
+import { recallStep, type Recalled } from '../promptRecall'
 import { toast } from '@/lib/toast'
 import { pasteFromHost, pickFromClipboard, unsupportedMessage } from '@/features/terminal/clipboardImage'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
@@ -92,25 +93,34 @@ type Props = {
   waiting?: boolean
   /** Where an `@` looks for files; absent where the daemon cannot be asked (another machine, no pane). */
   files?: FileSearchPlace | undefined
+  /** The messages the person sent in this chat, oldest first, for ↑ to bring back (`promptRecall.ts`). */
+  sent?: readonly string[]
 }
 
 const NO_CHANGE = () => undefined
+const NO_MESSAGES: readonly string[] = []
 const PERCENT = 100
+
+/** What in the question tray takes the focus when it opens: its first field, else its first button. */
+const TRAY_FIRST_CONTROL = 'input:not([disabled]), textarea:not([disabled]), button:not([disabled])'
 
 /**
  * The message box, in three layers (README: message box): the question tray when the agent asks, the
  * box (text, attach, model picker, send), and the settings tray under it. Enter sends, Shift+Enter
  * adds a line, Esc interrupts the running turn. While the agent works, sending queues the message;
- * while a request waits for an answer, or the daemon is offline, the box is off and says why.
+ * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
+ * offline the box still takes typing but does not send.
  */
-export function Composer({ agent, composer, conversation, commandsFrom, question = null, facts, waiting = false, files }: Props) {
-  const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, sendQueuedNow, submit, stop, running, sending, disabledReason, error } = composer
+export function Composer({ agent, composer, conversation, commandsFrom, question = null, facts, waiting = false, files, sent = NO_MESSAGES }: Props) {
+  const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, sendQueuedNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
   const draft = composer.draft ?? storedDraft
   const off = disabledReason !== null
   const box = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLTextAreaElement>(null)
+  // The sent message ↑ put in the box, while it is still there unedited.
+  const recalled = useRef<Recalled | null>(null)
   // A chat that opens takes the typing, as the terminal under it would, when nothing else on the page has it:
   // the new-chat page has just closed, or the starting chat's box was replaced by this one.
   useEffect(() => {
@@ -120,6 +130,18 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     if (pane?.classList.contains('is-card') === true && !pane.classList.contains('is-focused')) return
     text.current?.focus({ preventScroll: true })
   }, [])
+  // A question the agent asks takes the typing from the box, which goes off while it waits: its first control has the
+  // focus, so y / a / n (or Enter) answer it at once instead of going nowhere. Once it is answered the box has it back.
+  // Only when the typing was in this chat's box, or nowhere (the box going off dropped it), never from another pane.
+  const tray = useRef<HTMLDivElement>(null)
+  const asking = question !== null
+  useEffect(() => {
+    const active = document.activeElement
+    const ours = active === null || active === document.body || active === text.current || (tray.current?.contains(active) ?? false)
+    if (!ours) return
+    if (asking) tray.current?.querySelector<HTMLElement>(TRAY_FIRST_CONTROL)?.focus({ preventScroll: true })
+    else if (active === null || active === document.body) text.current?.focus({ preventScroll: true })
+  }, [asking])
   // The desktop shell takes file drops for itself, so the composer asks to be told of the ones that land on it.
   const { addPaths } = attach
   useEffect(() => {
@@ -223,8 +245,21 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
       event.preventDefault()
       return
     }
+    if ((event.key === 'ArrowUp' || event.key === 'ArrowDown') && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      const area = event.currentTarget
+      const step = area.selectionStart === area.selectionEnd ? recallStep(sent, draft, recalled.current, area.selectionStart, event.key === 'ArrowUp' ? 'older' : 'newer') : null
+      if (step !== null) {
+        event.preventDefault()
+        recalled.current = step.recalled
+        setDraft(step.draft)
+        // The caret goes to the end, as in a shell, once React has put the text in.
+        window.requestAnimationFrame(() => { area.setSelectionRange(area.value.length, area.value.length) })
+        return
+      }
+    }
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
+      recalled.current = null
       submit()
     } else if (event.key === 'Escape' && running) {
       event.preventDefault()
@@ -236,7 +271,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     <div ref={box} className="mx-composer">
       <div className="mx-composer-column">
         <QueuedMessages agent={agent} queue={queue} onRemove={removeQueued} onEdit={(id) => { editQueued(id); text.current?.focus() }} onSendNow={sendQueuedNow} />
-        {question}
+        <div ref={tray} className="mx-question-slot">{question}</div>
         <div className={`mx-box${off ? ' is-locked' : ''}`}>
           {picking && (
             <SlashPicker agent={agent} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={run} onHover={(index) => { setCursor({ query, index }) }} />
@@ -252,7 +287,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
             {...(mention.open && (mention.found?.paths.length ?? 0) > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-file-list', 'aria-activedescendant': `mx-file-${String(mention.active)}` } : {})}
             rows={2}
             value={draft}
-            disabled={off}
+            disabled={!draftable}
             placeholder={placeholder}
             className="mx-box-text"
             onChange={(event) => { setDraft(event.target.value); followCaret(event.target) }}

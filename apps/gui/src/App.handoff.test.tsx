@@ -139,7 +139,7 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
 
     expect(await screen.findByRole('heading', { name: 'No sessions running' })).toBeInTheDocument()
-    expect(screen.getByText(/A new session opens a shell in/)).toHaveTextContent('A new session opens a shell in ~. cd into a project')
+    expect(screen.getByText(/A new session starts an agent/)).toHaveTextContent('A new session starts an agent in a project you pick, from ~ if you pick none.')
     expect(screen.getByText('No agents running. New chat starts one.')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Change start folder' }))

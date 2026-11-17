@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
 import { commandMeta, isWaitingStep, relativePath, tookText } from '../stepInfo'
+import { shownCommandStatus } from '../commandIntent'
 import { stackCards, stackLines, stepsBeyondStack, type StackStep } from '../workStack'
 import { workDurationMs, workStatus, workSummary, type WorkStep } from '../workSummary'
 import { ChangePill, FileBadge, StepGlyph } from './cardParts'
@@ -22,15 +23,16 @@ function cardMeta(step: StackStep) {
 
 /** One card of the stack. Only the front one shows its content; the ones behind show their edges. */
 function StackCard({ step, depth, root }: { step: StackStep; depth: number; root: string | null }) {
+  const status = step.kind === 'command' ? shownCommandStatus(step) : step.status
   return (
-    <span className={`mx-stack-card is-depth-${String(depth)} is-${step.status}`}>
+    <span className={`mx-stack-card is-depth-${String(depth)} is-${status}`}>
       <span className="mx-stack-head">
-        <StepGlyph status={step.status} />
+        <StepGlyph status={status} />
         {step.kind === 'command'
           ? <span className="mx-stack-command"><span className="mx-step-prompt">$</span><span>{step.command.split('\n')[0]}</span></span>
           : <span className="mx-stack-file">{step.file === null ? 'a file' : <FileBadge path={relativePath(step.file, root)} />}<ChangePill change={step.change} /></span>}
         <span className="mx-spacer" />
-        <span className={`mx-step-meta ${TIME_TONE[step.status]}`}>{cardMeta(step)}</span>
+        <span className={`mx-step-meta ${TIME_TONE[status]}`}>{cardMeta(step)}</span>
       </span>
       <span className="mx-stack-body">
         {stackLines(step).map((line, index) => (

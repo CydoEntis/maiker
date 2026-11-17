@@ -1,4 +1,6 @@
+import { useEffect } from 'react'
 import { TitleBar } from '@/components/TitleBar'
+import { rememberGround } from '@/data/bootGround'
 import { Toaster } from '@/components/ui/sonner'
 import { ReducedMotionContext } from './components/motion'
 import { useWorkspaceState } from './useWorkspaceState'
@@ -16,6 +18,8 @@ import '@/features/chat/chat.css'
 export function DesktopApp() {
   const workspace = useWorkspaceState()
   const { reducedMotion, setRoot, narrow, rootStyle, theme, preferences, machineSaid } = workspace
+  // The next start opens on this theme's ground, not a flash of another colour.
+  useEffect(() => { rememberGround(theme.tokens.bg) }, [theme.tokens.bg])
   return (
     <WorkspaceContext.Provider value={workspace}>
     <ReducedMotionContext.Provider value={reducedMotion}>

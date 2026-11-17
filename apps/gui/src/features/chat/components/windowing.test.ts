@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLayout, followAfterScroll, FOLLOW_THRESHOLD_PX, glidePlan, glideTop, isAtBottom, visibleRange, type FollowState } from './windowing'
+import { anchorAt, anchoredTop, buildLayout, followAfterScroll, FOLLOW_THRESHOLD_PX, glidePlan, glideTop, isAtBottom, visibleRange, type FollowState } from './windowing'
 
 const keys = (count: number) => Array.from({ length: count }, (_, index) => `row-${String(index)}`)
 
@@ -114,5 +114,21 @@ describe('gliding to the newest row', () => {
     expect(glideTop(0, 1000, 0.5)).toBe(875)
     expect(glideTop(0, 1000, 1)).toBe(1000)
     expect(glideTop(0, 1000, 2)).toBe(1000)
+  })
+})
+
+describe('the reader\'s anchor', () => {
+  it('keeps the row being read in place when a row above it grows', () => {
+    const rows = ['a', 'b', 'c']
+    const before = buildLayout(rows, new Map([['a', 100], ['b', 100], ['c', 100]]), 50)
+    const anchor = anchorAt(before, rows, 130)
+    expect(anchor).toEqual({ key: 'b', within: 30 })
+    const after = buildLayout(rows, new Map([['a', 160], ['b', 100], ['c', 100]]), 50)
+    expect(anchor === null ? null : anchoredTop(after, rows, anchor)).toBe(190)
+  })
+
+  it('lets go when the row is gone', () => {
+    const layout = buildLayout(['a'], new Map(), 50)
+    expect(anchoredTop(layout, ['a'], { key: 'zz', within: 0 })).toBeNull()
   })
 })

@@ -9,6 +9,7 @@ import { errorMessage } from '@/lib/error-message'
 import { isChatSession } from '../model/chatSession'
 import { carryDraftToTerminal } from '../model/draftCarry'
 import { PaneCard } from './PaneCard'
+import { PaneErrorBoundary } from '@/components/PaneErrorBoundary'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { AgentTerminals } from './AgentTerminals'
 import { startsFolded } from '../model/terminalDrawer'
@@ -101,6 +102,7 @@ export function WorkspacePane({ shown, pane, kept }: {
       view={chat.view}
       {...(chatOnly || !hasChat(chat.availability) ? {} : { onViewChange: (view: PaneView) => { if (view === 'terminal') showTerminal(); else paneViews.choose(session.id, view) } })}
       chat={chat.view === 'chat' && !kept ? (
+        <PaneErrorBoundary key={session.id} what="This chat" fallback={chatOnly ? null : { label: 'Show the terminal', run: showTerminal }}>
         <ChatPane
           availability={chat.availability}
           hasTerminal={!chatOnly}
@@ -136,6 +138,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           hideSuccessfulTools={preferences.hideSuccessfulTools}
           onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
         />
+        </PaneErrorBoundary>
       ) : undefined}
       panelOpen={inspectOpen && focused}
       {...(hasPanel ? { onPanel: () => { togglePanel(pane.id, session.id) } } : {})}

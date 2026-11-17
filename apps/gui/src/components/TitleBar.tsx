@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { isTauri } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { hasAppWindow } from '@/lib/windowMetadata'
 import { TitleBarView } from './TitleBarView'
 import { titleBarPlatform, type TitleBarPlatform } from './title-bar-platform'
 
@@ -11,17 +11,8 @@ import { titleBarPlatform, type TitleBarPlatform } from './title-bar-platform'
  * outside the desktop app. `platform` overrides detection, for tests and previews.
  */
 export function TitleBar({ platform = titleBarPlatform(navigator.userAgent) }: { platform?: TitleBarPlatform }) {
-  if (!isTauri() || !hasWindowMetadata()) return null
+  if (!hasAppWindow()) return null
   return <DesktopTitleBar platform={platform} />
-}
-
-// getCurrentWindow() needs the host's window metadata, which a real Tauri
-// webview always has.
-function hasWindowMetadata(): boolean {
-  const internals = (
-    window as unknown as { __TAURI_INTERNALS__?: { metadata?: unknown } }
-  ).__TAURI_INTERNALS__
-  return internals?.metadata !== undefined
 }
 
 function DesktopTitleBar({ platform }: { platform: TitleBarPlatform }) {

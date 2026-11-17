@@ -3,7 +3,7 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, u
 import { ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ReducedMotionContext } from '@/features/workspace/components/motion'
-import { buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, visibleRange, type FollowState } from './windowing'
+import { anchorAt, anchoredTop, buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, visibleRange, type FollowState, type ScrollAnchor } from './windowing'
 
 type Props<T> = {
   items: readonly T[]
@@ -133,17 +133,23 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     setScrollTop(element.scrollTop)
   }, [])
 
-  // Keep the newest row in view while the list follows it.
+  // The row a reader who moved up is looking at. Rows above it are measured as they are drawn, and a card above can grow:
+  // without this the text being read slid down under the reader.
+  const anchor = useRef<ScrollAnchor | null>(null)
+
+  // Keep the newest row in view while the list follows it; keep the reader's row still while it does not.
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) return
     if (!follow.current.following) {
       follow.current = { ...follow.current, total: layout.total }
+      const top = anchor.current === null ? null : anchoredTop(layout, keys, anchor.current)
+      if (top !== null && Math.abs(top - element.scrollTop) >= 1) place(element, top, layout.total)
       return
     }
     place(element, layout.total, layout.total)
     // The view's own height is a dependency too: a message box that grows must not leave the newest row under it.
-  }, [layout.total, viewport, place])
+  }, [layout, keys, viewport, place])
 
   // A link to a row (an approval's step) moves the view there and stops following the newest row.
   const handled = useRef<number | null>(null)
@@ -162,6 +168,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     const element = scroller.current
     if (!element) return
     setScrollTop(element.scrollTop)
+    anchor.current = anchorAt(layout, keys, element.scrollTop)
     const ownWrite = wrote.current === element.scrollTop
     const byReader = held.current || performance.now() - touchedAt.current < READER_SCROLL_MS
     wrote.current = null

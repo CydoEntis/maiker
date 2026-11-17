@@ -121,7 +121,7 @@ const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint
 ]
 
 /** The section a session is listed in. An agent that stopped, or one held by its plan limit, is yours to look at, so it sits with what needs you. */
-function sectionOf(session: SessionView): StatusSectionKey {
+export function sectionOf(session: SessionView): StatusSectionKey {
   switch (session.status) {
     case 'needs': return 'needs'
     case 'error':
@@ -135,11 +135,20 @@ function sectionOf(session: SessionView): StatusSectionKey {
 
 export type StatusSection = { key: StatusSectionKey; name: string; hint: string; sessions: SessionView[] }
 
-/** The agents under the status each has, as created within a section; a section with nothing in it is left out. Terminals have their own section (`terminalSessions`). */
-export function statusSections(sessions: readonly SessionView[]): StatusSection[] {
+/** A session kept in the section it was in when it was picked, whatever its status says since. */
+export type HeldRow = { readonly id: string; readonly section: StatusSectionKey }
+
+/**
+ * The agents under the status each has, as created within a section; a section with nothing in it is left out. Terminals
+ * have their own section (`terminalSessions`). The `held` row stays where it was picked: looking at a finished agent
+ * makes it idle, and a row that jumps away from under the pointer the moment it is clicked reads as the app fighting you.
+ * Its mark still shows its status.
+ */
+export function statusSections(sessions: readonly SessionView[], held: HeldRow | null = null): StatusSection[] {
   const created = inCreationOrder(sessions.filter((session) => !isTerminal(session)))
+  const placed = (session: SessionView): StatusSectionKey => (session.id === held?.id ? held.section : sectionOf(session))
   return STATUS_SECTIONS
-    .map((section) => ({ ...section, sessions: created.filter((session) => sectionOf(session) === section.key) }))
+    .map((section) => ({ ...section, sessions: created.filter((session) => placed(session) === section.key) }))
     .filter((section) => section.sessions.length > 0)
 }
 
