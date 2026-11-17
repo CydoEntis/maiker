@@ -246,16 +246,16 @@ mod tests {
     #[test]
     fn socket_identity_uses_the_windows_user_first_and_default_values() {
         assert_eq!(
-            socket_id("maitty", Some("work"), Some("cst"), Some("fallback")),
-            "maitty-cst-work.sock"
+            socket_id("maiker", Some("work"), Some("cst"), Some("fallback")),
+            "maiker-cst-work.sock"
         );
         assert_eq!(
-            socket_id("maitty", None, None, Some("linux-user")),
-            "maitty-linux-user-default.sock"
+            socket_id("maiker", None, None, Some("linux-user")),
+            "maiker-linux-user-default.sock"
         );
         assert_eq!(
-            socket_id("maitty", None, None, None),
-            "maitty-user-default.sock"
+            socket_id("maiker", None, None, None),
+            "maiker-user-default.sock"
         );
     }
 

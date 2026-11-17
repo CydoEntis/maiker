@@ -2655,13 +2655,13 @@ mod screen_tests {
         app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         let o = draw(&mut app, 160, 45);
         assert!(
-            o.contains("Dark themes") && o.contains("Maitty Night") && !o.contains("Maitty Day"),
+            o.contains("Dark themes") && o.contains("Maiker Night") && !o.contains("Maiker Day"),
             "the dark tab lists only dark themes"
         );
         app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
         let o = draw(&mut app, 160, 45);
         assert!(
-            o.contains("Light themes") && o.contains("Maitty Day") && !o.contains("Maitty Night"),
+            o.contains("Light themes") && o.contains("Maiker Day") && !o.contains("Maiker Night"),
             "Tab shows the light tab, on the light theme chosen"
         );
         app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));

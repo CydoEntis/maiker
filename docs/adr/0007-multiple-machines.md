@@ -33,7 +33,7 @@ People run agents on more than one computer and want one window over all of them
 - **A remote daemon is untrusted.** Its clipboard writes, notices and sounds are off unless that
   machine opts in. Every string it supplies is cleaned before display. Only the line after a
   marker, and only an absolute path, is taken from a script's output.
-- **Updating a machine replaces its daemon.** `maitty machine update <name>` installs the new file
+- **Updating a machine replaces its daemon.** `maiker machine update <name>` installs the new file
   and restarts the far daemon so the two ends match. Without `--restart` it restarts only an idle
   daemon; with it (the window's Update button always passes it, after asking) it restarts a daemon
   whose sessions are saved. They come back on the new daemon with their agents resumed; a turn in

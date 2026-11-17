@@ -171,11 +171,16 @@ pub enum Installed {
 
 /// `code` is the exit status of `<remote_cmd> --version`; login text may precede the answer.
 pub fn classify_version(code: Option<i32>, stdout: &str) -> Installed {
+    classify_version_of(APP_COMMAND, code, stdout)
+}
+
+/// `classify_version` for the app under the command `name` (one it had before a rename).
+pub fn classify_version_of(name: &str, code: Option<i32>, stdout: &str) -> Installed {
     match code {
         Some(127) => Installed::Missing,
         Some(0) => stdout
             .lines()
-            .filter_map(|line| line.trim().strip_prefix(APP_COMMAND)?.strip_prefix(' '))
+            .filter_map(|line| line.trim().strip_prefix(name)?.strip_prefix(' '))
             .map(str::trim)
             .find(|version| parse(version).is_some())
             .map_or_else(
@@ -466,7 +471,7 @@ mod tests {
             Installed::Missing
         );
         assert!(matches!(
-            classify_version(Some(1), "bash: maitty: command not found"),
+            classify_version(Some(1), "bash: maiker: command not found"),
             Installed::Broken(_)
         ));
         assert!(matches!(classify_version(None, ""), Installed::Broken(_)));
@@ -475,7 +480,7 @@ mod tests {
     #[test]
     fn the_version_is_found_after_login_noise() {
         assert_eq!(
-            classify_version(Some(0), "Welcome\nmaitty 0.58.0\n"),
+            classify_version(Some(0), "Welcome\nmaiker 0.58.0\n"),
             Installed::Version("0.58.0".into())
         );
         assert!(matches!(
@@ -483,7 +488,7 @@ mod tests {
             Installed::Broken(_)
         ));
         assert!(matches!(
-            classify_version(Some(0), "maitty banana\n"),
+            classify_version(Some(0), "maiker banana\n"),
             Installed::Broken(_)
         ));
     }
@@ -600,7 +605,7 @@ mod tests {
     fn the_refusals_name_the_flag_that_would_do_it() {
         assert_eq!(
             Refusal::NeedsInstallFlag.message("build"),
-            "maitty is not installed on build; run `maitty machine update build --install`"
+            "maiker is not installed on build; run `maiker machine update build --install`"
         );
         assert!(Refusal::NeedsYesFlag.message("build").contains("--yes"));
         assert!(Refusal::RemoteIsNewer.message("build").contains("--force"));
@@ -609,19 +614,19 @@ mod tests {
     #[test]
     fn the_destination_follows_remote_cmd_when_it_names_a_place() {
         let rows = [
-            ("maitty", "~/.local/bin/maitty"),
-            ("bin/maitty", "~/.local/bin/maitty"),
-            ("./maitty", "~/.local/bin/maitty"),
-            ("/opt/maitty/bin/maitty", "/opt/maitty/bin/maitty"),
-            ("~/bin/maitty", "~/bin/maitty"),
-            ("/opt/my tools/it's/maitty", "/opt/my tools/it's/maitty"),
-            ("~/my tools/maitty", "~/my tools/maitty"),
-            ("~root/maitty", "~/.local/bin/maitty"),
+            ("maiker", "~/.local/bin/maiker"),
+            ("bin/maiker", "~/.local/bin/maiker"),
+            ("./maiker", "~/.local/bin/maiker"),
+            ("/opt/maiker/bin/maiker", "/opt/maiker/bin/maiker"),
+            ("~/bin/maiker", "~/bin/maiker"),
+            ("/opt/my tools/it's/maiker", "/opt/my tools/it's/maiker"),
+            ("~/my tools/maiker", "~/my tools/maiker"),
+            ("~root/maiker", "~/.local/bin/maiker"),
         ];
         for (cmd, want) in rows {
             assert_eq!(destination(cmd), want, "{cmd}");
         }
-        assert!(names_destination("/opt/maitty") && !names_destination("maitty"));
+        assert!(names_destination("/opt/maiker") && !names_destination("maiker"));
     }
 
     #[test]

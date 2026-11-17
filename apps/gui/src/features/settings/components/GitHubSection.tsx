@@ -77,7 +77,7 @@ export function GitHubSection({ machines, signIn, only }: { machines: readonly M
   return (
     <Card title={only === undefined ? 'Signed in' : 'GitHub'}
       meta={<button type="button" className="mx-text-button" onClick={() => { setAsked((count) => count + 1) }}>Check again</button>}
-      foot="Sign in opens GitHub's own sign-in in a terminal on that machine: finish it there and in your browser, then close the terminal. Maitty reads who is signed in and keeps no passwords or tokens."
+      foot="Sign in opens GitHub's own sign-in in a terminal on that machine: finish it there and in your browser, then close the terminal. Maiker reads who is signed in and keeps no passwords or tokens."
     >
       {rows.map((row) => {
         const state = states[row.machine] ?? LOADING

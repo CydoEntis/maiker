@@ -1,6 +1,6 @@
-# Maitty guide
+# Maiker guide
 
-How each part of Maitty works, in more depth than the [README](../README.md). Shortcuts are
+How each part of Maiker works, in more depth than the [README](../README.md). Shortcuts are
 in [shortcuts](shortcuts.md); every setting is in [`config.example.toml`](../config.example.toml).
 
 ## Using it
@@ -13,7 +13,7 @@ and your configured custom ones; rows click and the wheel scrolls.
 ```
 ╭─ LOCAL ────────────────────────╮
 │                                │
-│ ▾  maitty                ⎇ dev ✓│
+│ ▾  maiker                ⎇ dev ✓│
 │   ● bold-raven            ● you │
 │     asks: what should the…     │
 │   ○ shell                   2   │
@@ -25,8 +25,8 @@ and your configured custom ones; rows click and the wheel scrolls.
 ├─ REMOTE 1 ─────────────── m add ┤
 │                                │
 │  ⇄ kingdom                  ●  │
-│ ▾  maitty         ⎇ fixes/fir ✓│
-│   ⣻ Maitty GUI Work       48m  │
+│ ▾  maiker         ⎇ fixes/fir ✓│
+│   ⣻ Maiker GUI Work       48m  │
 ╰────────────────────────────────╯
 ```
 
@@ -86,7 +86,7 @@ panel open; a click in the panel, or its key again, gives the keys back.
 **Files** shows the project's tree and the file you pick beside it (on a narrow panel the
 file takes the panel, `‹` goes back). `f` again or Esc closes it; Ctrl+click on a `path:line`
 in a pane opens it at that line. Enter puts the path in the agent's prompt, `e` opens it in
-your editor (`editor` in config; nvim, helix … open inside maitty), `o` opens it outside,
+your editor (`editor` in config; nvim, helix … open inside maiker), `o` opens it outside,
 `y` copies the path, `/` filters, `r` lists recent files. Drag over the file shown (or
 double-click a word) and Ctrl+C copies the text.
 
@@ -110,8 +110,8 @@ Everything also works with the mouse. Hold Shift to select text with your termin
 
 ### Helpers
 
-Any session may start helpers: other agents in their own worktrees, through `maitty mcp`
-(`maitty_start`). The first time one tries, its row turns **needs you** and says `wants to
+Any session may start helpers: other agents in their own worktrees, through `maiker mcp`
+(`maiker_start`). The first time one tries, its row turns **needs you** and says `wants to
 start 4 helpers`. Press Enter on the row (or click the line) to see the tasks, then
 **1** Allow, **2** Always in this project, **3** No, do it alone, or Esc to decide later.
 Their permission prompts come to your Inbox, and nothing merges.
@@ -119,7 +119,7 @@ Their permission prompts come to your Inbox, and nothing merges.
 Settings › Sessions sets the rest: **Sessions may start helpers** (`ask`, `always` or
 `never`; `never` refuses with a clear error to the agent) and **Helpers at once** (2, 3 or 4
 per session; an extra one is told to wait). "Always in this project" is kept in
-`helper-projects.json` in Maitty's data folder, not in the repo, so an agent cannot give itself
+`helper-projects.json` in Maiker's data folder, not in the repo, so an agent cannot give itself
 helpers. An older `[mcp] helpers_at_once` in `config.toml` still counts until `[sessions]
 helpers_at_once` is set. The commander and `[team]` jobs are gone; an old `config.toml` that
 still has them loads, and they are ignored.
@@ -144,7 +144,7 @@ their session with their own steps: see [Specialists and workflows](workflows.md
 - **Images:** `Ctrl+Space`, then `Ctrl+V` (or a paste while an image is on the
   clipboard) saves the image and pastes its path; Claude Code and Codex attach it. In a pane on
   another machine the image is sent to that machine over ssh (up to 25 MB), kept there in
-  `~/.cache/maitty/pastes` (private, cleared after a week), and its path there is pasted. It needs
+  `~/.cache/maiker/pastes` (private, cleared after a week), and its path there is pasted. It needs
   ssh to that machine (not a custom transport) and a login that works without a prompt.
   An agent's own image key, `Ctrl+V` or `Alt+V` (Claude Code on Windows), typed into an agent on
   another machine does the same when this computer's clipboard holds an image; with no image the
@@ -152,7 +152,7 @@ their session with their own steps: see [Specialists and workflows](workflows.md
 - **Files to another machine:** in a pane on another machine, `Ctrl+Space`, then `d`, asks for a
   file's path (type it, or drop the file on the terminal: the path is pasted into the box). The
   file (up to 100 MB; a folder is sent too, up to 1 GB, see *Sending a file or a folder to a machine*) goes to that machine over ssh the same way as an image,
-  into the same private folder (`~/.cache/maitty/pastes`), and its path there is typed into the pane.
+  into the same private folder (`~/.cache/maiker/pastes`), and its path there is typed into the pane.
   The name there is `paste-<time>-<id>-<your file's name>`, so two files never overwrite each other.
   A toast shows the percentage; `Ctrl+Space`, `d` again (or the toast's close mark) stops it.
   A sent file stays on that machine for a week, readable by you only, so do not send a secret you
@@ -169,9 +169,9 @@ Needs-you alerts use two rising notes and stay quiet for the session you're look
 same session asking again within 2 minutes stays quiet too. A background
 session's completion uses one soft note, once for each thing you asked for: an agent that stops, picks itself back up (a helper or a background job reported in) and stops again does not ring a second time until you type into its pane, or two minutes have passed. The session you're viewing stays quiet. Other panes get an in-app completion notice. A needs-you alert is delayed briefly
 to ignore transient prompts and is cancelled if the agent resumes work. Sessions started
-by another agent do not alert when they finish. With no maitty window open, the server
+by another agent do not alert when they finish. With no maiker window open, the server
 plays the needs-you sound and shows a desktop notification. `[notify] sound = false`
-(Settings → Alerts → Alert sounds) turns every sound off. Each sound has its own switch beside it: `sound_on_needs` (Sound when an agent needs you) and `sound_on_done` (Sound when an agent finishes), and `volume` (Sound volume) is `quiet`, `normal` or `loud`. `maitty test-alert` plays both sample tones at that volume.
+(Settings → Alerts → Alert sounds) turns every sound off. Each sound has its own switch beside it: `sound_on_needs` (Sound when an agent needs you) and `sound_on_done` (Sound when an agent finishes), and `volume` (Sound volume) is `quiet`, `normal` or `loud`. `maiker test-alert` plays both sample tones at that volume.
 
 **On your phone** (off until you set it up): install the free [ntfy](https://ntfy.sh) app (no
 account), subscribe to a topic name nobody would guess, and put it in Settings → Phone alerts
@@ -179,22 +179,22 @@ account), subscribe to a topic name nobody would guess, and put it in Settings �
 answering (`phone_after`), so it stays quiet while you're at your desk; `phone_done` adds
 finished ones. Alerts say which agent and where; `phone_text` adds what it's doing. On the
 public server the topic name is all that keeps them private (`phone_server` for your own).
-`maitty test-alert` sends a test.
+`maiker test-alert` sends a test.
 
-Click a notification to go to its session: maitty comes to the front on it (its split too).
-That works for the note inside maitty and the desktop notification on Windows and Linux (on
+Click a notification to go to its session: maiker comes to the front on it (its split too).
+That works for the note inside maiker and the desktop notification on Windows and Linux (on
 Omarchy / Hyprland the window is brought forward too); on macOS, install
 `terminal-notifier` for clickable ones.
 
 ## Sessions from older versions
 
-Maitty no longer stops idle agents automatically; they keep running until you close them or
-their own agent process exits. Sessions saved while sleeping by an older version recover when you open them. Maitty does not
+Maiker no longer stops idle agents automatically; they keep running until you close them or
+their own agent process exits. Sessions saved while sleeping by an older version recover when you open them. Maiker does not
 show a separate sleep screen or wake animation.
 
 ## What a session's status means
 
-Every agent session has one status. Maitty works it out from the agent's own reports, its screen and its process, in that
+Every agent session has one status. Maiker works it out from the agent's own reports, its screen and its process, in that
 order of trust; how to connect an agent so it reports for itself is in [agent-status](agent-status.md).
 
 | Status | What it means | Desktop app | Terminal app |
@@ -216,10 +216,10 @@ until the machine is back.
 Every status change records a short reason, in the daemon's own words. Typical ones:
 
 - `hook: Stop`: the agent reported the event itself (here, the end of a turn).
-- `screen: matched …` or `screen: it's printing`: Maitty read it off the agent's terminal.
-- `process: an agent started`: Maitty saw an agent start in the pane.
+- `screen: matched …` or `screen: it's printing`: Maiker read it off the agent's terminal.
+- `process: an agent started`: Maiker saw an agent start in the pane.
 - `you looked at it`: you opened a finished session, so it went from done to idle.
-- `you answered it`: you answered a question the agent asked through Maitty.
+- `you answered it`: you answered a question the agent asked through Maiker.
 
 **In the desktop app**, rest the pointer on a session's row for about half a second. A card opens beside it with the
 agent, its changes and, under **Set by**, the reason and how long ago it happened (`hook: Stop, 3 s ago`). The line is left
@@ -227,13 +227,13 @@ out where it would be about some other status: when the status is not known, for
 for one waiting for you to allow helpers.
 
 **In the terminal app** there is no such card. The reason goes to `daemon.log` in the data folder, one line per change
-(`pane 4 (claude): Working -> Done: hook: Stop`), and `maitty ls --json` carries it as `status_why`.
+(`pane 4 (claude): Working -> Done: hook: Stop`), and `maiker ls --json` carries it as `status_why`.
 
 ### Limited
 
 When an agent stops at a plan limit (the screen says things like "usage limit reached", "you've hit your weekly limit" or
-"out of extra usage"), Maitty works out when it can go on. That time is the reset of a limit its usage tracking shows as
-95% used or more; with none, it tries again in half an hour. Exactly one minute after that time Maitty types `continue`
+"out of extra usage"), Maiker works out when it can go on. That time is the reset of a limit its usage tracking shows as
+95% used or more; with none, it tries again in half an hour. Exactly one minute after that time Maiker types `continue`
 into the agent and says so in a notice. This needs auto-continue, which is on by default; with it off, nothing is typed
 and the session is not marked limited.
 
@@ -292,11 +292,11 @@ shows. After 6 seconds the process ends. Putting away has the same 6-second Undo
 ## Follow-ups and snapshots
 
 `Enter` in shortcut mode (or **Message** in the row's menu) writes an agent a follow-up without leaving where you are. While the agent is
-working, Enter leaves the message with maitty and it's typed in when the turn is over (never
+working, Enter leaves the message with maiker and it's typed in when the turn is over (never
 into a question the agent is asking); Ctrl+Enter sends it at once. What's waiting shows under
 the row, and the row's menu drops it.
 
-Each time an agent's turn begins, and again when it ends, maitty keeps the checkout's files
+Each time an agent's turn begins, and again when it ends, maiker keeps the checkout's files
 as they are (tracked or not; never what git ignores), so one turn's changes are the
 difference between its two snapshots. A turn that changed nothing adds none. A turn ends
 when it finishes, fails or is cancelled; stopping to ask you something is not an end.
@@ -304,21 +304,21 @@ when it finishes, fails or is cancelled; stopping to ask you something is not an
 lists them all; picking one puts the files back as they were then. What's there now is kept
 as a snapshot first, so a restore can be taken back the same way. It is refused while the
 agent is working, since it would keep writing into the files being put back. Snapshots are
-commits under the worktree's own refs (`refs/worktree/maitty/snapshots`): no branch, nothing
+commits under the worktree's own refs (`refs/worktree/maiker/snapshots`): no branch, nothing
 in your history, your staging untouched, the newest 60 kept (at least thirty turns).
 `[snapshots] enabled = false` turns them off.
 
 ## Checks
 
-A check is a command Maitty runs after each agent turn, such as your tests: a session whose
+A check is a command Maiker runs after each agent turn, such as your tests: a session whose
 check fails reads **failed**, not done, until the check passes or you override it. Name one
 or more per project as `[[check]]` tables in config.toml (`build`, `test`, …; each is a
-checkpoint), or let a repo ship its own in `.maitty/checks.toml`.
+checkpoint), or let a repo ship its own in `.maiker/checks.toml`.
 
 - A repo's command never runs until you approve it: Enter on its row opens the approval.
   Enter, `y` and Space do nothing there; `1` runs it once, `2` twice always runs this exact
   command, `3` never runs it (the session reads **not checked**). A changed command asks again.
-  Your answers live in Maitty's data folder, never in the repo.
+  Your answers live in Maiker's data folder, never in the repo.
 - Enter on a failed row opens its evidence: the command, where and when it ran, and its output.
   `r` re-runs, `O` overrides with a reason (the failure stays visible), `u` undoes that, Tab
   moves between checkpoints.
@@ -332,7 +332,7 @@ checkpoint), or let a repo ship its own in `.maitty/checks.toml`.
 
 In Changes, `m` merges a worktree's branch into the main one, then closes its
 sessions and removes the worktree and the branch. Closing the last session in a worktree
-maitty made removes the folder; its branch goes too when it's already merged.
+maiker made removes the folder; its branch goes too when it's already merged.
 
 ## Recipes
 
@@ -348,18 +348,18 @@ They show up in + New as `⚙ feature`.
 ## References
 
 Keep the screenshots and design files an agent should build from in the References view
-(leader + `e`). They are plain files in `.maitty/references/` at the repo's main checkout (a
+(leader + `e`). They are plain files in `.maiker/references/` at the repo's main checkout (a
 folder outside git keeps its own), so every agent, in every worktree, sees the same set, and
-any agent can read them by path. The first time Maitty makes the folder in a repo it adds
-`.maitty/references/` to the repo's `.git/info/exclude`, so references stay out of git without
+any agent can read them by path. The first time Maiker makes the folder in a repo it adds
+`.maiker/references/` to the repo's `.git/info/exclude`, so references stay out of git without
 touching your `.gitignore`; `git add -f` commits one if you want to share it. Agents connected
-through `maitty integrate mcp` are told to call `maitty_references` before UI or design work; it
+through `maiker integrate mcp` are told to call `maiker_references` before UI or design work; it
 lists each file's absolute path, kind, size and time, and the agent opens the images itself.
 Subagents usually inherit their parent's MCP tools. Over `--remote` the view isn't available yet.
 
 ## Secrets and pull requests
 
-**Secrets.** An agent that needs an API key or token calls `maitty_request_secret` instead of
+**Secrets.** An agent that needs an API key or token calls `maiker_request_secret` instead of
 asking in chat. Its row turns "needs you" with "asks for a secret" (and shows in the Inbox);
 The prompt opens by itself beside the row when nothing else has the screen (it waits its turn
 behind a dialog or sheet, and a request you declined is not offered again); keys are ignored for
@@ -367,26 +367,26 @@ the first second and a half, so what you were typing is not taken as the secret.
 or a click on the line, opens it any time. What you type shows as dots.
 Enter gives it and Esc declines (the agent is told to carry on without it); a paste works too. By
 default the agent gets the path of a file only you can read, with the secret in it; if it asks for
-delivery `run`, it gets a reference and runs `maitty secret run <reference> --env NAME -- <command>`
+delivery `run`, it gets a reference and runs `maiker secret run <reference> --env NAME -- <command>`
 to put the secret in one command's environment. A reference works once, only for the pane that
-asked, and runs out after a day. Maitty keeps secrets in memory only: a restart forgets them,
+asked, and runs out after a day. Maiker keeps secrets in memory only: a restart forgets them,
 and delivered files are removed within a day or when the daemon starts. They never appear in the
 chat, the state or a log.
 
-**Pull requests.** With the GitHub CLI (`gh`) installed and logged in, Maitty finds the pull
+**Pull requests.** With the GitHub CLI (`gh`) installed and logged in, Maiker finds the pull
 request open on each pane's branch every couple of minutes and shows it on the session's row in
 the sidebar (and in the desktop app's pane header): `#7 2 failing`, `#7 changes requested`, `#7 conflict`, `#7 checking`, `#7 approved`,
-`#7 passing`, `#7 merged`. `maitty ls --json` and `maitty_list` carry the details. When the
+`#7 passing`, `#7 merged`. `maiker ls --json` and `maiker_list` carry the details. When the
 checks fail, a review remark arrives or a merge conflict appears, the agent is told once its turn
 is over (never into a question), at most ten times per commit; Settings › Agents › "Tell agents
-about their PR" turns that off. If the branch doesn't find it, `maitty pr link
-<github pull request address>` links the pane by hand (`maitty pr unlink` goes back). Only
+about their PR" turns that off. If the branch doesn't find it, `maiker pr link
+<github pull request address>` links the pane by hand (`maiker pr unlink` goes back). Only
 reviews and conversation comments are read, not inline code comments. A link is forgotten when the
 server restarts.
 
 ## Agents that steer agents (MCP)
 
-`maitty integrate mcp` registers `maitty mcp` with every agent you have that takes one, and
+`maiker integrate mcp` registers `maiker mcp` with every agent you have that takes one, and
 prints a line per agent (registered, already registered, or skipped when it isn't installed):
 
 - Claude Code, through `claude mcp add --scope user` (every project);
@@ -395,18 +395,18 @@ prints a line per agent (registered, already registered, or skipped when it isn'
   `~/.gemini/settings.json` (`$QWEN_HOME` is Qwen's config folder itself; `$GEMINI_CLI_HOME`
   stands in for the home folder, so Gemini's is `$GEMINI_CLI_HOME/.gemini`).
 
-Each entry runs this `maitty` with `args = ["mcp"]`; the rest of each file, comments included,
+Each entry runs this `maiker` with `args = ["mcp"]`; the rest of each file, comments included,
 is kept, and a backup sits beside it. An agent whose config folder doesn't exist is skipped, not
-set up. Running it again changes nothing; `--uninstall` removes only Maitty's entry. Restart a
-running agent to load the server. `maitty doctor` shows which agents have it. An agent then has tools to
-list sessions (`maitty_list`), read a screen (`maitty_read`), send a message
-(`maitty_send`), wait for a turn to end (`maitty_wait`), answer a prompt (`maitty_answer`),
-interrupt (`maitty_interrupt`), start helpers (`maitty_start`, see *Helpers* above) and list the
-project's references (`maitty_references`, see *References* above) and ask you for a secret
-(`maitty_request_secret`, see *Secrets and pull requests* below), and open the ticket setup
-(`maitty_tickets_setup`, see *Setting up tickets with an agent* below).
+set up. Running it again changes nothing; `--uninstall` removes only Maiker's entry. Restart a
+running agent to load the server. `maiker doctor` shows which agents have it. An agent then has tools to
+list sessions (`maiker_list`), read a screen (`maiker_read`), send a message
+(`maiker_send`), wait for a turn to end (`maiker_wait`), answer a prompt (`maiker_answer`),
+interrupt (`maiker_interrupt`), start helpers (`maiker_start`, see *Helpers* above) and list the
+project's references (`maiker_references`, see *References* above) and ask you for a secret
+(`maiker_request_secret`, see *Secrets and pull requests* below), and open the ticket setup
+(`maiker_tickets_setup`, see *Setting up tickets with an agent* below).
 `[mcp] approve` sets whether agents may answer "yes" to prompts and `[mcp] scope` whether
-they reach only their project or every session; `maitty grant <pane> read,write,…` changes
+they reach only their project or every session; `maiker grant <pane> read,write,…` changes
 one pane's rights.
 
 An agent can also reach another machine you have opened to agents; see *Agents on a machine* under *Machines*.
@@ -414,9 +414,9 @@ An agent can also reach another machine you have opened to agents; see *Agents o
 ### Setting up tickets with an agent
 
 Ask your agent to set up the project's tickets (for example "set up Plane tickets for this repo with
-https://plane.example/acme/projects/…"). It calls `maitty_tickets_setup`, which opens Tickets in your
-Maitty window on that project and source, with the link it suggests shown beside the steps. You finish it
-there: paste any key into Maitty's own box, never into the chat, and pick the project. The agent saves
+https://plane.example/acme/projects/…"). It calls `maiker_tickets_setup`, which opens Tickets in your
+Maiker window on that project and source, with the link it suggests shown beside the steps. You finish it
+there: paste any key into Maiker's own box, never into the chat, and pick the project. The agent saves
 nothing and never sees a key; it hears back only what is linked and whether a key is saved.
 
 A repository can name its ticket sources in a committed `.maitty/tickets.toml`, so a clone or another
@@ -436,14 +436,14 @@ team = "9b2e…"             # the Linear team's id, not its key such as ENG
 name = "Core"              # optional
 ```
 
-Anything you link in Maitty wins over the file. A `[plane]` entry is used only when your saved Plane key is
+Anything you link in Maiker wins over the file. A `[plane]` entry is used only when your saved Plane key is
 for the same address and workspace; otherwise Settings › Tickets says why it was not used.
 
 ## From any shell
 
 ```sh
-maitty                 # open the current directory
-maitty ~/code/my-app   # open a project
+maiker                 # open the current directory
+maiker ~/code/my-app   # open a project
 ```
 
 Use **+ new** or **Menu** at the bottom of the sidebar to start a session,
@@ -451,8 +451,8 @@ open a shell, split a pane, or reach Settings. For example, the CLI can start an
 agent directly:
 
 ```sh
-maitty new ~/code/my-app -- claude
-maitty worktree feature/login -- codex
+maiker new ~/code/my-app -- claude
+maiker worktree feature/login -- codex
 ```
 
 The worktree command creates or opens a separate checkout for the task. When an
@@ -464,14 +464,14 @@ answer, and return to your other work.
 Structured Codex conversations use the daemon without creating a terminal pane.
 They appear in the existing session list; selecting an unbound conversation keeps
 the sidebar focused. Native terminal handoff and interactive request answers are
-later work. Existing `maitty send` still types into a PTY.
+later work. Existing `maiker send` still types into a PTY.
 
 Start with a verified Codex 0.164.0 executable and existing absolute paths:
 
 ```powershell
-maitty conversation start --executable C:\tools\codex.exe --config-root C:\codex-home --cwd C:\project
-maitty conversation send --conversation 1 --generation 1 --operation 1 "Review the failing test"
-maitty conversation read --conversation 1 --limit 128
+maiker conversation start --executable C:\tools\codex.exe --config-root C:\codex-home --cwd C:\project
+maiker conversation send --conversation 1 --generation 1 --operation 1 "Review the failing test"
+maiker conversation read --conversation 1 --limit 128
 ```
 
 Commands print JSON. Start returns `conversation` and `generation`; use those
@@ -482,7 +482,7 @@ evidence before deciding how to continue.
 
 `start --session <exact-Thread.id>` resumes that exact native thread with the same
 explicit executable/config-root/cwd inputs. A missing thread fails. Reconnect
-recorded Maitty identity with `start --conversation <id> --generation <current>`;
+recorded Maiker identity with `start --conversation <id> --generation <current>`;
 it uses recorded settings and returns a newly fenced generation. No picker,
 latest-session selection or implicit fork is used. Interrupted creation intent
 has no confirmed identity and cannot automatically create another thread.
@@ -501,7 +501,7 @@ remain visibly blocked and unanswered. Checkpoint failures and pending approvals
 remain visible even when the provider has finished.
 
 Structured mutations require `[restore] enabled=true`. Setting `output=false`
-removes/prevents Maitty's transcript cache while preserving content-free identity
+removes/prevents Maiker's transcript cache while preserving content-free identity
 and delivery receipts; explicit reads may hydrate memory for that connection.
 
 Structured tools authenticate as that runtime and follow configured MCP grants.
@@ -516,13 +516,13 @@ your configuration or storing authentication values in thread settings.
 
 ## Machines
 
-maitty can show the agents of other computers next to yours. Each computer keeps running its own maitty;
+maiker can show the agents of other computers next to yours. Each computer keeps running its own maiker;
 this window connects to it over `ssh` and shows its folders and sessions under a header of their own.
 Closing the window, or losing the connection, never stops anything over there.
 
 ### Add a machine
 
-Leader `w` (or `Machines` in the command palette) lists the computers maitty reaches over ssh and
+Leader `w` (or `Machines` in the command palette) lists the computers maiker reaches over ssh and
 adds more. Pick a host from your `~/.ssh/config` and press Enter: if ssh logs in on its own (a key, an
 agent, a known host) the machine is added and connecting in that one step. If ssh needs you (a password, a
 code, a host key you have not accepted) it opens in a popup, you answer, and the machine connects when the
@@ -535,14 +535,14 @@ and its saved layout is kept in case you add it back.
 
 The dialog writes the machine to `config.local.toml`, beside `config.toml`. That file belongs to this computer
 and is never synced; a `[[machines]]` entry in the synced `config.toml` is refused. You can write the entry
-yourself, and a change made by hand takes effect the next time maitty starts:
+yourself, and a change made by hand takes effect the next time maiker starts:
 
 ```toml
 [[machines]]
 name = "build"                      # how you address it: --on build, build/4
 target = "me@10.0.0.2"              # a host, user@host or a Host alias from ~/.ssh/config
 ssh_args = ["-p", "2222"]           # optional: extra ssh arguments, one per entry
-remote_cmd = "~/.local/bin/maitty"  # optional: where maitty is on that machine (default: maitty)
+remote_cmd = "~/.local/bin/maiker"  # optional: where maiker is on that machine (default: maiker)
 ```
 
 Four more keys decide what a machine may do. `clipboard` is on unless you write `clipboard = false`: a copy made in its panes reaches your clipboard. The other three are `false` until you turn them on. `clipboard` lets its panes
@@ -550,33 +550,33 @@ write your clipboard, `notices` lets it raise notices (which include bringing th
 `sounds` lets it play sounds; what it raises starts with `[build]`. `mcp` opens it to agents (see *Agents on a
 machine*). `config.example.toml` lists every key.
 
-Adding a machine starts maitty there if it is not running, so you can create the first session from this
-computer. If the connection drops later, maitty only reconnects to a maitty that is still running there; it
-never starts one you stopped. Right-click the machine's heading in the sidebar and choose Reconnect to start it there again. If maitty is not
-installed there, its heading has an **install** button: see *Install or update maitty on a machine*.
+Adding a machine starts maiker there if it is not running, so you can create the first session from this
+computer. If the connection drops later, maiker only reconnects to a maiker that is still running there; it
+never starts one you stopped. Right-click the machine's heading in the sidebar and choose Reconnect to start it there again. If maiker is not
+installed there, its heading has an **install** button: see *Install or update maiker on a machine*.
 
 ### What you see
 
 Sessions on this computer are in the sidebar's **Local** half; every other machine's are in **Remote**,
 each machine under a `⇄ build` header. A machine that is not connected, or has no sessions, is one item: its name with
-how its connection is at the right. A session's status is the one its own maitty reports, and what its agents
+how its connection is at the right. A session's status is the one its own maiker reports, and what its agents
 need shows in the Inbox with `· on build`.
 
 | Shown | What it means, and what to do |
 | --- | --- |
 | `connecting` | The first try this run. |
 | `connected` | The line is up. |
-| `reconnecting #2` | A line that was up dropped. maitty tries again at once, then after 250 ms, doubling up to 30 s; three tries in a row without an answer make it `unreachable`. |
+| `reconnecting #2` | A line that was up dropped. maiker tries again at once, then after 250 ms, doubling up to 30 s; three tries in a row without an answer make it `unreachable`. |
 | `needs login` | ssh cannot log in without asking you. Make plain `ssh` to that machine work in a terminal (load your key, accept its host key), then right-click the machine and choose Reconnect. |
-| `needs update` | The machine runs another version of maitty, or has none on its PATH. Click **install** (none there) or **update** (another version) on the machine's heading in the sidebar, or right-click the heading and choose Install Maitty / Update Maitty: it asks in a popup, then reconnects. From a terminal: `maitty machine update <name>` (add `--install` when there is none, or set `remote_cmd` to its path). |
-| `unreachable` | No answer, or maitty is not running there. The reason is written under it (ssh's last line, or "maitty is not running on that machine; retry to start it there"); maitty keeps trying in the background. |
+| `needs update` | The machine runs another version of maiker, or has none on its PATH. Click **install** (none there) or **update** (another version) on the machine's heading in the sidebar, or right-click the heading and choose Install Maiker / Update Maiker: it asks in a popup, then reconnects. From a terminal: `maiker machine update <name>` (add `--install` when there is none, or set `remote_cmd` to its path). |
+| `unreachable` | No answer, or maiker is not running there. The reason is written under it (ssh's last line, or "maiker is not running on that machine; retry to start it there"); maiker keeps trying in the background. |
 | `refused` | A different computer now answers at that name. If you replaced the machine, remove it and add it again; otherwise check the host name and DNS. |
 
 When a machine drops, its cards give way to one item saying how it stands, such as `needs update · click for the fix` (click it for the
-Machines dialog, which says what to do and can reconnect, install or update, edit or remove it; right-click the machine's heading for Install / Update Maitty, a new shell, Reconnect and the Machines dialog). They come back by themselves when the line does, each pane showing
+Machines dialog, which says what to do and can reconnect, install or update, edit or remove it; right-click the machine's heading for Install / Update Maiker, a new shell, Reconnect and the Machines dialog). They come back by themselves when the line does, each pane showing
 its screen again. Its needs-you and failed marks leave the Inbox while it is down. Typing sent to a machine while it
 was down is dropped, never queued (replaying keystrokes into a pane that moved on could run commands you no
-longer meant); when the machine is back, maitty says how much was not sent.
+longer meant); when the machine is back, maiker says how much was not sent.
 
 ### The command line on another machine
 
@@ -584,13 +584,13 @@ The commands you script with work on a machine you added: `--on <machine>` runs 
 there is written `machine/id`.
 
 ```sh
-maitty ls --on build                     # build's workspaces; its panes are listed as build/4
-maitty send --pane build/4 "run the tests"
-maitty read build/4
-maitty wait --pane build/4 --regex "tests passed"
-maitty split --pane build/4 -- htop
-maitty new --on build ~/code/api -- claude
-maitty ls --all                          # this computer and every machine; one that is down is named on stderr
+maiker ls --on build                     # build's workspaces; its panes are listed as build/4
+maiker send --pane build/4 "run the tests"
+maiker read build/4
+maiker wait --pane build/4 --regex "tests passed"
+maiker split --pane build/4 -- htop
+maiker new --on build ~/code/api -- claude
+maiker ls --all                          # this computer and every machine; one that is down is named on stderr
 ```
 
 `--on` may come before or after the command, `local` means this computer, and `machine/id` works
@@ -600,83 +600,83 @@ wherever a pane does (`read`, `focus`, `grant`, `handoff`, `--pane`). It works w
 that work.
 
 The pane a command runs in is on this computer, so on another machine you always say which pane:
-`maitty send --on build "hi"` is refused until you add `--pane build/4`. The other machine is never
+`maiker send --on build "hi"` is refused until you add `--pane build/4`. The other machine is never
 told which pane here you are in. What a machine prints is cleaned before it reaches your terminal;
 `read --raw` prints a machine's screen exactly as it sent it. If a machine cannot be reached the error
-is one line with the fix (log in with plain `ssh`, `maitty machine update <name>` to install or update maitty there, retry the machine to start maitty there).
+is one line with the fix (log in with plain `ssh`, `maiker machine update <name>` to install or update maiker there, retry the machine to start maiker there).
 `kill-server --on build` stops every session on that machine, so it needs `--yes`. `--remote host`
 still works as before, and cannot be combined with `--on`.
 
 ### What a machine needs
 
-A machine you add only needs the `maitty` program. There is no desktop app on it and nothing to build.
+A machine you add only needs the `maiker` program. There is no desktop app on it and nothing to build.
 
-- **The program.** The same `maitty` you run here, for Linux or macOS (x86_64 or aarch64). The Linux downloads
-  are static, so they run on any Linux. Installing it puts one file at `~/.local/bin/maitty` for your user.
-  `maitty machine update <name> --install` does this over ssh for you, so you do not need to log in and
+- **The program.** The same `maiker` you run here, for Linux or macOS (x86_64 or aarch64). The Linux downloads
+  are static, so they run on any Linux. Installing it puts one file at `~/.local/bin/maiker` for your user.
+  `maiker machine update <name> --install` does this over ssh for you, so you do not need to log in and
   install it by hand. A Windows machine cannot be the remote yet.
 - **A way in.** ssh must get in without asking you anything: a key (or your ssh agent) for that user. Run plain
   `ssh <target>` once first, so its host key is known and you can see that it works.
-- **maitty where ssh finds it.** Maitty looks in `~/.local/bin` (where it installs itself) first, then on the
+- **maiker where ssh finds it.** Maiker looks in `~/.local/bin` (where it installs itself) first, then on the
   PATH ssh gives it. Only a copy kept somewhere else needs `remote_cmd` set to its full path.
 - **A version close enough.** This computer, the machine and any desktop app talk when their versions are the
   same or close enough that the newer one still speaks the older one's protocol; releases say when that
-  stops being true. A machine too old to talk to shows `needs update`; run `maitty machine update <name>`. The desktop
+  stops being true. A machine too old to talk to shows `needs update`; run `maiker machine update <name>`. The desktop
   app asks more: a machine on any older version shows `needs update` there, with its **update** button. A machine too new for
   this computer shows `newer than this app` and has no update button: update this computer instead
-  (`maitty update`, or the desktop app's own update). A machine is never downgraded from here.
+  (`maiker update`, or the desktop app's own update). A machine is never downgraded from here.
 
 Nothing else needs installing. Agents such as Claude Code or Codex run there as they do anywhere, so install
 the ones you want to use on that machine yourself.
 
-`maitty doctor` checks the way in, the program, its version and the protocol for every machine you added (see "Check a machine with doctor" below).
+`maiker doctor` checks the way in, the program, its version and the protocol for every machine you added (see "Check a machine with doctor" below).
 
-### Install or update maitty on a machine
+### Install or update maiker on a machine
 
-`maitty machine update <name>` installs or updates maitty on a machine you added, over ssh. It looks first,
+`maiker machine update <name>` installs or updates maiker on a machine you added, over ssh. It looks first,
 says what it found, and changes nothing without a yes.
 
 ```sh
-maitty machine update build --install   # not installed there yet: install this version
-maitty machine update build --yes       # an older version there: replace it
-maitty machine update build             # asks, when you are at a keyboard
-maitty machine update build --force     # a newer version there: put this one on instead (a downgrade)
-maitty machine update build --yes --restart  # also restart its daemon now, even with sessions open
-maitty machine update build --yes --agents-idle  # restart its daemon once no agent there is working or waiting
-maitty machine activity build           # how many sessions are open there and how many are busy (changes nothing)
+maiker machine update build --install   # not installed there yet: install this version
+maiker machine update build --yes       # an older version there: replace it
+maiker machine update build             # asks, when you are at a keyboard
+maiker machine update build --force     # a newer version there: put this one on instead (a downgrade)
+maiker machine update build --yes --restart  # also restart its daemon now, even with sessions open
+maiker machine update build --yes --agents-idle  # restart its daemon once no agent there is working or waiting
+maiker machine activity build           # how many sessions are open there and how many are busy (changes nothing)
 ```
 
 ```
 probing build…
-build: linux x86_64, maitty 0.58.0 (this is 0.60.0)
+build: linux x86_64, maiker 0.58.0 (this is 0.60.0)
 sending 14.2 MB (sha256 3f2a9c1b7d04)…
 verified: it arrived whole and runs there
-installed to ~/.local/bin/maitty
+installed to ~/.local/bin/maiker
 asking the daemon on build to restart if no session is open…
 daemon: left running: 3 open session(s); it keeps them   (with --restart: restarted, sessions come back)
-build: maitty 0.60.0 installed to ~/.local/bin/maitty
+build: maiker 0.60.0 installed to ~/.local/bin/maiker
 ```
 
-- **Never silent.** A machine with no maitty needs `--install` (or a `y` at the question); an older one needs
+- **Never silent.** A machine with no maiker needs `--install` (or a `y` at the question); an older one needs
   `--yes` (or a `y`). With neither and no keyboard the command stops and says which flag to pass. A machine
   that already has this version is left alone; a newer one is not downgraded without `--force`.
-- **The binary.** If the machine has the same system and CPU as this computer, this computer's own maitty is
+- **The binary.** If the machine has the same system and CPU as this computer, this computer's own maiker is
   sent. Otherwise the matching release is fetched here (this version's, else the latest, said aloud), checked
   against the release's `sha256sums.txt`, unpacked, and then sent: the machine never needs GitHub. A bad or
   missing checksum stops before anything is sent.
 - **It goes in whole or not at all.** The file is written beside its destination, its size is checked, it is
-  run with `--version`, and only then renamed over the old one. Any failed step leaves the old maitty as it
+  run with `--version`, and only then renamed over the old one. Any failed step leaves the old maiker as it
   was and says so ("the old version is unchanged", or "nothing was installed" on a first install).
 - **Where.** At the machine's `remote_cmd` when that is an absolute path or starts with `~/`; otherwise at
-  `~/.local/bin/maitty`, which is the first place Maitty looks on that machine, so nothing else needs setting.
+  `~/.local/bin/maiker`, which is the first place Maiker looks on that machine, so nothing else needs setting.
 - **Running sessions survive an ordinary update.** The old daemon keeps running on the old file. The new
-  maitty restarts it only when it has no session open; otherwise it says it left it running. Add `--restart`
+  maiker restarts it only when it has no session open; otherwise it says it left it running. Add `--restart`
   (the desktop app's Update button does, after asking) to restart it anyway: its sessions are saved, so the
   new daemon restores them and resumes their agents. A turn in progress is lost. A daemon whose sessions are
   not saved is never restarted.
-- **Machines follow this computer.** After maitty updates here, each machine with an older maitty is updated
+- **Machines follow this computer.** After maiker updates here, each machine with an older maiker is updated
   the same way in the background (`--yes --agents-idle`): its daemon restarts once its sessions are saved and
-  no agent there is working or waiting, so nothing is lost. A machine with no maitty, one that needs a login,
+  no agent there is working or waiting, so nothing is lost. A machine with no maiker, one that needs a login,
   and one behind a custom transport keep their Update button. Turn it off with `[updates] machines = false`
   (Settings › General › Update remote machines too, in either app).
 - **Not supported: a Windows machine as the remote.** In v1 Windows is never the remote; the command says so
@@ -698,11 +698,11 @@ missing), 1 a step that did not work.
 ### Getting a file or a folder from a machine
 
 ```sh
-maitty machine get build ~/out.log          # saved in the folder you are in
-maitty machine get build /srv/app/app.zip ~/Downloads   # saved in that folder (made if missing)
+maiker machine get build ~/out.log          # saved in the folder you are in
+maiker machine get build /srv/app/app.zip ~/Downloads   # saved in that folder (made if missing)
 ```
 
-`maitty machine get <machine> <path> [folder]` pulls one file or one folder from a machine you added, over ssh,
+`maiker machine get <machine> <path> [folder]` pulls one file or one folder from a machine you added, over ssh,
 and prints the path it was saved to. A `~/` at the start of the path is the machine's home folder.
 
 - **One file or one folder, up to 1 GB.** A folder arrives as a folder, with its sub-folders. A `.zip` you already
@@ -724,12 +724,12 @@ Exit status: 0 saved, 2 a mistake in how it was asked, 1 the pull did not work (
 ### Sending a file or a folder to a machine
 
 ```sh
-maitty machine put build ./report.pdf     # one file, up to 100 MB
-maitty machine put build ./my-project     # one folder, up to 1 GB
+maiker machine put build ./report.pdf     # one file, up to 100 MB
+maiker machine put build ./my-project     # one folder, up to 1 GB
 ```
 
-`maitty machine put <machine> <path>` sends one file or one folder from this computer to a machine you added, over
-ssh, and prints where it is there. It is kept in that machine's private cache folder (`~/.cache/maitty/pastes`, readable
+`maiker machine put <machine> <path>` sends one file or one folder from this computer to a machine you added, over
+ssh, and prints where it is there. It is kept in that machine's private cache folder (`~/.cache/maiker/pastes`, readable
 only by you, cleared after a week) under a name like `paste-<time>-<id>-my-project`, so nothing there is overwritten.
 Dropping a file on a session of another machine does the same thing for a file. A pulled or sent file can hold secrets,
 so do not send one you would not leave in that cache.
@@ -740,7 +740,7 @@ In the desktop app, right-click a session that is on another machine and choose 
 session's folder: click a folder to open it, **Up** to go back, or a file to get it. Type a few letters of a name to
 search the session's folder and everything below it (not `.git`, `node_modules` or build folders; the first 5000
 files), and use the arrow keys and Enter. If the file is somewhere else, browse up to it or type the path in the box
-under the list. The file is saved in `Downloads/maitty/<machine>/` with a progress toast you can cancel and an
+under the list. The file is saved in `Downloads/maiker/<machine>/` with a progress toast you can cancel and an
 **Open folder** button when it is done. It is the same pull as the command. Names with unusual characters are left
 out of the list, and the dialog says how many.
 
@@ -754,15 +754,15 @@ Text needs no special command.
   and it reaches your clipboard. The machine's clipboard switch is on unless you turned it off (Settings › Machines, or
   `clipboard = false` in its entry in `config.local.toml`).
 - **A long text, or one you want to keep as a file:** save it as a file. To bring it here, use
-  `maitty machine get` or **Get a file…** (see *Getting a file or a folder from a machine*). To send a file there, drop it on the
+  `maiker machine get` or **Get a file…** (see *Getting a file or a folder from a machine*). To send a file there, drop it on the
   session.
 
 ### Agents on a machine
 
 An agent can reach a machine from your `[[machines]]` list through the same MCP tools it uses here
 (see *Agents that steer agents (MCP)* above), but only a machine you opened to agents with `mcp = true` in
-its entry. `maitty_list`, `maitty_read`, `maitty_send`,
-`maitty_wait` and `maitty_start` take an optional `machine`; a session on another machine is
+its entry. `maiker_list`, `maiker_read`, `maiker_send`,
+`maiker_wait` and `maiker_start` take an optional `machine`; a session on another machine is
 listed, and passed back to any tool, as `machine/id` (`build/4`), and `machine = "all"` lists this
 computer and every open machine, with one that is down reported inline. The agent's own pane
 needs the `read` grant to list, read or wait on another machine and `write` to send to it, as it
@@ -785,29 +785,29 @@ via = ["fly", "ssh", "console", "-C", "{command}"]
 ```
 
 `via` is the program and its arguments, one entry each, not a shell line. `{command}` is replaced by what
-must run on the far side (`'maitty' proxy --attach-only`); leave it out and the command is added as the last
+must run on the far side (`'maiker' proxy --attach-only`); leave it out and the command is added as the last
 argument. The program must pass stdin and stdout through unchanged and must not ask questions or use a
-terminal. Text it prints before maitty starts is skipped, as for ssh. It does not work on Windows, and
-`ssh_args` cannot be set beside it. `maitty machine update` will not install over it: install maitty on that
-machine yourself. `maitty doctor` names the program (never its arguments) and checks the protocol.
+terminal. Text it prints before maiker starts is skipped, as for ssh. It does not work on Windows, and
+`ssh_args` cannot be set beside it. `maiker machine update` will not install over it: install maiker on that
+machine yourself. `maiker doctor` names the program (never its arguments) and checks the protocol.
 
 ### Check a machine with doctor
 
-With machines configured, `maitty doctor` ends with a section for each, checked all at once, one line a
+With machines configured, `maiker doctor` ends with a section for each, checked all at once, one line a
 check:
 
 ```
  machine build
  ✓ reachable              ssh logs in without a prompt
- ✓ maitty version         0.60.0 (same as this computer)
+ ✓ maiker version         0.60.0 (same as this computer)
  ✓ protocol               protocol 69, the same as this computer
- ✓ login PATH             maitty found at /home/me/.local/bin/maitty
+ ✓ login PATH             maiker found at /home/me/.local/bin/maiker
  ✓ ssh options            BatchMode=yes ForwardAgent=no -a -T ConnectTimeout=15 ServerAlive=15x3 + your ssh_args: -p 2222
 ```
 
 A machine ssh cannot log in to gets one ✕ line with the fix, then `skipped: not reachable` and the ssh options.
-A version that differs says `maitty machine update <name>`; a daemon on another protocol says the same. The
-login PATH line shows where the machine's login shell finds maitty (the program, never the whole PATH) and
+A version that differs says `maiker machine update <name>`; a daemon on another protocol says the same. The
+login PATH line shows where the machine's login shell finds maiker (the program, never the whole PATH) and
 notes when your `remote_cmd` is something else. Each machine has about 30 seconds in all, so one that never
 answers does not hold up the rest. The section is not printed when there are no machines.
 
@@ -819,7 +819,7 @@ answers does not hold up the rest. The section is not printed when there are no 
 - Files, Changes, Find, Branches, References, connecting an agent and worktrees read this
   computer's disk, so for a pane on another machine they do nothing but say so: "Files is local-only in v1: the
   files are on build, not on this computer."
-- `maitty --remote host` still works as before: one ad-hoc machine named after the host, not in your list. Unlike
+- `maiker --remote host` still works as before: one ad-hoc machine named after the host, not in your list. Unlike
   a machine you added, it starts the daemon there when none is running, and it keeps its own worktrees.
 - The desktop app has no machines; this is the terminal app's.
 
@@ -848,15 +848,15 @@ its own. An Inbox row from another machine says `· on build`.
   closes. On Windows use ssh keys or an agent: password prompts work in that session but are not remembered.
   A machine whose app is missing or old is added too; its header then says `not installed` or `needs update`.
 
-A machine with no maitty says `not installed` under its header in the sidebar, with an **Install** button; one
+A machine with no maiker says `not installed` under its header in the sidebar, with an **Install** button; one
 with another version says `needs update`, with an **Update** button. Its right-click menu has the same as
-**Install Maitty** or **Update Maitty**, and Settings › Machines has it as the first button. No command or flag is
-needed: Install runs `maitty machine update <name> --install` for you, and Update replaces the version there
+**Install Maiker** or **Update Maiker**, and Settings › Machines has it as the first button. No command or flag is
+needed: Install runs `maiker machine update <name> --install` for you, and Update replaces the version there
 (`--yes`). Both ask first. Install says what it puts on the machine; Update says how many sessions are open there
 and how many are busy, and offers **Update now** (its daemon restarts and its saved sessions come back with their
 agents resumed; a turn in progress is lost) or **Update when idle** (the new version is installed now and the daemon
 restarts once every session there is closed; it waits up to half an hour, then leaves the daemon running). A toast says it is running, then how it ended: installed, already up to date, or why it did not (ssh
-could not get in, the machine has a newer maitty than this app, which is never downgraded from here, or it is a
+could not get in, the machine has a newer maiker than this app, which is never downgraded from here, or it is a
 Windows machine, which cannot be a remote yet). After a success the machine is dialled again. The exact command
 is still shown with a **Copy command** button, to run in a terminal instead.
 
@@ -880,22 +880,22 @@ GitHub, the dialog also lists your repositories there: search, pick an owner, an
 address. It works for this computer and for
 another machine, and uses whatever git sign-in that machine already has; a private repository the machine
 cannot sign in to fails with git's own message. **Settings › GitHub** shows who each connected machine is
-signed in to GitHub as, read from that machine's GitHub CLI (`gh`); Maitty never sees the token. A machine
+signed in to GitHub as, read from that machine's GitHub CLI (`gh`); Maiker never sees the token. A machine
 that is not signed in has **Sign in** there: it opens a terminal on that machine running `gh auth login`,
 which shows a one-time code and opens GitHub in your browser. Finish it, close the terminal, and the row
 updates. A machine with somebody signed in has **Details**: every account signed in there (the active one
 marked), the name and email its commits carry, and its folder rules, the folders where git uses another
-account and identity. A rule you made by hand in your git config shows as "set outside Maitty". **Add
+account and identity. A rule you made by hand in your git config shows as "set outside Maiker". **Add
 another account** starts the same sign-in. **Add a folder rule** gives a folder its own account, name and
 email: choose the folder, pick one of the accounts signed in there, type the name and email, and click
-**Show the lines** to see exactly what Maitty will write to git's config. Nothing changes until you click
+**Show the lines** to see exactly what Maiker will write to git's config. Nothing changes until you click
 **Write these lines**. From then on, commits in any repository inside that folder carry that name and
-email, and git signs in to GitHub there as that account. A rule Maitty made has **Change** and **Remove**;
+email, and git signs in to GitHub there as that account. A rule Maiker made has **Change** and **Remove**;
 Remove asks once. Cloning into a folder a rule covers says "Will use <account>" under the destination. Files, worktrees and the other features that read a pane's files
 are for this computer's sessions only; Changes is the exception described above.
 
 **Dropping files or folders on a session of another machine** sends them there: drag up to 10 files or folders from
-your file manager onto the pane. Each goes over ssh (not a custom transport) into `~/.cache/maitty/pastes` on that
+your file manager onto the pane. Each goes over ssh (not a custom transport) into `~/.cache/maiker/pastes` on that
 machine (private, cleared after a week), and its path there is typed into the pane. A file is sent up to
 100 MB, a folder (as one archive) up to 1 GB. A toast shows the file or folder, how far it has got, and a **Cancel** button; if a
 file fails, the ones after it are not tried. The machine has to be `connected`. A file stays on the machine for
@@ -905,12 +905,12 @@ computer types the file's path, as before.
 **Pasting an image** works in the desktop app too: copy a screenshot or an image, click the session and press
 Ctrl+Shift+V on Windows and Linux, or ⌘V on a Mac. On a session of this computer the image is saved in the app's private cache folder and its
 path is typed; on a session of another machine it is sent over ssh (up to 25 MB, not a custom transport) into
-`~/.cache/maitty/pastes` there, with the same progress toast and **Cancel** as a file, and its path there is typed.
+`~/.cache/maiker/pastes` there, with the same progress toast and **Cancel** as a file, and its path there is typed.
 If the clipboard holds text as well, the text is pasted and the image is left alone. On Linux and Windows
 plain Ctrl+V still goes to the program in the pane as the raw `^V`, so Claude Code and vim see it; use Ctrl+Shift+V
 to paste. In the chat box any paste key attaches an image.
 
-## Never leave maitty
+## Never leave maiker
 
 | Leader + | Panel | What it does |
 |---|---|---|
@@ -946,9 +946,9 @@ command = "claude {prompt}"
 env = { CLAUDE_CONFIG_DIR = "~/.claude-work" }
 ```
 
-Set one up once, from any terminal: `maitty account "claude work" -- claude` to sign in, and
-`maitty account "claude work" -- maitty integrate claude` so that account reports its status
-to maitty too. When one account hits its limit, start the next session on the other.
+Set one up once, from any terminal: `maiker account "claude work" -- claude` to sign in, and
+`maiker account "claude work" -- maiker integrate claude` so that account reports its status
+to maiker too. When one account hits its limit, start the next session on the other.
 
 ## Restarts
 
@@ -957,19 +957,19 @@ saved to the data directory a couple of seconds after it changes. On the next st
 
 - Panes reopen in their last known directory. For PowerShell, that requires your prompt to report it
   via OSC 7 or OSC 9;9, as oh-my-posh and starship can. Other shells are tracked automatically.
-- Agents resume. With hooks installed, maitty knows the exact session (`claude --resume <id>`).
+- Agents resume. With hooks installed, maiker knows the exact session (`claude --resume <id>`).
   Otherwise it uses the agent's "most recent" form (`claude --continue`, `codex resume --last`).
-- Panes started with a command (`spawn-right:lazygit`, `maitty split -- x`) run it again, except
+- Panes started with a command (`spawn-right:lazygit`, `maiker split -- x`) run it again, except
   an agent's: `codex "<task>"` would start the task over, so an agent that can't be resumed
   opens as a shell.
 
-`maitty kill-server` keeps the session for next time, and `maitty kill-server --forget` discards it.
+`maiker kill-server` keeps the session for next time, and `maiker kill-server --forget` discards it.
 Either way the list of closed agent sessions is kept, as the usage history is.
 Closing every pane yourself also starts fresh. A pane or agent that ends on its own is left out
 of the saved session for 15 seconds: a shutdown, reboot or logoff kills agents a moment before
-maitty, so the session from before it is the one that comes back. Chat conversations that were running
+maiker, so the session from before it is the one that comes back. Chat conversations that were running
 resume by themselves on the same provider session (`conversations = false` leaves them in Recovery
-needed until you press Resume). A resumed chat waits for you; with `continue_turn = true` maitty sends
+needed until you press Resume). A resumed chat waits for you; with `continue_turn = true` maiker sends
 a chat that was mid-turn `Continue where you left off.` once after it resumes, and never more than 3 times in 5 minutes to
 one conversation, however often the service restarts. The message shows in the chat like one you
 sent. A chat whose turn had already ended, and every terminal agent, never get it. Configure all of this under `[restore]`,
@@ -981,13 +981,13 @@ Sessions › Keep each pane's recent output) stops saving it and deletes what wa
 
 In the desktop app an agent has a chat view as well as its terminal. For an agent that runs in a
 terminal it is the same session: switching between the Chat and Terminal tabs in its pane's header never restarts the agent. (A chat that
-Maitty's background service runs, see [Worktrees](#worktrees), has no terminal.) This part is about working in the chat and
+Maiker's background service runs, see [Worktrees](#worktrees), has no terminal.) This part is about working in the chat and
 checking what the agent did. What the status marks mean is in [What a session's status
 means](#what-a-sessions-status-means).
 
 ### Starting a chat
 
-**New chat** (the `+` at the top of the sidebar, the Maitty menu at the top left of the window, or **New agent chat…** in the command palette, Ctrl+Shift+T, ⌘T
+**New chat** (the `+` at the top of the sidebar, the Maiker menu at the top left of the window, or **New agent chat…** in the command palette, Ctrl+Shift+T, ⌘T
 on a Mac) opens a page that asks "What are we building today?". When nothing is running, the window
 opens on this page. It starts on your most recent project: write the first message and press Enter.
 The agent starts in its own terminal and the chat opens. (**New agent chat** without the dots,
@@ -1045,13 +1045,13 @@ message box. The message box is off, and says why, until you have answered.
   ("Pick any"); tick at least one. Nothing is typed to the agent before then, so you can still
   change an answer. Every question also has **Your own answer** under its choices, the box Claude's menu calls "Type
   something": write in it to answer in your own words. A question beyond those limits is answered in the terminal.
-- **Codex, and any menu the chat has no buttons for.** Maitty does not press a button for these,
+- **Codex, and any menu the chat has no buttons for.** Maiker does not press a button for these,
   because it has not checked that those keys are right. The card shows the question as the terminal
   draws it, with a row of **↑ ↓ ← → Enter Esc** buttons. They press those keys in the agent's terminal,
   the way you would. For a session on another machine the screen cannot be read: the card says the
   question is in the terminal and keeps the keys.
 
-A chat that Maitty's background service runs (see [Worktrees](#worktrees)) shows **Yes once**,
+A chat that Maiker's background service runs (see [Worktrees](#worktrees)) shows **Yes once**,
 **This session** and **No** instead, with **Always in this project** for a command.
 
 ### Queue and Send now
@@ -1068,11 +1068,11 @@ and show `1 of 3`; click the stack to spread them out. A card has:
 
 What Send now does depends on the chat. For an agent in a terminal it types the message into the turn
 that is running, as typing there would, so the agent reads it at its next step. For a chat that
-Maitty's service runs, Codex takes the message into the running turn where its version supports that.
+Maiker's service runs, Codex takes the message into the running turn where its version supports that.
 Otherwise, and for Claude, the turn is interrupted and your message is sent next, ahead of the others
 in the queue. If the agent refuses (the turn just ended, or it is waiting on an approval), the reason
 shows under the box and the message stays queued. The button is hidden while a question is showing, and
-off while Maitty waits for the answer.
+off while Maiker waits for the answer.
 
 ### Naming a file with @
 
@@ -1089,7 +1089,7 @@ A turn that edited files ends with a row such as "3 changed files +111 −0" and
 and the side panel opens on **Changes** with only what that turn changed, headed "This turn's
 changes". **All changes** goes back to the whole working tree.
 
-This works from the snapshots Maitty keeps of the checkout. If none from before the turn (or from
+This works from the snapshots Maiker keeps of the checkout. If none from before the turn (or from
 after it) is kept, or the turn has no times, or the snapshots cannot be read, the panel shows the whole working tree
 instead, and says why: "Whole working tree · no snapshot from before this turn is kept" (or "this
 turn has no times to find its snapshots by", or "couldn't read the snapshots"). The turn's diff covers the
@@ -1098,7 +1098,7 @@ it. This is for sessions on this computer.
 
 ### Edit from here
 
-Point at a message you sent and open its **⋯** menu, then choose **Edit from here**. Maitty puts the
+Point at a message you sent and open its **⋯** menu, then choose **Edit from here**. Maiker puts the
 files back to how they were before that message, and puts the message back in the box so you can change
 it and send it again. It asks first. The prompt says how many files change back (**Restore 3
 files**), and that what is there now is kept as a "before a restore" snapshot. Nothing is changed
@@ -1131,15 +1131,15 @@ uncommitted changes", and has:
 - **Recreate**, for a worktree whose folder is gone, which makes it again from its branch.
 
 If two worktrees changed the same file, a line at the top says so, so you hear about a merge conflict
-before the merge. The list is for projects on this computer. For the rest of how maitty names and
+before the merge. The list is for projects on this computer. For the rest of how maiker names and
 cleans up worktrees, see [Worktrees](#worktrees).
 
 ## Worktrees
 
 ```sh
-maitty worktree feat/login -- claude      # new branch from HEAD, opened with claude running
-maitty worktree fix-123 --base origin/main
-maitty worktree-remove [--force]          # closes the workspace and removes the checkout
+maiker worktree feat/login -- claude      # new branch from HEAD, opened with claude running
+maiker worktree fix-123 --base origin/main
+maiker worktree-remove [--force]          # closes the workspace and removes the checkout
 ```
 
 New worktrees go to `{repo_parent}/{repo}-worktrees/{branch}` (set `[worktree] dir`). An existing
@@ -1155,12 +1155,12 @@ agent as one argument, never run by the shell, and cannot start with a dash. It 
 this computer.
 
 The same dialog has a **Session** choice: **Terminal** (the default, as above) or **Chat**. A chat
-session is Claude or Codex run by Maitty's background service instead of in a terminal, so the chat
+session is Claude or Codex run by Maiker's background service instead of in a terminal, so the chat
 has a message box that works: Enter sends, Stop interrupts, a message sent while the agent is busy
 waits in a queue (with Remove), and each permission the agent asks for appears in the chat with
 **Yes once (y)**, **This session (a)** and **No (n)**; a command also has **Always in this project**,
 which approves that exact command (written the same) in that project from then on. Those are kept
-in `chat-allowed-commands.json` in Maitty's data folder, never in the repo. Settings → Permissions lists
+in `chat-allowed-commands.json` in Maiker's data folder, never in the repo. Settings → Permissions lists
 them with a **Forget** for each, which takes effect at once (a second service running on the same
 computer drops it only when it next starts). Nothing else is ever remembered: a file change, an extra permission or a
 question always asks. A chat session has no terminal (to use the agent's own screen, start a terminal
@@ -1171,21 +1171,21 @@ folder. If you typed `claude` or `codex` in a shell yourself, its chat is read-o
 the agent did and you answer in the terminal.
 
 With **Own worktree per agent** enabled (the default), typing `claude`, `codex`, `gemini`,
-`opencode` (or a quick agent's name) in a Maitty shell in a Git repository's main checkout
+`opencode` (or a quick agent's name) in a Maiker shell in a Git repository's main checkout
 creates a worktree and starts the agent in it, including with `-c` configuration
 or `-p` profile options. `codex resume` and `codex fork` stay in the current folder;
 explicit `--cd` and Codex's own `--worktree` are honored. Starting inside an existing
 linked worktree reuses it, and a folder that is not a Git repository gets no worktree and no
-error. This applies to shells opened by Maitty, whatever shell they run (bash, zsh, fish,
-PowerShell, nu, cmd, or a `shell` setting with arguments): each has Maitty's small launcher for
+error. This applies to shells opened by Maiker, whatever shell they run (bash, zsh, fish,
+PowerShell, nu, cmd, or a `shell` setting with arguments): each has Maiker's small launcher for
 each agent first on its `PATH`, so an alias or function of your own, a shim manager, `command
 claude`, or a shell started inside the pane (tmux, `bash -l`) still reaches it. The launcher
-asks Maitty, which checks the pane's own secret, so only a plain shell in that pane can ask. Two
+asks Maiker, which checks the pane's own secret, so only a plain shell in that pane can ask. Two
 cases it cannot cover: an alias that runs another command or an absolute path (`alias
 claude=~/bin/claude`), and a shell that rebuilds `PATH` without the launcher folder and never
 puts it back.
 
-**Cleaning up.** Closing the last session in a worktree maitty made removes its folder (never
+**Cleaning up.** Closing the last session in a worktree maiker made removes its folder (never
 with uncommitted changes; the branch is kept unless it's merged). One left behind by a session
 that crashed is removed the same way a few minutes later, once nothing in it exists only there.
 For everything else there is **Clean up worktrees** (a project's menu, or search):
@@ -1218,21 +1218,21 @@ Copies go to the system clipboard and, through OSC 52, to your outer terminal (w
 
 ## Agent status
 
-Maitty detects common command-line agents automatically and combines process,
+Maiker detects common command-line agents automatically and combines process,
 terminal-screen and native lifecycle evidence where available. Status means:
 
-1. **Native hooks** report lifecycle events. The installer and `maitty update` run `maitty integrate`, which
-   connects every installed agent at once (`MAITTY_NO_INTEGRATE=1` skips it). `maitty integrate claude` adds hooks to `~/.claude/settings.json`.
-   They stay inert outside maitty panes and are tagged so a re-run or `--uninstall` replaces them cleanly.
-   Any tool can report its own state with `maitty hook <name> --status working|blocked|done|idle`.
-   `maitty integrate gemini` and `maitty integrate qwen` do the same for Gemini CLI and Qwen Code;
-   `maitty integrate opencode` writes a small OpenCode plugin that tells maitty what it's doing.
-   `maitty integrate pi` installs Pi's native extension. Every agent `maitty integrate` sets up
+1. **Native hooks** report lifecycle events. The installer and `maiker update` run `maiker integrate`, which
+   connects every installed agent at once (`MAIKER_NO_INTEGRATE=1` skips it). `maiker integrate claude` adds hooks to `~/.claude/settings.json`.
+   They stay inert outside maiker panes and are tagged so a re-run or `--uninstall` replaces them cleanly.
+   Any tool can report its own state with `maiker hook <name> --status working|blocked|done|idle`.
+   `maiker integrate gemini` and `maiker integrate qwen` do the same for Gemini CLI and Qwen Code;
+   `maiker integrate opencode` writes a small OpenCode plugin that tells maiker what it's doing.
+   `maiker integrate pi` installs Pi's native extension. Every agent `maiker integrate` sets up
    (Claude Code, Codex, Gemini CLI, Qwen Code, OpenCode, Pi, OMP, Kilo, Kimi and Mastra Code) can also
    be connected with the mouse through **Settings › Agents → Connect agents…** (or search for Connect agents). Restart Codex or
    OpenCode after setup, or reload Pi. Status follows the app with any provider, including
    z.ai and DeepSeek; see [status setup and requirements](agent-status.md).
-   For Codex, `maitty integrate codex` adds native `SubagentStart` / `SubagentStop`
+   For Codex, `maiker integrate codex` adds native `SubagentStart` / `SubagentStop`
    hooks in `~/.codex/config.toml`, so helper events carry their parent session ID;
    it also configures `notify` when free, preserving another program's notify.
 2. **Screen evidence**: 22 pinned Herdr manifests match live screen regions, OSC
@@ -1243,13 +1243,13 @@ terminal-screen and native lifecycle evidence where available. Status means:
 A turn that finishes while you're looking elsewhere is **done** until you focus that pane.
 An unanswered Codex queued or expanded question takes priority over its working spinner and shows
 **needs you**. Finished prose that mentions the interrupt shortcut does not count as active
-work. Codex reports turn completion through its notify hook; Maitty detects the next
+work. Codex reports turn completion through its notify hook; Maiker detects the next
 turn's activity footer, including soft wraps and background-terminal details. New
 input after a finished turn allows work detection immediately or after a delayed start.
 An advancing footer also detects automatic follow-up work without keyboard input.
 Native Codex subagent hooks attach every helper to its parent pane as soon as it
 starts and remove it when it stops.
-Hook authority ends when a recognized agent's process exits. Maitty recognizes
+Hook authority ends when a recognized agent's process exits. Maiker recognizes
 Herdr's 24 agent identities plus its five additional existing agents.
 See [status setup and its limits](agent-status.md).
 Terminal bells do not replace the status icon or add musical-note history entries.

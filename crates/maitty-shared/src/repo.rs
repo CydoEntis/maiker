@@ -40,7 +40,7 @@ pub enum RepoRequest {
     Snapshots,
     /// How many files restoring one of those snapshots would change now; nothing is changed.
     RestoreCount { commit: String },
-    /// The project's reference files (`.maitty/references/`), newest first.
+    /// The project's reference files (`.maiker/references/`), newest first.
     References,
     /// Files whose path holds `query` (case-insensitive), best match first, at most `limit`
     /// (capped at `FIND_FILES_MAX_RESULTS`). Ignored and hidden files are left out.

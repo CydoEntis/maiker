@@ -40,7 +40,7 @@ remote machine. The daemon (`crates/maitty-core/src/daemon/restore.rs`,
 - A "Resuming…" state in the window.
 - Terminal panes (already restored by `restore.agents`).
 - Retrying a failed resume.
-- Updating machines (`maitty machine update`).
+- Updating machines (`maiker machine update`).
 
 ## Open questions
 

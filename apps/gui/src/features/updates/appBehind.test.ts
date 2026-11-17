@@ -3,7 +3,7 @@ import { appBehindStep } from './appBehind'
 
 describe('app behind the service', () => {
   it('offers the download once a newer release is found', () => {
-    expect(appBehindStep({ status: 'available', version: '0.70.0', notes: '' })).toEqual({ label: 'Download Maitty 0.70.0', action: 'download' })
+    expect(appBehindStep({ status: 'available', version: '0.70.0', notes: '' })).toEqual({ label: 'Download Maiker 0.70.0', action: 'download' })
   })
 
   it('offers the install once the download is ready', () => {

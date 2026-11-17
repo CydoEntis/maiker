@@ -159,8 +159,8 @@ export const previewConversations: Conversation[] = [
   {
     id: 'codex-43',
     title: 'Tighten the branch view navigation',
-    project: 'maitty',
-    folder: 'C:/dev/maitty',
+    project: 'maiker',
+    folder: 'C:/dev/maiker',
     branch: 'gui/branch-view-navigation',
     provider: 'Codex',
     status: 'needs-you',
@@ -174,8 +174,8 @@ export const previewConversations: Conversation[] = [
   {
     id: 'codex-41',
     title: 'Add a conversation reconnect test',
-    project: 'maitty',
-    folder: 'C:/dev/maitty',
+    project: 'maiker',
+    folder: 'C:/dev/maiker',
     branch: 'feat/reconnect-proof',
     provider: 'Codex',
     status: 'working',
@@ -189,8 +189,8 @@ export const previewConversations: Conversation[] = [
   {
     id: 'claude-18',
     title: 'Review the daemon restore flow',
-    project: 'maitty',
-    folder: 'C:/dev/maitty',
+    project: 'maiker',
+    folder: 'C:/dev/maiker',
     branch: 'main',
     provider: 'Claude',
     status: 'done',
@@ -204,8 +204,8 @@ export const previewConversations: Conversation[] = [
   {
     id: 'codex-12',
     title: 'Check Windows named pipe errors',
-    project: 'maitty',
-    folder: 'C:/dev/maitty',
+    project: 'maiker',
+    folder: 'C:/dev/maiker',
     branch: 'fix/named-pipe-errors',
     provider: 'Codex',
     status: 'idle',
@@ -275,7 +275,7 @@ export const previewMessages: Record<string, Message[]> = {
     { id: 'c3', role: 'activity', content: 'Inspecting daemon conversation restore', detail: '2 files · running', activityState: 'Running', time: '10:44 AM' },
   ],
   'claude-18': [
-    { id: 'a1', role: 'user', content: 'Review the restore flow for sessions that were active when Maitty closed.', time: '9:18 AM' },
+    { id: 'a1', role: 'user', content: 'Review the restore flow for sessions that were active when Maiker closed.', time: '9:18 AM' },
     { id: 'a2', role: 'assistant', content: 'The restore path keeps active sessions marked as recovery-required and avoids launching a duplicate provider process.', time: '9:21 AM' },
     { id: 'a3', role: 'activity', content: 'Review complete', detail: 'No findings · 3 files checked', activityState: 'Completed', time: '9:22 AM' },
   ],

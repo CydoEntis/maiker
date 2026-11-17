@@ -59,7 +59,7 @@ export function SlashPicker({ agent, typed, matches, active, loading, error, onP
               onClick={() => { onPick(command) }}
             >
               <span className="mx-slash-name">{commandLabel(command)}{command.hint !== '' && <span className="mx-slash-hint"> {command.hint}</span>}</span>
-              <span className="mx-slash-what">{command.opens !== undefined && <span className="mx-slash-tag" title={command.opens === ASKS_FIRST ? 'Asks before it runs' : `Opens ${command.opens} in Maitty`}>{command.opens}</span>}{command.terminal === true && command.opens === undefined && <span className="mx-slash-tag" title="Opens in the terminal">terminal</span>}{command.skill === true && <span className="mx-slash-tag" title="Named in your message for the agent to use">skill</span>}{command.description}</span>
+              <span className="mx-slash-what">{command.opens !== undefined && <span className="mx-slash-tag" title={command.opens === ASKS_FIRST ? 'Asks before it runs' : `Opens ${command.opens} in Maiker`}>{command.opens}</span>}{command.terminal === true && command.opens === undefined && <span className="mx-slash-tag" title="Opens in the terminal">terminal</span>}{command.skill === true && <span className="mx-slash-tag" title="Named in your message for the agent to use">skill</span>}{command.description}</span>
             </ResultsOption>
           ))}
         </ResultsList>

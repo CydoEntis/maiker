@@ -32,7 +32,7 @@ export function readConversationPermissions(): Record<
       ),
     )
   } catch {
-    console.warn('Ignoring invalid Maitty session permissions')
+    console.warn('Ignoring invalid Maiker session permissions')
     return {}
   }
 }

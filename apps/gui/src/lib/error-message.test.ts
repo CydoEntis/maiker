@@ -28,7 +28,7 @@ describe('explainError', () => {
   it('puts a raw tool failure in plain words and keeps the raw text as details', () => {
     const raw = 'connecting to the local daemon: Connection refused (os error 111)'
     const explained = explainError(raw, 'Could not save the setting')
-    expect(explained.reason).toBe('The Maitty service is not answering. It may still be starting; try again in a moment.')
+    expect(explained.reason).toBe('The Maiker service is not answering. It may still be starting; try again in a moment.')
     expect(explained.details).toBe(raw)
   })
 

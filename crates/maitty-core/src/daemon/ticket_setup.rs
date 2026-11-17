@@ -65,9 +65,9 @@ fn status_words(project: &str, link: &TicketLink, keys: &[TicketKeyState], opene
         (true, Some(pick)) => format!("{name}: {}", pick.name),
     };
     let first = if opened {
-        format!("Opened the ticket setup for {project} in Maitty. The user finishes it there: they paste any key into Maitty's own box, never into this chat, and pick the project. Nothing was saved.")
+        format!("Opened the ticket setup for {project} in Maiker. The user finishes it there: they paste any key into Maiker's own box, never into this chat, and pick the project. Nothing was saved.")
     } else {
-        format!("The ticket setup for {project} was opened a moment ago; it is still waiting for the user in Maitty.")
+        format!("The ticket setup for {project} was opened a moment ago; it is still waiting for the user in Maiker.")
     };
     format!(
         "{first}\nNow: {github}; {}; {}.",

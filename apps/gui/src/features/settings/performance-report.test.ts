@@ -13,7 +13,7 @@ describe('performance report', () => {
 
   it('says what it does not have yet', () => {
     const report = buildPerformanceReport(ENVIRONMENT, null, null)
-    expect(report).toContain('Maitty desktop 0.64.0')
+    expect(report).toContain('Maiker desktop 0.64.0')
     expect(report).toContain('Web view sample: none yet')
     expect(report).toContain('Processes: none yet')
   })

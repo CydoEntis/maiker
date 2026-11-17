@@ -14,8 +14,8 @@ export function appBehindStep(state: UpdaterState): AppBehindStep {
   switch (state.status) {
     case 'idle':
     case 'checking': return { label: 'Checking for an update…', action: null }
-    case 'available': return { label: `Download Maitty ${state.version}`, action: 'download' }
-    case 'downloading': return { label: `Downloading Maitty ${state.version}…`, action: null }
+    case 'available': return { label: `Download Maiker ${state.version}`, action: 'download' }
+    case 'downloading': return { label: `Downloading Maiker ${state.version}…`, action: null }
     case 'ready': return { label: 'Install and restart', action: 'install' }
     case 'current': return { label: 'Check again', action: 'check' }
     case 'failed': return { label: 'Try again', action: 'check' }

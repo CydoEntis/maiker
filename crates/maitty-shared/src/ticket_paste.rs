@@ -51,7 +51,7 @@ pub fn parse_ticket_link(text: &str) -> Result<PastedLink, &'static str> {
     let rest = rest.split(['?', '#']).next().unwrap_or("");
     let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
     if !is_host(host) {
-        return Err("That link has no address Maitty can use");
+        return Err("That link has no address Maiker can use");
     }
     let segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
     let bare = host.to_ascii_lowercase();
@@ -171,16 +171,16 @@ mod tests {
 
     #[test]
     fn github_https_and_ssh_links_give_owner_and_name() {
-        let repo = Ok(PastedLink::Github { repo: "CydoEntis/maitty".into() });
-        assert_eq!(parse_ticket_link("https://github.com/CydoEntis/maitty/issues/12"), repo);
-        assert_eq!(parse_ticket_link("https://github.com/CydoEntis/maitty.git"), repo);
-        assert_eq!(parse_ticket_link("git@github.com:CydoEntis/maitty.git"), repo);
+        let repo = Ok(PastedLink::Github { repo: "CydoEntis/maiker".into() });
+        assert_eq!(parse_ticket_link("https://github.com/CydoEntis/maiker/issues/12"), repo);
+        assert_eq!(parse_ticket_link("https://github.com/CydoEntis/maiker.git"), repo);
+        assert_eq!(parse_ticket_link("git@github.com:CydoEntis/maiker.git"), repo);
         assert!(parse_ticket_link("https://github.com/CydoEntis").is_err());
     }
 
     #[test]
     fn anything_else_is_refused_with_a_reason_and_never_panics() {
-        for text in ["", "maitty", "ftp://x/y", "https://", "https://user:pw@host/ws", "https://host/ws/projects/not-an-id", "https://host/projects", "https://host/w%20s", "http://x/\u{7}"] {
+        for text in ["", "maiker", "ftp://x/y", "https://", "https://user:pw@host/ws", "https://host/ws/projects/not-an-id", "https://host/projects", "https://host/w%20s", "http://x/\u{7}"] {
             assert!(parse_ticket_link(text).is_err(), "{text:?} should be refused");
         }
         assert!(parse_ticket_link(&format!("https://h/{}", "a".repeat(PASTED_LINK_MAX_CHARS))).is_err());

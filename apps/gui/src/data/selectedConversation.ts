@@ -5,7 +5,7 @@ export function readSelectedConversation(): string | null {
   if (conversationId === null) return null
   if (conversationId.length > 0) return conversationId
 
-  console.warn('Ignoring empty Maitty conversation selection')
+  console.warn('Ignoring empty Maiker conversation selection')
   return null
 }
 

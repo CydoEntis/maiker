@@ -1,10 +1,10 @@
 {
- "note": "The themes both apps ship, in display order: Maitty's own (the nine with a full palette from the desktop design, four of which the TUI builds from maitty-tokens.json, and the Retro pair) and twenty-two families with a dark and a light each. The GUI draws a palette theme exactly as written and builds a family's tokens from the six colours; the TUI hand-tunes its own palette and a test holds its ground and text equal to these.",
+ "note": "The themes both apps ship, in display order: Maiker's own (the nine with a full palette from the desktop design, four of which the TUI builds from maitty-tokens.json, and the Retro pair) and twenty-two families with a dark and a light each. The GUI draws a palette theme exactly as written and builds a family's tokens from the six colours; the TUI hand-tunes its own palette and a test holds its ground and text equal to these.",
  "themes": [
   {
    "id": "night",
-   "name": "Maitty Night",
-   "family": "Maitty",
+   "name": "Maiker Night",
+   "family": "Maiker",
    "light": false,
    "tokens": "night",
    "palette": {
@@ -43,8 +43,8 @@
   },
   {
    "id": "day",
-   "name": "Maitty Day",
-   "family": "Maitty",
+   "name": "Maiker Day",
+   "family": "Maiker",
    "light": true,
    "tokens": "day",
    "palette": {
@@ -83,8 +83,8 @@
   },
   {
    "id": "maitty-dark",
-   "name": "Maitty Dark",
-   "family": "Maitty",
+   "name": "Maiker Dark",
+   "family": "Maiker",
    "light": false,
    "tokens": "dark",
    "palette": {
@@ -123,8 +123,8 @@
   },
   {
    "id": "maitty-light",
-   "name": "Maitty Light",
-   "family": "Maitty",
+   "name": "Maiker Light",
+   "family": "Maiker",
    "light": true,
    "tokens": "light",
    "palette": {
@@ -164,7 +164,7 @@
   {
    "id": "maitty-abyss",
    "name": "Abyss",
-   "family": "Maitty",
+   "family": "Maiker",
    "light": false,
    "palette": {
     "mOk": "#7fd99a",
@@ -203,7 +203,7 @@
   {
    "id": "maitty-ember",
    "name": "Ember",
-   "family": "Maitty",
+   "family": "Maiker",
    "light": false,
    "palette": {
     "mOk": "#7fd99a",
@@ -242,7 +242,7 @@
   {
    "id": "maitty-moss",
    "name": "Moss",
-   "family": "Maitty",
+   "family": "Maiker",
    "light": false,
    "palette": {
     "mOk": "#7fd99a",
@@ -281,7 +281,7 @@
   {
    "id": "maitty-dusk",
    "name": "Dusk",
-   "family": "Maitty",
+   "family": "Maiker",
    "light": false,
    "palette": {
     "mOk": "#7fd99a",
@@ -320,7 +320,7 @@
   {
    "id": "maitty-paper",
    "name": "Paper",
-   "family": "Maitty",
+   "family": "Maiker",
    "light": true,
    "palette": {
     "mOk": "#2e7d32",
@@ -358,8 +358,8 @@
   },
   {
    "id": "maitty-retro-dark",
-   "name": "Maitty Retro Dark",
-   "family": "Maitty",
+   "name": "Maiker Retro Dark",
+   "family": "Maiker",
    "light": false,
    "bg": "#222538",
    "fg": "#E0F8CF",
@@ -370,8 +370,8 @@
   },
   {
    "id": "maitty-retro-light",
-   "name": "Maitty Retro Light",
-   "family": "Maitty",
+   "name": "Maiker Retro Light",
+   "family": "Maiker",
    "light": true,
    "bg": "#FFFFFF",
    "fg": "#1A1C2C",

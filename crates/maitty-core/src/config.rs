@@ -883,9 +883,26 @@ pub fn migrate_old_names() {
         let cfg = old_cfg_dir
             .filter(|_| !new_cfg.exists())
             .zip(new_dir.clone());
+        stop_previous_daemon(old);
         bring_over(old, cfg, old_data.as_deref(), &new_data);
         tracing::info!("brought {old}'s config and data over");
         return;
+    }
+}
+
+/// A daemon still running under the old name holds the sessions: it is asked to stop first, so it saves them and
+/// the copy brought over is current; the new name's daemon then restores them with their agents resumed. Without
+/// this the old one would keep running unseen while the new one restored the same agents a second time.
+fn stop_previous_daemon(old: &str) {
+    let stopped = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(anyhow::Error::from)
+        .and_then(|rt| rt.block_on(crate::ipc::stop_previous_daemon(old)));
+    match stopped {
+        Ok(true) => tracing::info!("stopped the {old} service; its sessions come back under the new name"),
+        Ok(false) => {}
+        Err(e) => tracing::warn!("{e:#}"),
     }
 }
 

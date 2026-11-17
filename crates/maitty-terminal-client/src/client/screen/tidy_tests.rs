@@ -1,5 +1,5 @@
 //! The clean-up list: what comes ticked, and what Remove asks before anything goes.
-//! `MAITTY_SHOW=1 cargo test screen::tidy::tests -- --nocapture` prints the frame.
+//! `MAIKER_SHOW=1 cargo test screen::tidy::tests -- --nocapture` prints the frame.
 use super::*;
 use crate::client::menu::Act;
 use crate::client::reference_fixture::{self, Stage};

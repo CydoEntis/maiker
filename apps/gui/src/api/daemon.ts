@@ -129,7 +129,7 @@ const TerminalSessionSchema = z.object({
 })
 const PlanLimitSchema = z.object({ name: z.string(), used: z.number(), resets_at: z.number().default(0) })
 
-/** What an agent asked the person for with `maitty_request_secret` (`SecretRequest` in the protocol). */
+/** What an agent asked the person for with `maiker_request_secret` (`SecretRequest` in the protocol). */
 const SecretAskSchema = z.object({ id: z.number().int().nonnegative(), term: z.number().int().nonnegative(), label: z.string(), reason: z.string().default('') })
 
 const DaemonSnapshotSchema = z.object({
@@ -1178,7 +1178,7 @@ export async function startChatSession(folder: string, agent: 'claude' | 'codex'
   })
 }
 
-/** Connects an agent's status hooks (`maitty integrate <agent>`), so its chat sees when it works, needs you or is done. */
+/** Connects an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works, needs you or is done. */
 export async function connectAgent(agent: 'claude' | 'codex' | 'gemini'): Promise<void> {
   await invokeParsed('connect_agent', NullSchema, { agent })
 }

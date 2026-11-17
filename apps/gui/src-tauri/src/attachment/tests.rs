@@ -45,7 +45,7 @@ fn a_file_is_copied_into_the_private_folder_and_described() {
     assert_eq!(copy.parent(), Some(kept.as_path()));
     assert!(copy.file_name().unwrap().to_string_lossy().starts_with(PREFIX));
     assert!(got.path.ends_with("-Design_Final.zip"));
-    // Maitty never unpacks it: the kept file is the archive itself, byte for byte.
+    // Maiker never unpacks it: the kept file is the archive itself, byte for byte.
     assert_eq!(std::fs::read(&copy).unwrap(), b"PK\x03\x04zipbytes");
     #[cfg(unix)]
     {

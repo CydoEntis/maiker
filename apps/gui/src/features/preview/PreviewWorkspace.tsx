@@ -94,7 +94,7 @@ export function PreviewWorkspace() {
                 desktop
                   ? daemonDisconnected
                     ? 'Daemon disconnected'
-                    : 'Connected to Maitty daemon'
+                    : 'Connected to Maiker daemon'
                   : 'Local preview · daemon not connected'
               }
               sessionCount={conversations.length}
@@ -151,7 +151,7 @@ export function PreviewWorkspace() {
                   <div className="connection-warning" role="alert">
                     <CircleAlert size={15} />
                     <span>
-                      Disconnected from maittyd. Agents keep running in the
+                      Disconnected from maikerd. Agents keep running in the
                       daemon. Statuses are the last known values; reconnect
                       before sending or approving.
                     </span>

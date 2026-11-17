@@ -11,7 +11,7 @@ type Options = {
   typeInto: (sessionId: string, text: string) => boolean
   /** Whether the machine with this name is `connected`. */
   isConnected: (machine: string) => boolean
-  /** The Maitty service is reachable: typing into a pane of this computer needs it. */
+  /** The Maiker service is reachable: typing into a pane of this computer needs it. */
   online: boolean
   /** The path is written the way this computer's shell reads it. */
   windows: boolean
@@ -41,7 +41,7 @@ export function useImagePaste(options: Options): (sessionId: string, image: Blob
     const machine = machineNameOf(sessionId)
     if (machine === null) {
       if (!online) {
-        toast.error('Reconnect to the Maitty service before pasting an image')
+        toast.error('Reconnect to the Maiker service before pasting an image')
         return
       }
       toast.loading('Saving the image…', { id: LOCAL_TOAST })

@@ -1007,7 +1007,7 @@ mod tests {
         let here = server.row_on(&Target::current(), &t);
         assert_eq!(here["id"], 4);
         assert!(here.get("machine").is_none(), "a local row is as it always was");
-        let there = Target::of(crate::ipc::Machine::ssh("build", vec!["ssh".into()], "maitty"));
+        let there = Target::of(crate::ipc::Machine::ssh("build", vec!["ssh".into()], "maiker"));
         let row = server.row_on(&there, &t);
         assert_eq!((&row["id"], &row["machine"]), (&json!("build/4"), &json!("build")));
         assert!(row.get("prompt").is_none() && row.get("you").is_none());

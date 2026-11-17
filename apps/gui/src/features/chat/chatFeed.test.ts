@@ -210,8 +210,8 @@ describe('losing and regaining the daemon', () => {
     const first = await syncFeed(newFeed(), daemon.read, now)
     const shown = kinds(first)
 
-    daemon.failure = new Error('maittyd is not running')
-    await expect(syncFeed(first, daemon.read, now)).rejects.toThrow('maittyd is not running')
+    daemon.failure = new Error('maikerd is not running')
+    await expect(syncFeed(first, daemon.read, now)).rejects.toThrow('maikerd is not running')
     // The feed given in is untouched by a failed read.
     expect(kinds(first)).toEqual(shown)
 

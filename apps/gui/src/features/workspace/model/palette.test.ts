@@ -21,8 +21,8 @@ describe('palette matching', () => {
   })
 
   it('matches on the detail too, ranks by score, and caps the list', () => {
-    const items = [item('a', 'Open worktree', { detail: 'maitty' }), item('b', 'maitty docs')]
-    expect(searchPalette(items, 'maitty').map((entry) => entry.id)).toEqual(['b', 'a'])
+    const items = [item('a', 'Open worktree', { detail: 'maiker' }), item('b', 'maiker docs')]
+    expect(searchPalette(items, 'maiker').map((entry) => entry.id)).toEqual(['b', 'a'])
     const many = Array.from({ length: 30 }, (_, index) => item(String(index), `Action ${String(index)}`))
     expect(searchPalette(many, 'action')).toHaveLength(PALETTE_LIMIT)
   })

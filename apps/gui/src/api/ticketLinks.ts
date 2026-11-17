@@ -79,7 +79,7 @@ type Change =
 
 /** How long the daemon is given; it reads a small file and asks git one question. */
 const LINKS_ANSWER_MS = 20_000
-const NOT_ANSWERED = 'The Maitty service did not answer about ticket links. Restart it if this keeps happening.'
+const NOT_ANSWERED = 'The Maiker service did not answer about ticket links. Restart it if this keeps happening.'
 const askLinks = taggedAnswers('ticket-links', AnswerSchema)
 
 async function changeLinks(place: TicketPlace | null, change: Change): Promise<TicketsResult<TicketLinksAnswer>> {

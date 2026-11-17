@@ -175,7 +175,7 @@ pub fn update_statusline(
     })
 }
 
-/// Maps events from Claude-compatible native hook payloads to Maitty status.
+/// Maps events from Claude-compatible native hook payloads to Maiker status.
 pub fn status_from_hook(payload: &Value) -> Option<maitty_shared::protocol::HookStatus> {
     use maitty_shared::protocol::HookStatus;
 
@@ -308,7 +308,7 @@ mod tests {
     use jsonc_parser::cst::CstInputValue;
     use serde_json::json;
 
-    const APP_NAMES: &[&str] = &["maitty", "seshi", "hydra", "drover"];
+    const APP_NAMES: &[&str] = &["maiker", "seshi", "hydra", "drover"];
 
     #[test]
     fn recognizes_current_and_previous_hook_commands_and_tags() {
@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn stale_hook_projection_keeps_other_tools_and_deduplicates_old_app_hooks() {
-        let wanted = "\"/home/me/.local/bin/maitty\" hook claude";
+        let wanted = "\"/home/me/.local/bin/maiker\" hook claude";
         let stale = "\"/home/me/.cargo/bin/hydra\" hook claude";
         let root = json!({ "hooks": {
             "Stop": [
@@ -342,12 +342,12 @@ mod tests {
 
     #[test]
     fn a_hook_path_differing_only_in_case_is_the_same_on_windows_only() {
-        let wanted = "& \"C:/Users/Me/maitty.exe\" hook claude";
-        let lower = "& \"c:/users/me/maitty.exe\" hook claude";
+        let wanted = "& \"C:/Users/Me/maiker.exe\" hook claude";
+        let lower = "& \"c:/users/me/maiker.exe\" hook claude";
         assert!(same_command(lower, wanted, true));
         assert!(!same_command(lower, wanted, false));
-        assert!(!same_command("& \"c:/users/me/maitty.exe\" hook codex", wanted, true));
-        assert!(!same_command("\"c:/users/me/maitty.exe\" hook claude", wanted, true));
+        assert!(!same_command("& \"c:/users/me/maiker.exe\" hook codex", wanted, true));
+        assert!(!same_command("\"c:/users/me/maiker.exe\" hook claude", wanted, true));
     }
 
     #[test]
@@ -386,20 +386,20 @@ mod tests {
     #[test]
     fn builds_tagged_hook_groups_with_optional_matchers() {
         let group = json_hook_group(JsonHookGroupOptions {
-            command_name: "maitty",
-            executable: "/home/user/Maitty App/maitty",
+            command_name: "maiker",
+            executable: "/home/user/Maiker App/maiker",
             agent: "claude",
             timeout: 5,
             matcher: Some("AskUserQuestion"),
             shell: HookShell::Posix,
         });
 
-        assert_eq!(group["_maitty"], true);
+        assert_eq!(group["_maiker"], true);
         assert_eq!(group["matcher"], "AskUserQuestion");
         assert_eq!(group["hooks"][0]["type"], "command");
         assert_eq!(
             group["hooks"][0]["command"],
-            "\"/home/user/Maitty App/maitty\" hook claude"
+            "\"/home/user/Maiker App/maiker\" hook claude"
         );
         assert_eq!(group["hooks"][0]["timeout"], 5);
     }
@@ -422,11 +422,11 @@ mod tests {
                     "hooks".into(),
                     CstInputValue::Array(vec![CstInputValue::Object(vec![(
                         "command".into(),
-                        CstInputValue::String("\"/bin/maitty\" hook claude".into()),
+                        CstInputValue::String("\"/bin/maiker\" hook claude".into()),
                     )])]),
                 ),
             ])),
-            &["maitty", "hydra"],
+            &["maiker", "hydra"],
         );
 
         let result = document.to_serde_value().unwrap();
@@ -435,30 +435,30 @@ mod tests {
         assert_eq!(groups[0]["hooks"][0]["command"], "other-tool");
         assert_eq!(
             groups[1]["hooks"][0]["command"],
-            "\"/bin/maitty\" hook claude"
+            "\"/bin/maiker\" hook claude"
         );
     }
 
     #[test]
     fn statusline_update_preserves_and_restores_the_users_previous_command() {
-        let names = ["maitty", "hydra"];
+        let names = ["maiker", "hydra"];
         let mut settings = serde_json::json!({
             "statusLine": { "type": "command", "command": "my-statusline", "padding": 1 }
         });
-        let install = update_statusline(&mut settings, "/apps/maitty", HookShell::Posix, &names, false, "").unwrap();
+        let install = update_statusline(&mut settings, "/apps/maiker", HookShell::Posix, &names, false, "").unwrap();
         assert_eq!(
             install.previous_command_to_save.as_deref(),
             Some("my-statusline")
         );
         assert_eq!(
             settings["statusLine"]["command"],
-            "\"/apps/maitty\" statusline"
+            "\"/apps/maiker\" statusline"
         );
         assert_eq!(settings["statusLine"]["padding"], 1);
 
         let repeated = update_statusline(
             &mut settings,
-            "/apps/maitty-new",
+            "/apps/maiker-new",
             HookShell::Posix,
             &names,
             false,
@@ -469,7 +469,7 @@ mod tests {
 
         let uninstall = update_statusline(
             &mut settings,
-            "/apps/maitty-new",
+            "/apps/maiker-new",
             HookShell::Posix,
             &names,
             true,
@@ -483,20 +483,20 @@ mod tests {
     }
 
     /// Claude Code on Windows runs a command line through Git Bash, or PowerShell without it, and
-    /// PowerShell reads `"C:/…/maitty.exe" statusline` as a string followed by a stray word.
+    /// PowerShell reads `"C:/…/maiker.exe" statusline` as a string followed by a stray word.
     #[test]
     fn windows_command_lines_run_in_whichever_shell_claude_code_has() {
-        let plain = "C:/Users/vox/.local/bin/maitty.exe";
-        let spaced = "C:/Users/Vox Smith/.local/bin/maitty.exe";
+        let plain = "C:/Users/vox/.local/bin/maiker.exe";
+        let spaced = "C:/Users/Vox Smith/.local/bin/maiker.exe";
         for shell in [HookShell::GitBash, HookShell::PowerShell] {
             assert_eq!(command_line(plain, "statusline", shell), format!("{plain} statusline"));
         }
         assert_eq!(command_line(spaced, "statusline", HookShell::GitBash), format!("\"{spaced}\" statusline"));
         assert_eq!(command_line(spaced, "statusline", HookShell::PowerShell), format!("& \"{spaced}\" statusline"));
-        assert_eq!(command_line("/usr/bin/maitty", "hook claude", HookShell::Posix), "\"/usr/bin/maitty\" hook claude");
+        assert_eq!(command_line("/usr/bin/maiker", "hook claude", HookShell::Posix), "\"/usr/bin/maiker\" hook claude");
 
         let group = json_hook_group(JsonHookGroupOptions {
-            command_name: "maitty",
+            command_name: "maiker",
             executable: spaced,
             agent: "claude",
             timeout: 5,
@@ -507,7 +507,7 @@ mod tests {
         assert!(is_our_hook_group(&group, APP_NAMES), "a call-operator line is still known as ours");
         assert!(runs_our_hook(&format!("{plain} hook claude"), APP_NAMES));
         assert!(is_our_statusline(&command_line(spaced, "statusline", HookShell::PowerShell), APP_NAMES));
-        let bare = json_hook_group(JsonHookGroupOptions { shell: HookShell::GitBash, executable: plain, command_name: "maitty", agent: "claude", timeout: 5, matcher: None });
+        let bare = json_hook_group(JsonHookGroupOptions { shell: HookShell::GitBash, executable: plain, command_name: "maiker", agent: "claude", timeout: 5, matcher: None });
         assert!(bare["hooks"][0].get("shell").is_none());
     }
 }

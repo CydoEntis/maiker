@@ -643,7 +643,7 @@ fn argv(cfg: &Config, cmd: Option<&str>, once: bool) -> Vec<String> {
 }
 
 /// A pane works on this machine: `--remote` routing the daemon was started under (its host,
-/// ssh program and remote command) must not make the pane's own `maitty` reach another one.
+/// ssh program and remote command) must not make the pane's own `maiker` reach another one.
 fn remove_remote_route(cmd: &mut CommandBuilder) {
     for key in crate::ipc::REMOTE_ROUTE_ENV {
         cmd.env_remove(key);

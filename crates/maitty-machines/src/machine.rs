@@ -203,6 +203,12 @@ impl Machine {
         )?)
     }
 
+    /// `probe_argv` for the app under another command there (a name it had before a rename).
+    pub fn probe_argv_for(&self, remote_cmd: &str) -> Result<Vec<String>> {
+        let route = self.ssh_route()?;
+        Ok(ssh_command::ssh_argv_probe(&route.ssh, &route.target, remote_cmd)?)
+    }
+
     /// The line that asks this machine for its platform (`uname -sm`), without asking a person.
     pub fn platform_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
@@ -800,12 +806,12 @@ mod tests {
     #[test]
     fn a_configured_machine_uses_its_own_remote_command() {
         let mut def = configured("box");
-        def.remote_cmd = Some("~/bin/maitty".into());
+        def.remote_cmd = Some("~/bin/maiker".into());
         let m = super::Machine::from_def(&def, "ssh");
         let want = super::Machine::ssh(
             "me@10.0.0.2",
             vec!["ssh".into(), "-p".into(), "2222".into()],
-            "~/bin/maitty",
+            "~/bin/maiker",
         )
         .attach_only();
         assert_eq!(m.route, want.route);
@@ -813,11 +819,11 @@ mod tests {
 
     #[test]
     fn remote_host_is_a_machine_named_after_the_host() {
-        let m = super::Machine::adhoc("box", Some("ssh -p 2222"), Some("~/maitty".into()));
+        let m = super::Machine::adhoc("box", Some("ssh -p 2222"), Some("~/maiker".into()));
         let want = super::Machine::ssh(
             "box",
             vec!["ssh".into(), "-p".into(), "2222".into()],
-            "~/maitty",
+            "~/maiker",
         );
         assert_eq!((m.name(), m.host()), ("box", Some("box")));
         assert_eq!(m, want);
@@ -838,17 +844,17 @@ mod tests {
     fn only_a_remote_machine_has_a_host_to_show() {
         let local = super::Machine::local();
         assert!(!local.is_remote() && local.host().is_none());
-        let box_ = super::Machine::ssh("box", vec!["ssh".into()], "maitty");
+        let box_ = super::Machine::ssh("box", vec!["ssh".into()], "maiker");
         assert!(box_.is_remote());
         assert_eq!((box_.host(), box_.name()), (Some("box"), "box"));
     }
 
     #[test]
     fn an_ssh_failure_is_told_from_what_ssh_said() {
-        let missing = super::ssh_failure("box", "bash: maitty: command not found");
+        let missing = super::ssh_failure("box", "bash: maiker: command not found");
         assert!(missing.starts_with("box has no `"), "{missing}");
         assert!(
-            missing.ends_with("(bash: maitty: command not found)"),
+            missing.ends_with("(bash: maiker: command not found)"),
             "the words stay: {missing}"
         );
         assert_eq!(
@@ -1080,7 +1086,7 @@ mod tests {
         let claim =
             |m: &super::Machine| super::pane_claim(m, Some("7".into()), Some("secret".into()));
         assert_eq!(claim(&super::Machine::local()), Some((7, "secret".into())));
-        let remote = super::Machine::ssh("box", vec!["ssh".into()], "maitty");
+        let remote = super::Machine::ssh("box", vec!["ssh".into()], "maiker");
         assert_eq!(claim(&remote), None);
         assert_eq!(
             super::pane_claim(&super::Machine::local(), None, None),
@@ -1114,7 +1120,7 @@ mod tests {
         assert!(structured(&super::Machine::local()).is_some());
         assert!(structured(&configured_machine()).is_none());
         assert!(structured(&through(&["relay", "{command}"])).is_none());
-        assert!(structured(&super::Machine::ssh("box", vec!["ssh".into()], "maitty")).is_none());
+        assert!(structured(&super::Machine::ssh("box", vec!["ssh".into()], "maiker")).is_none());
     }
 
     #[test]
@@ -1148,7 +1154,7 @@ mod tests {
         assert_eq!(from(&configured_machine()), None);
         assert_eq!(from(&through(&["relay", "{command}"])), None);
         assert_eq!(
-            from(&super::Machine::ssh("box", vec!["ssh".into()], "maitty")),
+            from(&super::Machine::ssh("box", vec!["ssh".into()], "maiker")),
             None
         );
     }

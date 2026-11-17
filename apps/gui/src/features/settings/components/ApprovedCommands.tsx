@@ -28,7 +28,7 @@ export function ApprovedCommands() {
       .catch((error: unknown) => { setFailure(errorMessage(error, 'Could not take that back')) })
   }
   return (
-    <Card title="Commands approved for a project" foot="Forgetting one takes effect at once. Another Maitty service running on this computer (a separate socket) only drops it when it next starts.">
+    <Card title="Commands approved for a project" foot="Forgetting one takes effect at once. Another Maiker service running on this computer (a separate socket) only drops it when it next starts.">
       {list.isError && <p className="mx-scard-note">{errorMessage(list.error, 'Could not read them')}</p>}
       {list.data?.length === 0 && <p className="mx-scard-note">None. A chat's command offers “Always in this project”; what you choose appears here.</p>}
       {(list.data ?? []).map((item) => (

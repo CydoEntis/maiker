@@ -43,7 +43,7 @@ function Mark({ provider }: { provider: Provider }) {
   return <span className="mx-tk-mark is-small" style={{ color: look.color }}>{look.mark}</span>
 }
 
-/** GitHub: the gh login on this computer. Maitty keeps no GitHub key. */
+/** GitHub: the gh login on this computer. Maiker keeps no GitHub key. */
 function GitHubCard({ signIn }: { signIn: GitHubSignIn | undefined }) {
   const login = useQuery({ queryKey: ['tickets', 'github-login'], queryFn: () => loadGitHubAccounts(LOCAL_MACHINE), retry: false, staleTime: Infinity })
   const { refetch } = login
@@ -60,7 +60,7 @@ function GitHubCard({ signIn }: { signIn: GitHubSignIn | undefined }) {
             : `Signed in with gh as @${account.login}`
   return (
     <Card title="GitHub" meta={<button type="button" className="mx-text-button" onClick={() => { void refetch() }}>Check again</button>}
-      foot="Tickets uses the GitHub command line's own login, so there is no key to paste and Maitty keeps none.">
+      foot="Tickets uses the GitHub command line's own login, so there is no key to paste and Maiker keeps none.">
       <Row label="GitHub" detail={words}>
         <Mark provider="github" />
         {signedOut && signIn !== undefined && <button type="button" className="mx-scard-button" onClick={() => { signIn.onSignIn(LOCAL_MACHINE, 'This computer') }}>Open terminal</button>}
@@ -292,7 +292,7 @@ function rootKey(place: TicketPlace): string {
 /**
  * Settings › Tickets, in two parts. Accounts: GitHub's gh login and the Plane and Linear keys, each set once for every
  * project on this computer. Linked projects: which repo, Plane project and Linear team each project reads, kept by the
- * Maitty service per project (and so for every worktree of it), then the names you go by for Mine.
+ * Maiker service per project (and so for every worktree of it), then the names you go by for Mine.
  */
 export function TicketsSection({ projects, signIn }: { projects: readonly TicketsProject[]; signIn: GitHubSignIn | undefined }) {
   const keys = useKeys()
@@ -310,7 +310,7 @@ export function TicketsSection({ projects, signIn }: { projects: readonly Ticket
       <GitHubCard signIn={signIn} />
       {KEYED.map((each) => <KeyCard key={each.provider} {...each} />)}
       <Part title="Linked projects" sub="Which tickets each project shows. A project is its repository, so every worktree and every session in it shows the same tickets." />
-      <Card title="Projects" foot="Kept by the Maitty service, so the desktop app and the terminal app show a project the same tickets. A GitHub repository needs no setup: the folder's origin is used.">
+      <Card title="Projects" foot="Kept by the Maiker service, so the desktop app and the terminal app show a project the same tickets. A GitHub repository needs no setup: the folder's origin is used.">
         {links.isPending ? <SkeletonLines label="Reading the linked projects" className="mx-scard-note" />
           : links.isError ? <p className="mx-scard-note" role="alert">{errorMessage(links.error, 'Could not read the linked projects')}</p>
             : (

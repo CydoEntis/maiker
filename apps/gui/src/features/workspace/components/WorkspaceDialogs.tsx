@@ -154,7 +154,7 @@ export function WorkspaceDialogs() {
             {preferences.perfOverlay && <PerfOverlay />}
             {restarting && (
               <div className="mx-restarting" role="status">
-                <strong>Restarting Maitty</strong>
+                <strong>Restarting Maiker</strong>
                 <span>Reopening your layout. Your sessions never stopped.</span>
               </div>
             )}

@@ -161,7 +161,7 @@ fn main() {
     }
 
     // A Write of a .env and a command that echoes a token. The agent must get its own input back
-    // untouched (`updatedInput`); only Maitty's stored copy is masked. The token is built from
+    // untouched (`updatedInput`); only Maiker's stored copy is masked. The token is built from
     // pieces so no secret-shaped literal sits in the source.
     if scenario == "tool-secret" {
         let token = format!("{}{}", "ghp_", "aB3d".repeat(9));

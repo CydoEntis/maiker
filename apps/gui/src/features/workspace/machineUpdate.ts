@@ -4,7 +4,7 @@ import { errorMessage } from '@/lib/error-message'
 import { UPDATE_WORDS, type UpdateAction } from './model/machines'
 
 // The update is the command-line app's, which leads each error it prints with its own name.
-const CLI_PREFIX = /^maitty: /
+const CLI_PREFIX = /^maiker: /
 
 function lines(text: string): { title: string; description?: string } {
   const [title = '', ...rest] = text.split('\n')

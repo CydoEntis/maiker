@@ -11,7 +11,7 @@ type Props = {
   update: RestartedUpdate
   /** Called once the toast is gone and the dialog, if it was opened, is closed. */
   onDone: () => void
-  /** The Maitty service still runs the older release and is restarted once no agent is at work. */
+  /** The Maiker service still runs the older release and is restarted once no agent is at work. */
   serviceFinishing?: boolean
 }
 
@@ -49,8 +49,8 @@ export function UpdatedNotice({ update, onDone, serviceFinishing = false }: Prop
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-[460px]">
           <DialogHeader>
-            <DialogTitle>What's new in Maitty {update.version}</DialogTitle>
-            <DialogDescription>{update.previous ? `Updated from ${update.previous}.` : 'Maitty is up to date.'}</DialogDescription>
+            <DialogTitle>What's new in Maiker {update.version}</DialogTitle>
+            <DialogDescription>{update.previous ? `Updated from ${update.previous}.` : 'Maiker is up to date.'}</DialogDescription>
           </DialogHeader>
           {lines.length > 0 && <ul className="m-0 grid list-disc gap-1.5 pl-5 text-[13px] text-[var(--fg2)]">{lines.map((line) => <li key={line}>{line}</li>)}</ul>}
           <p className="m-0 text-[12px] text-[var(--muted)]">{update.automatic ? 'Installed while nothing was running. No session was interrupted.' : 'No session was interrupted.'}</p>

@@ -284,7 +284,7 @@ describe('the Terminal | Chat view of a pane', () => {
     expect(daemon.submitMessage).toHaveBeenCalledWith(
       { id: '42', generation: 1 },
       1,
-      'what is wrong here?\n\nAttached files (kept by Maitty; read them with your file tools):\n- /cache/attachments/attach-1730000000000-0a1b2c3d-shot.png',
+      'what is wrong here?\n\nAttached files (kept by Maiker; read them with your file tools):\n- /cache/attachments/attach-1730000000000-0a1b2c3d-shot.png',
     )
   })
 

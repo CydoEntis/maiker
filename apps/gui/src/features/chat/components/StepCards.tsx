@@ -241,7 +241,7 @@ function EditBody({ event, file, sidePanel }: { event: EditEvent; file: string |
   const [all, setAll] = useState(false)
   if (event.status === 'running') return <p className="mx-step-well is-writing"><span className="mx-step-wellspin" aria-hidden="true"><Spinner /></span>Still writing…</p>
   if (event.diff.status === 'unavailable') return <p className="mx-step-absent">The history didn&apos;t keep this diff.</p>
-  if (event.diff.status === 'omitted') return <p className="mx-step-well mx-step-secret"><Lock className="size-3 shrink-0" aria-hidden="true" />Secret file: Maitty doesn&apos;t show its contents.</p>
+  if (event.diff.status === 'omitted') return <p className="mx-step-well mx-step-secret"><Lock className="size-3 shrink-0" aria-hidden="true" />Secret file: Maiker doesn&apos;t show its contents.</p>
   if (event.diff.truncated) return <p className="mx-step-well mx-step-toolarge">Diff too large to show here{sidePanel}</p>
   const rows = diffRows(event.diff.hunks)
   if (rows.length === 0) return null

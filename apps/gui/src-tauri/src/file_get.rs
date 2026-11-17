@@ -2,7 +2,7 @@
 //! the machine's name, a path on that machine and a transfer id; the host checks them, pulls the
 //! file over the machine's own ssh line (`maitty-machines`' `get_file`, the runner the terminal
 //! app's `machine get` uses), and tells the window how it goes as `file-get` events. It saves
-//! into `Downloads/maitty/<machine>/`. Nothing here blocks the UI thread: the pull runs on a
+//! into `Downloads/maiker/<machine>/`. Nothing here blocks the UI thread: the pull runs on a
 //! blocking worker. One transfer runs at a time, shared with file sends, and `cancel_file_send`
 //! ends a pull by its id too.
 

@@ -60,7 +60,7 @@ export function permissionsCard(agent: string, mode: string | null, modes: reado
   return [
     `${agentName(agent)} is set to **${modeLabel(mode) ?? NOT_REPORTED}**. The modes it can be set to:`,
     ...rows,
-    'Pick one with the shield button next to the message box. Maitty never changes it for you.',
+    'Pick one with the shield button next to the message box. Maiker never changes it for you.',
   ].join('\n')
 }
 

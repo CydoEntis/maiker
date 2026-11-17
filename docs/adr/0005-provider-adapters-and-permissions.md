@@ -1,4 +1,4 @@
-# 0005. Provider adapters sit behind the daemon, and Maitty never widens permissions
+# 0005. Provider adapters sit behind the daemon, and Maiker never widens permissions
 
 - **Status:** Accepted
 - **Date:** 2026-11-06
@@ -13,9 +13,9 @@ a pane (0003). Each provider speaks its own protocol.
 - Codex (`app-server`) and Claude Code (headless `stream-json`) each live in their own adapter
   crate behind the daemon's provider contract. Adapters are built with the daemon; there is no
   plugin ABI or runtime download.
-- Maitty launches the official CLI with the user's own sign-in. It offers no login screen and
+- Maiker launches the official CLI with the user's own sign-in. It offers no login screen and
   does not handle OAuth tokens.
-- Permission posture is the provider's. Maitty only chooses the setting and never widens a
+- Permission posture is the provider's. Maiker only chooses the setting and never widens a
   session's permissions after it starts. **Bypass Permissions** (the provider's own skip-permissions
   mode: Claude `--dangerously-skip-permissions`, Codex `--dangerously-bypass-approvals-and-sandbox` or
   `Sandbox::FullAccess` always paired with `ApprovalPolicy::Never`, Gemini `--yolo`) is **on by default

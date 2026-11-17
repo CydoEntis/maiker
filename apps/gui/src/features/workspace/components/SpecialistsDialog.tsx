@@ -11,7 +11,7 @@ const SCOPES: readonly SpecialistFile['scope'][] = ['project', 'home', 'unknown'
 
 /**
  * The specialist agents a session's project and its user's home define, for Claude Code and Codex,
- * read-only (ADR 0010). Maitty never makes or edits these files; `/agents` in Claude Code and the
+ * read-only (ADR 0010). Maiker never makes or edits these files; `/agents` in Claude Code and the
  * files themselves are where that is done. Opening one shows the file as it is.
  */
 export function SpecialistsDialog({ title, term, onClose, load = readSpecialists }: { title: string; term: number; onClose: () => void; load?: (term: number) => Promise<SpecialistList> }) {

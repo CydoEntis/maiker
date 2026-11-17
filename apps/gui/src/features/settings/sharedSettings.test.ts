@@ -45,7 +45,7 @@ describe('the settings shared with the terminal app', () => {
   it('lays what the daemon says over the preferences', () => {
     const next = applyShared({ ...readSettingsPreferences(), themeMode: 'dark' }, SHARED)
     expect(next).toMatchObject({
-      defaultAgent: 'codex', sidebarSide: 'right', darkTheme: 'Tokyo Night', lightTheme: 'Maitty Day',
+      defaultAgent: 'codex', sidebarSide: 'right', darkTheme: 'Tokyo Night', lightTheme: 'Maiker Day',
       themeMode: 'light', spinner: 'snake', startFolder: '/srv', reduceMotion: true, bypassOff: ['gemini'],
       updateMachines: false,
     })

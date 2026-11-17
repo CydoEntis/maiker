@@ -19,7 +19,7 @@ describe('corners', () => {
 
 describe('the one look', () => {
   it('keeps the theme its own colours and gives it Inter with JetBrains Mono', () => {
-    for (const theme of [findTheme('Maitty Night'), findTheme('Maitty Day'), findTheme('Catppuccin Mocha')]) {
+    for (const theme of [findTheme('Maiker Night'), findTheme('Maiker Day'), findTheme('Catppuccin Mocha')]) {
       const looked = withLook(theme)
       expect(looked.tokens).toEqual(theme.tokens)
       expect(themeStyle(looked)['--ui']).toContain('Inter')
@@ -33,7 +33,7 @@ describe('the one look', () => {
   })
 
   it('draws flat: no sheen', () => {
-    const style = themeStyle(withLook(findTheme('Maitty Night')))
+    const style = themeStyle(withLook(findTheme('Maiker Night')))
     expect(style['--sh']).toBe('none')
   })
 })

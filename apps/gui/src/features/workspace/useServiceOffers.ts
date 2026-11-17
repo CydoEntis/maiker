@@ -11,14 +11,14 @@ import type { AppBehindOffer, RestartOffer } from './components/states'
 import { serviceStep } from '@/features/updates/finishUpdate'
 
 /**
- * The desktop app: a terminal multiplexer window over sessions maittyd owns. Tabs and
+ * The desktop app: a terminal multiplexer window over sessions maikerd owns. Tabs and
  * splits are this window's arrangement; closing them only detaches.
  */
 /** What restarting an older service does to the sessions it owns, in words. */
 function olderServiceNote(status: { canRestart: boolean; sessionCount: number; activeTurnCount: number | null } | undefined): string {
   if (!status || status.sessionCount === 0) return ''
   const sessions = `${String(status.sessionCount)} session${status.sessionCount === 1 ? '' : 's'}`
-  if (!status.canRestart) return ` The older service owns ${sessions} but is not saving them, so Maitty leaves it running.`
+  if (!status.canRestart) return ` The older service owns ${sessions} but is not saving them, so Maiker leaves it running.`
   const midTurn = status.activeTurnCount ? ` ${String(status.activeTurnCount)} working or waiting agent${status.activeTurnCount === 1 ? '' : 's'} will offer a Resume.` : ''
   return ` Restarting it stops what is running in its ${sessions}. They reopen in the same folders.${midTurn}`
 }
@@ -48,7 +48,7 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
     tried.current = mismatch.daemonProtocol
     void restartMismatchedDaemon(mismatch.daemonProtocol)
       .then(() => refetchSessions())
-      .catch((error: unknown) => { toast.failure(error, 'Could not finish updating the Maitty service') })
+      .catch((error: unknown) => { toast.failure(error, 'Could not finish updating the Maiker service') })
   }, [unasked, mismatch, refetchSessions])
   const restartOffer: RestartOffer | null = mismatch && !serviceNewer
     ? {
@@ -66,7 +66,7 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
               await refetchSessions()
               toast.success(`Service restarted · ${String(restartStatusQuery.data?.sessionCount ?? 0)} sessions back`)
             })
-            .catch((error: unknown) => { toast.failure(error, 'Could not restart the Maitty service') })
+            .catch((error: unknown) => { toast.failure(error, 'Could not restart the Maiker service') })
             .finally(() => { setRestartPending(false) })
         },
       }

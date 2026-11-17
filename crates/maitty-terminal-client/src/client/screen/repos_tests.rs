@@ -1,6 +1,6 @@
 //! Clone a repository, another machine's folders, specialist agents, another machine's worktrees
 //! to tidy, and a branch added as a worktree: what each asks which daemon, and what it draws.
-//! `MAITTY_SHOW=1 cargo test screen::repos_tests -- --nocapture` prints the frames.
+//! `MAIKER_SHOW=1 cargo test screen::repos_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::{Outgoing, WtRow};

@@ -16,7 +16,7 @@ function ItemMark({ state }: { state: TodoItemState }) {
   return <span className={`mx-plan-mark is-${state}`} role="img" aria-label={state === 'current' ? 'In progress' : 'To do'}>{state === 'current' && <span className="mx-plan-ring" />}</span>
 }
 
-/** The agent's own plan as the history carried it: how much is done, and each item. Maitty adds no items. */
+/** The agent's own plan as the history carried it: how much is done, and each item. Maiker adds no items. */
 export function PlanCard({ event }: { event: TodoEvent }) {
   if (event.items === null) return <p className="mx-step-absent">The agent kept a plan here, but the history didn&apos;t save it.</p>
   const progress = todoProgress(event.items)

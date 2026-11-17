@@ -115,12 +115,12 @@ mod tests {
 
     #[test]
     fn a_repository_is_read_from_each_way_it_is_pasted() {
-        assert_eq!(parse_github("CydoEntis/maitty"), Ok(repo("CydoEntis", "maitty", false)));
-        assert_eq!(parse_github("  https://github.com/CydoEntis/maitty  "), Ok(repo("CydoEntis", "maitty", false)));
-        assert_eq!(parse_github("https://github.com/CydoEntis/maitty.git"), Ok(repo("CydoEntis", "maitty", false)));
-        assert_eq!(parse_github("https://github.com/CydoEntis/maitty/tree/dev/docs?tab=readme#top"), Ok(repo("CydoEntis", "maitty", false)));
+        assert_eq!(parse_github("CydoEntis/maiker"), Ok(repo("CydoEntis", "maiker", false)));
+        assert_eq!(parse_github("  https://github.com/CydoEntis/maiker  "), Ok(repo("CydoEntis", "maiker", false)));
+        assert_eq!(parse_github("https://github.com/CydoEntis/maiker.git"), Ok(repo("CydoEntis", "maiker", false)));
+        assert_eq!(parse_github("https://github.com/CydoEntis/maiker/tree/dev/docs?tab=readme#top"), Ok(repo("CydoEntis", "maiker", false)));
         assert_eq!(parse_github("github.com/a-b/c_d.e"), Ok(repo("a-b", "c_d.e", false)));
-        assert_eq!(parse_github("git@github.com:CydoEntis/maitty.git"), Ok(repo("CydoEntis", "maitty", true)));
+        assert_eq!(parse_github("git@github.com:CydoEntis/maiker.git"), Ok(repo("CydoEntis", "maiker", true)));
     }
 
     #[test]
@@ -133,7 +133,7 @@ mod tests {
     fn anything_but_a_github_repository_is_refused() {
         for input in [
             "",
-            "maitty",
+            "maiker",
             "https://gitlab.com/o/r",
             "https://evil.example/github.com/o/r",
             "file:///etc/passwd",

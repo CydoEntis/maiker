@@ -48,7 +48,7 @@ describe('a service a release behind, with nobody mid-turn', () => {
     await waitFor(() => { expect(toasts.success).toHaveBeenCalledTimes(1) })
     expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0')
     expect(refetch).toHaveBeenCalled()
-    expect(toasts.success.mock.calls[0]).toEqual(['Maitty service updated', { description: 'It was restarted to finish the update. 11 sessions came back.' }])
+    expect(toasts.success.mock.calls[0]).toEqual(['Maiker service updated', { description: 'It was restarted to finish the update. 11 sessions came back.' }])
     expect(toasts.warning).not.toHaveBeenCalled()
   })
 
@@ -96,7 +96,7 @@ describe('the notice that the service is a release behind', () => {
     renderNotice()
 
     await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
-    expect(toasts.warning.mock.calls[0]?.[0]).toBe('The Maitty service is still on 0.71.0')
+    expect(toasts.warning.mock.calls[0]?.[0]).toBe('The Maiker service is still on 0.71.0')
     expect(toasts.warning.mock.calls[0]?.[1]?.action?.label).toBe('Restart…')
   })
 
@@ -130,14 +130,14 @@ describe('the notice that the service is a release behind', () => {
   })
 
   it('keeps the dialog open and says why when the restart is refused', async () => {
-    daemon.restartStaleDaemon.mockRejectedValue(new Error('the local Maitty service changed since the restart prompt opened'))
+    daemon.restartStaleDaemon.mockRejectedValue(new Error('the local Maiker service changed since the restart prompt opened'))
     renderNotice()
     await waitFor(() => { expect(toasts.warning).toHaveBeenCalled() })
     toasts.warning.mock.calls[0]?.[1]?.action?.onClick()
 
     await userEvent.click(await screen.findByRole('button', { name: 'Restart service' }))
 
-    await waitFor(() => { expect(toasts.error).toHaveBeenCalledWith('the local Maitty service changed since the restart prompt opened') })
+    await waitFor(() => { expect(toasts.error).toHaveBeenCalledWith('the local Maiker service changed since the restart prompt opened') })
     expect(screen.getByRole('button', { name: 'Restart service' })).toBeTruthy()
   })
 })

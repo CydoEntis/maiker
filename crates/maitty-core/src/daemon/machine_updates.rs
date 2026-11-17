@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn the_log_keeps_the_last_line_said() {
-        assert_eq!(last_line(b"probing\nbox: maitty 0.80.0 installed\n\n"), "box: maitty 0.80.0 installed");
+        assert_eq!(last_line(b"probing\nbox: maiker 0.80.0 installed\n\n"), "box: maiker 0.80.0 installed");
         assert_eq!(last_line(b""), "no output");
     }
 }

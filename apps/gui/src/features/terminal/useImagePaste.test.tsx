@@ -25,7 +25,7 @@ function setup(overrides: Partial<Parameters<typeof useImagePaste>[0]> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  host.save.mockResolvedValue('/home/me/.cache/maitty/pastes/paste-1-0000000a.png')
+  host.save.mockResolvedValue('/home/me/.cache/maiker/pastes/paste-1-0000000a.png')
 })
 
 describe('pasting an image into a pane of this computer', () => {
@@ -34,7 +34,7 @@ describe('pasting an image into a pane of this computer', () => {
     paste('t3', image)
     await flush()
     expect(host.save).toHaveBeenCalledWith(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))
-    expect(typeInto).toHaveBeenCalledWith('t3', '/home/me/.cache/maitty/pastes/paste-1-0000000a.png ')
+    expect(typeInto).toHaveBeenCalledWith('t3', '/home/me/.cache/maiker/pastes/paste-1-0000000a.png ')
     expect(toasts.success).toHaveBeenCalledWith('Pasted the image', expect.objectContaining({ id: 'image-paste' }))
     expect(sendImage).not.toHaveBeenCalled()
   })
@@ -68,7 +68,7 @@ describe('pasting an image into a pane of this computer', () => {
     paste('t3', image)
     await flush()
     expect(host.save).not.toHaveBeenCalled()
-    expect(toasts.error).toHaveBeenCalledWith('Reconnect to the Maitty service before pasting an image')
+    expect(toasts.error).toHaveBeenCalledWith('Reconnect to the Maiker service before pasting an image')
   })
 })
 

@@ -6,7 +6,7 @@ Plan: [phases 34–37](../../ROADMAP.md#34--shared-conversations-and-codex-hando
 
 ## Problem
 
-“I think a lot of people would benefit from Maitty as a GUI app as well.”
+“I think a lot of people would benefit from Maiker as a GUI app as well.”
 Chat should be the main GUI experience, with terminals available, while keeping
 the existing TUI a great product. A GUI conversation must also be usable in the
 TUI and vice versa.
@@ -19,7 +19,7 @@ conversation transfer between the GUI and TUI is optional follow-up work.
 
 ## Affected users and systems
 
-Developers using local Maitty on Windows, macOS and Linux; the daemon, native
+Developers using local Maiker on Windows, macOS and Linux; the daemon, native
 Codex and Claude sessions, local IPC, CLI, TUI and optional desktop client.
 
 ## Constraints
@@ -34,7 +34,7 @@ Codex and Claude sessions, local IPC, CLI, TUI and optional desktop client.
 
 ## Out of scope
 
-A replacement TUI chat renderer, a Maitty-built agent/tool loop, more structured
+A replacement TUI chat renderer, a Maiker-built agent/tool loop, more structured
 providers, a workflow runner, cloud sync and a browser service. Chat on another machine
 is its own feature ([remote-chat](../remote-chat/intent.md)). Existing SSH/TUI functionality
 remains supported. Arbitrary historical
@@ -47,5 +47,5 @@ block foundation tickets.
 
 ## Tickets
 
-Phase 34: [#197](https://github.com/CydoEntis/maitty/issues/197), [#198](https://github.com/CydoEntis/maitty/issues/198), [#199](https://github.com/CydoEntis/maitty/issues/199), [#200](https://github.com/CydoEntis/maitty/issues/200), [#201](https://github.com/CydoEntis/maitty/issues/201), [#202](https://github.com/CydoEntis/maitty/issues/202), [#203](https://github.com/CydoEntis/maitty/issues/203), [#204](https://github.com/CydoEntis/maitty/issues/204), [#205](https://github.com/CydoEntis/maitty/issues/205), [#206](https://github.com/CydoEntis/maitty/issues/206), [#207](https://github.com/CydoEntis/maitty/issues/207).
+Phase 34: [#197](https://github.com/CydoEntis/maiker/issues/197), [#198](https://github.com/CydoEntis/maiker/issues/198), [#199](https://github.com/CydoEntis/maiker/issues/199), [#200](https://github.com/CydoEntis/maiker/issues/200), [#201](https://github.com/CydoEntis/maiker/issues/201), [#202](https://github.com/CydoEntis/maiker/issues/202), [#203](https://github.com/CydoEntis/maiker/issues/203), [#204](https://github.com/CydoEntis/maiker/issues/204), [#205](https://github.com/CydoEntis/maiker/issues/205), [#206](https://github.com/CydoEntis/maiker/issues/206), [#207](https://github.com/CydoEntis/maiker/issues/207).
 Later phases are not ticketed.

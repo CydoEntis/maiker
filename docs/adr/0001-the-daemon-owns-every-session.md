@@ -5,7 +5,7 @@
 
 ## Context
 
-Maitty exists so agents keep running when the person leaves. A client that owned a PTY would
+Maiker exists so agents keep running when the person leaves. A client that owned a PTY would
 take the agent down with it when it closed or crashed.
 
 ## Decision

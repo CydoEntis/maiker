@@ -25,7 +25,7 @@ const RECONNECTING_MARK: &str = "┆";
 /// What the machine heading calls the computer the window runs on.
 const THIS_COMPUTER: &str = "This computer";
 /// The sidebar's title chip, and the chips that hide it and bring it back.
-const TITLE: &str = "Maitty";
+const TITLE: &str = "Maiker";
 pub(in crate::client) const HIDE: &str = "«";
 pub(in crate::client) const SHOW: &str = "»";
 /// The fold arrows of a heading: open (it folds), and folded (it opens).
@@ -549,7 +549,7 @@ pub(in crate::client) fn draw_rail(app: &mut App, buf: &mut Buffer, r: Rect, mod
     }
 }
 
-/// The top border: the `maitty` chip at the left and `«` (hide the sidebar) at the right.
+/// The top border: the `maiker` chip at the left and `«` (hide the sidebar) at the right.
 fn draw_top_chips(app: &mut App, buf: &mut Buffer, r: Rect, t: &Theme) {
     let x = r.x + 2;
     let title = chip(app, TITLE, Chip::Title { focused: false }, t.bg, t);

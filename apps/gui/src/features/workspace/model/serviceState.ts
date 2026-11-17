@@ -2,7 +2,7 @@
 export const RECONNECT_TRIES = 5
 
 /**
- * What the window tells about maittyd:
+ * What the window tells about maikerd:
  * - `ok`: connected;
  * - `reconnecting`: a try failed, more are coming ("Try N of 5");
  * - `down`: every try failed;

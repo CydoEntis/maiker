@@ -23,7 +23,7 @@ export function useServiceReads({ failures, setFailures, afterAppUpdate = false 
   /** Right after an app update an older service is restarted once its agents finish, so its status is read until then. */
   afterAppUpdate?: boolean
 }) {
-  // While maittyd is unreachable, try again after 1, 2, 4, then every 8 seconds.
+  // While maikerd is unreachable, try again after 1, 2, 4, then every 8 seconds.
   const retryDelay = BACKOFF_BASE ** Math.min(MAX_RETRY_EXPONENT, Math.max(0, failures - 1)) * SECOND_MS
   const sessionsQuery = useQuery({
     queryKey: ['conversations'],

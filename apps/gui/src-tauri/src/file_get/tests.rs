@@ -98,8 +98,8 @@ fn an_event_reaches_the_window_in_the_shape_it_reads() {
     let done = serde_json::to_value(GetEvent::Done {
         transfer: "t-1".into(),
         file: "out.log".into(),
-        path: "/d/maitty/build/out.log".into(),
-        folder: "/d/maitty/build".into(),
+        path: "/d/maiker/build/out.log".into(),
+        folder: "/d/maiker/build".into(),
     })
     .unwrap();
     assert_eq!(
@@ -108,8 +108,8 @@ fn an_event_reaches_the_window_in_the_shape_it_reads() {
             "kind": "done",
             "transfer": "t-1",
             "file": "out.log",
-            "path": "/d/maitty/build/out.log",
-            "folder": "/d/maitty/build",
+            "path": "/d/maiker/build/out.log",
+            "folder": "/d/maiker/build",
         })
     );
     let progress = serde_json::to_value(GetEvent::Progress {
@@ -126,7 +126,7 @@ fn an_event_reaches_the_window_in_the_shape_it_reads() {
 fn a_pull_that_cannot_start_ssh_ends_with_one_failed_event_that_says_why() {
     let mut job = plan_for("/x/out.log").unwrap();
     job.folder = folder("no-ssh");
-    job.machine = Machine::ssh("build", vec!["ssh-that-must-not-run".into()], "maitty");
+    job.machine = Machine::ssh("build", vec!["ssh-that-must-not-run".into()], "maiker");
     let events = events_of(&job, &Arc::new(AtomicBool::new(false)));
     let ends: Vec<_> = events.iter().filter(|e| is_end(e)).collect();
     assert_eq!(ends.len(), 1, "{events:?}");
@@ -143,7 +143,7 @@ fn a_pull_that_cannot_start_ssh_ends_with_one_failed_event_that_says_why() {
 fn a_cancel_ends_with_one_cancelled_event_and_saves_nothing() {
     let mut job = plan_for("/x/out.log").unwrap();
     job.folder = folder("cancel");
-    job.machine = Machine::ssh("build", vec!["ssh-that-must-not-run".into()], "maitty");
+    job.machine = Machine::ssh("build", vec!["ssh-that-must-not-run".into()], "maiker");
     let events = events_of(&job, &Arc::new(AtomicBool::new(true)));
     let ends: Vec<_> = events.iter().filter(|e| is_end(e)).collect();
     assert!(matches!(ends[..], [GetEvent::Cancelled { .. }]), "{events:?}");
@@ -173,7 +173,7 @@ fn a_file_is_pulled_from_a_fake_remote_and_the_window_is_told_where_it_is() {
             "--mode=remote-sh".into(),
             format!("--home={}", home.display()),
         ],
-        "maitty",
+        "maiker",
     );
 
     let events = events_of(&job, &Arc::new(AtomicBool::new(false)));
@@ -226,7 +226,7 @@ fn a_folder_is_pulled_through_the_same_command_and_the_window_is_told_where_it_i
             "--mode=remote-sh".into(),
             format!("--home={}", home.display()),
         ],
-        "maitty",
+        "maiker",
     );
 
     let events = events_of(&job, &Arc::new(AtomicBool::new(false)));

@@ -15,7 +15,7 @@ const FEWEST_CHOICES = 3
 /**
  * The wording checked on a Claude permission menu ("2. Yes, and don't ask again", the fixture in the daemon's
  * prompt reader, which goes on with what it covers). Any other second choice, such as one that only says "Yes, allow
- * all edits", is not offered: Maitty names what an answer allows only in words it has seen.
+ * all edits", is not offered: Maiker names what an answer allows only in words it has seen.
  */
 const DONT_ASK_AGAIN = /^Yes, and don['’]t ask again\b/
 /** A label longer than this is not shown whole in a button; the card leaves such a menu to the terminal. */

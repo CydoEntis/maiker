@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Maitty",
+  "productName": "Maiker",
   "version": "0.79.0",
   "identifier": "com.cydoentis.maitty",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Maitty",
+        "title": "Maiker",
         "width": 1440,
         "height": 900,
         "minWidth": 720,
@@ -30,7 +30,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/maitty-gui-daemon"],
+    "externalBin": ["binaries/maiker-gui-daemon"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -45,7 +45,7 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMzNzI5RUU4NTdGMUIxNUMKUldSY3NmRlg2SjV5TTF5VTJWUTQ1VnlHSlBWTU9uYnl5ZW50UzQzSFVXcU5zRlhqOGZIZXpucUsK",
-      "endpoints": ["https://github.com/CydoEntis/maitty/releases/latest/download/latest.json"],
+      "endpoints": ["https://github.com/CydoEntis/maiker/releases/latest/download/latest.json"],
       "windows": { "installMode": "passive" }
     }
   }

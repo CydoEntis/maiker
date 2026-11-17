@@ -9,7 +9,7 @@ type Props = {
   onDismiss: (sessionId: string) => void
 }
 
-/** Offers to bring back agents that were working when Maitty restarted. Nothing resumes until you click. */
+/** Offers to bring back agents that were working when Maiker restarted. Nothing resumes until you click. */
 export function RestoreBanner({ sessions, online, onResume, onDismiss }: Props) {
   if (sessions.length === 0) return null
   return (
@@ -17,7 +17,7 @@ export function RestoreBanner({ sessions, online, onResume, onDismiss }: Props) 
       {sessions.map((session) => (
         <div key={session.id} className="mx-restore-row">
           <span className="mx-restore-text">
-            <strong>{session.interrupted?.agent}</strong> was working in {displayName(session)} when Maitty restarted.
+            <strong>{session.interrupted?.agent}</strong> was working in {displayName(session)} when Maiker restarted.
           </span>
           <code className="mx-restore-command">{session.interrupted?.resume}</code>
           <button type="button" className="mx-text-button is-primary" disabled={!online} onClick={() => { onResume(session) }}>Resume</button>

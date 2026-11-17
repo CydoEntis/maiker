@@ -74,7 +74,7 @@ function moveOldLinksOnce(): Promise<void> {
 async function read(place: TicketPlace | null): Promise<TicketLinksAnswer> {
   await moveOldLinksOnce()
   const told = await loadTicketLinks(place)
-  if (!told.ok) throw new Error(told.failure.kind === 'invalid' || told.failure.kind === 'unreachable' ? told.failure.line : 'The Maitty service could not read the ticket links')
+  if (!told.ok) throw new Error(told.failure.kind === 'invalid' || told.failure.kind === 'unreachable' ? told.failure.line : 'The Maiker service could not read the ticket links')
   return told.value
 }
 

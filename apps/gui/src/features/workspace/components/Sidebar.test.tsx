@@ -118,7 +118,7 @@ describe('the sidebar', () => {
   })
 })
 
-describe('a machine that needs maitty installed or updated', () => {
+describe('a machine that needs maiker installed or updated', () => {
   const needing = (action: MachineHead['updateAction']): MachineHead => ({ ...DEVBOX, chip: { glyph: '▲', word: 'needs update', tone: 'bad' }, down: true, updateAction: action })
   const machineMenuItems = () => {
     fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
@@ -130,7 +130,7 @@ describe('a machine that needs maitty installed or updated', () => {
     const onUpdateMachine = vi.fn()
     show([], { machines: [LOCAL_HEAD, needing('install')], onUpdateMachine })
     expect(screen.getByRole('img', { name: /^devbox is / })).toHaveClass('is-warn')
-    await user.click(screen.getByRole('button', { name: 'Install Maitty on devbox' }))
+    await user.click(screen.getByRole('button', { name: 'Install Maiker on devbox' }))
     expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'install')
   })
 
@@ -141,46 +141,46 @@ describe('a machine that needs maitty installed or updated', () => {
     expect(add).toHaveAttribute('title', expect.stringContaining('Cannot start a chat on devbox: '))
   })
 
-  it('offers Install Maitty first in its menu', async () => {
+  it('offers Install Maiker first in its menu', async () => {
     const user = userEvent.setup()
     const onUpdateMachine = vi.fn()
     show([], { machines: [LOCAL_HEAD, needing('install')], onUpdateMachine })
-    expect(machineMenuItems()[0]).toBe('Install Maitty')
-    await user.click(screen.getByRole('menuitem', { name: 'Install Maitty' }))
+    expect(machineMenuItems()[0]).toBe('Install Maiker')
+    await user.click(screen.getByRole('menuitem', { name: 'Install Maiker' }))
     expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'install')
   })
 
-  it('offers Update in its header for another version, and offers Update Maitty in its menu', async () => {
+  it('offers Update in its header for another version, and offers Update Maiker in its menu', async () => {
     const user = userEvent.setup()
     const onUpdateMachine = vi.fn()
     show([session(1)], { machines: [LOCAL_HEAD, needing('update')], onUpdateMachine })
     expect(screen.getByRole('img', { name: 'devbox is needs update' })).toHaveClass('is-warn')
-    expect(screen.getByRole('button', { name: 'Update Maitty on devbox' })).toBeInTheDocument()
-    expect(machineMenuItems()).toContain('Update Maitty')
-    await user.click(screen.getByRole('menuitem', { name: 'Update Maitty' }))
+    expect(screen.getByRole('button', { name: 'Update Maiker on devbox' })).toBeInTheDocument()
+    expect(machineMenuItems()).toContain('Update Maiker')
+    await user.click(screen.getByRole('menuitem', { name: 'Update Maiker' }))
     expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'update')
   })
 
   it('shows how far its update has got in the header, in place of the Update button', () => {
     show([], { machines: [LOCAL_HEAD, needing('update')], updateProgress: { devbox: 55 } })
     expect(screen.getByText('55%')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Update Maitty on devbox' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Update Maiker on devbox' })).toBeNull()
     expect(screen.getByRole('progressbar', { name: 'Updating devbox' })).toHaveAttribute('aria-valuenow', '55')
   })
 
   it('shows no progress for a machine that is not updating', () => {
     show([], { machines: [LOCAL_HEAD, needing('update')], updateProgress: { other: 55 } })
     expect(screen.queryByRole('progressbar')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Update Maitty on devbox' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update Maiker on devbox' })).toBeInTheDocument()
   })
 
   it('offers neither on a machine that is up to date, nor on this computer', () => {
     show([session(1)], { machines: [LOCAL_HEAD, DEVBOX] })
-    expect(machineMenuItems().filter((item) => item.endsWith('Maitty'))).toEqual([])
+    expect(machineMenuItems().filter((item) => item.endsWith('Maiker'))).toEqual([])
     fireEvent.contextMenu(screen.getByRole('button', { name: /^This computer/ }))
-    expect(screen.queryByRole('menuitem', { name: /Maitty$/ })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: /Maiker$/ })).toBeNull()
     expect(screen.queryByRole('img', { name: /needs update|not installed/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Maitty on/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Maiker on/ })).toBeNull()
   })
 })
 
@@ -564,8 +564,8 @@ describe('grouped by status', () => {
   it('still offers Update for a machine that needs the app, under the list', () => {
     const onUpdateMachine = vi.fn()
     show(mixed(), { grouping: 'status', machines: [LOCAL_HEAD, { ...DEVBOX, updateAction: 'update' }], onUpdateMachine })
-    const notes = screen.getByRole('group', { name: 'Machines that need Maitty' })
-    fireEvent.click(within(notes).getByRole('button', { name: 'Update Maitty on devbox' }))
+    const notes = screen.getByRole('group', { name: 'Machines that need Maiker' })
+    fireEvent.click(within(notes).getByRole('button', { name: 'Update Maiker on devbox' }))
     expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'update')
   })
 })
@@ -594,7 +594,7 @@ describe('the top of the sidebar', () => {
     expect(onSearch).toHaveBeenCalledTimes(1)
   })
 
-  it('opens Recent sessions from the rail; docked, it is in the Maitty menu instead', async () => {
+  it('opens Recent sessions from the rail; docked, it is in the Maiker menu instead', async () => {
     const user = userEvent.setup()
     const onRecentSessions = vi.fn()
     const { again } = show([], { onRecentSessions })

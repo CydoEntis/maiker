@@ -546,6 +546,7 @@ fn machine_activity(name: &str) -> anyhow::Result<()> {
 }
 
 pub(crate) fn run() {
+    crate::brand::adopt_previous_env();
     let args = Args::parse();
     if let Err(error) = config::initialize_data_dir() {
         eprintln!(concat!(env!("APP_COMMAND"), ": {:#}"), error);

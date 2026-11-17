@@ -13,7 +13,7 @@ export type SavedLayout = {
   reset: boolean
 }
 
-export const LAYOUT_RESET_NOTICE = 'Maitty is one list of sessions now, so your saved tabs were reset. Your sessions are all still here.'
+export const LAYOUT_RESET_NOTICE = 'Maiker is one list of sessions now, so your saved tabs were reset. Your sessions are all still here.'
 
 /** The splits from last time. Sessions are the daemon's; only the arrangement is local. */
 export function readLayout(): SavedLayout {

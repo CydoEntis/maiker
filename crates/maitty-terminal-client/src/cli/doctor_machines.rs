@@ -25,7 +25,7 @@ pub(crate) const MACHINE_BUDGET: Duration =
     ipc::CONNECT_BUDGET.saturating_add(Duration::from_secs(10));
 
 const REACHABLE: &str = "reachable";
-const VERSION: &str = "maitty version";
+const VERSION: &str = "maiker version";
 const PROTOCOL: &str = "protocol";
 const LOGIN_PATH: &str = "login PATH";
 const SSH_OPTIONS: &str = "ssh options";
@@ -157,7 +157,7 @@ fn check_machine(def: &MachineDef, ssh: &str, ours: &str, budget: Duration) -> V
         Next::Stop => checks.push(Check::skipped("not reachable")),
         Next::NoApp => {
             checks.push(not_installed(name));
-            checks.push(Check::skipped("maitty is not installed there"));
+            checks.push(Check::skipped("maiker is not installed there"));
         }
         Next::Go(line) => {
             checks.push(version(&line, ours, name));
@@ -342,12 +342,12 @@ mod tests {
     fn a_machine_that_logs_in_is_reachable_and_goes_on() {
         let (check, next) = after_probe(
             &Probe::Ready {
-                version: "maitty 0.60.0".into(),
+                version: "maiker 0.60.0".into(),
             },
             "box",
         );
         assert_eq!(check.ok, Some(true));
-        assert_eq!(next, Next::Go("maitty 0.60.0".into()));
+        assert_eq!(next, Next::Go("maiker 0.60.0".into()));
     }
 
     #[test]
@@ -382,12 +382,12 @@ mod tests {
 
     #[test]
     fn the_version_is_compared_with_this_computer_s() {
-        let same = version("maitty 0.60.0", "0.60.0", "box");
+        let same = version("maiker 0.60.0", "0.60.0", "box");
         assert_eq!(
             line(&same),
-            "ok maitty version 0.60.0 (same as this computer)"
+            "ok maiker version 0.60.0 (same as this computer)"
         );
-        let older = version("maitty 0.58.1", "0.60.0", "box");
+        let older = version("maiker 0.58.1", "0.60.0", "box");
         assert_eq!(older.ok, Some(false));
         assert!(
             older
@@ -395,10 +395,10 @@ mod tests {
                 .contains("0.58.1 is older than this computer's 0.60.0")
         );
         assert!(
-            older.detail.contains("`maitty machine update box`"),
+            older.detail.contains("`maiker machine update box`"),
             "{older:?}"
         );
-        let newer = version("maitty 0.62.0", "0.60.0", "box");
+        let newer = version("maiker 0.62.0", "0.60.0", "box");
         assert_eq!(newer.ok, Some(false));
         assert!(newer.detail.contains("0.62.0 is newer"), "{newer:?}");
         assert!(
@@ -425,13 +425,13 @@ mod tests {
                 .contains(&format!("protocol {}", PROTOCOL_VERSION - 1))
         );
         assert!(
-            older.detail.contains("`maitty machine update box`"),
+            older.detail.contains("`maiker machine update box`"),
             "{older:?}"
         );
         let newer = speaking(PROTOCOL_VERSION + 1);
         assert_eq!(newer.ok, Some(false));
         assert!(
-            newer.detail.contains("update this computer (`maitty update`)"),
+            newer.detail.contains("update this computer (`maiker update`)"),
             "{newer:?}"
         );
         assert!(!newer.detail.contains("machine update"), "{newer:?}");
@@ -443,22 +443,22 @@ mod tests {
     #[test]
     fn the_login_path_shows_the_program_and_flags_a_remote_cmd_that_differs() {
         let at = |path: &str| Located::At(path.into());
-        let plain = login_path(&at("/usr/bin/maitty"), None, "box");
+        let plain = login_path(&at("/usr/bin/maiker"), None, "box");
         assert_eq!(
             line(&plain),
-            "ok login PATH maitty found at /usr/bin/maitty"
+            "ok login PATH maiker found at /usr/bin/maiker"
         );
-        let same = login_path(&at("/opt/maitty"), Some("/opt/maitty"), "box");
+        let same = login_path(&at("/opt/maiker"), Some("/opt/maiker"), "box");
         assert_eq!(same.ok, Some(true));
-        let differs = login_path(&at("/usr/bin/maitty"), Some("~/bin/maitty"), "box");
+        let differs = login_path(&at("/usr/bin/maiker"), Some("~/bin/maiker"), "box");
         assert_eq!(differs.ok, None);
         assert!(
             differs
                 .detail
-                .contains("your remote_cmd ~/bin/maitty is used"),
+                .contains("your remote_cmd ~/bin/maiker is used"),
             "{differs:?}"
         );
-        let by_name = login_path(&at("/usr/bin/maitty"), Some("maitty"), "box");
+        let by_name = login_path(&at("/usr/bin/maiker"), Some("maiker"), "box");
         assert_eq!(
             by_name.ok,
             Some(true),
@@ -471,7 +471,7 @@ mod tests {
         let default = login_path(&Located::NotFound, None, "box");
         assert_eq!(default.ok, Some(false));
         assert!(default.detail.contains("not on its login PATH"));
-        let custom = login_path(&Located::NotFound, Some("~/bin/maitty"), "box");
+        let custom = login_path(&Located::NotFound, Some("~/bin/maiker"), "box");
         assert_eq!(custom.ok, None);
         let failed = login_path(&Located::Failed(FailureClass::Login), None, "box");
         assert_eq!(failed.ok, Some(false));

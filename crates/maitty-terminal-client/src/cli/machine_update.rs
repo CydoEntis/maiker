@@ -129,7 +129,10 @@ pub(crate) fn update(
     talk.say(&format!("probing {name}…"));
     talk.progress(stage::PROBING);
     let platform = probe_platform(machine, &name)?;
-    let installed = probe_installed(machine, &name)?;
+    let installed = match probe_installed(machine, &name)? {
+        Installed::Missing => installed_under_older_name(machine).unwrap_or(Installed::Missing),
+        found => found,
+    };
     talk.say(&found_line(&name, &platform, &installed));
     talk.progress(stage::FOUND);
     let state = state_of(&installed, APP_VERSION).ok_or_else(|| {
@@ -248,6 +251,22 @@ fn probe_installed(machine: &Machine, name: &str) -> Result<Installed, Failure> 
     let ran = ssh_run::run(&argv, None, ASK_LIMIT).map_err(Failure::Failed)?;
     reached(&ran, name)?;
     Ok(classify_version(ran.code, &ran.stdout))
+}
+
+/// The app on the machine under a name it had before a rename (`maitty` for `maiker`): an older version to
+/// replace, not a missing app to install, so an update needs no `--install`. It is looked for where the app
+/// installs itself. The new name goes in beside it,
+/// and the first run there brings the old name's data and sessions over.
+fn installed_under_older_name(machine: &Machine) -> Option<Installed> {
+    crate::brand::previous().find_map(|old| {
+        // Where the app installs itself, under the old name: a PATH lookup could find an unrelated copy.
+        let argv = machine.probe_argv_for(&format!("~/.local/bin/{old}")).ok()?;
+        let ran = ssh_run::run(&argv, None, ASK_LIMIT).ok()?;
+        match crate::remote_install::classify_version_of(old, ran.code, &ran.stdout) {
+            found @ Installed::Version(_) => Some(found),
+            _ => None,
+        }
+    })
 }
 
 /// ssh's own failure (status 255, or killed by the limit) is the machine not being reached.

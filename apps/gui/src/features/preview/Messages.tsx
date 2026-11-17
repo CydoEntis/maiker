@@ -192,7 +192,7 @@ export function EmptyConversation({ conversation }: { conversation: Conversation
       <p>
         <span className="conversation-branch">{conversation.branch}</span> ·{' '}
         {conversation.permission.split(' · ')[0]}. Send a message to start. It
-        keeps running in maittyd if you close this window.
+        keeps running in maikerd if you close this window.
       </p>
     </div>
   )

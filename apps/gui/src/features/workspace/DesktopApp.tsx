@@ -30,7 +30,7 @@ export function DesktopApp() {
     <KeyOverridesContext.Provider value={preferences.keyOverrides}>
         <div ref={setRoot} className={`mx-app${narrow ? ' is-narrow' : ''}`} style={rootStyle} data-motion={reducedMotion ? 'reduced' : 'full'} data-theme-kind={theme.light ? 'light' : 'dark'} data-side={preferences.sidebarSide}>
           <AppTitleBar />
-          <div className="mx-window" role="application" aria-label="Maitty">
+          <div className="mx-window" role="application" aria-label="Maiker">
             <WorkspaceSidebars />
             <WorkspaceMain />
             <WorkspaceSidePanel />

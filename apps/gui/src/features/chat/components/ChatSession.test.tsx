@@ -152,12 +152,12 @@ describe('the chat history', () => {
     await settle()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    daemon.failure = new Error('maittyd is not running')
+    daemon.failure = new Error('maikerd is not running')
     await settle(IDLE_POLL_MS)
     await settle(RETRY_READ_MS)
     expect(screen.getByText(/Reconnecting to the daemon/)).toBeInTheDocument()
     // The reason is on screen, so a window that cannot read its chat says why instead of only waiting.
-    expect(screen.getByText(/maittyd is not running/)).toBeInTheDocument()
+    expect(screen.getByText(/maikerd is not running/)).toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
 
     daemon.failure = null
@@ -165,11 +165,11 @@ describe('the chat history', () => {
     await settle(IDLE_POLL_MS)
 
     expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/maittyd is not running/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/maikerd is not running/)).not.toBeInTheDocument()
     expect(screen.getAllByText('message 0')).toHaveLength(1)
     expect(screen.getAllByText('sent while it was down')).toHaveLength(1)
     // The warning names the failure, never the conversation's text.
-    expect(warn).toHaveBeenCalledWith('Could not read the conversation', 'maittyd is not running')
+    expect(warn).toHaveBeenCalledWith('Could not read the conversation', 'maikerd is not running')
     warn.mockRestore()
   })
 

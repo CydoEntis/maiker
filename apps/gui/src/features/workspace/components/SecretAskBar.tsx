@@ -11,7 +11,7 @@ type Props = {
 }
 
 /**
- * An agent asked for a secret (`maitty_request_secret`). Only the person answers, here and never in the chat
+ * An agent asked for a secret (`maiker_request_secret`). Only the person answers, here and never in the chat
  * (ADR 0006): the value goes from this box to the daemon and nowhere else, is not kept in the window's state
  * once sent, and the agent gets a single-use reference, never the value.
  */

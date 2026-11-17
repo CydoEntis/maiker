@@ -5,7 +5,7 @@ import { SELF_DISMISS_MS, sessionNoticeFor } from './noticeForSession'
 function session(status: SessionStatus, asking = '', extra: Partial<SessionView> = {}): SessionView {
   return { id: 't1', name: null, title: '(root)', process: 'codex', cwdLabel: '(root)', status, asking, ask: null, ...extra } as unknown as SessionView
 }
-const project = { name: 'maitty' }
+const project = { name: 'maiker' }
 
 describe('session notice', () => {
   it('names the session in the title, what happened beside it, and what it is asking in the body', () => {

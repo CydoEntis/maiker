@@ -2,7 +2,7 @@
 //!
 //! A pane is addressed `machine/id` (or a bare `id`), and `--on <machine>` names the machine for
 //! a command that has no pane. `--remote host` stays the ad-hoc route. The pane a command runs
-//! in (`$MAITTY_TERM_ID`) belongs to the daemon on this computer, so it is only a default when
+//! in (`$MAIKER_TERM_ID`) belongs to the daemon on this computer, so it is only a default when
 //! the command talks to this computer.
 
 use crate::client::remote_snapshot::sanitize_snapshot;
@@ -195,7 +195,7 @@ pub(crate) struct Target {
 }
 
 impl Target {
-    /// The machine `--remote` (or `$MAITTY_REMOTE`) names, else this computer.
+    /// The machine `--remote` (or `$MAIKER_REMOTE`) names, else this computer.
     pub(crate) fn current() -> Target {
         Target {
             machine: Machine::current(),
@@ -247,7 +247,7 @@ impl Target {
         self.named.then(|| self.machine.name())
     }
 
-    /// Whether `$MAITTY_TERM_ID` names a pane on this machine.
+    /// Whether `$MAIKER_TERM_ID` names a pane on this machine.
     pub(crate) fn owns_env_pane(&self) -> bool {
         !self.named || !self.is_remote()
     }
@@ -490,7 +490,7 @@ mod tests {
     #[test]
     fn remote_text_loses_its_escape_sequences_and_local_text_is_untouched() {
         let hostile = "ok\u{1b}]52;c;AAAA\u{7}\u{1b}[2J\nnext";
-        let remote = Target::of(Machine::ssh("box", vec!["ssh".into()], "maitty"));
+        let remote = Target::of(Machine::ssh("box", vec!["ssh".into()], "maiker"));
         assert_eq!(remote.plain(hostile), "ok]52;c;AAAA[2J\nnext");
         assert_eq!(Target::of(Machine::local()).plain(hostile), hostile);
     }
@@ -520,7 +520,7 @@ mod tests {
             Reply::List(snap) => snap.workspaces[0].name.clone(),
             _ => panic!("a list"),
         };
-        let remote = Target::of(Machine::ssh("box", vec!["ssh".into()], "maitty"));
+        let remote = Target::of(Machine::ssh("box", vec!["ssh".into()], "maiker"));
         assert_eq!(
             named(remote.safe_reply(list()).unwrap()),
             "ws]52;c;QQ==name"

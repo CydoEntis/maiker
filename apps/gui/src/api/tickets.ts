@@ -4,7 +4,7 @@ import { LOCAL_MACHINE } from './machines'
 import { taggedAnswers } from './taggedAnswers'
 
 /**
- * Tickets, read through this computer's daemon (`Query::Tickets`, `Query::TicketKeys`). Maitty only reads tickets:
+ * Tickets, read through this computer's daemon (`Query::Tickets`, `Query::TicketKeys`). Maiker only reads tickets:
  * nothing here changes one. Every string was cleaned and cut by the daemon; it is still other people's text, so the window shows it as text and never as
  * markup.
  */
@@ -118,7 +118,7 @@ export const TICKETS_PAGE_SIZE = 30
 /** A ticket read runs `gh` up to twice (thirty seconds each); the host waits that long and a little more. */
 export const TICKETS_ANSWER_MS = 95_000
 const KEYS_ANSWER_MS = 20_000
-const NOT_ANSWERED = 'The Maitty service did not answer in time'
+const NOT_ANSWERED = 'The Maiker service did not answer in time'
 
 const askTickets = taggedAnswers('tickets', TicketsAnswerSchema)
 const askKeys = taggedAnswers('ticket-keys', KeysAnswerSchema)

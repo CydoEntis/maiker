@@ -109,18 +109,18 @@ export function ticketBranch(key: string, title: string): string {
   return `agent/${[name, words].filter((part) => part !== '').join('-')}`
 }
 
-/** What is sent to an agent about a ticket: Maitty's own lines, then the ticket's words as a quote. */
+/** What is sent to an agent about a ticket: Maiker's own lines, then the ticket's words as a quote. */
 export type TicketMessage = { lead: string; quote: string; text: string }
 
 /**
- * The message that starts an agent on a ticket, or goes into a chat. Maitty's lines say what the ticket is and that
+ * The message that starts an agent on a ticket, or goes into a chat. Maiker's lines say what the ticket is and that
  * its text is a request to check, not instructions; the ticket's text follows with every line quoted (`> `), so
- * nothing in it can look like Maitty's words. The text was cleaned of hidden characters by the daemon.
+ * nothing in it can look like Maiker's words. The text was cleaned of hidden characters by the daemon.
  */
 export function ticketMessage(ticket: TicketDetail, provider: Provider, blockers: readonly string[]): TicketMessage {
   const key = ticketKey(ticket)
   const labels = ticket.labels.length === 0 ? 'none' : ticket.labels.join(', ')
-  // The title sits in Maitty's own line, so it is kept to one line: a line break in it could pass as Maitty's words.
+  // The title sits in Maiker's own line, so it is kept to one line: a line break in it could pass as Maiker's words.
   const title = ticket.title.replace(/\s+/g, ' ').trim()
   const lines = [
     `Work on ${PROVIDER_LOOK[provider].name} ticket ${key}: "${title}".`,

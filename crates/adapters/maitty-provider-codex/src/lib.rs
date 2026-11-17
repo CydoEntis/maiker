@@ -14,7 +14,7 @@ pub use status_hooks::{HooksState, StatusHookOptions, hooks_state, update_status
 /// The tool Codex calls to ask you a question mid-turn.
 const QUESTION_TOOL: &str = "request_user_input";
 
-/// Maps what only Codex says to Maitty's shared hook status: its completion notification, an
+/// Maps what only Codex says to Maiker's shared hook status: its completion notification, an
 /// interrupted turn, and a question to you. Every other Codex hook event is in Claude's
 /// dialect and maps there.
 pub fn status_from_hook(payload: &Value) -> Option<maitty_shared::protocol::HookStatus> {
@@ -280,7 +280,7 @@ pub fn is_verified_version(version: &str) -> bool {
     VERIFIED_VERSIONS.contains(&version)
 }
 
-/// Checks that a verified Codex server advertises every operation Maitty uses.
+/// Checks that a verified Codex server advertises every operation Maiker uses.
 ///
 /// This preflight takes no session handle, so refusal cannot mutate a thread.
 pub fn check_compatibility(version: &str, schema: &str) -> Result<(), CompatibilityError> {

@@ -155,7 +155,7 @@ const SOURCES: &[&str] = manifests!(
     "qwen"
 );
 
-/// Maitty's own rules, by agent: each file's rules join the vendored manifest of the same id, so
+/// Maiker's own rules, by agent: each file's rules join the vendored manifest of the same id, so
 /// the vendored snapshot is never edited.
 const OWN_SOURCES: &[&str] = &[include_str!("../rules/claude.toml")];
 

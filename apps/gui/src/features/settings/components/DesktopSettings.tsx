@@ -75,7 +75,7 @@ export type MachinesInfo = {
 export type DaemonInfo = {
   online: boolean
   sessionCount: number
-  /** Reported by maittyd; rows are left out until it does. */
+  /** Reported by maikerd; rows are left out until it does. */
   version?: string
   socket?: string
 }
@@ -175,7 +175,7 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
   extensions: ['Extensions', 'Skills, plugins and MCP servers for Claude Code and Codex, for you and for a project.'],
   machines: ['Remote machines', 'Other computers whose sessions show up in your sidebar.'],
-  tickets: ['Tickets', 'Where Maitty reads tickets from. It only reads them.'],
+  tickets: ['Tickets', 'Where Maiker reads tickets from. It only reads them.'],
   usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
   performance: ['Performance', 'What the window is spending its time on, measured live.'],
 }
@@ -493,7 +493,7 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
         <Row label="Reopen layout on launch" detail="Restore the panes and splits you had last time.">
           <Switch aria-label="Reopen layout on launch" checked={preferences.restoreLayout} onCheckedChange={(value) => { update('restoreLayout', value) }} />
         </Row>
-        <Row label="Closing the window" detail="Sessions are owned by maittyd and keep running.">
+        <Row label="Closing the window" detail="Sessions are owned by maikerd and keep running.">
           <span style={{ fontSize: 12, color: 'var(--dim)' }}>Keeps running</span>
         </Row>
         <Row label="Welcome" detail="Replay the short intro: where sessions start and the keys to know.">
@@ -547,7 +547,7 @@ function FontFamilyField({ value, onCommit }: { value: string; onCommit: (family
   // A family saved earlier that this computer no longer reports still shows as the current choice.
   const saved = value !== '' && value !== BUNDLED_FONT_NAME && !names.includes(value) ? [item(value, 'Saved choice')] : []
   const groups: PickerGroup[] = [
-    { items: [item(BUNDLED_FONT_NAME, 'Bundled with Maitty')] },
+    { items: [item(BUNDLED_FONT_NAME, 'Bundled with Maiker')] },
     ...(saved.length + names.length > 0 ? [{ label: 'Installed here', items: [...saved, ...names.map((name) => item(name, 'Monospace'))] }] : []),
   ]
   return <PickerSelect label="Terminal font family" value={value === '' ? BUNDLED_FONT_NAME : value} groups={groups} onPick={(next) => { onCommit(next === BUNDLED_FONT_NAME ? '' : next) }} width={240} />
@@ -578,7 +578,7 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         </Row>
       </Card>
       <Card title="Scrollback">
-        <Row label="Lines kept per pane" detail="Older output is dropped from the GUI. maittyd keeps the full history.">
+        <Row label="Lines kept per pane" detail="Older output is dropped from the GUI. maikerd keeps the full history.">
           <SegmentedChoice label="Lines kept per pane" value={preferences.scrollback} options={SCROLLBACKS} onChange={(value) => { update('scrollback', value) }} />
         </Row>
         <Row label="Scroll speed" detail="Lines per wheel notch. Normal is xterm's own pace, which feels slow at this line height.">
@@ -724,7 +724,7 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
     {shown !== null && <SignInCard view={shown} onCancel={() => { signIn.cancel(shown.agent) }} onClose={signIn.close} onRetry={() => { signIn.begin(shown.agent) }} />}
     <Card title="Accounts"
       meta={<button type="button" className="mx-scard-meta-button" onClick={again}>Check again</button>}
-      foot="Sign in runs the agent's own sign-in and shows its link and code here. Maitty keeps no passwords or keys."
+      foot="Sign in runs the agent's own sign-in and shows its link and code here. Maiker keeps no passwords or keys."
     >
       {ACCOUNT_AGENTS.map(([agent, label]) => {
         const state = states[agent]

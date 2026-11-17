@@ -44,7 +44,7 @@ function RemakeLine({ state }: { state: RemakeState }) {
 
 function Body({ read, home, locked, onPick, onRetry }: { read: RecentRead; home: string; locked: boolean; onPick: Props['onPick']; onRetry: () => void }) {
   if (read.kind === 'loading') return <p role="status">Looking for closed sessions…</p>
-  if (read.kind === 'older') return <p role="status">Restart the Maitty service to see closed sessions.</p>
+  if (read.kind === 'older') return <p role="status">Restart the Maiker service to see closed sessions.</p>
   if (read.kind === 'failed') {
     return (
       <p role="status">

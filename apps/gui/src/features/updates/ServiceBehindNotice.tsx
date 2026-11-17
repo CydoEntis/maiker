@@ -69,10 +69,10 @@ export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false, af
         await queryClient.invalidateQueries({ queryKey: STATUS_KEY })
         // Part of an app update, the app's own notice already says it was updated.
         if (afterAppUpdate) return
-        toast.success('Maitty service updated', { description: sessionCount === 0 ? 'It was restarted to finish the update.' : `It was restarted to finish the update. ${plural(sessionCount, 'session')} came back.` })
+        toast.success('Maiker service updated', { description: sessionCount === 0 ? 'It was restarted to finish the update.' : `It was restarted to finish the update. ${plural(sessionCount, 'session')} came back.` })
       },
       (error: unknown) => {
-        console.warn('Could not restart the older Maitty service', error)
+        console.warn('Could not restart the older Maiker service', error)
         setAutoFailed(true)
       },
     )
@@ -81,12 +81,12 @@ export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false, af
   useEffect(() => {
     // While the unasked restart runs there is nothing to ask.
     if (!version || (unasked && !autoFailed)) return
-    toast.warning(`The Maitty service is still on ${version}`, {
+    toast.warning(`The Maiker service is still on ${version}`, {
       id: TOAST_ID,
       duration: Infinity,
       description: canRestart
         ? 'This app is newer. Restart the service to finish updating.'
-        : 'This app is newer, but its sessions are not saved, so Maitty is leaving it running.',
+        : 'This app is newer, but its sessions are not saved, so Maiker is leaving it running.',
       action: canRestart ? { label: 'Restart…', onClick: () => { setDialogOpen(true) } } : undefined,
     })
     return () => {
@@ -112,7 +112,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false, af
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Restart the Maitty service?</DialogTitle>
+          <DialogTitle>Restart the Maiker service?</DialogTitle>
           <DialogDescription>{`It is on ${version}, and this app is newer. ${description}`}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -137,7 +137,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false, af
                   await queryClient.invalidateQueries({ queryKey: STATUS_KEY })
                 })
                 .catch((error: unknown) => {
-                  toast.error(error instanceof Error ? error.message : typeof error === 'string' ? error : 'Could not restart the Maitty service')
+                  toast.error(error instanceof Error ? error.message : typeof error === 'string' ? error : 'Could not restart the Maiker service')
                   void queryClient.invalidateQueries({ queryKey: STATUS_KEY })
                 })
                 .finally(() => {

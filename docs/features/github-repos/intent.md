@@ -1,4 +1,4 @@
-# Intent: bring GitHub repositories into Maitty
+# Intent: bring GitHub repositories into Maiker
 
 Type: feature
 Author: Cody · Status: accepted
@@ -6,7 +6,7 @@ Date: 2026-11-12
 
 ## Problem
 
-"There's no way for Maitty to clone down repos. I'd have to leave Maitty to bring new projects
+"There's no way for Maiker to clone down repos. I'd have to leave Maiker to bring new projects
 down and inside of it. That's probably bad UX." Starting on a project that is not on the disk yet
 means cloning it by hand in a terminal, and on another machine it means an ssh session first.
 The desktop app's Pull, Push, Commit and Create PR work only for a checkout on this computer;
@@ -23,7 +23,7 @@ In the desktop app a person can, without leaving it:
 3. see the changes of a session on another machine and pull, push, commit and open a pull
    request for it;
 4. say which GitHub account and which commit name and email a folder uses, see the exact change
-   first, and have plain git follow the same rule outside Maitty.
+   first, and have plain git follow the same rule outside Maiker.
 
 ## Affected users and systems
 
@@ -34,9 +34,9 @@ tab, Settings).
 
 ## Constraints
 
-- GitHub sign-in is the GitHub command line's own (`gh`). Maitty stores no password and no token
+- GitHub sign-in is the GitHub command line's own (`gh`). Maiker stores no password and no token
   ([ADR 0006](../../adr/0006-secrets-never-enter-chat.md); `docs/SECURITY.md`, the threat model).
-  A machine without `gh` is told so; Maitty does not install it.
+  A machine without `gh` is told so; Maiker does not install it.
 - The folder is on the machine the daemon runs on, so the daemon does the git work there. The
   desktop host does not link `maitty-core`
   ([ADR 0004](../../adr/0004-client-split-and-desktop-host.md)).

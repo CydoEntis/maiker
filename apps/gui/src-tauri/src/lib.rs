@@ -31,7 +31,7 @@ mod worktrees;
 use maitty_desktop_client::{FleetCommand, PaneCommand};
 use tauri::Manager;
 
-/// The daemon to start. A packaged app runs the shared per-user `maitty`, which it first brings
+/// The daemon to start. A packaged app runs the shared per-user `maiker`, which it first brings
 /// up to its own release (ADR 0004); a development build runs the one it just built.
 fn daemon_executable(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     if cfg!(debug_assertions) {
@@ -56,13 +56,13 @@ fn bundled_daemon(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let suffix = if cfg!(windows) { ".exe" } else { "" };
     let (file_name, development_path) = if cfg!(debug_assertions) {
         let file_name = format!(
-            "binaries/maitty-gui-daemon-{}{suffix}",
+            "binaries/maiker-gui-daemon-{}{suffix}",
             env!("MAITTY_TARGET_TRIPLE")
         );
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(&file_name);
         (file_name, Some(path))
     } else {
-        (format!("maitty-gui-daemon{suffix}"), None)
+        (format!("maiker-gui-daemon{suffix}"), None)
     };
     if let Some(path) = development_path {
         return path
@@ -82,10 +82,10 @@ fn bundled_daemon(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         && let Some(directory) = gui_executable.parent()
     {
         candidates.push(directory.join(format!(
-            "maitty-gui-daemon-{}{suffix}",
+            "maiker-gui-daemon-{}{suffix}",
             env!("MAITTY_TARGET_TRIPLE")
         )));
-        candidates.push(directory.join(format!("maitty-gui-daemon{suffix}")));
+        candidates.push(directory.join(format!("maiker-gui-daemon{suffix}")));
     }
     first_existing_daemon(&candidates)
         .ok_or_else(|| "the bundled daemon executable is missing".into())
@@ -96,10 +96,10 @@ fn first_existing_daemon(candidates: &[PathBuf]) -> Option<PathBuf> {
 }
 
 /// The agents whose status hooks the window may connect. Only these names ever reach
-/// `maitty integrate`; the webview cannot choose what the host runs.
+/// `maiker integrate`; the webview cannot choose what the host runs.
 const CONNECTABLE_AGENTS: [&str; 3] = ["claude", "codex", "gemini"];
 
-/// Connect an agent's status hooks (`maitty integrate <agent>`), so its chat sees when it works,
+/// Connect an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works,
 /// needs you or is done.
 #[tauri::command]
 async fn connect_agent(app: tauri::AppHandle, agent: String) -> Result<(), String> {
@@ -1855,7 +1855,7 @@ pub fn run() {
             performance::performance_sample
         ])
         .run(tauri::generate_context!())
-        .expect("Maitty desktop host failed");
+        .expect("Maiker desktop host failed");
 }
 
 #[cfg(test)]
@@ -1990,15 +1990,15 @@ mod tests {
     #[test]
     fn daemon_lookup_uses_the_first_existing_packaged_or_adjacent_binary() {
         let directory = std::env::temp_dir().join(format!(
-            "maitty-gui-daemon-path-{}-{}",
+            "maiker-gui-daemon-path-{}-{}",
             std::process::id(),
             NEXT_TEMP_DIRECTORY.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir(&directory).unwrap();
 
-        let missing_resource = directory.join("resources").join("maitty.exe");
-        let adjacent_sidecar = directory.join("maitty-gui-daemon-x86_64-pc-windows-msvc.exe");
-        let adjacent_daemon = directory.join("maitty.exe");
+        let missing_resource = directory.join("resources").join("maiker.exe");
+        let adjacent_sidecar = directory.join("maiker-gui-daemon-x86_64-pc-windows-msvc.exe");
+        let adjacent_daemon = directory.join("maiker.exe");
         std::fs::write(&adjacent_sidecar, []).unwrap();
         std::fs::write(&adjacent_daemon, []).unwrap();
 
@@ -2009,20 +2009,20 @@ mod tests {
 
         let packaged_directory = directory.join("resources");
         std::fs::create_dir(&packaged_directory).unwrap();
-        let packaged_daemon = packaged_directory.join("maitty.exe");
+        let packaged_daemon = packaged_directory.join("maiker.exe");
         std::fs::write(&packaged_daemon, []).unwrap();
         assert_eq!(
             first_existing_daemon(&[
                 packaged_daemon.clone(),
-                directory.join("maitty-gui-daemon-x86_64-pc-windows-msvc.exe"),
-                directory.join("maitty.exe"),
+                directory.join("maiker-gui-daemon-x86_64-pc-windows-msvc.exe"),
+                directory.join("maiker.exe"),
             ]),
             Some(packaged_daemon.clone())
         );
 
-        std::fs::remove_file(directory.join("maitty-gui-daemon-x86_64-pc-windows-msvc.exe"))
+        std::fs::remove_file(directory.join("maiker-gui-daemon-x86_64-pc-windows-msvc.exe"))
             .unwrap();
-        std::fs::remove_file(directory.join("maitty.exe")).unwrap();
+        std::fs::remove_file(directory.join("maiker.exe")).unwrap();
         std::fs::remove_file(packaged_daemon).unwrap();
         std::fs::remove_dir(packaged_directory).unwrap();
         std::fs::remove_dir(directory).unwrap();

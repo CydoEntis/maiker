@@ -158,7 +158,7 @@ export type WindowActions = {
   readonly openSettings: (section: DesktopSettingsSection) => void
   readonly openPanel: (view: InspectView) => void
   readonly openRecent: () => void
-  /** Gives the session a new name in Maitty, as the sidebar's rename does. */
+  /** Gives the session a new name in Maiker, as the sidebar's rename does. */
   readonly renameSession: (name: string) => void
 }
 

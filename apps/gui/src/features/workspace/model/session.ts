@@ -69,7 +69,7 @@ export type SessionView = {
   limits: NonNullable<TerminalDetails['limits']>
   /** The pull request of its branch, as the daemon polls it; null when the branch has none. */
   pr: PullRequest | null
-  /** What its agent asked the person to give it with `maitty_request_secret`; empty when it asked for nothing. */
+  /** What its agent asked the person to give it with `maiker_request_secret`; empty when it asked for nothing. */
   secretAsk: readonly SecretAsk[]
   /** The checks that ran for its last turns; empty when none did. */
   checks: readonly Check[]

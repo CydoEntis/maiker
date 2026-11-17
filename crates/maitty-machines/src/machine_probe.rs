@@ -228,9 +228,9 @@ mod tests {
     #[test]
     fn exit_zero_is_ready_with_the_first_line_of_the_version() {
         assert_eq!(
-            finished(Some(0), "\n maitty 1.2.3 \nmore\n", ""),
+            finished(Some(0), "\n maiker 1.2.3 \nmore\n", ""),
             Probe::Ready {
-                version: "maitty 1.2.3".into()
+                version: "maiker 1.2.3".into()
             }
         );
     }
@@ -264,8 +264,8 @@ mod tests {
     #[test]
     fn the_path_command_v_prints_is_where_the_app_is_found() {
         assert_eq!(
-            located_from(Some(0), "\n/home/me/.local/bin/maitty\n", ""),
-            Located::At("/home/me/.local/bin/maitty".into())
+            located_from(Some(0), "\n/home/me/.local/bin/maiker\n", ""),
+            Located::At("/home/me/.local/bin/maiker".into())
         );
         assert_eq!(located_from(Some(0), "", ""), Located::NotFound);
         assert_eq!(located_from(Some(1), "", ""), Located::NotFound);
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     fn a_missing_app_is_install_and_a_dead_host_says_why() {
         assert_eq!(
-            finished(Some(127), "", "bash: maitty: command not found"),
+            finished(Some(127), "", "bash: maiker: command not found"),
             Probe::Failed(FailureClass::Install)
         );
         assert_eq!(

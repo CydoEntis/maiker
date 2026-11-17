@@ -1,7 +1,7 @@
 //! Which commit name, email and GitHub account git uses on this machine, and for which folders a
 //! different one applies (`Query::GitIdentities`). It is read from the global git config with git
 //! itself, never by reading the file as text, and nothing is written. A folder's rule is an
-//! `includeIf "gitdir:<folder>/"` entry; one that Maitty wrote points at a file in Maitty's own
+//! `includeIf "gitdir:<folder>/"` entry; one that Maiker wrote points at a file in Maiker's own
 //! folder that names the folder it is for, and only those are read further. Any other is reported
 //! by its folder alone.
 
@@ -17,16 +17,16 @@ use std::time::Duration;
 
 /// How long git has to answer one question about its config.
 const ASK_LIMIT: Duration = Duration::from_secs(5);
-/// The folder, inside Maitty's data folder, that holds the files its rules point at.
+/// The folder, inside Maiker's data folder, that holds the files its rules point at.
 pub(super) const RULES_FOLDER: &str = "git-identities";
-/// The key, in a file Maitty wrote, that names the folder the file is for.
+/// The key, in a file Maiker wrote, that names the folder the file is for.
 pub(super) const FOLDER_KEY: &str = "maitty.folder";
-/// The key that names the GitHub login git signs in as, in a file Maitty wrote.
+/// The key that names the GitHub login git signs in as, in a file Maiker wrote.
 pub(super) const LOGIN_KEY: &str = "credential.https://github.com.username";
 /// The two conditions of an `includeIf` that are about a folder.
 const FOLDER_CONDITIONS: [&str; 2] = ["gitdir:", "gitdir/i:"];
 
-/// Where git's global config is and where Maitty keeps the files its rules point at.
+/// Where git's global config is and where Maiker keeps the files its rules point at.
 pub(super) struct Place {
     /// The file to read in place of the person's global config, and the home folder to go with
     /// it. Tests name both, so a developer's own config is never read.
@@ -35,7 +35,7 @@ pub(super) struct Place {
 }
 
 impl Place {
-    /// This machine's own: the person's global config, and Maitty's data folder.
+    /// This machine's own: the person's global config, and Maiker's data folder.
     pub(super) fn real() -> Place {
         Place { stand_in: None, rules: crate::config::data_dir().join(RULES_FOLDER) }
     }
@@ -84,13 +84,13 @@ impl Place {
         Ok(self.config(&["--global", "--get", key])?.map(|value| value.trim().to_owned()))
     }
 
-    /// One value of a file Maitty may have written, trimmed. A file that cannot be read has none.
+    /// One value of a file Maiker may have written, trimmed. A file that cannot be read has none.
     fn in_file(&self, file: &Path, key: &str) -> Option<String> {
         let file = file.to_str()?;
         self.config(&["--file", file, "--get", key]).ok().flatten().map(|value| value.trim().to_owned())
     }
 
-    /// The folder Maitty keeps its rules' files in.
+    /// The folder Maiker keeps its rules' files in.
     pub(super) fn rules_folder(&self) -> &Path {
         &self.rules
     }
@@ -116,7 +116,7 @@ impl Place {
         listed.lines().map(|entry| line(&entry.replacen('=', " = ", 1))).collect()
     }
 
-    /// Whether `file` is directly inside the folder Maitty keeps its rules' files in.
+    /// Whether `file` is directly inside the folder Maiker keeps its rules' files in.
     fn holds(&self, file: &Path) -> bool {
         let (Some(parent), Ok(ours)) = (file.parent(), self.rules.canonicalize()) else {
             return false;
@@ -176,7 +176,7 @@ fn folder_of(key: &str) -> Option<String> {
     (!folder.is_empty()).then_some(folder)
 }
 
-/// The identity `file` gives `folder`, when Maitty wrote the file for that folder.
+/// The identity `file` gives `folder`, when Maiker wrote the file for that folder.
 fn written_by_us(place: &Place, folder: &str, file: &Path) -> Option<GitIdentity> {
     if !place.holds(file) || place.in_file(file, FOLDER_KEY).as_deref() != Some(folder) {
         return None;
@@ -215,7 +215,7 @@ mod tests {
             assert!(self.place.config(args).is_ok_and(|said| said.is_some()), "git config {args:?}");
         }
 
-        /// A rule for `folder` as Maitty writes one: a file of its own, and the entry that points at it.
+        /// A rule for `folder` as Maiker writes one: a file of its own, and the entry that points at it.
         fn rule(&self, folder: &str, name: &str, email: &str, login: &str) -> PathBuf {
             let file = self.dir.path().join(RULES_FOLDER).join(format!("{login}.gitconfig"));
             let path = file.to_str().unwrap();

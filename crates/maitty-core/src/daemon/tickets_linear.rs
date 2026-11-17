@@ -1,6 +1,6 @@
 //! Linear issues as tickets, read over Linear's GraphQL API with the user's own personal API key:
 //! the teams, projects and cycles, a page of issues, one issue with its comments. Read-only: every
-//! request here is a `query`, never a `mutation` (Maitty only reads tickets, ADR 0011). The one server is `api.linear.app` over `https`,
+//! request here is a `query`, never a `mutation` (Maiker only reads tickets, ADR 0011). The one server is `api.linear.app` over `https`,
 //! fixed in this file and never read from the key file, so the key can go nowhere else; it travels
 //! in the `Authorization` header, which `curl_http` hands curl on its standard input.
 //!

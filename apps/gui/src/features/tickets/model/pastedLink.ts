@@ -80,7 +80,7 @@ export function parseTicketLink(text: string): PastedLinkResult {
   const rest = typed.slice(scheme.length + '://'.length).split(/[?#]/)[0] ?? ''
   const slash = rest.indexOf('/')
   const host = slash === -1 ? rest : rest.slice(0, slash)
-  if (!HOST.test(host)) return refused('That link has no address Maitty can use')
+  if (!HOST.test(host)) return refused('That link has no address Maiker can use')
   const segments = (slash === -1 ? '' : rest.slice(slash + 1)).split('/').filter((segment) => segment !== '')
   const bare = host.toLowerCase().replace(/^www\./, '')
   if (bare === GITHUB_HOST) return github(segments.slice(0, REPO_SEGMENTS).join('/'))

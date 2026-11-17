@@ -94,7 +94,7 @@ fn a_fake_remote_answers_a_listing_and_an_index() {
             "--mode=remote-sh".into(),
             format!("--home={}", home.display()),
         ],
-        "maitty",
+        "maiker",
     );
 
     let listing = list_folder(&machine, "build", "~/app").unwrap();

@@ -39,6 +39,23 @@ fn main() {
         .expect("workspace brand has a name");
     println!("cargo:rustc-env=MAITTY_APP_COMMAND={command}");
     println!("cargo:rustc-env=MAITTY_APP_NAME={name}");
+    let previous = brand
+        .lines()
+        .find_map(|line| {
+            let (key, value) = line.split_once('=')?;
+            (key.trim() == "previous").then(|| {
+                value
+                    .trim()
+                    .trim_matches(['[', ']'])
+                    .split(',')
+                    .map(|name| name.trim().trim_matches('"'))
+                    .filter(|name| !name.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(",")
+            })
+        })
+        .unwrap_or_default();
+    println!("cargo:rustc-env=MAITTY_APP_PREVIOUS={previous}");
     println!(
         "cargo:rustc-env=MAITTY_APP_ENV={}",
         command.to_ascii_uppercase().replace('-', "_")

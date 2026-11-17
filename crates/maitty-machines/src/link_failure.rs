@@ -20,13 +20,13 @@ const LOGIN_TOKENS: [&str; 3] = [
 
 pub const FIX_LOGIN: &str = "ssh needs a login it cannot do without you; make plain `ssh` to that machine work in a terminal (load your key, accept its host key), then retry";
 /// `<name>` is the machine's name in the config; a fix text is one constant for every machine.
-pub const FIX_UPDATE: &str = "run `maitty machine update <name>`, then retry";
+pub const FIX_UPDATE: &str = "run `maiker machine update <name>`, then retry";
 /// The machine runs a newer app than this computer. Updating it from here is refused (never a
 /// downgrade), so the fix is on this side.
-pub const FIX_UPDATE_HERE: &str = "it runs a newer maitty than this computer; update maitty on this computer (`maitty update`, or the desktop app's own update), then retry";
+pub const FIX_UPDATE_HERE: &str = "it runs a newer maiker than this computer; update maiker on this computer (`maiker update`, or the desktop app's own update), then retry";
 pub const FIX_INSTALL: &str =
-    "run `maitty machine update <name> --install` (or set `remote_cmd` to its path), then retry";
-pub const FIX_NO_DAEMON: &str = "maitty is not running on that machine; retry to start it there";
+    "run `maiker machine update <name> --install` (or set `remote_cmd` to its path), then retry";
+pub const FIX_NO_DAEMON: &str = "maiker is not running on that machine; retry to start it there";
 
 /// Longest reason kept: ssh's last line is shown on screen.
 const MOST_WHY_CHARS: usize = 200;
@@ -240,7 +240,7 @@ mod tests {
     #[test]
     fn exit_127_means_the_app_is_not_installed_whatever_was_said() {
         assert_eq!(
-            class(Some(127), "bash: maitty: command not found"),
+            class(Some(127), "bash: maiker: command not found"),
             FailureClass::Install
         );
         assert_eq!(
@@ -251,8 +251,8 @@ mod tests {
 
     #[test]
     fn the_install_and_update_fixes_name_the_command_that_does_it() {
-        assert!(FIX_INSTALL.contains("maitty machine update <name> --install"));
-        assert!(FIX_UPDATE.contains("maitty machine update <name>"));
+        assert!(FIX_INSTALL.contains("maiker machine update <name> --install"));
+        assert!(FIX_UPDATE.contains("maiker machine update <name>"));
         assert!(!FIX_UPDATE.contains("by hand"));
     }
 
@@ -293,12 +293,12 @@ mod tests {
             code: Some(255),
             said: String::new(),
             streamed: false,
-            message: "couldn't reach maitty on box over ssh".into(),
+            message: "couldn't reach maiker on box over ssh".into(),
             custom: false,
         });
         assert_eq!(
             classify(&error),
-            FailureClass::Unreachable("couldn't reach maitty on box over ssh".into())
+            FailureClass::Unreachable("couldn't reach maiker on box over ssh".into())
         );
     }
 

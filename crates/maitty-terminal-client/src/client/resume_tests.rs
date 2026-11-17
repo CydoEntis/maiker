@@ -1,5 +1,5 @@
 //! Resume a conversation here: the lists asked of the daemon, the menu, and what a pick starts.
-//! `MAITTY_SHOW=1 cargo test resume_tests -- --nocapture` prints the frames.
+//! `MAIKER_SHOW=1 cargo test resume_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::MachineId;

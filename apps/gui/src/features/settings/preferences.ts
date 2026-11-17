@@ -81,7 +81,7 @@ export type SettingsPreferences = {
   darkTheme: string
   lightTheme: string
   cursorStyle: CursorStyle
-  /** Lines each pane keeps; maittyd keeps the full history. */
+  /** Lines each pane keeps; maikerd keeps the full history. */
   scrollback: ScrollbackLines
   scrollSpeed: ScrollSpeed
   /** Mirror the terminal's text into the page for screen readers. It makes every pane much heavier to draw. */
@@ -313,7 +313,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       keyOverrides: readKeyOverrides(preferences.keyOverrides),
     }
   } catch {
-    console.warn('Ignoring invalid Maitty settings')
+    console.warn('Ignoring invalid Maiker settings')
     return fresh
   }
 }
@@ -349,8 +349,13 @@ function isAccent(value: unknown): value is SettingsPreferences['accent'] {
 const isThemeMode = (value: unknown): value is ThemeMode => value === 'system' || value === 'dark' || value === 'light'
 
 /** A saved theme name, if it is a known theme of the wanted kind. */
-const themeOfKind = (value: unknown, light: boolean): string | null =>
-  typeof value === 'string' && THEMES.some((theme) => theme.name === value && theme.light === light) ? value : null
+/** The app was called Maitty: a theme saved under that name ("Maitty Night") is the same theme under the new one. */
+const RENAMED_THEME = /^Maitty /
+
+const themeOfKind = (saved: unknown, light: boolean): string | null => {
+  const value = typeof saved === 'string' ? saved.replace(RENAMED_THEME, 'Maiker ') : saved
+  return typeof value === 'string' && THEMES.some((theme) => theme.name === value && theme.light === light) ? value : null
+}
 
 /** The mode and both slots. Settings saved with one theme keep it: it fills its own slot and the mode pins to it. */
 function themeChoice(saved: Partial<Record<string, unknown>>, fallback: SettingsPreferences): Pick<SettingsPreferences, 'themeMode' | 'darkTheme' | 'lightTheme'> {

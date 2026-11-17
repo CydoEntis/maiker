@@ -11,7 +11,7 @@ export function isGalleryHash(hash: string): boolean {
 export function galleryParams(hash: string): { theme: string; corners: Corners } {
   const query = new URLSearchParams(hash.slice(hash.indexOf('?') + 1))
   const corners = query.get('corners')
-  return { theme: query.get('theme') ?? 'Maitty Night', corners: isCorners(corners) ? corners : DEFAULT_CORNERS }
+  return { theme: query.get('theme') ?? 'Maiker Night', corners: isCorners(corners) ? corners : DEFAULT_CORNERS }
 }
 
 export function galleryHash(theme: string, corners: Corners): string {

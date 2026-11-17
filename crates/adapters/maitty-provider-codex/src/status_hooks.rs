@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 
-/// Inputs for projecting Maitty's Codex status handlers into a config document.
+/// Inputs for projecting Maiker's Codex status handlers into a config document.
 pub struct StatusHookOptions<'a> {
     pub executable: &'a str,
     pub uninstall: bool,
     pub windows: bool,
 }
 
-/// Adds or removes Maitty's Codex status hooks while preserving unrelated TOML.
+/// Adds or removes Maiker's Codex status hooks while preserving unrelated TOML.
 ///
 /// Returns `None` when uninstalling a document with no hooks table; the caller
 /// should then leave the file untouched.
@@ -132,10 +132,10 @@ const LIFECYCLE: &[(&str, &str)] = &[
     ("Interrupt", "interrupt"),
 ];
 
-/// Where Maitty's Codex lifecycle hooks stand, read from a Codex configuration.
+/// Where Maiker's Codex lifecycle hooks stand, read from a Codex configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HooksState {
-    /// Some lifecycle hook is missing: Maitty reads Codex's screen.
+    /// Some lifecycle hook is missing: Maiker reads Codex's screen.
     NotInstalled,
     /// All installed, but Codex has no recorded trust for at least one: Codex skips it until
     /// you review it in `/hooks`.
@@ -145,7 +145,7 @@ pub enum HooksState {
     Trusted,
 }
 
-/// Read-only: whether Maitty's lifecycle hooks are in `text` and Codex has recorded trusting
+/// Read-only: whether Maiker's lifecycle hooks are in `text` and Codex has recorded trusting
 /// them. A document that does not parse reads as not installed.
 pub fn hooks_state(text: &str) -> HooksState {
     let Ok(document) = text.parse::<toml_edit::DocumentMut>() else {
@@ -216,27 +216,27 @@ mod tests {
     fn adds_platform_specific_handlers_and_preserves_other_config() {
         let windows = update_status_hooks(
             "# keep this comment\nmodel = 'gpt'\n",
-            options("C:\\Maitty\\maitty.exe", false, true),
+            options("C:\\Maiker\\maiker.exe", false, true),
         )
         .unwrap()
         .unwrap();
         assert!(windows.contains("# keep this comment"));
         assert!(
             windows.contains(
-                "commandWindows = '& \"C:\\Maitty\\maitty.exe\" hook codex --status same'"
+                "commandWindows = '& \"C:\\Maiker\\maiker.exe\" hook codex --status same'"
             )
         );
 
-        let linux = update_status_hooks("", options("/home/user/bin/maitty", false, false))
+        let linux = update_status_hooks("", options("/home/user/bin/maiker", false, false))
             .unwrap()
             .unwrap();
-        assert!(linux.contains("\"/home/user/bin/maitty\" hook codex --status same"));
+        assert!(linux.contains("\"/home/user/bin/maiker\" hook codex --status same"));
         assert!(!linux.contains("commandWindows"));
     }
 
     #[test]
     fn installs_the_whole_turn_lifecycle_and_reads_the_payload_for_each() {
-        let linux = update_status_hooks("", options("/bin/maitty", false, false))
+        let linux = update_status_hooks("", options("/bin/maiker", false, false))
             .unwrap()
             .unwrap();
         for event in [
@@ -266,7 +266,7 @@ mod tests {
             HooksState::NotInstalled
         );
         assert_eq!(hooks_state("not [toml"), HooksState::NotInstalled);
-        let installed = update_status_hooks("", options("/bin/maitty", false, false))
+        let installed = update_status_hooks("", options("/bin/maiker", false, false))
             .unwrap()
             .unwrap();
         assert_eq!(hooks_state(&installed), HooksState::NeedsTrust);
@@ -286,10 +286,10 @@ trusted_hash = 'sha256:abc'
 
     #[test]
     fn installing_twice_adds_nothing_the_second_time() {
-        let once = update_status_hooks("", options("/bin/maitty", false, false))
+        let once = update_status_hooks("", options("/bin/maiker", false, false))
             .unwrap()
             .unwrap();
-        let twice = update_status_hooks(&once, options("/bin/maitty", false, false))
+        let twice = update_status_hooks(&once, options("/bin/maiker", false, false))
             .unwrap()
             .unwrap();
         assert_eq!(once, twice);
@@ -298,19 +298,19 @@ trusted_hash = 'sha256:abc'
     #[test]
     fn uninstall_removes_only_maitty_handlers_and_leaves_other_hooks() {
         let installed = update_status_hooks(
-            "[[hooks.SessionStart]]\n[[hooks.SessionStart.hooks]]\ntype = 'command'\ncommand = '\"/bin/maitty\" hook codex --status same'\n[[hooks.SessionStart.hooks]]\ntype = 'command'\ncommand = 'my-hook'\n",
-            options("/bin/maitty", true, false),
+            "[[hooks.SessionStart]]\n[[hooks.SessionStart.hooks]]\ntype = 'command'\ncommand = '\"/bin/maiker\" hook codex --status same'\n[[hooks.SessionStart.hooks]]\ntype = 'command'\ncommand = 'my-hook'\n",
+            options("/bin/maiker", true, false),
         )
         .unwrap()
         .unwrap();
-        assert!(!installed.contains("/bin/maitty"));
+        assert!(!installed.contains("/bin/maiker"));
         assert!(installed.contains("my-hook"));
     }
 
     #[test]
     fn uninstall_without_hooks_leaves_the_document_untouched() {
         assert_eq!(
-            update_status_hooks("model = 'gpt'\n", options("/bin/maitty", true, false)).unwrap(),
+            update_status_hooks("model = 'gpt'\n", options("/bin/maiker", true, false)).unwrap(),
             None
         );
     }

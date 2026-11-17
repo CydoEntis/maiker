@@ -214,10 +214,10 @@ an SSH remote being someone else's machine; what agents work on leaking through 
 the topic name is the only secret on the public server).
 
 The agent launchers (`crates/maitty-core/src/shim.rs`) sit first on `PATH` in every plain shell pane. They are
-files in maitty's own data folder, written by the daemon as the user; a process that can write
-there can already run as the user through the shell startup files maitty writes beside them.
-A launcher asks for a worktree with `maitty agent-dir`, which sends the pane's own
-`MAITTY_TERM_ID` and `MAITTY_PANE_TOKEN` and nothing from its arguments; a wrong or missing token
+files in maiker's own data folder, written by the daemon as the user; a process that can write
+there can already run as the user through the shell startup files maiker writes beside them.
+A launcher asks for a worktree with `maiker agent-dir`, which sends the pane's own
+`MAIKER_TERM_ID` and `MAIKER_PANE_TOKEN` and nothing from its arguments; a wrong or missing token
 makes the caller "from a pane" but not that pane, and the daemon answers with nothing (worktrees,
 like status reports, are trusted only from the pane itself). A launcher passes the agent's
 arguments on as an argument vector, never through a shell, and the paths it embeds are
@@ -228,15 +228,15 @@ The daemon runs the user's own `$SHELL -ilc` once at start to learn the login PA
 startup files already are, and bounded further: the shell is started by path as an argument
 vector, never through a shell, and only when `$SHELL` is an absolute path to an existing file
 (else `/bin/sh`); it has no terminal (its own session) and null stdin, its error output is
-discarded, and the `MAITTY_*` variables (pane id and token, socket, routing) are removed from its
+discarded, and the `MAIKER_*` variables (pane id and token, socket, routing) are removed from its
 environment; a timeout kills its whole process group; its output is read only between two
 marker words, capped in size, and used as PATH entries, never executed or logged. It runs in
 the daemon, on the machine the daemon serves, never on a client.
 
 A project's check is a command the daemon runs as the user when an agent's turn ends. It
 comes from the user's own `config.toml` (`[[check]]`) or, for a project with none there, from
-the repo's `.maitty/checks.toml` under the approval rules below. It runs through the user's shell in the
-session's worktree with no stdin and without `MAITTY_PANE_TOKEN`, so it cannot report status
+the repo's `.maiker/checks.toml` under the approval rules below. It runs through the user's shell in the
+session's worktree with no stdin and without `MAIKER_PANE_TOKEN`, so it cannot report status
 as the pane. On timeout its whole process tree is killed (process group on unix, job object
 on Windows). If the daemon dies, a check dies with it on Windows (the job closes) and on
 Linux (a parent-death signal kills the shell; a descendant the shell already started is
@@ -258,13 +258,13 @@ anything. A group whose leader's start time differs from the recorded one is lef
 that has been given to another process is never signalled; ids 0 and 1 and negatives never are.
 
 An agent can start helpers only if you say so. Who is asking is proven the way status reports are
-(the pane's `MAITTY_PANE_TOKEN` on the connection); the answer is `AnswerHelpers`, which the daemon
+(the pane's `MAIKER_PANE_TOKEN` on the connection); the answer is `AnswerHelpers`, which the daemon
 refuses from any pane and accepts only for a request it holds. The desktop app sends it through its own command (`answer_helpers`), which takes one of three words (`allow`, `always`, `no`) and refuses anything else. "Always in this project" is kept in
-`helper-projects.json` in Maitty's data folder, never in the repo, so an agent that can write the
+`helper-projects.json` in Maiker's data folder, never in the repo, so an agent that can write the
 repo cannot grant itself helpers. A helper's own permission prompts still come to you.
 
 A chat's **Always in this project** (`ConversationAllowAlways`, ADR 0005) is kept the same way, in
-`chat-allowed-commands.json` in Maitty's data folder: the project and the hash of the exact command as the
+`chat-allowed-commands.json` in Maiker's data folder: the project and the hash of the exact command as the
 provider sent it (not the text shown, which has secrets hidden). Only a human client can send it; the daemon
 refuses it from a pane or a structured client, and for anything but a command request. Residual risk: a process
 running as the same OS user can edit that file, as with `check-approvals.json`. A person takes a rule back with `ForgetAllowedCommand` (Settings → Permissions), refused from a pane; the daemon drops it from memory and the file at once.
@@ -292,13 +292,13 @@ index file in the git directory, as snapshots do. It never touches the user's in
 tree's blobs go into the repo's object store, where `git gc` drops them.
 
 A repo-supplied command never runs until you approve it, so cloning a repo, or an agent
-editing `.maitty/checks.toml`, cannot make Maitty run anything. The rules:
+editing `.maiker/checks.toml`, cannot make Maiker run anything. The rules:
 
 - Your own `[[check]]` for a project wins whole; the repo's file is then not read.
 - Approval is per exact command: Always is kept with the command's sha256, and a changed
   command asks again. Never holds whatever the command becomes. Once lets one run of that
   pane's checkpoint go and is never saved.
-- Answers live in `check-approvals.json` in Maitty's data folder, outside every repo, written
+- Answers live in `check-approvals.json` in Maiker's data folder, outside every repo, written
   atomically (synced, then renamed). The daemon reads the file once at start and goes by its
   own copy, so writing the file changes nothing while it runs. Every daemon shares the file,
   so an answer is written into the file as it is then, never as the daemon's whole copy, and
@@ -316,29 +316,29 @@ editing `.maitty/checks.toml`, cannot make Maitty run anything. The rules:
 
 Residual risk: a process running as the same OS user can edit `check-approvals.json`, which
 counts after the next daemon restart, and a process that hides its pane identity (no
-`MAITTY_TERM_ID`) is treated as you, as for grants. Both need code already running as you.
+`MAIKER_TERM_ID`) is treated as you, as for grants. Both need code already running as you.
 
 Overriding a failed check is a recorded, visible action: the time and the reason stay on the
 result and its `Overridden` state shows wherever the check does. It needs the write grant on
 the target pane, and a pane can never override or undo its own check, so an agent's claim
 cannot turn its failure into done. An override covers one result; the next run replaces it.
 
-`maitty handoff` copies the tail of a pane's screen, its prompts and its changed file names into
+`maiker handoff` copies the tail of a pane's screen, its prompts and its changed file names into
 another agent's first prompt, so whatever the screen showed (secrets included) reaches that
 agent. It adds no permission of its own: the screen read needs the read grant on the pane and
-the new pane needs the start grant, both checked by the daemon as for `maitty read` and
-`maitty split`. The brief is quoted with `Config::quote_for_shell` like any first prompt; for
+the new pane needs the start grant, both checked by the daemon as for `maiker read` and
+`maiker split`. The brief is quoted with `Config::quote_for_shell` like any first prompt; for
 PowerShell that escapes the curly single quotes as well as `'`, since PowerShell ends a
 single-quoted string at either.
 
-Text sent to an agent through `maitty send` (and `--wait`), MCP `maitty_send` and a
-`maitty_start` task is refused when it holds characters that draw as nothing or reorder the text
+Text sent to an agent through `maiker send` (and `--wait`), MCP `maiker_send` and a
+`maiker_start` task is refused when it holds characters that draw as nothing or reorder the text
 (`hidden::is_invisible`: zero-width and direction marks, the BOM, Unicode tag characters), so
 one agent cannot hide instructions to another from you. The error names each one and where it
 is; nothing is sent. Your own typing and pastes in a pane are not checked.
 
-References (`crates/maitty-terminal-client/src/references.rs`) are files the user puts in `.maitty/references/` at the repo's
-main checkout; agents read them through MCP `maitty_references`, which returns paths and never
+References (`crates/maitty-terminal-client/src/references.rs`) are files the user puts in `.maiker/references/` at the repo's
+main checkout; agents read them through MCP `maiker_references`, which returns paths and never
 file contents. An agent's `path` must name an existing folder in its own project unless
 `[mcp] scope = "all"`. Nothing outside that folder is listed or removed: a path with `..` is
 refused, a link is listed only when it resolves inside the folder, and a references folder (or
@@ -367,8 +367,8 @@ the config load. The remote command is one string for the remote user's login sh
 word is POSIX single-quoted whatever the client runs (a Windows client to a Linux remote
 included); `remote_cmd` is one program path, a control character or newline in it is refused,
 and only a leading `~/` stays unquoted. A remote machine is untrusted, so the pane id and token
-a command carries (`Hello.from`) are sent only to this computer's daemon, and `MAITTY_REMOTE`,
-`MAITTY_SSH` and `MAITTY_REMOTE_CMD` are removed from every pane's environment. The table is
+a command carries (`Hello.from`) are sent only to this computer's daemon, and `MAIKER_REMOTE`,
+`MAIKER_SSH` and `MAIKER_REMOTE_CMD` are removed from every pane's environment. The table is
 read only from `config.local.toml` and refused in the synced
 `config.toml`, so a shared config cannot point this computer at a host.
 
@@ -443,7 +443,7 @@ ssh; stopping ends the ssh process, and the script keeps nothing that arrives sh
 refused unless it is the checked path shape, exactly as for images. A sent file stays on the far machine
 for a week, mode 600 in a folder only its owner can use; the guide tells people so. Directories are not sent.
 
-`maitty machine update <name>` (`cli/machine_update.rs`) runs one fixed script on a machine and writes a
+`maiker machine update <name>` (`cli/machine_update.rs`) runs one fixed script on a machine and writes a
 binary there, so it follows the same rules as every other ssh line, plus these. The script is a constant
 in the app (`maitty_machines::INSTALL_SCRIPT`, re-exported by `remote_install`, passed to the remote shell as `sh -c '<script>' sh <args>`);
 the destination and the byte count are positional arguments, each quoted once by `ssh_command`, and never
@@ -452,7 +452,7 @@ the argv, and the script has no `{`/`}` and no process-signalling command). The 
 not in a command. The script writes beside the destination with `umask 077`, checks the byte count, runs
 `--version` (owner-only mode until it has run), makes it 755, and renames it over the old file; on any
 failure it removes the temp file and leaves the destination as it was. It never signals a process: a
-running daemon keeps its sessions. `maitty update` verifies a release twice before it
+running daemon keeps its sessions. `maiker update` verifies a release twice before it
 replaces the program: `sha256sums.txt` must carry a signature (`sha256sums.txt.sig`) made with the release
 key built into the program, which is the desktop updater's, and the download must match its line in that
 file; then the downloaded program is run (`--version`) and must name the release asked for. Releases are
@@ -581,7 +581,7 @@ is a fixed set of host commands that take a machine's name or number, never a pr
 - **Reading who commits** (`Query::GitIdentities`, `daemon/git_identity.rs`): the daemon reads the
   machine's global git config through git itself: the default `user.name` and `user.email`, and the
   folder of every `includeIf "gitdir:…"` entry. It reads further only into files that sit directly in
-  its own `git-identities` folder and name the folder they are for; what a rule set outside Maitty
+  its own `git-identities` folder and name the folder they are for; what a rule set outside Maiker
   points at is never opened. No credential is read (a rule holds a GitHub login, never a token), nothing
   is written, and only a person's client may ask.
 - **Writing a folder's rule** (`Query::GitIdentityRule`, `daemon/git_rule.rs`): the daemon writes the
@@ -592,8 +592,8 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   leading dash) before it is put in the helper's command, and must be signed in on the machine; the name
   and email may hold no control character; the folder must exist and may hold no pattern character or
   quote. No token is written: `gh` keeps it and hands it to git when asked. The person sees the exact
-  lines before they are written (`Preview`). A rule set outside Maitty is never replaced or removed, and a
-  removal takes out only Maitty's entry and file. Only a person's client may ask.
+  lines before they are written (`Preview`). A rule set outside Maiker is never replaced or removed, and a
+  removal takes out only Maiker's entry and file. Only a person's client may ask.
 - **Changing a checkout on request** (`Query::Git`, `daemon/sync.rs`, `commit.rs`, `pull_request.rs`):
   fetch, fast-forward pull, push, commit and open a pull request for the checkout a pane is in. Only a
   person's client may ask, with the pane checks of `Query::Repo`. The request is one of five words; the
@@ -637,7 +637,7 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   daemon of the computer that reads the tickets, in the system's keychain (`daemon/keychain.rs`:
   Windows Credential Manager, the macOS login Keychain, the Secret Service on Linux), so it is not a
   file an agent running as the same user can read by opening it. A machine with no keychain (no Secret
-  Service, a server reached over ssh) keeps it in one small file per provider in Maitty's data folder
+  Service, a server reached over ssh) keeps it in one small file per provider in Maiker's data folder
   (`ticket-keys/plane.json`, `ticket-keys/linear.json`: the folder `0700`, the file `0600` on unix; on
   Windows the user's own app data, which only they and administrators can read), and the client says
   so ("Key kept in a file: no keychain on this machine"). A key moves from the file to the keychain only
@@ -719,9 +719,9 @@ is a fixed set of host commands that take a machine's name or number, never a pr
 No user accounts. Access to the daemon is access to its local socket: a named
 pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
 (`maitty-<user>-<label>.sock`). Socket access must stay limited to the user who
-started the daemon. Status reports (`maitty hook`) are accepted only from a
+started the daemon. Status reports (`maiker hook`) are accepted only from a
 process inside the pane (traced through its process tree) or carrying that
-pane's `MAITTY_PANE_TOKEN`, a random secret set only in that pane's environment.
+pane's `MAIKER_PANE_TOKEN`, a random secret set only in that pane's environment.
 Listing specialist agents (`Query::Specialists`, ADR 0010) reads only the fixed agent folders of the
 pane's repository and the user's home, never a path a client names; it is for human clients with read
 access to the pane, writes nothing, and bounds the count and size of what it returns. Names,
@@ -734,7 +734,7 @@ control characters and hidden characters (`hidden::sanitize`), and a failure to 
 one cleaned line with its fix (`link_failure::classify`). `read` prints another machine's screen
 without escape sequences or other control characters (newlines stay); `read --raw` prints it exactly
 as sent, which is the person's choice to make and can move the cursor or retitle the terminal. The
-pane a command runs in belongs to this computer's daemon, so `$MAITTY_TERM_ID` is never the default
+pane a command runs in belongs to this computer's daemon, so `$MAIKER_TERM_ID` is never the default
 pane on another machine and the Hello to it carries no pane id or token. `kill-server --on` stops all
 of that machine's sessions and needs `--yes`.
 
@@ -759,9 +759,9 @@ where text came from; (5) answering a prompt, interrupting and starting agents o
 worktree or folder is chosen from a machine's paths. `[mcp] scope` limits the sessions of this
 computer only; opening a machine opens all of its sessions to every pane here that holds the grant.
 
-`maitty doctor` checks each configured machine with the same ssh lines as everything else
+`maiker doctor` checks each configured machine with the same ssh lines as everything else
 (`ssh_command.rs`: `BatchMode`, no agent forwarding, `--` before the host), plus one fixed script,
-`command -v maitty` (`maitty_machines::WHERE_SCRIPT`), which carries no user data. Every step has a time
+`command -v maiker` (`maitty_machines::WHERE_SCRIPT`), which carries no user data. Every step has a time
 limit and the ssh it started is ended when the limit passes. What a machine answers (the version line, the
 program's path, ssh's last line) is cleaned of control and hidden characters and cut short before it is
 printed, and only the program's path is shown from the login shell, never its PATH, which can name users.
@@ -780,19 +780,19 @@ never uploads.
 Bundled Herdr detection rules and adapted integration code are pinned to a
 reviewed source commit; provenance and Apache terms live in
 `vendor/herdr-detection/NOTICE.md` and LICENSE. No remote rules are executed or
-downloaded. Native JavaScript adapters invoke the installed Maitty executable with
+downloaded. Native JavaScript adapters invoke the installed Maiker executable with
 an argument array and inherited pane authentication; they do not forward prompt
 or answer text. Setup rejects non-regular owned-file targets and preserves
 unowned extensions/hooks. OpenCode's JSONC editor uses pinned jsonc-parser 0.33.1
 to retain native comments/settings, with invalid-config preflight tests.
 
-The installers (`install.sh`, `install.ps1`) and `maitty update` run `maitty integrate`, which
+The installers (`install.sh`, `install.ps1`) and `maiker update` run `maiker integrate`, which
 edits the config of every agent installed on the machine: Claude Code's `settings.json` and
 `~/.claude.json` (through `claude mcp add`), Codex's `config.toml`, Gemini CLI's and Qwen Code's
 `settings.json`, Kimi's `config.toml`, Mastra Code's `hooks.json`, and adapter files for OpenCode,
-Pi, OMP and Kilo. Only Maitty's own entries change; a changed config file is first copied to
+Pi, OMP and Kilo. Only Maiker's own entries change; a changed config file is first copied to
 `<file>.maitty-bak` (once). Agents that aren't installed get no folder or file. A failure
-warns and leaves the install in place. `MAITTY_NO_INTEGRATE=1` skips the step.
+warns and leaves the install in place. `MAIKER_NO_INTEGRATE=1` skips the step.
 
 `cargo audit` (install with `cargo install cargo-audit`) before releases; GitHub
 push protection for secrets. Not yet in CI (there is no CI yet).
@@ -867,10 +867,10 @@ The agent runs with the user's permissions, so the window's start path is narrow
   `--allow-dangerously-skip-permissions`; Codex `danger-full-access` with approval `never`). The window always
   sends the choice explicitly: a labelled checkbox with a warning, ticked at first because **Bypass Permissions** is on
   by default (Settings › Permissions, one switch per agent, `[permissions.bypass]`), and unticked for one chat or for
-  good by turning the agent's switch off. It is fixed for the session: Maitty never widens a running session, and a
+  good by turning the agent's switch off. It is fixed for the session: Maiker never widens a running session, and a
   chat started with it shows a visible Bypass permissions tag. The same switch adds the agent's own flag
   (`AgentDef.bypass_flag`) to every agent the daemon or either app starts in a terminal: new sessions, branch agents,
-  MCP `maitty_start`, CLI handoff and resume. A resume adds it only when the session started with it and the switch
+  MCP `maiker_start`, CLI handoff and resume. A resume adds it only when the session started with it and the switch
   is still on (`restore::keeping_bypass`); a flag that is not a plain `-`option is ignored. Typing an agent's name in
   a shell yourself adds nothing. In the default posture every tool use the provider does not allow by itself becomes an approval
   that waits for a person's answer, and there is no auto-approve. There is no way to change a running session's
@@ -905,7 +905,7 @@ off the UI thread, with the user's permissions. What was pasted never reaches gi
 - The target is a new folder named after the repository inside an absolute folder that exists; an existing folder
   is never written into.
 - Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses
-  the credentials git already has. Maitty stores no GitHub token.
+  the credentials git already has. Maiker stores no GitHub token.
 
 ## Project-specific: signing an agent in from the desktop
 
@@ -920,7 +920,7 @@ person a link and a code (`daemon/agent_sign_in.rs`). What it may do:
   digits and dashes, at most 24 characters. The window shows the link's host beside Open link and opens it
   through the same `open_link` path as every other address. The host is not on a list: the command's own
   output is the source, so the check is the shape, and the person sees where it goes.
-- No credential passes through Maitty. The tokens a login obtains go to the agent's own files, as when it is
+- No credential passes through Maiker. The tokens a login obtains go to the agent's own files, as when it is
   run in a terminal; the daemon reads none and logs none. The output is read up to 16 KiB, scanned once, and
   dropped; the rest is read and discarded so the command never stalls. Status text is never logged.
 - One login per agent, a 15-minute limit, killed on cancel, on timeout and when the daemon drops it. Human
@@ -955,13 +955,13 @@ narrow (`daemon/conversation/continue_turn.rs`):
 
 The structured-history cache reuses private-directory/file helpers:
 0700 directories and 0600 files on Unix, the user's private data location on
-Windows. Binding fingerprints and numeric Maitty paths keep native identifiers
+Windows. Binding fingerprints and numeric Maiker paths keep native identifiers
 out of filenames; pages remain sensitive conversation content, never diagnostics.
 Only current daemon-owned provider events may project into attached history.
 Unsupported raw provider objects are not retained. Of a Codex reasoning item only the plain-text
 summary is kept, masked like a message and never logged; its encrypted content is not read. The same holds for the thinking a followed Claude or Codex
 transcript holds (a Claude block's signature is not kept). Cache disable serializes with
-writes and deletes only Maitty's socket-scoped history root, never native history.
+writes and deletes only Maiker's socket-scoped history root, never native history.
 Without persistence, hydrated content belongs to an attachment and disappears on
 its disconnect. No credentials, real transcripts or model requests enter fixtures.
 Structured start/send/read/approval/cancel actions use the existing socket
@@ -1027,7 +1027,7 @@ Everything the daemon stores and serves as conversation history passes one funct
 `redact_entry` (`daemon/conversation/redact.rs`), when it enters the store (`History::apply`,
 `hydrate`) and again when a cache is loaded. That covers the Claude and Codex adapters, both
 followed-transcript parsers, message text, tool input, command output and approvals. It changes only
-Maitty's copy: the agent still sees exactly what it sent and received, and nothing is blocked.
+Maiker's copy: the agent still sees exactly what it sent and received, and nothing is blocked.
 
 **Masked** (the secret part becomes `[redacted]`, the text around it stays):
 

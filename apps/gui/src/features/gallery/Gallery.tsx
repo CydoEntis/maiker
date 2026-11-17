@@ -133,7 +133,7 @@ function Primitives() {
   )
 }
 
-const QUICK_THEMES = ['Maitty Night', 'Maitty Day', 'Maitty Dark', 'Maitty Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Tokyo Night']
+const QUICK_THEMES = ['Maiker Night', 'Maiker Day', 'Maiker Dark', 'Maiker Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Tokyo Night']
 
 function useHashParams() {
   const [params, setParams] = useState(() => galleryParams(window.location.hash))

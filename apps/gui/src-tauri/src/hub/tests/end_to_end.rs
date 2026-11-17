@@ -520,9 +520,9 @@ async fn a_held_message_is_typed_in_once_the_panes_agent_says_it_is_at_rest() {
     assert_eq!(occurrences(&host.history(HERE, pane).unwrap().1, "HELD_ARRIVED_5"), 0);
 
     // The pane's own hook says an agent is running there and at rest, as an agent's would.
-    let maitty = maitty_test_support::maitty_binary();
+    let maiker = maitty_test_support::maitty_binary();
     let call = if cfg!(windows) { "& " } else { "" };
-    host.type_into(HERE, pane, &format!("{call}'{}' hook claude --status idle", maitty.display()));
+    host.type_into(HERE, pane, &format!("{call}'{}' hook claude --status idle", maiker.display()));
     host.until("the held message typed in and run", |h| {
         h.history(HERE, pane).is_some_and(|(_, text)| occurrences(&text, "HELD_ARRIVED_5") >= 2)
     })

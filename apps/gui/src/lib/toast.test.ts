@@ -34,7 +34,7 @@ describe('toast.failure', () => {
 
     const { title, options } = shown()
     expect(title).toBe('Could not save the file')
-    expect(options.description).toMatch(/^Maitty is not allowed/)
+    expect(options.description).toMatch(/^Maiker is not allowed/)
     expect(options.action?.label).toBe('Copy details')
   })
 

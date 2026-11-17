@@ -1,4 +1,4 @@
-// Runs the built Maitty GUI in headless Chromium with a mocked Tauri host and measures it.
+// Runs the built Maiker GUI in headless Chromium with a mocked Tauri host and measures it.
 // Usage: node harness.mjs --scenario a|b|c|d --gpu gpu|cpu [--measure 20] [--warm 5] [--exp name]
 //        [--poll] (sample heap/nodes every 5 s instead of tracing) [--dsf 2]
 import fs from 'node:fs'

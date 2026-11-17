@@ -18,9 +18,9 @@ const ANSWER: &str = concat!(env!("APP_COMMAND"), "_answer");
 const INTERRUPT: &str = concat!(env!("APP_COMMAND"), "_interrupt");
 
 const READ_DENIED: &str =
-    "this pane may not read other panes through maitty (maitty grant 4 read allows it)";
+    "this pane may not read other panes through maiker (maiker grant 4 read allows it)";
 const WRITE_DENIED: &str =
-    "this pane may not type into other panes through maitty (maitty grant 4 write allows it)";
+    "this pane may not type into other panes through maiker (maiker grant 4 write allows it)";
 
 #[derive(Clone, Copy)]
 enum Grants {

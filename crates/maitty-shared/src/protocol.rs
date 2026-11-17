@@ -239,10 +239,10 @@ pub enum GitRuleChange {
     /// The lines that `Apply` would write, written nowhere.
     Preview { folder: String, identity: GitIdentity },
     /// Write the rule: `folder` (which must be there) commits as `identity` and signs in to
-    /// github.com as its login, which must be signed in on the machine. A rule Maitty wrote for
-    /// the folder before is replaced; one set outside Maitty is refused.
+    /// github.com as its login, which must be signed in on the machine. A rule Maiker wrote for
+    /// the folder before is replaced; one set outside Maiker is refused.
     Apply { folder: String, identity: GitIdentity },
-    /// Take away the rule Maitty wrote for `folder`, named as `GitIdentityRule::folder` names it.
+    /// Take away the rule Maiker wrote for `folder`, named as `GitIdentityRule::folder` names it.
     Remove { folder: String },
 }
 
@@ -280,7 +280,7 @@ pub struct GitIdentityReport {
 pub struct GitIdentityRule {
     /// The folder as the entry writes it, without the closing slash.
     pub folder: String,
-    /// What the rule sets, when Maitty wrote it. `None` for a rule set outside Maitty: it is
+    /// What the rule sets, when Maiker wrote it. `None` for a rule set outside Maiker: it is
     /// listed so it can be seen, and nothing of what it sets is read.
     pub identity: Option<GitIdentity>,
 }
@@ -1357,7 +1357,7 @@ pub enum Query {
         change: TicketKeyChange,
         tag: u64,
     },
-    /// Retired (ADR 0011): Maitty only reads tickets. It stays on the wire so a window from
+    /// Retired (ADR 0011): Maiker only reads tickets. It stays on the wire so a window from
     /// versions 107 to 112, which may still ask, gets `Reply::TicketWrite` with an error instead
     /// of losing its connection. The daemon writes nothing; no client of this version asks.
     TicketWrite {
@@ -3015,7 +3015,7 @@ mod tests {
                     path: "/home/me/code".into(),
                     exists: true,
                     entries: vec![FolderEntry {
-                        name: "maitty".into(),
+                        name: "maiker".into(),
                         git: Some("dev".into()),
                         has_children: true,
                     }],
@@ -3710,7 +3710,7 @@ mod tests {
             ],
             overridden_by: "you".into(),
             source: CheckSource::Repo {
-                file: ".maitty/checks.toml".into(),
+                file: ".maiker/checks.toml".into(),
                 commit: Some("a1b2c3d".into()),
                 committed_at: Some(80),
                 uncommitted: true,
@@ -4136,7 +4136,7 @@ mod tests {
     }
 
     /// Workflow reports are gone (ADR 0011). A pane from a daemon that still keeps runs reads
-    /// without them, and a report from an older `maitty workflow report` is not read as anything
+    /// without them, and a report from an older `maiker workflow report` is not read as anything
     /// else: that one-shot call is refused, never misread.
     #[test]
     fn a_pane_with_workflow_runs_reads_without_them_and_a_report_is_refused() {

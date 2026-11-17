@@ -348,7 +348,7 @@ describe('a sent message of a chat on another machine', () => {
     fake.attachmentsExist.mockResolvedValue([false])
     render(
       <FilesHereContext.Provider value={false}>
-        <SentAttachments files={[{ path: '/home/dev/.cache/maitty/pastes/paste-1-0a1b2c3d-image.png', name: 'Pasted image.png', kind: 'image' }]} />
+        <SentAttachments files={[{ path: '/home/dev/.cache/maiker/pastes/paste-1-0a1b2c3d-image.png', name: 'Pasted image.png', kind: 'image' }]} />
       </FilesHereContext.Provider>,
     )
     await act(async () => { await Promise.resolve() })

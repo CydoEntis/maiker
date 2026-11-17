@@ -18,7 +18,7 @@ const MOST_FIELD_CHARS = 512
 /** `owner/name`, as GitHub spells a repository. */
 export const REPO_SHAPE = /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/
 /** Said wherever a key is typed: where it goes, and that it is for every project. */
-export const KEY_ONCE = 'You do this once on this computer: the key is kept by the Maitty service (in its data folder, not the system keychain), used for every project, and never shown again.'
+export const KEY_ONCE = 'You do this once on this computer: the key is kept by the Maiker service (in its data folder, not the system keychain), used for every project, and never shown again.'
 
 const GROUP_WORD: Readonly<Record<'plane' | 'linear', string>> = { plane: 'project', linear: 'team' }
 
@@ -224,7 +224,7 @@ function GitHubSetup({ project, link, off, suggested }: { project: SetupProject;
   return (
     <ol className="mx-tk-setup" aria-label="Set up GitHub">
       <Step n={1} title="GitHub uses your gh login" done>
-        <span className="mx-tk-setup-hint">There is no key to paste: Maitty reads issues with the GitHub command line's own sign-in.</span>
+        <span className="mx-tk-setup-hint">There is no key to paste: Maiker reads issues with the GitHub command line's own sign-in.</span>
       </Step>
       <Step n={2} title={off ? `GitHub is off for ${project.name}` : `Paste a link to ${project.name}'s repository`} done={false}>
         <span className="mx-tk-setup-hint">{off ? 'Turn it back on to read the issues of the repository the folder pushes to, or paste a link to another.' : 'The folder has no GitHub origin.'}</span>

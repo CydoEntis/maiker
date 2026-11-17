@@ -1,6 +1,6 @@
 // Injected with page.addInitScript before the app loads. Emulates the Tauri 2 host:
 // window.isTauri, __TAURI_INTERNALS__.invoke/transformCallback/metadata, the event plugin,
-// and a fake maittyd that answers list_sessions and streams output frames over the channel the view opens.
+// and a fake maikerd that answers list_sessions and streams output frames over the channel the view opens.
 // Reads its configuration from window.__SCENARIO (set by an earlier init script).
 (() => {
   const S = window.__SCENARIO || {}
@@ -272,7 +272,7 @@
       case 'plugin:app|version':
         return '0.62.1'
       case 'plugin:app|name':
-        return 'Maitty'
+        return 'Maiker'
       case 'plugin:updater|check':
         return null
       case 'plugin:notification|is_permission_granted':

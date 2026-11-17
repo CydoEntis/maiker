@@ -19,14 +19,14 @@ function useNow(): number {
   return now
 }
 
-/** Under the pane header while maittyd does not answer and more tries are coming. */
+/** Under the pane header while maikerd does not answer and more tries are coming. */
 function ReconnectingBar({ failures, retryAt, onRetry }: { failures: number; retryAt: number | null; onRetry: () => void }) {
   const seconds = secondsUntil(retryAt, useNow())
   return (
     <div className="mx-offline" role="status">
       <span className="mx-offline-dot" aria-hidden="true" />
       <span className="mx-offline-text">
-        <strong>Reconnecting to maittyd</strong> · your sessions are still running
+        <strong>Reconnecting to maikerd</strong> · your sessions are still running
       </span>
       <span className="mx-offline-count mono">
         Try {tryNumber(failures)} of {RECONNECT_TRIES}{seconds !== null && ` · next in ${String(seconds)}s`}
@@ -81,10 +81,10 @@ function ServiceDownBanner({ detail, onStart, onRetry, onOpenLog }: { detail: st
   // Not focused when it shows: it sits beside what you were typing in, and your next Enter must not restart the service.
   const [details, setDetails] = useState(false)
   return (
-    <section className="mx-banner is-danger" aria-label="Maitty service stopped">
+    <section className="mx-banner is-danger" aria-label="Maiker service stopped">
       <div className="mx-banner-row">
         <span className="mx-banner-icon" aria-hidden="true">{POWER}</span>
-        <p className="mx-banner-text"><strong>Maitty service stopped.</strong> <span>Chats are paused and nothing is lost. Restart to pick up where they left off.</span></p>
+        <p className="mx-banner-text"><strong>Maiker service stopped.</strong> <span>Chats are paused and nothing is lost. Restart to pick up where they left off.</span></p>
         <button type="button" className="mx-banner-primary" onClick={onStart}>Restart service</button>
         <button type="button" className="mx-banner-ghost" aria-expanded={details} onClick={() => { setDetails(!details) }}>Details</button>
       </div>
@@ -106,7 +106,7 @@ export function UpdateReadyBanner({ version, onRestart, onLater }: { version: st
     <section className="mx-banner is-accent" aria-label="Update ready">
       <div className="mx-banner-row">
         <span className="mx-banner-icon" aria-hidden="true">{RESTART}</span>
-        <p className="mx-banner-text"><strong>Maitty {version} is ready.</strong> <span>Restart to update. Running chats keep going in the service.</span></p>
+        <p className="mx-banner-text"><strong>Maiker {version} is ready.</strong> <span>Restart to update. Running chats keep going in the service.</span></p>
         <button type="button" className="mx-banner-primary" onClick={onRestart}>Restart now</button>
         <button type="button" className="mx-banner-ghost" onClick={onLater}>Later</button>
       </div>
@@ -117,7 +117,7 @@ export function UpdateReadyBanner({ version, onRestart, onLater }: { version: st
 /** What a restart keeps and what it stops, one line each, from the daemon's own counts. A line with a count of 0 is left out. */
 function restartFacts(restart: RestartOffer): Array<{ tone: 'ok' | 'warn' | 'dim'; text: string }> {
   if (restart.sessions === 0) return []
-  if (!restart.canRestart) return [{ tone: 'warn', text: `The older service owns ${plural(restart.sessions, 'session', 'sessions')} but is not saving them, so Maitty leaves it running.` }]
+  if (!restart.canRestart) return [{ tone: 'warn', text: `The older service owns ${plural(restart.sessions, 'session', 'sessions')} but is not saving them, so Maiker leaves it running.` }]
   return [
     { tone: 'ok', text: `${plural(restart.sessions, 'session reopens', 'sessions reopen')} in the same folders` },
     ...(restart.working > 0 ? [{ tone: 'warn' as const, text: restart.working === 1 ? '1 agent was working. It will offer Resume.' : `${String(restart.working)} agents were working. They will offer Resume.` }] : []),
@@ -137,7 +137,7 @@ function ServiceUpdateCard({ restart, onLater }: { restart: RestartOffer | null;
         <div className="mx-service-head">
           <span className="mx-service-tile is-accent" aria-hidden="true">{RESTART}</span>
           <div className="mx-service-copy">
-            <h2 id="mx-service-update-title">Restart Maitty to finish updating</h2>
+            <h2 id="mx-service-update-title">Restart Maiker to finish updating</h2>
             <p>The app updated, but the service behind it is still the older one.</p>
           </div>
         </div>
@@ -183,7 +183,7 @@ function AppBehindCard({ offer, sessions, onLater }: { offer: AppBehindOffer; se
         <div className="mx-service-head">
           <span className="mx-service-tile is-accent" aria-hidden="true">{RESTART}</span>
           <div className="mx-service-copy">
-            <h2 id="mx-service-behind-title">Update Maitty to reconnect</h2>
+            <h2 id="mx-service-behind-title">Update Maiker to reconnect</h2>
             <p>The service behind this app is newer than the app.{sessions > 0 && ` Your ${plural(sessions, 'session', 'sessions')} keep running.`}</p>
           </div>
         </div>
@@ -198,7 +198,7 @@ function AppBehindCard({ offer, sessions, onLater }: { offer: AppBehindOffer; se
 }
 
 /**
- * What the window shows while maittyd cannot be reached: a reconnecting bar for the first tries, the
+ * What the window shows while maikerd cannot be reached: a reconnecting bar for the first tries, the
  * Service stopped banner after the last one, or the update card (then a bar) when the service is another
  * version. Nothing when it is connected.
  */
@@ -213,7 +213,7 @@ export function ServiceStatus({ online, failures, mismatch, retryAt, detail, res
   appBehind: AppBehindOffer | null
   /** The sessions this window last knew of, for "your N sessions keep running". */
   sessions: number
-  /** Tries to reach maittyd again now. The window's connection starts the service when it is not running, so this is also how it is started. */
+  /** Tries to reach maikerd again now. The window's connection starts the service when it is not running, so this is also how it is started. */
   onRetry: () => void
   /** Shows the service's log, the only record of why it stopped. */
   onOpenLog: () => void
