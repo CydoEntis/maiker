@@ -23,6 +23,7 @@ use maitty_machines::link::Timing;
 use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
+use maitty_shared::extensions::{ExtError, ExtReply, ExtRequest};
 use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, Snapshot, Status, TermId, TicketKeyChange};
 use maitty_shared::ticket_links::{TicketLinkChange, TicketLinks, TicketPlace};
 use maitty_shared::tickets::{TicketError, TicketKeyState, TicketWrite, TicketWritten, TicketsReply, TicketsRequest};
@@ -69,6 +70,8 @@ const TICKETS_EVENT: &str = "tickets";
 /// Where the ticket providers' keys stand: `{machine, tag, answer}`, never a key.
 const TICKET_KEYS_EVENT: &str = "ticket-keys";
 const TICKET_WRITE_EVENT: &str = "ticket-write";
+/// What a request about the extensions (skills, plugins, MCP servers, marketplaces) did: `{machine, tag, answer}`.
+const EXTENSIONS_EVENT: &str = "extensions";
 /// Which sources each project reads: `{machine, tag, answer}`, `answer` `{Ok}` (the asked project, every linked one, your names) or `{Err}`.
 const TICKET_LINKS_EVENT: &str = "ticket-links";
 /// A machine's home folder, as its daemon reads it.
@@ -530,6 +533,12 @@ impl Wire {
         self.send(MachineId::LOCAL, ClientMsg::Query(Query::TicketLinks { place, change, tag }))
     }
 
+    /// Ask this computer's daemon to list, add, switch or remove an extension. The daemon checks the request, and an add
+    /// runs only with the token its preview gave. The answer comes back as an `extensions` event carrying `tag`.
+    pub fn extensions(&self, request: ExtRequest, tag: u64) -> Result<(), String> {
+        self.send(MachineId::LOCAL, ClientMsg::Query(Query::Extensions { request, tag }))
+    }
+
     pub fn ticket_write(&self, source: &str, id: &str, write: TicketWrite, confirmed: bool, tag: u64) -> Result<(), String> {
         let (source, id) = (source.trim(), id.trim());
         for text in [source, id] {
@@ -648,6 +657,13 @@ pub fn ticket_write(
     tag: u64,
 ) -> Result<(), String> {
     wire.ticket_write(&source, &id, write, confirmed, tag)
+}
+
+/// Asks this computer's daemon about the extensions of Claude Code and Codex. The answer arrives as an `extensions`
+/// event with the same `tag`.
+#[tauri::command]
+pub fn extensions(wire: tauri::State<'_, Wire>, request: ExtRequest, tag: u64) -> Result<(), String> {
+    wire.extensions(request, tag)
 }
 
 /// Asks another machine for its whole list; it arrives as `machine-sessions-changed`.
@@ -942,6 +958,12 @@ pub enum Reaction {
         tag: u64,
         answer: Result<TicketWritten, TicketError>,
     },
+    /// What a request about extensions did, for the window that asked.
+    Extensions {
+        machine: MachineId,
+        tag: u64,
+        answer: Result<ExtReply, ExtError>,
+    },
     /// The projects' ticket links, for the window that asked.
     TicketLinks {
         machine: MachineId,
@@ -1043,6 +1065,7 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::TicketKeys { machine, tag, answer } => Some(Reaction::TicketKeys { machine, tag, answer }),
             Out::TicketWrite { machine, tag, answer } => Some(Reaction::TicketWrite { machine, tag, answer }),
             Out::TicketLinks { machine, tag, answer } => Some(Reaction::TicketLinks { machine, tag, answer }),
+            Out::Extensions { machine, tag, answer } => Some(Reaction::Extensions { machine, tag, answer }),
             Out::TicketSetup(ask) => Some(Reaction::TicketSetup(ask)),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
@@ -1254,6 +1277,9 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             }
             Reaction::TicketWrite { machine, tag, answer } => {
                 let _ = app.emit(TICKET_WRITE_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
+            }
+            Reaction::Extensions { machine, tag, answer } => {
+                let _ = app.emit(EXTENSIONS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
             Reaction::TicketLinks { machine, tag, answer } => {
                 let _ = app.emit(TICKET_LINKS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
