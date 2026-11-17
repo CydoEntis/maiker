@@ -8,7 +8,7 @@
   background: var(--main);
   border: 1px solid rgba(var(--hl), calc(.09 * var(--hk)));
   border-radius: var(--r14);
-  transition: border-color .2s ease;
+  transition: border-color var(--t-base) var(--ease);
 }
 
 /* The tab showing, over the tabs kept mounted behind it. A kept tab has the same box as the one showing, so its
@@ -31,8 +31,8 @@
 /* While a pane is dragged it dims, and the pane under the pointer says what letting go does. */
 .mx-pane.is-dragging { opacity: .6; }
 .mx-pane-drop { position: absolute; inset: 6px; z-index: 29; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; color: var(--accent-text); pointer-events: none; animation: v7scrim .12s ease-out; }
-.mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 0 0 1.5px transparent; transition: box-shadow .15s; }
-.mx-pane.is-focused .mx-pane-ring { box-shadow: inset 0 0 0 1.5px var(--accent-line), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 0 0 1.5px var(--accent-line), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.mx-pane.is-focused .mx-pane-ring { opacity: 1; }
 
 /* The session header (52px, two lines): the status icon and the name, and under the name where the chat works (folder,
    project / branch, machine). Right: the Chat | Terminal toggle, Changes, Files and the ⋯ menu. */
@@ -165,10 +165,9 @@
 .mx-tdock-tab.is-on { color: var(--fg); background: var(--m-hover); box-shadow: inset 0 0 0 1px var(--line2); --fold-line: var(--line2); }
 .mx-tdock-pick { height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; font: 500 12px var(--mono); color: inherit; white-space: nowrap; }
 .mx-tdock-prompt { color: var(--accent-text); }
-/* Closing a tab ends its shells, so its × waits for the pointer instead of sitting on every tab. */
 /* The × owns its slot in every tab at all times, so a tab never changes width when it is picked, hovered or focused; only
    its opacity does. It stays focusable while hidden, and focus shows it. */
-.mx-tdock-tab-close { width: 18px; height: 18px; margin-right: 4px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: 0; transition: opacity .12s ease; }
+.mx-tdock-tab-close { width: 18px; height: 18px; margin-right: 4px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
 .mx-tdock-tab.is-on .mx-tdock-tab-close, .mx-tdock-tab:hover .mx-tdock-tab-close, .mx-tdock-tab:focus-within .mx-tdock-tab-close { opacity: 1; }
 .mx-tdock-tab-close:not(:disabled):hover { color: var(--fg); background: var(--m-hover); }
 .mx-tdock-tool { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); }

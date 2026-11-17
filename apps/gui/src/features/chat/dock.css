@@ -24,7 +24,7 @@
 .mx-dock-block.is-done { background: var(--ok); opacity: .55; }
 .mx-dock-block.is-failed { background: var(--danger); }
 .mx-dock-of { flex: none; font: 400 11px var(--mono); color: var(--dim); }
-.mx-dock-chevron { flex: none; display: flex; color: var(--dim); transition: transform .15s; }
+.mx-dock-chevron { flex: none; display: flex; color: var(--dim); transition: transform var(--t-fast) var(--ease); }
 .mx-dock-chevron.is-open { transform: rotate(180deg); }
 /* The record's chevron points down when open and right when folded. */
 .mx-dock-chevron.is-down { transform: rotate(90deg); }
@@ -83,7 +83,7 @@
 .mx-qd-text.is-strong { color: var(--fg); }
 /* A message that is open is read whole, as typed, up to a height that scrolls. */
 .mx-qd-text.is-read { white-space: pre-wrap; max-height: 260px; overflow-y: auto; overflow-wrap: anywhere; text-overflow: clip; }
-.mx-qd-chevron { flex: none; margin-top: 4px; display: flex; color: var(--dim); transform: rotate(180deg); transition: transform .15s; }
+.mx-qd-chevron { flex: none; margin-top: 4px; display: flex; color: var(--dim); transform: rotate(180deg); transition: transform var(--t-fast) var(--ease); }
 .mx-qd-chevron.is-read { transform: none; }
 .mx-qd-open { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 8px; }
 .mx-qd-open.is-listed { padding-left: 34px; }

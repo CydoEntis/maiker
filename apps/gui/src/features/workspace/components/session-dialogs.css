@@ -69,7 +69,7 @@
 .mx-ns-dialog .mx-model-button { height: 28px; padding: 0 8px; border: 1px solid var(--line); font-size: 12.5px; }
 .mx-ns-dialog .mx-model-button[data-state="open"] { background: var(--m-sel); }
 .mx-nsd-start { flex: none; height: 28px; margin-left: 4px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px; border: 1px solid var(--fg); background: var(--fg); font-size: 12.5px; font-weight: 600; color: var(--bg); white-space: nowrap; }
-.mx-nsd-start:not(:disabled):hover { filter: brightness(1.1); }
+.mx-nsd-start:not(:disabled):hover { background: color-mix(in srgb, var(--fg) 90%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 90%, var(--bg)); }
 .mx-nsd-start:disabled { opacity: .45; }
 .mx-nsd-start-key { font: 400 11px var(--mono); opacity: .7; }
 

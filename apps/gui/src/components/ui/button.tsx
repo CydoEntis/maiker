@@ -14,12 +14,12 @@ import { Slot } from "radix-ui"
  *   link     an inline text link
  */
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center gap-2 rounded-(--r-control) border whitespace-nowrap font-(family-name:--ui) outline-none select-none transition-[filter,background-color,color] duration-(--t-fast) ease-(--ease) focus-visible:shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--focus)] disabled:cursor-not-allowed disabled:opacity-42 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  "group/button inline-flex shrink-0 items-center justify-center gap-2 rounded-(--r-control) border whitespace-nowrap font-(family-name:--ui) outline-none select-none transition-[background-color,color,border-color] duration-(--t-fast) ease-(--ease) focus-visible:shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--focus)] disabled:cursor-not-allowed disabled:opacity-42 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
   {
     variants: {
       variant: {
-        primary: "border-(--accent) [--fold-line:var(--accent)] bg-(--accent) font-semibold text-(--on-accent) hover:enabled:brightness-108 active:enabled:bg-[color-mix(in_oklab,var(--accent)_80%,var(--bg))]",
-        needs: "border-(--needs) [--fold-line:var(--needs)] bg-(--needs) font-semibold text-(--on-needs) hover:enabled:brightness-108 active:enabled:bg-[color-mix(in_oklab,var(--needs)_80%,var(--bg))]",
+        primary: "border-(--accent) [--fold-line:var(--accent)] bg-(--accent) font-semibold text-(--on-accent) hover:enabled:bg-[color-mix(in_oklab,var(--accent)_90%,white)] active:enabled:bg-[color-mix(in_oklab,var(--accent)_80%,var(--bg))]",
+        needs: "border-(--needs) [--fold-line:var(--needs)] bg-(--needs) font-semibold text-(--on-needs) hover:enabled:bg-[color-mix(in_oklab,var(--needs)_90%,white)] active:enabled:bg-[color-mix(in_oklab,var(--needs)_80%,var(--bg))]",
         soft: "border-(--line2) [--fold-line:var(--line2)] bg-(--raise) font-semibold text-(--fg) hover:enabled:bg-[color-mix(in_oklab,var(--raise)_88%,var(--fg))] active:enabled:bg-[color-mix(in_oklab,var(--raise)_80%,var(--bg))] aria-expanded:bg-(--sel)",
         ghost: "border-transparent bg-transparent font-medium text-(--fg2) hover:enabled:bg-(--hover) hover:enabled:text-(--fg) active:enabled:bg-(--sel) aria-expanded:bg-(--sel)",
         danger: "border-[color-mix(in_oklab,var(--err)_45%,transparent)] [--fold-line:color-mix(in_oklab,var(--err)_45%,transparent)] bg-[color-mix(in_oklab,var(--err)_10%,transparent)] font-semibold text-(--err) hover:enabled:bg-[color-mix(in_oklab,var(--err)_18%,transparent)]",

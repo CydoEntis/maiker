@@ -345,7 +345,6 @@ button.mx-file-chip:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-option.is-picked .mx-option-key { color: var(--needs); }
 .mx-option-tick { flex: none; width: 14px; font-size: 12px; color: var(--needs); }
 .mx-option-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; font-weight: 400; overflow-wrap: anywhere; }
-.mx-option.is-picked .mx-option-text { font-weight: 600; }
 .mx-option-about { font-size: 12px; font-weight: 400; line-height: 1.45; color: var(--muted); }
 .mx-option.is-own { align-items: center; min-height: 34px; padding: 0 8px 0 0; cursor: text; }
 .mx-option.is-own:hover { background: transparent; }
@@ -364,7 +363,7 @@ button.mx-file-chip:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-box {
   position: relative; z-index: 2; width: 100%; display: flex; flex-direction: column; gap: 6px; padding: 12px 10px 10px 14px; border-radius: var(--r-panel);
   border: 1px solid var(--line2); background: var(--main);
-  transition: opacity .25s, border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
+  transition: opacity var(--t-base) var(--ease), border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease);
 }
 /* The message box is the one field whose whole border takes the focus, with no second ring. */
 .mx-box:focus-within { border-color: var(--accent); }
@@ -414,7 +413,7 @@ button.mx-file-chip:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-mm-model { flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; font-size: 13px; font-weight: 500; color: var(--fg); text-align: left; outline: none; }
 .mx-mm-model > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-mm-model:hover, .mx-mm-model:focus-visible { background: var(--m-hover); }
-.mx-mm-model[aria-checked="true"] { font-weight: 600; background: var(--m-hover); }
+.mx-mm-model[aria-checked="true"] { background: var(--m-hover); }
 .mx-mm-model small { font-size: 11px; font-weight: 400; color: var(--dim); }
 .mx-mm-more { flex: none; display: flex; align-items: center; gap: 8px; height: 28px; margin: 0 6px 6px; padding: 0 8px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
 .mx-mm-more:hover, .mx-mm-more:focus-visible { background: var(--m-hover); color: var(--fg); }
@@ -426,12 +425,13 @@ button.mx-file-chip:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-mm-effort-word { font-size: 12px; color: var(--muted); }
 .mx-mm-level { text-align: right; font-size: 12.5px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .mx-mm-bars { display: flex; align-items: flex-end; gap: 3px; height: 16px; }
-.mx-mm-bar { width: 16px; height: 6px; border-radius: 0; background: var(--line2); outline: none; transition: background .12s; }
+.mx-mm-bar { width: 16px; height: 6px; border-radius: 0; background: var(--line2); outline: none; }
 .mx-mm-bar:nth-child(2) { height: 9.3px; }
 .mx-mm-bar:nth-child(3) { height: 12.6px; }
 .mx-mm-bar:nth-child(4) { height: 15.9px; }
 .mx-mm-bar.is-on { background: var(--accent); }
-.mx-mm-bar:hover:not(:disabled) { filter: brightness(1.25); }
+.mx-mm-bar:hover:not(:disabled) { background: var(--muted); }
+.mx-mm-bar.is-on:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 80%, #fff); }
 .mx-mm-bar:focus-visible { box-shadow: 0 0 0 2px var(--accent-line); }
 .mx-mm-bar:disabled { opacity: .35; cursor: not-allowed; }
 .mx-mm-mini { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; margin-left: 2px; }
@@ -453,7 +453,6 @@ button.mx-file-chip:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
 .mx-pm-tick svg { width: 13px; height: 13px; }
 .mx-pm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-pm-name { display: flex; align-items: baseline; gap: 7px; font-size: 13.5px; font-weight: 500; color: var(--fg); }
-.mx-pm-mode[aria-checked="true"] .mx-pm-name { font-weight: 600; }
 .mx-pm-mode.is-danger .mx-pm-name { color: var(--danger); }
 .mx-pm-name small { font-size: 11.5px; font-weight: 400; color: var(--dim); }
 .mx-pm-what { font-size: 12px; color: var(--muted); text-wrap: pretty; }

@@ -12,7 +12,7 @@
 }
 .mx-inspect-grip { position: absolute; top: 0; bottom: 0; left: -6px; width: 8px; cursor: col-resize; z-index: 2; }
 .mx-app[data-side="right"] .mx-inspect-grip { left: auto; right: -6px; }
-.mx-inspect-grip::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 3px; width: 2px; border-radius: 2px; background: transparent; transition: background .15s; }
+.mx-inspect-grip::after { content: ""; position: absolute; top: 8px; bottom: 8px; left: 3px; width: 2px; border-radius: 2px; background: transparent; transition: background var(--t-fast) var(--ease); }
 .mx-inspect-grip:hover::after, .mx-inspect-grip:focus-visible::after { background: var(--accent); }
 .mx-app.is-narrow .mx-inspect-grip { display: none; }
 /* Its header names the view the tools bar picked, with that view's count, and a close button. */
@@ -178,7 +178,7 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-files-wait > span:nth-of-type(5n) { width: 34%; }
 .mx-files-wait.is-preview { gap: 10px; padding: 14px 16px; }
 .mx-files-twist { width: 12px; flex: none; display: inline-flex; justify-content: center; }
-.mx-files-twist svg { transform: rotate(-90deg); transition: transform .12s ease; }
+.mx-files-twist svg { transform: rotate(-90deg); transition: transform var(--t-fast) var(--ease); }
 .mx-files-twist.is-open svg { transform: none; }
 .mx-files-view .mx-preview { flex: 1 1 auto; min-height: 0; border-radius: 0; background: transparent; padding: 6px 0; }
 /* A line is never wrapped: a wrapped line cannot be told from the next one, and code is read by its shape. The view scrolls sideways

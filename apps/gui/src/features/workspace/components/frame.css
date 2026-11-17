@@ -32,8 +32,9 @@
 .mx-row.is-selected, .mx-row.is-selected:hover { background: var(--m-sel); box-shadow: none; }
 .mx-row .mx-row-icon { margin-top: 1px; }
 .mx-row-name { font-weight: 450; color: var(--fg2); }
-.mx-row.is-active .mx-row-name { font-weight: 450; color: var(--fg2); }
-.mx-row.is-needs .mx-row-name, .mx-row.is-selected .mx-row-name { font-weight: 600; color: var(--fg); }
+/* Needs you is bold for what the row is; being picked changes the colour only, so clicking a row never re-sets its text. */
+.mx-row.is-needs .mx-row-name { font-weight: 600; color: var(--fg); }
+.mx-row.is-selected .mx-row-name { color: var(--fg); }
 .mx-row-when { font-family: var(--mono); color: var(--dim); }
 .mx-row-sub { gap: 6px; font-size: calc(11.5px * var(--sidebar-text, 1)); line-height: calc(15px * var(--sidebar-text, 1)); color: var(--dim); }
 .mx-row-sub .mx-row-project-name { flex: 1; }
