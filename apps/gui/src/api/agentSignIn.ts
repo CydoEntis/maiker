@@ -33,9 +33,21 @@ const AnswerSchema = z.object({
 })
 type Answer = z.infer<typeof AnswerSchema>
 
+const LAST_CONTROL_CODE = 0x20
+const DELETE_CODE = 0x7f
+
+/** Whether text has a space, a control character or DEL: nothing an address may carry. */
+function hasUnprintable(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index)
+    if (code <= LAST_CONTROL_CODE || code === DELETE_CODE) return true
+  }
+  return false
+}
+
 /** A link is shown and opened only when it is a plain `https://` address, whatever the host said. */
 export function safeSignInLink(link: string | null): string | null {
-  if (link === null || !link.startsWith('https://') || [...link].some((char) => (char.codePointAt(0) ?? 0) <= 0x20 || char.codePointAt(0) === 0x7f)) return null
+  if (link === null || !link.startsWith('https://') || hasUnprintable(link)) return null
   try {
     const url = new URL(link)
     return url.protocol === 'https:' && url.username === '' && url.password === '' ? link : null
