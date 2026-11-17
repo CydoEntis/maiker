@@ -3,20 +3,7 @@
 //! also checked in `write.rs` on every platform.
 
 use super::*;
-use crate::daemon::persist::scratch_dir;
-use maitty_shared::extensions::{ExtAgent, ExtKind, ExtScope, ExtTarget, McpRun};
-
-const INSTALLED: &str = include_str!("samples/claude-installed-plugins.json");
-const MARKETS: &str = include_str!("samples/claude-known-marketplaces.json");
-const SETTINGS: &str = include_str!("samples/claude-settings.json");
-const CODEX_CONFIG: &str = include_str!("samples/codex-config.toml");
-const OK: &str = include_str!("samples/claude-plugin-install-ok.json");
-
-fn put(root: &Path, file: &str, text: &str) {
-    let path = root.join(file);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    std::fs::write(path, text).unwrap();
-}
+use maitty_shared::extensions::{ExtAgent, ExtKind, ExtScope, ExtTarget};
 
 fn target(agent: ExtAgent, kind: ExtKind, id: &str) -> ExtTarget {
     ExtTarget { agent, kind, id: id.into(), scope: ExtScope::User, project: None }
@@ -45,6 +32,20 @@ fn a_request_that_is_not_fit_is_refused_before_anything_is_read_or_started() {
 mod with_programs {
     use super::*;
     use crate::daemon::extensions::cli::fake;
+    use crate::daemon::persist::scratch_dir;
+    use maitty_shared::extensions::McpRun;
+
+    const INSTALLED: &str = include_str!("samples/claude-installed-plugins.json");
+    const MARKETS: &str = include_str!("samples/claude-known-marketplaces.json");
+    const SETTINGS: &str = include_str!("samples/claude-settings.json");
+    const CODEX_CONFIG: &str = include_str!("samples/codex-config.toml");
+    const OK: &str = include_str!("samples/claude-plugin-install-ok.json");
+
+    fn put(root: &Path, file: &str, text: &str) {
+        let path = root.join(file);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, text).unwrap();
+    }
 
     struct Fixture {
         root: crate::daemon::persist::ScratchDir,
