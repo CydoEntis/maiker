@@ -54,6 +54,8 @@ export type AgentAbilities = {
   readonly readModelsAreExtras: boolean
   /** Max effort is offered for a model only where the agent lists it; where the agent lists nothing, Max is withheld. */
   readonly maxEffortNeedsListing: boolean
+  /** The agent's model has a reasoning effort the chat can set; Gemini CLI documents none, so its picker shows no effort. */
+  readonly takesEffort: boolean
   /** The agent's yolo flag cannot be combined with a permission mode, so a chat started under it takes no mode. */
   readonly yoloExcludesMode: boolean
 }
@@ -76,6 +78,7 @@ const NONE: AgentAbilities = {
   midTurnCommands: [],
   readModelsAreExtras: false,
   maxEffortNeedsListing: false,
+  takesEffort: false,
   yoloExcludesMode: false,
 }
 
@@ -96,6 +99,7 @@ const AGENT_ABILITIES: Readonly<Record<ChatAgent, AgentAbilities>> = {
     midTurnCommands: ['btw'],
     readModelsAreExtras: true,
     maxEffortNeedsListing: false,
+    takesEffort: true,
     yoloExcludesMode: false,
   },
   codex: {
@@ -115,9 +119,12 @@ const AGENT_ABILITIES: Readonly<Record<ChatAgent, AgentAbilities>> = {
     midTurnCommands: [],
     readModelsAreExtras: false,
     maxEffortNeedsListing: true,
+    takesEffort: true,
     yoloExcludesMode: true,
   },
-  gemini: { ...NONE, bangToTerminal: true },
+  // Gemini's chat is its terminal read back, so its commands run there (`geminiCommands.ts`). Nothing about its permission
+  // menu, a question or a running turn has been run, so no answer keys, no mid-turn commands and no mode switch are claimed.
+  gemini: { ...NONE, slashCommands: { list: 'window', skillsAfterDollar: false, enterAfterPause: true }, bangToTerminal: true },
 }
 
 /**
