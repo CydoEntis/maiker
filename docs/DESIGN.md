@@ -16,9 +16,11 @@ Most of this document describes the TUI. The desktop app's look is in
   that mark stays in view longest when space runs out.
 - **Shape and word carry the meaning; colour backs them.** Every state reads in the Unicode
   glyph set and without colour.
-- **Amber means needs you.** Nothing else is drawn in it: no heading, no decoration.
-- **Only what has the keys is lit.** The focused pane, the open sheet or the selected row (a selected row's ground is the theme's accent tinted into the surface it is on, `SELECTED_ACCENT`, so it is seen on dark and light alike; in the GUI a terminal selection is the solid accent);
-  everything else is quieter.
+- **Colour means status only.** Borders, names, buttons and the selected row are neutral; teal is working, coral
+  needs you, green done, red failed, yellow a caution. The brass accent marks one thing in the TUI: an update waiting.
+- **Only what has the keys is lit.** The focused pane (a bright neutral border and a bold title), the open sheet or the
+  selected row (a selected row's ground is the strongest text tinted into the surface it is on, `SELECTED_TINT`, so it
+  is seen on dark and light alike; in the GUI a terminal selection is the solid accent); everything else is quieter.
 - **Plain words.** Sentence case, no bracketed explanations, every key shown as a keycap.
 
 ## Themes and colour roles
@@ -57,18 +59,18 @@ needs you never looks like failed. See UI › *design system*.
 
 The terminal's own font. Bold marks names and states worth a look; italic only the splash
 tagline and a toast's preview. Status glyphs come from Settings › Appearance › Status glyphs:
-**Dots** (the default: a `●` told apart by colour alone, amber needs you, green done, red problem,
-`idle` colour at rest, `┆` for an unreachable machine) or **Unicode**, where each state has a
-shape of its own (`●` needs you, `✓` done, `✕` problem, `○` idle). Working is the spinner you
-pick; checking is a sweeping ring. An agent's own mark is `✻` Claude, `◆` Codex, `✦` Gemini,
-`◇` OpenCode. See UI › *the sidebar* and *working spinner picker*.
+**Unicode** (the default), where each state has a shape of its own (`!` needs you, `×` failed, `✓` done, `–` idle,
+`┆` for an unreachable machine) and colour backs it, or **Dots**, a `●` told apart by colour alone (`○` at rest).
+Working is the spinner you pick (the default, Blocks, is `▖▘▝▗` at 120 ms a frame); checking is a sweeping ring. An
+agent's own mark is `✻` Claude, `◆` Codex, `✦` Gemini, `◇` OpenCode. See UI › *the sidebar* and *working spinner
+picker*.
 
 ## Layouts
 
 There is one look, drawn to the TUI redesign: the sidebar and the workspace, `ui.gap` apart (one
 column by default), and the status bar under them. Every pane is a box of its own with round
-corners; a split is two to four boxes a column or row apart. Every label on a border is a title
-chip. Exactly one box, the focused pane's, is in the accent.
+corners; a split is two to four boxes a column or row apart. A pane's labels are plain text on its
+border. Exactly one box, the focused pane's, has the bright border.
 
 `ui.padding` is the blank space inside the terminal round both frames: `small` none, `medium` (the
 default) 1 row and 2 columns, `large` 2 rows and 4 columns. See UI › *layout and navigation* and *the frame*.
@@ -82,38 +84,40 @@ accent fill. See UI › *UI conventions*.
 
 ## Sidebar
 
-Each machine with its sessions under it, on the panel ground, 34 columns by default (24 to 60
-resizable). On the top border the ` maiker ` chip at the left and ` « ` (hide) at the right; hidden,
-a ` » ` chip beside the panes brings it back. Filtering is a command (`/`) with its own modal,
-no field; the folder button groups sessions by folder. In folder view each folder has a coloured bar and icon (the theme's pane colours in turn) and a line before the next folder. A machine is a heading chip with its count (` This computer 5 `), an accent ` + `
-chip (a shell there at once) and a green `●` at the right while it is up. While its app is missing
-or on another version the ` + ` gives way to an accent ` install ` or ` update ` chip, the fix one
-click from where it shows; the Machines dialog marks that row ` u install ` / ` u update ` beside its
-state. A session is two lines:
-the status mark and the name (bold and bright for an agent with something going on), then `■` in
-the project's colour, the project and the branch in violet. No status words anywhere, except
-`limited 16:30` (`limited Sun 16:30` on another day) in amber on a session that hit its plan limit. Agents come
-first, then shells, each in the order they started, so a row never moves when its status changes.
-The open session has the row ground and an accent `▎`. An agent's subagents follow it: one still
-running for as long as it runs (after its parent's turn too), one finished in the current turn for a
-few seconds; `└` and a mark each, or under the open session one row each with `├`/`└` and the name,
-and a quiet `└ 3 done · show` line that lists the finished ones (`· hide` folds them again). A subagent's row
-opens its own steps in a modal ("subagent name": what it was asked, `▸` what it ran, what it said, the newest that
-fit, asked again every 1.5 s while it works); Enter goes to its parent's pane. Another machine's opens the pane.
-On the bottom border the release chip (` ↑ v0.15.0 ` when a release is out, else the version) and
-` menu `, each opening a menu upward. See UI › *the sidebar*; the Machines dialog and its states
-are in UI › *Machines dialog*.
+Sessions grouped by status, on the panel ground, 34 columns by default (24 to 60 resizable); 5 columns collapsed. The
+header sits inside the frame: ` Maiker ` and, dim, how the list is grouped (`status`, `status · a–z`), then four plain
+buttons, `⌕` search, `+` new chat, `≡` group and sort, `«` collapse. The groups are **Needs you** (failed sessions too),
+**Working**, **Done** and **Idle**, each a bold heading with its count; a click folds it. `≡` chooses status or machine
+grouping (by machine, each machine is a heading with its count, a `+` that starts a shell there, and a `●` while it is
+up) and the order inside a group: newest change first, oldest first or A–Z. A row therefore moves when its status
+changes. A session is two lines: the status mark, the name (bold while it is working, needs you or failed) and its age
+at the right (`now`, `4m`, `2h`, `1d`); then, dim, `project / branch`, a `⑂` when it has a worktree of its own and
+`· machine` when it is not on this computer. `limited 16:30` in the needs-you colour and a pull request's headline
+follow on that line. The open session has the row ground, a `▎` bar and a third line, `Claude · this computer ·
+working 12s`. An agent's subagents follow it: one still running for as long as it runs (after its parent's turn
+too), one finished in the current turn for a few seconds; `└` and a mark each, or under the open session one row each
+with `├`/`└` and the name, and a quiet `└ 3 done · show` line that lists the finished ones (`· hide` folds them
+again). A subagent's row opens its own steps in a modal ("subagent name": what it was asked, `▸` what it ran, what it
+said, the newest that fit, asked again every 1.5 s while it works); Enter goes to its parent's pane. Another machine's
+opens the pane. The foot is a rule, then `menu` (with a `▪`, or `•` with round corners, in the accent while an update
+waits or needs a restart) at the left and `? keys` at the right; the menu starts with **Install update X** or
+**Restart to finish update**, and a build that is not a clean release prints its commit and age between the two. The
+collapsed rail is `»`, `⌕` and `+` over one status mark per session with a short rule between groups and `≡` (with
+the update mark) at the bottom. See UI › *the sidebar*; the Machines dialog and its states are in UI › *Machines
+dialog*.
 
 ## Pane titles
 
-Every pane's top border carries its **title chip** at the left: the status mark, the name in bold,
-(`mark name`), the accent with dark ink while the pane has the keys, and ` × ` at the right. Its
-folder and branch are quiet chips on the **bottom** border (cut with `…`); a click on them opens the
-Project menu, where Files and Changes are. Labels are capitalised. The program starts on the row under the border: an agent's pane is its own
-terminal, and the TUI draws no chat of its own. With no pane open, a dashed box says `No pane open`
-over an ` n new session ` chip. A pane closes with Alt+x, leader `x` or its `×`, with an undo, and a
-running agent asks first, its box red until you answer. Unfocused panes fade; the focused pane's
-box is the accent, or the KEYS yellow (`blocked`) in key mode. See UI › *the frame* and *pane focus*.
+A pane's top border carries its title as plain text at the left: the status mark and the name, bold while the pane has
+the keys. At the right, plain too, ` ± changes N ` (only where the checkout has changes; a click opens Changes) and
+` × `. The folder it runs in is dim on the **bottom** border (cut with `…`); the branch is on its sidebar row. A click
+on the folder opens the Project menu, where Files and Changes are. The program starts on the row under the border: an
+agent's pane is its own terminal, and the TUI draws no chat of its own. At 85% context or more, a one-line yellow bar,
+`▲ Context almost full · 91% used. Compact to keep the important parts.`, sits along the pane's bottom; a click types
+`/compact` into the agent. With no pane open, a dashed box says `No pane open` over an ` n new session ` chip. A pane
+closes with Alt+x, leader `x` or its `×`, with an undo, and a running agent asks first, its box red until you answer.
+Unfocused panes fade; the focused pane's box is the bright neutral, or the KEYS yellow (`blocked`) in key mode. See
+UI › *the frame* and *pane focus*.
 
 ## Side panel
 
@@ -197,15 +201,14 @@ its line, then outlined ones, then text ones (Copy details); Copy details says C
 
 ## Status bar
 
-The one full-width row, along the bottom, on the panel ground. It is hidden while keys go to the pane
-(no row, no gap; the focused frame turns the KEYS yellow in key mode instead) and shows for key mode,
-for whatever holds the keys, for a flashed line and while Update or Restart waits. Typing with it up: a ` PANE ` chip in the accent,
-and at the right `^space keys  alt+↓/alt+↑ sessions  ^space ? help` (a key that needs the leader is shown with it, since the bare key would be typed into the pane; the session keys need none).
-Key mode: a yellow ` KEYS ` chip and `n new  s split  x close  tab pane  ? help  esc back`, each a click
-that presses it; starting a pane ends it. When something other than the panes has the keys, a calm chip
-(`strong` bold on `btn`) names the holder and its keys sit at the right with the way out last
-(` SIDEBAR ` … `↑↓ move  enter open  n new  esc back`), with `shortcut mode waits` while the mode is held.
-Keys are bold in the accent, their words muted. Under a popup the bar is words only and takes no click.
+The one full-width row, along the bottom, on the panel ground. It is always up. Typing: a `pane` chip (the button
+ground, strong text) and, at the right, the keys that still reach Maiker, bold with their words muted: `alt+↓/alt+↑
+chats  ^space k search  ^space n new  ^space tab next pane  ^space keys  ^space ? help` (every other key goes to the
+agent, so a key that needs the leader is shown with it; the session keys need none). Key mode: a yellow `keys` chip and
+`n new  s split  x close  tab pane  ? help  esc back`, each a click that presses it; starting a pane ends it. When
+something other than the panes has the keys, a calm chip names the holder in lower case and its keys sit at the right
+with the way out last (`sidebar` … `↑↓ move  enter open  n new  esc back`), with `shortcut mode waits` while the mode
+is held. Keys are bold in the strong colour, their words muted. Under a popup the bar is words only and takes no click.
 **Update** or **Restart** sits at its right end when waiting, unless the sidebar shows it at its foot.
 See UI › *the frame* (Status bar).
 
