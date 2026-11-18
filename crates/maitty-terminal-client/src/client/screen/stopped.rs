@@ -40,7 +40,7 @@ pub(in crate::client) struct Stopped {
 
 impl Stopped {
     /// The title of the box and the words after `×` on the bar.
-    fn title(&self) -> String {
+    pub(super) fn title(&self) -> String {
         match self.cause {
             Cause::Exited { .. } => format!("{} stopped", self.agent),
             Cause::Silent { .. } => format!("{} stopped answering", self.machine),

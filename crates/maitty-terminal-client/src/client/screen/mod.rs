@@ -196,6 +196,8 @@ pub(super) struct Screen {
     /// Where the toast is drawn this frame (empty: none). It sits over the panes, so a click
     /// there is the toast's, never the program's under it.
     pub toast_rect: Rect,
+    /// Where the toast of `toasts` is drawn this frame (empty: none); a click there is the toast's.
+    pub toast_box: Rect,
     /// A session picked from the sidebar, the go-to list or a sheet: it shows its own tab, not
     /// the one you were last on in it. Taken by the next focus change.
     pub show_own: Option<ClientTerm>,
@@ -1465,6 +1467,12 @@ fn session_title(t: &TermInfo, name: &str, top: &Path) -> String {
 pub(super) enum ScreenHit {
     /// The toast's ✕.
     ToastClose,
+    /// A toast's title or `go there`: open its chat (the update toast: the menu).
+    ToastGo,
+    /// A news toast's ✕ or `esc`.
+    ToastDismiss,
+    /// The update toast's `install now`.
+    ToastInstall,
     /// A subagent row of the sidebar (its place in `Screen::sub_rows`): it opens its parent's
     /// pane, where the agent shows its subagents itself.
     Subagent(usize),
@@ -1685,6 +1693,10 @@ mod service;
 mod chat_menu_tests;
 mod side_keys;
 mod stopped;
+mod toasts;
+mod release;
+pub(in crate::client) use release::release_chip;
+pub(in crate::client) use toasts::{Toast, draw_live_toast};
 pub(in crate::client) use service::{Service, draw_service_down, service_chip};
 mod updates;
 pub(in crate::client) use updates::draw_updates;

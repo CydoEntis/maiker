@@ -305,6 +305,10 @@ impl App {
         if k.code == KeyCode::Esc && !matches!(self.mode, Mode::Copy(_)) {
             self.dismiss_notice();
         }
+        // Esc puts the toast away and goes no further: it was meant for the toast, not for the agent.
+        if k.code == KeyCode::Esc && self.toast_dismiss() {
+            return;
+        }
         // Esc while a pane is dragged by its title: it stays where it was.
         if k.code == KeyCode::Esc && matches!(self.screen.drag, Some(screen::Drag::Pane { .. })) {
             self.screen.drag = None;
@@ -749,7 +753,7 @@ impl App {
         }
         self.screen_fresh();
         // Ctrl+click opens a link; double-click copies a word (or a path, or a link).
-        let on_toast = self.screen.toast_rect.contains(pos);
+        let on_toast = self.screen.toast_rect.contains(pos) || self.screen.toast_box.contains(pos);
         if m.kind == MouseEventKind::Down(MouseButton::Left)
             && !self.splash
             && !on_toast

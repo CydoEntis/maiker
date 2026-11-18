@@ -4893,10 +4893,8 @@ second line
             "a second sound inside the quiet spell is held back"
         );
         assert!(
-            app.notice
-                .as_ref()
-                .is_some_and(|(m, ..)| m.ends_with("finished")),
-            "the card still says it finished"
+            app.toasts.iter().any(|t| t.title.ends_with("finished")),
+            "the toast still says it finished"
         );
         assert_eq!(
             app.last_alert.map(|(kind, _)| kind),
@@ -4918,26 +4916,24 @@ second line
             app.settle_alerts();
         };
         // codex (2), not the session you're on.
-        app.notice = None;
+        app.toasts.clear();
         attention(&mut app, 2, Status::Done);
         assert!(
-            app.notice.is_none() && app.settling.contains_key(&ClientTerm::local(2)),
+            app.toasts.is_empty() && app.settling.contains_key(&ClientTerm::local(2)),
             "finished: nothing yet, it waits"
         );
         // It went back to work by itself: nothing is ever said.
         app.snap.terms.get_mut(&2).unwrap().status = Status::Working;
         due(&mut app, 2);
         assert!(
-            app.notice.is_none() && !app.alerted.contains_key(&ClientTerm::local(2)),
+            app.toasts.is_empty() && !app.alerted.contains_key(&ClientTerm::local(2)),
             "it carried on: no note, no sound"
         );
         // Finished and still finished when the wait is over: now it's said.
         attention(&mut app, 2, Status::Done);
         due(&mut app, 2);
         assert!(
-            app.notice
-                .as_ref()
-                .is_some_and(|(m, ..)| m.ends_with("finished"))
+            app.toasts.iter().any(|t| t.title.ends_with("finished"))
                 && app.alerted.contains_key(&ClientTerm::local(2))
                 && app
                     .last_alert
@@ -4945,24 +4941,22 @@ second line
             "a background completion uses the soft sound"
         );
         // A stable question replaces the pending finish, without ringing twice.
-        app.notice = None;
+        app.toasts.clear();
         attention(&mut app, 2, Status::Done);
         attention(&mut app, 2, Status::Blocked);
-        assert!(app.notice.is_none());
+        assert!(app.toasts.is_empty());
         due(&mut app, 2);
         assert!(
-            app.notice
-                .as_ref()
-                .is_some_and(|(m, ..)| m.ends_with("needs you"))
+            app.toasts.iter().any(|t| t.title.ends_with("needs you"))
                 && app.alerted.contains_key(&ClientTerm::local(2))
                 && !app.settling.contains_key(&ClientTerm::local(2))
         );
         // A session another agent started: its finish is that agent's news, not yours.
-        app.notice = None;
+        app.toasts.clear();
         app.snap.terms.get_mut(&2).unwrap().started_by = Some(1);
         attention(&mut app, 2, Status::Done);
         assert!(
-            app.notice.is_none() && !app.settling.contains_key(&ClientTerm::local(2)),
+            app.toasts.is_empty() && !app.settling.contains_key(&ClientTerm::local(2)),
             "a helper's finish is never said"
         );
         // But it still says when it needs you.
@@ -4970,11 +4964,7 @@ second line
         app.last_alert = None;
         attention(&mut app, 2, Status::Blocked);
         due(&mut app, 2);
-        assert!(
-            app.notice
-                .as_ref()
-                .is_some_and(|(m, ..)| m.ends_with("needs you"))
-        );
+        assert!(app.toasts.iter().any(|t| t.title.ends_with("needs you")));
         // Its starter gone: it's yours again.
         app.notice = None;
         app.snap.terms.get_mut(&2).unwrap().started_by = Some(999);
@@ -5967,11 +5957,7 @@ second line
         app.settling.get_mut(&ClientTerm::local(2)).unwrap().1 =
             Instant::now() - Duration::from_millis(1);
         app.settle_alerts();
-        let said = app
-            .notice
-            .as_ref()
-            .map(|(m, ..)| m.clone())
-            .unwrap_or_default();
+        let said = app.toasts.last().map(|t| t.title.clone()).unwrap_or_default();
         assert!(
             said.starts_with("Checkout rewrite") && said.ends_with("finished"),
             "the renamed session, not its agent: {said}"
@@ -5979,7 +5965,7 @@ second line
     }
 
     #[test]
-    fn a_finished_note_names_the_repository_and_branch() {
+    fn a_finished_toast_names_the_chat_and_says_it_is_ready() {
         let (_, mut app) = super::design_tests::render_with(160, 45);
         {
             let t = app.snap.terms.get_mut(&2).unwrap();
@@ -5999,19 +5985,13 @@ second line
         app.settling.get_mut(&ClientTerm::local(2)).unwrap().1 =
             Instant::now() - Duration::from_millis(1);
         app.settle_alerts();
-        let said = app
-            .notice
-            .as_ref()
-            .map(|(m, ..)| m.clone())
-            .unwrap_or_default();
-        assert_eq!(
-            said, "Checkout rewrite (shop-api · fix/early-alerts) finished",
-            "the worktree folder alone wouldn't say which"
-        );
+        let said = app.toasts.last().map(|t| t.title.clone()).unwrap_or_default();
+        assert_eq!(said, "Checkout rewrite finished", "the name you gave it, not its folder");
+        assert_eq!(app.toasts.last().map(|t| t.body.as_str()), Some("Ready for you to review."));
     }
 
     #[test]
-    fn a_finished_note_outside_a_repository_names_the_folder() {
+    fn a_finished_toast_outside_a_repository_still_names_the_chat() {
         let (_, mut app) = super::design_tests::render_with(160, 45);
         {
             let t = app.snap.terms.get_mut(&2).unwrap();
@@ -6028,15 +6008,8 @@ second line
         app.settling.get_mut(&ClientTerm::local(2)).unwrap().1 =
             Instant::now() - Duration::from_millis(1);
         app.settle_alerts();
-        let said = app
-            .notice
-            .as_ref()
-            .map(|(m, ..)| m.clone())
-            .unwrap_or_default();
-        assert_eq!(
-            said, "Notes (notes) finished",
-            "like the desktop and phone alerts"
-        );
+        let said = app.toasts.last().map(|t| t.title.clone()).unwrap_or_default();
+        assert_eq!(said, "Notes finished");
     }
 
     #[test]
@@ -11819,9 +11792,13 @@ mod restart_tests {
     const OLD_DAEMON: &str = "0.36.11";
     const INSTALLED: &str = "9.9.9";
 
-    /// The shop-api scene (3 sessions, 1 working) whose daemon is older than the installed the app.
+    /// The shop-api scene (3 sessions, 1 waiting for you) whose daemon is older than the installed the app.
+    /// Its working session waits for you instead: a restart stops waiting sessions after asking, but waits for working ones.
     fn scene(w: u16, h: u16, layout: (&str, &str)) -> (App, mpsc::UnboundedReceiver<Outgoing>) {
         let (_, mut app) = super::design_tests::render_with(w, h);
+        for t in app.snap.terms.values_mut().filter(|t| t.status == Status::Working) {
+            t.status = Status::Blocked;
+        }
         (app.cfg.ui.layout, app.cfg.ui.panes) = (layout.0.into(), layout.1.into());
         app.cfg.ui.fold_retired_layout();
         let (tx, rx) = mpsc::unbounded_channel();
@@ -12016,7 +11993,7 @@ mod restart_tests {
                 );
                 let out = draw(&mut app, w, h);
                 for want in [
-                    "3 sessions stop and resume, 1 is working",
+                    "3 sessions stop and resume, 2 waiting for you",
                     "Restart",
                     "Cancel",
                 ] {
@@ -12027,6 +12004,19 @@ mod restart_tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn a_restart_with_working_chats_waits_for_them_instead_of_asking() {
+        let (mut app, mut rx) = scene(100, 30, LAYOUTS[0]);
+        app.snap.terms.get_mut(&1).unwrap().status = Status::Working;
+        app.ask_restart();
+        assert!(app.restart_waiting && matches!(app.mode, Mode::Normal), "no question, it waits");
+        assert!(sent(&mut rx).is_empty(), "nothing was stopped");
+        app.snap.terms.get_mut(&1).unwrap().status = Status::Idle;
+        app.release_tick();
+        assert!(!app.restart_waiting, "the wait is over");
+        assert!(matches!(&app.mode, Mode::Confirm(c) if is_restart(&c.act)), "the chat waiting for you is still asked about");
     }
 
     #[test]

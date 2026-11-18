@@ -368,6 +368,9 @@ pub(in crate::client) fn draw(app: &mut App, f: &mut Frame, area: Rect, t: &Them
         };
         draw_pane(app, f, r, term, (true, true), &model, t);
     }
+    let taken = draw_live_toast(app, f.buffer_mut(), above, t);
+    // A plain notice rides above the toast, never over it.
+    let room = Rect { height: room.height.saturating_sub(taken), ..room };
     draw_toast(app, f.buffer_mut(), room, t);
     g.panes
 }

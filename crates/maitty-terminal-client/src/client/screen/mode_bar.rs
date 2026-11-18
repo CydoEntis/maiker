@@ -76,7 +76,7 @@ fn bound(app: &App, a: &Action) -> Option<KeySpec> {
 
 /// The key that runs `a` with no leader, if it has one (`Alt+↓` for the next session): the one to show while typing,
 /// since it works from where you are. When there are several, the same one every time.
-fn bound_global(app: &App, a: &Action) -> Option<KeySpec> {
+pub(super) fn bound_global(app: &App, a: &Action) -> Option<KeySpec> {
     app.keymap
         .global
         .iter()
@@ -714,7 +714,7 @@ pub(in crate::client) fn draw_mode_bar(app: &mut App, buf: &mut Buffer, row: Rec
     let room = row.width.saturating_sub(2);
     let tag_w = width(std::slice::from_ref(&tag));
     // The service's chip replaces whatever the bar says about the session while it is away or has just returned.
-    let mut place = match super::service_chip(app, t) {
+    let mut place = match super::service_chip(app, t).or_else(|| super::release_chip(app, t)) {
         Some((segs, hit)) => Some(Piece { segs, gap: 1, hit }),
         None => place,
     };

@@ -156,27 +156,30 @@ mod tests {
             );
             app.on_machine_server(THERE, ServerMsg::State(snap));
             app.notice = None;
+            app.toasts.clear();
             app.last_alert = None;
             app.alert_now(term, Status::Blocked);
         };
         let mut none = app_with_machine(|_| {});
         blocked(&mut none);
-        assert!(none.notice.is_none() && none.last_alert.is_none());
+        assert!(none.toasts.is_empty() && none.last_alert.is_none());
 
         let mut sound = app_with_machine(|d| d.sounds = true);
         blocked(&mut sound);
-        assert!(sound.last_alert.is_some() && sound.notice.is_none());
+        assert!(sound.last_alert.is_some() && sound.toasts.is_empty());
 
         let mut toast = app_with_machine(|d| d.notices = true);
         blocked(&mut toast);
         assert!(toast.last_alert.is_none());
         assert!(
-            toast
-                .notice
-                .as_ref()
-                .is_some_and(|(t, ..)| t.starts_with("[build] ") && t.ends_with("needs you")),
+            toast.toasts.last().is_some_and(|t| t.title.starts_with("[build] ") && t.title.ends_with("needs you")),
             "{:?}",
-            toast.notice
+            toast.toasts
+        );
+        assert_eq!(
+            toast.toasts.last().map(|t| t.body.as_str()),
+            Some("Waiting for your answer."),
+            "a remote agent's own words never reach the screen"
         );
     }
 
@@ -200,7 +203,7 @@ mod tests {
         app.notice = None;
         app.on_machine_server(THERE, ServerMsg::State(state()));
         app.alert_now(term, Status::Blocked);
-        assert!(app.notice.is_none(), "{:?}", app.notice);
+        assert!(app.notice.is_none() && app.toasts.is_empty(), "{:?}", app.notice);
 
         // A machine that was granted toasts needs no explaining.
         let mut granted = app_with_machine(|d| d.notices = true);

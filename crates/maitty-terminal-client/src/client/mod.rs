@@ -560,6 +560,14 @@ pub struct App {
     notice: Option<(String, Instant, bool)>,
     /// The session the note is about (an agent finished or needs you): clicking it goes there.
     notice_term: Option<ClientTerm>,
+    /// News about chats you are not looking at, and the update; the newest shows (`screen::toasts`).
+    toasts: Vec<screen::Toast>,
+    /// Chats whose stopping already had a toast, so a dismissed one does not come back.
+    failed_told: HashSet<ClientTerm>,
+    /// Restart was asked for while chats are working; it goes when they finish.
+    restart_waiting: bool,
+    /// The version this window just updated to, and when.
+    updated: Option<(String, Instant)>,
     /// The toast offers Restart now (the update just installed, the daemon still old).
     notice_restart: bool,
     /// The toast is a hint about keys, not news: it is marked `i`, not ✓.
@@ -885,6 +893,10 @@ impl App {
             cfg,
             notice: None,
             notice_term: None,
+            toasts: Vec::new(),
+            failed_told: HashSet::new(),
+            restart_waiting: false,
+            updated: None,
             notice_restart: false,
             notice_hint: false,
             sending: None,
@@ -1051,6 +1063,11 @@ impl App {
                     }
                     let frame = self.spinner_frame();
                     self.settle_alerts();
+                    self.fire_failed_toasts();
+                    if self.prune_toasts() {
+                        self.dirty = true;
+                    }
+                    self.release_tick();
                     self.ask_lists_again();
                     if frame != last_frame && ((self.motion_on() && (self.any_working() || self.any_checking() || self.any_calling())) || matches!(self.mode, Mode::Spinners(_))) {
                         last_frame = frame;
@@ -1495,6 +1512,10 @@ impl App {
             .filter(|t| t.status == Status::Blocked)
             .count();
         let keeps = self.cfg.restore.enabled;
+        if working > 0 {
+            // Stopping a working chat is never the default: Maiker waits for them to finish.
+            return self.restart_when_idle();
+        }
         if sessions == 0 || (working + waiting == 0 && keeps) {
             return self.restart_daemon_now();
         }
@@ -1590,12 +1611,9 @@ impl App {
         }
         match found {
             Ok(Some(v)) if self.update_available.as_ref() != Some(&v) => {
-                self.notify(
-                    format!("{APP_COMMAND} {v} is out: Update now is in Settings"),
-                    false,
-                );
-                self.update_available = Some(v);
+                self.update_available = Some(v.clone());
                 self.update_notes = notes;
+                self.announce_update(&v);
             }
             Ok(Some(v)) if asked => self.notify(
                 format!("{APP_COMMAND} {v} is out: Update now is in Settings"),
@@ -1900,30 +1918,6 @@ impl App {
                 }
             })
             .unwrap_or_default()
-    }
-
-    fn describe_term(&self, term: ClientTerm) -> String {
-        let name = self.session_name(term);
-        if let Some(t) = self.term_info(term) {
-            let place = crate::alert::place_label(
-                t.root.as_deref(),
-                t.top.as_deref().unwrap_or(&t.cwd),
-                t.branch.as_deref(),
-            );
-            if !place.is_empty() {
-                return format!("{name} ({place})");
-            }
-        }
-        match self
-            .snap_of(term.machine)
-            .and_then(|snap| snap.locate(term.term))
-        {
-            Some((w, t)) => {
-                let idx = w.tabs.iter().position(|x| x.id == t.id).unwrap_or(0) + 1;
-                format!("{name} ({} › {idx})", w.name)
-            }
-            None => name,
-        }
     }
 
     // ---- input ---------------------------------------------------------------------

@@ -151,7 +151,13 @@ See UI › *UI conventions*, *Menus* and *check modals and settings*.
 
 ## Toasts
 
-The TUI's notices: one small floating pane, bottom right, above the agent's input area, a box on the plain ground in the
+**News toasts** (`client/screen/toasts.rs`): a box 50 columns wide, bottom right, just above the status bar, on the plain
+ground with the theme's border and a 2-column edge filled in the status colour (`blocked` needs you, `err` failed,
+`done` finished, the accent an update). Row 1 is the colour's mark (`!`, `×`, `✓`, `↓`) and the bold title, then `+N` in dim
+when more wait, and a dim `×` at the right; then the body, then the keys in the status bar's style (the key bold, its words
+dim). One shows at a time, the newest. Plain notices keep the card below and ride above a news toast, never over it.
+
+The TUI's plain notices: one small floating pane, bottom right, above the agent's input area, a box on the plain ground in the
 notice's colour (`err`, `blocked` for needs you, `done`, else the accent) with a kind chip on the top border (`▲ Needs you`,
 `✕ Error`, `✓ Done`, `i Hint`, `✓ Notice`) and the red × chip at its right, then a bold title, a detail and an optional
 preview in italics. Every text row wraps at the toast's width: the title and detail onto up to three lines, the preview

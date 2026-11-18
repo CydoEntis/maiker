@@ -235,6 +235,8 @@ impl App {
         self.screen.show_own = Some(term);
         self.screen.cursor = None;
         self.mode = Mode::Normal;
+        // Looking at the chat is handling its news.
+        self.toasts.retain(|t| t.term != Some(term));
         self.cmd_on(term.machine, Command::FocusPane { term: term.term });
     }
 
@@ -621,6 +623,8 @@ impl App {
             }
             // It opens the Inbox, and closes it again.
             Action::Jump if matches!(self.mode, Mode::GoTo { .. }) => self.mode = Mode::Normal,
+            // With a toast on show the jump key goes to its chat; the inbox is one key away in the menu.
+            Action::Jump if self.toast_go() => {}
             Action::Jump => self.open_goto(),
             Action::PrevPrompt | Action::NextPrompt => {
                 if let Some(t) = self.focused() {
@@ -859,6 +863,9 @@ impl App {
         let plain = !k
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        if plain && k.code == KeyCode::Char('i') && self.toast_install() {
+            return;
+        }
         if k.code == KeyCode::Enter
             && let Some(c) = self.screen.cursor.and_then(|key| self.session_term(key))
             && self.asks_you(c)
@@ -2042,6 +2049,15 @@ impl App {
                 // The close mark on a progress toast stops the send it shows.
                 self.cancel_send();
                 self.dismiss_notice();
+            }
+            ScreenHit::ToastGo => {
+                self.toast_go();
+            }
+            ScreenHit::ToastDismiss => {
+                self.toast_dismiss();
+            }
+            ScreenHit::ToastInstall => {
+                self.toast_install();
             }
             ScreenHit::SettingsBody => {}
             ScreenHit::FinderPick(i) => {

@@ -792,6 +792,22 @@ keeps it), so starting never flashes white or another theme's colour.
   Split down `S`, Find, the right-click toggle, Project… (worktrees, snapshots, the check), **Close pane** `x`
   last. **Sidebar menu** (the ` menu ` chip): Filter sessions `/`, Add machine…, Inbox `i`, Put away…, Usage and cost `u`,
   Settings `,`, Keys `?`; the full Menu is the leader's `.`.
+- **Toasts** (`client/screen/toasts.rs`, look in DESIGN › Toasts). News about a chat you are not looking at, and the update;
+  plain notices (`App::notify`) are separate. One at a time, newest first, `+N` in the title for the rest. Kinds: needs you
+  (`<chat> needs you`, the agent's question; a remote agent's own words never show, only `Waiting for your answer.`; stays
+  until the question is answered), failed (`<machine> stopped answering` or `<Agent> stopped`, `<chat> is paused there. Nothing is
+  lost.`; once per stop, stays until dismissed), finished (`<chat> finished`, `Ready for you to review.`, 6 s) and update
+  (12 s). They fire only for chats off screen (`machine_opts.notices` allows it) and opening the chat removes its toast. Keys:
+  the jump key (`alt+j`) or a click on the title goes to the chat (for the update toast, to the menu), `esc` or `×` dismisses
+  (Esc goes no further, so it never reaches the agent); `i` installs from the update toast, only with the keys on the sidebar,
+  never while typing in a pane. Hidden while the service is down, during the start-up screen, and while any dialog, menu or
+  settings screen is open (`toast_visible`).
+- **Update** (`client/screen/release.rs`). A release found by the periodic check shows the update toast once: `Maiker X is ready`,
+  the first line of what changed, and `It installs when you restart, never while an agent is working.`; `i` install now, `esc`
+  later. While it downloads the status bar's chip (the service chip's slot) shows the spinner and `Downloading X…`. Restart with
+  chats working does not stop them: the chip says `N chats are working · Maiker restarts when they finish` and the restart goes
+  once none works (`release_tick`); with only chats waiting for you it still asks first. After the window reconnects to the new
+  daemon the chip says `✓ Updated to X · all chats reconnected` for 4 s.
 - **A chat stopped** (`client/screen/stopped.rs`). The client derives it from signals the daemon already reports and adds no
   status: an agent's pane whose last command failed (`TermInfo.exit`) while the agent is neither working nor asking, or an agent
   on a machine whose line is `Unreachable`. The row stays under Needs you with `×` (`State::Problem`). Only that pane is
