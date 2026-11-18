@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLayout, glidePlan, glideTop, isAtBottom, SEND_TOP_GAP_PX, sendSpacer, sendTop, visibleRange } from './windowing'
+import { buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, SEND_TOP_GAP_PX, sendSpacer, sendTop, visibleRange } from './windowing'
 
 const keys = (count: number) => Array.from({ length: count }, (_, index) => `row-${String(index)}`)
 
@@ -47,6 +47,27 @@ describe('the bottom of the list', () => {
     expect(isAtBottom(1_000, 600, 1_600)).toBe(true)
     expect(isAtBottom(980, 600, 1_600)).toBe(true)
     expect(isAtBottom(500, 600, 1_600)).toBe(false)
+  })
+})
+
+describe('following the newest row', () => {
+  const at = (top: number, total = 2_000) => ({ scrollTop: top, viewport: 600, total })
+  const following = { following: true, top: 1_400, total: 2_000 }
+
+  it('lets go as soon as the reader moves up, however little', () => {
+    expect(followAfterScroll(following, at(1_390), false).following).toBe(false)
+  })
+
+  it('takes the newest row again only when the reader comes back down to the end', () => {
+    const away = { following: false, top: 800, total: 2_000 }
+
+    expect(followAfterScroll(away, at(1_000), false).following).toBe(false)
+    expect(followAfterScroll(away, at(1_380), false).following).toBe(true)
+  })
+
+  it('reads nothing into a scroll the list made, or the view pulled in because the list got shorter', () => {
+    expect(followAfterScroll(following, at(200), true)).toEqual({ following: true, top: 200, total: 2_000 })
+    expect(followAfterScroll(following, at(1_200, 1_800), false).following).toBe(true)
   })
 })
 

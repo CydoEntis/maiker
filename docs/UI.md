@@ -1235,13 +1235,19 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   every second at rest (`follow_gap`). The last feed per conversation is kept (32 at most), so reopening a chat shows it
   at once.
 - **List.** `VirtualList` draws only the rows near the view (`transform` placement, measured heights, stable event
-  ids as keys) opens on the newest row and holds it until its first rows are measured, then leaves the view to the reader:
-  a reply never scrolls the chat down. When the person sends a message (`toLatest`, with `isSent` naming the rows that are
-  theirs) the view takes it to the top with room left below it (`sendTop`, `sendSpacer`), and keeps it there until the reader
-  scrolls; a message queued behind a running turn is not in the chat, so it moves nothing. When the view is short of the
-  end the list offers "Jump to the latest message". Rows
+  ids as keys) opens on the newest row and follows it while the view is at the end, so rows that arrive or grow keep the
+  end in sight. Following goes by the reader's direction (`followAfterScroll`): any move up lets go at once, even a nudge
+  that stays near the end, and only a move down that ends at the end takes it again; a scroll the list or the web view made
+  says nothing. A reader who scrolled up is never pulled down. Rows that come in above the view while the reader reads move
+  the view by as much, so what is read stays put. When the person sends a message (`toLatest`, with `isSent` naming the rows
+  that are theirs) the view takes it to the top with room left below it (`sendTop`, `sendSpacer`, the scroller's padding
+  counted), keeps it there while the reply is shorter than the view, then follows the reply's end until the reader scrolls
+  up; a message queued behind a running turn is not in the chat, so it moves nothing. When the view is short of the end the
+  list offers "Jump to the latest message". Rows
   are `buildRows(events)`: one agent message per turn (adjacent agent messages of a turn are joined; a step between
-  two messages keeps their order), user bubbles, step cards, approvals, turn dividers, and the live box last (while the agent works the turn's own messages, thoughts and steps are left out, `liveRows`).
+  two messages keeps their order), user bubbles, step cards, approvals, turn dividers, and the live box last. While the
+  agent works the turn's own steps, thoughts and messages are drawn as they arrive, above the live box; only a pending
+  request is left out of the list (the question tray asks it).
   Two or more steps that follow each other (edits, commands, tools; never the to-do list) fold into one **work row**
   (`workSummary.ts`, `WorkCard`): a line such as "Read 2 files, edited 3, ran 1 command" with the daemon's own time for
   the run, a "N steps" chip and a chevron on one row that opens to every step, one open at a time. Every run and every

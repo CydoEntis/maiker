@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import type { ChatRow } from '../chatRows'
 import { messageEvent } from '../eventFixtures'
-import { KnownRowsContext } from '../knownRows'
 import { ChatItem } from './ChatItems'
 
 const context = { agent: 'claude' as const, workingSince: null, approval: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
@@ -48,18 +47,24 @@ describe('a reply from the agent', () => {
     expect(container).toHaveTextContent('Now the **bol')
   })
 
-  it('is revealed once, a sentence at a time: drawn again, a reply that arrived live shows whole', () => {
-    const known = new Set<string>()
-    const live = () => <KnownRowsContext.Provider value={known}>{reply('completed', 'The endpoint is in. It has tests.')}</KnownRowsContext.Provider>
+  it('shows all the text the history has at once, with no timer between sentences', () => {
+    const { container } = render(reply('completed', 'The endpoint is in. It has tests.\n\n- One\n- Two'))
 
-    const first = render(live())
-    expect(first.container).toHaveTextContent('The endpoint is in.')
-    expect(first.container).not.toHaveTextContent('It has tests.')
-    first.unmount()
+    expect(container.querySelector('.mx-msg-lead')).toHaveTextContent('The endpoint is in.')
+    expect(container.querySelector('.mx-msg-rest')).toHaveTextContent('It has tests.')
+    expect(container).toHaveTextContent('Two')
+  })
 
-    // What the list does when the row scrolls out of sight and back.
-    const again = render(live())
-    expect(again.container).toHaveTextContent('It has tests.')
+  it('grows in place as more of a running reply arrives, its earlier words where they were', () => {
+    const { container, rerender } = render(reply('running', 'The endpoint'))
+    const lead = container.querySelector('.mx-msg-lead')
+    expect(container).toHaveTextContent('The endpoint')
+
+    rerender(reply('running', 'The endpoint is in. It has'))
+
+    expect(container.querySelector('.mx-msg-lead')).toBe(lead)
+    expect(lead).toHaveTextContent('The endpoint is in.')
+    expect(container.querySelector('.mx-msg-rest')).toHaveTextContent('It has')
   })
 
   it('shows no half-typed table while it is still arriving', () => {

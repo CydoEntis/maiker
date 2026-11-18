@@ -3,7 +3,7 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, u
 import { ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ReducedMotionContext } from '@/features/workspace/components/motion'
-import { buildLayout, glidePlan, glideTop, isAtBottom, sendSpacer, sendTop, visibleRange } from './windowing'
+import { buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, sendSpacer, sendTop, visibleRange, type FollowState } from './windowing'
 
 type Props<T> = {
   items: readonly T[]
@@ -19,7 +19,7 @@ type Props<T> = {
   scrollTarget?: { key: string; nonce: number } | null
   /**
    * Each new value is a message the person just sent: the newest row `isSent` accepts is scrolled to the top of the view,
-   * with room left below it, and the view stays there while the reply arrives (the reader moves it themselves).
+   * with room left below it, and the view stays there while the reply is shorter than the view, then follows its end.
    */
   toLatest?: number
   /** Whether a row is a message the person sent, for `toLatest` to find. */
@@ -35,22 +35,24 @@ const DEFAULT_OVERSCAN = 6
  * just moved or resized; read as the reader moving, one of those would take the view from the list.
  */
 const READER_SCROLL_MS = 1200
-/**
- * A chat opens on its newest row and holds it while its rows are measured. After this long the list leaves the view
- * alone: a reply that is arriving never takes the view down, the reader keeps control of it.
- */
-const SETTLE_MS = 1000
+
+/** The scroller's padding, top and bottom together; none where there is no style sheet (tests). */
+function paddingOf(element: HTMLElement): number {
+  const style = getComputedStyle(element)
+  return (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0)
+}
 
 /**
  * A scrolling list that draws only the rows near the view, so a conversation of thousands of items
  * costs what a screenful costs. Rows are placed with `transform` (no layout work per scroll) and their
- * heights are measured as they are drawn. A chat opens on its newest row; a message the person sends scrolls
- * to the top of the view with room left below it, and after that nothing moves the view but the reader.
+ * heights are measured as they are drawn. A chat opens on its newest row and follows it while the view is at the end,
+ * so a turn that streams in stays in sight; a move up by the reader lets go, and nothing then moves the view but them.
+ * A message the person sends scrolls to the top of the view with room left below it.
  */
 export function VirtualList<T>({ items, getKey, estimate, renderItem, label, overscan = DEFAULT_OVERSCAN, scrollTarget = null, toLatest = 0, isSent }: Props<T>) {
   const scroller = useRef<HTMLDivElement>(null)
-  // The view sits on the newest row until the chat has settled, the reader moves it, or something is sent.
-  const holdBottom = useRef(true)
+  // Whether the view follows the newest row, and where it was last seen (`followAfterScroll`).
+  const follow = useRef<FollowState>({ following: true, top: 0, total: 0 })
   // The view holds a sent message at its top until the reader moves it.
   const pinned = useRef(false)
   // When the reader last touched the list, and whether they still hold it (a scrollbar being dragged).
@@ -58,7 +60,6 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
   const held = useRef(false)
   const touched = useCallback(() => {
     touchedAt.current = performance.now()
-    holdBottom.current = false
     pinned.current = false
   }, [])
   useEffect(() => {
@@ -74,13 +75,10 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
       window.removeEventListener('pointercancel', release)
     }
   }, [touched])
-  useEffect(() => {
-    const timer = window.setTimeout(() => { holdBottom.current = false }, SETTLE_MS)
-    return () => { window.clearTimeout(timer) }
-  }, [])
   const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map())
   const [scrollTop, setScrollTop] = useState(0)
   const [viewport, setViewport] = useState(FALLBACK_VIEWPORT_PX)
+  const [padding, setPadding] = useState(0)
   const [away, setAway] = useState(false)
 
   // The row a sent message stands at: found when `toLatest` moves, and kept while the rows are only added to.
@@ -91,11 +89,12 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     const found = isSent === undefined ? -1 : items.findLastIndex(isSent)
     if (found !== -1) setSent({ at: found, nonce: toLatest })
   }
-  // The view takes a sent message to its top, and holds it there until the reader moves it.
+  // The view takes a sent message to its top, and holds it there until the reader moves it; once the reply under it is
+  // taller than the view, the view follows the reply's end.
   useLayoutEffect(() => {
     if (sent === null) return
     pinned.current = true
-    holdBottom.current = false
+    follow.current = { ...follow.current, following: true }
   }, [sent])
   // The echo of a message gives way to the history's own row of it: the stand stays on whichever row is the sent one now.
   const standAt = useMemo(() => {
@@ -108,15 +107,17 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
 
   const keys = useMemo(() => items.map(getKey), [items, getKey])
   const rowsLayout = useMemo(() => buildLayout(keys, heights, estimate), [keys, heights, estimate])
-  const spacer = standAt === null ? 0 : sendSpacer(viewport, rowsLayout.offsets[standAt] ?? 0, rowsLayout.total)
+  // The scroller's own padding is part of what the view shows, so the room leaves the message exactly at the top.
+  const spacer = standAt === null ? 0 : sendSpacer(viewport - padding, rowsLayout.offsets[standAt] ?? 0, rowsLayout.total)
   const layout = useMemo(() => ({ ...rowsLayout, total: rowsLayout.total + spacer }), [rowsLayout, spacer])
   const range = visibleRange(layout, scrollTop, viewport, overscan)
   const totalNow = useRef(layout.total)
   useLayoutEffect(() => { totalNow.current = layout.total }, [layout.total])
-  // Where the view belongs while the list holds it: on the sent message, or on the newest row; null when it is the reader's.
+  // Where the view belongs while the list holds it: on the sent message while its reply is shorter than the view, else on
+  // the newest row while the view follows it; null when it is the reader's. The browser stops a scroll past the end at the end.
   const wantedTop = (): number | null => {
-    if (pinned.current && standAt !== null) return sendTop(layout.offsets[standAt] ?? 0)
-    if (holdBottom.current) return layout.total
+    if (pinned.current && standAt !== null && spacer > 0) return sendTop(layout.offsets[standAt] ?? 0)
+    if (pinned.current || follow.current.following) return layout.total
     return null
   }
   const wanted = useRef(wantedTop)
@@ -169,7 +170,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     pending.current.set(key, height)
   }, [])
 
-  // One observer for every drawn row; a row reports its own height when it changes (an expanded card, a revealed message).
+  // One observer for every drawn row; a row reports its own height when it changes (an expanded card, a reply that grew).
   const observer = useRef<ResizeObserver | null>(null)
   // A row that leaves the drawn range stops being observed (the ref's cleanup), so a long read does not keep every row
   // it ever drew under the observer.
@@ -196,7 +197,10 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) return
-    const update = () => { setViewport(element.clientHeight || FALLBACK_VIEWPORT_PX) }
+    const update = () => {
+      setViewport(element.clientHeight || FALLBACK_VIEWPORT_PX)
+      setPadding(paddingOf(element))
+    }
     update()
     if (typeof ResizeObserver === 'undefined') return
     const watch = new ResizeObserver(update)
@@ -204,9 +208,10 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     return () => { watch.disconnect() }
   }, [])
 
-  // The list moves the view itself: remember where it is.
+  // The list moves the view itself: remember where it is, so the reader's next scroll is measured from there.
   const place = useCallback((element: HTMLDivElement, top: number, total: number) => {
     element.scrollTop = top
+    follow.current = { ...follow.current, top: element.scrollTop, total }
     setScrollTop(element.scrollTop)
     atEnd.current = isAtBottom(element.scrollTop, element.clientHeight || FALLBACK_VIEWPORT_PX, total)
     setAway(!atEnd.current)
@@ -221,15 +226,16 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     place(element, element.scrollTop + delta, layout.total)
   }, [layout.total, place])
 
-  // The view holds its place: on the sent message while it is pinned, on the newest row while the chat opens. Otherwise it
-  // is the reader's, and rows that come in or grow leave it where it is.
+  // The view holds its place: on the sent message while it is pinned, on the newest row while it follows it (a view that
+  // got shorter, as a message box grows, included). Otherwise it is the reader's, and rows that come in or grow leave it
+  // where it is.
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) return
     const top = wanted.current()
     if (top !== null) place(element, top, layout.total)
     else setAway(!isAtBottom(element.scrollTop, element.clientHeight || FALLBACK_VIEWPORT_PX, layout.total))
-  }, [layout.total, standAt, place])
+  }, [layout.total, standAt, viewport, place])
 
   // A reader at the end stays at the end when the view changes size: a message box that grows must not cover the last row.
   useLayoutEffect(() => {
@@ -245,7 +251,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     const at = keys.indexOf(scrollTarget.key)
     if (at === -1) return
     handled.current = scrollTarget.nonce
-    holdBottom.current = false
+    follow.current = { ...follow.current, following: false }
     pinned.current = false
     place(element, layout.offsets[at] ?? 0, layout.total)
   }, [scrollTarget, keys, layout, place])
@@ -255,20 +261,24 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     if (!element) return
     setScrollTop(element.scrollTop)
     const byReader = held.current || performance.now() - touchedAt.current < READER_SCROLL_MS
-    atEnd.current = isAtBottom(element.scrollTop, element.clientHeight || FALLBACK_VIEWPORT_PX, layout.total)
+    const height = element.clientHeight || FALLBACK_VIEWPORT_PX
+    follow.current = followAfterScroll(follow.current, { scrollTop: element.scrollTop, viewport: height, total: layout.total }, !byReader)
+    atEnd.current = isAtBottom(element.scrollTop, height, layout.total)
     setAway(!atEnd.current)
     // A scroll nobody asked for (a web view settling a view the list moved) that left a held view elsewhere is put right.
     const top = wanted.current()
     if (!byReader && top !== null && element.scrollTop !== top) place(element, top, layout.total)
   }
 
-  // A wheel turn arrives before the scroll it causes, and a commit in between would undo it.
+  // A wheel turn arrives before the scroll it causes, and a streaming commit in between would undo it.
   const onWheel = (event: WheelEvent) => {
     touched()
     stopGlide()
     // The scrolling region is only as wide as the chat column; a wheel turn over the space beside it scrolls it too.
     const element = scroller.current
     if (element !== null && event.target instanceof Node && !element.contains(event.target)) element.scrollTop += event.deltaY
+    // A turn up lets go of the newest row at once; nothing above to scroll to (a short chat, or the top) is not leaving it.
+    if (event.deltaY < 0 && (element?.scrollTop ?? 0) > 0) follow.current = { ...follow.current, following: false }
   }
 
   // The jump to the newest row glides there, so the reader sees which way the chat went; the reader's own scroll, a
@@ -286,6 +296,7 @@ export function VirtualList<T>({ items, getKey, estimate, renderItem, label, ove
     stopGlide()
     const arrive = () => {
       glide.current = null
+      follow.current = { ...follow.current, following: true }
       place(element, totalNow.current, totalNow.current)
     }
     const bottomNow = () => element.scrollHeight - element.clientHeight

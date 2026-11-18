@@ -10,6 +10,7 @@ import { findTheme, themeStyle, THEMES } from '@/features/workspace/theme/themes
 import { Copy } from 'lucide-react'
 import { ChatFeed, ChatParity, SubagentsBars, WaitingCards } from './ChatFeed'
 import { RepliesGallery } from './RepliesGallery'
+import { LiveTurnGallery } from './LiveTurnGallery'
 import { DocumentsGallery } from './DocumentsGallery'
 import { galleryParams, galleryHash } from './galleryParams'
 
@@ -179,6 +180,11 @@ export function Gallery() {
         <div className="flex flex-wrap items-start gap-6">
           <div className="w-[800px] max-w-full"><ChatFeed /></div>
           <div className="w-[400px] max-w-full"><ChatFeed /></div>
+        </div>
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">A turn as it streams</h2>
+        <div className="flex flex-wrap items-start gap-6">
+          <LiveTurnGallery width={780} />
+          <LiveTurnGallery width={360} />
         </div>
         <h2 className="m-0 mt-4 text-[18px] font-[650]">Replies and quotes</h2>
         <div className="flex flex-wrap items-start gap-6">

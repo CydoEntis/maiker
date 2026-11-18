@@ -143,10 +143,32 @@ describe('how the chat feels while it waits', () => {
     await settle(ACTIVE_POLL_MS + 1)
     daemon.upsert(daemon.message('t1', 'a1', 'Assistant', 'the answer'))
     await settle(700)
-    // The reply arrived live, so it is typed in; give the typing time to catch up.
-    await settle(1500)
 
     expect(screen.getByText('the answer')).toBeInTheDocument()
+  })
+
+  it('draws the running turn as it streams in: its steps and its reply growing in place, over one working line', async () => {
+    const { daemon } = open('Working')
+    daemon.upsert(daemon.message('t2', 'u2', 'User', 'fix the build'))
+    await settle()
+    // Nothing of the turn yet: a skeleton holds the place of its first row.
+    expect(screen.getByText('Thinking')).toBeInTheDocument()
+    expect(document.querySelectorAll('.mx-sk')).toHaveLength(3)
+
+    daemon.upsert(daemon.tool('t2', 'c1', 'pnpm build', 'error: lockfile', 'Running'))
+    daemon.upsert(daemon.message('t2', 'a1', 'Assistant', 'The build fails because', 'Running'))
+    await settle(ACTIVE_POLL_MS + 1)
+
+    expect(screen.getByText('The build fails because')).toBeInTheDocument()
+    expect(document.querySelector('[data-key="t2:c1"]')).not.toBeNull()
+    expect(document.querySelector('.mx-sk')).toBeNull()
+    expect(screen.getByText('Esc to stop')).toBeInTheDocument()
+
+    // More of the same message: no timer stands between the read and the words.
+    daemon.upsert(daemon.message('t2', 'a1', 'Assistant', 'The build fails because the lockfile is stale.', 'Running'))
+    await settle(ACTIVE_POLL_MS + 1)
+    expect(screen.getByText('The build fails because the lockfile is stale.')).toBeInTheDocument()
+    expect(document.querySelectorAll('[data-key="t2:a1"]')).toHaveLength(1)
   })
 
   it('shows a reply that arrived while the chat was closed whole when it is opened again, and does not type it in', async () => {

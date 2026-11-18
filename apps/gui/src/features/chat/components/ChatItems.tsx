@@ -1,16 +1,13 @@
-import { memo, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { memo, useContext, useMemo, type ReactNode } from 'react'
 import { Quote as QuoteIcon } from 'lucide-react'
 import { Icon } from '@/features/workspace/components/glyphs'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import type { TurnSpan } from '@/features/inspect/turnRange'
-import { dividerText, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
+import { dividerText, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
 import type { ItemStatus } from '../chatEvents'
-import { KnownRowsContext } from '../knownRows'
 import { isWaitingStep } from '../stepInfo'
-import { useRevealedText } from '../useRevealedText'
 import { WorkingMark } from './WorkingMark'
 import { LiveBox } from './LiveBox'
-import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { parseAttachmentMessage } from '../attachmentMessage'
 import { parseQuoteMessage } from '../quoteMessage'
 import { askablesOf, type Askable } from '../plainQuestions'
@@ -95,7 +92,7 @@ function sameRow(a: ChatRow, b: ChatRow): boolean {
     case 'approval':
       return b.kind === 'approval' && a.event === b.event && a.step?.key === b.step?.key && a.step?.label === b.step?.label
     case 'working':
-      return b.kind === 'working' && a.phrase === b.phrase
+      return b.kind === 'working' && a.phrase === b.phrase && a.placeholder === b.placeholder
     case 'echo':
       return b.kind === 'echo' && a.text === b.text
     case 'report':
@@ -113,22 +110,18 @@ function sameProps(a: RowProps, b: RowProps): boolean {
 }
 
 /**
- * An agent's reply. One that arrives while the person is looking appears sentence by sentence (a list item or a table row
- * each count as one), so what shows is always finished; one that was already there shows whole. A reply still arriving
- * is read in its finished form, so a half-written mark does not flash.
+ * An agent's reply, drawn as fast as the history brings it: a reply still arriving grows in place. It is read in its
+ * finished form (`streamingParagraphs`), so a half-written mark or table does not flash; each block is parsed and drawn
+ * again only when its own text changed (`Markdown`).
  */
 function AgentMessage({ rowKey, paragraphs, status, agent }: { rowKey: string; paragraphs: readonly string[]; status: ItemStatus; agent: ChatAgent }) {
-  const reduced = useContext(ReducedMotionContext)
-  const known = useContext(KnownRowsContext)
   const actions = useContext(ChatActionsContext)
-  const target = (status === 'running' ? streamingParagraphs(paragraphs) : paragraphs).join('\n\n')
-  const typed = useRevealedText(target, !reduced, known !== null && !known.has(rowKey))
-  // Revealed once: drawn again, this row shows whole.
-  useEffect(() => { known?.add(rowKey) }, [known, rowKey])
-  const { lead, rest } = splitLead(typed === target ? (status === 'running' ? streamingParagraphs(paragraphs) : paragraphs) : paragraphsOf(typed))
-  const empty = target.trim() === ''
-  // Questions asked in plain words are offered a Reply only once the message is whole: never while it is written or typed in.
-  const whole = status !== 'running' && typed === target && actions !== null && actions.canReply
+  const running = status === 'running'
+  const shown = running ? streamingParagraphs(paragraphs) : paragraphs
+  const { lead, rest } = splitLead(shown)
+  const empty = shown.join('').trim() === ''
+  // Questions asked in plain words are offered a Reply only once the message is whole: never while it is still written.
+  const whole = !running && actions !== null && actions.canReply
   const restText = rest.join('\n\n')
   const leadAsked = useMemo(() => (whole ? askablesOf(lead).map((one): Askable => ({ ...one, key: `lead.${one.key}` })) : []), [whole, lead])
   const restAsked = useMemo(() => (whole ? askablesOf(restText) : []), [whole, restText])
@@ -142,7 +135,7 @@ function AgentMessage({ rowKey, paragraphs, status, agent }: { rowKey: string; p
         ? <p className="mx-msg-lead"><InlineMarkdown text={lead} /></p>
         : <p className="mx-msg-lead has-reply"><InlineMarkdown text={lead} /><ReplyAction label={leadOne.label} onReply={() => { reply(leadOne.key) }} /></p>)}
       {rest.length > 0 && <Markdown text={restText} className="mx-msg-rest" {...(restAsked.length === 0 ? {} : { asked: restAsked, onReply: (one: Askable) => { reply(one.key) } })} />}
-      {empty && <p className="mx-msg-empty">{status === 'running' ? 'Writing…' : 'The agent finished without writing a reply.'}</p>}
+      {empty && <p className="mx-msg-empty">{running ? 'Writing…' : 'The agent finished without writing a reply.'}</p>}
       {asked.length > 1 && (
         <p className="mx-ask-foot">
           <button type="button" className="mx-ask-all" onClick={() => { reply(null) }}>{asked.length} questions<span aria-hidden="true"> · </span><span className="mx-ask-all-do">Reply to each</span></button>
@@ -286,7 +279,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     }
     case 'working':
       // Token counts are not shown: the daemon's history carries none, and an estimate would be invented.
-      return <Frame><LiveBox phrase={row.phrase} since={workingSince} /></Frame>
+      return <Frame><LiveBox phrase={row.phrase} since={workingSince} placeholder={row.placeholder} /></Frame>
   }
 }, sameProps)
 

@@ -24,8 +24,6 @@ function scroller(): HTMLElement {
 }
 
 const latest = () => screen.queryByRole('button', { name: 'Jump to the latest message' })
-/** How long the list holds the newest row while a chat opens. */
-const SETTLE_MS = 1000
 
 afterEach(() => { vi.useRealTimers() })
 
@@ -48,23 +46,52 @@ describe('a conversation list', () => {
     expect(latest()).toBeNull()
   })
 
-  it('never moves the view when rows arrive after the chat has settled, and offers the way down', () => {
+  it('follows the newest row as rows stream in while the view is at the end, long after the chat opened', () => {
     vi.useFakeTimers()
     const { rerender } = render(list())
     const element = scroller()
     rerender(list({ items: rows(21) }))
-    act(() => { vi.advanceTimersByTime(SETTLE_MS) })
+    act(() => { vi.advanceTimersByTime(5_000) })
 
     rerender(list({ items: rows(22) }))
     rerender(list({ items: rows(23) }))
 
-    expect(element.scrollTop).toBe(21 * ROW)
-    // Read a little up from there, a reply arriving moves nothing and the way down is offered.
-    act(() => { element.scrollTop = 100 })
+    expect(element.scrollTop).toBe(23 * ROW)
+    expect(latest()).toBeNull()
+  })
+
+  it('never pulls a reader who scrolled up back down when rows stream in, however little they moved, and offers the way down', () => {
+    const { rerender } = render(list())
+    const element = scroller()
+    rerender(list({ items: rows(21) }))
+
+    // A nudge up, still within reach of the end: the wheel lets go before the scroll it causes lands.
+    fireEvent.wheel(element, { deltaY: -3 })
+    rerender(list({ items: rows(22) }))
+    // The view is 600px, so the end of 22 rows is at 22 * ROW - 600.
+    const nudged = 22 * ROW - 600 - 10
+    act(() => { element.scrollTop = nudged })
     fireEvent.scroll(element)
     rerender(list({ items: rows(24) }))
-    expect(element.scrollTop).toBe(100)
+
+    expect(element.scrollTop).toBe(nudged)
     expect(latest()).not.toBeNull()
+  })
+
+  it('follows again once the reader scrolls back down to the end', () => {
+    const { rerender } = render(list())
+    const element = scroller()
+    rerender(list({ items: rows(21) }))
+    fireEvent.wheel(element, { deltaY: -3 })
+    act(() => { element.scrollTop = 100 })
+    fireEvent.scroll(element)
+
+    fireEvent.wheel(element, { deltaY: 3 })
+    act(() => { element.scrollTop = 21 * ROW - 600 })
+    fireEvent.scroll(element)
+    rerender(list({ items: rows(22) }))
+
+    expect(element.scrollTop).toBe(22 * ROW)
   })
 
   it('leaves the view where the reader put it when rows come in', () => {
@@ -190,19 +217,22 @@ describe('sending a message', () => {
     expect(total).toBe(sentOffset + ROW + (600 - SEND_TOP_GAP_PX - ROW))
   })
 
-  it('never scrolls down while the reply arrives, and the room under the message shrinks as it grows', () => {
+  it('holds it at the top while the reply is shorter than the view, the room under it shrinking, then follows the reply\'s end', () => {
     const { rerender } = render(list({ items: rows(20) }))
     const element = scroller()
     rerender(list({ items: chat, toLatest: 1 }))
-    const stood = element.scrollTop
+    const reply = (grown: number) => [...chat, ...rows(grown).map((key) => `reply-${key}`)]
+    const total = () => Number(element.firstElementChild?.getAttribute('style')?.match(/height: (\d+)px/)?.[1])
 
-    for (let grown = 1; grown <= 30; grown += 1) rerender(list({ items: [...chat, ...rows(grown).map((key) => `reply-${key}`)], toLatest: 1 }))
+    for (let grown = 1; grown <= 5; grown += 1) rerender(list({ items: reply(grown), toLatest: 1 }))
+    expect(element.scrollTop).toBe(sentOffset - SEND_TOP_GAP_PX)
+    expect(total()).toBe(sentOffset + 600 - SEND_TOP_GAP_PX)
 
-    expect(element.scrollTop).toBe(stood)
-    // A reply taller than the view leaves no room: the rows themselves are the height, and the reader has the way down.
-    const total = Number(element.firstElementChild?.getAttribute('style')?.match(/height: (\d+)px/)?.[1])
-    expect(total).toBe((chat.length + 30) * ROW)
-    expect(latest()).not.toBeNull()
+    for (let grown = 6; grown <= 30; grown += 1) rerender(list({ items: reply(grown), toLatest: 1 }))
+    // A reply taller than the view leaves no room: the rows themselves are the height, and the view is on their end.
+    expect(total()).toBe((chat.length + 30) * ROW)
+    expect(element.scrollTop).toBe(total())
+    expect(latest()).toBeNull()
   })
 
   it('stands on the history\'s own row when the echo of the message gives way to it', () => {
@@ -214,17 +244,18 @@ describe('sending a message', () => {
     expect(element.scrollTop).toBe(sentOffset - SEND_TOP_GAP_PX)
   })
 
-  it('hands the view to the reader as soon as they move it', () => {
+  it('hands the view to the reader as soon as they move it up, and the reply growing past the view leaves them there', () => {
     const { rerender } = render(list({ items: rows(20) }))
     const element = scroller()
     rerender(list({ items: chat, toLatest: 1 }))
 
-    fireEvent.wheel(element, { deltaY: 3 })
-    act(() => { element.scrollTop = sentOffset + 20 })
+    fireEvent.wheel(element, { deltaY: -3 })
+    act(() => { element.scrollTop = sentOffset - 200 })
     fireEvent.scroll(element)
-    rerender(list({ items: [...chat, 'reply-1'], toLatest: 1 }))
+    rerender(list({ items: [...chat, ...rows(30).map((key) => `reply-${key}`)], toLatest: 1 }))
 
-    expect(element.scrollTop).toBe(sentOffset + 20)
+    expect(element.scrollTop).toBe(sentOffset - 200)
+    expect(latest()).not.toBeNull()
   })
 
   it('scrolls to the new message again when another is sent', () => {

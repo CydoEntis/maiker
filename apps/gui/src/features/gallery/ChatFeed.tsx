@@ -149,7 +149,7 @@ export function ChatFeed() {
   return (
     <div className="mx-chat" style={{ zoom: 1 }}>
       <div className="mx-chat-column">
-        <LiveBox phrase="reading src/refunds/partial.ts" since={LIVE_SINCE} />
+        <LiveBox phrase="reading src/refunds/partial.ts" since={LIVE_SINCE} placeholder />
         <WorkCard steps={run} root={null} openDiff={null} waitingStep={null} />
         <CommandStep event={commandEvent('c1', { command: 'pnpm test --filter refunds', output: TEST_OUTPUT, exitCode: 0, timing: started(0) })} alone />
         <CommandStep event={commandEvent('c2', { command: 'pnpm db:migrate --env staging', output: FAILED_OUTPUT, exitCode: 1, status: 'failed', timing: started(0) })} alone />
@@ -206,7 +206,7 @@ export function ChatParity() {
     { kind: 'step', key: 's5', event: editEvent('e2', { file: 'src/flags/settings.ts', diff: { status: 'available', hunks: [{ header: '@@ -12,2 +12,3 @@', lines: DIFF }], added: 2, removed: 1, truncated: false } }) },
     { kind: 'divider', key: 'd1', event: TURN },
     { kind: 'user', key: 'u2', event: messageEvent('u2', 'user', 'Should sessions be stored in Redis instead of Postgres? And does that change how logout reads the session?') },
-    { kind: 'working', key: 'wk', phrase: 'running the full test suite' },
+    { kind: 'working', key: 'wk', phrase: 'running the full test suite', placeholder: false },
     { kind: 'agent', key: 'a2', turnId: 't2', status: 'completed', paragraphs: PROSE.split('\n\n') },
     { kind: 'changes', key: 'ch', files: ['src/flags/settings.ts', 'src/flags/index.ts', 'drizzle/0043_flags.sql', 'src/flags/settings.test.ts'], lines: { added: 186, removed: 41 }, turn: null },
   ]

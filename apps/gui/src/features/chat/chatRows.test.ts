@@ -1,29 +1,33 @@
 import { describe, expect, it } from 'vitest'
 import type { TurnEvent } from './chatEvents'
-import { approvalEvent, commandEvent, editEvent, messageEvent, reasoningEvent, todoEvent, toolEvent } from './eventFixtures'
-import { buildRows, dividerText, formatDuration, liveRows, paragraphsOf, splitLead, streamingParagraphs } from './chatRows'
+import { approvalEvent, commandEvent, editEvent, fields, messageEvent, reasoningEvent, todoEvent, toolEvent } from './eventFixtures'
+import { buildRows, dividerText, formatDuration, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from './chatRows'
 
 describe('the rows drawn while the agent works', () => {
-  const events = [messageEvent('u1', 'user', 'Fix it'), toolEvent('s1', { target: 'a.ts' }), messageEvent('a1', 'agent', 'Looking.'), commandEvent('c1', { command: 'pnpm test' })]
+  const asked = messageEvent('u1', 'user', 'Fix it')
+  const writing = { ...messageEvent('a1', 'agent', 'Looking at the'), ...fields('a1', 'running') }
+  const turnSoFar = [asked, reasoningEvent('r1', 'Where is it read?'), toolEvent('s1', { target: 'a.ts' }), toolEvent('s2', { target: 'b.ts' }), writing]
+  const working = (rows: readonly ChatRow[]) => rows.find((row): row is Extract<ChatRow, { kind: 'working' }> => row.kind === 'working')
 
-  it('leaves the turn in progress to the live box: no reply, thought or step of it', () => {
-    expect(liveRows(buildRows(events, true), null).map((row) => row.kind)).toEqual(['user', 'working'])
+  it('draws the turn as it arrives: its thought, its steps folded into a run, and the reply still being written, then the working line', () => {
+    const rows = buildRows(turnSoFar, true)
+
+    expect(rows.map((row) => row.kind)).toEqual(['user', 'thought', 'work', 'agent', 'working'])
+    expect(rows[3]).toMatchObject({ kind: 'agent', status: 'running', paragraphs: ['Looking at the'] })
   })
 
-  it('shows everything once the work has ended', () => {
-    const rows = buildRows(events, false)
-
-    expect(liveRows(rows, null)).toEqual(rows)
+  it('holds the place of the first row with a skeleton until the turn has drawn something', () => {
+    expect(working(buildRows([asked], true))?.placeholder).toBe(true)
+    expect(working(buildRows([], false, null, 'Fix it'))?.placeholder).toBe(true)
+    expect(working(buildRows(turnSoFar, true))?.placeholder).toBe(false)
   })
 
-  it('keeps what the person sent and the turns before it', () => {
-    const earlier = [messageEvent('u0', 'user', 'First'), messageEvent('a0', 'agent', 'Done.'), ...events]
+  it('keeps every row a stable key as the turn grows, so a row that is drawn is never drawn again in another place', () => {
+    const before = buildRows(turnSoFar.slice(0, 3), true).map((row) => row.key)
+    const after = buildRows([...turnSoFar, commandEvent('c1', { command: 'pnpm test' })], true).map((row) => row.key)
 
-    expect(liveRows(buildRows(earlier, true), null).map((row) => row.kind)).toEqual(['user', 'agent', 'user', 'working'])
-  })
-
-  it('keeps a step a request is waiting on, so it is never hidden from the person who must answer', () => {
-    expect(liveRows(buildRows(events, true), 'c1').map((row) => row.kind)).toContain('step')
+    expect(after.slice(0, before.length - 1)).toEqual(before.slice(0, -1))
+    expect(after.at(-1)).toBe('working')
   })
 })
 

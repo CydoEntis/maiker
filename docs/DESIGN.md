@@ -478,11 +478,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   full list, a click opens the chat and a right-click gives the same menu. The foot has the update button and Settings.
   No agent logos, initials or connection dot (the service's state is the title-bar chip), and no Recent sessions button
   (it is in the command palette). The width eases on the drawers' timing.
-- **Replies are revealed a sentence at a time.** While the agent works the chat draws only the quiet working line and skeleton (*The live box*, below); when the
-  work ends its reply appears one unit every 120 ms (`useRevealedText`, `REVEAL_MS`): a sentence of prose, a list item, a
-  table row or a whole fenced block of code (`revealEnds`), so what shows is always finished, never half a word. Steps
-  arrive already folded. A reply that arrives after the history has loaded is revealed from its first sentence; what the
-  history already held shows at once (`knownRows.ts`), and Reduce motion shows everything at once. A helper agent reporting back (the harness's `<task-notification>` block, which the history keeps as a
+- **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
+  thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
+  working line (*The live box*, below). There is no reveal timer: text shows as fast as the history has it, and a reply
+  still being written (Claude's structured chats stream it, `--include-partial-messages`) grows in place, read in its
+  finished form so a half-written mark or table never flashes (`streamingParagraphs`). A pending request stays out of the
+  feed; it is asked in the tray over the box. A helper agent reporting back (the harness's `<task-notification>` block, which the history keeps as a
   user message) is one quiet line, "Agent "name" finished · 11s · 50.5k tokens", never the markup; once it has reported,
   it clears from the helpers dock. One that still needs you stays.
 - **Running helpers** (`HelpersDock`, the daemon's `subagent_activity`, `model/subagents.ts`). Helpers that run show in the dock above the message box, not in a bar over the chat; the daemon takes a helper's own report that it finished as final, whatever second its other reports were stamped with, and only a start of its own brings a finished helper back, so one whose last news arrives late is not listed as running again and then as stopped (`apply_hook`).
@@ -806,7 +807,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   folds into one line, "Allowed", "Allowed for this session" or "Denied". A turn ends with a divider (centred words
   between hairlines, "Finished in 3m 40s · 10:46"; failed in `--err` and stopped in `--dim`, each with its mark; a
   turn the person stopped in the terminal is "Stopped after …", never a bubble of Claude's "[Request interrupted…]") and,
-  when it edited files, the changed-files card (a head-only card: icon, "N changed files", +A −R, **Review**). card. While the agent works the chat shows the live box (see *The live box*). Problems with the history (offline, incomplete, a provider error) and Full access show in one
+  when it edited files, the changed-files card (a head-only card: icon, "N changed files", +A −R, **Review**). card. While the agent works the chat shows the turn as it arrives and the live box at its end (see *The live box*). Problems with the history (offline, incomplete, a provider error) and Full access show in one
   slim strip above the list. **A subagent's chat** replaces the list with a 36px bar on `--well` (**‹ Main session**,
   "· Subagent", its name, its time in mono and a **read-only** tag), then the helper's own steps drawn as the chat's rows (read from the record its agent keeps, every 1.5 s while it
   works, "Its earlier steps are not shown." above them when the start was cut). Where there is no record (another
@@ -992,15 +993,17 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   state, and amber only for what needs you.
 - **Sending scrolls to your message.** The chat never clears. A message you send stands 16px from the top of the view
   (`SEND_TOP_GAP_PX` plus the row's own 8px) with empty room under it (`sendSpacer`) so this holds even when the reply is
-  short; the room shrinks as the reply grows. Nothing after that moves the view but the reader: a reply never scrolls the
-  chat down, and a chat opens on its newest row only until its first rows are measured. Queuing a message while the agent
-  works does not move the view (the message is in the dock, not the chat).
-- **The live box.** While the agent works the turn shows one frameless, quiet block (`LiveBox`, `role="status"`): no border,
-  no background, no header bar. One 28px line with the 12px running light, "Working for 12s" (12.5px `--muted`, the time in
-  mono) and "Esc to stop" (11.5px `--dim`) at the right, then a skeleton of three bars (92, 80 and 56%, `.mx-sk`, a 1.6s
-  shimmer that is static under Reduce motion). The step the agent is on is said only to screen readers. **Deliberate deviation
-  from the prototype**, which frames this as a bordered card with a step row. The turn's messages, thoughts and steps stay out of
-  the chat until the work ends (`liveRows`); a plan, helpers, and a step a request waits on stay.
+  short; the room shrinks as the reply grows, and once the reply is taller than the view the view follows its end. A chat
+  opens on its newest row and **follows it while the view is at the end**, so a turn that streams in stays in sight. Any
+  move up by the reader lets go at once and nothing then moves the view but them ("Jump to the latest message", or
+  scrolling back down to the end, takes it again). Queuing a message while the agent works does not move the view (the
+  message is in the dock, not the chat).
+- **The live box.** While the agent works the turn ends in one frameless, quiet line (`LiveBox`, `role="status"`): no
+  border, no background, no header bar. One 28px line with the 12px running light, "Working for 12s" (12.5px `--muted`, the
+  time in mono) and "Esc to stop" (11.5px `--dim`) at the right. Until the turn has drawn a row of its own, a skeleton of
+  three bars (92, 80 and 56%, `.mx-sk`, a 1.6s shimmer that is static under Reduce motion) under the line holds the place
+  the first row will take (`placeholder` on the working row); it goes when that row comes. The step the agent is on is said
+  only to screen readers. **Deliberate deviation from the prototype**, which frames this as a bordered card with a step row.
 - **Chat blocks follow the Maiker Desktop prototype, not Chat Feed.dc.html** (the older spec). Your message is a plain bubble
   (no border, `--fg` 7% over `--main`, 14.5px/1.6, 10px 14px); the agent's reply is plain 14.5/1.65 text with its first
   paragraph in `--fg` and the rest `--fg2`, nothing bold unless written so. A command, a diff and a code block are one `Block`

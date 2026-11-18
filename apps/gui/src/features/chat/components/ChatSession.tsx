@@ -8,7 +8,7 @@ import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
 import type { SessionStatus } from '@/features/workspace/model/session'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { hasPendingApproval, runningTurnStartedAt, type ChatFeed } from '../chatFeed'
-import { buildRows, liveRows, type ChatRow } from '../chatRows'
+import { buildRows, type ChatRow } from '../chatRows'
 import { findRow, registerChatFind } from '../chatSearch'
 import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
@@ -42,7 +42,6 @@ import { Composer, type DockOpen } from './Composer'
 import { HelpersDock } from './HelpersDock'
 import { dockHelpers, HelpersLiveContext, liveAgentsRow, type HelpersLive } from '../helpersDock'
 import { ChatItem, type ChatItemContext } from './ChatItems'
-import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
@@ -181,7 +180,7 @@ export type WindowActions = {
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
 export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
-  const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
+  const { feed, events, offline, readError, refresh, recordAnswer } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
   const working = !agentFree && (feed.status === 'Working' || paneWorking)
@@ -445,7 +444,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const holdWorking = settling && !replied
   const freePhrase = agentFree ? `free · ${String(helpersOnly)} ${helpersOnly === 1 ? 'helper' : 'helpers'} working` : null
   const allRows = useMemo(() => buildRows(events, working || holdWorking || agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase), [events, working, holdWorking, agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase])
-  const rows = useMemo(() => liveRows(allRows.filter((row) => !isPendingApproval(row)), allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event.stepId ?? null), [allRows])
+  // The turn's rows are drawn as they arrive; only a pending request stays out, since the tray over the box asks it.
+  const rows = useMemo(() => allRows.filter((row) => !isPendingApproval(row)), [allRows])
   // The dock above the box: the helpers line while helpers work (the last agents row with one running, and only while
   // the session itself is not at rest, or a history that never recorded their end would keep the line for ever), the
   // queue under it. One of the two lists is open at a time.
@@ -462,9 +462,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const queueNote = paneStatus === 'error' && queuedCount > 0 ? 'This session failed. Your queued messages are kept and go out when it runs again.' : null
   // What ↑ in the box brings back: the messages sent in this chat, each once in a row, the newest last.
   const sentMessages = useMemo(() => sentTexts(events), [events])
-  // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
-  // the chat opened (until then it shows what this window remembered, which may be behind) and one after the window was
-  // hidden. Only a reply that comes while the chat is being looked at is typed in.
   // Text selected in the chat gets a small bar where the mouse let go: Copy, and Quote into the message box. It goes
   // when the selection does (a click elsewhere), on Esc, and when the chat scrolls away from under it.
   const [picked, setPicked] = useState<PickedText | null>(null)
@@ -512,12 +509,6 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     if (picked === null) return
     quote(picked.speaker === 'user' ? 'You' : agentName(agent), picked.text)
     setPicked(null)
-  }
-  const [known, setKnown] = useState<Set<string> | null>(null)
-  const [knownAsOf, setKnownAsOf] = useState(0)
-  if (feed.loaded && knownAsOf !== unwatchedReads) {
-    setKnownAsOf(unwatchedReads)
-    setKnown(new Set(rows.map(rowKey)))
   }
   const pending = useMemo(() => allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event ?? null, [allRows])
   // The model and effort picked on the New session dialog are this conversation's choice from its first frame, so the picker shows them.
@@ -783,8 +774,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         <p className="mx-chat-empty">{hasTerminal ? 'No messages yet. Send one below, or type in the terminal.' : 'No messages yet. Send one below.'}</p>
       ) : feed.loaded || rows.length > 0 ? (
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
-        <KnownRowsContext.Provider value={known}>
-          <OpenFileContext.Provider value={openFile}>
+        <OpenFileContext.Provider value={openFile}>
           <HelpersLiveContext.Provider value={helpersLive}>
           <ChatActionsContext.Provider value={actions}>
           <RevealContext.Provider value={reveal}>
@@ -792,8 +782,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           </RevealContext.Provider>
           </ChatActionsContext.Provider>
           </HelpersLiveContext.Provider>
-          </OpenFileContext.Provider>
-        </KnownRowsContext.Provider>
+        </OpenFileContext.Provider>
       ) : (
         <ChatSkeleton />
       )}

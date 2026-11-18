@@ -22,13 +22,13 @@ function stepLine(phrase: string): string {
 }
 
 /**
- * The one thing the chat shows while the agent works: no box, one quiet line (the running light, how long it has worked,
- * how to stop) and a skeleton where the reply will be. Nothing else of the turn is drawn until the work ends (the steps
- * arrive collapsed, the reply a sentence at a time). A deliberate deviation from the prototype, which framed this in a
- * card with a step line. The step is said only to screen readers; the clock is hidden from them so the status is not
- * announced every second.
+ * The line at the end of a running turn: no box, the running light, how long the agent has worked and how to stop it.
+ * The turn's own rows (its steps, thoughts and reply) are drawn above it as they arrive; until the first one comes,
+ * `placeholder` adds a skeleton where it will be, so the chat is never blank under the message just sent. A deliberate
+ * deviation from the prototype, which framed this in a card with a step line. The step is said only to screen readers;
+ * the clock is hidden from them so the status is not announced every second.
  */
-export function LiveBox({ phrase, since }: { phrase: string; since: number | null }) {
+export function LiveBox({ phrase, since, placeholder }: { phrase: string; since: number | null; placeholder: boolean }) {
   const now = useNow()
   return (
     <div className="mx-live" role="status" aria-live="polite">
@@ -39,9 +39,11 @@ export function LiveBox({ phrase, since }: { phrase: string; since: number | nul
         <span className="mx-spacer" />
         <span className="mx-live-esc">Esc to stop</span>
       </div>
-      <div className="mx-live-skeleton" aria-hidden="true">
-        {SKELETON_WIDTHS.map((width) => <span key={width} className="mx-sk" style={{ width: `${String(width)}%` }} />)}
-      </div>
+      {placeholder && (
+        <div className="mx-live-skeleton" aria-hidden="true">
+          {SKELETON_WIDTHS.map((width) => <span key={width} className="mx-sk" style={{ width: `${String(width)}%` }} />)}
+        </div>
+      )}
     </div>
   )
 }

@@ -596,12 +596,16 @@ Measure it on Windows with a screen recording at 30 fps: count frames from Enter
 ## A reply being typed out in chat (2026-11-09)
 
 The chat reads snapshots, at least 100 ms apart, so the daemon's news never arrives faster than
-that. The cost while a reply is revealed is one step per sentence: `useRevealedText` adds a unit every 120 ms (it moved the text
-every 40 ms, then 24 ms, when this was measured), and each step parsed and rendered the whole message again. Measured in the
-test renderer on a 2.2 KB reply of 40 blocks: 1.27 ms a step, 0.07 ms of it parsing. Blocks whose
-parse did not change are now left as they are (`BlockView` in `Markdown.tsx`): 0.48 ms a step. The
-timer also stops once the text has caught up, so messages at rest wake nothing. To re-measure,
-render `Markdown` with a text that grows a few characters at a time and time the re-renders.
+that. Text is drawn as each read brings it: there is no reveal timer (a typing timer, then a sentence-every-120 ms reveal,
+`useRevealedText`, were removed on 2026-11-18), so a message at rest wakes nothing and a streaming reply costs one render
+per read. Each read re-runs `buildRows` over the whole history, but only the rows whose events changed draw again
+(`ChatItem` is memoised on them), and within the growing reply only the blocks whose parse changed (`BlockView` in
+`Markdown.tsx`; on a 2.2 KB reply of 40 blocks this took a step from 1.27 ms to 0.48 ms).
+
+Measured on 2026-11-18 in the test renderer (jsdom, devbox): a 243-event history (60 earlier turns) whose last reply grows
+to 4.9 KB over 119 reads, each read drawn through `buildRows` and `VirtualList`: 3.9 to 4.1 ms per read on average,
+median 3.1 ms, p95 8 to 9 ms; `buildRows` alone 0.18 ms. To re-measure, render `VirtualList` with `ChatItem` rows from
+`buildRows` of a history whose last message (status `running`) grows a slice at a time, and time each rerender.
 
 ## The Changes tab with many new files (2026-11-09)
 
@@ -671,6 +675,6 @@ removed blurred shadow. Not done, and why:
 
 - The folded cut's `clip-path` on nearly every control (`material.css`) is unchanged beyond the float bleed: a plain panel polygon or corner pseudo-elements risk the border and stripe results the shell fixed, and the gain is unmeasured.
 - The chat's jump-to-latest glide still sets the scroll position through React each frame (`VirtualList.tsx`): the rows in view are chosen from it, and throttling it would leave blank rows.
-- `HelpersDock`, `useChatProblem` and `useRevealedText` keep their own timers.
+- `HelpersDock` and `useChatProblem` keep their own timers.
 - The sidebar's width transition is kept (the look is the same); only the terminal's fits are throttled.
 - The `:is()` lists and the universal `border-radius: 0 !important` in `material.css` are unchanged.
