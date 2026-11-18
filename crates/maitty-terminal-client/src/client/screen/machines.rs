@@ -204,7 +204,7 @@ impl App {
 fn state_detail(state: &crate::client::link::ConnectionState) -> Option<String> {
     use crate::client::link::ConnectionState::*;
     match state {
-        NeedsLogin { why } | NeedsUpdate { why } | Unreachable { why, .. } => {
+        NeedsLogin { why, .. } | NeedsUpdate { why } | Unreachable { why, .. } => {
             Some(sanitize(why, false))
         }
         Reconnecting { .. } => Some("The connection was lost; trying again.".to_string()),

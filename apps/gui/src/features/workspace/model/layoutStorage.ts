@@ -4,8 +4,8 @@ import { EMPTY_LAYOUT, parseLayout, type Layout } from './layout'
  * The split layouts of this window (see `layout.ts`). Earlier versions saved tabs under the keys
  * below; a tab layout means nothing in a flat window, so it is dropped once and the person is told.
  */
-export const STORAGE_KEY = 'maitty.gui.layout.v3'
-const SUPERSEDED_KEYS = ['maitty.gui.layout.v2', 'maitty.gui.layout.v1'] as const
+export const STORAGE_KEY = 'maiker.gui.layout.v3'
+const SUPERSEDED_KEYS = ['maiker.gui.layout.v2', 'maiker.gui.layout.v1'] as const
 
 export type SavedLayout = {
   layout: Layout

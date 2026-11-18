@@ -1,20 +1,18 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef } from 'react'
 import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction } from './model/shortcuts'
-import type { ChatAgent, ChatAvailability, PaneView } from './model/chatView'
+import type { ChatAvailability, PaneView } from './model/chatView'
 import { toast } from '@/lib/toast'
-import { defaultSessionFolder } from '@/api/daemon'
-import { LOCAL_MACHINE } from '@/api/machines'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { guardLocal } from '@/lib/localOnly'
 import { isChatSession } from './model/chatSession'
 import { carryDraftToTerminal } from './model/draftCarry'
+import { discardDraft } from './model/newSessionDraft'
 import { usePaneViews } from './usePaneViews'
 import { activeArrangement, cycleFocus, type Layout, type SplitDirection, toggleBroadcast } from './model/layout'
 import type { SessionView } from './model/session'
 import { type EscLayer, topmostOpen } from './model/escLadder'
 import { jumpToast, nextNeedsYou, NOTHING_NEEDS_YOU } from '@/features/needs-you/model/needsYou'
-import { resolveStartFolder } from './model/startFolder'
 
 /** Listens for the keyboard: a shortcut runs its action, and Esc closes the topmost layer. */
 export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
@@ -42,8 +40,8 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
     // How each layer of the Esc ladder closes. A new dialog adds its closer here and its id to ESC_LADDER.
     const closers: Partial<Record<EscLayer, () => void>> = {
       palette: () => { setPaletteOpen(false) },
-      // The New session dialog counts as a dialog here, so this layer is the one that closes it too.
-      settings: () => { setSettingsSection(null); setNewChatOpen(false) },
+      // The New session draft counts as a dialog here, so this layer is the one that closes it too; Esc discards it.
+      settings: () => { setSettingsSection(null); discardDraft(); setNewChatOpen(false) },
       drawer: () => { setDrawerOpen(false) },
       'focus-mode': () => { setFocusMode(false) },
     }
@@ -64,7 +62,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
       }
       if (event.key === 'Escape') {
         // A menu or list that is open (the spinner picker in Settings) takes Esc itself.
-        if (event.target instanceof Element && event.target.closest('[role="menu"]')) return
+        if (event.target instanceof Element && event.target.closest('[role="menu"], [role="combobox"][aria-expanded="true"], .mx-chip-menu, .mx-nsd-more-body')) return
         const top = topmostOpen({ palette: state.paletteOpen, settings: state.settingsOpen, drawer: state.drawerShown, 'focus-mode': state.focusMode })
         if (top === null) return
         // What Esc closes is not also sent on to the terminal, where it would interrupt an agent.
@@ -95,14 +93,12 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
 }
 
 /** What each shortcut does. The palette and the keyboard both go through it. */
-export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences, home, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, chatOf, paneViews, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
+export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, chatOf, paneViews, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
   newSession: (machine?: number) => void
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
-  startAgentSession: (folder: () => Promise<string>, agent: ChatAgent, view: PaneView, firstMessage?: string, flags?: string) => Promise<boolean>
   preferences: SettingsPreferences
-  home: string
   split: (paneId: string | null, direction: SplitDirection) => void
   setLayout: Dispatch<SetStateAction<Layout>>
   layout: Layout
@@ -133,12 +129,6 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
         return
       case 'new-terminal':
         newTerminal(focusedMachineNumber)
-        return
-      case 'new-agent-chat':
-        // A chat with the default agent in the start folder, without the dialog. On another machine the dialog asks for its folder.
-        setSettingsSection(null)
-        if (focusedMachineNumber !== LOCAL_MACHINE) newSession(focusedMachineNumber)
-        else void startAgentSession(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), preferences.defaultAgent, 'chat')
         return
       case 'split-right':
         split(null, 'right')
@@ -233,6 +223,6 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
         }
         return
     }
-  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, startAgentSession, preferences.defaultAgent, preferences.terminalFontSize, preferences.startFolder, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, home, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, chatOf, paneViews, online, setWorktreeFrom, toggleTerminal])
+  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, chatOf, paneViews, online, setWorktreeFrom, toggleTerminal])
   return { runShortcut }
 }

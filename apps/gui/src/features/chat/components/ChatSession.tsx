@@ -46,6 +46,7 @@ import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
+import { keysToPick, parseChoiceMenu, typeEach } from '../screenMenu'
 import { CommandMenuTray } from './CommandMenuTray'
 import { useChatProblem } from './ChatProblem'
 import { ProblemLine } from '@/components/ui/feedback'
@@ -698,6 +699,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         void sendKeys(ANSWER_KEYS.deny)
       }
       return
+    }
+    // A menu with no hook behind it: its number picks, never while typing (the check above) so the box keeps its digits.
+    if (ask === null && stoppedOnPrompt && online && sendKeys !== undefined) {
+      const menu = parseChoiceMenu(asking)
+      if (menu !== null && Number.isInteger(choice) && choice >= 0 && choice < menu.options.length) {
+        event.preventDefault()
+        void typeEach(sendKeys)(keysToPick(menu, choice))
+        return
+      }
     }
     const choices = ask?.choices ?? []
     if (stoppedOnPrompt && online && pickChoice !== undefined && formQuestions(ask).length === 0 && Number.isInteger(choice) && choice >= 0 && choice < choices.length) {

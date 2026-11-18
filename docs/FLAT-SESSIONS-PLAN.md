@@ -42,7 +42,7 @@ Revisit any of these before its phase starts; reversing one later is expensive.
    "new session goes to the focused machine" became the dialog's default.
 4. **No chat view in the TUI yet.** It stays desktop-only (AGENTS non-negotiable 4 is unchanged);
    the TUI opens a chat session as a terminal, as today.
-5. **Saved layouts are reset** with a one-time notice: the desktop's `maitty.gui.layout.v2` and the daemon's saved workspaces and tabs.
+5. **Saved layouts are reset** with a one-time notice: the desktop's `maiker.gui.layout.v2` and the daemon's saved workspaces and tabs.
 6. **The key changes are accepted** (TUI prefix `ctrl+a`; `ctrl+t`, `ctrl+k`, `ctrl+j`). Old bindings keep
    working for one release with a note, where they do not collide.
 7. **Smaller calls:** the default window style is Flat and Tiled goes; the pane cap is 4; checks and

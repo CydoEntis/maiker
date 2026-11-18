@@ -91,6 +91,12 @@ const MachineStateSchema = z.object({
   state: z.enum(MACHINE_KINDS),
   /** What a person has to do, when one has to. */
   why: z.string().nullable(),
+  /** On needs-login: ssh's own last line, why it could not log in. */
+  said: z.string().nullable().optional(),
+  /** On needs-login: the line to run in a terminal to log in by hand. */
+  login_command: z.string().nullable().optional(),
+  /** How the machine is reached over ssh (`user@host`, a host, or an alias). */
+  target: z.string().nullable().optional(),
   /** Which dial a reconnect is on. */
   attempt: z.number().nullable(),
   /** On connecting: how many keystrokes the machine could not take while it was down. */
@@ -230,8 +236,7 @@ export async function listSshHosts(): Promise<HostChoice[]> {
 
 const AddedSchema = z.discriminatedUnion('outcome', [
   z.object({ outcome: z.literal('added'), name: z.string(), version: z.string().nullable() }),
-  z.object({ outcome: z.literal('login'), name: z.string() }),
-  z.object({ outcome: z.literal('login-manual'), name: z.string(), target: z.string(), why: z.string() }),
+  z.object({ outcome: z.literal('login'), name: z.string(), target: z.string(), said: z.string(), command: z.string().nullable() }),
   z.object({ outcome: z.literal('needs-name') }),
   z.object({ outcome: z.literal('cancelled') }),
 ])
@@ -242,9 +247,80 @@ export type Added = z.infer<typeof AddedSchema>
  * Look at `target` over ssh without asking anyone anything and, when it holds up, add it and start
  * dialling it. `name` is only needed when none can be made from the target.
  */
-export async function addMachine(target: string, name?: string): Promise<Added> {
+export async function addMachine(target: string, name?: string, port?: number): Promise<Added> {
   if (!isTauri()) throw new Error('Machines can only be added in the desktop app')
-  return AddedSchema.parse(await invoke<unknown>('add_machine', { target, name: name ?? null }))
+  return AddedSchema.parse(await invoke<unknown>('add_machine', { target, name: name ?? null, port: port ?? null }))
+}
+
+const HostKeySchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('unknown'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string() }),
+  z.object({ status: z.literal('trusted'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string() }),
+  z.object({ status: z.literal('changed'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string(), known_fingerprint: z.string() }),
+])
+/** The host key a machine offers and where this computer stands on it. */
+export type HostKeyReport = z.infer<typeof HostKeySchema>
+
+/** Fetch the host key a machine offers and compare it with known_hosts. Rejects with the reason when it cannot be fetched. */
+export async function inspectHostKey(name: string): Promise<HostKeyReport> {
+  if (!isTauri()) throw new Error('Host keys can only be looked at in the desktop app')
+  return HostKeySchema.parse(await invoke<unknown>('inspect_host_key', { name }))
+}
+
+/** Add the key whose fingerprint was shown to known_hosts; the machine is dialled again. The host refuses a key that changed or no longer matches. */
+export async function trustHostKey(name: string, fingerprint: string): Promise<void> {
+  if (isTauri()) await invoke('trust_host_key', { name, fingerprint })
+}
+
+const KeyLoginSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('unavailable'), reason: z.string() }),
+  z.object({ status: z.literal('host-key-not-trusted') }),
+  z.object({ status: z.literal('no-key'), path: z.string() }),
+  z.object({ status: z.literal('encrypted'), path: z.string() }),
+  z.object({ status: z.literal('blocked'), reason: z.string() }),
+  z.object({ status: z.literal('ready'), path: z.string(), key_type: z.string(), fingerprint: z.string() }),
+])
+/** What this computer has to offer for key login, and whether it can run. */
+export type KeyLoginReport = z.infer<typeof KeyLoginSchema>
+
+const KeySetupSchema = z.discriminatedUnion('outcome', [
+  z.object({ outcome: z.literal('installed'), added: z.boolean(), fingerprint: z.string() }),
+  z.object({ outcome: z.literal('wrong-password'), attempts_left: z.number() }),
+  z.object({ outcome: z.literal('stopped') }),
+  z.object({ outcome: z.literal('manual'), reason: z.string(), steps: z.string() }),
+  z.object({ outcome: z.literal('not-verified'), message: z.string(), steps: z.string() }),
+])
+/** What setting up key login came to. It never carries the password. */
+export type KeySetupResult = z.infer<typeof KeySetupSchema>
+
+/** Look at the key on this computer and whether key login can be set up for a machine. */
+export async function inspectKeyLogin(name: string): Promise<KeyLoginReport> {
+  if (!isTauri()) throw new Error('Key login can only be set up in the desktop app')
+  return KeyLoginSchema.parse(await invoke<unknown>('inspect_key_login', { name }))
+}
+
+/**
+ * Put this computer's public key on a machine using the account password once. The password is sent
+ * to the host in this one call and not kept; the caller clears its own copy as it calls.
+ */
+export async function setUpKeyLogin(name: string, password: string, createKey: boolean): Promise<KeySetupResult> {
+  if (!isTauri()) throw new Error('Key login can only be set up in the desktop app')
+  return KeySetupSchema.parse(await invoke<unknown>('set_up_key_login', { name, password, createKey }))
+}
+
+/** The user name ssh would connect as on this computer when a machine names none; null when it cannot be told. */
+export async function localUserName(): Promise<string | null> {
+  if (!isTauri()) return null
+  return z.string().nullable().parse(await invoke<unknown>('local_user_name'))
+}
+
+/** Set the user a machine connects as (blank for none); the machine is dialled again as that user. */
+export async function setMachineUser(name: string, user: string): Promise<void> {
+  if (isTauri()) await invoke('set_machine_user', { name, user })
+}
+
+/** Open ssh in a session on this computer for a machine that needs a login, so its prompts can be answered. */
+export async function openMachineLogin(machine: number): Promise<void> {
+  if (isTauri()) await invoke('open_machine_login', { machine })
 }
 
 /** End the look that is running. */

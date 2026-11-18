@@ -23,7 +23,7 @@ describe('theme preference', () => {
   })
 
   it('ignores unsupported saved themes', () => {
-    localStorage.setItem('maitty.gui.theme.v1', 'neon')
+    localStorage.setItem('maiker.gui.theme.v1', 'neon')
 
     expect(readThemePreference()).toBe('night')
   })

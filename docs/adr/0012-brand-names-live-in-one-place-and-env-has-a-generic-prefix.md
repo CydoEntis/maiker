@@ -68,3 +68,31 @@ YAML. A rename meant a hunt, and the last one missed the daemon.
 - `AGENT_` is generic, so another tool could set a variable with the same prefix; the app reads
   only the names it documents in [ENVIRONMENT](../ENVIRONMENT.md#project-specific-variables), and
   a login shell's scrub removes only variables that start with the prefix and an underscore.
+
+## Names a person saved under the old brand
+
+A rename must also carry what the person already stored. Each of these moves once, never loses
+the old value, and leaves the old name readable for an older build still installed:
+
+- **Desktop window storage.** `maitty.*` keys become `maiker.*`. `apps/gui/src/data/storageMigration.ts`
+  copies every `maitty.` entry to its `maiker.` name at startup (`migrateStorageOnLoad.ts` is the
+  first import of `main.tsx`), never over a value already under the new name, and records a marker
+  so a setting the person later resets is not brought back. The old keys stay (an older build and a
+  rollback read them). New code keys a setting `maiker.*` and never writes `maitty.`; `brand.test.ts`
+  fails if the source does. `public/boot-ground.js` runs before the app and reads the new key, then
+  the old.
+- **Theme ids.** Maiker's own `maitty-abyss`, `-dark`, `-dusk`, `-ember`, `-light`, `-moss`, `-paper`,
+  `-retro-dark`, `-retro-light` are `maiker-*` (`theme::RENAMED`). A config that names an old id is
+  rewritten to the new one on load and written that way the next time the config is saved; the old
+  id still resolves everywhere through `theme::canonical`.
+- **Git rule files.** The key that names a rule file's folder is `maiker.folder`. A file written
+  before the rename has only `maitty.folder`; reading it accepts that key and copies the value to the
+  new one (the old stays). Only Maiker's own files in its data folder are touched, never the
+  person's git config. A rule written now carries the new key only, so a build from before the rename
+  reports that rule as set outside Maiker until it is updated.
+
+Kept on purpose, because an older install or an installed script reads them: the `AGENT_` and
+`MAITTY_` variable names, the `maitty-platform` handshake, the desktop app's identifier
+`com.cydoentis.maitty` and the `maitty-gui` binary and window name (app-data location and updater
+identity), the `previous` metadata and the release artifact names. Remove one only with its own
+decision.

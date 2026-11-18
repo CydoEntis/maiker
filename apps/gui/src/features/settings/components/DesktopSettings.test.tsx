@@ -7,7 +7,7 @@ import { machineHeads, type RemoteMachine } from '@/features/workspace/model/mac
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 import { DAEMON_NAME } from '@/brand'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -30,7 +30,7 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
 }))
 
 function info(overrides: Partial<MachinesInfo> = {}): MachinesInfo {
-  return { known: true, list: [], onRetry: vi.fn(), onRemove: vi.fn(), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onCheckActivity: vi.fn(() => Promise.resolve(null)), onCopyCommand: vi.fn(), add: { windows: false, loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn() }, ...overrides }
+  return { known: true, list: [], onRetry: vi.fn(), onRemove: vi.fn(), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onCheckActivity: vi.fn(() => Promise.resolve(null)), onCopyCommand: vi.fn(), onOpenLogin: vi.fn(), localUser: 'vox', onSetUser: vi.fn(() => Promise.resolve()), hostKey: { inspect: vi.fn(), trust: vi.fn(() => Promise.resolve()) }, keyLogin: { inspect: vi.fn(), setUp: vi.fn() }, add: { windows: false, loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn() }, ...overrides }
 }
 
 function renderSettings(section: DesktopSettingsSection, overrides: Partial<Parameters<typeof DesktopSettings>[0]> = {}) {
@@ -161,14 +161,15 @@ describe('desktop settings', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('sets which view a Claude, Codex or Gemini session opens in, one agent at a time', async () => {
+  it('sets the one view every new session opens in, with no per-agent choice', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('chat')
 
-    const claude = screen.getByRole('radiogroup', { name: 'Claude sessions open in' })
-    expect(within(claude).getByRole('radio', { name: 'Terminal' })).toBeChecked()
-    await user.click(within(claude).getByRole('radio', { name: 'Chat' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ chatViewDefault: { claude: 'chat', codex: 'terminal', gemini: 'terminal' } }))
+    const opens = screen.getByRole('radiogroup', { name: 'Open sessions in' })
+    expect(within(opens).getByRole('radio', { name: 'Terminal' })).toBeChecked()
+    await user.click(within(opens).getByRole('radio', { name: 'Chat' }))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ openSessionsIn: 'chat' }))
+    expect(screen.queryByRole('radiogroup', { name: 'Claude sessions open in' })).toBeNull()
   })
 
   it('chooses the default agent and what a new session opens as', async () => {
@@ -547,6 +548,34 @@ describe('the Machines page', () => {
     expect(screen.getByText('run ssh box once to log in')).toBeInTheDocument()
   })
 
+  it('shows what ssh said for a machine that needs a login, who it logs in as, and a way to change that', async () => {
+    const said = 'vox@box: Permission denied (publickey).'
+    const heads = machineHeads(new Map([[1, { ...box('needs-login', 'make plain ssh work'), state: { ...box('needs-login', 'make plain ssh work').state, said, login_command: "ssh -- box 'maiker --version'", target: '100.78.214.15' } }]])).filter((head) => head.name !== null)
+    const onOpenLogin = vi.fn()
+    const onSetUser = vi.fn(() => Promise.resolve())
+    const { user } = await openBox(info({ list: heads, onOpenLogin, onSetUser }))
+    expect(screen.getByText(said)).toBeInTheDocument()
+    expect(screen.getByText(/No user is set, so ssh connects as vox/)).toBeInTheDocument()
+    await user.type(screen.getByRole('textbox', { name: 'User for box' }), 'dev')
+    await user.click(screen.getByRole('button', { name: 'Save the user of box' }))
+    expect(onSetUser).toHaveBeenCalledWith('box', 'dev')
+    await user.click(screen.getByRole('button', { name: 'Open a terminal for box' }))
+    expect(onOpenLogin).toHaveBeenCalledWith(1)
+  })
+
+  it('offers key login, not only a terminal, when ssh says a password is accepted', async () => {
+    const said = 'cstin@100.97.58.91: Permission denied (publickey,keyboard-interactive).'
+    const heads = machineHeads(new Map([[1, { ...box('needs-login', 'make plain ssh work'), state: { ...box('needs-login', 'make plain ssh work').state, said, target: 'cstin@100.97.58.91' } }]])).filter((head) => head.name !== null)
+    await openBox(info({ list: heads }))
+    expect(screen.getByRole('button', { name: 'Set up key login' })).toBeInTheDocument()
+  })
+
+  it('shows the user a machine connects as on its tile, with its user', () => {
+    const withTarget = (target: string) => machineHeads(new Map([[1, { ...box('connected'), state: { ...box('connected').state, target } }]])).filter((head) => head.name !== null)
+    renderSettings('machines', { machines: info({ list: withTarget('dev@100.78.214.15') }) })
+    expect(screen.getByText('dev@100.78.214.15')).toBeInTheDocument()
+  })
+
   it('shows a refused machine with the reason, the fix, and Remove to act on it', async () => {
     const why = 'a different machine answers at box (id bbbbbbbb instead of aaaaaaaa). If you replaced that machine, open Machines, remove it and add it again; otherwise check the host name and DNS.'
     await openBox(info({ list: others('refused', why) }))
@@ -693,7 +722,7 @@ describe('adding a machine', () => {
   /** Switches the flow to typing an address, and types it. */
   const byAddress = async (user: ReturnType<typeof userEvent.setup>, text: string) => {
     await user.click(screen.getByRole('radio', { name: 'By address' }))
-    await user.type(screen.getByRole('textbox', { name: 'Address' }), text)
+    await user.type(screen.getByRole('textbox', { name: 'Host' }), text)
   }
 
   it('says it is loading the hosts, then lists them', async () => {
@@ -722,16 +751,44 @@ describe('adding a machine', () => {
     expect(screen.getByRole('button', { name: 'Connect machine' })).toBeDisabled()
     await user.click(await screen.findByRole('radio', { name: /build/ }))
     await user.click(screen.getByRole('button', { name: 'Connect build' }))
-    expect(onAdd).toHaveBeenCalledWith('build', undefined)
-    expect(await screen.findByText(/build is added and connecting\. maiker 1\.2\.3 answered there\./)).toBeInTheDocument()
+    expect(onAdd).toHaveBeenCalledWith('build', undefined, undefined)
+    expect(await screen.findByText(/build is added and connecting\./)).toHaveClass('is-good')
+    expect(screen.getByText(/Maiker answered there \(maiker 1\.2\.3\)/)).toBeInTheDocument()
   })
 
-  it('adds the address as typed, under the name given', async () => {
+  it('builds the destination from user, host and port, under the name given', async () => {
     const onAdd = vi.fn().mockResolvedValue(added('box'))
     const user = await startAdding({ onAdd })
-    await byAddress(user, 'me@box.example')
+    await byAddress(user, 'box.example')
+    await user.type(screen.getByRole('textbox', { name: 'User' }), 'me')
+    await user.type(screen.getByRole('textbox', { name: 'Port' }), '2222')
     await user.type(screen.getByRole('textbox', { name: 'Name in Maiker' }), 'box{Enter}')
-    expect(onAdd).toHaveBeenCalledWith('me@box.example', 'box')
+    expect(onAdd).toHaveBeenCalledWith('me@box.example', 'box', 2222)
+  })
+
+  it('warns, with the local user, when no user is given, and connects as the bare host', async () => {
+    const onAdd = vi.fn().mockResolvedValue(added('box'))
+    const user = await startAdding({ onAdd })
+    await byAddress(user, '100.78.214.15')
+    expect(screen.getByRole('note')).toHaveTextContent('No user: ssh will connect as vox, which is usually wrong on another machine')
+    await user.type(screen.getByRole('textbox', { name: 'User' }), 'dev')
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+
+  it('refuses a user, host or port that ssh would read as something else, and sends nothing', async () => {
+    const onAdd = vi.fn()
+    const user = await startAdding({ onAdd })
+    await byAddress(user, '-oProxyCommand=x')
+    expect(screen.getByRole('alert')).toHaveTextContent('cannot start with a dash')
+    expect(screen.getByRole('button', { name: /^Connect/ })).toBeDisabled()
+    await user.clear(screen.getByRole('textbox', { name: 'Host' }))
+    await user.type(screen.getByRole('textbox', { name: 'Host' }), 'box')
+    await user.type(screen.getByRole('textbox', { name: 'User' }), 'a b')
+    expect(screen.getByRole('button', { name: /^Connect/ })).toBeDisabled()
+    await user.clear(screen.getByRole('textbox', { name: 'User' }))
+    await user.type(screen.getByRole('textbox', { name: 'Port' }), '99999')
+    expect(screen.getByRole('button', { name: /^Connect/ })).toBeDisabled()
+    expect(onAdd).not.toHaveBeenCalled()
   })
 
   it('shows the words of a machine that cannot be added, and goes back to the form to try again', async () => {
@@ -740,14 +797,14 @@ describe('adding a machine', () => {
     await byAddress(user, 'nope.example{Enter}')
     expect(await screen.findByRole('alert')).toHaveTextContent('nope.example: could not resolve')
     await user.click(screen.getByRole('button', { name: 'Edit and try again' }))
-    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveValue('nope.example')
+    expect(screen.getByRole('textbox', { name: 'Host' })).toHaveValue('nope.example')
   })
 
   it('asks for a name when none can be made', async () => {
     const onAdd = vi.fn().mockResolvedValueOnce({ outcome: 'needs-name' })
     const user = await startAdding({ onAdd })
-    await byAddress(user, 'me@{Enter}')
-    expect(await screen.findByText('Give me@ a name in Maiker to add it.')).toBeInTheDocument()
+    await byAddress(user, '10.0.0.5{Enter}')
+    expect(await screen.findByText('Give 10.0.0.5 a name in Maiker to add it.')).toBeInTheDocument()
   })
 
   it('shows checking with a way to cancel while ssh is looked at', async () => {
@@ -772,11 +829,51 @@ describe('adding a machine', () => {
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('points at the session to log in with when ssh needs a person', async () => {
-    const onAdd = vi.fn().mockResolvedValue({ outcome: 'login', name: 'box' })
-    const user = await startAdding({ onAdd })
-    await byAddress(user, 'box{Enter}')
-    expect(await screen.findByText(/ssh needs you to log in: use the session named “ssh box”/)).toBeInTheDocument()
+  it('shows a machine that needs a login as a warning with ssh\'s own words and who it tried to be', async () => {
+    const said = 'vox@100.97.58.91: Permission denied (publickey).'
+    const command = "ssh -p 22 -- 100.97.58.91 'maiker --version'"
+    const onAdd = vi.fn().mockResolvedValue({ outcome: 'login', name: 'box', target: '100.97.58.91', said, command })
+    const onCopyCommand = vi.fn()
+    const user = await startAdding({ onAdd }, { machines: info({ add: { ...info().add, onAdd }, onCopyCommand }) })
+    await byAddress(user, '100.97.58.91{Enter}')
+    expect(await screen.findByText(/box is added but not connected yet: it needs a login/)).toHaveClass('is-warn')
+    expect(screen.getByText(said)).toBeInTheDocument()
+    expect(screen.getByText('vox')).toBeInTheDocument()
+    expect(screen.getByText('ssh could not log in by itself')).toBeInTheDocument()
+    expect(screen.queryByText(/Logged in with your ssh keys/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy command' }))
+    expect(onCopyCommand).toHaveBeenCalledWith(command)
+    expect(within(screen.getByRole('region', { name: 'Add a machine' })).queryByRole('button', { name: /terminal/i })).not.toBeInTheDocument()
+  })
+
+  it('offers the host key to trust, not a terminal, when ssh stopped on an unknown host', async () => {
+    const onAdd = vi.fn().mockResolvedValue({ outcome: 'login', name: 'box', target: 'dev@10.0.0.9', said: 'Host key verification failed.', command: null })
+    const inspect = vi.fn().mockResolvedValue({ status: 'unknown', host: '10.0.0.9', port: 22, key_type: 'ssh-ed25519', fingerprint: 'SHA256:abcDEF123' })
+    const trust = vi.fn(() => Promise.resolve())
+    const user = await startAdding({ onAdd }, { machines: info({ add: { ...info().add, onAdd }, hostKey: { inspect, trust } }) })
+    await byAddress(user, '10.0.0.9{Enter}')
+    expect(await screen.findByText(/ED25519 SHA256:abcDEF123/)).toBeInTheDocument()
+    expect(inspect).toHaveBeenCalledWith('box')
+    await user.click(screen.getByRole('button', { name: 'Trust this key' }))
+    expect(trust).toHaveBeenCalledWith('box', 'SHA256:abcDEF123')
+    expect(await screen.findByText(/Trusted\. Connecting to box/)).toBeInTheDocument()
+  })
+
+  it('never offers Trust for a changed host key', async () => {
+    const onAdd = vi.fn().mockResolvedValue({ outcome: 'login', name: 'box', target: 'dev@10.0.0.9', said: 'Host key verification failed.', command: null })
+    const inspect = vi.fn().mockResolvedValue({ status: 'changed', host: '10.0.0.9', port: 22, key_type: 'ssh-ed25519', fingerprint: 'SHA256:new', known_fingerprint: 'SHA256:old' })
+    const trust = vi.fn(() => Promise.resolve())
+    const user = await startAdding({ onAdd }, { machines: info({ add: { ...info().add, onAdd }, hostKey: { inspect, trust } }) })
+    await byAddress(user, '10.0.0.9{Enter}')
+    expect(await screen.findByText(/has changed/)).toBeInTheDocument()
+    expect(screen.getByText('SHA256:old')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /trust/i })).not.toBeInTheDocument()
+    expect(trust).not.toHaveBeenCalled()
+  })
+
+  it('explains what a remote machine needs before anything is typed', async () => {
+    await startAdding()
+    expect(screen.getByText(/over ssh and talks to its own Maiker there/)).toBeInTheDocument()
   })
 
   it('says that Windows wants keys or an agent, on Windows only', async () => {

@@ -89,18 +89,19 @@ describe('Tag and FileBadge', () => {
   it('shows the folder dimmed, keeps the whole path as its title, and opens from the keyboard', async () => {
     const user = userEvent.setup()
     const open = vi.fn()
-    render(<FileBadge path="src/auth/session.ts" tag="TS" line={12} onOpen={open} />)
+    render(<FileBadge path="src/auth/session.ts" line={12} onOpen={open} />)
     const badge = screen.getByRole('button', { name: /session\.ts/ })
     expect(badge).toHaveAttribute('title', 'src/auth/session.ts')
     expect(screen.getByText('src/auth/')).toBeInTheDocument()
     expect(screen.getByText(':12')).toBeInTheDocument()
+    expect(badge.querySelector('[data-slot="type-tag"]')).toBeNull()
     await user.tab()
     await user.keyboard('{Enter}')
     expect(open).toHaveBeenCalledOnce()
   })
 
   it('is plain text without an action, for use inside a row that is a button', () => {
-    render(<FileBadge path="README.md" tag="MD" />)
+    render(<FileBadge path="README.md" />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByTitle('README.md')).toBeInTheDocument()
   })

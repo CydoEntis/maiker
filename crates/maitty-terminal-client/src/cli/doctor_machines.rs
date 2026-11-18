@@ -358,7 +358,7 @@ mod tests {
             "bad reachable unreachable (Connection refused)"
         );
         assert_eq!(next, Next::Stop);
-        let (check, next) = after_probe(&Probe::Failed(FailureClass::Login), "box");
+        let (check, next) = after_probe(&Probe::Failed(FailureClass::Login("denied".into())), "box");
         assert_eq!(check.detail, format!("needs a login; {FIX_LOGIN}"));
         assert_eq!(next, Next::Stop);
         assert_eq!(
@@ -473,7 +473,7 @@ mod tests {
         assert!(default.detail.contains("not on its login PATH"));
         let custom = login_path(&Located::NotFound, Some("~/bin/maiker"), "box");
         assert_eq!(custom.ok, None);
-        let failed = login_path(&Located::Failed(FailureClass::Login), None, "box");
+        let failed = login_path(&Located::Failed(FailureClass::Login("denied".into())), None, "box");
         assert_eq!(failed.ok, Some(false));
     }
 

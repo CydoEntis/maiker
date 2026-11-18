@@ -86,9 +86,9 @@ const layout = {
 await page.addInitScript(({ scenarioConfig, layoutJson }) => {
   window.__SCENARIO = scenarioConfig
   try {
-    localStorage.setItem('maitty.gui.welcomed.v1', '1')
-    localStorage.setItem('maitty.gui.settings.v1', '{}')
-    localStorage.setItem('maitty.gui.layout.v1', layoutJson)
+    localStorage.setItem('maiker.gui.welcomed.v1', '1')
+    localStorage.setItem('maiker.gui.settings.v1', '{}')
+    localStorage.setItem('maiker.gui.layout.v1', layoutJson)
   } catch {}
 }, { scenarioConfig: { sessions: sc.sessions, bytesPerSec: 20000, tickMs, timerStacks: args.stacks === 'true' }, layoutJson: JSON.stringify(layout) })
 await page.addInitScript({ path: path.join(HERE, 'mock-tauri.js') })
@@ -116,8 +116,8 @@ const EXPERIMENTS = {
   hideterminal: async () => { await page.addStyleTag({ content: '.terminal-view { visibility: hidden !important; }' }) },
   noshadow: async () => { await page.addStyleTag({ content: '* { box-shadow: none !important; filter: none !important; backdrop-filter: none !important; text-shadow: none !important; }' }) },
   nogradient: async () => { await page.addStyleTag({ content: '*, *::before, *::after { background-image: none !important; }' }) },
-  flatstyle: async () => { await page.evaluate(() => { localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ style: 'flat', effectWorking: false, effectNeedsYou: false, effectDone: false })) }); await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.mx-pane .xterm-rows') },
-  reducemotion: async () => { await page.evaluate(() => { localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ reduceMotion: true })) }); await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.mx-pane .xterm-rows') },
+  flatstyle: async () => { await page.evaluate(() => { localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ style: 'flat', effectWorking: false, effectNeedsYou: false, effectDone: false })) }); await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.mx-pane .xterm-rows') },
+  reducemotion: async () => { await page.evaluate(() => { localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ reduceMotion: true })) }); await page.reload({ waitUntil: 'load' }); await page.waitForSelector('.mx-pane .xterm-rows') },
   stop1s: async () => { await page.evaluate(() => { window.__perf.blockPeriod(1000) }) },
   stop80ms: async () => { await page.evaluate(() => { window.__perf.blockPeriod(80) }) },
   stop1500: async () => { await page.evaluate(() => { window.__perf.blockPeriod(1500) }) },

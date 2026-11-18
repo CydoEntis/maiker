@@ -1,5 +1,5 @@
-const SKIPPED_KEY = 'maitty.gui.update.skipped'
-const RESTARTED_KEY = 'maitty.gui.update.restarted'
+const SKIPPED_KEY = 'maiker.gui.update.skipped'
+const RESTARTED_KEY = 'maiker.gui.update.restarted'
 
 function read(key: string): string | null {
   try {

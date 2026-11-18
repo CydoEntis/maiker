@@ -19,7 +19,6 @@ function pressOf(text: string, platform: Platform): Key {
 const TABLE: readonly [ShortcutAction, string, string][] = [
   ['new-session', '⌘T', 'Ctrl+Shift+T'],
   ['new-terminal', '⌘⇧T', 'Ctrl+Alt+T'],
-  ['new-agent-chat', '⌘⇧A', 'Ctrl+Shift+A'],
   ['new-worktree', '⌘⇧N', 'Ctrl+Shift+N'],
   ['split-right', '⌘D', 'Ctrl+Shift+D'],
   ['split-down', '⌘⇧D', 'Ctrl+Alt+Shift+D'],
@@ -123,8 +122,8 @@ describe('matching a key press', () => {
 
   it('needs the modifiers exactly, so Ctrl+Shift+T is a new session and Ctrl+Alt+T (or Ctrl+Alt+Shift+T) a new shell', () => {
     expect(matchShortcut({ key: 't', ctrlKey: true, metaKey: false, shiftKey: false, altKey: true }, 'linux')).toEqual({ action: 'new-terminal' })
-    expect(matchShortcut({ key: 'A', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toEqual({ action: 'new-agent-chat' })
-    expect(matchShortcut({ key: 'A', ctrlKey: false, metaKey: true, shiftKey: true, altKey: false }, 'mac')).toEqual({ action: 'new-agent-chat' })
+    // There is no second way in: Ctrl+Shift+A no longer starts an agent without the dialog.
+    expect(matchShortcut({ key: 'A', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toBeNull()
     expect(matchShortcut({ key: 'T', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toEqual({ action: 'new-session' })
     expect(matchShortcut({ key: 'T', ctrlKey: true, metaKey: false, shiftKey: true, altKey: true }, 'linux')).toEqual({ action: 'new-terminal' })
     expect(matchShortcut({ key: 't', ctrlKey: false, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toBeNull()

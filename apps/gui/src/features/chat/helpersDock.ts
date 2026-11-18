@@ -44,14 +44,16 @@ export function dockHelpers(events: readonly SubagentEvent[], views: readonly Su
   return events.map((event) => {
     const asked = event.prompt?.split('\n')[0]?.trim() ?? null
     const status = STATUS_OF[event.status]
-    const view = status === 'working' ? subagentNamed(views, event.title, asked) : null
+    // A helper that needs you, or stopped while its session still works, is still in the runtime's list: matched like a
+    // working one, so its detail has what it last ran. A finished one has reported back and is gone from it.
+    const view = status === 'done' ? null : subagentNamed(views, event.title, asked)
     const report = event.report.trim()
     return {
       id: event.id,
       label: event.title ?? event.agentType ?? 'A helper agent',
       kind: event.title !== null ? event.agentType : null,
       status,
-      activity: view?.latest ?? null,
+      activity: status === 'working' ? view?.latest ?? null : null,
       asked: event.prompt?.trim() ?? null,
       ran: view?.latest ?? null,
       answer: report === '' ? null : report,

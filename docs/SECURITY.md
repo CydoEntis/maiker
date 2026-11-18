@@ -167,7 +167,7 @@ choosing. The person finishes the sign-in in that terminal and their browser; th
 password or token from it.
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
-`maitty-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
+`maiker-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
 Daemon › Service log). The webview supplies nothing: the log, the folder and the name are the
 host's, and an existing file is never replaced (`export::save_in`). The log names folders,
 repositories and sessions, so the setting says to look before sharing it.
@@ -843,19 +843,25 @@ The agent runs with the user's permissions, so the window's start path is narrow
 
 ## Project-specific: cloning a repository from the desktop
 
-The New session dialog's Clone from GitHub runs `git clone` in the desktop host (`git_clone`, `src-tauri/src/clone.rs`),
-off the UI thread, with the user's permissions. What was pasted never reaches git as typed:
+The New session draft's project list (a pasted link, **Clone from link…**, **My GitHub repos…**) clones through the
+daemon (`Query::CloneRepo`, `crates/maitty-core/src/daemon/clone.rs`), on this computer or the chosen machine, off the
+UI thread, with the user's permissions. The desktop host has no clone of its own. What was pasted never reaches git as
+typed:
 
-- It is read as a GitHub owner and repository name (owner/repo, a github.com page or HTTPS address, or
-  `git@github.com:`). Each name is checked: ASCII letters, digits, `-`, `_` and `.`, at most 100 characters, not
-  starting with `-` or `.`. Anything else, including another host, a user or token in the address, `file://` or
-  `ext::`, is refused.
-- The address git is given is built again from the two checked names, after `--`, so no option or transport can
-  reach the command line.
-- The target is a new folder named after the repository inside an absolute folder that exists; an existing folder
-  is never written into.
-- Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses
-  the credentials git already has. Maiker stores no GitHub token.
+- The window reads it as a GitHub owner and repository name (owner/repo, a github.com page or HTTPS address, or
+  `git@github.com:`; `model/repoAddress.ts`). Each name is checked: ASCII letters, digits, `-`, `_` and `.`, at most
+  100 characters, not starting with `-` or `.`. Anything else, including another host, `file://` or `ext::`, is
+  refused. An address carrying a user name or token is refused with a plain line, never cloned and never shown back.
+- The address handed on is built again from the two checked names, so a pasted secret is dropped, not carried into a
+  command line, a URL or a log. The daemon checks the address again (https, ssh or git, no spaces or leading dash,
+  length limit) and passes it after `--`.
+- The target is a new folder named after the repository inside an existing absolute folder; an existing folder is
+  never written into. The one exception is the default `~/Projects` (the user's home plus `Projects`), which is made
+  on first use; any other missing folder is refused.
+- Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses the
+  credentials git already has on that machine. Maiker stores no GitHub token and cannot sign in to GitHub from the
+  clone flow; the window says so when git needs a sign-in. Git's own words are matched to a plain sentence and shown
+  without the address.
 
 ## Project-specific: signing an agent in from the desktop
 
@@ -1053,3 +1059,42 @@ is what the panes show, so the rules are those of a credential:
 - **No silent overwrite.** The window sends no version only after the person pressed Overwrite on a `ChangedOnDisk` answer.
 - Not covered: a change made in the instant between the daemon's last version check and the rename is not caught (no lock is
   held on files an agent edits).
+
+## Project-specific: remote machine logins from the desktop
+
+The Settings > Remote machines screens (`apps/gui/src-tauri/src/machine_access.rs`, `add_machine.rs`;
+logic in `crates/maitty-machines/src/{host_key,key_login,machine_target}.rs`) let a person fix a
+machine that will not log in without a terminal. They run ssh tools on this computer on input from
+the window, so each is bounded as follows.
+
+| Command | What it takes | Rule |
+| --- | --- | --- |
+| `add_machine`, `set_machine_user` | user, host, port | Checked at the host as well as in the window (`machine_target`): a user or host starts with no `-`, has no whitespace, quotes or shell characters; a port is 1-65535 and becomes `-p N` in `ssh_args`. Every ssh line puts the target after `--`. The entry stays `user@host` in `config.local.toml`; entries written before still load. |
+| `inspect_host_key` | machine name | `ssh -G` resolves the real host and port (a jump host or proxy command is refused), `ssh-keyscan` fetches the key, the SHA256 fingerprint is computed here. Read-only. |
+| `trust_host_key` | machine name, fingerprint | Fetches the key again and appends it to `known_hosts` only when it is still the fingerprint the person was shown and no key of that type is on record. A changed key is never added from the app (nothing offers it, and the host refuses it). No ssh option that turns host-key checking off is used anywhere. |
+| `inspect_key_login`, `set_up_key_login` | machine name, account password, "create a key" | See below. |
+
+Key login with a password once (`key_login`):
+
+- **The password.** It arrives as one argument, is moved into a `Secret` (no `Debug`, `Clone` or
+  `Serialize`; its bytes are overwritten on drop), and lives only for that call. It is not written
+  to disk, config, logs, ssh arguments or events, never sent to the daemon, and never returned to the
+  window. It reaches ssh only through `SSH_ASKPASS` with `SSH_ASKPASS_REQUIRE=force`: a helper script
+  with no secret in it, in a mode-0700 folder that is removed afterwards, prints it from an
+  environment variable set on that one short-lived ssh process. Every text shown from ssh is scrubbed
+  of the password first. Limits that remain: the window's webview and the IPC string cannot be wiped,
+  and the environment of the ssh child (readable by the same user while it runs) holds it briefly.
+- **Where it can be used.** Never before the machine's host key is trusted: the steps run with
+  `StrictHostKeyChecking=yes`, and the command refuses when the key is not on record. Not offered when
+  this computer is Windows (the helper is a shell script); the card says so and offers the terminal.
+- **What is installed.** Only the public key. A key with a passphrase stops the flow. A new key
+  (ed25519, no passphrase) is made only after the person agrees, only where no key file exists.
+- **The far side.** OpenSSH on Linux and macOS: `~/.ssh` 700, `authorized_keys` 600, no duplicate.
+  Windows: an administrator's key goes to `ProgramData\ssh\administrators_authorized_keys` with
+  only Administrators and SYSTEM allowed; anyone else's to their own `.ssh\authorized_keys`. The
+  system is told with fixed commands (`uname -s`, then one fixed `cmd` line); when it cannot be told,
+  or the machine does not confirm, the exact steps are shown and nothing is guessed.
+- **Attempts.** One password prompt per ssh run, a wrong password stops at once, and three wrong
+  passwords for a machine in a row stop further tries until Maiker restarts.
+- **After.** The key is checked by a `BatchMode` login with passwords off; the machine is dialled
+  again only on success.

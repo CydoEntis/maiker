@@ -11,9 +11,15 @@ const KEY: &str = "machines";
 /// Append `[[machines]]` with this name and target. Nothing is written when the entry would
 /// not load, or when the name is taken.
 pub fn add_machine(file: &Path, name: &str, target: &str) -> Result<()> {
+    add_machine_with(file, name, target, &[])
+}
+
+/// `add_machine` with ssh's own arguments for the entry (`["-p", "2222"]`); none writes no key.
+pub fn add_machine_with(file: &Path, name: &str, target: &str, ssh_args: &[String]) -> Result<()> {
     let def = MachineDef {
         name: name.into(),
         target: target.into(),
+        ssh_args: ssh_args.to_vec(),
         ..MachineDef::default()
     };
     let mut doc = read(file)?;
@@ -32,6 +38,13 @@ pub fn add_machine(file: &Path, name: &str, target: &str) -> Result<()> {
     let mut entry = toml_edit::Table::new();
     entry.insert("name", toml_edit::value(name));
     entry.insert("target", toml_edit::value(target));
+    if !ssh_args.is_empty() {
+        let mut args = toml_edit::Array::new();
+        for arg in ssh_args {
+            args.push(arg.as_str());
+        }
+        entry.insert("ssh_args", toml_edit::value(args));
+    }
     // After what the file already says, not up among its first keys.
     entry.set_position(isize::MAX);
     list.push(entry);
@@ -213,10 +226,16 @@ fn first_free(base: &str, taken: &[String]) -> String {
 
 /// Why `name` and `target` cannot be a machine alongside `existing`, in the loader's words.
 pub fn refusal(existing: &[MachineDef], name: &str, target: &str) -> Option<String> {
+    refusal_with(existing, name, target, &[])
+}
+
+/// `refusal` for an entry that also carries ssh arguments.
+pub fn refusal_with(existing: &[MachineDef], name: &str, target: &str, ssh_args: &[String]) -> Option<String> {
     let mut all = existing.to_vec();
     all.push(MachineDef {
         name: name.into(),
         target: target.into(),
+        ssh_args: ssh_args.to_vec(),
         ..MachineDef::default()
     });
     validate_machines(&all).err().map(|e| e.to_string())

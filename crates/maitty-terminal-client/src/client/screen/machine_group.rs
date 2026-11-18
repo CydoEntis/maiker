@@ -173,7 +173,7 @@ mod tests {
         assert_eq!(AppFix::Restart.label(), format!("Restart {APP_NAME}"));
         assert_eq!(AppFix::of(&ConnectionState::Connected), None);
         assert_eq!(
-            AppFix::of(&ConnectionState::NeedsLogin { why: FIX_INSTALL.into() }),
+            AppFix::of(&ConnectionState::NeedsLogin { why: FIX_INSTALL.into(), said: String::new() }),
             None
         );
     }

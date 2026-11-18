@@ -579,6 +579,10 @@ pub(crate) fn run() {
         None => open_client(args.path),
         Some(Cmd::Attach { path }) => open_client(path),
         Some(Cmd::Daemon) => maitty_core::run_daemon(|| {
+            maitty_core::install_hook_tools(maitty_core::HookTools {
+                check: cli::claude_hook_problem,
+                repair: cli::repair_claude_hooks_in,
+            });
             if !cfg!(test) {
                 cli::refresh_claude_hooks();
             }

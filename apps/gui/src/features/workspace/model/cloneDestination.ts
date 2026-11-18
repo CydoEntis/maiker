@@ -2,7 +2,7 @@
  * The folder a person last cloned into on each machine, so the next clone starts there. A
  * convenience of this window only: a browser that keeps nothing simply starts from the default.
  */
-const KEY_PREFIX = 'maitty.clone-into.'
+const KEY_PREFIX = 'maiker.clone-into.'
 
 const keyOf = (machine: string) => `${KEY_PREFIX}${machine.toLowerCase()}`
 

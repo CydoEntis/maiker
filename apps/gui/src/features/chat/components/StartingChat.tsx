@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from '@/lib/toast'
 import { WorkingMark } from './WorkingMark'
 import { connectAgent, reloadAgentOnDaemon, sendWhenAgentReady } from '@/api/daemon'
-import { NO_EVENTS_HINT_AFTER_MS, noEventsHint, waitingInTerminalHint, type ChatAgent } from '@/features/workspace/model/chatView'
+import { NO_EVENTS_HINT_AFTER_MS, configFolderOf, hookProblemHint, noConversationHint, noEventsHint, stuckChatLine, waitingInTerminalHint, type ChatAgent } from '@/features/workspace/model/chatView'
 import { keepComposerFocus } from '../keepComposerFocus'
 import { buildAttachmentMessage, parseAttachmentMessage } from '../attachmentMessage'
 import { machineNameOf } from '@/api/machines'
@@ -28,6 +28,10 @@ type StartingChatProps = {
   onBackToTerminal: () => void
   /** What the daemon says the session is doing: Needs before any chat events means a question only the terminal shows. */
   paneStatus?: SessionStatus
+  /** Whether the agent's hooks have reported in; absent when the daemon did not say. */
+  hooked?: boolean
+  /** Why the hooks never report, from the daemon's look at the agent's own settings file. */
+  hookProblem?: { file: string; why: string; repaired: boolean } | null
   /** The question on the agent's screen, as the daemon read it: shown here with its choices so it can be answered without the terminal. */
   asking?: string
   /** Types into the agent's terminal. */
@@ -52,7 +56,7 @@ function echoed(message: string) {
  * box are there at once. A message sent now is held and goes out when the real chat takes over; a
  * half-typed one is carried across.
  */
-export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, asking = '', typeInto }: StartingChatProps) {
+export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, hooked, hookProblem = null, asking = '', typeInto }: StartingChatProps) {
   const waiting = paneStatus === 'needs'
   const menu = waiting && typeInto !== undefined ? parseScreenMenu(asking) : null
   const trust = menu === null ? null : parseTrustPrompt(agent, menu)
@@ -76,9 +80,14 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     return () => { window.clearTimeout(timer) }
   }, [])
 
+  // The folder of THIS pane's agent, as the daemon found it: the app's own environment may name another.
   const connect = () => {
     setConnecting(true)
-    connectAgent(agent)
+    // Hooks the daemon already repaired only need the agent restarted.
+    const connected = hookProblem?.repaired === true
+      ? Promise.resolve()
+      : hookProblem === null ? connectAgent(agent) : connectAgent(agent, configFolderOf(hookProblem.file))
+    connected
       .then(() => reloadAgentOnDaemon({ id: sessionId }))
       .then(() => { toast.success(`${agent} is connected and restarted to load the hooks.`) })
       .catch((failure: unknown) => { toast.failed(`Could not connect ${agent}`, failure) })
@@ -129,14 +138,20 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
           answered here is its own notice (the tray over the message box), so this one stays away. */}
       {menu === null && (late || waiting) && (
         <div className="mx-chat-notices">
-          <span role="note" className="is-warn">{waiting ? waitingInTerminalHint(agent) : noEventsHint(agent)}</span>
+          <span role="note" className="is-warn">{waiting ? waitingInTerminalHint(agent) : hookProblem !== null && hooked !== true ? hookProblemHint(agent, hookProblem) : hooked === true ? noConversationHint(agent) : noEventsHint(agent)}</span>
           <span className="mx-spacer" />
           <button type="button" className="mx-sub-back" onClick={onBackToTerminal}>Open terminal</button>
-          {!waiting && <button type="button" className="mx-sub-back" disabled={connecting} onClick={connect}>{connecting ? 'Connecting…' : `Connect ${agent}`}</button>}
+          {!waiting && hooked !== true && <button type="button" className="mx-sub-back" disabled={connecting} onClick={connect}>{connecting ? 'Connecting…' : hookProblem === null ? `Connect ${agent}` : hookProblem.repaired ? `Restart ${agent}` : `Repair ${agent} hooks`}</button>}
         </div>
       )}
       {held === null ? (
-        <p className="mx-chat-empty">Type below: it is sent as soon as {agent} is ready.</p>
+        // Never a blank screen or a raw terminal: the session is an agent session, and this says it is on its way.
+        <div className="mx-chat-empty" role="status">
+          <div className="mx-chat-starting">
+            <span className="mx-chat-starting-title"><WorkingMark agent={agent} />Starting {AGENT_LABEL[agent]}…</span>
+            <p>{late ? stuckChatLine(agent) : `Type below: it is sent as soon as ${agent} is ready.`}</p>
+          </div>
+        </div>
       ) : (
         // The same list the real chat uses, so the message and the line under it are already where they will stay.
         <div className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto">

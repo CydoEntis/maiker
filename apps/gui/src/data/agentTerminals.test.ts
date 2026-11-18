@@ -25,9 +25,9 @@ describe('agent terminals', () => {
   it('remembers them between runs, and reads nothing from a value that is not a list of ids', () => {
     writeAgentTerminals(new Map([['a1', ['t2', 't3']]]))
     expect(readAgentTerminals().get('a1')).toEqual(['t2', 't3'])
-    localStorage.setItem('maitty.gui.agent-terminals.v1', JSON.stringify({ a1: 'nope', a2: [1, 2] }))
+    localStorage.setItem('maiker.gui.agent-terminals.v1', JSON.stringify({ a1: 'nope', a2: [1, 2] }))
     expect(readAgentTerminals().size).toBe(0)
-    localStorage.setItem('maitty.gui.agent-terminals.v1', 'not json')
+    localStorage.setItem('maiker.gui.agent-terminals.v1', 'not json')
     expect(readAgentTerminals().size).toBe(0)
   })
 })

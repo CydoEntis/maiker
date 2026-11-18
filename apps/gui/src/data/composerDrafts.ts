@@ -3,7 +3,7 @@
  * loses what was being written. Only text: attached files are object URLs and paths that do not outlive the window.
  */
 
-const STORAGE_KEY = 'maitty.gui.composer-drafts.v1'
+const STORAGE_KEY = 'maiker.gui.composer-drafts.v1'
 /** A draft not touched for this long is dropped: a conversation number the daemon hands out again names another chat. */
 const DAY_MS = 86_400_000
 const DAYS_KEPT = 7

@@ -25,6 +25,7 @@ mod git_identity;
 mod git_rule;
 mod github;
 mod helpers;
+pub mod hook_repair;
 mod identity;
 mod last_lines;
 mod leftover_tickets;
@@ -142,6 +143,8 @@ pub enum Ev {
     },
     /// A background read of a followed pane's transcript finished (ADR 0003).
     FollowRead(Box<conversation::follow::Done>),
+    /// A background look at a Claude pane's config folder finished (`hook_repair`).
+    HookFolderChecked(Box<hook_repair::Checked>),
     ConversationStorage {
         id: crate::conversation::ConversationId,
         revision: Option<u64>,
@@ -1435,6 +1438,7 @@ impl Daemon {
                     self.poll_codex();
                     self.poll_effort();
                     self.follow_tick();
+                    self.hook_watch_tick();
                     self.deliver_queued();
                     self.usage_store.save_if_due(term::unix_now());
                     self.poll_git();
@@ -1973,6 +1977,7 @@ impl Daemon {
                 self.conversation_save_completed(barrier, result);
             }
             Ev::FollowRead(done) => self.follow_read_done(*done),
+            Ev::HookFolderChecked(done) => self.hook_checked(*done),
             Ev::ConversationStorage {
                 id,
                 revision,
@@ -2103,6 +2108,9 @@ impl Daemon {
                     if t.process != f.process && !f.process.is_empty() {
                         t.process = f.process;
                         self.dirty = true;
+                    }
+                    if f.claude_dir.is_some() && t.claude_dir != f.claude_dir {
+                        t.claude_dir = f.claude_dir.clone();
                     }
                     if t.remote != f.remote {
                         t.remote = f.remote;
@@ -3655,6 +3663,7 @@ impl Daemon {
                         popup: t.popup,
                         agent: t.agent.clone(),
                         hooked: t.hooked,
+                        hook_problem: t.hook_problem.clone(),
                         // Asking for helpers needs you, whatever the agent's own hooks say meanwhile.
                         status: if t.helpers.asked.is_empty() {
                             t.status
@@ -3940,8 +3949,13 @@ impl Daemon {
             self.tx.clone(),
         )?;
         t.account = account;
-        t.began_as_agent = self.agent_in_cmd(inner).is_some();
+        let agent_here = self.agent_in_cmd(inner);
+        t.began_as_agent = agent_here.is_some();
         self.terms.insert(id, t);
+        if agent_here.as_deref() == Some("claude") {
+            let account = self.terms.get(&id).and_then(|t| t.account.clone());
+            self.repair_hooks_for_spawn(id, account.as_deref());
+        }
         self.had_terms = true;
         // Its worktree is looked at for a repo checks file with the git poll.
         self.poll_git_soon();

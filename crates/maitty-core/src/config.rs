@@ -980,8 +980,9 @@ fn validate_appearance(appearance: &str) -> Result<()> {
 /// The app's own themes were once named after it ("seshi-night", ADR 0008), and the first set
 /// gave way to Night and Day: an old choice moves to the one of the same lightness.
 fn retired_theme(theme: &str) -> Option<&'static str> {
-    // A built-in theme is never retired: `maitty-dark` and `maitty-light` start with the app's name too, and are themes of their own.
-    if crate::theme::BUILTIN.contains(&theme) {
+    // A built-in theme is never retired, and neither is one of Maiker's own under its old `maitty-*` id (`renamed` moves it):
+    // `maiker-dark` and `maitty-dark` start with a name of the app too, and are themes of their own.
+    if crate::theme::BUILTIN.contains(&theme) || crate::theme::renamed(theme).is_some() {
         return None;
     }
     let plain = theme
@@ -1066,7 +1067,10 @@ impl Config {
             cfg.icons.shell = Icons::default().shell;
         }
         for name in [&mut cfg.theme, &mut cfg.theme_dark, &mut cfg.theme_light] {
-            if let Some(t) = retired_theme(name) {
+            // Maiker's own themes were `maitty-*`; the new id is saved the next time the config is written.
+            if let Some(t) = crate::theme::renamed(name) {
+                *name = t.to_string();
+            } else if let Some(t) = retired_theme(name) {
                 *name = t.to_string();
             }
         }
@@ -1714,10 +1718,11 @@ mod tests {
     }
 
     #[test]
-    fn maitty_dark_and_maitty_light_are_themes_of_their_own_not_retired_names() {
+    fn maiker_dark_and_maiker_light_are_themes_of_their_own_not_retired_names() {
         // They start with the app's name like the old `maitty-dark`, and once loaded as `night` and `day`.
-        assert_eq!(retired_theme("maitty-dark"), None);
-        assert_eq!(retired_theme("maitty-light"), None);
+        for name in ["maiker-dark", "maiker-light", "maitty-dark", "maitty-light"] {
+            assert_eq!(retired_theme(name), None, "{name}");
+        }
         assert_eq!(retired_theme("maitty-night"), Some("night"));
     }
 
@@ -2461,6 +2466,24 @@ ssh_args = ['-p', '2222']
         assert!(cfg.machines.is_empty());
         assert_eq!(cfg.prefix, "ctrl+b");
         assert!(Config::default().machines.is_empty());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_config_naming_a_theme_by_its_maitty_id_loads_it_under_the_maiker_id() {
+        let dir = config_dir("renamed-theme");
+        std::fs::write(
+            dir.join("config.toml"),
+            "theme_dark = 'maitty-abyss'\ntheme_light = 'maitty-paper'\nappearance = 'dark'\n",
+        )
+        .unwrap();
+        let cfg = Config::load_at(&dir.join("config.toml"), true).unwrap();
+        assert_eq!(cfg.theme_dark, "maiker-abyss");
+        assert_eq!(cfg.theme_light, "maiker-paper");
+        assert_eq!(cfg.theme, "maiker-abyss");
+        std::fs::write(dir.join("config.toml"), "theme_dark = 'maiker-abyss'\nappearance = 'dark'\n").unwrap();
+        let again = Config::load_at(&dir.join("config.toml"), true).unwrap();
+        assert_eq!(again.theme_dark, "maiker-abyss", "a current id is read as written");
         std::fs::remove_dir_all(dir).unwrap();
     }
 

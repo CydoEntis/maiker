@@ -42,6 +42,19 @@ folder exists, skips the rest without creating anything, then registers MCP. It 
 per agent (connected, already connected, skipped: not installed, failed: reason), tries every
 agent before failing, and changes nothing on a second run.
 
+**Claude's hooks follow the folder each pane really uses.** Claude Code reads its hooks from
+`$CLAUDE_CONFIG_DIR/settings.json`, and a pane's own alias, shell function or account entry can set
+that variable where the daemon's environment never sees it. So the daemon does not trust its own
+folder: when it starts a Claude pane it repairs that pane's folder (the account's `env`, the
+config's `env`, else Claude's default) in the background, and the scan reads `CLAUDE_CONFIG_DIR`
+off the running Claude process. A Claude pane that has not reported a hook 15 seconds after it
+started has its folder checked; hooks that are missing, or that run another program (an older
+install, or a program under an old name such as `maitty`), are pointed at this build. The result
+is `TermInfo.hook_problem` (the settings file and what was wrong, `repaired` when only a restart of
+the agent is left), which the chat shows with a button that repairs that folder; a failure is logged
+and shown, never swallowed. No forwarding program is left at an old path. The same repair renames an
+MCP server still registered under an old name (`maitty`) to `maiker` in that folder's `.claude.json`.
+
 Codex installs `SessionStart`, `SubagentStart`, `SubagentStop` and the turn lifecycle
 (`UserPromptSubmit`, `PreToolUse`, `PermissionRequest`, `PostToolUse`, `Stop`, `Interrupt`)
 in `$CODEX_HOME/config.toml` (or `~/.codex/config.toml`). SessionStart records the

@@ -76,7 +76,7 @@ vi.mock('./TerminalView', () => ({
 const REFUSAL = (feature: string) => `${feature} is local-only in v1: the files are on build, not on this computer.`
 
 async function openRemotePane() {
-  window.localStorage.setItem('maitty.gui.welcomed.v1', '1')
+  window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
   const user = userEvent.setup()

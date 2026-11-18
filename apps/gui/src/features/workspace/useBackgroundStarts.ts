@@ -5,7 +5,7 @@ import { revokePreviews } from '@/features/chat/useAttachmentIntake'
 import { explainError, type ExplainedError } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import { useLatest } from '@/lib/useLatest'
-import type { NewChatRequest, NewChatStartOptions } from './components/NewSessionDialog'
+import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import { nameFromMessage } from './model/newSession'
 
 /** What a start in the background took out of the message box, given back as it was when the start fails. */
@@ -23,7 +23,7 @@ export const failedStartLabel = ({ name, agent }: Pick<FailedStart, 'name' | 'ag
   `${name === '' ? 'the empty chat' : `“${name}”`}${agent === null ? '' : ` with ${agent}`}`
 
 /**
- * The New session dialog's starts in the background: each runs on its own while the dialog is written in again. `pending`
+ * The New session draft's starts in the background: each runs on its own while the dialog is written in again. `pending`
  * counts the ones still starting; a failed one is kept in `failed` until it is taken back or dismissed, and is a toast
  * instead once the page is gone.
  */

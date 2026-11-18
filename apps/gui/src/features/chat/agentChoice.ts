@@ -191,7 +191,7 @@ export function defaultChoice(): AgentChoice {
   return { model: DEFAULT_PICK, reasoning: DEFAULT_PICK }
 }
 
-const STORAGE_KEY = 'maitty.gui.agentChoice.v1'
+const STORAGE_KEY = 'maiker.gui.agentChoice.v1'
 const listeners = new Set<() => void>()
 /** A chat's pick, and what its agent last said it runs (see `noteAgentSaid`). */
 type StoredChoice = { model?: string; reasoning?: ReasoningPick; saidModel?: string; saidEffort?: string }

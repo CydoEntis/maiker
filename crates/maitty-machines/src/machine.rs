@@ -389,6 +389,19 @@ impl Machine {
         &self.name
     }
 
+    /// The ssh destination (`user@host`, a host, or an alias) of a machine reached over ssh.
+    pub fn target(&self) -> Option<&str> {
+        self.ssh_route().ok().map(|route| route.target.as_str())
+    }
+
+    /// The ssh program with its leading arguments and the target, for a look at the machine
+    /// that is not a dial (its host key). None for this computer and for a custom transport.
+    pub fn ssh_parts(&self) -> Option<(&[String], &str)> {
+        self.ssh_route()
+            .ok()
+            .map(|route| (route.ssh.as_slice(), route.target.as_str()))
+    }
+
     /// The name to show for a remote machine; nothing for this one.
     pub fn host(&self) -> Option<&str> {
         self.is_remote().then_some(self.name.as_str())
@@ -1091,7 +1104,7 @@ mod tests {
         let error = super::ssh_failed(&machine, said, anyhow::anyhow!("closed"), false).await;
         assert_eq!(
             crate::link_failure::classify(&error),
-            crate::link_failure::FailureClass::Login
+            crate::link_failure::FailureClass::Login("box: Permission denied".into())
         );
     }
 

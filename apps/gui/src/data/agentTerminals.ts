@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'maitty.gui.agent-terminals.v1'
+const STORAGE_KEY = 'maiker.gui.agent-terminals.v1'
 
 /** The terminals this window opened for an agent, by the agent's session id, in the order they were opened. */
 export type AgentTerminals = ReadonlyMap<string, readonly string[]>

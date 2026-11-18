@@ -18,16 +18,16 @@ describe('saved layout', () => {
   })
 
   it('drops a tab layout from an older version and says so once', () => {
-    localStorage.setItem('maitty.gui.layout.v2', JSON.stringify({ tabs: [], activeTabId: null }))
+    localStorage.setItem('maiker.gui.layout.v2', JSON.stringify({ tabs: [], activeTabId: null }))
     expect(readLayout()).toEqual({ layout: EMPTY_LAYOUT, reset: true })
-    expect(localStorage.getItem('maitty.gui.layout.v2')).toBeNull()
+    expect(localStorage.getItem('maiker.gui.layout.v2')).toBeNull()
     writeLayout(EMPTY_LAYOUT)
     expect(readLayout().reset).toBe(false)
     expect(localStorage.getItem(STORAGE_KEY)).not.toBeNull()
   })
 
   it('does not reset a layout that is already the new kind', () => {
-    localStorage.setItem('maitty.gui.layout.v2', '{}')
+    localStorage.setItem('maiker.gui.layout.v2', '{}')
     writeLayout(EMPTY_LAYOUT)
     expect(readLayout().reset).toBe(false)
   })

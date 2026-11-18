@@ -17,7 +17,7 @@ import { UpdateBox } from './UpdateBox'
 import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { ExtensionProject } from '@/features/extensions/projects'
 import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
-import { CHAT_AGENTS, type ChatAgent } from '@/features/workspace/model/chatView'
+import { type ChatAgent } from '@/features/workspace/model/chatView'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { Icon } from '@/features/workspace/components/glyphs'
@@ -26,7 +26,7 @@ import { loadAgentAuth, signOutAgent, type AgentAuth } from '@/api/daemon'
 import { SignInCard } from '@/features/signin/SignInCard'
 import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { BUNDLED_FONT_NAME, fontStackFor, installedMonospaceFamilies, WEIGHT_BOLD, WEIGHT_EXTRA_BOLD, WEIGHT_LIGHT, WEIGHT_MEDIUM, WEIGHT_REGULAR, WEIGHT_SEMIBOLD, type TerminalFontWeight } from '@/lib/terminalFont'
-import type { Added, Grant, HostChoice, MachineActivity } from '@/api/machines'
+import type { Added, Grant, HostChoice, HostKeyReport, KeyLoginReport, KeySetupResult, MachineActivity } from '@/api/machines'
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
@@ -56,6 +56,16 @@ export type MachinesInfo = {
   onCheckActivity: (name: string) => Promise<MachineActivity | null>
   /** Puts the same command on the clipboard, to run in a terminal instead. */
   onCopyCommand: (command: string) => void
+  /** Opens ssh in a session on this computer for a machine that needs a login (by its number), so its prompts can be answered. */
+  onOpenLogin: (machine: number) => void
+  /** The user name ssh would connect as here when a machine names none; null when unknown. */
+  localUser: string | null
+  /** Sets the user a machine connects as (blank for none) and dials it again as that user. */
+  onSetUser: (name: string, user: string) => Promise<void>
+  /** Looks at a machine's host key, and trusts the one that was shown. */
+  hostKey: { inspect: (name: string) => Promise<HostKeyReport>; trust: (name: string, fingerprint: string) => Promise<void> }
+  /** Key login set up with the account password once. */
+  keyLogin: { inspect: (name: string) => Promise<KeyLoginReport>; setUp: (name: string, password: string, createKey: boolean) => Promise<KeySetupResult> }
   /** How many sessions the sidebar shows for a machine (by its number); without it a tile says it does not know. */
   sessionsOn?: (machine: number) => number
   add: {
@@ -64,7 +74,7 @@ export type MachinesInfo = {
     /** The hosts of ~/.ssh/config that are not machines yet. Stable between renders. */
     loadHosts: () => Promise<HostChoice[]>
     /** Looks at the target and adds it. Rejects with the words to show when it cannot be added. */
-    onAdd: (target: string, name?: string) => Promise<Added>
+    onAdd: (target: string, name?: string, port?: number) => Promise<Added>
     /** Ends the look that is running. */
     onCancel: () => void
   }
@@ -498,7 +508,7 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
   )
 }
 
-const CHAT_VIEW_OPTIONS = [['terminal', 'Terminal'], ['chat', 'Chat']] as const
+const CHAT_VIEW_OPTIONS = [['chat', 'Chat'], ['terminal', 'Terminal']] as const
 const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as const
 const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creation', 'Creation'], ['priority', 'Priority']]
 const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
@@ -652,11 +662,9 @@ function ChatSection({ preferences, update }: { preferences: SettingsPreferences
         <Row label="Hide successful tool calls" detail="Leaves out the file reads and searches that worked. Commands, edits, other tools and anything that failed still show.">
           <Switch aria-label="Hide successful tool calls" checked={preferences.hideSuccessfulTools} onCheckedChange={(value) => { update('hideSuccessfulTools', value) }} />
         </Row>
-        {CHAT_AGENTS.map((agent) => (
-          <Row key={agent} label={`${AGENT_LABEL[agent]} sessions open in`} detail="Only a session with a chat opens in it; the switch on each pane changes one session.">
-            <SegmentedChoice label={`${AGENT_LABEL[agent]} sessions open in`} value={preferences.chatViewDefault[agent]} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('chatViewDefault', { ...preferences.chatViewDefault, [agent]: value }) }} />
-          </Row>
-        ))}
+        <Row label="Open sessions in" detail="Where a new session opens. It is one session either way: the Chat and Terminal switch on each pane changes the view at any time. Gemini has no chat view and always opens in its terminal.">
+          <SegmentedChoice label="Open sessions in" value={preferences.openSessionsIn} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('openSessionsIn', value) }} />
+        </Row>
       </Card>
     </>
   )

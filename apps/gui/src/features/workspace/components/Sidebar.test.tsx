@@ -1,11 +1,12 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { Conversation, SubagentActivity } from '@/data/preview'
+import type { Conversation } from '@/data/preview'
 import { writeMachineNicknames } from '@/data/machineNicknames'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
 import { toSessionView, type SessionView } from '../model/session'
 import { Sidebar, type SidebarProps } from './Sidebar'
+import { flipKey } from './flipKey'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(id.indexOf('t') + 1)) }))
 
@@ -20,14 +21,13 @@ function session(pane: number, extra: Partial<Conversation> = {}): SessionView {
   )
 }
 
-const child = (id: string, task: string, state: SubagentActivity['state']): SubagentActivity => ({ id, name: 'Explore', state, task, startedAt: 100, updatedAt: 160, latest: null, result: null })
 
 function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   const none = vi.fn()
   const props: SidebarProps = {
-    sessions, listed: true, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, openSubagent: null, mode: 'docked', online: true, canStart: true, renamingId: null, portalContainer: null,
+    sessions, listed: true, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, mode: 'docked', online: true, canStart: true, renamingId: null, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, grouping: 'machine', onGrouping: none, onSearch: none,
-    onNewAgentChat: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onShowSubagent: none, onRenameSession: none,
+    onNewSession: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
     onSetName: none, onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onPutAway: none, onBringBack: none, onSnooze: none, onUnsnooze: none, onGetFile: none,
     onEndSession: none, onOpenSettings: none, onRecentSessions: none, updateSlot: null, railUpdateSlot: null,
     ...more,
@@ -100,15 +100,12 @@ describe('the sidebar', () => {
     expect(screen.getByRole('button', { name: /^dev, shell/ })).toBeTruthy()
   })
 
-  it('groups a machine by project from its menu, and back to one list', async () => {
-    const user = userEvent.setup()
+  it('has no group-by-project toggle on a machine: one list, and no such entry in its menu', () => {
     show([session(1, { agent: 'claude', cwd: '/home/me/a', folder: '/home/me/a' }), session(2, { agent: 'claude', cwd: '/home/me/b', folder: '/home/me/b' })])
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^This computer/ }))
-    await user.click(screen.getByRole('menuitem', { name: 'Group by project' }))
-    expect(screen.getByRole('list', { name: 'a' })).toBeTruthy()
-    expect(screen.getByRole('list', { name: 'b' })).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Show one list, most urgent first' }))
+    expect(screen.queryByRole('button', { name: /Group by project|Show one list/ })).toBeNull()
     expect(screen.getByRole('list', { name: 'Sessions on This computer' })).toBeTruthy()
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^This computer/ }))
+    expect(screen.queryByRole('menuitem', { name: /Group by project|Show as one list/ })).toBeNull()
   })
 
   it('folds a machine away from its heading', async () => {
@@ -135,11 +132,14 @@ describe('a machine that needs maiker installed or updated', () => {
     expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'install')
   })
 
-  it('says why its + is off while the machine is down', () => {
-    show([], { machines: [LOCAL_HEAD, needing('update')] })
-    const add = screen.getByRole('button', { name: 'New agent chat on devbox' })
-    expect(add).toBeDisabled()
-    expect(add).toHaveAttribute('title', expect.stringContaining('Cannot start a chat on devbox: '))
+  it('has no + on a machine, and a machine that is down still says why from its dot and its menu', () => {
+    const down: MachineHead = { ...needing('update'), why: 'ssh: connection refused' }
+    show([], { machines: [LOCAL_HEAD, down] })
+    expect(screen.queryByRole('button', { name: /^New (session|agent chat) on / })).toBeNull()
+    expect(screen.getByRole('img', { name: /^devbox is / })).toHaveAttribute('title', 'ssh: connection refused')
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
+    expect(screen.getByRole('menuitem', { name: 'New session here' })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('menuitem', { name: /Not reachable: ssh: connection refused/ })).toBeTruthy()
   })
 
   it('offers Install Maiker first in its menu', async () => {
@@ -184,41 +184,6 @@ describe('a machine that needs maiker installed or updated', () => {
     expect(screen.queryByRole('button', { name: /Maiker on/ })).toBeNull()
   })
 })
-
-describe('subagents', () => {
-  it('lists running helpers under every session, selected or not, and opens one on a click', () => {
-    const onShowSubagent = vi.fn()
-    const helpers = [child('a', 'Read the parser', 'Working'), child('b', 'Write drafts tests', 'WaitingForInput'), child('c', 'Old one', 'Completed')]
-    show([
-      session(1, { agent: 'claude', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: helpers } }),
-      session(2, { agent: 'claude', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: [child('d', 'Check the docs', 'Working')] } }),
-    ], { focusedId: 't2', onShowSubagent })
-
-    const groups = screen.getAllByRole('group', { name: 'Subagents' })
-    expect(groups).toHaveLength(2)
-    // One that finished has reported back, so it is not listed.
-    expect(screen.queryByRole('button', { name: /Old one/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Write drafts tests, needs you' }))
-    expect(onShowSubagent).toHaveBeenCalledExactlyOnceWith('t1', 'b')
-    expect(screen.getByRole('button', { name: 'Check the docs, working' })).toBeTruthy()
-  })
-
-  it('names a few helpers and counts the rest, which open the session', () => {
-    const onShowSession = vi.fn()
-    const many = ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => child(id, `Task ${id}`, 'Working'))
-    show([session(1, { agent: 'claude', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: many } })], { onShowSession })
-
-    expect(screen.getAllByRole('button', { name: /^Task ., working$/ })).toHaveLength(4)
-    fireEvent.click(screen.getByRole('button', { name: '+2 more' }))
-    expect(onShowSession).toHaveBeenCalledWith('t1')
-  })
-
-  it('marks the helper whose chat is open', () => {
-    show([session(1, { agent: 'claude', status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: [child('a', 'Read the parser', 'Working')] } })], { openSubagent: { sessionId: 't1', subagentId: 'a' } })
-    expect(screen.getByRole('button', { name: 'Read the parser, working' }).getAttribute('aria-current')).toBe('page')
-  })
-})
-
 
 describe('a session row', () => {
   it('says how long an agent has been in its state, and nothing for a shell or when the daemon did not say', () => {
@@ -441,14 +406,18 @@ describe('a session row', () => {
 })
 
 describe('a machine heading', () => {
-  it('starts an agent chat on that machine when + is clicked, and opens the full menu on right-click', async () => {
+  it('starts a session or a terminal on that machine from its right-click menu, not from a +', async () => {
     const user = userEvent.setup()
-    const onNewAgentChat = vi.fn()
-    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], onNewAgentChat })
-    await user.click(screen.getByRole('button', { name: 'New agent chat on devbox' }))
-    expect(onNewAgentChat).toHaveBeenCalledWith(4)
-    fireEvent.contextMenu(screen.getByRole('button', { name: 'New agent chat on devbox' }))
-    expect(await screen.findByRole('menuitem', { name: /New shell/ })).toBeTruthy()
+    const onNewSession = vi.fn()
+    const onNewShell = vi.fn()
+    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], onNewSession, onNewShell })
+    expect(screen.queryByRole('button', { name: /^New (session|agent chat) on / })).toBeNull()
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New session here' }))
+    expect(onNewSession).toHaveBeenCalledWith(4)
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New terminal here' }))
+    expect(onNewShell).toHaveBeenCalledWith(4)
   })
 
   it('collapses its sessions when the name is clicked', async () => {
@@ -479,7 +448,7 @@ describe('closing a session from its row', () => {
 describe('a draft chat', () => {
   it('is listed last on its machine while it waits for a first message, as a twin of a session row, and the empty note steps aside', () => {
     show([], { draft: { machine: 0, process: 'claude' } })
-    const draft = screen.getByRole('status', { name: 'New chat, waiting for the first message' })
+    const draft = screen.getByRole('status', { name: 'New session, waiting for the first message' })
     expect((screen.getByRole('button', { name: /^This computer/ }).closest('.mx-machine') as HTMLElement).contains(draft)).toBe(true)
     expect(screen.queryByText('No agents running. New chat starts one.')).toBeNull()
     expect(draft.querySelector('.mx-row')).not.toBeNull()
@@ -487,7 +456,7 @@ describe('a draft chat', () => {
 
   it('shows the agent picked for it, drawn as a session row draws its agent', () => {
     show([], { draft: { machine: 0, process: 'codex' } })
-    const icon = screen.getByRole('status', { name: 'New chat, waiting for the first message' }).querySelector('.mx-app-icon')
+    const icon = screen.getByRole('status', { name: 'New session, waiting for the first message' }).querySelector('.mx-app-icon')
     expect(icon?.classList.contains('is-codex')).toBe(true)
     expect(icon?.classList.contains('size-16')).toBe(true)
     expect(icon?.classList.contains('is-flat')).toBe(true)
@@ -495,14 +464,22 @@ describe('a draft chat', () => {
 
   it('stays after every session of its machine, wherever they sort', () => {
     show([session(1, { agent: 'claude', named: true, title: 'First' }), session(2, { agent: 'claude', named: true, title: 'Second', status: 'needs-you' })], { draft: { machine: 0, process: 'claude' }, order: 'priority' })
-    const draft = screen.getByRole('status', { name: 'New chat, waiting for the first message' })
+    const draft = screen.getByRole('status', { name: 'New session, waiting for the first message' })
     const rows = Array.from((screen.getByRole('button', { name: /^This computer/ }).closest('.mx-machine') as HTMLElement).querySelectorAll('.mx-row-wrap'))
     expect(rows.at(-1)).toBe(draft)
   })
 
+  it('is a button that opens the draft again when it is set aside with text in it', async () => {
+    const onOpen = vi.fn()
+    show([], { draft: { machine: 0, process: 'claude', onOpen } })
+    expect(screen.queryByRole('status', { name: /New session/ })).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: /^New session draft/ }))
+    expect(onOpen).toHaveBeenCalledTimes(1)
+  })
+
   it('is not listed once there is no draft, nor on another machine', () => {
     show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], draft: { machine: 0, process: 'claude' } })
-    expect(screen.getAllByRole('status', { name: /New chat/ })).toHaveLength(1)
+    expect(screen.getAllByRole('status', { name: /New session/ })).toHaveLength(1)
     expect(within(screen.getByRole('list', { name: 'Sessions on devbox' })).queryByRole('status')).toBeNull()
   })
 })
@@ -577,7 +554,7 @@ describe('grouped by status', () => {
 
   it('lists a draft chat first, above every section', () => {
     show(mixed(), { grouping: 'status', draft: { machine: 0, process: 'claude' } })
-    const draft = screen.getByRole('status', { name: 'New chat, waiting for the first message' })
+    const draft = screen.getByRole('status', { name: 'New session, waiting for the first message' })
     expect(Array.from(document.querySelectorAll('.mx-row-wrap'))[0]).toBe(draft)
   })
 
@@ -603,13 +580,13 @@ describe('grouped by project', () => {
 })
 
 describe('the top of the sidebar', () => {
-  it('starts a chat on this computer from New chat, and opens the search from Search', async () => {
+  it('starts a session on this computer from New session, and opens the search from Search', async () => {
     const user = userEvent.setup()
-    const onNewAgentChat = vi.fn()
+    const onNewSession = vi.fn()
     const onSearch = vi.fn()
-    show([], { onNewAgentChat, onSearch })
-    await user.click(screen.getByRole('button', { name: /^New chat/ }))
-    expect(onNewAgentChat).toHaveBeenCalledWith(0)
+    show([], { onNewSession, onSearch })
+    await user.click(screen.getByRole('button', { name: /^New session/ }))
+    expect(onNewSession).toHaveBeenCalledWith(0)
     await user.click(screen.getByRole('button', { name: /^Search/ }))
     expect(onSearch).toHaveBeenCalledTimes(1)
   })
@@ -633,14 +610,14 @@ describe('the top of the sidebar', () => {
     expect(await screen.findByRole('menuitem', { name: 'Open' })).toBeTruthy()
   })
 
-  it('has a New terminal button between the filter and New chat that starts the existing shell action', async () => {
+  it('has a New terminal button between the filter and New session that starts the existing shell action', async () => {
     const user = userEvent.setup()
     const onNewShell = vi.fn()
     show([], { onNewShell })
     const names = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')).filter((name) => name !== null)
     const terminal = names.findIndex((name) => name === 'New terminal')
     expect(names[terminal - 1]).toMatch(/^Filter and group/)
-    expect(names[terminal + 1]).toBe('New chat')
+    expect(names[terminal + 1]).toBe('New session')
     await user.click(screen.getByRole('button', { name: 'New terminal' }))
     expect(onNewShell).toHaveBeenCalledWith(0)
   })
@@ -655,13 +632,13 @@ describe('the top of the sidebar', () => {
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'New terminal' }).disabled).toBe(true)
   })
 
-  it('offers a shell and a remote machine from a right-click on New chat', async () => {
+  it('offers a terminal and a remote machine from a right-click on New session', async () => {
     const user = userEvent.setup()
     const onNewShell = vi.fn()
     show([], { onNewShell })
-    fireEvent.contextMenu(screen.getByRole('button', { name: 'New chat' }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'New session' }))
     expect(screen.getByRole('menuitem', { name: /Add a remote machine/ })).toBeTruthy()
-    await user.click(screen.getByRole('menuitem', { name: /^New shell/ }))
+    await user.click(screen.getByRole('menuitem', { name: /^New terminal/ }))
     expect(onNewShell).toHaveBeenCalledWith(0)
   })
 
@@ -735,15 +712,18 @@ describe('the top of the sidebar', () => {
     expect(screen.queryByRole('region', { name: 'Terminals' })).toBeNull()
   })
 
-  it('folds the Terminals section from its heading, and starts a terminal from its plus', async () => {
+  it('folds the Terminals section from its heading, which has no plus of its own', async () => {
     const user = userEvent.setup()
-    const onNewShell = vi.fn()
-    show([session(1, { named: true, title: 'Shell' })], { onNewShell })
+    show([session(1, { named: true, title: 'Shell' })])
     const section = screen.getByRole('region', { name: 'Terminals' })
     await user.click(within(section).getByRole('button', { name: /^Terminals/ }))
     expect(within(section).getByRole('button', { name: /^Terminals/ })).toHaveAttribute('aria-expanded', 'false')
-    await user.click(within(section).getByRole('button', { name: 'New terminal' }))
-    expect(onNewShell).toHaveBeenCalledWith(0)
+    expect(within(section).queryByRole('button', { name: 'New terminal' })).toBeNull()
+  })
+
+  it('hides the Terminals section unless a terminal is open', () => {
+    show([session(1, { agent: 'claude', named: true, title: 'Agent' })])
+    expect(screen.queryByRole('region', { name: 'Terminals' })).toBeNull()
   })
 
   it('closes a terminal from its row, as an agent row stops', async () => {
@@ -777,5 +757,58 @@ describe('the top of the sidebar', () => {
     const heads = screen.getAllByRole('button', { expanded: true }).map((button) => button.querySelector('.mx-section-name')?.textContent).filter((name) => name !== undefined)
     expect(heads).toEqual(['Idle', 'Terminals'])
     expect(screen.getByRole('region', { name: 'Terminals' })).toBeTruthy()
+  })
+})
+
+describe('the key that decides when rows are measured to slide', () => {
+  const keyFor = (sessions: SessionView[], grouping: 'status' | 'machine' = 'status') => flipKey({ sessions, grouping }, sessions, 'recent', null, false, { signature: '' }, false, '')
+
+  it('does not change when only the focused session changes, so a click reads no layout', () => {
+    const list = [session(1, { agent: 'claude', named: true, title: 'A' }), session(2, { agent: 'claude', named: true, title: 'B' })]
+    expect(keyFor(list)).toBe(keyFor([...list]))
+  })
+
+  it('changes when a session changes status, which moves its row', () => {
+    const before = [session(1, { agent: 'claude', named: true, title: 'A' })]
+    const after = [session(1, { agent: 'claude', named: true, title: 'A', status: 'needs-you' })]
+    expect(keyFor(before)).not.toBe(keyFor(after))
+  })
+
+  it('still changes when moving focus moves a row between sections, through where the rows sit', () => {
+    const list = [session(1, { agent: 'claude', named: true, title: 'A', status: 'working' }), session(2, { agent: 'claude', named: true, title: 'B', status: 'needs-you' })]
+    const key = (placement: string) => flipKey({ sessions: list, grouping: 'status' }, list, 'recent', null, false, { signature: '' }, false, placement)
+    expect(key('needs:t2|working:t1')).not.toBe(key('working:t1,t2'))
+  })
+})
+
+describe('one name for starting an agent', () => {
+  const OLD = /^New (agent )?chat/i
+
+  it('is New session on the header button, its right-click menu, the rail and a machine\'s menu, never New chat or New agent chat', () => {
+    const view = show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX] })
+    expect(screen.getByRole('button', { name: 'New session' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'New terminal' })).toBeTruthy()
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'New session' }))
+    for (const item of screen.getAllByRole('menuitem')) expect(item.textContent).not.toMatch(OLD)
+    expect(screen.getByRole('menuitem', { name: /^New session/ })).toBeTruthy()
+    for (const button of screen.getAllByRole('button')) expect(button.getAttribute('aria-label') ?? '').not.toMatch(OLD)
+    view.again({ mode: 'rail' })
+    expect(screen.getByRole('button', { name: 'New session' })).toBeTruthy()
+    for (const button of screen.getAllByRole('button')) expect(button.getAttribute('aria-label') ?? '').not.toMatch(OLD)
+  })
+})
+
+describe('hovering a row', () => {
+  it('tells the window which row the pointer or the keyboard is on, and when it leaves', async () => {
+    const user = userEvent.setup()
+    const onHoverSession = vi.fn()
+    show([session(1, { agent: 'claude', named: true, title: 'Growth' })], { onHoverSession })
+    const row = screen.getByRole('button', { name: /^Growth,/ })
+    await user.hover(row)
+    expect(onHoverSession).toHaveBeenLastCalledWith('t1')
+    await user.unhover(row)
+    expect(onHoverSession).toHaveBeenLastCalledWith(null)
+    act(() => { row.focus() })
+    expect(onHoverSession).toHaveBeenLastCalledWith('t1')
   })
 })

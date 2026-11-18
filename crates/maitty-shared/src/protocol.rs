@@ -2019,6 +2019,17 @@ pub struct TabInfo {
     pub focus: TermId,
 }
 
+/// What is wrong with the hooks of an agent that never reports in: its settings file, in words.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HookProblem {
+    /// The settings file whose hooks are wrong; its folder is the agent's config folder.
+    pub file: PathBuf,
+    pub why: String,
+    /// The daemon pointed them at this build already: only a restart of the agent loads the fix.
+    #[serde(default)]
+    pub repaired: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TermInfo {
     #[serde(default)]
@@ -2042,6 +2053,10 @@ pub struct TermInfo {
     /// hooks were installed never does, which is what `Command::ReloadAgent` is for.
     #[serde(default)]
     pub hooked: bool,
+    /// Why an agent's hooks never report, when the daemon looked and knows. An older daemon sends
+    /// none, which reads as nothing known.
+    #[serde(default)]
+    pub hook_problem: Option<HookProblem>,
     pub status: Status,
     pub cwd: PathBuf,
     /// What the agent is on: the last prompt it was given (one line), if known.

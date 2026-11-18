@@ -7,7 +7,7 @@ use std::process::Command;
 use tauri::Manager;
 
 /// The name a copy of the log is saved under (a number is added when it is taken).
-const COPY_NAME: &str = "maitty-log.txt";
+const COPY_NAME: &str = "maiker-log.txt";
 /// The most of the log's end a copy holds: what happened lately is what is asked for, and it has
 /// to fit what an export may be.
 const COPY_BYTES: u64 = 4 * 1024 * 1024;

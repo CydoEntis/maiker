@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'maitty.gui.split-shells.v1'
+const STORAGE_KEY = 'maiker.gui.split-shells.v1'
 
 /** The terminals this window opened by splitting a pane; the sidebar leaves them out while a pane shows them. */
 export function readSplitShells(): ReadonlySet<string> {

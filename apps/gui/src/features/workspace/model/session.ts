@@ -53,6 +53,10 @@ export type SessionView = {
   interrupted: TerminalDetails['interrupted']
   /** The agent's own conversation id; null when unknown. */
   agentSession?: string | null
+  /** The agent's own hooks have reported in (the daemon's `TermInfo.hooked`); absent for a session that is not a terminal. */
+  hooked?: boolean
+  /** Why the agent's hooks never report (the daemon's `TermInfo.hook_problem`); null when it found nothing. */
+  hookProblem?: { file: string; why: string; repaired: boolean } | null
   /** The effort the agent's own files say it runs at; null when they do not say. */
   agentEffort?: string | null
   /** When the status last changed, in milliseconds, as the daemon says; null when it did not say. */
@@ -300,6 +304,8 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     ask: conversation.details?.ask ?? null,
     interrupted: conversation.details?.interrupted ?? null,
     agentSession: conversation.details?.agentSession ?? null,
+    ...(conversation.details?.hooked === undefined ? {} : { hooked: conversation.details.hooked }),
+    hookProblem: conversation.details?.hookProblem ?? null,
     agentEffort: conversation.details?.agentEffort ?? null,
     statusSince: (conversation.details?.since ?? 0) > 0 ? (conversation.details?.since ?? 0) * MS_PER_SECOND : null,
     statusWhy: conversation.details?.statusWhy ?? '',

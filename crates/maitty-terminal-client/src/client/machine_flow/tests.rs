@@ -691,11 +691,10 @@ fn a_popup_that_closes_on_a_failed_login_leaves_the_machine_with_its_state_and_t
             matches!(h.state_of("box"), Some(ConnectionState::NeedsLogin { .. }))
         })
         .await;
-        assert_eq!(
-            h.state_of("box"),
-            Some(ConnectionState::NeedsLogin {
-                why: FIX_LOGIN.into()
-            })
+        assert!(
+            matches!(h.state_of("box"), Some(ConnectionState::NeedsLogin { why, said }) if why == FIX_LOGIN && !said.is_empty()),
+            "{:?}",
+            h.state_of("box")
         );
         assert_eq!(h.app.cfg.machines.len(), 1, "it stays configured");
     });

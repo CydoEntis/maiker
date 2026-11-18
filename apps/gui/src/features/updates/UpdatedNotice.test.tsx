@@ -57,7 +57,7 @@ describe('update memory across a relaunch', () => {
   })
 
   it('reads the plain version an older launch stored', () => {
-    localStorage.setItem('maitty.gui.update.restarted', '0.63.0')
+    localStorage.setItem('maiker.gui.update.restarted', '0.63.0')
     expect(takeRestarted()).toEqual({ version: '0.63.0', previous: null, notes: '', automatic: false })
   })
 })
