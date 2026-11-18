@@ -337,6 +337,8 @@ async fn a_markdown_document_on_a_machine_is_read_and_saved_by_that_machines_dae
     std::fs::write(repository.join("docs/guide.md"), "guide\n").unwrap();
     std::fs::write(repository.join("main.rs"), "fn main() {}\n").unwrap();
     std::fs::write(sandbox.dir.join("outside.md"), "outside\n").unwrap();
+    // A link needs no special right to make on Unix only (Windows asks for Developer Mode), so the escape is checked there.
+    #[cfg(unix)]
     std::os::unix::fs::symlink(sandbox.dir.join("outside.md"), repository.join("link.md")).unwrap();
 
     let mut watch = Watch::new(&[machine("box", &sandbox, "proxy")], &sandbox, quick(WAIT));
@@ -374,14 +376,17 @@ async fn a_markdown_document_on_a_machine_is_read_and_saved_by_that_machines_dae
     // Anything that is not a markdown document is refused here; a link out of the checkout is refused by that machine's daemon.
     let refused = wire.save_daemon(Some(BOX.0), "main.rs", not_here).err().expect("only markdown is saved on a machine");
     assert!(refused.contains("local-only"), "{refused}");
-    let escape = RepoRequest::FileStamped { path: "link.md".into() };
-    let daemon = wire.repo_daemon(Some(BOX.0), &escape, not_here).unwrap();
-    let outside = maitty_desktop_client::repo_query(term, escape, daemon).await;
-    assert!(outside.is_err(), "a link out of the checkout is not read: {outside:?}");
-    let daemon = wire.save_daemon(Some(BOX.0), "link.md", not_here).unwrap();
-    let outside = maitty_desktop_client::save_project_file(term, "link.md".into(), "x".into(), None, daemon).await;
-    assert!(outside.is_err(), "a link out of the checkout is not written: {outside:?}");
-    assert_eq!(std::fs::read_to_string(sandbox.dir.join("outside.md")).unwrap(), "outside\n");
+    #[cfg(unix)]
+    {
+        let escape = RepoRequest::FileStamped { path: "link.md".into() };
+        let daemon = wire.repo_daemon(Some(BOX.0), &escape, not_here).unwrap();
+        let outside = maitty_desktop_client::repo_query(term, escape, daemon).await;
+        assert!(outside.is_err(), "a link out of the checkout is not read: {outside:?}");
+        let daemon = wire.save_daemon(Some(BOX.0), "link.md", not_here).unwrap();
+        let outside = maitty_desktop_client::save_project_file(term, "link.md".into(), "x".into(), None, daemon).await;
+        assert!(outside.is_err(), "a link out of the checkout is not written: {outside:?}");
+        assert_eq!(std::fs::read_to_string(sandbox.dir.join("outside.md")).unwrap(), "outside\n");
+    }
     let _ = RepoReply::Written;
 }
 

@@ -153,7 +153,7 @@ describe('the chat history', () => {
     await settle()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    daemon.failure = new Error('maikerd is not running')
+    daemon.failure = new Error(`${DAEMON_NAME} is not running`)
     await settle(IDLE_POLL_MS)
     await settle(RETRY_READ_MS)
 
