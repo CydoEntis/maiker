@@ -473,9 +473,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   (it is in the command palette). The width eases on the drawers' timing.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
   thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
-  working line (*The live box*, below). There is no reveal timer: text shows as fast as the history has it, and a reply
-  still being written (Claude's structured chats stream it, `--include-partial-messages`) grows in place, read in its
-  finished form so a half-written mark or table never flashes (`streamingParagraphs`). A pending request stays out of the
+  working line (*The live box*, below). Steps and thoughts show as fast as the history has them. A reply is typed in a few
+  words at a time (`useTypedText`: at least 120 characters a second, and fast enough that any reply is in within 2.5 s), so
+  one the history brings whole (an agent started in a terminal pane writes its message to the transcript only when it is
+  finished) still appears the way a streamed one does, and one that streams (Claude's structured chats,
+  `--include-partial-messages`) is only smoothed. A reply that was there when the chat opened, or came while the window was
+  hidden, shows whole (`KnownRowsContext`); Reduce motion shows every reply whole. What shows is read in its finished
+  form so a half-written mark or table never flashes (`streamingParagraphs`). A pending request stays out of the
   feed; it is asked in the tray over the box. A helper agent reporting back (the harness's `<task-notification>` block, which the history keeps as a
   user message) is one quiet line, "Agent "name" finished · 11s · 50.5k tokens", never the markup; once it has reported,
   it clears from the helpers dock. One that still needs you stays.
