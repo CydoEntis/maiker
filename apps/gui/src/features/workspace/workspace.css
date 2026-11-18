@@ -192,7 +192,8 @@
 .mx-status-icon.is-error { color: var(--danger); }
 .mx-status-icon.is-limited { color: var(--muted); }
 .mx-status-icon.is-idle { opacity: .45; }
-.mx-status-icon.is-working { border-color: var(--line2); }
+/* The tile is tinted in the running colour so a working session reads at 14px, not only by its moving light. */
+.mx-status-icon.is-working { border-color: color-mix(in srgb, var(--working) 40%, var(--line2)); background: color-mix(in srgb, var(--working) 14%, transparent); }
 .mx-status-icon.is-unknown { border: 1px dashed var(--dim); }
 .mx-status-light { position: absolute; left: -1px; top: -1px; width: calc(100% + 2px); height: calc(100% + 2px); overflow: visible; }
 .mx-status-light .mx-sq, .mx-status-light .mx-fold, .mx-status-light .mx-round { stroke: var(--working); animation: mxSq 1.1s steps(16) infinite; }
