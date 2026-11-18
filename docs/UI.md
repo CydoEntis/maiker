@@ -743,7 +743,8 @@ The sidebar shows or collapses (`App::sidebar`) to a narrow column (`side.rs` `d
   `archived: false`. With none, a toast says `Nothing is put away`. On a machine that is down the row menu offers
   neither, the list keeps the row with `· offline` after it, and either action is refused with an error toast. **Close project** counts its put-away sessions
   (`2 panes, 1 put away`) and leaves them running.
-- **Keys.** ↑ ↓ walk the sessions; → or Enter opens one; `1`–`9` open that row.
+- **Keys** (`screen/side_keys.rs`, only while the sidebar has the keys; a pane gets every key but the leader's). ↑ ↓ walk the sessions; → or Enter opens one; `1`–`9` open that row; `F2` renames the row; `del` closes the chat (it asks first, as every close does); `shift+F10` or the menu key opens its chat menu; `g` flips the grouping between status and machine; `s` steps the sort (newest, oldest, A–Z); `f` opens the group and sort menu; `m` the sidebar menu; `n` a new session; `?` all the keys; `/` filters.
+- **Renaming in place.** `F2`, or Rename… in the chat menu, turns the row's name into the text being typed with a `▏` cursor (`side::typing_name`); Enter saves it through the existing rename (`submit_prompt`, shared by every client for a chat), Esc leaves the name as it was. It opens no box of its own while the sidebar is drawn open (`renames_in_place`); with the sidebar hidden or collapsed the usual Rename box shows.
 
 **Status glyphs** (`screen/status_mark.rs`): working is the chosen spinner in the accent (Dots, the design's Braille, held 80 ms a frame, Snake 90 ms, Bars 85 ms, other spinners 90 ms; Reduce motion shows the first frame); needs you is a `●` in `blocked` amber, done in `done` green, problem (a failed command, a failed check) in `err` red, idle in `idle` with the name dimmed; `┆` for a machine that cannot be reached. By default the states differ by colour only, as the product owner chose. Settings › Appearance › **Status glyphs** `Unicode` (`ui.glyphs = "unicode"`) gives each its own shape for colour-blind users: `●` needs you, `✓` done, `✕` problem, `○` idle.
 
@@ -782,12 +783,27 @@ keeps it), so starting never flashes white or another theme's colour.
   with its leader key at the right in the accent when it has one (letters a menu gives items of its own run
   them while it is open but are not shown), the chosen row on `hov`, and the item that ends something last,
   in red, after a line. It opens under its point, or above it with no room below (the sidebar foot's chips).
-  **Session menu** (`.` or right-click on a session row): Open and Open in split (not for the session on
-  screen), Rename `r`, Copy path and, when they apply, Changes, Snapshots, the check items, queued
-  follow-ups and Put away; **Stop session** (an agent) or **Close shell** last. **Pane menu**: Rename `r`, Split right `s`,
+  **Chat menu** (`.`, `shift+F10` or right-click on a session row; one menu, `menu.rs` `session_items`): Open, Open in split
+  (not for the session on screen), Rename… `F2` (in place), Show changes and, when they apply, Snapshots, Copy folder path,
+  **Compact the context** (only from 80% of the context, `COMPACT_OFFERED_AT`; it types the agent's own `/compact`, as the pane's
+  context bar does), the check items, queued follow-ups and Put away; then, after a line and in red, **Stop the agent** (only
+  while it works or needs you; sends Ctrl+C like the Stop agent action) and **Close chat** `del` (an agent) or Close shell.
+  Closing a chat says `Closed the chat. Its branch and history are kept.` **Pane menu**: Rename `r`, Split right `s`,
   Split down `S`, Find, the right-click toggle, Project… (worktrees, snapshots, the check), **Close pane** `x`
   last. **Sidebar menu** (the ` menu ` chip): Filter sessions `/`, Add machine…, Inbox `i`, Put away…, Usage and cost `u`,
   Settings `,`, Keys `?`; the full Menu is the leader's `.`.
+- **A chat stopped** (`client/screen/stopped.rs`). The client derives it from signals the daemon already reports and adds no
+  status: an agent's pane whose last command failed (`TermInfo.exit`) while the agent is neither working nor asking, or an agent
+  on a machine whose line is `Unreachable`. The row stays under Needs you with `×` (`State::Problem`). Only that pane is
+  affected: its inside fades to about 35% (`dim_inside`) and a box sits in its middle with a red edge: `<Agent> stopped`, `It exited
+  with code N. Your messages and changes are safe. Restart to carry on from the last message.` and `[r] Restart`, `esc Not now`,
+  `c Copy details`; for a machine, `<machine> stopped answering`, its own words and `[r] Try again`. `r` restarts, which is the
+  existing resume (the interrupted agent's command, else the newest closed session of that agent in that folder through
+  `Command::ReopenClosedSession`) or, for a machine, the Machines retry; the box turns teal with the spinner (`Restarting
+  <Agent>…` or `Reconnecting to <machine>…`, `Picking up from your last message.`) for up to 12 s. `esc` (Not now) leaves a red bar on
+  the pane's bottom row, `× <Agent> stopped` with `r restart`, `c details` and `enter more` at the right, each clickable; `enter`
+  brings the box back. These bare keys go to Maiker, not the program, only while the focused pane's chat is stopped; clicks work
+  in any state.
 - **Reconnecting** (`client/screen/service.rs`): when the window loses its own daemon without being told to
   quit, it stays. An amber bar on the first row of the pane says
   `┆ Reconnecting to maikerd · sessions still running · try N of 5 · next in Ns · r retry`; tries wait 1, 2, 4, 8 and 15 s

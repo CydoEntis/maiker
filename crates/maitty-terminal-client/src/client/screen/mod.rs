@@ -234,6 +234,9 @@ pub(super) struct Screen {
     pub last_focus: Option<ClientTerm>,
     /// Modal frames drawn this frame, flattened onto the workspace ground afterward.
     pub modal_rects: Vec<Rect>,
+    /// What was done about each stopped chat's box (`stopped.rs`), and the chat whose restart waits on the daemon's closed sessions.
+    pub stopped_ui: HashMap<ClientTerm, stopped::StoppedUi>,
+    pub restart_asked: Option<ClientTerm>,
     /// Sidebar scroll, and whether to bring the focused row into view on the next draw.
     pub side_scroll: u16,
     pub follow: bool,
@@ -1487,6 +1490,11 @@ pub(super) enum ScreenHit {
     PaneProject(ClientTerm),
     /// The context-almost-full bar on a pane: send its agent `/compact`.
     Compact(ClientTerm),
+    /// The keys of a stopped chat's box and bar.
+    StoppedRestart(ClientTerm),
+    StoppedNotNow(ClientTerm),
+    StoppedCopy(ClientTerm),
+    StoppedReopen(ClientTerm),
     /// The service box's buttons, and the red chip that brings the box back.
     ServiceStart,
     ServiceNotNow,
@@ -1673,6 +1681,10 @@ pub(in crate::client) mod machines;
 #[cfg(test)]
 mod machines_tests;
 mod service;
+#[cfg(test)]
+mod chat_menu_tests;
+mod side_keys;
+mod stopped;
 pub(in crate::client) use service::{Service, draw_service_down, service_chip};
 mod updates;
 pub(in crate::client) use updates::draw_updates;
@@ -1703,6 +1715,7 @@ mod panes_apart_tests;
 mod reference;
 mod sheet;
 mod side;
+pub(in crate::client) use side::renames_in_place;
 mod splash;
 mod workspace;
 mod splash_wide;

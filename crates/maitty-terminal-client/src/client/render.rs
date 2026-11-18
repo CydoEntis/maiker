@@ -283,6 +283,7 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
             let view = (**view).clone();
             super::spinners::draw(app, f, area, &t, &view);
         }
+        Mode::Prompt { .. } if super::screen::renames_in_place(app) => {}
         Mode::Prompt { kind, input } => {
             let (label, input) = (kind.label().to_string(), input.clone());
             let enter = (!kind.is_confirm()).then_some("save");

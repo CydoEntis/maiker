@@ -874,6 +874,9 @@ impl App {
             self.open_approval(c);
             return;
         }
+        if self.on_side_shortcut(k) {
+            return;
+        }
         match spec.code {
             KeyCode::Char('/') if plain => self.start_side_filter(),
             KeyCode::Up | KeyCode::Char('k') if !k.modifiers.contains(KeyModifiers::CONTROL) => {
@@ -1941,7 +1944,11 @@ impl App {
                 let at = self.hover.map_or((0, 0), |p| (p.x, p.y.saturating_sub(1)));
                 self.menu_for_project_tools(term, at);
             }
-            ScreenHit::Compact(term) => self.send_input(term, b"/compact\r".to_vec()),
+            ScreenHit::Compact(term) => self.send_compact(term),
+            ScreenHit::StoppedRestart(term) => self.stopped_restart(term),
+            ScreenHit::StoppedNotNow(term) => self.stopped_not_now(term),
+            ScreenHit::StoppedCopy(term) => self.stopped_copy(term),
+            ScreenHit::StoppedReopen(term) => self.stopped_reopen(term),
             ScreenHit::ServiceStart => self.on_service_key(&KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)),
             ScreenHit::ServiceNotNow => self.on_service_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
             ScreenHit::ServiceCopy => self.on_service_key(&KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE)),

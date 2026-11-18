@@ -930,7 +930,7 @@ fn the_row_menu_lists_what_the_design_does() {
     let labels: Vec<&str> = items.iter().map(|(l, _)| l.as_str()).collect();
     assert_eq!(
         labels,
-        ["Open", "Open in split", "Rename", "Copy path", "Stop session"]
+        ["Open", "Open in split", "Rename…", "Copy folder path", "Stop the agent", "Close chat"]
     );
 }
 

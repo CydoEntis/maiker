@@ -129,7 +129,7 @@ impl SideRow {
 }
 
 /// A span as the third line says it: `12s`, `4m`, `2h`.
-fn span(secs: u64) -> String {
+pub(super) fn span(secs: u64) -> String {
     match secs {
         0..=59 => format!("{secs}s"),
         60..=3599 => format!("{}m", secs / 60),
@@ -490,7 +490,7 @@ fn subs_h(r: &SideRow, open: bool) -> u16 {
 }
 
 /// `word` with its first letter in capitals, for a label.
-fn capitalised(word: &str) -> String {
+pub(super) fn capitalised(word: &str) -> String {
     let mut chars = word.chars();
     chars.next().map_or_else(String::new, |first| first.to_uppercase().chain(chars).collect())
 }
@@ -856,6 +856,48 @@ fn limited_note(resume_at: u64, now: u64) -> String {
 
 /// One session: its mark, name and age, the project and branch under it, and for the open session a line saying
 /// what it is doing; then its subagents.
+/// The cursor in a name being typed.
+const CURSOR: &str = "▏";
+
+/// The last `max` columns of `text`, so what is being typed stays in view.
+fn tail(text: &str, max: usize) -> String {
+    let mut kept: Vec<char> = Vec::new();
+    let mut width = 0;
+    for c in text.chars().rev() {
+        let w = c.to_string().width();
+        if width + w > max {
+            break;
+        }
+        width += w;
+        kept.push(c);
+    }
+    kept.into_iter().rev().collect()
+}
+
+/// What is typed over this row's name while it is renamed in place (the row shows it with a cursor, `Enter` saves).
+fn typing_name(app: &App, row: &SideRow) -> Option<String> {
+    use crate::client::PromptKind;
+    let Mode::Prompt { kind, input } = &app.mode else {
+        return None;
+    };
+    let mine = match kind {
+        PromptKind::RenamePane(t) => row.term == Some(*t),
+        PromptKind::RenameConversation(id) => {
+            let of_term = row.term.and_then(|t| app.term_info(t)).and_then(|i| i.conversation_id);
+            matches!(row.key.key, SessionKey::Conversation(c) if c == *id) || of_term == Some(*id)
+        }
+        _ => false,
+    };
+    mine.then(|| input.clone())
+}
+
+/// A rename is typed on the sidebar's row, so it asks for no box of its own.
+pub(in crate::client) fn renames_in_place(app: &App) -> bool {
+    use crate::client::PromptKind;
+    matches!(&app.mode, Mode::Prompt { kind: PromptKind::RenamePane(_) | PromptKind::RenameConversation(_), .. })
+        && app.screen.side_rect.width > 0
+}
+
 fn draw_session(app: &mut App, buf: &mut Buffer, r: Rect, y: u16, row: &SideRow, open: bool, t: &Theme) {
     let height = session_h(open);
     let picked = side_focused(app) && app.screen.cursor == Some(row.key);
@@ -893,7 +935,13 @@ fn draw_session(app: &mut App, buf: &mut Buffer, r: Rect, y: u16, row: &SideRow,
         base.fg(t.text)
     };
     let room = end.saturating_sub(r.x + NAME_X + age_w + 1) as usize;
-    put(buf, r.x + NAME_X, y, &[seg(truncate(&row.name, room.max(1)), name_style)], end);
+    match typing_name(app, row) {
+        Some(typed) => {
+            let shown = tail(&typed, room.saturating_sub(1));
+            put(buf, r.x + NAME_X, y, &[seg(format!("{shown}{CURSOR}"), base.fg(t.strong).add_modifier(Modifier::BOLD))], end)
+        }
+        None => put(buf, r.x + NAME_X, y, &[seg(truncate(&row.name, room.max(1)), name_style)], end),
+    };
     if age_w > 0 {
         put(buf, end.saturating_sub(age_w), y, &[seg(age, base.fg(t.muted))], end);
     }

@@ -283,7 +283,7 @@ impl App {
 }
 
 /// `text` broken into lines of at most `width` columns, on spaces.
-fn wrap(text: &str, width: usize) -> Vec<String> {
+pub(super) fn wrap(text: &str, width: usize) -> Vec<String> {
     let mut lines: Vec<String> = Vec::new();
     for word in text.split_whitespace() {
         match lines.last_mut() {
@@ -349,7 +349,7 @@ pub(in crate::client) fn draw_service_down(app: &mut App, f: &mut Frame, area: R
     let mut at = x;
     for (i, key) in keys.iter().enumerate() {
         let end = put(buf, at, y, key, inside.right());
-        let target = [ScreenHit::ServiceStart, ScreenHit::ServiceNotNow, ScreenHit::ServiceCopy][i].clone();
+        let target = [ScreenHit::ServiceStart, ScreenHit::ServiceNotNow, ScreenHit::ServiceCopy][i];
         hit(app, Rect { x: at, y, width: end - at, height: 1 }, target);
         at = end + 2;
     }

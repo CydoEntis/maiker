@@ -545,8 +545,18 @@ struct Section {
 }
 
 /// The map (`all` false: the short one) or All keys, group by group.
-/// The sidebar's own new-session keys (`Mode::Side` reads them); not in the keymap.
-const SIDEBAR_KEYS: [(&str, &str); 1] = [("n", "New session")];
+/// The sidebar's own bare keys (`Mode::Side` reads them, see `side_keys.rs`); not in the keymap.
+const SIDEBAR_KEYS: [(&str, &str); 9] = [
+    ("n", "New session"),
+    ("F2", "Rename chat"),
+    ("del", "Close chat"),
+    ("shift+F10", "Chat menu"),
+    ("g", "Group by status or machine"),
+    ("s", "Sort"),
+    ("f", "Group and sort menu"),
+    ("m", "Sidebar menu"),
+    ("?", "All keys"),
+];
 
 fn grid_sections(app: &App, all: bool) -> Vec<Section> {
     let leader = leader_entries(app);

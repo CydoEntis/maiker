@@ -389,7 +389,7 @@ impl App {
                     self.act(a);
                 } else if self.view_has_keys() {
                     self.on_view_key(&k);
-                } else if self.scroll_key(&k) {
+                } else if self.on_stopped_key(&k) || self.scroll_key(&k) {
                 } else {
                     self.forward_key(&k);
                 }

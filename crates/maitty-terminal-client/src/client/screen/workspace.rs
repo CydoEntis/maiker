@@ -265,7 +265,9 @@ pub(in crate::client) fn draw_pane(
         terminal_bg,
         t,
     );
-    draw_context_bar(app, f.buffer_mut(), r, (term, &info), terminal_bg, t);
+    if !super::stopped::draw_stopped(app, f.buffer_mut(), (r, inner), term, terminal_bg, t) {
+        draw_context_bar(app, f.buffer_mut(), r, (term, &info), terminal_bg, t);
+    }
 }
 
 /// How full the context is, in percent, from which the pane carries a caution.

@@ -4824,7 +4824,7 @@ second line
     }
 
     #[test]
-    fn the_menu_opens_from_the_leader_not_from_a_bare_letter_in_the_sidebar() {
+    fn a_bare_m_in_the_sidebar_opens_its_menu_and_the_leaders_m_the_full_one() {
         let (_, mut app) = super::design_tests::render_with(160, 45);
         app.screen_side_set(screen::SideItem::Sess(ClientSession::local(
             SessionKey::Pane(2),
@@ -4832,9 +4832,11 @@ second line
         assert_eq!(app.mode, Mode::Side);
         app.on_key(KeyEvent::new(KeyCode::Char('m'), KeyModifiers::NONE));
         assert!(
-            !matches!(app.mode, Mode::Actions { .. }),
-            "a bare m does not open the menu from the sidebar"
+            matches!(&app.mode, Mode::ScreenMenu(m) if m.title == "menu"),
+            "a bare m opens the sidebar's own menu"
         );
+        app.mode = Mode::Normal;
+        app.screen.cursor = None;
         app.act(Action::Menu);
         assert!(
             matches!(app.mode, Mode::Actions { .. }),
@@ -8082,19 +8084,15 @@ second line
 
     #[test]
     fn borrowed_screens_look_like_the_default() {
-        for (a, title) in [
-            (Action::RenameWorkspace, "Rename"),
-            (Action::NewWorktree(None), "Worktrees"),
-        ] {
-            let (_, mut app) = super::design_tests::render_with(120, 34);
-            app.act(a);
-            let o = draw(&mut app, 120, 34);
-            show(&o);
-            assert!(
-                o.contains(title) && o.contains('×'),
-                "{title}: a {APP_COMMAND} modal (title in its accent chip, a red ✕ to close)"
-            );
-        }
+        let title = "Worktrees";
+        let (_, mut app) = super::design_tests::render_with(120, 34);
+        app.act(Action::NewWorktree(None));
+        let o = draw(&mut app, 120, 34);
+        show(&o);
+        assert!(
+            o.contains(title) && o.contains('×'),
+            "{title}: a {APP_COMMAND} modal (title in its accent chip, a red ✕ to close)"
+        );
     }
 
     #[test]

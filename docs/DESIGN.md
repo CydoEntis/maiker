@@ -103,7 +103,10 @@ opens the pane. The foot is a rule, then `menu` (with a `▪`, or `•` with rou
 waits or needs a restart) at the left and `? keys` at the right; the menu starts with **Install update X** or
 **Restart to finish update**, and a build that is not a clean release prints its commit and age between the two. The
 collapsed rail is `»`, `⌕` and `+` over one status mark per session with a short rule between groups and `≡` (with
-the update mark) at the bottom. See UI › *the sidebar*; the Machines dialog and its states are in UI › *Machines
+the update mark) at the bottom. The chat menu (right-click, `shift+F10`) lists Open, Rename… (the name is typed on the row with a
+cursor), Show changes, Copy folder path and, from 80% of the context, Compact the context, then in red after a line Stop the
+agent (only while it works or needs you) and Close chat. A chat that stopped dims its pane to about 35% under a box with a red edge
+(`Claude stopped`, or `<machine> stopped answering`) and, after Not now, leaves a one-line red bar at the pane's foot. See UI › *the sidebar*; the Machines dialog and its states are in UI › *Machines
 dialog*.
 
 ## Pane titles

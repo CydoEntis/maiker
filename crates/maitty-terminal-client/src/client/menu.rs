@@ -92,6 +92,10 @@ pub enum Act {
     UndoOverride(ClientTerm),
     /// Delete a reference: (the project root, the file, its name in the references).
     RemoveReference(PathBuf, PathBuf, String),
+    /// Type the agent's own `/compact` into the session.
+    Compact(ClientTerm),
+    /// Interrupt what the agent is doing (as Ctrl+C would); the session stays.
+    StopAgent(ClientTerm),
     /// A shell on this machine at once.
     MachineShell(MachineId),
     /// Browse this machine's folders and open one.
@@ -302,6 +306,29 @@ fn closing_lines(
         .collect()
 }
 
+/// An item that ends or interrupts something: red, last, and below a line.
+fn is_danger(act: &Act) -> bool {
+    matches!(
+        act,
+        Act::End(_) | Act::CloseProject(_) | Act::ArchiveConversation(_) | Act::StopAgent(_)
+    )
+}
+
+/// The key an item shows when it has no leader key: the sidebar's own bare keys.
+fn sidebar_hint(act: &Act) -> Option<&'static str> {
+    match act {
+        Act::RenamePane(_) | Act::RenameConversation(_) => Some("F2"),
+        Act::End(ts) if ts.len() == 1 => Some("del"),
+        _ => None,
+    }
+}
+
+/// What closing a chat says: the work around it stays.
+const CLOSED_CHAT: &str = "Closed the chat. Its branch and history are kept.";
+
+/// The context use from which a chat's menu offers to compact it.
+const COMPACT_OFFERED_AT: f32 = 80.0;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScreenMenu {
     pub title: String,
@@ -316,16 +343,14 @@ impl App {
             .is_some_and(|x| x.status == crate::protocol::Status::Working)
     }
 
+    /// Ask the agent to compact its own context; Maiker summarises nothing itself.
+    pub(super) fn send_compact(&self, term: ClientTerm) {
+        self.send_input(term, b"/compact\r".to_vec());
+    }
+
     pub(super) fn menu(&mut self, title: String, mut items: Vec<(String, Act)>, at: (u16, u16)) {
-        // The destructive item last.
-        items.sort_by_key(|(_, a)| {
-            matches!(
-                a,
-                Act::End(_)
-                    | Act::CloseProject(_)
-                    | Act::ArchiveConversation(_)
-            )
-        });
+        // The destructive items last.
+        items.sort_by_key(|(_, a)| is_danger(a));
         self.mode = Mode::ScreenMenu(Box::new(ScreenMenu {
             title,
             items,
@@ -513,20 +538,23 @@ impl App {
         }) {
             items.push((format!("{} is an agent…", t.process), Act::TeachAgent(term)));
         }
+        items.push(("Open".to_string(), Act::Open(term)));
         if self.focused() != Some(term) {
-            items.push(("Open".to_string(), Act::Open(term)));
             items.push(("Open in split".into(), Act::Beside(term, crate::layout::Dir::Right)));
         }
-        items.push(("Rename".to_string(), Act::RenamePane(term)));
-        items.push(("Copy path".to_string(), Act::CopyPath(term)));
+        items.push(("Rename…".to_string(), Act::RenamePane(term)));
         if let Some(d) = dir
             .filter(|_| self.is_local_pane(term))
             .filter(|d| crate::gitfs::head(d).is_some())
         {
-            items.push(("Changes".to_string(), Act::Changes(d.clone())));
+            items.push(("Show changes".to_string(), Act::Changes(d.clone())));
             if s.is_agent && self.cfg.snapshots.enabled {
                 items.push(("Snapshots…".to_string(), Act::Snapshots(d, term)));
             }
+        }
+        items.push(("Copy folder path".to_string(), Act::CopyPath(term)));
+        if s.is_agent && info.is_some_and(|t| t.usage.context.is_some_and(|c| c >= COMPACT_OFFERED_AT)) {
+            items.push(("Compact the context".to_string(), Act::Compact(term)));
         }
         let queued = info.map_or(0, |t| t.queued.len());
         if queued > 0 {
@@ -546,7 +574,11 @@ impl App {
         } else if self.can_bring_back(term) {
             items.push(("Bring back".to_string(), Act::BringBack(term)));
         }
-        let close = if s.is_agent { "Stop session" } else { "Close shell" };
+        let interruptible = info.is_some_and(|t| matches!(t.status, crate::protocol::Status::Working | crate::protocol::Status::Blocked));
+        if s.is_agent && interruptible {
+            items.push(("Stop the agent".to_string(), Act::StopAgent(term)));
+        }
+        let close = if s.is_agent { "Close chat" } else { "Close shell" };
         items.push((close.to_string(), Act::End(vec![term])));
         // Titled by what it is (an agent, or the program's name), never its window title.
         let what = if s.is_agent {
@@ -688,6 +720,22 @@ impl App {
                     .items
                     .iter()
                     .find(|(_, a)| matches!(a, Act::End(_) | Act::CloseProject(_)))
+                    .cloned()
+                {
+                    self.menu_act(a);
+                }
+            }
+            // F2: its rename item, as in the sidebar.
+            KeyCode::F(2)
+                if m.items
+                    .iter()
+                    .any(|(_, a)| matches!(a, Act::RenamePane(_) | Act::RenameConversation(_))) =>
+            {
+                self.mode = Mode::Normal;
+                if let Some((_, a)) = m
+                    .items
+                    .iter()
+                    .find(|(_, a)| matches!(a, Act::RenamePane(_) | Act::RenameConversation(_)))
                     .cloned()
                 {
                     self.menu_act(a);
@@ -1205,7 +1253,11 @@ impl App {
             // One session closes with an Undo (the asking was done by `menu_act`).
             Act::End(ts) => {
                 if let [term] = ts.as_slice() {
+                    let chat = self.term_info(*term).is_some_and(|t| t.agent.is_some());
                     self.close_session(*term);
+                    if chat {
+                        self.notify(CLOSED_CHAT.into(), false);
+                    }
                     return;
                 }
                 for t in ts {
@@ -1224,6 +1276,8 @@ impl App {
                 }
             }
             Act::Changes(p) => self.open_changes(p),
+            Act::Compact(t) => self.send_compact(t),
+            Act::StopAgent(t) => self.send_input(t, vec![3]),
             Act::CheckOutput(t) => self.open_check_sheet(t),
             Act::RerunCheck(t) => self.rerun_check(t),
             Act::OverrideCheck(t, reason, name) => self.override_check(t, name, reason),
@@ -1471,16 +1525,18 @@ fn menu_letters(
 /// while it is open but are not shown: a bare letter beside an item reads as a key that works
 /// anywhere.
 pub(super) fn draw_menu(app: &mut App, f: &mut Frame, area: Rect, t: &Theme, m: &ScreenMenu) {
-    let danger = |a: &Act| matches!(a, Act::End(_) | Act::CloseProject(_) | Act::ArchiveConversation(_));
+    let danger = is_danger;
     let keys: Vec<String> = menu_keys(app, &m.items)
         .into_iter()
-        .map(|k| match k {
+        .zip(&m.items)
+        .map(|(k, (_, act))| match k {
             Some(MenuKey::Bound(k)) => super::screen::short_key(&k),
-            _ => String::new(),
+            _ => sidebar_hint(act).map(str::to_string).unwrap_or_default(),
         })
         .collect();
-    // The destructive item sits last, after a line.
-    let rule = m.items.iter().any(|(_, a)| danger(a)) && m.items.len() > 1;
+    // The destructive items sit last, after a line.
+    let first_danger = m.items.iter().position(|(_, a)| danger(a)).filter(|i| *i > 0);
+    let rule = first_danger.is_some();
     let key_w = keys.iter().map(|k| k.width() as u16).max().unwrap_or(0);
     let w = m
         .items
@@ -1511,7 +1567,7 @@ pub(super) fn draw_menu(app: &mut App, f: &mut Frame, area: Rect, t: &Theme, m: 
     let buf = f.buffer_mut();
     let mut yy = r.y + 1;
     for (i, ((label, act), key)) in m.items.iter().zip(&keys).enumerate() {
-        if rule && danger(act) && i + 1 == m.items.len() {
+        if first_danger == Some(i) {
             let line = "─".repeat(usize::from(w).saturating_sub(2));
             put(buf, r.x + 1, yy, &[seg(line, Style::default().fg(t.line).bg(ground))], r.right() - 1);
             yy += 1;
