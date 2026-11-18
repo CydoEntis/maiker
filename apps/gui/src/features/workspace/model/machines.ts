@@ -202,6 +202,39 @@ export function machineTitle(head: MachineHead): string {
  * order of their ids, which only changes when the machine list does (the sidebar never reorders
  * itself). Nothing while there is no other machine, so one machine looks as it always did.
  */
+const NOT_STARTED_WHY = 'Maiker has not started connecting to it. Restart Maiker to try again, or remove it.'
+
+/**
+ * A machine the config names but the host never reported, so it is still in the list and can be
+ * removed. Its number is negative: the host's are not, so the two never meet.
+ */
+function unconnectedMachine(id: number, name: string): RemoteMachine {
+  return { state: { machine: id, name, state: 'unreachable', why: NOT_STARTED_WHY, attempt: null }, conversations: [], heard: false, listedAt: 0 }
+}
+
+/** `machines` plus a placeholder for each configured name that has no entry, in any case. */
+export function withUnconnected(machines: ReadonlyMap<number, RemoteMachine>, configured: readonly string[]): ReadonlyMap<number, RemoteMachine> {
+  const known = new Set([...machines.values()].map((machine) => machine.state.name.toLowerCase()))
+  const missing = configured.filter((name) => !known.has(name.toLowerCase()))
+  if (missing.length === 0) return machines
+  const next = new Map(machines)
+  let id = Math.min(0, ...machines.keys())
+  for (const name of missing) {
+    id -= 1
+    next.set(id, unconnectedMachine(id, name))
+  }
+  return next
+}
+
+/** `machines` without the placeholder for `name`, once the host reports it or it is removed. */
+export function withoutUnconnected(machines: ReadonlyMap<number, RemoteMachine>, name: string): ReadonlyMap<number, RemoteMachine> {
+  const stale = [...machines].filter(([id, machine]) => id < 0 && machine.state.name.toLowerCase() === name.toLowerCase())
+  if (stale.length === 0) return machines
+  const next = new Map(machines)
+  for (const [id] of stale) next.delete(id)
+  return next
+}
+
 /** The longest name you can give a machine in the sidebar. */
 export const MAX_MACHINE_NICKNAME_LENGTH = 40
 

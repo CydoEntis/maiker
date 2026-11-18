@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { z } from 'zod'
-import { conversationsFromSnapshot, isDesktop } from '@/api/daemon'
+import { conversationsFromSnapshot, isDesktop, loadMachines } from '@/api/daemon'
 import { LOCAL_MACHINE, addMachine, cancelAddMachine, listenMachineClipboard, listenMachineError, listenMachineNotice, listenMachineRemoved, listenMachineSessions, listenMachineState, listenMachineUpdateProgress, loadMachinesOverview, openMachineLogin, removeMachine, retryMachine, setMachineGrant, terminalOf, unregisterMachine, type Grant, type MachineState } from '@/api/machines'
 import type { Conversation } from '@/data/preview'
 import { sendNativeNotice } from '@/features/notifications/native'
@@ -8,7 +8,7 @@ import { COPY_TOAST_ID, COPY_TOAST_MS, copySaid } from '@/features/terminal/copy
 import { toast } from '@/lib/toast'
 import { runMachineUpdate } from './machineUpdate'
 import { advanceLoginWatch, LOGIN_CHECK_MS, startLoginWatch, type LoginWatch } from './model/loginWatch'
-import { announcementFor, type RemoteMachine, type UpdateAction } from './model/machines'
+import { announcementFor, withUnconnected, withoutUnconnected, type RemoteMachine, type UpdateAction } from './model/machines'
 import { copyText } from '@/lib/clipboard'
 
 /** The other machines as the host reports them, and what was last said about one for a screen reader. */
@@ -19,6 +19,8 @@ export type RemoteMachines = {
   /** The first answer about the machines has come, so a Machines page can tell loading from empty. */
   machinesKnown: boolean
   machineSaid: string
+  /** A removed machine leaves the list at once, though the host never reported it. */
+  forgetMachine: (name: string) => void
 }
 
 export function useRemoteMachines(): RemoteMachines {
@@ -49,6 +51,7 @@ export function useRemoteMachines(): RemoteMachines {
       names.set(state.machine, state.name)
       const said = announcementFor(machinesRef.current.get(state.machine)?.state, state)
       if (said !== null) setMachineSaid(said)
+      setMachines((current) => withoutUnconnected(current, state.name))
       change(state.machine, (before) => ({ conversations: before?.conversations ?? [], heard: before?.heard ?? false, listedAt: before?.listedAt ?? 0, state }))
       // Typing the machine could not take while it was down: say so once it is back.
       if (state.state === 'connected' && state.unsent) {
@@ -76,7 +79,13 @@ export function useRemoteMachines(): RemoteMachines {
     }, (error: unknown) => {
       console.warn('Could not read the state of the machines', error)
       if (!gone) setMachinesKnown(true)
-    })
+    }).then(() => loadMachines()).then((configured) => {
+      if (gone) return
+      // A machine in the config that the host never reported would otherwise be invisible, yet still
+      // hold its name: show it so it can be seen and removed.
+      if (configured.error !== null) toast.error(`Remote machines: ${configured.error}`)
+      setMachines((current) => withUnconnected(current, configured.names))
+    }, (error: unknown) => { console.warn('Could not read the configured machines', error) })
     for (const listening of [
       listenMachineState(settle),
       listenMachineError((text) => { toast.error(text) }),
@@ -116,11 +125,12 @@ export function useRemoteMachines(): RemoteMachines {
       for (const stop of stops) stop()
     }
   }, [])
-  return { machines, machinesRef, machinesKnown, machineSaid }
+  const forgetMachine = useCallback((name: string) => { setMachines((current) => withoutUnconnected(current, name)) }, [])
+  return { machines, machinesRef, machinesKnown, machineSaid, forgetMachine }
 }
 
 /** What the window can ask of a machine by its name: add, retry, change what it may do, update, remove. */
-export function useMachineActions(localConversations: readonly Conversation[] | undefined) {
+export function useMachineActions(localConversations: readonly Conversation[] | undefined, forgetMachine: (name: string) => void) {
   const retryNamed = useCallback((name: string) => {
     retryMachine(name).catch((error: unknown) => { toast.failed(`Could not retry ${name}`, error) })
   }, [])
@@ -202,9 +212,12 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
   }, [])
   const removeNamed = useCallback((name: string) => {
     removeMachine(name).then(
-      () => { toast.info(`Removed ${name}. Its sessions keep running on ${name}.`) },
+      () => {
+        forgetMachine(name)
+        toast.info(`Removed ${name}. Its sessions keep running on ${name}.`)
+      },
       (error: unknown) => { toast.failed(`Could not remove ${name}`, error) },
     )
-  }, [])
+  }, [forgetMachine])
   return { retryNamed, addNamed, openLoginNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed }
 }

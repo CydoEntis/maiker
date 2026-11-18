@@ -94,6 +94,12 @@ pub fn prepare(
             }
         }
     };
+    if let Some(taken) = existing.iter().find(|m| m.name.eq_ignore_ascii_case(&name)) {
+        return Err(format!(
+            "You already have a machine called {}. Remove it in Remote machines, or pick another name.",
+            taken.name
+        ));
+    }
     if let Some(why) = refusal_with(existing, &name, target, ssh_args) {
         return Err(why);
     }
@@ -346,7 +352,10 @@ mod tests {
     fn a_name_that_is_taken_is_refused_and_a_suggestion_steps_around_it() {
         let ok = |_: &MachineDef| Probe::Ready { version: "v".into() };
         let existing = [def("build", "other.example")];
-        assert!(prepare(&existing, "x.example", Some("BUILD"), &[], &ok).is_err());
+        let Err(why) = prepare(&existing, "x.example", Some("BUILD"), &[], &ok) else {
+            panic!("refused");
+        };
+        assert!(why.starts_with("You already have a machine called build."), "{why}");
         let Ok(Prepare::Ready { def, .. }) = prepare(&existing, "build", None, &[], &ok) else {
             panic!("ready");
         };

@@ -151,7 +151,7 @@ export function useWorkspaceState() {
   const terminalHandles = useRef(new Map<string, TerminalHandle>())
   const { sessionsQuery, online, home, retryDelay, serviceNewer, mismatch, restartStatusQuery } = useServiceReads({ failures, setFailures })
 
-  const { machines, machinesRef, machinesKnown, machineSaid } = useRemoteMachines()
+  const { machines, machinesRef, machinesKnown, machineSaid, forgetMachine } = useRemoteMachines()
   const { sessions, sessionMap, setExpectedAgents, paneSessions } = useSessionList({ sessionsQuery, online, machines, home, layout })
   const focusedId = focusedSessionId(layout)
   const [turnDiff, setTurnDiff] = useTurnDiff(focusedId)
@@ -179,7 +179,7 @@ export function useWorkspaceState() {
   const [machineNicknames, setMachineNicknames] = useState(readMachineNicknames)
   const [renamingMachine, setRenamingMachine] = useState<string | null>(null)
   const heads = useMemo(() => machineHeads(machines, machineNicknames), [machines, machineNicknames])
-  const { retryNamed, addNamed, openLoginNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed } = useMachineActions(sessionsQuery.data)
+  const { retryNamed, addNamed, openLoginNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed } = useMachineActions(sessionsQuery.data, forgetMachine)
   // The sidebar is one flat list in creation order; a status change, a pin or a focus never moves a row.
   const ordered = useMemo(() => inCreationOrder(sessions), [sessions])
   // A session the daemon lists a moment before its pane exists would show in the sidebar and then jump once placed.
