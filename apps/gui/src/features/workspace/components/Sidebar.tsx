@@ -8,7 +8,6 @@ import { AppIcon, Icon, StatusBadge } from './glyphs'
 import { Collapse } from './Collapse'
 import { useReducedMotion } from './motion'
 import { useFlip } from './useFlip'
-import { useStatusFlash } from './useStatusFlash'
 import { snoozeChoices } from '../model/snooze'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
@@ -170,7 +169,6 @@ function Expanded(props: SidebarProps) {
   const [putAwayOpen, setPutAwayOpen] = useState(false)
   const reduced = useReducedMotion()
   useFlip(list, reduced)
-  useStatusFlash(list, props.sessions, reduced)
   const projects = projectChoices(props.sessions)
   // A project whose last session closed is no longer a choice, so the list goes back to all of them.
   const project = projects.some((choice) => choice.name === pickedProject) ? pickedProject : null

@@ -391,8 +391,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   so the draft is never missing from the sidebar; it goes when the chat starts and the chat's own row takes its place.
   Grouped by project inside a machine, each project is a folding heading (its colour square, name, needs-you count,
   count). A row whose status changes glides to its new place over 420ms, and the headings and rows it passes glide with it, so
-  nothing in the list snaps (`useFlip`); a new row slides in from the left. The moved row is tinted with the accent for a moment
-  (`useStatusFlash`); Reduce motion turns both off.
+  nothing in the list snaps (`useFlip`); a new row slides in from the left; Reduce motion turns both off. A row is never tinted or flashed when its
+  status changes: its badge says the new status, and a flash on every finished turn read as noise.
   **Put away** (`splitPutAway`) is the last heading of the scrolling list in every grouping, folded until opened, with
   its count and "still running": the sessions put away from their menu, terminals included, as created. A row there has
   an arrow (**Bring back**) in place of the hover ×; a put-away session that needs you is listed under Needs you instead.
