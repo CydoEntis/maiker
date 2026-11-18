@@ -2103,6 +2103,9 @@ pub struct TermInfo {
     pub diff_added: u32,
     #[serde(default)]
     pub diff_removed: u32,
+    /// Files changed in that checkout against HEAD (the number on the pane's `changes` chip).
+    #[serde(default)]
+    pub diff_files: u32,
     /// Subagents running right now (their kinds).
     pub subagents: Vec<String>,
     /// Persistent lifecycle records reported by the runtime.
@@ -3558,6 +3561,9 @@ mod tests {
         assert_eq!((old.diff_added, old.diff_removed), (0, 0));
         let new = pane_from(serde_json::json!({"diff_added": 7, "diff_removed": 2}));
         assert_eq!((new.diff_added, new.diff_removed), (7, 2));
+        assert_eq!(old.diff_files, 0, "a peer from before the file count sends none");
+        let counted = pane_from(serde_json::json!({"diff_files": 3}));
+        assert_eq!(counted.diff_files, 3);
     }
 
     /// A daemon from before `began_as_agent` sends none: the pane reads as a terminal, which is
