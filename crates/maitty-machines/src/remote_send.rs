@@ -276,7 +276,7 @@ mod tests {
     use crate::MachineDef;
 
     fn box_machine() -> Machine {
-        Machine::ssh("box", vec!["ssh-that-must-not-run".into()], "maitty")
+        Machine::ssh("box", vec!["ssh-that-must-not-run".into()], "maiker")
     }
 
     #[test]

@@ -6,9 +6,9 @@ import { useFlip } from './useFlip'
 /** jsdom lays nothing out, so each row's place is what the test says it is. */
 const tops = new Map<string, number>()
 
-function List({ rows }: { rows: readonly string[] }) {
+function List({ rows, tick = 0 }: { rows: readonly string[]; tick?: number }) {
   const list = useRef<HTMLDivElement>(null)
-  useFlip(list, false)
+  useFlip(list, false, `${rows.join(',')}#${String(tick)}`)
   return <div ref={list} data-testid="list">{rows.map((row) => <div key={row} data-flip={row}>{row}</div>)}</div>
 }
 
@@ -32,13 +32,13 @@ describe('rows that slide to their new place', () => {
     const { container, rerender } = render(<List rows={['a', 'b']} />)
     const { glides } = prepare(container, () => false)
     // The first draw was before the places were known to the test; this one records them.
-    rerender(<List rows={['a', 'b']} />)
+    rerender(<List rows={['a', 'b']} tick={1} />)
     glides.mockClear()
-    rerender(<List rows={['a', 'b']} />)
+    rerender(<List rows={['a', 'b']} tick={2} />)
     expect(glides).not.toHaveBeenCalled()
 
     tops.set('b', 96)
-    rerender(<List rows={['a', 'b']} />)
+    rerender(<List rows={['a', 'b']} tick={3} />)
     expect(glides).toHaveBeenCalledTimes(1)
   })
 
@@ -47,11 +47,11 @@ describe('rows that slide to their new place', () => {
     const { container, rerender } = render(<List rows={['a', 'b']} />)
     let folds = true
     const { root, glides } = prepare(container, () => folds)
-    rerender(<List rows={['a', 'b']} />)
+    rerender(<List rows={['a', 'b']} tick={4} />)
 
     // Half way through a session's subagents opening, the list is drawn again: the row under them is part way down.
     tops.set('b', 68)
-    rerender(<List rows={['a', 'b']} />)
+    rerender(<List rows={['a', 'b']} tick={5} />)
     expect(glides).not.toHaveBeenCalled()
 
     // The fold ends with the row at its place, and nothing draws the list again to see it.
@@ -60,7 +60,19 @@ describe('rows that slide to their new place', () => {
     const ended = new Event('transitionend', { bubbles: true })
     Object.defineProperty(ended, 'propertyName', { value: 'grid-template-rows' })
     fireEvent(root, ended)
-    rerender(<List rows={['a', 'b']} />)
+    rerender(<List rows={['a', 'b']} tick={6} />)
     expect(glides).not.toHaveBeenCalled()
+  })
+
+  it('reads nothing from the page while the layout key is unchanged', () => {
+    tops.set('a', 0).set('b', 40)
+    const { container, rerender } = render(<List rows={['a', 'b']} />)
+    const { root } = prepare(container, () => false)
+    const query = vi.spyOn(root, 'querySelectorAll')
+    rerender(<List rows={['a', 'b']} />)
+    rerender(<List rows={['a', 'b']} />)
+    expect(query).not.toHaveBeenCalled()
+    rerender(<List rows={['a', 'b']} tick={1} />)
+    expect(query).toHaveBeenCalled()
   })
 })

@@ -178,10 +178,7 @@ pub(in crate::daemon) async fn answer(target: Target, ask: SideAsk) -> SideAnswe
         .kill_on_drop(true)
         .env_remove("CLAUDECODE");
     // The copy is no pane and no structured chat: its hooks must not report for either.
-    for name in crate::ipc::STRUCTURED_ENV
-        .iter()
-        .chain([concat!(env!("APP_ENV"), "_TERM_ID"), concat!(env!("APP_ENV"), "_PANE_TOKEN")].iter())
-    {
+    for name in crate::ipc::identity_env() {
         command.env_remove(name);
     }
     if let Some(root) = &target.config_root {

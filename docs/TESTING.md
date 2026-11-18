@@ -78,7 +78,7 @@ terminal-only build does not require Node or a webview.
 The built-in test harness: `cargo test` runs everything (unit tests sit in
 `#[cfg(test)] mod` blocks beside the code). UI tests render frames with
 ratatui's `TestBackend` and assert on the text and cell styles;
-`MAITTY_SHOW=1 cargo test <name> -- --nocapture` prints the frames. One test:
+`AGENT_SHOW=1 cargo test <name> -- --nocapture` prints the frames. One test:
 `cargo test <name>`.
 
 ### Agent command lists
@@ -105,12 +105,12 @@ Tests live next to the code they test. Client UI tests build a fake snapshot
 with `design_tests::render_with(w, h)` (projects, worktrees, agents in
 each state) and drive it with `app.on_key` / `app.act`. Layout tests use
 `client/reference_fixture.rs`: `world(stage)` is the reference sample world (affiliate-site,
-pixls, maitty) with fix-footer's check at one of its stages, on a pinned clock
+pixls, maiker) with fix-footer's check at one of its stages, on a pinned clock
 (`screen::FIXED_NOW`), and `frame(app, layout, w, h, glyphs)` draws it as text.
 
 `client/screen/flat_tests.rs` holds the flat sidebar, the collapsed column, the status glyphs and the
 workspace frames to the v26 TUI design: it draws the sample world at 140×36, 100×30 or 200×40 with a
-`TestBackend` and asserts on rows, glyphs, colours and hit rects (`MAITTY_SHOW=1 cargo test <name> --
+`TestBackend` and asserts on rows, glyphs, colours and hit rects (`AGENT_SHOW=1 cargo test <name> --
 --nocapture` prints a frame). The sheets' and popovers' insides are held to
 `client/screen/reference.txt` and `client/screen/check_modals_frames.txt`, fixed fixtures; update them by
 hand, in the same change, only when the design itself changes; never to make a failing test pass.
@@ -124,16 +124,16 @@ Glyphs the site's font may lack come wrapped in `.g` / `.g2` spans; the page nee
 `client/site_frames/html.rs` to hold them to their cells.
 
 ```sh
-MAITTY_SITE_FRAMES=../maitty-site/site/frames cargo test export_site_frames -- --ignored
+AGENT_SITE_FRAMES=../maitty-site/site/frames cargo test export_site_frames -- --ignored
 ```
 
 ```powershell
-$env:MAITTY_SITE_FRAMES='../maitty-site/site/frames'; cargo test export_site_frames -- --ignored
+$env:AGENT_SITE_FRAMES='../maitty-site/site/frames'; cargo test export_site_frames -- --ignored
 ```
 
 Live checks use a nested
-server: `MAITTY_SOCKET=test maitty`, then `maitty send` / `maitty read` against it.
-Tests never touch the user's real config (`MAITTY_CONFIG` or in-memory configs).
+server: `AGENT_SOCKET=test maiker`, then `maiker send` / `maiker read` against it.
+Tests never touch the user's real config (`AGENT_CONFIG` or in-memory configs).
 
 A daemon test that finds a pane by its folder names that folder canonically
 (`clean_path(root.canonicalize())`). The pane's shell reports the folder's real name at its first
@@ -160,12 +160,12 @@ where and when it was recorded, and update the pane numbers the test names for i
 
 Anything that reaches another machine is tested through a stand-in for `ssh`, never a real
 server. `apps/tui/examples/fake-ssh.rs` is a small program (no `sh`, except in `remote-sh` mode, so it runs the same on
-Windows, Linux and macOS): point `MAITTY_SSH` at it and it ignores the host and every option,
-then runs the real `maitty proxy` against the socket the test chose. `cargo test` builds it
+Windows, Linux and macOS): point `AGENT_SSH` at it and it ignores the host and every option,
+then runs the real `maiker proxy` against the socket the test chose. `cargo test` builds it
 with the tests (`apps/tui/tests/fake_ssh.rs` builds it itself when run with `--test`). The code that
 builds and locates the shim (`fake_ssh()`) and runs a command with a time limit (`output_within()`)
 is in `crates/maitty-test-support`, a dev-dependency any crate's tests can use, with `Sandbox`: a
-private daemon's environment, the shim's per-machine arguments (`--mode`, `--maitty`, `--env`,
+private daemon's environment, the shim's per-machine arguments (`--mode`, `--maiker`, `--env`,
 `--calls`, which let one process hold several machines), and killing the last connection. The
 desktop host's `hub` tests use it.
 The host also has an end-to-end test without a window (`hub/tests/end_to_end.rs`): a real daemon for
@@ -173,9 +173,9 @@ this computer and two behind the shim, the hub and the same `react` the window's
 snapshots per machine, typing, a pane's replay, and a pane replayed again after one machine's link is
 killed while the others are never touched.
 
-| `MAITTY_FAKE_SSH_MODE` | The shim |
+| `AGENT_FAKE_SSH_MODE` | The shim |
 | --- | --- |
-| `proxy` (default) | runs `$MAITTY_FAKE_SSH_MAITTY proxy`; the connection works |
+| `proxy` (default) | runs `$AGENT_FAKE_SSH_MAITTY proxy`; the connection works |
 | `noise` | prints login text on stdout, then behaves as `proxy` (which writes the stream marker, so the client skips the text) |
 | `noise-only` | prints login text and exits, with no marker |
 | `noise-flood` | prints more login text than the client skips (over 64 KiB), with no marker |
@@ -185,14 +185,14 @@ killed while the others are never touched.
 | `mismatch` | answers the handshake with a protocol version one ahead |
 | `exit` | exits 0 at once, before any frame |
 | `unreachable` | prints `ssh: connect to host box port 22: Connection refused` on stderr, exits 255 |
-| `not-installed` | prints `bash: maitty: command not found` on stderr, exits 127 |
+| `not-installed` | prints `bash: maiker: command not found` on stderr, exits 127 |
 | `remote-sh` | runs the remote command through the host's `sh -c` in a fake remote home (`--home=`); see below |
 | `require-pipes` | behaves as `proxy`, but exits 3 if its stdin or stdout is a terminal (a custom transport must get plain pipes) |
 | `capture-argv` | appends each argument it was called with, one per line then `--`, to `--argv-log=<file>`, then behaves as `proxy` |
-| `capture-hello` | writes the client's first frame to the file `MAITTY_FAKE_SSH_HELLO` names, answers a Welcome, exits |
+| `capture-hello` | writes the client's first frame to the file `AGENT_FAKE_SSH_HELLO` names, answers a Welcome, exits |
 
 In `proxy`, `noise` and `old` modes a call whose remote command ends in ` --version` (the Machines
-dialog's probe and first login) answers `maitty 0.0.0-fake` and exits 0; the other modes fail or hang
+dialog's probe and first login) answers `maiker 0.0.0-fake` and exits 0; the other modes fail or hang
 for it as they do for a proxy.
 
 The shim is also a machine's custom transport: put its path first in `via`, with `--mode=` and the rest in
@@ -204,14 +204,14 @@ compile. Validation, argv construction, classification and the Windows refusal a
 every host. The daemon's login-PATH probe (`login_path.rs`) is split the same way: its parsing and merging
 run everywhere, and the tests that start a shell are `cfg(unix)`.
 
-`MAITTY_FAKE_SSH_LOG` names a file that receives the arguments the shim was called with, one
+`AGENT_FAKE_SSH_LOG` names a file that receives the arguments the shim was called with, one
 per line, to assert how the client builds its ssh command.
 
 Several machines in one process put each machine's settings in the shim's arguments, which win
-over the environment: `--mode=`, `--maitty=`, `--env=KEY=value` (repeatable), and `--calls=<file>`,
+over the environment: `--mode=`, `--maiker=`, `--env=KEY=value` (repeatable), and `--calls=<file>`,
 which appends a line `<shim pid> <proxy pid>` per call (the proxy's is 0 when none ran). A test
 counts dials from it, and kills both pids to cut a live line the way a dead link does. Like ssh,
-the shim passes `--attach-only` on to `maitty proxy` when the remote command ends with it.
+the shim passes `--attach-only` on to `maiker proxy` when the remote command ends with it.
 `--argv-log=<file>` also records the arguments of each `proxy` call, so a test can tell a dial that
 may start the daemon from an attach-only one. On Windows a daemon that a proxy starts keeps the shim's
 pipe open, so a test that cuts the line starts the daemon apart first.
@@ -238,21 +238,21 @@ cleared, only pastes are cleared). They need `sh` with `wc mv mktemp cat tr prin
 `skipped:` and pass when there is none.
 
 `client/cli_machine_tests.rs` runs the one-shot commands in-process against a real daemon behind the shim, the
-way `--on build` reaches it: a `[[machines]]` entry whose `ssh_args` carry `--mode=`, `--maitty=`, `--env=`
+way `--on build` reaches it: a `[[machines]]` entry whose `ssh_args` carry `--mode=`, `--maiker=`, `--env=`
 and `--calls=` is resolved with `resolve_machine`, and the shim program is passed in. It covers new, split,
 focus, popup, close, send, `wait --regex`, read, the `ls` text and JSON tags, `ls --all` with a machine that
 answers and one that is down or locked, the one-line fixes (`needs a login`, `has no app`, `is not running`),
 `kill-server`, and the rule that a named machine needs an explicit pane (the shim's call count proves nothing
 was dialled). A configured machine cannot be named through the binary on Windows, because the config
-directory there is not taken from the environment and `MAITTY_CONFIG` ignores `config.local.toml`; the
+directory there is not taken from the environment and `AGENT_CONFIG` ignores `config.local.toml`; the
 binary-level tests in `fake_ssh.rs` cover what needs no machine (an unknown name is exit 2 with the
 `[[machines]]` hint, `--on` with `--remote`, `--on` on a command that ignores it) and that `--remote ls`
 is unchanged. The pane-token rule is `a_local_pane_token_never_reaches_another_machine_s_daemon`. Tests never
-dial this computer's own daemon and never set `MAITTY_TERM_ID` on the shared test process.
+dial this computer's own daemon and never set `AGENT_TERM_ID` on the shared test process.
 
 `client/doctor_machine_tests.rs` runs `doctor`'s machine checks (`cli/doctor_machines.rs`) against the shim: a good
 machine gets five passing lines (the shim answers `--version` as `0.0.0-fake` and the login-PATH script as
-`/fake/bin/maitty`; the test passes `0.0.0` as this computer's version), `mismatch` fails the protocol line with
+`/fake/bin/maiker`; the test passes `0.0.0` as this computer's version), `mismatch` fails the protocol line with
 the update hint, `auth-fail` gives one failed line, the skip and the options, and `hang` finishes within a small
 budget passed to `check_all` with the shim process gone afterwards. Three hanging machines checked in parallel
 must finish in well under the sum of their budgets. The line texts and the skip rule are pure tests in the module.
@@ -277,8 +277,8 @@ unit tests (`connections.rs`, `link/state.rs` in `maitty-machines`) with duratio
 milliseconds and no clock.
 
 `client/remote_status_tests.rs` is the same pattern from inside the client: a real daemon behind the
-shim, a pane that reports through `maitty hook`, and the window's model of that machine checked
-against the daemon's status for the first report and the next. It builds the `maitty` binary and
+shim, a pane that reports through `maiker hook`, and the window's model of that machine checked
+against the daemon's status for the first report and the next. It builds the `maiker` binary and
 the shim itself, as `fake_ssh.rs` does.
 
 `client/machine_flow/tests.rs` drives the Machines dialog with its keys against the shim and real
@@ -291,36 +291,36 @@ login still fails), removing (config, supervisor, sidebar, daemon id, saved layo
 daemon's pane still alive over a second connection), that what a removed machine's daemon or supervisor
 says afterwards does not bring it back (handed to the window directly, with no daemon), and retrying a
 refusal. The frames of the dialog are
-`client/screen/machines_tests.rs` (`MAITTY_SHOW=1 cargo test machines_tests -- --nocapture` prints them
+`client/screen/machines_tests.rs` (`AGENT_SHOW=1 cargo test machines_tests -- --nocapture` prints them
 at 80x24, 100x30 and 160x45).
 
 ### The Machines dialog by hand
 
 No test drives a real terminal, so look once with a nested server and the shim:
 
-1. `cargo build --bin maitty --example fake-ssh`. Make a folder `lookat` and put a copy of
+1. `cargo build --bin maiker --example fake-ssh`. Make a folder `lookat` and put a copy of
    `target/debug/examples/fake-ssh` (`.exe` on Windows) in it named `ssh` (`ssh.exe`).
 2. In a scratch shell, point everything at a private daemon and put the shim first on the path:
-   `MAITTY_SOCKET=lookat`, `MAITTY_DATA_DIR=<lookat>/data`, `MAITTY_CONFIG=<lookat>/config.toml`,
-   `MAITTY_FAKE_SSH_MAITTY=<path to target/debug/maitty>`, `PATH=<lookat>:$PATH` (PowerShell:
+   `AGENT_SOCKET=lookat`, `AGENT_DATA_DIR=<lookat>/data`, `AGENT_CONFIG=<lookat>/config.toml`,
+   `AGENT_FAKE_SSH_MAITTY=<path to target/debug/maiker>`, `PATH=<lookat>:$PATH` (PowerShell:
    `$env:NAME = ...`). A machine added in the dialog is reached with plain `ssh`, which is now the
-   shim, and the shim runs `maitty proxy` against that same private daemon.
-3. Run `target/debug/maitty`, press the leader, then `w`. Type `box` and Enter: the dialog says
+   shim, and the shim runs `maiker proxy` against that same private daemon.
+3. Run `target/debug/maiker`, press the leader, then `w`. Type `box` and Enter: the dialog says
    `Checking box…`, then the machine appears in *Yours* as `connecting` and then `connected`, and its group
    is in the sidebar. `<lookat>/config.local.toml` holds one `[[machines]]` entry (`name = "box"`,
    `target = "box"`) and `config.toml` is untouched.
 4. `Tab`, `x`, Enter removes it: its group leaves the sidebar and the entry leaves the file, and the
    daemon's sessions are still there.
-5. Popup path: quit, set `MAITTY_FAKE_SSH_MODE=auth-fail`, start `maitty`, add `box` again. The probe
+5. Popup path: quit, set `AGENT_FAKE_SSH_MODE=auth-fail`, start `maiker`, add `box` again. The probe
    fails with a login, the dialog closes with the toast `ssh needs you to log in: use the popup`, and a popup runs the interactive line
    (the shim prints `Permission denied` and the popup closes). The machine then shows `needs login`
-   with its fix. Set `MAITTY_FAKE_SSH_MODE=unreachable` instead and nothing is added: the dialog shows
+   with its fix. Set `AGENT_FAKE_SSH_MODE=unreachable` instead and nothing is added: the dialog shows
    ssh's `Connection refused` line. `hang` shows `Checking box…` until `Esc` (or 12 s).
 6. With a real host (no shim): leader `w`, pick a host from your `~/.ssh/config`, answer ssh's
    prompts in the popup if it opens one.
 
 `Sandbox` in `fake_ssh.rs` gives each test its own socket, data folder and config, removes
-`MAITTY_TERM_ID` and `MAITTY_PANE_TOKEN` (so a suite run inside a pane does not speak as that
+`AGENT_TERM_ID` and `AGENT_PANE_TOKEN` (so a suite run inside a pane does not speak as that
 pane), stops its daemon on drop, and captures output to files, not pipes: a daemon started by
 the command keeps a pipe open on Windows. Copy that pattern for a new remote test.
 
@@ -350,7 +350,7 @@ Native Pi/OMP/OpenCode/Kilo adapters also run without an installed agent, networ
 status socket: `node --experimental-vm-modules --test crates/maitty-terminal-client/src/cli/integrations.test.mjs`.
 The VM supplies the process-launch boundary and executes the bundled adapters.
 Cover nested dialogs, event ordering, helper versus parent completion, unrelated
-sessions, reporting failures/recovery and inert behavior outside Maitty. CI runs
+sessions, reporting failures/recovery and inert behavior outside Maiker. CI runs
 these adapter tests on Windows and Linux; Node's VM flag is test-only.
 Cover OpenCode TUI V1/V2 selection, initial idle, shared-backend isolation and
 disposal. Exercise OMP retry/continuation timers deterministically. Rust tests

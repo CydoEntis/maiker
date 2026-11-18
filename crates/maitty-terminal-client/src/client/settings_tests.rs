@@ -1,6 +1,6 @@
 //! The settings-side views the desktop app has and the terminal app now shares: usage by period,
 //! approved commands, and a machine's details (GitHub, git identity, this computer's service).
-//! `MAITTY_SHOW=1 cargo test settings_tests -- --nocapture` prints the frames.
+//! `AGENT_SHOW=1 cargo test settings_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::MachineId;
@@ -22,7 +22,7 @@ pub(super) fn sent(rx: &mut mpsc::UnboundedReceiver<Outgoing>) -> Vec<Outgoing> 
 
 pub(super) fn frame(app: &mut App, title: &str, w: u16, h: u16) -> String {
     let text = raw_text(app, Layout::Floating, w, h, "unicode");
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title} ({w}x{h})\n{text}");
     }
     text
@@ -315,7 +315,7 @@ mod machine_details {
             assert!(text.contains("daemon.log"), "{text}");
             assert!(text.contains("cydo") && text.contains("active"), "{text}");
             assert!(text.contains("Cydo <cydo@home.example>"), "{text}");
-            assert!(text.contains("~/work") && text.contains("set outside Maitty"), "{text}");
+            assert!(text.contains("~/work") && text.contains("set outside Maiker"), "{text}");
         }
     }
 
@@ -387,7 +387,7 @@ mod machine_details {
             _ => None,
         }).expect("a preview asked");
         assert!(!out.iter().any(|o| matches!(&o.msg, ClientMsg::Query(Query::GitIdentityRule { change: GitRuleChange::Apply { .. }, .. }))));
-        let lines = vec![GitConfigWrite { file: "~/.gitconfig".into(), lines: vec!["[includeIf \"gitdir:~/clients/\"]".into(), "path = ~/.config/maitty/git/clients.gitconfig".into()] }];
+        let lines = vec![GitConfigWrite { file: "~/.gitconfig".into(), lines: vec!["[includeIf \"gitdir:~/clients/\"]".into(), "path = ~/.config/maiker/git/clients.gitconfig".into()] }];
         app.on_machine_server(BUILD, ServerMsg::Reply(Reply::GitIdentityRuleDone { tag: preview, outcome: Ok(lines) }));
         let shown = frame(&mut app, "machine · preview", 100, 30);
         assert!(shown.contains("Enter writes these lines on build") && shown.contains("gitdir:~/clients/"), "{shown}");
@@ -412,7 +412,7 @@ mod machine_details {
         key(&mut app, KeyCode::Down);
         key(&mut app, KeyCode::Char('x'));
         let text = frame(&mut app, "machine · outside rule", 100, 30);
-        assert!(text.contains("set outside Maitty: change it in your git config"), "{text}");
+        assert!(text.contains("set outside Maiker: change it in your git config"), "{text}");
         key(&mut app, KeyCode::Up);
         key(&mut app, KeyCode::Char('x'));
         let ask = frame(&mut app, "machine · remove?", 100, 30);

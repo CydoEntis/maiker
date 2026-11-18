@@ -11,7 +11,7 @@ describe('connecting an agent\'s status hooks', () => {
     forgetConnectedAgents()
   })
 
-  it('runs `maitty integrate` once per agent, however many chats start', async () => {
+  it('runs `maiker integrate` once per agent, however many chats start', async () => {
     daemon.connectAgent.mockResolvedValue(undefined)
 
     await Promise.all([connectAgentOnce('claude'), connectAgentOnce('claude')])
@@ -22,9 +22,9 @@ describe('connecting an agent\'s status hooks', () => {
   })
 
   it('tries again after a failure instead of remembering it', async () => {
-    daemon.connectAgent.mockRejectedValueOnce(new Error('no maitty on PATH')).mockResolvedValue(undefined)
+    daemon.connectAgent.mockRejectedValueOnce(new Error('no maiker on PATH')).mockResolvedValue(undefined)
 
-    await expect(connectAgentOnce('claude')).rejects.toThrow('no maitty on PATH')
+    await expect(connectAgentOnce('claude')).rejects.toThrow('no maiker on PATH')
     await connectAgentOnce('claude')
 
     expect(daemon.connectAgent).toHaveBeenCalledTimes(2)

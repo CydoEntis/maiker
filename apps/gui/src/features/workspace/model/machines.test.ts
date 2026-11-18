@@ -192,8 +192,8 @@ describe('machine headers', () => {
 
   it('carry the fix a person has to act on', () => {
     const down = machineOf(1, 'box', [], 'needs-update')
-    const heads = machineHeads(new Map([[1, { ...down, state: { ...down.state, why: 'run maitty machine update box --install' } }]]))
-    expect(heads[1]?.why).toBe('run maitty machine update box --install')
+    const heads = machineHeads(new Map([[1, { ...down, state: { ...down.state, why: 'run maiker machine update box --install' } }]]))
+    expect(heads[1]?.why).toBe('run maiker machine update box --install')
   })
 })
 
@@ -207,20 +207,20 @@ describe('where a new session goes', () => {
 
 describe('the command that fixes a machine that needs an update', () => {
   it('is the one the fix text names, for a machine that needs an update only', () => {
-    const fix = 'run `maitty machine update build`, then retry'
-    expect(updateCommandOf({ ...state(1, 'build', 'needs-update'), why: fix })).toBe('maitty machine update build')
-    expect(updateCommandOf({ ...state(1, 'build', 'needs-update'), why: 'run `maitty machine update build --install` (or set `remote_cmd` to its path), then retry' })).toBe('maitty machine update build --install')
+    const fix = 'run `maiker machine update build`, then retry'
+    expect(updateCommandOf({ ...state(1, 'build', 'needs-update'), why: fix })).toBe('maiker machine update build')
+    expect(updateCommandOf({ ...state(1, 'build', 'needs-update'), why: 'run `maiker machine update build --install` (or set `remote_cmd` to its path), then retry' })).toBe('maiker machine update build --install')
     expect(updateCommandOf({ ...state(1, 'build', 'unreachable'), why: fix })).toBeNull()
     expect(updateCommandOf(state(1, 'build', 'needs-update'))).toBeNull()
   })
 
   it('installs on a machine with no app, updates one with another version, and does neither otherwise', () => {
-    const missing = { ...state(1, 'build', 'needs-update'), why: 'run `maitty machine update build --install` (or set `remote_cmd` to its path), then retry' }
-    const other = { ...state(1, 'build', 'needs-update'), why: 'run `maitty machine update build`, then retry' }
+    const missing = { ...state(1, 'build', 'needs-update'), why: 'run `maiker machine update build --install` (or set `remote_cmd` to its path), then retry' }
+    const other = { ...state(1, 'build', 'needs-update'), why: 'run `maiker machine update build`, then retry' }
     expect(updateActionOf(missing)).toBe('install')
     expect(updateActionOf(other)).toBe('update')
     expect(updateActionOf(state(1, 'build', 'needs-update'))).toBe('update')
-    const newer = { ...state(1, 'build', 'needs-update'), why: "it runs a newer maitty than this computer; update maitty on this computer (`maitty update`, or the desktop app's own update), then retry" }
+    const newer = { ...state(1, 'build', 'needs-update'), why: "it runs a newer maiker than this computer; update maiker on this computer (`maiker update`, or the desktop app's own update), then retry" }
     expect(updateActionOf(newer)).toBeNull()
     expect(updateCommandOf(newer)).toBeNull()
     expect(machineChip(newer).word).toBe('newer than this app')

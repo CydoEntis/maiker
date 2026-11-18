@@ -1,5 +1,5 @@
 //! The sidebar (each machine with its sessions), the status glyphs, the tab row and the workspace
-//! frames, held to the TUI redesign. `MAITTY_SHOW=1 cargo test <name> -- --nocapture` prints the frames.
+//! frames, held to the TUI redesign. `AGENT_SHOW=1 cargo test <name> -- --nocapture` prints the frames.
 use super::status_mark::State;
 use super::*;
 use crate::client::reference_fixture::{self, Stage};
@@ -34,7 +34,7 @@ fn text(app: &mut App, w: u16, h: u16) -> Vec<String> {
 }
 
 fn show(rows: &[String], title: &str) {
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title}");
         for row in rows {
             println!("{row}");
@@ -166,8 +166,8 @@ fn the_borders_carry_the_title_hide_release_and_menu_chips() {
     let mut app = reference_fixture::world(Stage::None);
     let rows = text(&mut app, 140, 36);
     let top = side(&rows, 0);
-    assert!(top.contains(" Maitty ") && top.contains(" « "), "{top}");
-    assert!(top.find(" Maitty ").unwrap() < top.find(" « ").unwrap());
+    assert!(top.contains(" Maiker ") && top.contains(" « "), "{top}");
+    assert!(top.find(" Maiker ").unwrap() < top.find(" « ").unwrap());
     assert!(!top.contains("+ machine"), "adding a machine lives in the menu: {top}");
     assert!(top.contains('\u{25be}') && top.find('\u{25be}').unwrap() < top.find(" « ").unwrap(), "the group-by chip: {top}");
     assert!(!rows.iter().any(|r| side_of(r).contains("filter sessions")), "the filter is a command, not a field");

@@ -17,7 +17,7 @@ describe('the folder rule that covers a folder', () => {
     expect(ruleCovering(rules, '/srv/work/client/app')?.login).toBe('client-me')
   })
 
-  it('is none for a folder whose name only starts the same, or one only a rule set outside Maitty covers', () => {
+  it('is none for a folder whose name only starts the same, or one only a rule set outside Maiker covers', () => {
     expect(ruleCovering(rules, '/srv/workshop')).toBeNull()
     expect(ruleCovering(rules, '/srv/oss/thing')).toBeNull()
     expect(ruleCovering(rules, '/srv')).toBeNull()

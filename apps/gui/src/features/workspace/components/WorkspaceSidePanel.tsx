@@ -14,7 +14,7 @@ const PANEL_EXIT_MS = 220
 
 /** The side panel for the focused session, docked between the chat area and the tools bar. */
 export function WorkspaceSidePanel() {
-  const { inspectOpen, focusMode, inspectTerm, focusedSession, diffStat, inspectView, lookAt, turnDiff, setTurnDiff, setInspectOpen, flash } = useWorkspace()
+  const { inspectOpen, focusMode, inspectTerm, focusedSession, diffStat, inspectView, lookAt, turnDiff, setTurnDiff, setInspectOpen, flash, openDocument } = useWorkspace()
   const presence = usePresence(inspectOpen, PANEL_EXIT_MS, useReducedMotion())
   // Files reads this computer's checkouts, so nothing is read ahead for a session of another machine.
   usePreloadFiles(focusedSession?.machineName === null ? inspectTerm : null, loadTopFolder)
@@ -32,6 +32,7 @@ export function WorkspaceSidePanel() {
       machine={focusedSession.machine}
       machineName={focusedSession.machineName}
       lookAt={lookAt}
+      documents={{ root: `${focusedSession.machineName ?? ''}${focusedSession.repoRoot ?? focusedSession.cwd}`, sessionId: focusedSession.id, onOpenBeside: (path: string) => { openDocument(focusedSession.id, path) } }}
       leaving={presence.leaving}
       {...(isShell(focusedSession) ? {} : { comments: { agent: agentName(focusedSession.process), onSend: (message: string) => sendAgentMessage(focusedSession, message) } })}
       {...(focusedSession.machineName === null && focusedSession.repoRoot !== null ? { changeActions: { folder: focusedSession.repoRoot, machine: focusedSession.machine, suggested: suggestedCommitMessage(focusedSession) } } : {})}

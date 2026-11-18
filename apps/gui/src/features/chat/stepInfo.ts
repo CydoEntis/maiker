@@ -100,6 +100,16 @@ export function commandEnded(event: CommandEvent): string {
   return foundNothing(event) ? 'no matches' : event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : 'exit code not reported'
 }
 
+/**
+ * What a command block's head says at the right: "exit 1 · 2.9s". A provider that reported no exit code adds no word,
+ * only the time, so a finished command never reads as one that passed; `null` where there is neither.
+ */
+export function commandHeadMeta(event: CommandEvent): string | null {
+  const ended = foundNothing(event) ? 'no matches' : event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : null
+  const parts = [ended, commandTook(event)].filter((part) => part !== null)
+  return parts.length === 0 ? null : parts.join(' · ')
+}
+
 /** How long a finished command took, or null where the history kept no time. */
 export function commandTook(event: CommandEvent): string | null {
   const took = elapsedMs(event, event.durationMs, 0)

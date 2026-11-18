@@ -162,6 +162,7 @@ mod design_tests {
             exit: None,
             ask: None,
             timeline: Vec::new(),
+            began_as_agent: false,
         }
     }
 
@@ -354,7 +355,7 @@ mod screen_tests {
     }
 
     fn show(s: &str) {
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{s}");
         }
     }
@@ -437,7 +438,7 @@ mod screen_tests {
                 o.contains("goes after the leader") && o.contains("= split") && o.contains("Esc"),
                 "{w}x{h}\n{o}"
             );
-            for g in ["SESSIONS", "PANES", "SIDEBAR", "TOOLS", env!("APP_ENV")] {
+            for g in ["SESSIONS", "PANES", "SIDEBAR", "TOOLS", crate::brand::APP_HEADING] {
                 assert!(o.contains(g), "{w}x{h}: the map has {g}");
             }
             assert!(
@@ -502,7 +503,7 @@ mod screen_tests {
                 x("PANES"),
                 x("SIDEBAR"),
                 x("TOOLS"),
-                x(env!("APP_ENV")),
+                x(crate::brand::APP_HEADING),
             ];
             xs.sort();
             xs.dedup();
@@ -1804,12 +1805,13 @@ mod screen_tests {
         let key = |c: KeyCode| KeyEvent::new(c, KeyModifiers::NONE);
         let cmd = super::screen::np_command(&app, "claude", 1, "fix the login bug").unwrap();
         assert!(
-            cmd.starts_with("claude --model opus ") && cmd.contains("fix the login bug"),
+            cmd.starts_with("claude --dangerously-skip-permissions --model fable ")
+                && cmd.contains("fix the login bug"),
             "{cmd}"
         );
         assert_eq!(
             super::screen::np_command(&app, "claude", 0, "  ").as_deref(),
-            Some("claude")
+            Some("claude --dangerously-skip-permissions")
         );
         assert_eq!(super::screen::np_command(&app, "shell", 0, "x"), None);
         app.screen_new(0, false);
@@ -1825,7 +1827,10 @@ mod screen_tests {
             o.contains("TASK") && o.contains("add tests"),
             "the task row shows what you typed"
         );
-        assert!(o.contains("Runs: claude --model opus"), "and what will run");
+        assert!(
+            o.contains("Runs: claude --dangerously-skip-permissions --model fable"),
+            "and what will run"
+        );
         app.on_key(key(KeyCode::Esc));
         app.screen_new(0, false);
         assert!(
@@ -2651,13 +2656,13 @@ mod screen_tests {
         app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         let o = draw(&mut app, 160, 45);
         assert!(
-            o.contains("Dark themes") && o.contains("Maitty Night") && !o.contains("Maitty Day"),
+            o.contains("Dark themes") && o.contains("Maiker Night") && !o.contains("Maiker Day"),
             "the dark tab lists only dark themes"
         );
         app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
         let o = draw(&mut app, 160, 45);
         assert!(
-            o.contains("Light themes") && o.contains("Maitty Day") && !o.contains("Maitty Night"),
+            o.contains("Light themes") && o.contains("Maiker Day") && !o.contains("Maiker Night"),
             "Tab shows the light tab, on the light theme chosen"
         );
         app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
@@ -2860,7 +2865,7 @@ mod screen_tests {
         assert!(matches!(app.mode, Mode::KeyMap(_)));
         let o = draw(&mut app, 160, 45);
         show(&o);
-        for g in ["SESSIONS", "PANES", "SIDEBAR", "TOOLS", env!("APP_ENV")] {
+        for g in ["SESSIONS", "PANES", "SIDEBAR", "TOOLS", crate::brand::APP_HEADING] {
             assert!(o.contains(g), "the key map has {g}");
         }
         assert!(
@@ -8186,7 +8191,7 @@ mod settings_splash_tests {
             scroll: 0,
         }));
         let keys = draw(&mut app);
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{splash}\n{settings}\n{keys}");
         }
         assert!(splash.contains(env!("APP_TAGLINE")));
@@ -8593,7 +8598,7 @@ mod shots {
     #[ignore]
     fn write_the_readme_screens() {
         let dir = std::path::PathBuf::from(
-            std::env::var(concat!(env!("APP_ENV"), "_SHOTS")).expect(concat!(
+            maitty_shared::brand::env_var("SHOTS").expect(concat!(
                 "set ",
                 env!("APP_ENV"),
                 "_SHOTS"
@@ -8785,7 +8790,7 @@ mod check_row_tests {
     }
 
     fn show(buf: &Buffer, title: &str) {
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("--- {title}");
             for y in 0..buf.area.height {
                 println!(
@@ -9161,7 +9166,7 @@ mod check_sheet_tests {
 
     fn draw(app: &mut App, w: u16, h: u16) -> String {
         let o = frame(&render(app, w, h));
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{o}");
         }
         o
@@ -9887,7 +9892,7 @@ mod check_inbox_tests {
         let buf = buffer(app, w, h);
         // The Inbox only: the sidebar beside it lists the same sessions.
         let out = lines(&buf, app.screen.side_rect.right());
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!(
                 "--- {w}x{h} {}/{}\n{}",
                 app.cfg.ui.layout,
@@ -10406,7 +10411,7 @@ mod check_settings_tests {
     }
 
     pub(super) fn show(s: &str) {
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{s}");
         }
     }
@@ -10963,7 +10968,7 @@ mod check_wiring_tests {
             })
             .collect();
         let frame = frame.replace(|c| ('\u{e000}'..='\u{f8ff}').contains(&c), "");
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!(
                 "--- {w}x{h} {}/{}\n{frame}",
                 app.cfg.ui.layout, app.cfg.ui.panes
@@ -11878,7 +11883,7 @@ mod restart_tests {
                     + "\n"
             })
             .collect();
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{out}");
         }
         out
@@ -14852,16 +14857,16 @@ mod drawer_tab_tests {
     }
 
     #[test]
-    fn tab_and_shift_tab_cycle_files_changes_branch_references_and_tickets() {
+    fn tab_and_shift_tab_cycle_files_changes_branch_and_references() {
         let (mut app, dir) = in_repo("cycle");
         app.act(Action::Files);
-        use screen::SheetKind::{Branch, Changes, Files, References, Tickets};
-        for want in [Changes, Branch, References, Tickets, Files] {
+        use screen::SheetKind::{Branch, Changes, Files, References};
+        for want in [Changes, Branch, References, Files] {
             key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
             assert_eq!(open(&app), Some(want), "Tab");
             assert!(app.view_has_keys(), "the new view has the keys");
         }
-        for want in [Tickets, References, Branch, Changes, Files] {
+        for want in [References, Branch, Changes, Files] {
             key(&mut app, KeyCode::BackTab, KeyModifiers::SHIFT);
             assert_eq!(open(&app), Some(want), "Shift+Tab");
         }
@@ -15544,7 +15549,7 @@ mod pane_swap_tests {
             mouse(&mut app, MouseEventKind::Down(MouseButton::Left), from);
             mouse(&mut app, MouseEventKind::Drag(MouseButton::Left), onto);
             let screen = draw(&mut app);
-            if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+            if maitty_shared::brand::env_var("SHOW").is_ok() {
                 println!("{layout}\n{screen}");
             }
             assert!(

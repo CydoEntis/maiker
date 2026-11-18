@@ -5,8 +5,7 @@ pub use maitty_ipc_transport::{Reader, Writer};
 use maitty_ipc_transport::{framed_parts, receive, send};
 use maitty_shared::protocol::{self, ClientMsg, ServerMsg};
 
-const APP_COMMAND: &str = env!("MAITTY_APP_COMMAND");
-const APP_ENV: &str = env!("MAITTY_APP_ENV");
+const APP_COMMAND: &str = env!("APP_COMMAND");
 
 #[derive(Debug)]
 pub struct OtherVersion {
@@ -42,7 +41,7 @@ pub fn remove_pid_file() {
 }
 
 pub fn data_dir() -> std::path::PathBuf {
-    if let Some(path) = std::env::var_os(format!("{APP_ENV}_DATA_DIR")) {
+    if let Some(path) = maitty_shared::brand::env_var_os("DATA_DIR") {
         return path.into();
     }
     directories::ProjectDirs::from("", "", APP_COMMAND)
@@ -51,7 +50,7 @@ pub fn data_dir() -> std::path::PathBuf {
 }
 
 fn socket_id() -> String {
-    let label = std::env::var(format!("{APP_ENV}_SOCKET")).ok();
+    let label = maitty_shared::brand::env_var("SOCKET").ok();
     let username = std::env::var("USERNAME").ok();
     let user = std::env::var("USER").ok();
     maitty_ipc_transport::socket_id(
@@ -119,7 +118,7 @@ pub async fn open_stream_for_user(daemon_executable: &std::path::Path) -> Result
             Err(error) => last_error = Some(error),
         }
     }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("daemon did not start")))
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("The Maiker service did not start. Try again; if it keeps happening, run maiker in a terminal to see why.")))
 }
 
 async fn open_as(attach: bool) -> Result<(Reader, Writer)> {
@@ -175,7 +174,7 @@ pub async fn open_or_spawn_for_user(
             Err(error) => last_error = Some(error),
         }
     }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("daemon did not start")))
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("The Maiker service did not start. Try again; if it keeps happening, run maiker in a terminal to see why.")))
 }
 
 fn spawn_daemon(executable: &std::path::Path) -> Result<()> {
@@ -217,17 +216,17 @@ fn daemon_command(executable: &std::path::Path) -> std::process::Command {
         command.creation_flags(CREATE_NO_WINDOW);
     }
     for key in [
-        format!("{APP_ENV}_CONVERSATION_ID"),
-        format!("{APP_ENV}_CONVERSATION_GENERATION"),
-        format!("{APP_ENV}_CONVERSATION_CONNECTION"),
-        format!("{APP_ENV}_CONVERSATION_AUTH"),
-        format!("{APP_ENV}_TERM_ID"),
-        format!("{APP_ENV}_PANE_TOKEN"),
-        format!("{APP_ENV}_REMOTE"),
-        format!("{APP_ENV}_SSH"),
-        format!("{APP_ENV}_REMOTE_CMD"),
+        "CONVERSATION_ID",
+        "CONVERSATION_GENERATION",
+        "CONVERSATION_CONNECTION",
+        "CONVERSATION_AUTH",
+        "TERM_ID",
+        "PANE_TOKEN",
+        "REMOTE",
+        "SSH",
+        "REMOTE_CMD",
     ] {
-        command.env_remove(key);
+        maitty_shared::brand::remove_child_env(&mut command, key);
     }
     command
 }
@@ -242,31 +241,31 @@ mod tests {
 
     #[test]
     fn gui_daemon_drops_pane_and_remote_identity_but_keeps_user_configuration() {
-        let command = daemon_command(std::path::Path::new("maitty"));
+        let command = daemon_command(std::path::Path::new("maiker"));
         let removed = command
             .get_envs()
             .filter(|(_, value)| value.is_none())
             .map(|(key, _)| key.to_string_lossy().into_owned())
             .collect::<Vec<_>>();
         for key in [
-            concat!(env!("MAITTY_APP_ENV"), "_CONVERSATION_ID"),
-            concat!(env!("MAITTY_APP_ENV"), "_CONVERSATION_GENERATION"),
-            concat!(env!("MAITTY_APP_ENV"), "_CONVERSATION_CONNECTION"),
-            concat!(env!("MAITTY_APP_ENV"), "_CONVERSATION_AUTH"),
-            concat!(env!("MAITTY_APP_ENV"), "_TERM_ID"),
-            concat!(env!("MAITTY_APP_ENV"), "_PANE_TOKEN"),
-            concat!(env!("MAITTY_APP_ENV"), "_REMOTE"),
-            concat!(env!("MAITTY_APP_ENV"), "_SSH"),
-            concat!(env!("MAITTY_APP_ENV"), "_REMOTE_CMD"),
+            "CONVERSATION_ID",
+            "CONVERSATION_GENERATION",
+            "CONVERSATION_CONNECTION",
+            "CONVERSATION_AUTH",
+            "TERM_ID",
+            "PANE_TOKEN",
+            "REMOTE",
+            "SSH",
+            "REMOTE_CMD",
         ] {
-            assert!(removed.iter().any(|removed| removed == key), "{key}");
+            for name in maitty_shared::brand::env_names(key) {
+                assert!(removed.contains(&name), "{name}");
+            }
         }
-        for key in [
-            concat!(env!("MAITTY_APP_ENV"), "_CONFIG"),
-            concat!(env!("MAITTY_APP_ENV"), "_DATA_DIR"),
-            concat!(env!("MAITTY_APP_ENV"), "_SOCKET"),
-        ] {
-            assert!(!removed.iter().any(|removed| removed == key), "{key}");
+        for key in ["CONFIG", "DATA_DIR", "SOCKET"] {
+            for name in maitty_shared::brand::env_names(key) {
+                assert!(!removed.contains(&name), "{name}");
+            }
         }
     }
 }

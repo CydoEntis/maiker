@@ -438,9 +438,9 @@ fn service_log() -> PathBuf {
     crate::config::data_dir().join("daemon.log")
 }
 
-/// The socket this window and its service share: `MAITTY_SOCKET`, else the default one.
+/// The socket this window and its service share: `AGENT_SOCKET`, else the default one.
 fn socket_label() -> String {
-    std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into())
+    maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into())
 }
 
 pub(in crate::client) fn machine_info_keys(v: &MachineInfoView) -> Vec<(&'static str, &'static str)> {
@@ -531,7 +531,7 @@ fn list_lines(app: &App, v: &MachineInfoView, t: &Theme) -> Vec<Line> {
     let name = app.info_name(v.machine);
     let text = Style::default().fg(t.text);
     let strong = Style::default().fg(t.strong).add_modifier(Modifier::BOLD);
-    let mut out = vec![heading(env!("APP_ENV"), t)];
+    let mut out = vec![heading(crate::brand::APP_HEADING, t)];
     let sessions = app.all_terms().into_iter().filter(|(term, _)| term.machine == v.machine).count();
     let plural = if sessions == 1 { "" } else { "s" };
     match app.snap_of(v.machine) {

@@ -13,7 +13,7 @@ function freeName(name: string, taken: ReadonlySet<string>): string {
 
 /**
  * A name for a branch nobody named: two short words, like the terminal app's worktrees. "New
- * worktree" on the new-chat page needs a branch at once, because one branch cannot be checked out
+ * worktree" on the New session dialog needs a branch at once, because one branch cannot be checked out
  * in two folders. Never one of `taken`.
  */
 export function suggestBranchName(taken: ReadonlySet<string>, random: () => number = Math.random): string {

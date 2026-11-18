@@ -1,6 +1,6 @@
 # Tauri
 
-> **Use for:** Maitty's optional cross-platform desktop GUI host.
+> **Use for:** Maiker's optional cross-platform desktop GUI host.
 > **Requires:** Rust, TypeScript, React
 > **Fills:** ARCHITECTURE § stack and layers; ENVIRONMENT § prerequisites; SECURITY § threat model
 
@@ -70,10 +70,10 @@ Tauri 2 is the optional desktop host. The GUI lives in `apps/gui/`, uses React,
 TypeScript, Vite, shadcn/ui and Tailwind, and connects to the existing daemon.
 Keep native packaging and GUI build steps separate from `cargo install --path apps/tui`.
 Desktop build scripts compile and package a GUI-specific CLI sidecar for the
-current host. Keep its `maitty-gui-daemon` name separate from the terminal CLI
+current host. Keep its `maikerd` name separate from the terminal CLI
 executable so a running daemon cannot lock the file a new GUI build must
 replace. That sidecar is only the payload: a packaged app installs it as the
-shared `maitty` (ADR 0004) and runs that file. Find the payload in packaged
+shared `maiker` (ADR 0004) and runs that file. Find the payload in packaged
 resources first, then as an adjacent target-suffixed sidecar so release builds
 launched from their output directory work too. A development build runs the
 sidecar directly.

@@ -48,9 +48,16 @@ fn overrides(
 
 /// Call first thing in `run`, before GTK and the web view read the environment.
 pub fn prefer_gpu_drawing() {
-    let opt_out = format!("{}_NO_GPU_FORCE", maitty_machines::APP_ENV);
+    let opt_out = maitty_shared::brand::env_name("NO_GPU_FORCE");
     let nvidia = std::path::Path::new(NVIDIA_KERNEL_MODULE).exists();
-    for (name, value) in overrides(nvidia, &opt_out, |name| std::env::var(name).ok()) {
+    for (name, value) in overrides(nvidia, &opt_out, |name| {
+        // The opt-out is also honoured under the names the prefix had before (ADR 0012).
+        if name == opt_out {
+            maitty_shared::brand::env_var("NO_GPU_FORCE").ok()
+        } else {
+            std::env::var(name).ok()
+        }
+    }) {
         // SAFETY: called at the start of `run`, before any other thread exists to read or
         // write the environment.
         unsafe { std::env::set_var(name, value) };

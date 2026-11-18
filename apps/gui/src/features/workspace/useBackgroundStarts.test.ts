@@ -1,10 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DraftAttachment } from '@/features/chat/composerStore'
-import type { NewChatRequest } from './components/NewChatPage'
+import type { NewChatRequest } from './components/NewSessionDialog'
 import { useBackgroundStarts } from './useBackgroundStarts'
 
-const toast = vi.hoisted(() => ({ error: vi.fn() }))
+const toast = vi.hoisted(() => ({ failed: vi.fn(), error: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast }))
 
 const picture: DraftAttachment = { id: '1', path: '/data/attach-1.png', name: 'shot.png', size: 10, kind: 'image', preview: 'blob:shot' }
@@ -32,7 +32,7 @@ describe('starts in the background', () => {
     unmount()
     fail(new Error('boom'))
 
-    await waitFor(() => { expect(toast.error).toHaveBeenCalledWith('Could not start “fix the login”: boom') })
+    await waitFor(() => { expect(toast.failed).toHaveBeenCalledWith('Could not start “fix the login”', new Error('boom')) })
     expect(revoke).toHaveBeenCalledWith('blob:shot')
   })
 

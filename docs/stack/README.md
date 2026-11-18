@@ -31,7 +31,7 @@ starter-owned sections forward. It never touches `Project-specific:` sections.
 | [tauri-updater](tauri-updater.md) | project | 2 |
 | [syntect](syntect.md) | project | 5.3 |
 | [xterm](xterm.md) | project | 6.0.0 |
-| [claude-code-cli](claude-code-cli.md) | project | Claude Code CLI `2.1.314` observed locally; support range open |
+| [claude-code-cli](claude-code-cli.md) | project | Claude Code CLI; verified versions listed in the doc |
 | [codex-app-server](codex-app-server.md) | project | codex-cli 0.164.0, 0.165.0 |
 
 ## Not applied

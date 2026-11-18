@@ -9,8 +9,8 @@ Type: spec · Status: built on `feat/references` (phase 28), not yet released ·
   (`references::project_root`, the same `gitfs::head` resolution the daemon uses for
   `TermInfo::root`), so every worktree and every agent sees one set.
 - **Gitignored without touching tracked files.** `.gitignore` is the user's tracked file.
-  Decided: the line `.maitty/references/` goes in the repo's `info/exclude` (the path git
-  reports for `--git-path info/exclude`), once, when Maitty first makes the folder.
+  Decided: the line `.maiker/references/` goes in the repo's `info/exclude` (the path git
+  reports for `--git-path info/exclude`), once, when Maiker first makes the folder.
 - **Remote daemons.** References are files on the machine the client runs on; over `--remote`
   the view says it isn't available over ssh yet, like Files and Branch. The MCP tool runs where
   the agent runs, so it works on a remote host.
@@ -19,11 +19,11 @@ Type: spec · Status: built on `feat/references` (phase 28), not yet released ·
 
 ## Requirements
 
-- **R1.** `<main checkout>/.maitty/references/` holds a project's references; a folder outside
-  git uses `<folder>/.maitty/references/`. A linked worktree resolves to the main checkout —
+- **R1.** `<main checkout>/.maiker/references/` holds a project's references; a folder outside
+  git uses `<folder>/.maiker/references/`. A linked worktree resolves to the main checkout —
   test with temporary repos (`references.rs`, `client/tests.rs`).
-- **R2.** When Maitty makes the folder in a repo, `.maitty/references/` is added to
-  `info/exclude` once (never twice; an anchored `/.maitty/references/` counts); no tracked file
+- **R2.** When Maiker makes the folder in a repo, `.maiker/references/` is added to
+  `info/exclude` once (never twice; an anchored `/.maiker/references/` counts); no tracked file
   changes; `git add -f` still commits one — tests.
 - **R3.** Leader + `a` opens **References**, the fourth tab of the side panel's strip
   (`Files f · Changes c · Branch b · References a`); `a` again or Esc closes it. It lists name,
@@ -45,7 +45,7 @@ Type: spec · Status: built on `feat/references` (phase 28), not yet released ·
 - **R6.** Every file operation (resolve, list, copy, write, remove, exclude) runs in `spawn_bg`;
   the view opens at once with the project's root from the snapshot and settles it when the
   background read lands.
-- **R7.** MCP `maitty_references` lists the caller's project (the MCP server's cwd mapped to
+- **R7.** MCP `maiker_references` lists the caller's project (the MCP server's cwd mapped to
   the main checkout) or the project of an optional `path`: `folder` and, per file, absolute
   `path`, `name`, `kind` (image, pdf, design, text, file), `bytes`, `modified` (UTC ISO 8601).
   The server's instructions tell agents to call it before UI, front-end or design work and open

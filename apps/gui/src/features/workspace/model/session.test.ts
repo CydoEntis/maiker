@@ -6,7 +6,7 @@ import { folderExists, resolveStartFolder } from './startFolder'
 
 vi.mock('@/api/daemon', () => ({
   terminalOf: (id: string) => Number(id.slice(1)),
-  suggestProjectFolders: (typed: string) => Promise.resolve(typed === '/home/casey/code' ? ['/home/casey/code/', '/home/casey/codex/'] : typed === 'C:\\dev\\maitty' ? ['C:\\dev\\maitty\\'] : []),
+  suggestProjectFolders: (typed: string) => Promise.resolve(typed === '/home/casey/code' ? ['/home/casey/code/', '/home/casey/codex/'] : typed === 'C:\\dev\\maiker' ? ['C:\\dev\\maiker\\'] : []),
 }))
 
 const HOME = '/home/casey'
@@ -34,8 +34,8 @@ describe('session view', () => {
   })
 
   it('names a shell by where it is within its repo, or by its ~ path outside one', () => {
-    expect(toSessionView(repo(1, `${HOME}/maitty`, `${HOME}/maitty`), HOME)).toMatchObject({ title: 'main', promptPath: 'maitty', repoName: 'maitty', branch: 'main', process: 'shell' })
-    expect(toSessionView(repo(1, `${HOME}/maitty`, `${HOME}/maitty/crates/maitty-core/src`), HOME)).toMatchObject({ title: 'maitty-core/src', promptPath: 'maitty/crates/maitty-core/src' })
+    expect(toSessionView(repo(1, `${HOME}/maiker`, `${HOME}/maiker`), HOME)).toMatchObject({ title: 'main', promptPath: 'maiker', repoName: 'maiker', branch: 'main', process: 'shell' })
+    expect(toSessionView(repo(1, `${HOME}/maiker`, `${HOME}/maiker/crates/maitty-core/src`), HOME)).toMatchObject({ title: 'maitty-core/src', promptPath: 'maiker/crates/maitty-core/src' })
     expect(toSessionView(conversation(1, `${HOME}/Downloads`, { agent: 'codex' }), HOME)).toMatchObject({ title: '~/Downloads', repoName: null, branch: null, process: 'codex' })
     // The worktree mark follows the pane the daemon says is in a linked worktree.
     expect(toSessionView(conversation(1, `${HOME}/wt`, { linked: true }), HOME).worktree).toBe(true)
@@ -43,10 +43,10 @@ describe('session view', () => {
   })
 
   it('calls a session by the name you gave it, else by where it is', () => {
-    const unnamed = toSessionView(conversation(1, `${HOME}/maitty`), HOME)
-    const named = toSessionView(conversation(2, `${HOME}/maitty`, { named: true, title: '  Login fix ' }), HOME)
+    const unnamed = toSessionView(conversation(1, `${HOME}/maiker`), HOME)
+    const named = toSessionView(conversation(2, `${HOME}/maiker`, { named: true, title: '  Login fix ' }), HOME)
     expect(unnamed.name).toBeNull()
-    expect(displayName(unnamed)).toBe('~/maitty')
+    expect(displayName(unnamed)).toBe('~/maiker')
     expect(named.name).toBe('Login fix')
     expect(displayName(named)).toBe('Login fix')
     expect(toSessionView(conversation(3, HOME, { named: true, title: '   ' }), HOME).name).toBeNull()
@@ -92,7 +92,7 @@ describe('session view', () => {
   })
 
   it('badges the folder by the repo root when there is one, else the shell folder', () => {
-    expect(folderNameOf(toSessionView(repo(1, `${HOME}/maitty`, `${HOME}/maitty/crates`), HOME))).toBe('maitty')
+    expect(folderNameOf(toSessionView(repo(1, `${HOME}/maiker`, `${HOME}/maiker/crates`), HOME))).toBe('maiker')
     expect(folderNameOf(toSessionView(conversation(2, `${HOME}/personal/dynamic-ui`), HOME))).toBe('dynamic-ui')
   })
 
@@ -147,8 +147,8 @@ describe('session tracking', () => {
 
   it('notices a shell moving to another repo', () => {
     const first = trackSessions(new Map(), view('idle'), new Set(), 0)
-    const moved = trackSessions(first.tracks, [toSessionView(repo(1, `${HOME}/maitty`, `${HOME}/maitty`), HOME)], new Set(), 5)
-    expect(moved.moves).toEqual([{ id: 't1', from: null, to: `${HOME}/maitty` }])
+    const moved = trackSessions(first.tracks, [toSessionView(repo(1, `${HOME}/maiker`, `${HOME}/maiker`), HOME)], new Set(), 5)
+    expect(moved.moves).toEqual([{ id: 't1', from: null, to: `${HOME}/maiker` }])
     expect(moved.tracks.get('t1')?.movedAt).toBe(5)
   })
 
@@ -180,7 +180,7 @@ describe('start folder', () => {
     await expect(folderExists('/home/casey/code')).resolves.toBe(true)
     await expect(folderExists('/home/casey/code/')).resolves.toBe(true)
     await expect(folderExists('/home/casey/cod')).resolves.toBe(false)
-    await expect(folderExists('C:\\dev\\maitty')).resolves.toBe(true)
+    await expect(folderExists('C:\\dev\\maiker')).resolves.toBe(true)
     await expect(folderExists('')).resolves.toBe(true)
     await expect(folderExists('/')).resolves.toBe(true)
   })
@@ -262,12 +262,12 @@ describe('a session stopped by its plan limit', () => {
 })
 
 describe('labels that stay put', () => {
-  const root = `${HOME}/maitty`
+  const root = `${HOME}/maiker`
   const shown = toSessionView(repo(1, root, root, { branch: 'dev' }), HOME)
 
   it('keeps the branch and title while a pull blanks it or a rebase passes a bare commit', () => {
     const during = toSessionView(repo(1, root, root, { branch: 'working tree' }), HOME)
-    expect(keepLabels(during, shown)).toMatchObject({ title: 'dev', branch: 'dev', repoName: 'maitty' })
+    expect(keepLabels(during, shown)).toMatchObject({ title: 'dev', branch: 'dev', repoName: 'maiker' })
     const rebasing = toSessionView(repo(1, root, root, { branch: '4ad0632' }), HOME)
     expect(keepLabels(rebasing, shown)).toMatchObject({ title: 'dev', branch: 'dev' })
   })

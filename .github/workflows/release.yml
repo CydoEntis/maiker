@@ -102,9 +102,9 @@ jobs:
         shell: bash
         run: |
           if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --locked --target ${{ matrix.target }} -p maitty --bin maitty
+            cross build --release --locked --target ${{ matrix.target }} -p maiker --bin maiker
           else
-            cargo build --release --locked --target ${{ matrix.target }} -p maitty --bin maitty
+            cargo build --release --locked --target ${{ matrix.target }} -p maiker --bin maiker
           fi
 
       - name: Package
@@ -186,8 +186,8 @@ jobs:
             macOS)
               find target/release/bundle -type f -iname '*.dmg' -exec cp {} dist/ \;
               # The update bundle is named after the app only; give it the version and arch.
-              cp target/release/bundle/macos/Maitty.app.tar.gz "dist/Maitty_${ver}_aarch64.app.tar.gz"
-              cp target/release/bundle/macos/Maitty.app.tar.gz.sig "dist/Maitty_${ver}_aarch64.app.tar.gz.sig"
+              cp target/release/bundle/macos/Maiker.app.tar.gz "dist/Maiker_${ver}_aarch64.app.tar.gz"
+              cp target/release/bundle/macos/Maiker.app.tar.gz.sig "dist/Maiker_${ver}_aarch64.app.tar.gz.sig"
               ;;
             Linux) find target/release/bundle -type f \( -iname '*.deb' -o -iname '*.rpm' -o -iname '*.appimage' -o -iname '*.sig' \) -exec cp {} dist/ \; ;;
           esac
@@ -254,9 +254,9 @@ jobs:
             exit 0
           fi
           ver=${TAG#v}
-          win="Maitty_${ver}_x64-setup.exe"
-          mac="Maitty_${ver}_aarch64.app.tar.gz"
-          lin="Maitty_${ver}_amd64.AppImage"
+          win="Maiker_${ver}_x64-setup.exe"
+          mac="Maiker_${ver}_aarch64.app.tar.gz"
+          lin="Maiker_${ver}_amd64.AppImage"
           for f in "$win" "$mac" "$lin"; do
             test -f "dist/$f" && test -f "dist/$f.sig" || { echo "Missing update bundle or signature: $f" >&2; exit 1; }
           done
@@ -345,7 +345,7 @@ jobs:
         shell: bash
         run: |
           app=$(sed -n 's/^name = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
-          prefix=$(echo "$app" | tr 'a-z-' 'A-Z_')
+          prefix=$(sed -n 's/^env_prefix = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
           echo "APP=$app" >> "$GITHUB_ENV"
           echo "${prefix}_FROM=$GITHUB_WORKSPACE/release-files" >> "$GITHUB_ENV"
           echo "${prefix}_NO_INTEGRATE=1" >> "$GITHUB_ENV"
@@ -407,13 +407,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
-      # The installers read <APP>_VERSION to pick this release.
+      # The installers read <PREFIX>_VERSION to pick this release (the prefix is env_prefix in apps/tui/Cargo.toml).
       - name: App name
         shell: bash
         run: |
           app=$(sed -n 's/^name = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
           echo "APP=$app" >> "$GITHUB_ENV"
-          echo "$(echo "$app" | tr 'a-z-' 'A-Z_')_VERSION=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_ENV"
+          prefix=$(sed -n 's/^env_prefix = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
+          echo "${prefix}_VERSION=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_ENV"
       - name: install.sh
         if: runner.os != 'Windows'
         run: |

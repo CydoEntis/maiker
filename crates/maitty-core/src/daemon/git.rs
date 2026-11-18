@@ -72,13 +72,6 @@ pub fn status(dir: &Path) -> Option<GitInfo> {
     })
 }
 
-/// The main checkout of the repository `dir` is in (`None` outside git): what every worktree of
-/// one repository shares.
-pub(super) fn main_checkout(dir: &Path) -> Option<PathBuf> {
-    let common = abs(dir, git(dir, &["rev-parse", "--git-common-dir"]).ok()?.trim());
-    repo_root_of_common(&common).map(crate::daemon::clean_path)
-}
-
 /// The main checkout's root: the parent of the common `.git` directory.
 fn repo_root_of_common(common: &Path) -> Option<PathBuf> {
     let c = common.canonicalize().ok()?;
@@ -180,7 +173,7 @@ pub fn create_worktree(
 ) -> Result<(PathBuf, String)> {
     let branch = branch.trim();
     if branch.is_empty() || branch.starts_with('-') || branch.contains(char::is_whitespace) {
-        bail!("invalid branch name `{branch}`");
+        bail!("`{branch}` is not a branch name that can be used: it must not be empty, start with `-` or hold spaces.");
     }
     let common = abs(
         dir,
@@ -201,7 +194,10 @@ pub fn create_worktree(
     );
     let path = crate::daemon::clean_path(path);
     if path.exists() {
-        bail!("{} already exists", path.display());
+        bail!(
+            "Could not make a worktree for branch `{branch}`: its folder {} is already there. Remove that folder, or pick another branch name.",
+            path.display()
+        );
     }
     let has = |r: &str| git(&root, &["show-ref", "--verify", "--quiet", r]).is_ok();
     let existing = has(&format!("refs/heads/{branch}"))
@@ -221,7 +217,7 @@ pub fn create_worktree(
     let p = path.to_string_lossy().into_owned();
     if existing {
         // Existing branch (git sets up tracking for a remote-only one).
-        git(&root, &["worktree", "add", &p, branch])?;
+        git(&root, &["worktree", "add", &p, branch]).map_err(|e| worktree_add_failed(branch, &e))?;
     } else {
         let mut args = vec!["worktree", "add", "-b", branch, &p];
         // Cut from a remote branch, the new one would otherwise track it and `git pull` would
@@ -232,13 +228,32 @@ pub fn create_worktree(
         if let Some(b) = base {
             // A base that looks like an option would be read as one.
             if b.starts_with('-') {
-                bail!("not a branch to start from: {b}");
+                bail!("`{b}` is not a branch a worktree can start from. Pick a branch from the list.");
             }
             args.push(b);
         }
-        git(&root, &args)?;
+        git(&root, &args).map_err(|e| worktree_add_failed(branch, &e))?;
     }
     Ok((path, repo))
+}
+
+/// Git's refusal to add a worktree, in plain words with what to do; for a case not listed, git's
+/// own last line follows the sentence.
+fn worktree_add_failed(branch: &str, error: &anyhow::Error) -> anyhow::Error {
+    let said = format!("{error:#}");
+    if said.contains("is already checked out") || said.contains("is already used by worktree") {
+        anyhow::anyhow!("Branch `{branch}` is already open in another folder, and git opens a branch in one place only. Pick another branch, or start a new worktree off it.")
+    } else if said.contains("a branch named") && said.contains("already exists") {
+        anyhow::anyhow!("A branch named `{branch}` already exists. Pick it from the branch list, or choose another name.")
+    } else if said.contains("invalid reference") || said.contains("not a valid") {
+        anyhow::anyhow!("Branch `{branch}` was not found. Fetch the repository, or pick a branch from the list.")
+    } else {
+        let last = said.lines().rev().find(|line| !line.trim().is_empty()).unwrap_or("").trim();
+        // `git()` puts the command before git's own words; only git's words are worth reading.
+        let words = last.split_once(": ").filter(|_| last.starts_with("git ")).map_or(last, |(_, said)| said);
+        let reason = words.trim_start_matches("fatal: ").trim_start_matches("error: ");
+        anyhow::anyhow!("Git could not make a worktree for branch `{branch}`: {reason}")
+    }
 }
 
 /// Branch names a made-up one must avoid: the local branches and `origin`'s, since
@@ -553,9 +568,52 @@ pub fn conversation_file(root: &Path, relative: &str) -> Result<String> {
     String::from_utf8(content).context("The selected file is not UTF-8 text")
 }
 
+/// A file's version: its length and an FNV-1a hash of its bytes, as one opaque word. A save names
+/// the version it read, so a file an agent changed since is noticed (a touch that changes no byte is not).
+pub fn file_version(bytes: &[u8]) -> String {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0100_0000_01b3;
+    let hash = bytes.iter().fold(OFFSET, |hash, byte| (hash ^ u64::from(*byte)).wrapping_mul(PRIME));
+    format!("{}-{hash:016x}", bytes.len())
+}
+
+/// A project file's text with the version of the bytes it was read from.
+pub fn conversation_file_stamped(root: &Path, relative: &str) -> Result<(String, String)> {
+    let path = resolve_conversation_path(root, relative)?
+        .canonicalize()
+        .context("resolving project file")?;
+    let metadata = std::fs::metadata(&path).context("reading project file metadata")?;
+    if !metadata.is_file() {
+        bail!("The selected project path is not a file");
+    }
+    if metadata.len() > MAX_FILE_BROWSER_BYTES {
+        bail!("This file is too large to preview");
+    }
+    let bytes = std::fs::read(path).context("reading project file")?;
+    let version = file_version(&bytes);
+    let text = String::from_utf8(bytes).context("The selected file is not UTF-8 text")?;
+    Ok((text, version))
+}
+
+/// How a save ended when it did not fail: written (with the new version), or refused because the
+/// file is no longer what the editor read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Saved {
+    Written(String),
+    ChangedOnDisk,
+}
+
 /// Replaces an existing project file's text (see `repo::write_file`). Nothing is created: a path that is
 /// not already a regular file is refused, so a typo cannot make a new file.
 pub fn conversation_write(root: &Path, relative: &str, contents: &str) -> Result<()> {
+    conversation_save(root, relative, contents, None).map(|_| ())
+}
+
+/// `conversation_write`, but with `expect` set the file must still have that version: the bytes on
+/// disk are compared just before the swap, and a different version is `ChangedOnDisk`, nothing written.
+/// (A change in the instant between that check and the swap is not caught: no lock is held on files an
+/// agent edits.)
+pub fn conversation_save(root: &Path, relative: &str, contents: &str, expect: Option<&str>) -> Result<Saved> {
     use std::io::Write;
     use std::path::Component;
 
@@ -575,18 +633,34 @@ pub fn conversation_write(root: &Path, relative: &str, contents: &str) -> Result
         .map(|n| n.to_string_lossy().into_owned())
         .context("The project path is invalid")?;
     let staged = path.with_file_name(format!(".{name}.{}.saving", std::process::id()));
-    let written = (|| -> std::io::Result<()> {
+    let unchanged = || -> std::io::Result<bool> {
+        match expect {
+            None => Ok(true),
+            Some(version) => Ok(file_version(&std::fs::read(&path)?) == version),
+        }
+    };
+    let written = (|| -> std::io::Result<bool> {
         let mut file = std::fs::File::create(&staged)?;
         file.write_all(contents.as_bytes())?;
         file.sync_all()?;
         std::fs::set_permissions(&staged, metadata.permissions())?;
-        std::fs::rename(&staged, &path)
+        if !unchanged()? {
+            return Ok(false);
+        }
+        std::fs::rename(&staged, &path)?;
+        Ok(true)
     })();
-    if let Err(error) = written {
-        let _ = std::fs::remove_file(&staged);
-        return Err(error).context("saving the file");
+    match written {
+        Ok(true) => Ok(Saved::Written(file_version(contents.as_bytes()))),
+        Ok(false) => {
+            let _ = std::fs::remove_file(&staged);
+            Ok(Saved::ChangedOnDisk)
+        }
+        Err(error) => {
+            let _ = std::fs::remove_file(&staged);
+            Err(error).context("saving the file")
+        }
     }
-    Ok(())
 }
 
 pub(super) fn resolve_conversation_path(root: &Path, relative: &str) -> Result<PathBuf> {
@@ -737,7 +811,7 @@ pub fn remove_worktree(path: &Path, force: bool, delete_branch: bool) -> Result<
         .ok()
         .filter(|b| b != "HEAD");
     if root.canonicalize().ok() == path.canonicalize().ok() {
-        bail!("refusing to remove the main checkout");
+        bail!("This is the project's main folder, not a worktree, so it is not removed. Only worktrees can be removed.");
     }
     let p = path.to_string_lossy().into_owned();
     let mut args = vec!["worktree", "remove", &p];
@@ -762,7 +836,9 @@ pub fn remove_worktree(path: &Path, force: bool, delete_branch: bool) -> Result<
         }
         std::thread::sleep(std::time::Duration::from_millis(300));
     }
-    Err(last.unwrap_or_else(|| anyhow::anyhow!("git worktree remove failed")))
+    Err(last.unwrap_or_else(|| {
+        anyhow::anyhow!("Git could not remove the worktree. Close anything still using that folder, then try again.")
+    }))
 }
 
 #[cfg(test)]
@@ -999,5 +1075,19 @@ two
 
         let (fresh, _) = create_worktree(&repo, "swift-lynx", Some("HEAD"), template).expect("worktree");
         assert_eq!(head_of(&fresh), new, "a base: a new branch from the current checkout");
+    }
+}
+
+#[cfg(test)]
+mod worktree_words {
+    use super::worktree_add_failed;
+
+    #[test]
+    fn git_s_refusals_to_add_a_worktree_read_as_sentences_with_a_next_step() {
+        let say = |stderr: &str| worktree_add_failed("dev", &anyhow::anyhow!("git worktree add: {stderr}")).to_string();
+        assert!(say("fatal: 'dev' is already checked out at '/srv/app'").starts_with("Branch `dev` is already open in another folder"));
+        assert!(say("fatal: a branch named 'dev' already exists").starts_with("A branch named `dev` already exists."));
+        assert!(say("fatal: invalid reference: dev").starts_with("Branch `dev` was not found."));
+        assert_eq!(say("fatal: disk full"), "Git could not make a worktree for branch `dev`: disk full");
     }
 }

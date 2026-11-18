@@ -1,8 +1,7 @@
 import { toast } from '@/lib/toast'
 import { listenFileSends, newTransferId, type SendEvent } from '@/api/fileSends'
-import { errorMessage } from '@/lib/error-message'
 import { typablePath } from '@/features/terminal/dropRoute'
-import { PLAIN_TOAST, showSendProgress } from '@/features/terminal/sendToast'
+import { showSendProgress } from '@/features/terminal/sendToast'
 
 /** A file the other machine kept; `remotePath` was checked here as well as in the host. `index` is its place among the files sent. */
 export type Landed = { readonly remotePath: string; readonly file: string; readonly bytes: number; readonly index: number }
@@ -61,17 +60,17 @@ export async function sendAttachments({ machine, label, image, count, start, onL
       }
       case 'done': {
         const unusable = refused.length > 0 ? `Not attached, the machine named an unusable path: ${refused.join(', ')}` : undefined
-        if (landed === 0) toast.error(unusable ?? 'Nothing was attached', { ...PLAIN_TOAST, id: transfer })
-        else toast.success(image ? 'Attached the image' : `Attached ${String(landed)} ${noun(landed)}`, { ...PLAIN_TOAST, id: transfer, description: unusable })
+        if (landed === 0) toast.error(unusable ?? 'Nothing was attached', { id: transfer })
+        else toast.success(image ? 'Attached the image' : `Attached ${String(landed)} ${noun(landed)}`, { id: transfer, description: unusable })
         end()
         return
       }
       case 'failed':
-        toast.error(event.unsent > 1 ? `${event.message} (${String(event.unsent - 1)} more not sent)` : event.message, { ...PLAIN_TOAST, id: transfer })
+        toast.error(event.unsent > 1 ? `${event.message} (${String(event.unsent - 1)} more not sent)` : event.message, { id: transfer })
         end()
         return
       case 'cancelled':
-        toast.message(`Stopped sending to ${machine}${landed > 0 ? `; ${String(landed)} of ${String(shown.count)} were attached` : ''}`, { ...PLAIN_TOAST, id: transfer })
+        toast.info(`Stopped sending to ${machine}${landed > 0 ? `; ${String(landed)} of ${String(shown.count)} were attached` : ''}`, { id: transfer })
         end()
     }
   }
@@ -80,7 +79,7 @@ export async function sendAttachments({ machine, label, image, count, start, onL
     // Listening comes first, so no event of the send is missed.
     unlisten = await listenFileSends(onEvent)
   } catch (error) {
-    toast.error(errorMessage(error, 'Could not follow the file send'))
+    toast.failed('Could not follow the file send', error)
     return
   }
   showSendProgress(transfer, shown, 0, null)
@@ -88,7 +87,7 @@ export async function sendAttachments({ machine, label, image, count, start, onL
     await start(transfer)
   } catch (error) {
     unlisten()
-    toast.error(errorMessage(error, `Could not send to ${machine}`), { ...PLAIN_TOAST, id: transfer })
+    toast.failed(`Could not send to ${machine}`, error, { id: transfer })
     return
   }
   await ended

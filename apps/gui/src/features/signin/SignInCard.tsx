@@ -3,7 +3,6 @@ import { openLink } from '@/api/daemon'
 import { Button, IconButton } from '@/components/ui/button'
 import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card'
 import { copyText } from '@/lib/clipboard'
-import { errorMessage } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import { failureWords, linkHost, SIGN_IN_LABELS } from './signInWords'
 import type { SignInView } from './useAgentSignIn'
@@ -17,11 +16,11 @@ export function SignInCard({ view, onCancel, onClose, onRetry }: { view: SignInV
   const { agent, state, problem } = view
   const label = SIGN_IN_LABELS[agent]
   const open = (link: string) => {
-    openLink(link).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the browser')) })
+    openLink(link).catch((error: unknown) => { toast.failed('Could not open the browser', error) })
   }
   const copy = (code: string) => {
     copyText(code).then(
-      () => { toast.message('Code copied') },
+      () => { toast.info('Code copied') },
       () => { toast.error('Could not copy the code') },
     )
   }

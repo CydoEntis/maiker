@@ -3,7 +3,7 @@ import { closedSessions, reopenClosedSession, type ClosedSession } from '@/api/d
 import { errorMessage } from '@/lib/error-message'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { DEFAULT_PICK } from '@/features/chat/agentChoice'
-import type { NewChatRequest } from '../components/NewChatPage'
+import type { NewChatRequest } from '../components/NewSessionDialog'
 import { resumeWords } from './moveToWorktree'
 
 /** What the Recent sessions list knows: nothing yet, the list, or why there is none. */
@@ -84,7 +84,7 @@ export function useReopenRemoved(onReopened: () => void): { state: RemakeState; 
       let outcome: RemakeState
       try {
         const asked = await reopenClosedSession(closed.agent, closed.session)
-        outcome = asked ? { kind: 'idle' } : { kind: 'failed', message: 'Restart the Maitty service to reopen it.' }
+        outcome = asked ? { kind: 'idle' } : { kind: 'failed', message: 'Restart the Maiker service to reopen it.' }
       } catch (error) {
         outcome = { kind: 'failed', message: errorMessage(error, 'Could not reopen the session.') }
       }

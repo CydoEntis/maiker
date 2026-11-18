@@ -82,7 +82,7 @@ pub async fn ask_skills(executable: &Path, folder: &Path) -> Result<Vec<AgentCom
     let hello = serde_json::json!({
         "id": HELLO_ID,
         "method": "initialize",
-        "params": {"clientInfo": {"name": "maitty", "title": "Maitty", "version": env!("CARGO_PKG_VERSION")}}
+        "params": {"clientInfo": {"name": "maiker", "title": "Maiker", "version": env!("CARGO_PKG_VERSION")}}
     });
     let ready = serde_json::json!({"method": "initialized"});
     let question = serde_json::json!({

@@ -9,6 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Conversation } from '@/data/preview'
 import { OTHER_FOLDERS, statusText } from './shared'
+import { DAEMON_NAME } from '@/brand'
 
 type SidebarProps = {
   conversations: Conversation[]
@@ -201,8 +202,8 @@ export function ConversationSidebar({
             {previewMode
               ? 'Local preview · sample data'
               : disconnected
-                ? 'Reconnecting to maittyd…'
-                : `maittyd · ${String(sessionCount)} ${sessionCount === 1 ? 'session' : 'sessions'}`}
+                ? `Reconnecting to ${DAEMON_NAME}…`
+                : `${DAEMON_NAME} · ${String(sessionCount)} ${sessionCount === 1 ? 'session' : 'sessions'}`}
           </span>
         </div>
         <Button

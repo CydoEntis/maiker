@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { toast } from '@/lib/toast'
 import { WorkingMark } from './WorkingMark'
 import { connectAgent, reloadAgentOnDaemon, sendWhenAgentReady } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { NO_EVENTS_HINT_AFTER_MS, noEventsHint, waitingInTerminalHint, type ChatAgent } from '@/features/workspace/model/chatView'
 import { keepComposerFocus } from '../keepComposerFocus'
 import { buildAttachmentMessage, parseAttachmentMessage } from '../attachmentMessage'
@@ -82,7 +81,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     connectAgent(agent)
       .then(() => reloadAgentOnDaemon({ id: sessionId }))
       .then(() => { toast.success(`${agent} is connected and restarted to load the hooks.`) })
-      .catch((failure: unknown) => { toast.error(errorMessage(failure, `Could not connect ${agent}`)) })
+      .catch((failure: unknown) => { toast.failed(`Could not connect ${agent}`, failure) })
       .finally(() => { setConnecting(false) })
   }
 
@@ -97,6 +96,8 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     queue: [],
     removeQueued: () => undefined,
     editQueued: () => undefined,
+    moveQueuedUp: () => undefined,
+    clearQueued: () => undefined,
     submit: () => {
       const text = draft.trim()
       // One message is held at a time: a second would replace the first before it was ever sent.
@@ -116,6 +117,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     ready: false,
     error: null,
     sendText: () => Promise.resolve(false),
+    sendReply: () => Promise.resolve(false),
     echo: null,
   }), [draft, held, sessionId, attachments, attach, draftKey])
 

@@ -601,6 +601,36 @@ async fn claude_adapter_denies_a_host_declined_tool() {
 }
 
 #[tokio::test]
+async fn a_late_claude_init_naming_another_session_ends_the_turn() {
+    let directory = crate::daemon::persist::scratch_dir();
+    let (launch, owner) = claude_launch(directory.path(), Some("late-init-other"));
+    let (task, _stop, requests, mut received) = start_claude_adapter(launch, owner).await;
+    start_claude_thread(&requests, &mut received, owner).await;
+    requests
+        .send(super::runtime::Command {
+            token: 3,
+            request: super::runtime::Rpc::Send {
+                params: json!({
+                    "threadId":"fixture-session",
+                    "input":[{"type":"text","text":"hello fake Claude"}]
+                }),
+            },
+        })
+        .await
+        .unwrap();
+    assert!(matches!(
+        receive_claude_payload(&mut received, owner).await,
+        Payload::Response { token: 3, result: Err(_) }
+    ));
+    assert!(matches!(
+        receive_claude_payload(&mut received, owner).await,
+        Payload::Terminated { failure: Some(ref failure), .. } if failure.contains("different session")
+    ));
+    task.await.unwrap();
+    drop(directory);
+}
+
+#[tokio::test]
 async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
     let directory = crate::daemon::persist::scratch_dir();
     let (launch, owner) = claude_launch(directory.path(), Some("interrupt"));
@@ -658,10 +688,11 @@ async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
             result: Ok(ref value)
         } if value == &json!({})
     ));
+    // Claude ends a stopped turn with an error result; the person asked for it, so it is interrupted.
     assert!(matches!(
         receive_claude_payload(&mut received, owner).await,
         Payload::Notification { method, params }
-            if method == "turn/completed" && params["turn"]["status"] == "completed"
+            if method == "turn/completed" && params["turn"]["status"] == "interrupted"
     ));
     stop_claude_adapter(task, stop, &mut received, owner).await;
     drop(directory);
@@ -2089,17 +2120,6 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             Query::GitHubOwners { tag: 9 },
             Query::AgentCommands { agent: crate::conversation::Provider::Claude, folder: "/code".into(), tag: 9 },
             Query::AgentSignIn { agent: crate::protocol::SignInAgent::Codex, request: crate::protocol::SignInRequest::Start, tag: 9 },
-            Query::Tickets { source: "me/widgets".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 },
-            Query::TicketKeys {
-                change: crate::protocol::TicketKeyChange::Set {
-                    provider: maitty_shared::tickets::TicketProvider::Plane,
-                    address: "https://plane.example.com".into(),
-                    workspace: "w".into(),
-                    key: crate::protocol::SecretText("plane_api_SECRETVALUE0123".into()),
-                },
-                tag: 9,
-            },
-            Query::TicketKeys { change: crate::protocol::TicketKeyChange::Remove { provider: maitty_shared::tickets::TicketProvider::Linear }, tag: 9 },
         ];
         for (client, query) in (442..).zip(about_github) {
             let from = authenticated_pane(&mut session);
@@ -2107,34 +2127,11 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
         }
 
-        // A person's client is answered, here with a refusal that needs no `gh`.
-        let nowhere = Query::Tickets { source: "not a repository".into(), request: maitty_shared::tickets::TicketsRequest::Groups, tag: 9 };
-        let answered = exchange(&mut session, 460, crate::protocol::ClientMsg::Query(nowhere), None).await;
-        assert!(
-            matches!(answered, ServerMsg::Reply(crate::protocol::Reply::Tickets { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(_)) })),
-            "{answered:?}"
-        );
-
         // A person's client is told plainly that Gemini has no sign-in to run, and nothing is started.
         let gemini = Query::AgentSignIn { agent: crate::protocol::SignInAgent::Gemini, request: crate::protocol::SignInRequest::Start, tag: 4 };
         let told = exchange(&mut session, 470, crate::protocol::ClientMsg::Query(gemini), None).await;
         assert!(
             matches!(told, ServerMsg::Reply(crate::protocol::Reply::AgentSignIn { tag: 4, state: crate::protocol::SignInState::Failed(crate::protocol::SignInFailure::Unsupported), .. })),
-            "{told:?}"
-        );
-
-        // Tickets are read-only (ADR 0011): a window from before that still asks for a write, even a
-        // confirmed one, is told so with its tag and keeps its connection.
-        let close = Query::TicketWrite {
-            source: "me/widgets".into(),
-            id: "github:me/widgets#1".into(),
-            write: maitty_shared::tickets::TicketWrite::Close,
-            confirmed: true,
-            tag: 9,
-        };
-        let told = exchange(&mut session, 462, crate::protocol::ClientMsg::Query(close), None).await;
-        assert!(
-            matches!(told, ServerMsg::Reply(crate::protocol::Reply::TicketWrite { tag: 9, answer: Err(maitty_shared::tickets::TicketError::Invalid(ref why)) }) if why.contains("no longer")),
             "{told:?}"
         );
 
@@ -4341,6 +4338,7 @@ mod send_now;
 mod continue_turn;
 mod branch_chat;
 mod claude_chat;
+mod claude_warm;
 mod turn_snapshot;
 mod worktree_recreate;
 

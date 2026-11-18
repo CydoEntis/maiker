@@ -7,6 +7,10 @@ export type DiffRow = {
   tone: 'add' | 'remove' | 'context' | 'header'
   /** The line's number in the file (the old file for a removed line); null where the hunk header does not say. */
   number: number | null
+  /** The line's number in the old file, null for an added line. */
+  oldNumber: number | null
+  /** The line's number in the new file, null for a removed line. */
+  newNumber: number | null
 }
 
 const HUNK_START = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/
@@ -24,12 +28,14 @@ export function diffRows(hunks: readonly DiffHunk[]): DiffRow[] {
     let oldLine = start?.old ?? null
     let newLine = start?.new ?? null
     const lines = hunk.lines.map((line, lineIndex): DiffRow => {
-      const number = line.kind === 'remove' ? oldLine : newLine
-      if (line.kind !== 'add' && oldLine !== null) oldLine += 1
-      if (line.kind !== 'remove' && newLine !== null) newLine += 1
-      return { key: `${String(hunkIndex)}:${String(lineIndex)}`, sign: line.kind === 'add' ? '+' : line.kind === 'remove' ? '−' : ' ', text: line.text, tone: line.kind, number }
+      const oldNumber = line.kind === 'add' ? null : oldLine
+      const newNumber = line.kind === 'remove' ? null : newLine
+      if (oldNumber !== null && oldLine !== null) oldLine += 1
+      if (newNumber !== null && newLine !== null) newLine += 1
+      const number = line.kind === 'remove' ? oldNumber : newNumber
+      return { key: `${String(hunkIndex)}:${String(lineIndex)}`, sign: line.kind === 'add' ? '+' : line.kind === 'remove' ? '−' : ' ', text: line.text, tone: line.kind, number, oldNumber, newNumber }
     })
-    const header = hunk.header === '' ? [] : [{ key: `${String(hunkIndex)}h`, sign: '', text: hunk.header, tone: 'header' as const, number: null }]
+    const header = hunk.header === '' ? [] : [{ key: `${String(hunkIndex)}h`, sign: '', text: hunk.header, tone: 'header' as const, number: null, oldNumber: null, newNumber: null }]
     return [...header, ...lines]
   })
 }

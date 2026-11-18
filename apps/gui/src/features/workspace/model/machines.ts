@@ -94,9 +94,9 @@ export type MachineHead = {
   updateAction: UpdateAction | null
 }
 
-const UPDATE_COMMAND = /`(maitty machine update [^`]+)`/
+const UPDATE_COMMAND = /`(maiker machine update [^`]+)`/
 const INSTALL_FLAG = '--install'
-const UPDATE_HERE = 'update maitty on this computer'
+const UPDATE_HERE = 'update maiker on this computer'
 
 /** The machine runs a newer app than this one: the fix is updating this app, and nothing is done to the machine. */
 export function isNewerThanThisApp(state: MachineState): boolean {
@@ -130,22 +130,22 @@ export const UPDATE_WORDS: Record<UpdateAction, UpdateWords> = {
   install: {
     verb: 'Install',
     state: 'not installed',
-    need: (name) => `Maitty is not installed on ${name}.`,
-    running: (name) => `Installing Maitty on ${name}…`,
-    failed: (name) => `Could not install Maitty on ${name}`,
+    need: (name) => `Maiker is not installed on ${name}.`,
+    running: (name) => `Installing Maiker on ${name}…`,
+    failed: (name) => `Could not install Maiker on ${name}`,
   },
   update: {
     verb: 'Update',
     state: 'needs update',
-    need: (name) => `${name} runs another version of Maitty.`,
-    running: (name) => `Updating Maitty on ${name}…`,
-    failed: (name) => `Could not update Maitty on ${name}`,
+    need: (name) => `${name} runs another version of Maiker.`,
+    running: (name) => `Updating Maiker on ${name}…`,
+    failed: (name) => `Could not update Maiker on ${name}`,
   },
 }
 
 /** What a first install does, said before it runs. There is no daemon there yet, so nothing to interrupt. */
 export function installNote(name: string): string {
-  return `Puts this version of Maitty on ${name} over ssh, then connects to it.`
+  return `Puts this version of Maiker on ${name} over ssh, then connects to it.`
 }
 
 type Activity = { sessions: number; busy: number; current: boolean }

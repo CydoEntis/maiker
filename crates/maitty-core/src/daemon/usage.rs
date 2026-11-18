@@ -8,6 +8,7 @@ use maitty_provider_codex::{
     task_event as codex_last_task_event, task_running as codex_running,
 };
 use crate::usage_report::{UsagePeriod, UsageReport};
+use maitty_shared::conversation::CLAUDE_MODEL_ALIASES;
 use regex::Regex;
 use std::path::Path;
 use std::sync::LazyLock;
@@ -621,9 +622,6 @@ fn claude_effort(tail: &str) -> Option<String> {
 /// How Claude Code's `/model` says the model it switched to: "Set model to `Opus 5.5` and saved as your default…".
 const MODEL_SET_PREFIX: &str = "<local-command-stdout>Set model to ";
 
-/// The aliases `claude --model` takes, which name the newest model of their family as `/model` names it.
-const CLAUDE_MODEL_ALIASES: [&str; 3] = ["opus", "sonnet", "haiku"];
-
 /// Where a Claude request comes from when it is the session's own turn; other sources (a side question, a title)
 /// may run another model.
 const MAIN_THREAD_SOURCES: [&str; 2] = ["repl_main_thread", "sdk"];
@@ -1069,6 +1067,8 @@ mod tests {
         assert_eq!(claude_model(&format!("{opus}\n{typed}")).as_deref(), Some("haiku"));
         assert_eq!(claude_model(&format!("{opus}\n{plain}")).as_deref(), Some("sonnet"));
         assert_eq!(claude_model(&format!("{typed}\n{opus}")).as_deref(), Some("claude-opus-5-5"));
+        let fable = r#"{"type":"user","message":{"content":"<local-command-stdout>Set model to `Fable 5.2` and saved as your default for new sessions</local-command-stdout>"}}"#;
+        assert_eq!(claude_model(&format!("{opus}\n{fable}")).as_deref(), Some("fable"));
         // A model the command line has no alias for, or a default, is not guessed from an older request.
         let unaliased = r#"{"type":"user","message":{"content":"<local-command-stdout>Set model to Default (Opus 5.5)</local-command-stdout>"}}"#;
         assert_eq!(claude_model(&format!("{opus}\n{unaliased}")), None);

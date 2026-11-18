@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
+import { resetToasts } from '@/lib/toast'
 
 Object.defineProperty(globalThis, 'ResizeObserver', {
   configurable: true,
@@ -15,11 +16,12 @@ Object.defineProperty(globalThis, 'ResizeObserver', {
 // jsdom does not lay anything out, so it has no scrollIntoView; every real browser does.
 Element.prototype.scrollIntoView = () => {}
 
-// jsdom has no pointer capture, which the toast library takes on a press; every real browser does.
+// jsdom has no pointer capture, which drag handles take on a press; every real browser does.
 Element.prototype.setPointerCapture = () => {}
 Element.prototype.releasePointerCapture = () => {}
 
 // jsdom defaults to 1024px, which is the compact (drawer) layout; tests assume the docked sidebar.
 Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 })
 
-afterEach(() => { cleanup(); })
+// The toasts live in one store for the window; each test starts with none.
+afterEach(() => { cleanup(); resetToasts() })

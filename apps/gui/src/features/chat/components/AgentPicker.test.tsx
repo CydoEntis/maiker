@@ -23,12 +23,12 @@ beforeEach(() => {
 describe('the effort the agent runs at', () => {
   const picker = (currentEffort: string | null) => render(<AgentPicker agent="codex" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} currentEffort={currentEffort} />)
 
-  it('shows what the agent\'s own files say while nothing is picked, and calls it the agent\'s own', async () => {
+  it('shows what the agent\'s own files say while nothing is picked, and says it short enough to fit', async () => {
     picker('medium')
     const button = screen.getByRole('button', { name: /Agent, model and reasoning: Codex · .* · Medium/ })
     expect(button).toHaveTextContent('Medium')
     await userEvent.click(button)
-    expect(screen.getByText("Medium · agent's own")).toBeInTheDocument()
+    expect(screen.getByTitle("Codex's own setting. Pick a level to change it.")).toHaveTextContent(/^Medium$/)
   })
 
   it('names a level above the menu\'s, and says nothing where the files do not say', () => {
@@ -63,7 +63,7 @@ describe('the model button and its menu', () => {
     expect(screen.getByRole('radiogroup', { name: 'Model' })).toBeInTheDocument()
     expect(within(screen.getByRole('radiogroup', { name: 'Effort' })).getAllByRole('radio').map((bar) => bar.getAttribute('aria-label'))).toEqual(['Low', 'Medium', 'High', 'Max'])
     // Nothing was picked, so no level is claimed.
-    expect(screen.getByText("Agent's own")).toBeInTheDocument()
+    expect(screen.getByTitle("Claude's own setting. Pick a level to change it.")).toHaveTextContent(/^Default$/)
   })
 
   it('has no agent switch in a chat that has started, and one where the agent is still to be chosen', async () => {
@@ -180,7 +180,7 @@ describe('the model button and its menu', () => {
     render(<Harness agent="claude" />)
     await user.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
     const models = within(screen.getByRole('radiogroup', { name: 'Model' })).getAllByRole('radio')
-    expect(models.map((model) => model.textContent)).toEqual(['Default', 'Fable 5.1', 'Opus', 'Sonnet', 'Haiku'])
+    expect(models.map((model) => model.textContent)).toEqual(['Default', 'Fable 5.1', 'Opus', 'Fable', 'Sonnet', 'Haiku'])
   })
 
   it('names a model read by its id, and lets the account default stand in for the Default row', async () => {
@@ -189,7 +189,7 @@ describe('the model button and its menu', () => {
     render(<Harness agent="claude" />)
     await user.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
     const models = within(screen.getByRole('radiogroup', { name: 'Model' })).getAllByRole('radio')
-    expect(models.map((model) => model.textContent)).toEqual(['Sonnet 5.5', 'Fable 5.2default', 'Opus', 'Sonnet', 'Haiku'])
+    expect(models.map((model) => model.textContent)).toEqual(['Sonnet 5.5', 'Fable 5.2default', 'Fable', 'Opus', 'Sonnet', 'Haiku'])
     // Nothing is picked, so the default's row is the ticked one, and picking it sends no model.
     expect(models[1]).toBeChecked()
     await user.click(models[0] as HTMLElement)
@@ -237,9 +237,15 @@ describe('what the picker sends with a message', () => {
     expect(wireChoice(7, 'claude')).toBeNull()
   })
 
-  it('ignores a stored model the agent does not offer', () => {
+  it('ignores a stored model the agent does not offer, once its list has come', () => {
     writeChoiceFor(9, { model: 'opus' })
+    setDiscoveredModels('codex', [{ id: 'gpt-x', label: 'GPT X', blurb: '' }])
     expect(wireChoice(9, 'codex')).toBeNull()
+  })
+
+  it('keeps a stored model while the agent has not yet said its list, so a pick of an extra model is not lost', () => {
+    writeChoiceFor(9, { model: 'claude-fable-5-1' })
+    expect(wireChoice(9, 'claude')).toEqual({ model: 'claude-fable-5-1' })
   })
 })
 
@@ -249,8 +255,8 @@ describe('the picker for a chat on another machine', () => {
     render(<AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} fixedModels />)
     await userEvent.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
     const models = within(screen.getByRole('radiogroup', { name: 'Model' })).getAllByRole('radio').map((row) => row.textContent)
-    expect(models.join(' ')).not.toContain('Fable')
-    expect(models.join(' ')).toContain('Opus')
+    expect(models.join(' ')).not.toContain('Fable 5.1')
+    expect(models).toEqual(expect.arrayContaining(['Fable', 'Opus']))
     expect(screen.getByRole('radiogroup', { name: 'Effort' })).toBeInTheDocument()
   })
 
@@ -258,5 +264,28 @@ describe('the picker for a chat on another machine', () => {
     expect(everywhereModel('claude', 'opus')).toBe('opus')
     expect(everywhereModel('claude', 'claude-fable-5-1[1m]')).toBe('default')
     expect(everywhereModel('codex', 'gpt-x')).toBe('default')
+  })
+})
+
+describe('the New session dialog\'s dropdown', () => {
+  it('names the agent with its mark, the model and the effort in one line, without the strength meter', () => {
+    const { container } = render(<AgentPicker compact agent="claude" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} currentModel="claude-sonnet-5-5" />)
+    const button = screen.getByRole('button', { name: /Agent, model and reasoning/ })
+    expect(button).toHaveTextContent('Claude · Sonnet 5.5 · Medium')
+    expect(container.querySelector('.mx-model-icon')).not.toBeNull()
+    expect(container.querySelector('.mx-mm-mini')).toBeNull()
+  })
+
+  it('says Default for the model while none is known', () => {
+    render(<AgentPicker compact agent="codex" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} />)
+    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Codex · Default')
+  })
+
+  it('has the agent list, the models and the efforts as a segmented control in its menu', async () => {
+    render(<AgentPicker compact agent="claude" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} onAgent={() => undefined} />)
+    await userEvent.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
+    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' })).toBeChecked()
+    expect(screen.getByRole('radiogroup', { name: 'Effort' })).toHaveAttribute('data-slot', 'segmented')
+    expect(screen.queryByText('Effort')).not.toBeInTheDocument()
   })
 })

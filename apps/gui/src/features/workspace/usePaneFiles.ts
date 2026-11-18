@@ -60,7 +60,7 @@ export function usePaneFiles({ terminalHandles, machinesRef, online, focusedId }
       return
     }
     if (!online) {
-      toast.error('Reconnect to the Maitty service before dropping files on a pane')
+      toast.error('Reconnect to the Maiker service before dropping files on a pane')
       return
     }
     handle.paste(route.text)

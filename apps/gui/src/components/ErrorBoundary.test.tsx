@@ -14,7 +14,7 @@ describe('ErrorBoundary', () => {
 
     render(<ErrorBoundary><BrokenWidget /></ErrorBoundary>)
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Maitty hit a problem')
+    expect(screen.getByRole('alert')).toHaveTextContent('Maiker hit a problem')
     expect(screen.getByRole('button', { name: 'Reload app' })).toBeInTheDocument()
     expect(screen.queryByText('private internal details')).not.toBeInTheDocument()
   })

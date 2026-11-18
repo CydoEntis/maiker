@@ -161,11 +161,22 @@ describe('Inspect panel', () => {
     cleanup()
   })
 
-  it('says Files is local-only for a session on another machine and asks nothing', () => {
-    daemonAnswers({})
+  it('lists the files of a session on another machine through that machine, and opens only its markdown documents', async () => {
+    vi.mocked(invoke).mockReset().mockImplementation((command, args) => {
+      const { question, machine } = args as { question: Question; machine?: number }
+      const kind = typeof question === 'string' ? question : (Object.keys(question)[0] ?? '')
+      expect(command).toBe('repo_query')
+      expect(machine, `${kind} is asked of the machine`).toBe(1)
+      if (kind === 'Tree') return Promise.resolve({ Tree: [{ name: 'README.md', is_directory: false }, { name: 'main.rs', is_directory: false }] })
+      if (kind === 'Diff') return Promise.resolve({ Diff: { files: [], additions: 0, deletions: 0, total_files: 0, truncated: false } })
+      if (kind === 'FileStamped') return Promise.resolve({ FileStamped: { text: '# Remote title\n', version: '9-ab' } })
+      return Promise.reject(new Error(`unexpected ${kind}`))
+    })
     renderOnBuild('files')
-    expect(screen.getByText('Files is local-only in v1: the files are on build, not on this computer.')).toBeTruthy()
-    expect(vi.mocked(invoke)).not.toHaveBeenCalled()
+    expect(await screen.findByRole('heading', { name: 'Remote title' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'main.rs' }))
+    expect(await screen.findByText(/Only Markdown documents open from build/)).toBeTruthy()
+    expect(vi.mocked(invoke).mock.calls.some(([, args]) => JSON.stringify((args as { question: unknown }).question).includes('"File"'))).toBe(false)
     cleanup()
   })
 
@@ -274,7 +285,7 @@ describe('Inspect panel', () => {
     vi.mocked(invoke).mockReset().mockRejectedValue('git diff: fatal: bad object HEAD')
     renderPanel('changes')
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('Maitty couldn’t load your changes')
+    expect(alert).toHaveTextContent('Maiker couldn’t load your changes')
     // The daemon's own words are kept for support, behind one link, and not in the headline.
     expect(alert).not.toHaveTextContent('bad object HEAD')
     fireEvent.click(screen.getByRole('button', { name: 'Show details for support' }))
@@ -295,7 +306,7 @@ describe('Inspect panel', () => {
     vi.mocked(invoke).mockReset().mockRejectedValue('read /code/app: Permission denied (os error 13)')
     renderPanel('files')
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('Maitty can’t read this folder')
+    expect(alert).toHaveTextContent('Maiker can’t read this folder')
     expect(alert).not.toHaveTextContent('Trying again automatically')
   })
 
@@ -315,7 +326,7 @@ describe('Inspect panel', () => {
   it('shows the file tree with a file beside it, opens folders in place and highlights the file', async () => {
     daemonAnswers({
       Tree: [{ name: 'src', is_directory: true }, { name: 'README.md', is_directory: false }],
-      File: 'const answer = 42 // the answer\n',
+      FileStamped: { text: 'The answer is 42\n', version: 'v1' },
     })
     renderPanel('files')
 
@@ -325,17 +336,18 @@ describe('Inspect panel', () => {
     expect(folder).toHaveAttribute('aria-expanded', 'true')
 
     fireEvent.click(await screen.findByRole('button', { name: 'README.md' }))
-    expect(await screen.findByLabelText('Preview of README.md')).toBeTruthy()
-    await waitFor(() => { expect(screen.getByLabelText('Preview of README.md').textContent).toContain('answer') })
-    // The tree stays on screen beside the file, and the file is read-only (no editor).
+    // A markdown file opens as a document, drawn; its editor is a mode of its own, not on screen until asked for.
+    expect(await screen.findByLabelText('Document README.md')).toBeTruthy()
+    await waitFor(() => { expect(screen.getByLabelText('Document README.md').textContent).toContain('The answer is 42') })
+    // The tree stays on screen beside the file.
     expect(screen.getByRole('navigation', { name: 'Files' })).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
   it('opens the README by default, or the first file when there is none', async () => {
-    daemonAnswers({ Tree: [{ name: 'src', is_directory: true }, { name: 'main.go', is_directory: false }, { name: 'README.md', is_directory: false }], File: '# hello\n' })
+    daemonAnswers({ Tree: [{ name: 'src', is_directory: true }, { name: 'main.go', is_directory: false }, { name: 'README.md', is_directory: false }], File: '# hello\n', FileStamped: { text: '# hello\n', version: 'v1' } })
     renderPanel('files')
-    expect(await screen.findByLabelText('Preview of README.md')).toBeTruthy()
+    expect(await screen.findByLabelText('Document README.md')).toBeTruthy()
     cleanup()
 
     daemonAnswers({ Tree: [{ name: 'src', is_directory: true }, { name: 'main.go', is_directory: false }], File: 'package main\n' })

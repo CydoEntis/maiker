@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useLatest } from '@/lib/useLatest'
-import type { NewChatRequest } from './components/NewChatPage'
+import type { NewChatRequest } from './components/NewSessionDialog'
 
 /** What a chat would start as, without its first message: enough to start its agent ahead of it. */
 export type WarmSpec = Pick<NewChatRequest, 'folder' | 'agent' | 'model' | 'reasoning' | 'mode'>

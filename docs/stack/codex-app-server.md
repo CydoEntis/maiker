@@ -36,8 +36,8 @@
 
 ## Project-specific: verified baseline
 
-Verified `codex-cli` versions: `0.164.0`, `0.165.0`, `0.166.0-alpha.5.1`, and
-`0.166.0`. Their generated schemas contain every required app-server method
+Verified `codex-cli` versions: `0.164.0`, `0.165.0`, `0.166.0-alpha.5.1`,
+`0.166.0` and `0.170.0`. Their generated schemas contain every required app-server method
 and parameter type. The 13 required parameter definitions in
 `0.165.0` and `0.166.0-alpha.5.1` are identical. Schema generation uses an
 isolated temporary `CODEX_HOME`; no account, private config, transcript or model
@@ -46,6 +46,19 @@ request is required. Do not commit or hand-edit the generated schemas. Baseline 
 (`fe3b29455488c2e189e43ad5526a107900c5e1b7`).
 Codex CLI 0.166.0's local generated schema was checked on 2026-10-31, and that
 version passed a Windows GUI conversation create/send/reply smoke.
+Codex CLI `0.170.0` was verified on Linux on 2026-11-18, installed side by side
+(`npm install --prefix <scratch> @openai/codex@0.170.0`, isolated `CODEX_HOME`). Its generated
+schema declares every required method and params reference above, plus `turn/steer`, the same as
+0.166.0, so the `codex-0.166.0.json` fixture stands for it. Against 0.166.0 it only adds: client
+requests `account/securitySetup/read`, `modelProvider/config/write` and `modelProvider/list`; the
+`thread/section/changed` notification; optional fields (`ThreadItemsListParams.deferOutput`,
+`ItemCompletedNotification.contentTokenCount`, an agent message's `moderation`, the
+`InitializeCapabilities.requiredHumanApproval` opt-in) and a `humanCommand` approval kind that
+Codex sends only to a client that opts in, which Maiker does not. A daemon smoke through a nested
+service passed: preflight, thread create, send and reply, a command approval accepted (file
+written), a decline (offered as Cancel, which interrupts the turn, the same as 0.166.0 in the same
+run), an interrupt (turn `interrupted`, chat Idle), and a daemon restart that resumed the exact
+thread and recalled the first turn.
 
 Required client request methods from generated `ClientRequest.oneOf`:
 

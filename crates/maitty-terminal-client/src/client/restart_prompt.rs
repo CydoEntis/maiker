@@ -258,7 +258,7 @@ mod tests {
                     + "\n"
             })
             .collect();
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("{out}");
         }
         out

@@ -5,7 +5,7 @@
 
 ## Context
 
-Maitty has a terminal app and an optional desktop app. Both must work against the same daemon
+Maiker has a terminal app and an optional desktop app. Both must work against the same daemon
 without the desktop app dragging daemon code or a webview into the terminal-only install.
 
 ## Decision
@@ -23,16 +23,16 @@ without the desktop app dragging daemon code or a webview into the terminal-only
   gets a one-time token, sends it first, and trusts the socket only after the host answers
   `ready`; only the app's own origin may connect. The Tauri channel carries output until then.
 - Terminal-only installation and the native agent terminal interfaces stay supported.
-- **One daemon file per PC.** The installed `maitty` (`%LOCALAPPDATA%\Programs\maitty` on
-  Windows, `~/.local/bin` elsewhere, or `MAITTY_INSTALL_DIR`) is the only daemon any client
+- **One daemon file per PC.** The installed `maiker` (`%LOCALAPPDATA%\Programs\maiker` on
+  Windows, `~/.local/bin` elsewhere, or `AGENT_INSTALL_DIR`) is the only daemon any client
   starts. The desktop app ships a copy of it only as the payload to install. At first use it
   makes the installed file its own release: it installs the file when missing or older, keeps
   a newer one, and asks its user to update instead of downgrading. Replacing the file never
   stops a running daemon: the old file is moved aside and goes on running with its sessions,
   and a daemon that speaks another protocol is restarted only when the user says so. A development
   build runs the daemon it just built and never touches the installed file. On Windows the
-  install also adds the folder to the user's PATH, as `install.ps1` does (`MAITTY_NO_PATH=1`
-  skips it), so `maitty` works in a new terminal; elsewhere the person adds the folder, as
+  install also adds the folder to the user's PATH, as `install.ps1` does (`AGENT_NO_PATH=1`
+  skips it), so `maiker` works in a new terminal; elsewhere the person adds the folder, as
   `install.sh` says.
 
 ## Alternatives considered

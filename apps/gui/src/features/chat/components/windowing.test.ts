@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildLayout, followAfterScroll, FOLLOW_THRESHOLD_PX, glidePlan, glideTop, isAtBottom, visibleRange, type FollowState } from './windowing'
+import { buildLayout, followAfterScroll, glidePlan, glideTop, isAtBottom, SEND_TOP_GAP_PX, sendSpacer, sendTop, visibleRange } from './windowing'
 
 const keys = (count: number) => Array.from({ length: count }, (_, index) => `row-${String(index)}`)
 
@@ -42,7 +42,7 @@ describe('the rows to draw', () => {
   })
 })
 
-describe('following the newest row', () => {
+describe('the bottom of the list', () => {
   it('counts a list as at the bottom within a few pixels of it', () => {
     expect(isAtBottom(1_000, 600, 1_600)).toBe(true)
     expect(isAtBottom(980, 600, 1_600)).toBe(true)
@@ -50,44 +50,42 @@ describe('following the newest row', () => {
   })
 })
 
-describe('whether the list follows its newest row after a scroll', () => {
-  const viewport = 600
-  const total = 2_000
-  const bottom = total - viewport
-  const following: FollowState = { following: true, top: bottom, total }
-  const reading: FollowState = { following: false, top: 500, total }
-  const at = (scrollTop: number, atTotal = total) => ({ scrollTop, viewport, total: atTotal })
+describe('following the newest row', () => {
+  const at = (top: number, total = 2_000) => ({ scrollTop: top, viewport: 600, total })
+  const following = { following: true, top: 1_400, total: 2_000 }
 
-  it('stops as soon as the reader moves up, however little and however near the bottom', () => {
-    expect(followAfterScroll(following, at(bottom - 1), false).following).toBe(false)
-    expect(bottom - 1).toBeGreaterThan(bottom - FOLLOW_THRESHOLD_PX)
+  it('lets go as soon as the reader moves up, however little', () => {
+    expect(followAfterScroll(following, at(1_390), false).following).toBe(false)
   })
 
-  it('starts again only when the reader moves down to within the threshold of the bottom', () => {
-    expect(followAfterScroll(reading, at(bottom - FOLLOW_THRESHOLD_PX), false).following).toBe(true)
-    expect(followAfterScroll(reading, at(bottom - FOLLOW_THRESHOLD_PX - 1), false).following).toBe(false)
-    expect(followAfterScroll(reading, at(900), false).following).toBe(false)
+  it('takes the newest row again only when the reader comes back down to the end', () => {
+    const away = { following: false, top: 800, total: 2_000 }
+
+    expect(followAfterScroll(away, at(1_000), false).following).toBe(false)
+    expect(followAfterScroll(away, at(1_380), false).following).toBe(true)
   })
 
-  it('does not start again when the reader stays where they are inside the threshold', () => {
-    const nearBottom: FollowState = { following: false, top: bottom - 10, total }
-    expect(followAfterScroll(nearBottom, at(bottom - 10), false).following).toBe(false)
+  it('reads nothing into a scroll the list made, or the view pulled in because the list got shorter', () => {
+    expect(followAfterScroll(following, at(200), true)).toEqual({ following: true, top: 200, total: 2_000 })
+    expect(followAfterScroll(following, at(1_200, 1_800), false).following).toBe(true)
+  })
+})
+
+describe('where a sent message stands', () => {
+  it('puts the message at the top of the view, a few pixels under it', () => {
+    expect(sendTop(1000)).toBe(1000 - SEND_TOP_GAP_PX)
+    expect(sendTop(3)).toBe(0)
   })
 
-  it('ignores a scroll the list caused itself', () => {
-    expect(followAfterScroll(following, at(100), true).following).toBe(true)
-    expect(followAfterScroll(reading, at(bottom), true).following).toBe(false)
+  it('leaves room below a short reply so the message can stand at the top', () => {
+    // 600px view, message at 1000, rows end at 1100: 100px of rows fill part of the view.
+    expect(sendSpacer(600, 1000, 1100)).toBe(600 - SEND_TOP_GAP_PX - 100)
   })
 
-  it('ignores the browser pulling the view in after the list got shorter', () => {
-    const clamped = followAfterScroll(following, at(1_100, 1_700), false)
-    expect(clamped.following).toBe(true)
-    expect(clamped.top).toBe(1_100)
-    expect(clamped.total).toBe(1_700)
-  })
-
-  it('remembers where the view is, so the next move has a direction', () => {
-    expect(followAfterScroll(reading, at(400), false).top).toBe(400)
+  it('shrinks as the reply grows and is gone once the reply fills the view', () => {
+    expect(sendSpacer(600, 1000, 1300)).toBeLessThan(sendSpacer(600, 1000, 1100))
+    expect(sendSpacer(600, 1000, 1000 + 600)).toBe(0)
+    expect(sendSpacer(600, 1000, 5000)).toBe(0)
   })
 })
 

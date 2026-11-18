@@ -49,7 +49,7 @@ function loadLine(load: ProcessLoad): string {
  */
 export function buildPerformanceReport(environment: PerformanceEnvironment, sample: PerfSample | null, processes: ProcessSample | null): string {
   const lines: string[] = [
-    `Maitty desktop ${environment.version ?? '(version unknown)'}`,
+    `Maiker desktop ${environment.version ?? '(version unknown)'}`,
     `Web view: ${environment.userAgent}`,
     `GPU: ${environment.gpu}`,
     `Corners: ${environment.corners}; reduce motion ${environment.reduceMotion ? 'on' : 'off'}; terminal ${String(environment.terminalFontSize)}px`,

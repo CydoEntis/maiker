@@ -18,6 +18,10 @@ export const SharedSettingsSchema = z.object({
   start_dir: z.string(),
   reduce_motion: z.boolean(),
   window_style: z.enum(['flat', 'glass']),
+  /** The agents switched off in `[permissions.bypass]`; absent from a daemon older than the switches, which reads as none. */
+  bypass_off: z.array(z.string()).default([]),
+  /** `[updates] machines`: remote machines update themselves after this computer does; absent from an older daemon, which reads as on. */
+  update_machines: z.boolean().default(true),
 })
 export type SharedSettings = z.infer<typeof SharedSettingsSchema>
 

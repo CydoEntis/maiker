@@ -17,7 +17,7 @@ describe('the question before the sidebar updates a machine', () => {
   it('says what is open there before an update, and updates now or when idle', async () => {
     const user = userEvent.setup()
     const { onUpdate } = ask('update', Promise.resolve({ sessions: 3, busy: 1, current: false }))
-    expect(screen.getByRole('dialog', { name: 'Update Maitty on box' })).toHaveTextContent('box runs another version of Maitty.')
+    expect(screen.getByRole('dialog', { name: 'Update Maiker on box' })).toHaveTextContent('box runs another version of Maiker.')
     expect(await screen.findByText(/box has 3 sessions open, 1 busy\./)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Update when idle' }))
     expect(onUpdate).toHaveBeenCalledWith(true)
@@ -28,7 +28,7 @@ describe('the question before the sidebar updates a machine', () => {
   it('says restart, not update, when the app there is already this version', async () => {
     const user = userEvent.setup()
     const { onUpdate } = ask('update', Promise.resolve({ sessions: 1, busy: 0, current: true }))
-    expect(await screen.findByRole('dialog', { name: 'Restart Maitty on box' })).toHaveTextContent('box already has this version; its daemon is still the old one.')
+    expect(await screen.findByRole('dialog', { name: 'Restart Maiker on box' })).toHaveTextContent('box already has this version; its daemon is still the old one.')
     expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Restart now' }))
     expect(onUpdate).toHaveBeenCalledWith(false)
@@ -46,7 +46,7 @@ describe('the question before the sidebar updates a machine', () => {
   it('installs on a machine with none without asking what is open there', async () => {
     const user = userEvent.setup()
     const { onUpdate, checkActivity } = ask('install')
-    expect(screen.getByRole('dialog', { name: 'Install Maitty on box' })).toHaveTextContent('Maitty is not installed on box.')
+    expect(screen.getByRole('dialog', { name: 'Install Maiker on box' })).toHaveTextContent('Maiker is not installed on box.')
     expect(screen.queryByRole('button', { name: 'Update when idle' })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Install now' }))
     expect(onUpdate).toHaveBeenCalledWith(false)

@@ -49,7 +49,7 @@ export function MachineUpdateDialog({ name, action, checkActivity, onUpdate, onC
   const words = UPDATE_WORDS[action]
   const asked = useActivity(name, action, checkActivity)
   const verb = updateVerb(action, asked.done ? asked.activity : null)
-  const title = `${verb} Maitty on ${name}`
+  const title = `${verb} Maiker on ${name}`
   const dialog = useRef<HTMLDivElement>(null)
   useFocusOnOpen(dialog)
   return (

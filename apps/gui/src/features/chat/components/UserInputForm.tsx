@@ -47,7 +47,7 @@ export function UserInputForm({ questions, busy, onSubmit }: Props) {
         return (
           <fieldset key={question.id} className="mx-waiting-question">
             <legend>{question.header !== '' ? `${question.header}: ` : ''}{question.question}</legend>
-            {question.options.map((option) => (
+            {question.options.map((option, index) => (
               <label key={option.label} className={`mx-option${choice === option.label ? ' is-picked' : ''}`}>
                 <input
                   type="radio"
@@ -57,11 +57,12 @@ export function UserInputForm({ questions, busy, onSubmit }: Props) {
                   disabled={busy}
                   onChange={() => { setChoices((current) => ({ ...current, [question.id]: option.label })) }}
                 />
-                <span className="mx-option-mark" aria-hidden="true" />
+                <span className="mx-option-key" aria-hidden="true">{index + 1}</span>
                 <span className="mx-option-text">
                   <span>{option.label}</span>
                   {option.description !== '' && <span className="mx-option-about"> &mdash; {option.description}</span>}
                 </span>
+                <span className="mx-option-tick" aria-hidden="true">{choice === option.label ? '✓' : ''}</span>
               </label>
             ))}
             {writes && (

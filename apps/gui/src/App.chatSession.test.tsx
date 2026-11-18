@@ -180,7 +180,8 @@ describe('a chat session in the desktop window', () => {
 
     const pane = screen.getByRole('region', { name: /^Terminal 1/ })
     // An agent is running in it, so closing asks first.
-    await user.click(within(pane).getByRole('button', { name: 'Close pane · ends its session' }))
+    await user.click(within(pane).getByRole('button', { name: 'More pane actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close pane · ends its session' }))
     expect(daemon.closeSessionWithUndo).not.toHaveBeenCalled()
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop claude' }))
     await waitFor(() => { expect(daemon.closeSessionWithUndo).toHaveBeenCalledTimes(1) })
@@ -196,7 +197,7 @@ describe('a chat session in the desktop window', () => {
     await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
 
     await user.click(within(pane).getByRole('button', { name: 'Start claude here' }))
-    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude\r')
+    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude --dangerously-skip-permissions\r')
     expect(daemon.startChatSession).not.toHaveBeenCalled()
   })
 
@@ -214,20 +215,20 @@ describe('a chat session in the desktop window', () => {
 
     await user.click(within(pane).getByRole('button', { name: 'Start a Claude chat' }))
 
-    await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(HOME, 'claude', null, false) })
+    await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(HOME, 'claude', null, true) })
     expect(daemon.sendTerminalInput).not.toHaveBeenCalled()
     // The chat session opens in a pane of its own, with no switch to a terminal it does not have.
     await waitFor(() => { expect(screen.getAllByRole('region', { name: /^Terminal \d/ }).some((shown) => within(shown).queryByRole('region', { name: 'Chat' }) !== null && within(shown).queryByRole('radiogroup', { name: 'Pane view' }) === null)).toBe(true) })
   })
 })
 
-describe('full access in a chat session', () => {
+describe('Bypass Permissions in a chat session', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
   })
 
-  it('starts the chat with full access when the switch is on, and shows it on the chat afterwards', async () => {
+  it('starts the chat bypassing permissions by default, and shows it on the chat afterwards', async () => {
     const user = userEvent.setup()
     serveHistory()
     daemon.loadConversations.mockResolvedValue([term(3, { repo: null, folder: HOME, cwd: HOME })])
@@ -239,11 +240,11 @@ describe('full access in a chat session', () => {
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
     await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
 
-    await user.click(within(pane).getByRole('checkbox', { name: 'Full access (skip permission prompts)' }))
+    expect(within(pane).getByRole('switch', { name: 'Bypass permissions (skip permission prompts)' })).toBeChecked()
     await user.click(within(pane).getByRole('button', { name: 'Start a Claude chat' }))
 
     await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(HOME, 'claude', null, true) })
-    expect(await screen.findByText('Full access')).toBeInTheDocument()
+    expect(await screen.findByText('Bypass permissions')).toBeInTheDocument()
   })
 
   it('has no New agent on a branch button: the sidebar offers New session and chats start from a shell', async () => {

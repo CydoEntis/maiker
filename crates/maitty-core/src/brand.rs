@@ -1,17 +1,16 @@
-//! The app's name (ADR 0008). It is set in `Cargo.toml` and nowhere else: the package name is the
-//! command, `[package.metadata.brand]` holds the name people see and the names it had before.
-//! Code writes it with `env!("APP_COMMAND")`, `env!("APP_NAME")` and `env!("APP_ENV")` inside
-//! `concat!`, so a file, variable or message stays a constant; a format string with arguments
-//! of its own names these constants instead (`format!("{APP_NAME} saw {n}")`).
+//! The app's names (ADR 0008, 0012). They are set in `Cargo.toml` and nowhere else, and
+//! `maitty_shared::brand` is where code reads them. Code writes the command with
+//! `env!("APP_COMMAND")` and `env!("APP_NAME")` inside `concat!`, so a file or message stays a
+//! constant; a format string with arguments of its own names these constants instead
+//! (`format!("{APP_NAME} saw {n}")`). Environment variables go through `env_var` and `env_names`,
+//! never through a written-out prefix.
 
-/// What people see: titles, the splash, messages.
-pub const APP_NAME: &str = env!("APP_NAME");
-/// What people type, and the root of the app's files, folders and tags.
-pub const APP_COMMAND: &str = env!("APP_COMMAND");
+pub use maitty_shared::brand::*;
+
 /// The release version shared by the TUI and daemon.
 pub const APP_VERSION: &str = env!("APP_VERSION");
-/// The prefix of the app's environment variables.
-pub const APP_ENV: &str = env!("APP_ENV");
+/// The prefix of the app's environment variables (brand-free, ADR 0012).
+pub const APP_ENV: &str = ENV_PREFIX;
 
 /// The commands the app had before, newest first: what an old install left is carried over.
 pub fn previous() -> impl Iterator<Item = &'static str> {
@@ -32,7 +31,7 @@ mod tests {
                     .all(|c| c.is_ascii_alphanumeric() || c == ' '),
             "{APP_NAME}"
         );
-        assert_eq!(APP_ENV, APP_COMMAND.to_ascii_uppercase().replace('-', "_"));
+        assert_eq!(APP_ENV, env!("APP_ENV"));
         assert!(
             previous().all(|p| p != APP_COMMAND),
             "a previous name is not the current one"

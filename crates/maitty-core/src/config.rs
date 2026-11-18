@@ -6,12 +6,14 @@ use crate::keys::{self, Action, KeySpec};
 use crate::theme::{Theme, ThemeOverrides};
 use anyhow::{Context, Result};
 pub use maitty_settings::config::{
-    AgentDef, BARS_FRAMES, CHECK_TIMEOUT_S_DEFAULT, CURSOR_SHAPES, CheckDef, DEFAULT_MODEL_FLAG,
-    DIMS, Detection, HELPERS_AT_ONCE, HELPERS_MAY, Icons, Keys, LAYOUT_NAMES, LayoutKind,
-    MachineDef, Mcp, NEW_AGENTS, NEW_WHERE, Notify, PADDING_TOP, Preset, Quick, QuickAgent, Recipe,
+    AgentDef, BARS_FRAMES, BYPASS_FLAGS, CHECK_TIMEOUT_S_DEFAULT, CURSOR_SHAPES, CheckDef,
+    DEFAULT_MODEL_FLAG, DIMS, Detection, HELPERS_AT_ONCE, HELPERS_MAY, Icons, Keys, LAYOUT_NAMES,
+    LayoutKind, MachineDef, Mcp, NEW_AGENTS, NEW_WHERE, Notify, PADDING_TOP, Permissions, Preset,
+    Updates,
+    Quick, QuickAgent, Recipe,
     Restore, Rounding, SIDEBAR_TABS, SIZES, SPINNERS, Sessions, Snapshots, Ui, Worktree, same_path,
     size_cells, validate_check, validate_checks, validate_cursor, validate_machines,
-    validate_sessions,
+    bypass_agents, validate_sessions,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -74,6 +76,10 @@ pub struct Config {
     pub detection: Detection,
     pub notify: Notify,
     pub snapshots: Snapshots,
+    /// Which agents the app starts without permission prompts (`[permissions.bypass]`, ADR 0005).
+    pub permissions: Permissions,
+    /// What updates without a click (`[updates]`).
+    pub updates: Updates,
     /// Agent definitions merged over the built-ins by `name`.
     pub agents: Vec<AgentDef>,
     /// Drop the built-in agent list and use only `agents`.
@@ -307,6 +313,7 @@ pub fn agent_from_command(program: &str, args: &[String]) -> Option<AgentDef> {
         resume: None,
         resume_last: None,
         enabled: None,
+        bypass_flag: None,
     })
 }
 
@@ -420,6 +427,8 @@ impl Default for Config {
             notify: Notify::default(),
             snapshots: Snapshots::default(),
             agents: Vec::new(),
+            permissions: Permissions::default(),
+            updates: Updates::default(),
             agents_replace_defaults: false,
             check: Vec::new(),
             machines: Vec::new(),
@@ -527,6 +536,7 @@ fn agent(
         resume: None,
         resume_last: None,
         enabled: None,
+        bypass_flag: None,
     }
 }
 
@@ -546,7 +556,7 @@ fn known_agent(cfg: &Config, name: &str) -> bool {
 }
 
 pub fn builtin_agents() -> Vec<AgentDef> {
-    vec![
+    let mut defs = vec![
         resumable(
             agent(
                 "claude",
@@ -728,11 +738,18 @@ pub fn builtin_agents() -> Vec<AgentDef> {
         ),
         agent("maki", &["maki"], &[], &[], &[]),
         agent("muse", &["muse", "muse-code", "muse-cli"], &[], &[], &[]),
-    ]
+    ];
+    for def in &mut defs {
+        def.bypass_flag = BYPASS_FLAGS
+            .iter()
+            .find(|(name, _)| *name == def.name)
+            .map(|(_, flag)| flag.to_string());
+    }
+    defs
 }
 
 pub fn config_path() -> PathBuf {
-    if let Ok(p) = std::env::var(concat!(env!("APP_ENV"), "_CONFIG")) {
+    if let Ok(p) = maitty_shared::brand::env_var("CONFIG") {
         return PathBuf::from(p);
     }
     if cfg!(windows)
@@ -774,7 +791,7 @@ pub fn initialize_data_dir() -> Result<()> {
     if DATA_DIRECTORY.get().is_some() {
         return Ok(());
     }
-    let directory = resolve_data_directory(std::env::var_os(DATA_DIR_ENV))?;
+    let directory = resolve_data_directory(maitty_shared::brand::env_var_os("DATA_DIR"))?;
     DATA_DIRECTORY.get_or_init(|| directory);
     Ok(())
 }
@@ -838,7 +855,7 @@ pub fn migrate_old_names() {
     if DATA_DIRECTORY
         .get()
         .is_some_and(|directory| directory.overridden)
-        || std::env::var_os(concat!(env!("APP_ENV"), "_CONFIG")).is_some()
+        || maitty_shared::brand::env_var_os("CONFIG").is_some()
     {
         return;
     }
@@ -866,9 +883,26 @@ pub fn migrate_old_names() {
         let cfg = old_cfg_dir
             .filter(|_| !new_cfg.exists())
             .zip(new_dir.clone());
+        stop_previous_daemon(old);
         bring_over(old, cfg, old_data.as_deref(), &new_data);
         tracing::info!("brought {old}'s config and data over");
         return;
+    }
+}
+
+/// A daemon still running under the old name holds the sessions: it is asked to stop first, so it saves them and
+/// the copy brought over is current; the new name's daemon then restores them with their agents resumed. Without
+/// this the old one would keep running unseen while the new one restored the same agents a second time.
+fn stop_previous_daemon(old: &str) {
+    let stopped = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(anyhow::Error::from)
+        .and_then(|rt| rt.block_on(crate::ipc::stop_previous_daemon(old)));
+    match stopped {
+        Ok(true) => tracing::info!("stopped the {old} service; its sessions come back under the new name"),
+        Ok(false) => {}
+        Err(e) => tracing::warn!("{e:#}"),
     }
 }
 
@@ -996,7 +1030,7 @@ impl Config {
 
     /// Load the config file; a missing file is the defaults, a broken one is an error.
     pub fn load() -> Result<Config> {
-        let own_file = std::env::var_os(concat!(env!("APP_ENV"), "_CONFIG")).is_some();
+        let own_file = maitty_shared::brand::env_var_os("CONFIG").is_some();
         Config::load_at(&config_path(), !own_file)
     }
 
@@ -1195,11 +1229,38 @@ impl Config {
         } else {
             self.quote_for_shell(model)
         };
-        let (program, rest) = cmd.split_at(program_end(cmd));
-        match rest.trim_start() {
-            "" => format!("{program} {flag} {model}"),
-            rest => format!("{program} {flag} {model} {rest}"),
+        after_program(cmd, &format!("{flag} {model}"))
+    }
+
+    /// The flag that starts `agent` without permission prompts, when `[permissions.bypass]` has it on
+    /// and the agent has one (`AgentDef::bypass_flag`); None otherwise.
+    pub fn bypass_flag(&self, agent: &str) -> Option<String> {
+        if !self.permissions.bypasses(agent) {
+            return None;
         }
+        self.agent_defs()
+            .into_iter()
+            .find(|def| def.name == agent)
+            .and_then(|def| def.bypass_flag)
+    }
+
+    /// `cmd` with `agent`'s bypass flag right after its program, when it has one and it is on
+    /// (`bypass_flag`); `cmd` unchanged otherwise, and when it already carries the flag.
+    pub fn with_bypass(&self, agent: &str, cmd: &str) -> String {
+        match self.bypass_flag(agent) {
+            Some(flag) if !started_with_flag(cmd, &flag) => after_program(cmd, &flag),
+            _ => cmd.to_string(),
+        }
+    }
+
+    /// Whether `cmd`, the command a pane started with, ran `agent` without permission prompts: it
+    /// carries the agent's bypass flag. A resume keeps that, and adds nothing to one that did not.
+    pub fn started_bypassed(&self, agent: &str, cmd: &str) -> bool {
+        self.agent_defs()
+            .into_iter()
+            .find(|def| def.name == agent)
+            .and_then(|def| def.bypass_flag)
+            .is_some_and(|flag| started_with_flag(cmd, &flag))
     }
 
     /// The agent started when none is named: the first quick agent, else claude.
@@ -1254,6 +1315,7 @@ impl Config {
             }
             None => cmd,
         };
+        let cmd = self.with_bypass(agent, &cmd);
         Ok(self.as_account(agent, &cmd))
     }
 
@@ -1350,6 +1412,9 @@ impl Config {
                     if user.resume_last.is_some() {
                         d.resume_last = user.resume_last.clone();
                     }
+                    if user.bypass_flag.is_some() {
+                        d.bypass_flag = user.bypass_flag.clone();
+                    }
                     d.enabled = user.enabled;
                 }
                 None => defs.push(user.clone()),
@@ -1381,6 +1446,8 @@ impl Config {
                 working: re(&d.working_patterns),
                 resume: d.resume.filter(|s| !s.is_empty()),
                 resume_last: d.resume_last.filter(|s| !s.is_empty()),
+                // It goes into a command line unquoted, so only a plain option is taken.
+                bypass_flag: d.bypass_flag.filter(|flag| plain_flag(flag)),
                 name: d.name,
             })
             .collect()
@@ -1398,6 +1465,7 @@ pub struct CompiledAgent {
     pub working: Vec<Regex>,
     pub resume: Option<String>,
     pub resume_last: Option<String>,
+    pub bypass_flag: Option<String>,
 }
 
 /// The key that opens shortcut mode unless the config says otherwise.
@@ -1445,6 +1513,29 @@ fn which(exe: &str) -> bool {
 
 /// Where a command line's program ends: after its closing quote when it is quoted (`"C:/Program
 /// Files/claude.exe" …`, also behind PowerShell's `& `), else at the first space.
+/// Whether `cmd` has `flag` as one of its words.
+fn started_with_flag(cmd: &str, flag: &str) -> bool {
+    cmd.split_whitespace().any(|word| word == flag)
+}
+
+/// An option and nothing else: `--word`, letters, digits and `-_.=` only.
+fn plain_flag(flag: &str) -> bool {
+    flag.starts_with('-')
+        && flag.len() > 1
+        && flag
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_.=".contains(c))
+}
+
+/// `words` put right after `cmd`'s program, which may be a quoted path with spaces, or PowerShell's `& "…"`.
+fn after_program(cmd: &str, words: &str) -> String {
+    let (program, rest) = cmd.split_at(program_end(cmd));
+    match rest.trim_start() {
+        "" => format!("{program} {words}"),
+        rest => format!("{program} {words} {rest}"),
+    }
+}
+
 fn program_end(cmd: &str) -> usize {
     let start = if cmd.starts_with("& ") { 2 } else { 0 };
     let program = &cmd[start..];
@@ -2709,8 +2800,67 @@ layout = 'cards'",
         assert_eq!(
             c.agent_command(Some("claude"), None, "fix it's test")
                 .unwrap(),
-            r"claude --fast 'fix it'\''s test'"
+            r"claude --dangerously-skip-permissions --fast 'fix it'\''s test'"
         );
+    }
+
+    fn bypass_off(mut c: Config, agent: &str) -> Config {
+        c.permissions.bypass.insert(agent.into(), false);
+        c
+    }
+
+    #[test]
+    fn an_agent_starts_with_its_bypass_flag_unless_switched_off() {
+        let c = sh_config(vec![]);
+        assert_eq!(
+            c.agent_command(Some("claude"), Some("opus"), "go").unwrap(),
+            "claude --dangerously-skip-permissions --model opus 'go'"
+        );
+        assert_eq!(
+            c.agent_command(Some("gemini"), None, "go").unwrap(),
+            "gemini --yolo 'go'"
+        );
+        // An agent with no such flag gets nothing.
+        assert_eq!(c.agent_command(Some("aider"), None, "go").unwrap(), "aider 'go'");
+        let off = bypass_off(sh_config(vec![]), "claude");
+        assert_eq!(off.agent_command(Some("claude"), None, "go").unwrap(), "claude 'go'");
+        assert_eq!(
+            off.agent_command(Some("codex"), None, "go").unwrap(),
+            "codex --dangerously-bypass-approvals-and-sandbox 'go'",
+            "one agent's switch leaves the others alone"
+        );
+    }
+
+    #[test]
+    fn the_bypass_flag_goes_after_a_quoted_program_and_is_not_added_twice() {
+        let c = sh_config(vec![]);
+        assert_eq!(
+            c.with_bypass("claude", "\"C:/Program Files/claude.exe\" --resume x"),
+            "\"C:/Program Files/claude.exe\" --dangerously-skip-permissions --resume x"
+        );
+        assert_eq!(
+            c.with_bypass("claude", "& \"C:/a b/claude.exe\""),
+            "& \"C:/a b/claude.exe\" --dangerously-skip-permissions"
+        );
+        let once = "claude --dangerously-skip-permissions 'go'";
+        assert_eq!(c.with_bypass("claude", once), once);
+        assert!(c.started_bypassed("claude", once));
+        assert!(!c.started_bypassed("claude", "claude 'go'"));
+        assert!(!c.started_bypassed("codex", once), "another agent's flag says nothing");
+    }
+
+    #[test]
+    fn a_file_that_names_some_agents_keeps_the_others_on_and_a_flag_that_is_not_plain_is_ignored() {
+        let c: Config = toml::from_str(
+            "[permissions.bypass]\ncodex = false\n\n[[agents]]\nname = \"claude\"\nbypass_flag = \"--x; rm -rf ~\"\n",
+        )
+        .unwrap();
+        assert!(c.permissions.bypasses("claude") && c.permissions.bypasses("gemini"));
+        assert!(!c.permissions.bypasses("codex"));
+        assert_eq!(c.permissions.bypass.get("gemini"), Some(&true), "the settings rows still show it");
+        assert_eq!(c.bypass_flag("claude"), None);
+        assert_eq!(c.bypass_flag("codex"), None, "switched off");
+        assert_eq!(c.bypass_flag("gemini").as_deref(), Some("--yolo"));
     }
 
     #[test]
@@ -2753,7 +2903,9 @@ layout = 'cards'",
     fn a_built_in_agent_not_in_quick_runs_by_its_name() {
         let c = sh_config(vec![]);
         assert_eq!(
-            c.agent_command(Some("codex"), None, "go").unwrap(),
+            bypass_off(c, "codex")
+                .agent_command(Some("codex"), None, "go")
+                .unwrap(),
             "codex 'go'"
         );
     }
@@ -2777,10 +2929,13 @@ layout = 'cards'",
             quick("codex", "codex -x {prompt}", &[]),
             quick("claude", "claude {prompt}", &[]),
         ]);
-        assert_eq!(c.agent_command(None, None, "go").unwrap(), "codex -x 'go'");
+        assert_eq!(
+            c.agent_command(None, None, "go").unwrap(),
+            "codex --dangerously-bypass-approvals-and-sandbox -x 'go'"
+        );
         assert_eq!(
             sh_config(vec![]).agent_command(None, None, "go").unwrap(),
-            "claude 'go'"
+            "claude --dangerously-skip-permissions 'go'"
         );
     }
 

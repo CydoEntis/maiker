@@ -35,7 +35,7 @@ function SelectContent({ className, children, container, position = "popper", ..
         data-slot="select-content"
         position={position}
         sideOffset={6}
-        className={cn("mx-pop z-50 max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-hidden rounded-xl p-1.5 text-fg", className)}
+        className={cn("mx-pop z-(--layer-pop) max-h-(--radix-select-content-available-height) min-w-(--radix-select-trigger-width) overflow-hidden rounded-xl p-1.5 text-fg", className)}
         {...props}
       >
         <SelectPrimitive.Viewport className="max-h-[min(340px,var(--radix-select-content-available-height))] overflow-y-auto">{children}</SelectPrimitive.Viewport>

@@ -54,12 +54,12 @@ export function readSidebarPreferences(): SidebarPreferences {
   try {
     value = JSON.parse(stored)
   } catch (error) {
-    console.warn('Ignoring invalid Maitty sidebar preferences', error)
+    console.warn('Ignoring invalid Maiker sidebar preferences', error)
     return structuredClone(EMPTY_PREFERENCES)
   }
 
   if (!isSidebarPreferences(value)) {
-    console.warn('Ignoring unsupported Maitty sidebar preferences')
+    console.warn('Ignoring unsupported Maiker sidebar preferences')
     return structuredClone(EMPTY_PREFERENCES)
   }
 

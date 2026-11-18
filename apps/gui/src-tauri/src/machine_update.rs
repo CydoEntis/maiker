@@ -1,5 +1,5 @@
-//! Updating the app on another machine from the window (ADR 0007). The installed `maitty` does
-//! the work, the same as `maitty machine update <name>` in a terminal, so there is one update
+//! Updating the app on another machine from the window (ADR 0007). The installed `maiker` does
+//! the work, the same as `maiker machine update <name>` in a terminal, so there is one update
 //! path. The machine's saved sessions come back on the new daemon; a turn in progress is lost.
 
 use std::io::{BufRead, BufReader, Read};
@@ -64,9 +64,10 @@ fn run(
     when_idle: bool,
 ) -> Result<String, String> {
     let mut command = maitty_desktop_client::host_command(executable);
+    // Under every name it has had: the `maitty` that answers may be an older build.
+    maitty_shared::brand::set_child_env(&mut command, "UPDATE_PROGRESS", "1");
     command
         .args(arguments(name, install, when_idle))
-        .env(format!("{}_UPDATE_PROGRESS", maitty_machines::APP_ENV), "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -254,10 +255,10 @@ mod tests {
     #[test]
     fn a_daemon_left_running_is_reported_with_the_result() {
         let said = summary(
-            "box: maitty 1.0.0 installed to ~/.local/bin/maitty\n",
+            "box: maiker 1.0.0 installed to ~/.local/bin/maiker\n",
             "probing box…\nnote: could not ask the daemon (x); running sessions are untouched\n",
         );
-        assert!(said.starts_with("box: maitty 1.0.0 installed"));
+        assert!(said.starts_with("box: maiker 1.0.0 installed"));
         assert!(said.contains("note: could not ask the daemon"));
         assert_eq!(summary("", ""), "Updated.");
     }

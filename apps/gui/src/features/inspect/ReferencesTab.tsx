@@ -13,7 +13,7 @@ export function ReferencesTab({ term }: { term: number }) {
   return (
     <div className="mx-inspect-body">
       {query.data.length === 0 && (
-        <p className="mx-inspect-note">No references yet. Files in this project&apos;s <code>.maitty/references</code> folder show here, and agents can list them.</p>
+        <p className="mx-inspect-note">No references yet. Files in this project&apos;s <code>.maiker/references</code> folder show here, and agents can list them.</p>
       )}
       <ul className="mx-inspect-list">
         {query.data.map((item) => (

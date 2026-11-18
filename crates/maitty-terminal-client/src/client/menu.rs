@@ -358,7 +358,7 @@ impl App {
             ]
         };
         let side = self.screen.side_rect;
-        self.menu("maitty".into(), items, (side.x + 2, side.bottom().saturating_sub(1)));
+        self.menu("maiker".into(), items, (side.x + 2, side.bottom().saturating_sub(1)));
     }
 
     /// The sidebar foot's ` menu ` chip: the sidebar's own few things, opening upward. The full
@@ -632,7 +632,6 @@ impl App {
             ("Branches", Action::Branches),
             ("History", Action::History),
             ("References", Action::References),
-            ("Tickets", Action::Tickets),
         ]
         .into_iter()
         .map(|(label, action)| (label.to_string(), Act::Tool(action)))

@@ -1,0 +1,110 @@
+/* The error system's parts (docs/DESIGN.md, Errors; the handoff's "Maiker Error States"): the toast, the scoped alert
+   (a chat problem over its own pane, the service-offline dialog over the window), the dock's problem line, the
+   title-bar chip, the inline note and the field error. Every part says what failed, why and what to do, and only its
+   icon and a 2px (3px on a dialog) left edge carry the status colour (`--edge`), never the sentence. One rule to a line. */
+
+/* ---- status colour ---- */
+.is-edge-error { --edge: var(--danger); }
+.is-edge-ok { --edge: var(--ok); }
+.is-edge-caution { --edge: var(--caution); }
+.is-edge-needs { --edge: var(--needs); }
+.is-edge-working { --edge: var(--working); }
+.is-edge-info { --edge: var(--line2); }
+
+/* ---- buttons: outlined, a status-tinted primary, the needs answer, a quiet text button ---- */
+.mx-fb-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; padding: 0 10px; font: 500 12px var(--ui); color: var(--fg); white-space: nowrap; background: transparent; box-shadow: inset 0 0 0 1px var(--line2); --fold-line: var(--line2); }
+.mx-fb-btn:hover { background: var(--m-hover); }
+.mx-fb-btn:focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
+.mx-fb-btn.is-lg { height: 30px; padding: 0 12px; font-size: 12.5px; }
+.mx-fb-btn.is-primary { background: color-mix(in srgb, var(--edge, var(--fg)) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--edge, var(--fg)) 55%, transparent); --fold-line: color-mix(in srgb, var(--edge, var(--fg)) 55%, transparent); }
+.mx-fb-btn.is-primary:hover { background: color-mix(in srgb, var(--edge, var(--fg)) 22%, transparent); }
+.mx-fb-btn.is-primary:focus-visible { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--edge, var(--fg)) 55%, transparent), var(--focus-underline); }
+.mx-fb-btn.is-lg.is-primary { padding: 0 14px; }
+.mx-fb-btn.is-needs { background: var(--needs); color: var(--on-needs); box-shadow: none; --fold-line: transparent; }
+.mx-fb-btn.is-needs:hover { background: color-mix(in oklab, var(--needs) 90%, white); }
+.mx-fb-btn.is-needs:focus-visible { box-shadow: var(--focus-underline); }
+.mx-fb-btn.is-text { padding: 0 6px; color: var(--muted); box-shadow: none; --fold-line: transparent; }
+.mx-fb-btn.is-text:hover { color: var(--fg); }
+.mx-fb-btn.is-text:focus-visible { color: var(--fg); box-shadow: var(--focus-underline); }
+.mx-fb-btn:disabled { opacity: .5; cursor: default; }
+/* Copy details turns into Copied for 2s: both words hold the one slot, so the button never changes width. */
+.mx-fb-swap { display: inline-grid; }
+.mx-fb-word { grid-area: 1 / 1; text-align: center; transition: opacity var(--t-fast) var(--ease); }
+.mx-fb-word[data-shown="false"] { opacity: 0; }
+
+/* ---- the mark at the head: the status glyph in the status colour, or a running light ---- */
+.mx-fb-mark { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; font: 800 13px/18px var(--mono); color: var(--edge); }
+.mx-fb-mark .mx-status-icon.is-working { --working: var(--edge); }
+
+/* ---- toasts: bottom right, 360px, newest above the others ---- */
+.mx-toaster { position: fixed; right: 20px; bottom: 20px; z-index: 85; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.mx-toast[data-float] { pointer-events: auto; display: flex; gap: 10px; padding: 12px 6px 10px 12px; color: var(--fg); background: var(--main); border: 1px solid var(--line2); box-shadow: inset 2px 0 0 var(--edge), var(--pop-sh); animation: mx-fb-rise .2s var(--ease); }
+/* In the window the float material (material.css) would set its own border and shadow; the toast keeps its edge. */
+.mx-app .mx-toast[data-float] { border-color: var(--line2); box-shadow: inset 2px 0 0 var(--edge), var(--pop-sh); }
+.mx-toast > .mx-fb-mark { align-self: flex-start; height: 18px; }
+.mx-toast-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mx-toast-title { font-size: 13px; font-weight: 600; line-height: 18px; color: var(--fg); overflow-wrap: anywhere; }
+.mx-toast-count { margin-left: 6px; font: 500 11.5px var(--mono); color: var(--dim); }
+.mx-toast-reason { font-size: 12.5px; line-height: 1.5; color: var(--fg2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.mx-toast-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+.mx-toast-x { flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; }
+.mx-toast-x:hover { background: var(--m-hover); color: var(--fg); }
+@keyframes mx-fb-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes mx-fb-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---- the scoped alert: a veil over what it blocks, and one card centred on it ----
+   The dim is one flat fill of the ground over what is blocked: no blur and no opacity group under it, so a
+   software-painting web view draws it as a single rectangle (docs/PERFORMANCE.md). It takes the pointer, so nothing
+   under it can be scrolled or clicked. The chat's covers its own pane; the window's covers everything under the title bar. */
+.mx-veil { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: color-mix(in srgb, var(--bg) 72%, transparent); animation: mx-fb-fade .18s var(--ease); }
+.mx-veil.is-chat { z-index: 45; }
+.mx-veil.is-window { z-index: 92; background: color-mix(in srgb, var(--bg) 78%, transparent); }
+:root[data-gpu="software"] .mx-veil { animation: none; }
+.mx-app .mx-alert[role="alertdialog"] { position: relative; width: min(480px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 14px 20px; border-color: var(--line2); box-shadow: inset 3px 0 0 var(--edge), var(--pop-sh-dialog); animation: mx-fb-fade .18s var(--ease); }
+.mx-alert-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--fg); }
+.mx-alert-reason { margin: 0; font-size: 13px; line-height: 1.6; color: var(--fg2); overflow-wrap: anywhere; }
+.mx-alert-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.mx-alert-actions .mx-fb-end { margin-left: auto; }
+.mx-alert-count { margin-left: auto; font: 400 11.5px var(--mono); color: var(--dim); white-space: nowrap; }
+.mx-alert-facts { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.5; color: var(--fg2); }
+.mx-alert-facts li { display: flex; gap: 8px; }
+.mx-alert-facts b { flex: none; width: 14px; font: 800 12px/18px var(--mono); text-align: center; color: var(--dim); }
+.mx-alert-facts .is-ok b { color: var(--ok); }
+.mx-alert-facts .is-caution b { color: var(--caution); }
+
+/* ---- the dock's problem line: 40px, above everything else in the dock ---- */
+.mx-app .mx-problem-line { position: relative; z-index: 1; width: 100%; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; margin-bottom: 8px; padding: 4px 6px 4px 12px; background: var(--main); border: 1px solid var(--line2); box-shadow: inset 2px 0 0 var(--edge); --fold-line: var(--line2); animation: mx-fb-rise .18s var(--ease); }
+.mx-problem-line .mx-fb-mark { width: 14px; font-size: 13px; line-height: 1; }
+.mx-problem-words { flex: 1 1 220px; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
+.mx-problem-words strong { font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; }
+.mx-problem-words span { min-width: 0; font-size: 12.5px; color: var(--fg2); }
+
+/* ---- the title bar's service chip: only while the service cannot be reached ---- */
+.mx-svc-chip { height: 22px; display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; padding: 0 8px; font: 500 11.5px var(--ui); color: var(--muted); white-space: nowrap; background: transparent; box-shadow: inset 0 0 0 1px var(--line2); --fold-line: var(--line2); }
+.mx-svc-chip.is-offline { color: var(--fg); background: color-mix(in srgb, var(--danger) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 55%, transparent); --fold-line: color-mix(in srgb, var(--danger) 55%, transparent); }
+.mx-svc-chip.is-offline:hover { background: color-mix(in srgb, var(--danger) 20%, transparent); }
+.mx-svc-chip.is-offline:focus-visible { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 55%, transparent), var(--focus-underline); }
+.mx-svc-chip.is-caution { color: var(--fg); background: color-mix(in srgb, var(--caution) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--caution) 55%, transparent); --fold-line: color-mix(in srgb, var(--caution) 55%, transparent); }
+.mx-svc-chip.is-caution:hover { background: color-mix(in srgb, var(--caution) 20%, transparent); }
+.mx-svc-chip.is-caution:focus-visible { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--caution) 55%, transparent), var(--focus-underline); }
+.mx-svc-chip b { font: 800 11px/1 var(--mono); color: var(--danger); }
+.mx-svc-chip.is-caution b { color: var(--caution); }
+.mx-svc-chip.is-found .mx-status-icon.is-working { --working: var(--ok); }
+
+/* ---- the inline note: a failure on the page you came to read, so it reads as part of the page ---- */
+.mx-app .mx-note { display: flex; gap: 10px; padding: 10px 8px 8px 12px; background: var(--main); border: 1px solid var(--line); box-shadow: inset 2px 0 0 var(--edge, var(--danger)); --fold-line: var(--line); animation: mx-fb-rise .18s var(--ease); }
+.mx-note-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mx-note-title { font-size: 13px; font-weight: 600; line-height: 18px; color: var(--fg); }
+.mx-note-reason { font-size: 12.5px; line-height: 1.5; color: var(--fg2); overflow-wrap: anywhere; }
+.mx-note-actions { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0 0 -6px; }
+
+/* ---- the field error: a 2px red underline and one sentence under the field; the field keeps its fill ---- */
+.mx-app [aria-invalid="true"]:is(input, textarea), .mx-app .mx-field-wrap.is-invalid { box-shadow: inset 0 -2px 0 var(--danger); }
+.mx-field-error { display: flex; gap: 6px; margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--fg2); overflow-wrap: anywhere; }
+/* The mark is drawn, not written, so the message read out and copied is the sentence alone. */
+.mx-field-error::before { content: "×"; flex: none; font: 800 12px/18px var(--mono); color: var(--danger); }
+.mx-field-error code { font: 400 .94em var(--mono); color: var(--fg); }
+
+/* ---- motion: off when asked ---- */
+@media (prefers-reduced-motion: reduce) { .mx-toast, .mx-veil, .mx-alert, .mx-problem-line, .mx-note { animation: none; } }
+:root[data-reduced-motion="true"] :is(.mx-toast, .mx-veil, .mx-alert, .mx-problem-line, .mx-note) { animation: none; }

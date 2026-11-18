@@ -249,7 +249,7 @@ mod tests {
     }
 
     fn attached() -> Machine {
-        Machine::ssh("box", vec!["ssh".into()], "maitty").attach_only()
+        Machine::ssh("box", vec!["ssh".into()], "maiker").attach_only()
     }
 
     #[test]

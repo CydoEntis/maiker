@@ -1,6 +1,6 @@
-# Maitty desktop GUI
+# Maiker desktop GUI
 
-This is Maitty’s optional desktop chat interface. It uses Tauri, React and
+This is Maiker’s optional desktop chat interface. It uses Tauri, React and
 TypeScript, and connects to the same local daemon as the terminal UI. Closing
 the GUI does not stop conversations.
 
@@ -22,7 +22,7 @@ GUI explains the mismatch and offers a guarded restart after showing what may be
 interrupted. Save or finish important work before choosing that action.
 
 Codex conversations use the installed Codex CLI and its local sign-in. On
-Windows, Maitty also searches common npm and NVM install locations. On Linux,
+Windows, Maiker also searches common npm and NVM install locations. On Linux,
 keep the Codex command on `PATH`; Unix mise shims are supported.
 
 ## Check and package

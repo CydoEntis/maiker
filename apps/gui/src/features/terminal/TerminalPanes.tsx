@@ -79,7 +79,7 @@ export function TerminalPanes({
   )
 
   useEffect(() => {
-    // Captured on the window so xterm never sees the few keys Maitty keeps.
+    // Captured on the window so xterm never sees the few keys Maiker keeps.
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey)
         return
@@ -198,9 +198,7 @@ export function TerminalPanes({
                 <code className="terminal-pane-path">
                   {conversation.folder}
                 </code>
-                {focused && (
-                  <span className="terminal-pane-focus">Focused</span>
-                )}
+                <span className={`terminal-pane-focus${focused ? ' is-on' : ''}`} aria-hidden={focused ? undefined : true}>Focused</span>
                 <button
                   type="button"
                   className="terminal-pane-close"

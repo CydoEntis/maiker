@@ -1,26 +1,32 @@
-//! The one daemon file per PC (ADR 0004). The terminal install puts `maitty` in a per-user
+//! The one daemon file per PC (ADR 0004). The terminal install puts `maiker` in a per-user
 //! folder; the desktop app keeps that same file current instead of running a private copy.
 
 use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const APP_COMMAND: &str = env!("MAITTY_APP_COMMAND");
-const APP_ENV: &str = env!("MAITTY_APP_ENV");
+const APP_COMMAND: &str = env!("APP_COMMAND");
+/// The commands the app had before, newest first.
+const APP_PREVIOUS: &str = env!("APP_PREVIOUS");
 
 /// Where `install.ps1`, `install.sh` and this module all keep the executable.
 pub fn shared_daemon_path() -> Result<PathBuf> {
+    shared_path_for(APP_COMMAND)
+}
+
+/// Where the shared file of the app named `command` is kept.
+fn shared_path_for(command: &str) -> Result<PathBuf> {
     let file = if cfg!(windows) {
-        format!("{APP_COMMAND}.exe")
+        format!("{command}.exe")
     } else {
-        APP_COMMAND.to_string()
+        command.to_string()
     };
-    if let Some(directory) = std::env::var_os(format!("{APP_ENV}_INSTALL_DIR")) {
+    if let Some(directory) = maitty_shared::brand::env_var_os("INSTALL_DIR") {
         return Ok(PathBuf::from(directory).join(file));
     }
     #[cfg(windows)]
     let directory = std::env::var_os("LOCALAPPDATA")
-        .map(|local| PathBuf::from(local).join("Programs").join(APP_COMMAND));
+        .map(|local| PathBuf::from(local).join("Programs").join(command));
     #[cfg(not(windows))]
     let directory = std::env::var_os("HOME")
         .map(|home| PathBuf::from(home).join(".local").join("bin"));
@@ -105,11 +111,29 @@ pub fn ensure_shared_daemon(bundled: &Path, app_version: &str) -> Result<PathBuf
             target.display()
         ),
     }
+    keep_previous_names_current(bundled);
     // A convenience for typing the command in a terminal: it must not stop the app starting.
     if let Err(error) = put_folder_on_path(&target) {
         tracing::warn!("couldn't add the install folder to your PATH: {error:#}");
     }
     Ok(target)
+}
+
+/// After a rename, agents' hooks and MCP entries, scripts and habits still run the old command. Its shared file,
+/// where one is installed, gets this release too, so the old name runs the current app (which goes by the new
+/// name) instead of an old copy that never updates. A name with no file is not created.
+fn keep_previous_names_current(bundled: &Path) {
+    for old in APP_PREVIOUS.split(',').filter(|name| !name.is_empty()) {
+        let Ok(path) = shared_path_for(old) else {
+            continue;
+        };
+        if !path.is_file() {
+            continue;
+        }
+        if let Err(error) = replace_file(bundled, &path) {
+            tracing::warn!("couldn't bring {} up to date: {error:#}", path.display());
+        }
+    }
 }
 
 /// The user PATH with `directory` added, or `None` when it is already there. Windows compares
@@ -133,13 +157,13 @@ fn path_with(existing: &str, directory: &str) -> Option<String> {
     })
 }
 
-/// Like `install.ps1`: add the folder to the user's PATH so `maitty` works in a new terminal.
+/// Like `install.ps1`: add the folder to the user's PATH so `maiker` works in a new terminal.
 /// `<APP>_NO_PATH=1` leaves PATH alone. Other systems keep their shell startup files to
 /// themselves; `install.sh` tells the person what to add.
 fn put_folder_on_path(target: &Path) -> Result<()> {
     #[cfg(windows)]
     {
-        if std::env::var(format!("{APP_ENV}_NO_PATH")).as_deref() == Ok("1") {
+        if maitty_shared::brand::env_var("NO_PATH").as_deref() == Ok("1") {
             return Ok(());
         }
         let directory = target
@@ -185,18 +209,18 @@ fn windows_user_path() -> Result<String> {
 #[cfg(windows)]
 fn set_windows_user_path(value: &str) -> Result<()> {
     use std::os::windows::process::CommandExt;
+    let path_variable = maitty_shared::brand::env_name("NEW_USER_PATH");
+    let changed_variable = maitty_shared::brand::env_name("PATH_CHANGED");
+    // An expandable string keeps `%VARIABLE%` entries working; setting and clearing a
+    // variable tells running programs the environment changed.
+    let script = format!(
+        "Set-ItemProperty -Path 'HKCU:\\Environment' -Name Path -Type ExpandString -Value $env:{path_variable}; \
+         [Environment]::SetEnvironmentVariable('{changed_variable}','1','User'); \
+         [Environment]::SetEnvironmentVariable('{changed_variable}',$null,'User')"
+    );
     let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-NonInteractive",
-            "-Command",
-            // An expandable string keeps `%VARIABLE%` entries working; setting and clearing a
-            // variable tells running programs the environment changed.
-            "Set-ItemProperty -Path 'HKCU:\\Environment' -Name Path -Type ExpandString -Value $env:MAITTY_NEW_USER_PATH; \
-             [Environment]::SetEnvironmentVariable('MAITTY_PATH_CHANGED','1','User'); \
-             [Environment]::SetEnvironmentVariable('MAITTY_PATH_CHANGED',$null,'User')",
-        ])
-        .env("MAITTY_NEW_USER_PATH", value)
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .env(&path_variable, value)
         .creation_flags(0x0800_0000)
         .output()
         .context("running PowerShell")?;
@@ -309,7 +333,7 @@ mod tests {
         replace_file(&source, &target).unwrap();
 
         assert_eq!(std::fs::read(&target).unwrap(), b"new");
-        assert!(!directory.join(concat!(".", env!("MAITTY_APP_COMMAND"), ".new")).exists());
+        assert!(!directory.join(concat!(".", env!("APP_COMMAND"), ".new")).exists());
         std::fs::remove_dir_all(&directory).unwrap();
     }
 
@@ -323,7 +347,7 @@ mod tests {
         let target = directory.join("installed.exe");
         std::fs::write(&source, b"newest").unwrap();
         std::fs::write(&target, b"newer").unwrap();
-        let first_aside = directory.join(concat!(env!("MAITTY_APP_COMMAND"), ".old.exe"));
+        let first_aside = directory.join(concat!(env!("APP_COMMAND"), ".old.exe"));
         std::fs::write(&first_aside, b"oldest").unwrap();
         // A running program's file cannot be removed; an open handle that shares nothing is the same lock.
         let in_use = {
@@ -338,7 +362,7 @@ mod tests {
         replace_file(&source, &target).unwrap();
 
         assert_eq!(std::fs::read(&target).unwrap(), b"newest");
-        let second_aside = directory.join(concat!(env!("MAITTY_APP_COMMAND"), ".old-2.exe"));
+        let second_aside = directory.join(concat!(env!("APP_COMMAND"), ".old-2.exe"));
         assert_eq!(std::fs::read(&second_aside).unwrap(), b"newer");
         drop(in_use);
         assert_eq!(std::fs::read(&first_aside).unwrap(), b"oldest");
@@ -348,10 +372,10 @@ mod tests {
     #[test]
     fn the_folder_is_added_once_and_matched_loosely() {
         assert_eq!(
-            path_with(r"C:\bin;C:\tools\", r"C:\Apps\maitty"),
-            Some(r"C:\bin;C:\tools\;C:\Apps\maitty".to_string())
+            path_with(r"C:\bin;C:\tools\", r"C:\Apps\maiker"),
+            Some(r"C:\bin;C:\tools\;C:\Apps\maiker".to_string())
         );
-        assert_eq!(path_with(r"C:\bin;c:\apps\MAITTY\", r"C:\Apps\maitty"), None);
-        assert_eq!(path_with("", r"C:\Apps\maitty"), Some(r"C:\Apps\maitty".to_string()));
+        assert_eq!(path_with(r"C:\bin;c:\apps\MAIKER\", r"C:\Apps\maiker"), None);
+        assert_eq!(path_with("", r"C:\Apps\maiker"), Some(r"C:\Apps\maiker".to_string()));
     }
 }

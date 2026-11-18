@@ -111,7 +111,7 @@ describe('the Recent sessions list', () => {
     reopened.next = () => Promise.resolve(false)
     const { onReopened } = open([removedWorktree])
     fireEvent.click(await screen.findByRole('button', { name: /Tidy the docs/ }))
-    expect((await screen.findByRole('alert')).textContent).toBe('Restart the Maitty service to reopen it.')
+    expect((await screen.findByRole('alert')).textContent).toBe('Restart the Maiker service to reopen it.')
     expect(onReopened).not.toHaveBeenCalled()
   })
 
@@ -122,7 +122,7 @@ describe('the Recent sessions list', () => {
 
   it('asks for a service restart when the service is older than the list', async () => {
     open(null)
-    expect(await screen.findByText('Restart the Maitty service to see closed sessions.')).toBeTruthy()
+    expect(await screen.findByText('Restart the Maiker service to see closed sessions.')).toBeTruthy()
   })
 
   it('says a failed read in plain words and tries again', async () => {

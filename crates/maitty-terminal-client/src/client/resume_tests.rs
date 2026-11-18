@@ -1,5 +1,5 @@
 //! Resume a conversation here: the lists asked of the daemon, the menu, and what a pick starts.
-//! `MAITTY_SHOW=1 cargo test resume_tests -- --nocapture` prints the frames.
+//! `AGENT_SHOW=1 cargo test resume_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::MachineId;
@@ -33,7 +33,7 @@ fn asked(out: &[Outgoing]) -> Vec<(String, String, u64)> {
 
 fn frame(app: &mut App, title: &str) -> String {
     let text = raw_text(app, Layout::Floating, 120, 30, "unicode");
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title}\n{text}");
     }
     text
@@ -174,7 +174,10 @@ fn a_pick_starts_that_agent_in_the_folder_with_the_conversation() {
         .collect();
     assert_eq!(
         started,
-        [(Some(dir), Some("codex resume 019a-codex_id".to_string()))]
+        [(
+            Some(dir),
+            Some("codex --dangerously-bypass-approvals-and-sandbox resume 019a-codex_id".to_string())
+        )]
     );
 }
 
@@ -255,7 +258,7 @@ fn an_error_from_the_daemon_closes_the_waiting_list_and_says_why() {
 #[test]
 fn a_daemon_too_old_to_list_them_is_not_asked_and_the_toast_says_why() {
     let (mut app, mut rx) = app_with_outbox();
-    app.local_protocol = crate::protocol::SAVED_CONVERSATIONS_SINCE - 1;
+    app.local_protocol = crate::protocol::COMPATIBLE_SINCE - 1;
     sent(&mut rx);
     app.act(Action::ResumeConversation);
     assert!(sent(&mut rx).is_empty(), "nothing is asked of it");

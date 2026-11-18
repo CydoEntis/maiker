@@ -98,7 +98,7 @@ check for the view). Acceptance criteria are the bullets.
    track yet" state, and the checklist card. Claude's `TodoWrite` and Codex's plan items feed a
    side panel: items with done / current / pending marks, "2 of 5" with a progress
    bar, elapsed time on the current item. The sidebar row shows the current item.
-9. **CV-9 Helper agents.** **Done in the chat** (`AgentsCard`; the panel's Agents list is the session panel work; the history carries no phase line or step count, so rows show title, type, elapsed). Claude `Task` calls (the helpers maitty already tracks)
+9. **CV-9 Helper agents.** **Done in the chat** (`AgentsCard`; the panel's Agents list is the session panel work; the history carries no phase line or step count, so rows show title, type, elapsed). Claude `Task` calls (the helpers maiker already tracks)
    become a "2 agents, 2 working" card inline and an **Agents** list in the side
    panel: title, phase ("Reading EmptyState.swift"), elapsed; done ones say
    "Done · 2 steps · 5m 30s".

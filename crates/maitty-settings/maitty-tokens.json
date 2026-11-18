@@ -1,9 +1,9 @@
 {
- "name": "Maitty Sea-glass and Brass",
+ "name": "Maiker Sea-glass and Brass",
  "rules": {
   "teal": "Only means 'working'. Never decoration.",
   "coral": "Only means 'needs you'. At most one coral highlight per screen.",
-  "wordmark": "The 'AI' in maitty is always gold.",
+  "wordmark": "The 'AI' in maiker is always gold.",
   "contrast": "All text pairs meet WCAG AA. Use *Text tokens for text; use fill tokens for backgrounds/badges with their *On ink.",
   "themes": "night and day are the sea-glass pair; dark and light are the same accents on a standard black and white ground."
  },

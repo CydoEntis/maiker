@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/brand'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, type UseQueryResult } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
@@ -14,6 +15,7 @@ vi.mock('@/api/daemon', () => daemon)
 const toasts = vi.hoisted(() => ({
   warning: vi.fn<(title: string, options?: { action?: { label: string; onClick: () => void } }) => void>(),
   error: vi.fn(),
+  failed: vi.fn(),
   success: vi.fn(),
   dismiss: vi.fn(),
 }))
@@ -21,12 +23,12 @@ vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const behind = { daemonVersion: '0.71.0', behind: true, canRestart: true, sessionCount: 11, activeTurnCount: 1 }
 
-function renderNotice(restartWhenIdle = false) {
+function renderNotice(restartServiceWhenIdle = false, { statuses = [] as string[], starting = false, afterAppUpdate = false } = {}) {
   const refetch = vi.fn(() => Promise.resolve())
-  const sessionsQuery = { isSuccess: true, refetch } as unknown as UseQueryResult<Conversation[]>
+  const sessionsQuery = { isSuccess: true, refetch, data: statuses.map((status) => ({ status })) } as unknown as UseQueryResult<Conversation[]>
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ServiceBehindNotice sessionsQuery={sessionsQuery} restartWhenIdle={restartWhenIdle} />
+      <ServiceBehindNotice sessionsQuery={sessionsQuery} restartServiceWhenIdle={restartServiceWhenIdle} starting={starting} afterAppUpdate={afterAppUpdate} />
     </QueryClientProvider>,
   )
   return { refetch }
@@ -48,7 +50,7 @@ describe('a service a release behind, with nobody mid-turn', () => {
     await waitFor(() => { expect(toasts.success).toHaveBeenCalledTimes(1) })
     expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0')
     expect(refetch).toHaveBeenCalled()
-    expect(toasts.success.mock.calls[0]).toEqual(['Maitty service updated', { description: 'It was restarted to finish the update. 11 sessions came back.' }])
+    expect(toasts.success.mock.calls[0]).toEqual(['Service restarted', { description: 'It restarted by itself to finish the update. 11 sessions came back.' }])
     expect(toasts.warning).not.toHaveBeenCalled()
   })
 
@@ -56,6 +58,25 @@ describe('a service a release behind, with nobody mid-turn', () => {
     renderNotice(true)
     await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
     expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['an agent is working', { statuses: ['idle', 'working'] }],
+    ['an agent needs the user', { statuses: ['needs-you'] }],
+    ['a session is being restored', { statuses: ['recovery'] }],
+    ['a session status is unknown', { statuses: ['unknown'] }],
+    ['a session is starting', { starting: true }],
+  ])('is left alone and the notice stays while %s, though the service counts nobody', async (_name, options) => {
+    daemon.loadDaemonUpdateStatus.mockResolvedValue(idle)
+    renderNotice(true, options)
+    await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
+    expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+  })
+
+  it('restarts when every session rests', async () => {
+    daemon.loadDaemonUpdateStatus.mockResolvedValue(idle)
+    renderNotice(true, { statuses: ['idle', 'done'] })
+    await waitFor(() => { expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0') })
   })
 
   it('is asked about when the setting is off, even with nobody working', async () => {
@@ -96,7 +117,7 @@ describe('the notice that the service is a release behind', () => {
     renderNotice()
 
     await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
-    expect(toasts.warning.mock.calls[0]?.[0]).toBe('The Maitty service is still on 0.71.0')
+    expect(toasts.warning.mock.calls[0]?.[0]).toBe(`The ${APP_NAME} service is still on 0.71.0`)
     expect(toasts.warning.mock.calls[0]?.[1]?.action?.label).toBe('Restart…')
   })
 
@@ -130,14 +151,44 @@ describe('the notice that the service is a release behind', () => {
   })
 
   it('keeps the dialog open and says why when the restart is refused', async () => {
-    daemon.restartStaleDaemon.mockRejectedValue(new Error('the local Maitty service changed since the restart prompt opened'))
+    daemon.restartStaleDaemon.mockRejectedValue(new Error('the local Maiker service changed since the restart prompt opened'))
     renderNotice()
     await waitFor(() => { expect(toasts.warning).toHaveBeenCalled() })
     toasts.warning.mock.calls[0]?.[1]?.action?.onClick()
 
     await userEvent.click(await screen.findByRole('button', { name: 'Restart service' }))
 
-    await waitFor(() => { expect(toasts.error).toHaveBeenCalledWith('the local Maitty service changed since the restart prompt opened') })
+    // The dialog stays open and says why in its own body, not in a toast.
+    expect(await screen.findByRole('alert')).toHaveTextContent('the local Maiker service changed since the restart prompt opened')
+    expect(toasts.error).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Restart service' })).toBeTruthy()
+  })
+})
+
+describe('a service a release behind, right after the app updated', () => {
+  it('is updated as part of the app update: restarted once no agent works, with no question and no second toast', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      renderNotice(false, { afterAppUpdate: true })
+      await vi.advanceTimersByTimeAsync(0)
+      // An agent is at work: nothing is asked and nothing is restarted yet.
+      expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+      expect(toasts.warning).not.toHaveBeenCalled()
+
+      daemon.loadDaemonUpdateStatus.mockResolvedValue({ ...behind, activeTurnCount: 0 })
+      await vi.advanceTimersByTimeAsync(10_000)
+      await waitFor(() => { expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0') })
+      expect(toasts.warning).not.toHaveBeenCalled()
+      expect(toasts.success).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still asks when the service cannot be restarted with nothing lost', async () => {
+    daemon.loadDaemonUpdateStatus.mockResolvedValue({ ...behind, canRestart: false })
+    renderNotice(false, { afterAppUpdate: true })
+    await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
+    expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
   })
 })

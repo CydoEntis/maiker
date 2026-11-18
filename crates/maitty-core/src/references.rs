@@ -75,10 +75,17 @@ pub fn project_root(dir: &Path) -> PathBuf {
     root.components().collect()
 }
 
-/// The references folder of the project at `root`.
+/// The references folder of the project at `root`: the current name's, else one a name the app had before left
+/// (its `info/exclude` line was added under that name, so it stays out of git where it is).
 pub fn folder(root: &Path) -> PathBuf {
-    root.join(concat!(".", env!("APP_COMMAND")))
-        .join("references")
+    let new = root.join(concat!(".", env!("APP_COMMAND"))).join("references");
+    if new.exists() {
+        return new;
+    }
+    crate::brand::previous()
+        .map(|old| root.join(format!(".{old}")).join("references"))
+        .find(|old| old.is_dir())
+        .unwrap_or(new)
 }
 
 /// A folder's references, and what it left out.
@@ -530,6 +537,20 @@ mod tests {
             "seen from the main checkout"
         );
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn references_kept_under_an_older_name_are_still_found() {
+        let dir = temp("renamed");
+        let Some(old) = crate::brand::previous().next() else {
+            return;
+        };
+        touch(&dir.join(format!(".{old}/references/shot.png")), 1);
+        assert_eq!(folder(&dir), dir.join(format!(".{old}/references")));
+        assert_eq!(list(&folder(&dir)).unwrap().items.len(), 1);
+        touch(&dir.join(concat!(".", env!("APP_COMMAND"), "/references/new.png")), 1);
+        assert_eq!(folder(&dir), dir.join(DIR), "the current name wins once it exists");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

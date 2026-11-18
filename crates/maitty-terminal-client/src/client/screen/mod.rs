@@ -78,13 +78,6 @@ pub(super) struct Saved {
     pub recent: Vec<String>,
     /// The side sheet's width per kind of view (`SheetKind::key`), as you sized it.
     pub sheet_w: HashMap<String, u16>,
-    /// Which ticket sources each project read, by `project_key`, from before this computer's
-    /// daemon kept them: read only to move them there once (`Query::TicketLinks` `Import`), then
-    /// emptied. A repo and group ids, no secret.
-    pub ticket_links: HashMap<String, crate::client::tickets::TicketLink>,
-    /// The name you are known by on GitHub, for Tickets' Mine. Plane's and Linear's are the
-    /// daemon's; the ones kept here before are moved there with `ticket_links`.
-    pub ticket_me: crate::client::tickets::TicketMe,
     /// `session_order` and `placed` of every other machine, by its configured name. The top-level
     /// ones are this machine's, so a file from before machines reads as it always did. A machine
     /// that is no longer configured keeps its entry.
@@ -427,7 +420,7 @@ pub(super) const SIDE_MAX: u16 = 60;
 
 fn saved_path() -> PathBuf {
     // Per server, like the saved session: a test server (<APP>_SOCKET) keeps its own.
-    let name = match std::env::var(concat!(env!("APP_ENV"), "_SOCKET")) {
+    let name = match maitty_shared::brand::env_var("SOCKET") {
         Ok(l) if l != "default" => format!("{APP_COMMAND}-ui-{l}.json"),
         _ => concat!(env!("APP_COMMAND"), "-ui.json").into(),
     };
@@ -1682,7 +1675,6 @@ mod popups;
 mod references_sheet;
 mod secret_ask;
 mod session_find;
-mod tickets_view;
 #[cfg(test)]
 mod flat_tests;
 #[cfg(test)]
@@ -1717,5 +1709,5 @@ pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
     popups::*, references_sheet::*, secret_ask::*, session_find::*, sheet::*, side::*, splash::*, tidy::*, usage::*,
-    helper_view::*, tickets_view::*, status_log::*, workspace::*,
+    helper_view::*, status_log::*, workspace::*,
 };

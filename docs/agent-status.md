@@ -1,43 +1,43 @@
 # Connect agents (status setup)
 
-Maitty works out whether an agent is working, needs you or is done by watching its process and screen. **Connect agents** installs a small hook or adapter into Claude Code, Codex, Gemini CLI, Qwen Code, OpenCode, Pi, OMP, Kilo, Kimi or Mastra Code so the agent reports that itself. These are exactly the agents `maitty integrate` sets up. The installer (and every update) runs `maitty integrate` for you unless `MAITTY_NO_INTEGRATE=1` is set.
+Maiker works out whether an agent is working, needs you or is done by watching its process and screen. **Connect agents** installs a small hook or adapter into Claude Code, Codex, Gemini CLI, Qwen Code, OpenCode, Pi, OMP, Kilo, Kimi or Mastra Code so the agent reports that itself. These are exactly the agents `maiker integrate` sets up. The installer (and every update) runs `maiker integrate` for you unless `AGENT_NO_INTEGRATE=1` is set.
 
 What each status means to you, and where its reason shows, is in the [guide](guide.md#what-a-sessions-status-means).
 
 Search commands (leader, then `Space`) for **Connect agents**, or open **Settings › Agents ›
 Connect agents…**, then click the agent.
 Setup installs
-only Maitty's hooks or adapter; it preserves other hooks and extensions and refuses to overwrite a
-different file named `maitty.js`. It does not interrupt an agent or restart the daemon.
+only Maiker's hooks or adapter; it preserves other hooks and extensions and refuses to overwrite a
+different file named `maiker.js`. It does not interrupt an agent or restart the daemon.
 
 Set up the integration on each machine where the agent runs; it lives in that
-machine's agent config, not Maitty's synced config. `maitty doctor` checks the
+machine's agent config, not Maiker's synced config. `maiker doctor` checks the
 machine-local adapters and says when an installed setup needs a provider reload.
 The check confirms configuration presence, not live reporting: native status is
-confirmed only after the running provider sends Maitty an event. Until then,
+confirmed only after the running provider sends Maiker an event. Until then,
 process and screen detection remain the fallback. Restart Codex and OpenCode
 after installation. In Pi, use `/reload` or restart it.
 The CLI equivalents, including removal, are:
 
 ```sh
-maitty integrate              # every installed agent, plus MCP
-maitty integrate --uninstall  # removes every one
-maitty integrate claude
-maitty integrate codex
-maitty integrate gemini
-maitty integrate qwen
-maitty integrate opencode
-maitty integrate pi
-maitty integrate omp
-maitty integrate kilo
-maitty integrate kimi
-maitty integrate mastracode
-maitty integrate pi --uninstall
-maitty integrate codex --uninstall
-maitty integrate opencode --uninstall
+maiker integrate              # every installed agent, plus MCP
+maiker integrate --uninstall  # removes every one
+maiker integrate claude
+maiker integrate codex
+maiker integrate gemini
+maiker integrate qwen
+maiker integrate opencode
+maiker integrate pi
+maiker integrate omp
+maiker integrate kilo
+maiker integrate kimi
+maiker integrate mastracode
+maiker integrate pi --uninstall
+maiker integrate codex --uninstall
+maiker integrate opencode --uninstall
 ```
 
-With no agent named, `maitty integrate` connects each agent that is on PATH or whose config
+With no agent named, `maiker integrate` connects each agent that is on PATH or whose config
 folder exists, skips the rest without creating anything, then registers MCP. It prints one line
 per agent (connected, already connected, skipped: not installed, failed: reason), tries every
 agent before failing, and changes nothing on a second run.
@@ -50,7 +50,7 @@ detection to work when Codex does not report child lifecycle events. Native
 child events provide immediate helper identity and lifecycle when available.
 Windows also gets Codex's `commandWindows` field with PowerShell's call
 operator; Linux and macOS retain the normal shell command.
-Maitty preserves existing Codex hooks and another program's `notify` command;
+Maiker preserves existing Codex hooks and another program's `notify` command;
 turn completion still uses `notify` when that key is available.
 
 The lifecycle hooks read Codex's own payload (the same dialect as Claude's): a prompt, a
@@ -59,12 +59,12 @@ tool or an approved tool is working, `PermissionRequest` is needs you, `Stop` is
 question, is needs you. A hook that prints nothing leaves Codex's own approval flow
 alone, and `PermissionRequest` does not fire at all where approvals are off (YOLO).
 
-**Codex runs a user hook only once it is trusted.** Review Maitty's hooks once in Codex's
-`/hooks`; an untrusted or edited hook is skipped. Maitty never writes the trust itself.
+**Codex runs a user hook only once it is trusted.** Review Maiker's hooks once in Codex's
+`/hooks`; an untrusted or edited hook is skipped. Maiker never writes the trust itself.
 Settings › Agents says `hooks installed · trust them in Codex /hooks` until Codex has
 recorded trust for each. A pane switches to hook status the moment its first lifecycle
 hook arrives (`Term::lifecycle_hooks`); until then, and for a pane whose hooks are not
-trusted, Maitty reads Codex's screen as before.
+trusted, Maiker reads Codex's screen as before.
 
 Checked against Codex 0.166 on Windows (2026-11-01): `SessionStart`, `UserPromptSubmit`,
 `PreToolUse`, `PostToolUse` and `Stop` all fire in a plain `codex exec` turn, each hook gets
@@ -75,16 +75,16 @@ Codex's published hook schemas. A hook run through PowerShell costs about 150 ms
 call that fires `PreToolUse` and `PostToolUse` takes about 0.3 s longer, inside Codex's 3 s
 hook limit.
 
-Claude Code runs its hooks and its status line (`maitty statusline`, which carries context and
+Claude Code runs its hooks and its status line (`maiker statusline`, which carries context and
 plan limits) through `sh`, and on Windows through Git Bash, or PowerShell when Git Bash isn't
 installed. PowerShell reads a quoted program path followed by a word as a parse error, so on
-Windows the command line names Maitty's path bare when the path has no space or shell character
+Windows the command line names Maiker's path bare when the path has no space or shell character
 (it runs in both shells). Otherwise it is quoted for Git Bash, or `& "…"` with `"shell":
 "powershell"` without it (`HookShell`, `command_line`). The daemon rewrites a line written for the
 other shell when it starts.
 
-Pi loads `~/.pi/agent/extensions/maitty.js` (or
-`$PI_CODING_AGENT_DIR/extensions/maitty.js`). Use a current Pi with
+Pi loads `~/.pi/agent/extensions/maiker.js` (or
+`$PI_CODING_AGENT_DIR/extensions/maiker.js`). Use a current Pi with
 `agent_settled`, `ui_prompt_start` and `ui_prompt_end` events. The adapter reports
 working at agent start, needs-you while a blocking extension dialog is open,
 and done only after automatic retries/continuation settle. It does not interpret
@@ -113,22 +113,22 @@ process matchers or hooks. Process detection recognizes Pi's current
 The separate `@deepseek-ai/dsh` CLI is also recognized as DeepSeek, but is not
 covered by the Pi/OpenCode native adapters.
 
-Both adapters remain inert outside Maitty. Reports carry only lifecycle/status
+Both adapters remain inert outside Maiker. Reports carry only lifecycle/status
 and session identity/working directory, with the pane's inherited authentication. A reporting
 failure surfaces through Pi's warning UI or OpenCode's log and later events retry.
 
-OMP uses `~/.omp/agent/extensions/maitty.js` (`PI_CONFIG_DIR` and
+OMP uses `~/.omp/agent/extensions/maiker.js` (`PI_CONFIG_DIR` and
 `PI_CODING_AGENT_DIR` follow OMP's own configuration). Pi and OMP must use
 separate directories. Nested `OMPCODE=1` agents cannot own the parent pane.
 Approvals/ask tools remain blocked until resolved; automatic continuation stays
 working and retryable failures have a 2.5-second retry grace before needs-you.
-Kilo uses `~/.config/kilo/plugin/maitty.js` (honoring `XDG_CONFIG_HOME`).
+Kilo uses `~/.config/kilo/plugin/maiker.js` (honoring `XDG_CONFIG_HOME`).
 Mastracode uses flat command arrays in `~/.mastracode/hooks.json`.
 Kimi uses native `[[hooks]]` tables in `~/.kimi-code/config.toml`
 (`KIMI_CODE_HOME` overrides it). Setup preserves custom hooks; `--uninstall`
-removes only Maitty's entries.
+removes only Maiker's entries.
 
-Maitty recognizes all 24 identities in the pinned Herdr registry plus Aider, Goose,
+Maiker recognizes all 24 identities in the pinned Herdr registry plus Aider, Goose,
 Crush, Auggie and the separate DeepSeek harness. The 22 bundled Herdr manifests
 use prioritized live-screen/OSC evidence; OMP and Mastracode rely on their native
 integrations. A known executable alone does not guarantee native lifecycle support.
@@ -186,9 +186,9 @@ needs-you (two notes) followed by a finish inside that spell is held back, so a 
 reads as three dings. The same agent saying the same thing again within `SAME_AGAIN_AFTER`
 (120 s) stays quiet too. The card and toast still say what happened; only the sound waits. The
 spell is kept per window: a daemon with no window open rings for itself, and two windows on one
-daemon each keep their own. `maitty test-alert` plays both sounds.
+daemon each keep their own. `maiker test-alert` plays both sounds.
 
-Not yet verified, so Maitty does not claim exact Herdr parity:
+Not yet verified, so Maiker does not claim exact Herdr parity:
 
 - every identity against real process entry points, including npm and native
   wrappers, Windows paths, aliases and helpers that must not match;
@@ -264,16 +264,16 @@ never-ending task stays quiet (decided 2026-10-24). With two tasks, a stop listi
 `b2` pauses; once `b1` ends, the wake-up that stops with `b2` still running rings, since
 `b2` is no longer new.
 The desktop notification, phone alert and in-app note name the repository and branch
-(`maitty · fix/early-alerts`), so two worktrees of one repository tell apart; a detached
+(`maiker · fix/early-alerts`), so two worktrees of one repository tell apart; a detached
 checkout shows its short commit, and a session outside a repository its folder.
-Maitty retains its four-second global sound spacing and two-minute same-news
+Maiker retains its four-second global sound spacing and two-minute same-news
 deduplication; its delivery settings and multiple-client acknowledgements differ
 from Herdr.
 
 Codex helpers belong to a specific thread, not a project folder. Native
 `SubagentStart` events identify the parent thread and helper before the parent
 turn ends. Older Codex setups without those hooks rely on local session files
-and the turn-end notifier to identify the thread; Maitty omits helpers rather
+and the turn-end notifier to identify the thread; Maiker omits helpers rather
 than borrowing another session's. If two panes report the same thread ID, disk
 fallback is ambiguous and is omitted.
 
@@ -281,7 +281,7 @@ A parent stays working for as long as any helper is listed. Four things must not
 that early: a progress bar that goes off while helpers run (the agent is waiting on them,
 not cancelled); the agent's idle prompt, which it shows once its own turn has ended and a
 background helper carries on; a session start in the middle of a turn (compaction); and a
-stop for a helper maitty never saw start, which removes nobody else. A stop with no id
+stop for a helper maiker never saw start, which removes nobody else. A stop with no id
 removes only the last helper started. A helper that says nothing for an hour is taken to
 have died: it stops holding its parent, which finishes and says so once, and it is kept as
 unconfirmed. An interrupt or a new session ends any hold. A Codex helper whose stop was lost
@@ -302,13 +302,13 @@ stops with none of its own work left. Its starting again keeps the parent's paus
 said is still the parent's wake-up stop. A helper's task the parent's stop no longer lists holds
 nothing, and the hour-long quiet limit still applies.
 
-When a trusted integration reports active helpers, Maitty keeps the parent
+When a trusted integration reports active helpers, Maiker keeps the parent
 session working until they finish or go quiet. Codex uses native lifecycle hooks
 when installed, with thread-specific local session files as fallback; Claude,
 Qwen, Kimi and Mastracode report helper lifecycle events through native hooks;
 OpenCode's selected-session bridge reports active child sessions. Provider/model
 choice does not change the host integration. Other agents still get their own
-working/needs-you/done status, but Maitty cannot list hidden helpers unless the
+working/needs-you/done status, but Maiker cannot list hidden helpers unless the
 agent exposes their lifecycle.
 
 Lifecycle reports are kept as child activity records after completion and
@@ -319,7 +319,7 @@ completed.
 
 Codex rollout files currently report child identity, parent thread and lifecycle
 events, but not the assigned prompt or child model/effort. Native hook
-payloads may report task/model/effort fields; Maitty uses them only when supplied.
+payloads may report task/model/effort fields; Maiker uses them only when supplied.
 It does not expose hidden reasoning or claim transcript access that a runtime does
 not provide.
 
@@ -353,12 +353,12 @@ Measured 2026-11-13 on Linux with Claude Code 2.1.323 and Codex 0.166.
   helper's own events off the conversation, so they never reach its history, error or status. Before
   this, those events marked the chat's history incomplete with an error, and the next turn's end
   turned the chat to Blocked.
-- **Codex hook trust.** In a new pane Codex asked to review Maitty's nine hooks ("new or changed")
-  and, until they are trusted, sent none. Without `SessionStart` Maitty learns the thread only from
+- **Codex hook trust.** In a new pane Codex asked to review Maiker's nine hooks ("new or changed")
+  and, until they are trusted, sent none. Without `SessionStart` Maiker learns the thread only from
   `notify` at the turn's end, so the rollout fallback cannot list helpers while the turn runs.
 - **Linking a workflow's step to its helper.** Both providers carry a name the parent chose: Claude's
   Agent `description` and Codex's task name. A workflow names its helper with that label and gives
   the same label in its report; a helper of the same pane whose label is equal, ignoring case and
   punctuation, is linked. Codex task names are snake_case, so `MAITTY-42 builder` names `maitty_42_builder`.
 
-Installing a new executable does not replace an already-running window. **Settings › General › UPDATES** shows the version, and Settings warns at the top when the installed, window and daemon versions differ. Local open sessions keep running; once no panes remain, Maitty restarts the daemon and reconnects the window automatically. Closing a window alone leaves the daemon running. A remote daemon must be updated on its host.
+Installing a new executable does not replace an already-running window. **Settings › General › UPDATES** shows the version, and Settings warns at the top when the installed, window and daemon versions differ. Local open sessions keep running; once no panes remain, Maiker restarts the daemon and reconnects the window automatically. Closing a window alone leaves the daemon running. A remote daemon must be updated on its host.

@@ -24,7 +24,9 @@ vi.mock('@/api/fileSends', async (importOriginal) => ({
   cancelFileSend: host.cancel,
 }))
 
-const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn(), message: vi.fn() }))
+const toasts = vi.hoisted(() => ({ progress: vi.fn(), success: vi.fn(), error: vi.fn(), info: vi.fn() }))
+// A failure's toast says what failed and then the error's own words; the double reports those words as the old error toast did.
+Object.assign(toasts, { failed: vi.fn((what: string, error: unknown, options?: object) => { const said = typeof error === 'string' ? error : error instanceof Error ? error.message : what; if (options === undefined) toasts.error(said); else toasts.error(said, options) }) })
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -50,7 +52,7 @@ describe('pulling a file from a machine', () => {
   it('shows a progress toast with Cancel at once, named by the transfer', async () => {
     const transfer = await start()
     expect(host.get).toHaveBeenCalledWith('devbox', '/srv/app/out.log', transfer)
-    const [title, options] = toasts.loading.mock.calls[0] as [string, { id: string; action: { label: string; onClick: (event: { preventDefault: () => void }) => void } }]
+    const [title, options] = toasts.progress.mock.calls[0] as [string, { id: string; action: { label: string; onClick: (event: { preventDefault: () => void }) => void } }]
     expect(title).toBe('Getting out.log from devbox')
     expect(options.id).toBe(transfer)
     options.action.onClick({ preventDefault: vi.fn() })
@@ -59,13 +61,13 @@ describe('pulling a file from a machine', () => {
 
   it('says where the file was saved and opens that folder from the toast', async () => {
     const transfer = await start()
-    emit({ kind: 'done', transfer, file: 'out.log', path: '/d/maitty/devbox/out.log', folder: '/d/maitty/devbox' })
+    emit({ kind: 'done', transfer, file: 'out.log', path: '/d/maiker/devbox/out.log', folder: '/d/maiker/devbox' })
     const [title, options] = toasts.success.mock.calls[0] as [string, { description: string; action: { label: string; onClick: () => void } }]
     expect(title).toBe('Saved out.log from devbox')
-    expect(options.description).toBe('/d/maitty/devbox')
+    expect(options.description).toBe('/d/maiker/devbox')
     expect(options.action.label).toBe('Open folder')
     options.action.onClick()
-    expect(host.open).toHaveBeenCalledWith('/d/maitty/devbox')
+    expect(host.open).toHaveBeenCalledWith('/d/maiker/devbox')
   })
 
   it("shows the host's own words when the pull fails, and when the host refuses it", async () => {
@@ -83,7 +85,7 @@ describe('pulling a file from a machine', () => {
   it('says a stopped pull was stopped, and ignores an event it did not start', async () => {
     const transfer = await start()
     emit({ kind: 'cancelled', transfer, file: 'out.log' })
-    expect(toasts.message).toHaveBeenCalledWith('Stopped getting out.log from devbox', expect.objectContaining({ id: transfer }))
+    expect(toasts.info).toHaveBeenCalledWith('Stopped getting out.log from devbox', expect.objectContaining({ id: transfer }))
     emit({ kind: 'done', transfer: 'get-someone-elses', file: 'x', path: '/x', folder: '/' })
     expect(toasts.success).not.toHaveBeenCalled()
   })

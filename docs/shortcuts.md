@@ -77,12 +77,11 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `g` | Branches (in the side panel; its first row switches branch) |
 | `h` | History: what happened |
 | `e` | References (in the side panel) |
-| `p` | Tickets: the project's GitHub, Plane and Linear tickets (in the side panel) |
 | `o` | Find a file |
 | `l` | Worktrees: new, clean up, merge, delete (a second step) |
 | `y` | Copy mode: select text in the pane |
 
-### Maitty
+### Maiker
 
 | Key | Action |
 |---|---|
@@ -91,7 +90,7 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `u` | Usage and cost: what each agent reported using, and the plan limits |
 | `,` | Settings |
 | `?` | Keys help |
-| `w` | Machines: the computers reached over ssh; add one, or on one of yours `r` reconnect, `u` install or update maitty there, `e` edit, `x` remove |
+| `w` | Machines: the computers reached over ssh; add one, or on one of yours `r` reconnect, `u` install or update maiker there, `e` edit, `x` remove |
 | `Ctrl+V` | Paste the clipboard's image |
 | `d` | In a pane on another machine: send a file from this computer (type or drop its path; again while it sends stops it) |
 | `q` | Step away (agents keep running) |
@@ -196,8 +195,8 @@ menu runs its items by letter while it is open.
 | Enter | Open the selected session; opening a sleeping session wakes it. On a session whose check failed, could not run, was overridden, went stale or is never run for its repo, open its evidence sheet instead; on one whose repo command waits for approval, open the approval |
 | Menu key (`.` after the prefix), right-click | The session's menu |
 | `+` on a machine heading | A shell on that machine at once |
-| `install` / `update` on a machine heading | Shown instead of `+` while the machine needs maitty installed or updated: runs it in a popup that asks first |
-| Right-click a machine heading | Install or Update Maitty (when it needs it), New shell here, Open a folder…, Clone a repository…, Details…, Reconnect, Machines… |
+| `install` / `update` on a machine heading | Shown instead of `+` while the machine needs maiker installed or updated: runs it in a popup that asks first |
+| Right-click a machine heading | Install or Update Maiker (when it needs it), New shell here, Open a folder…, Clone a repository…, Details…, Reconnect, Machines… |
 | Enter on a row of an agent a restart stopped | Types its resume command, then opens the session |
 | Esc | Return keyboard focus to the active pane |
 
@@ -210,7 +209,7 @@ Leader `w`, or a click on a remote machine's heading in the sidebar. These keys 
 | Type, Backspace | The machine to add, like `user@host` (the host list below it is `~/.ssh/config`); Enter connects |
 | Up, Down | Walk from the input onto your machines, and back |
 | `r` or Enter | On one of your machines: reconnect |
-| `u` | Install or update maitty there (the bar says which) |
+| `u` | Install or update maiker there (the bar says which) |
 | `n`, `s` | Turn that machine's toasts, then its alert sounds, on or off. Both are off until you turn them on; the line under the chosen machine says where they stand |
 | `c` | Turn copying to your clipboard from that machine off, or on (asked first: Enter allows, Esc keeps it off) |
 | `i` | That machine's details (below) |
@@ -227,7 +226,7 @@ Leader `w`, or a click on a remote machine's heading in the sidebar. These keys 
 | `g` | Start GitHub's sign-in (`gh auth login`) in a new session on that machine |
 | `a` | Add a folder rule: Tab between Folder, Name, Email and GitHub account (Left, Right pick the account); Enter previews the lines it writes, Enter again writes them, Esc goes back |
 | Up, Down | Choose a folder rule |
-| `x` or Delete | Remove the chosen rule Maitty wrote (Enter confirms, Esc keeps it) |
+| `x` or Delete | Remove the chosen rule Maiker wrote (Enter confirms, Esc keeps it) |
 | `o`, `y` | This computer only: open the service log, copy its path |
 | `r` | Read it all again |
 | Esc | Close |
@@ -295,8 +294,8 @@ Search commands' **Specialist agents…**, or the pane's right-click Project… 
 
 There is no dialog. Leader `n`, leader `t`, `Alt+N`, `Ctrl+T`, the ` n new session ` chip of an empty workspace and a machine's ` + ` chip all start a shell at once where you are (a machine's chip on that machine). Start an agent by typing `claude` (or any other) in the shell.
 
-In the desktop app's New chat page, `Enter` starts the chat and opens it; `Ctrl+Enter` (`⌘Enter` on
-macOS) starts it in the background, empties the message box and keeps the page open for the next one.
+In the desktop app's New session dialog, `Enter` is a new line; `Ctrl+Enter` (`⌘Enter` on macOS) starts the chat and opens it; `Ctrl+Shift+Enter` (`⇧⌘Enter`)
+starts it in the background, empties the message box and keeps the dialog open for the next one.
 
 The desktop app's window keys are changed in its Settings › Hotkeys: **Change** on a row, then press the new keys (Esc cancels). It refuses a key the terminal uses, such as a plain Ctrl+letter on Windows and Linux or any key without ⌘ on macOS, and a key another action already has. **Reset** puts one back, and **Reset all** puts them all back.
 
@@ -326,7 +325,7 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Drag its left edge | Resize it (not the Inbox) |
 | Click a pane | Type into that pane; the view stays open, unlit |
 | Click the panel | Give the view the keys again |
-| Tab, Shift+Tab | Files, Changes, Branch, References, Tickets: the next or previous tab, for the same checkout (not while Files filters or edits, or while Tickets types into a field) |
+| Tab, Shift+Tab | Files, Changes, Branch, References: the next or previous tab, for the same checkout (not while Files filters or edits) |
 | Click a tab | Switch to it |
 
 ## Inbox
@@ -492,7 +491,7 @@ Fetch, pull and push run for a checkout on this computer only, and never ask for
 
 ## References view
 
-Leader + `e` opens the project's references (`.maitty/references/` at the repo's main checkout).
+Leader + `e` opens the project's references (`.maiker/references/` at the repo's main checkout).
 In `[keys.prefix]` its action is `references`. It has the keys while open.
 
 | Keys | Action |
@@ -505,32 +504,6 @@ In `[keys.prefix]` its action is `references`. It has the keys while open.
 | d, Delete | Remove it (asks first) |
 | y | Copy its absolute path |
 | e, Esc | Close it |
-
-## Tickets view
-
-Leader + `p` opens the tickets of the project the session in front works in. In `[keys.prefix]` its
-action is `tickets`. It has the keys while open. It only reads tickets: change one in its tracker.
-
-| Keys | Action |
-| --- | --- |
-| Up / k, Down / j, PgUp, PgDn, Home, End | Choose a ticket (the next page is read at the end) |
-| Left / h, Right / l | GitHub, Plane, Linear |
-| / | Search: type, Enter asks the provider, Esc stops typing |
-| m | Only yours (asks your name at that provider the first time) |
-| a | Show closed tickets too |
-| g | Narrow to a milestone, module or cycle |
-| r | Read again |
-| , | Sources: your accounts (keys, names) and the linked projects |
-| t | Signed out of GitHub: a shell running `gh auth login` |
-| Enter, o | Open the ticket; on a source not set up, its next setup step |
-| s | Start an agent on it (review first) |
-| Esc, p | Clear the search, then close |
-
-On a ticket: Up / Down scroll, `s` start an agent in a new worktree, `o` open its link, `y` copy its
-link, `r` read again, Esc back. The start page shows exactly what will be sent; Left / Right picks
-the agent; `y` starts. Sources: Enter changes the row, `x` turns GitHub off, removes
-a key (asks first) or unlinks another project; in the key form Tab moves between fields and Enter
-connects. Setting up from a tab, Esc goes back to the list.
 
 ## Branches and worktree cleanup
 
@@ -553,7 +526,7 @@ connects. Setting up from a tab, Esc goes back to the list.
 | --- | --- |
 | Tab, Shift+Tab, Up / k, Down / j | Change settings category; choose row |
 | Left / h, Right / l, Enter, Space | Change value; Enter edits text or captures binding; theme opens browser |
-| o | Open configuration file outside Maitty |
+| o | Open configuration file outside Maiker |
 | u | Check for updates now |
 | R | Restart the daemon after an update (when the Restart now button shows) |
 | Keys on the Check page | As in `PROJECT · <name>` (see Check modals); Tab, Esc and o stay Settings' |
@@ -589,7 +562,7 @@ Leader + `y` (or search commands, leader then `Space`, as **Select text**) opens
 ## Terminal scrolling and mouse
 
 Scrolled up, a pane shows **↓ Back to bottom** at its bottom right (with how many lines up,
-in Maitty's own history); a click goes back to the newest output. An agent that scrolls itself
+in Maiker's own history); a click goes back to the newest output. An agent that scrolls itself
 (a full-screen one, which the wheel pages) shows it too, and the click pages it back down as
 far as the wheel paged it up; typing to the agent clears it, since the agent scrolls to its
 prompt itself.
@@ -604,9 +577,9 @@ Leader `z` is Zoom, not a sidebar key.
 | --- | --- |
 | PageUp, PageDown at a prompt | Scroll history; full-screen programs keep these keys |
 | Shift+PageUp, Shift+PageDown, Ctrl+Shift+Up, Ctrl+Shift+Down | Scroll half-pages or individual lines outside full-screen mode |
-| Shift with mouse | Keep selection/scrolling in Maitty when program captures the mouse |
+| Shift with mouse | Keep selection/scrolling in Maiker when program captures the mouse |
 | Ctrl+click | Open a path or link |
-| Shift+right-click | Maitty menu even when program handles right-click |
+| Shift+right-click | Maiker menu even when program handles right-click |
 | Double-click, drag | Copy word/path/link, select and copy text |
 | Drag a pane's title onto another pane | Swap the two (Esc, or letting go outside the panes, cancels) |
 

@@ -1,6 +1,6 @@
 # Tauri updater
 
-> **Use for:** Letting the Maitty desktop GUI update itself from GitHub releases.
+> **Use for:** Letting the Maiker desktop GUI update itself from GitHub releases.
 > **Requires:** Tauri 2
 > **Fills:** SECURITY § supply chain, ENVIRONMENT § releases
 
@@ -11,16 +11,22 @@
   app is idle: no agent working or waiting on an answer, no keyboard input for 5 minutes, and the window
   unfocused or minimized (`features/updates/idle.ts`). The GUI checks on launch, hourly after that (never while an update is downloading or ready),
   and when asked in Settings › General › Updates; it offers the version and what changed, and the user chooses.
-  When the service is newer than the app, the app cannot reconnect: the "Update Maitty to reconnect" card
+  When the service is newer than the app, the app cannot reconnect: the "Update Maiker to reconnect" card
   fetches the update itself, and idle installs stay on even though the service is unreachable.
-  After the restart a toast and a What's new dialog say which version this is.
+  After the restart a toast and a What's new dialog say which version this is, and the local service is updated
+  as part of the same update, once no agent is working, with no second question (UI › *Service a release behind*).
 - Verify every update with the project's updater key. The public key is in `tauri.conf.json`; the
   private key lives only in the `TAURI_SIGNING_PRIVATE_KEY` repository secret and the owner's
   backup. Never commit it, print it, or put it in a fixture or log.
 - An update replaces the GUI. After the restart the new GUI brings the shared daemon file up to its
   own release (ADR 0004) and leaves a running daemon alone: the old file is moved aside and goes on
   running with its sessions. A daemon that speaks another protocol is restarted only when the user
-  says so on the "Restart Maitty to finish updating" card. An update never ends an agent's turn.
+  says so on the "Restart Maiker to finish updating" card, or by itself when **Restart the service when
+  idle** is on (off by default; a separate setting from the idle install) and the moment is quiet: the
+  service counts no agent working or waiting, no visible session is working, needs the user or is
+  starting, and nothing is starting from the window (`features/updates/serviceRestart.ts`). It runs the
+  card's own restart, which restores the saved sessions, and retries every 10 seconds until quiet. An
+  update never ends an agent's turn.
 - A failed or offline check is quiet: no banner, only the line in Settings. A failed install says so
   and never claims the app is updated.
 - Enable only the operations the GUI calls in its Tauri capability.
@@ -33,15 +39,15 @@ The GUI uses `@tauri-apps/plugin-updater` and `@tauri-apps/plugin-process` with
 `process:allow-restart`. The app downloads in the background and installs on restart (a click, or the idle rule above), which are two
 commands, so the combined `updater:allow-download-and-install` does not cover it.
 
-The app reads `https://github.com/CydoEntis/maitty/releases/latest/download/latest.json`. The release
+The app reads `https://github.com/CydoEntis/maiker/releases/latest/download/latest.json`. The release
 workflow builds with `src-tauri/tauri.updater.conf.json` (which sets `createUpdaterArtifacts`) and
 publishes the signed bundles and `latest.json` beside the installers:
 
 | Platform | Update bundle |
 | --- | --- |
-| Windows x64 | `Maitty_<version>_x64-setup.exe` |
-| macOS Apple Silicon | `Maitty_<version>_aarch64.app.tar.gz` |
-| Linux x64 | `Maitty_<version>_amd64.AppImage` |
+| Windows x64 | `Maiker_<version>_x64-setup.exe` |
+| macOS Apple Silicon | `Maiker_<version>_aarch64.app.tar.gz` |
+| Linux x64 | `Maiker_<version>_amd64.AppImage` |
 
 An install made with the `.msi`, `.deb` or `.rpm` installer asks `latest.json` for its own kind first
 (`windows-x86_64-msi`, `linux-x86_64-deb`, `linux-x86_64-rpm`) and updates with that installer. The

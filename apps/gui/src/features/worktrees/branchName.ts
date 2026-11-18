@@ -13,6 +13,7 @@ export function branchNameProblem(name: string): string | null {
   if (name.startsWith('/') || name.endsWith('/')) return 'A branch name cannot start or end with a slash'
   if (name.endsWith('.') || name.endsWith('.lock')) return 'A branch name cannot end with a dot or .lock'
   if (name.includes('..') || name.includes('//') || name.includes('@{')) return 'A branch name cannot hold .. or // or @{'
+  if (/\s/.test(name)) return `Branch names can’t contain spaces. Try ${name.trim().split(/\s+/).join('-')}.`
   if (FORBIDDEN.test(name) || hasControlCharacter(name)) return 'A branch name cannot hold spaces or ~ ^ : ? * [ \\'
   return null
 }

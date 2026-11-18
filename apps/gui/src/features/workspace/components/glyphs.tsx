@@ -4,11 +4,10 @@ import { attachSpinner, currentGlyph, isWebSpinner, isWideSpinner, spinnerFrames
 import { WebSpinner } from '@/components/WebSpinner'
 import { SHELL_PROCESS, type SessionStatus } from '../model/session'
 import { CLAUDE_MARK, CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
-import { programStyle } from './programStyle'
 import { FOLDER_PATH } from './paths'
 import { useReducedMotion } from './motion'
 
-/** The working spinner: the Maitty TUI's text frames or a web SVG spinner, whichever was picked in Settings. */
+/** The working spinner: the Maiker TUI's text frames or a web SVG spinner, whichever was picked in Settings. */
 export function Spinner({ className = 'mx-spin', frozen = false }: { className?: string; frozen?: boolean }) {
   const reduced = useReducedMotion()
   const style = useSpinnerStyle()
@@ -56,7 +55,6 @@ const ICON_DRAWINGS = {
     <Svg size={13} strokeWidth={1.75}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.1z" /></Svg>
   ),
   chart: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></Svg>,
-  ticket: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z" /><path d="M10 5v14" strokeDasharray="2 2" /></Svg>,
   list: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 6h16M4 12h16M4 18h16" /></Svg>,
   person: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM5 20a7 7 0 0 1 14 0" /></Svg>,
   board: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M3 4h5v16H3zM9.5 4h5v11h-5zM16 4h5v7h-5z" /></Svg>,
@@ -112,6 +110,22 @@ const ICON_DRAWINGS = {
   openSide: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M4 4h16v16H4zM14 4v16" /></Svg>,
   shield: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z" /></Svg>,
   bang: () => <Svg size={9} strokeWidth={3.5} stroke="var(--danger)"><path d="M12 6v7" /><path d="M12 18h.01" /></Svg>,
+  /** The session header's Changes button: two branches meeting, the design's git mark. */
+  gitChanges: ({ size = 15 }: IconProps) => <Svg size={size} strokeWidth={1.8}><circle cx="6" cy="6" r="2.2" /><circle cx="6" cy="18" r="2.2" /><circle cx="18" cy="8" r="2.2" /><path d="M6 8.2v7.6M18 10.2c0 4-6 3.2-10.2 6.4" /></Svg>,
+  /** The folder of a session in a worktree of its own: locked to it. */
+  folderLocked: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M10 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v2.5" /><rect x="14" y="17" width="8" height="5" rx="1" /><path d="M20 17v-2a2 2 0 1 0-4 0v2" /></Svg>,
+  /** The plain folder of a hover card's folder line, in the design's own stroke. */
+  folderPlain: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M3 6h6l2 2h10v11H3z" /></Svg>,
+  /** The ⋯ button. */
+  more: ({ size = 15 }: IconProps) => <Svg size={size} strokeWidth={1.8} fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="19" cy="12" r="1.6" /></Svg>,
+  /** A line count of changes, as the hover card's changes row draws it. */
+  diffStat: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M12 4v7M8.5 7.5h7M8.5 17h7" /></Svg>,
+  pullRequest: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M6 8v13M8 6a2 2 0 1 1-4 0a2 2 0 1 1 4 0M18 15v-6a3 3 0 0 0-3-3h-4M13 3.5 10.5 6 13 8.5M20 17a2 2 0 1 1-4 0a2 2 0 1 1 4 0" /></Svg>,
+  /** The Chat | Terminal toggle's own marks, at the design's 13px. */
+  chatBox: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 5h16v11H9l-5 4z" strokeLinejoin="round" /></Svg>,
+  terminalBox: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 5h16v14H4zM8 10l3 2.5L8 15M13 15h3" /></Svg>,
+  restart: ({ size = 15 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" /></Svg>,
+  checks: ({ size = 15 }: IconProps) => <Svg size={size} strokeWidth={1.7}><path d="M9 11l3 3 8-8M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9" /></Svg>,
 } satisfies Record<string, (props: IconProps) => ReactNode>
 
 export type IconName = keyof typeof ICON_DRAWINGS
@@ -123,7 +137,7 @@ export function Icon({ name, ...props }: IconProps & { name: IconName }) {
 
 type IconKind = { kind: 'shell' | 'codex' | 'claude' | 'deepseek' | 'gemini' | 'opencode' | 'rust'; glyph: ReactNode }
 
-const MARK_SIZE = '66%'
+const MARK_SIZE = '100%'
 
 function Mark({ d }: { d: string }) {
   return (
@@ -145,16 +159,16 @@ const SHELL_ICON: IconKind = { kind: 'shell', glyph: '>_' }
 type IconSize = 14 | 16 | 18 | 20 | 22 | 24 | 26 | 28 | 32
 
 /**
- * An agent's or program's tile. `flat` is the frame's tile (sidebar rows, the pane header): the mark in its own colour
- * on the raised surface with a hairline, instead of the mark on its brand gradient.
+ * An agent's or program's mark: the glyph alone, flat, with no tile or background behind it anywhere (the design's
+ * rule 1: colour means status, plus Claude's orange). Claude's is orange, every other mark takes the text colour.
  */
-export function AppIcon({ process, size, dimmed = false, flat = false }: { process: string; size: IconSize; dimmed?: boolean; flat?: boolean }) {
+export function AppIcon({ process, size, dimmed = false }: { process: string; size: IconSize; dimmed?: boolean }) {
   const program = process.split(/\s+/)[0] ?? ''
   const icon = ICONS[program] ?? (program === SHELL_PROCESS || program === '' ? SHELL_ICON : null)
-  const className = `mx-app-icon size-${String(size)}${dimmed ? ' is-dimmed' : ''}${flat ? ' is-flat' : ''}`
+  const className = `mx-app-icon size-${String(size)}${dimmed ? ' is-dimmed' : ''} is-flat`
   if (icon) return <span className={`${className} is-${icon.kind}`} aria-hidden="true">{icon.glyph}</span>
-  // Any other agent or program: its first letter on a colour taken from its name, so each stays recognisable.
-  return <span className={`${className} is-tinted`} style={programStyle(program)} aria-hidden="true">{program.charAt(0).toUpperCase()}</span>
+  // Any other agent or program: its first letter, flat.
+  return <span className={`${className} is-tinted`} aria-hidden="true">{program.charAt(0).toUpperCase()}</span>
 }
 
 /**

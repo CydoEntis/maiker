@@ -249,7 +249,7 @@ describe('while the agent works', () => {
     await settle()
 
     expect(fake.submitMessage).toHaveBeenCalledWith(TARGET, 1, 'and then lint it')
-    const queued = screen.getByRole('list', { name: 'Queued messages' })
+    const queued = screen.getByRole('region', { name: 'Queued messages' })
     expect(queued).toHaveTextContent('and then lint it')
     // When it is sent is the header's tooltip now, not a line on the card.
     expect(within(queued).getByTitle(/even if you close the window/)).toHaveTextContent('Queued')
@@ -267,7 +267,11 @@ describe('while the agent works', () => {
 
     expect(fake.submitMessage).toHaveBeenNthCalledWith(1, TARGET, 1, 'first')
     expect(fake.submitMessage).toHaveBeenNthCalledWith(2, TARGET, 2, 'second')
-    expect(screen.getByRole('list', { name: 'Queued messages' }).querySelectorAll('li')).toHaveLength(2)
+    // Two or more fold into a stack: the first message in front, how many wait behind it.
+    const queued = screen.getByRole('region', { name: 'Queued messages' })
+    expect(queued).toHaveTextContent('2 queued')
+    expect(queued).toHaveTextContent('first')
+    expect(queued).toHaveTextContent('+1')
   })
 
   it('shows what the daemon holds when the chat is opened again, so closing the window loses nothing', async () => {
@@ -282,7 +286,7 @@ describe('while the agent works', () => {
     render(<ChatSession link={LINK} agent="claude" online />)
     await settle()
 
-    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('still here')
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toHaveTextContent('still here')
   })
 
   it('removes a queued message through the daemon', async () => {
@@ -291,11 +295,12 @@ describe('while the agent works', () => {
     await user.type(box, 'never mind{Enter}')
     await settle()
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: /Remove/ }))
     await settle()
 
     expect(fake.dequeueMessage).toHaveBeenCalledWith(TARGET, 1)
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
   it('takes a queued message back into the box to edit, ahead of what was typed there', async () => {
@@ -305,28 +310,30 @@ describe('while the agent works', () => {
     await settle()
     await user.type(box, 'and more')
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Edit' }))
     await settle()
 
     expect(fake.dequeueMessage).toHaveBeenCalledWith(TARGET, 1)
     expect(box).toHaveValue('lint it\n\nand more')
     expect(box).toHaveFocus()
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
   it('shows a queued message with its files as chips, never the lines that name them, and gives both back on Edit', async () => {
-    const withFile = 'look at this\n\nAttached files (kept by Maitty; read them with your file tools):\n- C:\\kept\\attach-1794395248212-6aebc0c8-notes.txt'
+    const withFile = 'look at this\n\nAttached files (kept by Maiker; read them with your file tools):\n- C:\\kept\\attach-1794395248212-6aebc0c8-notes.txt'
     const { daemon, user, box } = await open((setup) => {
       setup.status = 'Working'
       setup.queued.push({ operation: 7, text: withFile })
     })
     daemonQueues(daemon)
 
-    const queued = screen.getByRole('list', { name: 'Queued messages' })
+    const queued = screen.getByRole('region', { name: 'Queued messages' })
     expect(queued).toHaveTextContent('look at this')
-    expect(queued).not.toHaveTextContent('Attached files (kept by Maitty')
-    expect(within(queued).getByRole('list', { name: 'Attached files' })).toHaveTextContent('notes.txt')
+    expect(queued).not.toHaveTextContent('Attached files (kept by Maiker')
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
+    expect(within(queued).getByRole('list', { name: 'Attached files' })).toHaveTextContent('notes.txt')
     await user.click(within(queued).getByRole('button', { name: 'Edit' }))
     await settle()
 
@@ -342,6 +349,7 @@ describe('while the agent works', () => {
     await settle()
     fake.dequeueMessage.mockRejectedValue(new Error('not queued'))
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Edit' }))
     await settle()
 
@@ -358,11 +366,12 @@ describe('while the agent works', () => {
     await user.type(box, 'steer left{Enter}')
     await settle()
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await settle(2000)
 
     expect(fake.sendQueuedMessageNow).toHaveBeenCalledWith(TARGET, 1)
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
     expect(fake.submitMessage).toHaveBeenCalledTimes(1)
   })
 
@@ -373,11 +382,12 @@ describe('while the agent works', () => {
     await user.type(box, 'steer left{Enter}')
     await settle()
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await settle(2000)
 
     expect(screen.getByRole('alert')).toHaveTextContent('the turn ended a moment ago')
-    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('steer left')
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toHaveTextContent('steer left')
   })
 
   it('sends a message now once, however often the button is pressed before the daemon answers', async () => {
@@ -388,6 +398,7 @@ describe('while the agent works', () => {
     await user.type(box, 'steer left{Enter}')
     await settle()
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     const button = screen.getByRole('button', { name: 'Send now' })
     await user.click(button)
     await user.click(button)
@@ -406,6 +417,7 @@ describe('while the agent works', () => {
     fake.sendQueuedMessageNow.mockRejectedValueOnce(new Error('the turn ended a moment ago'))
     await user.type(box, 'steer left{Enter}')
     await settle()
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await settle()
     expect(screen.getByRole('alert')).toHaveTextContent('the turn ended a moment ago')
@@ -422,17 +434,18 @@ describe('while the agent works', () => {
     daemonQueues(daemon)
     await user.type(box, 'steer left{Enter}')
     await settle()
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     expect(screen.getByRole('button', { name: 'Send now' })).toBeInTheDocument()
 
     daemon.status = 'Blocked'
     daemon.approvals = [{ request_id: 9, kind: 'Command', turn_id: 't1', command: 'rm -rf build', choices: ['Accept', 'Decline'] }]
     await settle(5000)
 
-    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('steer left')
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toHaveTextContent('steer left')
     expect(screen.queryByRole('button', { name: 'Send now' })).not.toBeInTheDocument()
   })
 
-  it('stacks several queued messages behind the first one sent, and spreads them out on a click', async () => {
+  it('stacks several queued messages behind the first one sent, opens them as a numbered list, and keeps the actions for the one that is read', async () => {
     const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
     daemonQueues(daemon)
     for (const text of ['first', 'second', 'third']) {
@@ -440,22 +453,60 @@ describe('while the agent works', () => {
       await settle()
     }
 
-    const list = screen.getByRole('list', { name: 'Queued messages' })
-    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
-    expect(within(list).getByRole('listitem')).toHaveTextContent('first')
-    expect(within(list).getByRole('listitem')).toHaveTextContent('1 of 3')
-    // Every queued message can be sent now, not only one a terminal agent holds.
-    expect(within(list).getByRole('button', { name: 'Send now' })).toBeInTheDocument()
-    // The count in its header is what says more wait behind it; nothing sits beside the stack.
-    expect(screen.queryByRole('list', { name: 'More queued messages' })).not.toBeInTheDocument()
+    const queued = screen.getByRole('region', { name: 'Queued messages' })
+    expect(queued).toHaveTextContent('3 queued')
+    expect(queued).toHaveTextContent('first')
+    expect(queued).not.toHaveTextContent('second')
+    expect(queued).toHaveTextContent('+2')
+    expect(screen.queryByRole('button', { name: 'Send now' })).not.toBeInTheDocument()
 
-    await user.click(within(list).getByRole('button', { name: 'first' }))
-    expect(within(list).getAllByRole('listitem').map((item) => item.querySelector('.mx-queued-text')?.textContent)).toEqual(['first', 'second', 'third'])
+    await user.click(within(queued).getByRole('button', { name: /3 queued/ }))
+    const list = within(queued).getByRole('list', { name: 'Queue, in the order they are sent' })
+    expect(within(list).getAllByRole('listitem').map((item) => item.querySelector('.mx-qd-text')?.textContent)).toEqual(['first', 'second', 'third'])
+    expect(queued).toHaveTextContent('Sent one at a time, in this order, when Claude finishes')
+    // Nothing is read until a message is clicked, so no message has its actions.
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
 
-    await user.click(within(within(list).getAllByRole('listitem')[1] as HTMLElement).getByRole('button', { name: 'Remove queued message' }))
+    await user.click(within(list).getByRole('button', { name: /second/ }))
+    expect(screen.getByRole('button', { name: 'Move up' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
     await settle()
     expect(fake.dequeueMessage).toHaveBeenCalledWith(TARGET, 2)
-    expect(within(list).getAllByRole('listitem').map((item) => item.querySelector('.mx-queued-text')?.textContent)).toEqual(['first', 'third'])
+    expect(within(screen.getByRole('list', { name: 'Queue, in the order they are sent' })).getAllByRole('listitem').map((item) => item.querySelector('.mx-qd-text')?.textContent)).toEqual(['first', 'third'])
+  })
+
+  it('moves a queued message up by queueing it ahead of the one above it, in the daemon', async () => {
+    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
+    daemonQueues(daemon)
+    for (const text of ['first', 'second', 'third']) {
+      await user.type(box, `${text}{Enter}`)
+      await settle()
+    }
+
+    await user.click(screen.getByRole('button', { name: /3 queued/ }))
+    await user.click(screen.getByRole('button', { name: /third/ }))
+    await user.click(screen.getByRole('button', { name: 'Move up' }))
+    await settle()
+
+    // The two last are taken out and queued again, third ahead of second; the first never moves.
+    expect(fake.dequeueMessage).toHaveBeenCalledTimes(2)
+    expect(daemon.queued.map((message) => message.text)).toEqual(['first', 'third', 'second'])
+  })
+
+  it('clears every queued message with Clear all', async () => {
+    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
+    daemonQueues(daemon)
+    for (const text of ['first', 'second']) {
+      await user.type(box, `${text}{Enter}`)
+      await settle()
+    }
+
+    await user.click(screen.getByRole('button', { name: /2 queued/ }))
+    await user.click(screen.getByRole('button', { name: 'Clear all' }))
+    await settle()
+
+    expect(daemon.queued).toEqual([])
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
   it('says so when a message was sent a moment before it could be removed, and shows the daemon\'s state', async () => {
@@ -466,11 +517,12 @@ describe('while the agent works', () => {
     fake.dequeueMessage.mockRejectedValueOnce(new Error('That message is no longer waiting; it may already have been sent'))
     daemon.queued = []
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: /Remove/ }))
     await settle()
 
     expect(await screen.findByRole('alert')).toHaveTextContent('no longer waiting')
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
   it('picks a new number when the daemon says another window got there first', async () => {

@@ -4,8 +4,8 @@ import { type Dispatch, type SetStateAction, useCallback, useState } from 'react
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { closeSessionWithUndo, undoCloseSession } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { useLatest } from '@/lib/useLatest'
+import { guardDrafts, inPane, ofSessions } from '@/features/documents/draftGuard'
 import { runsProgram } from './components/runsProgram'
 import { type Layout, removePane, removeSessions, showSession } from './model/layout'
 import { displayName, type SessionView } from './model/session'
@@ -48,14 +48,14 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         setLayout((current) => (current === closed.after ? closed.before : closed.sessions.reduce((layoutNow, session) => showSession(layoutNow, session.id, makeId), current)))
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not bring the session back')) })
+      .catch((error: unknown) => { toast.failed('Could not bring the session back', error) })
   }, [lastClose, setLayout, queryClient])
   // The toast's button outlives the render that made it, so it calls whichever undo is current.
   const undoNow = useLatest(undoLastClose)
   // Ending a session takes a moment, and the layout may change meanwhile (a split, a resize, another close):
   // the pane is taken out of the layout as it is when the daemon answers, not as it was when the close began.
   const layoutNow = useLatest(() => layout)
-  const endSessions = useCallback((ids: string[]) => {
+  const endSessionsNow = useCallback((ids: string[]) => {
     // An agent's own terminals go with it. Left running they were listed as sessions of their own under Terminals,
     // so stopping an agent looked as if it had turned into a terminal. Undo brings them back with it.
     const gone = new Set(ids.flatMap((id) => [id, ...(agentTerminals.get(id) ?? [])]))
@@ -76,7 +76,7 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         if (failed.length > 0) {
           unmarkClosed(failed.map((session) => session.id))
           const reason: unknown = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')?.reason
-          toast.error(errorMessage(reason, failed.length === 1 && failed[0] ? `Could not end ${displayName(failed[0])}` : `Could not end ${String(failed.length)} sessions`))
+          toast.failed(failed.length === 1 && failed[0] ? `Could not end ${displayName(failed[0])}` : `Could not end ${String(failed.length)} sessions`, reason)
         }
         if (terminals.length === 0) return
         const closed = new Set(terminals.map((session) => session.id))
@@ -88,13 +88,19 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         // Named for what was asked to close: an agent's terminals went with it, they are not further sessions.
         const named = terminals.filter((session) => asked.has(session.id))
         const label = named.length === 1 && named[0] ? displayName(named[0]) : `${String(named.length)} sessions`
-        const toastId = toast(`Closed ${label}`, { duration: UNDO_CLOSE_MS, action: { label: 'Undo', onClick: undoNow } })
+        const toastId = toast.info(`Closed ${label}`, { duration: UNDO_CLOSE_MS, action: { label: 'Undo', onClick: undoNow } })
         setLastClose({ toastId, sessions: terminals, before, after })
         window.setTimeout(() => { setLastClose((current) => (current?.toastId === toastId ? null : current)) }, UNDO_CLOSE_MS)
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not end the session')) })
+      .catch((error: unknown) => { toast.failed('Could not end the session', error) })
   }, [sessions, setLayout, layoutNow, queryClient, undoNow, agentTerminals])
+
+  // A session's documents go with it: a draft in one is asked about first, whoever started the close.
+  const endSessions = useCallback((ids: string[]) => {
+    const withTerminals = new Set(ids.flatMap((id) => [id, ...(agentTerminals.get(id) ?? [])]))
+    guardDrafts(ofSessions(withTerminals), () => { endSessionsNow(ids) })
+  }, [agentTerminals, endSessionsNow])
 
   /**
    * Runs `close` now when no session in `ids` has anything to lose: it has ended, or it is a shell with nothing
@@ -146,6 +152,11 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
     const tab = layout.arrangements.find((candidate) => candidate.panes.some((pane) => pane.id === paneId))
     const pane = tab?.panes.find((candidate) => candidate.id === paneId)
     if (!tab || !pane) return
+    // A document pane shows a file beside its session: closing it takes the pane out and nothing else.
+    if (pane.doc) {
+      guardDrafts(inPane(paneId), () => { movePanes(() => { setLayout((current) => removePane(current, paneId)) }) })
+      return
+    }
     const session = paneSessions.get(pane.sessionId)
     // One pane of several, with an agent or a running program in it: only the pane goes. The session keeps
     // running and stays in the sidebar, where a click shows it again. Ending it is the sidebar's Stop.
@@ -154,7 +165,8 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
       flash(`Pane closed · ${displayName(session)} keeps running`)
       return
     }
-    askToClose([pane.sessionId], () => { closePaneNow(paneId) })
+    // Ending the session takes its documents with it: ask about their drafts before the pane starts to shrink.
+    askToClose([pane.sessionId], () => { guardDrafts(ofSessions(new Set([pane.sessionId])), () => { closePaneNow(paneId) }) })
   }, [layout, paneSessions, setLayout, flash, askToClose, closePaneNow])
   return { askToClose, endSessions, undoLastClose, lastClose, closePaneById, closingPanes, closeAsk, setCloseAsk }
 }

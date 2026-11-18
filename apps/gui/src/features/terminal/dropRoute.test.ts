@@ -30,7 +30,7 @@ describe('where dropped files go', () => {
 
 describe('a path another machine names', () => {
   it('is typed quoted, with a space after, when it is an absolute plain path', () => {
-    expect(remotePathText('/home/me/.cache/maitty/pastes/paste-1-ab-a_b.log')).toBe('/home/me/.cache/maitty/pastes/paste-1-ab-a_b.log ')
+    expect(remotePathText('/home/me/.cache/maiker/pastes/paste-1-ab-a_b.log')).toBe('/home/me/.cache/maiker/pastes/paste-1-ab-a_b.log ')
     expect(remotePathText('/home/my user/p.log')).toBe('/home/my\\ user/p.log ')
   })
 

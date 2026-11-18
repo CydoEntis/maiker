@@ -1,6 +1,3 @@
-//! The app's command and environment prefix, from the root `Cargo.toml` through `build.rs`.
+//! The app's command and environment prefix, from `maitty_shared::brand` (ADR 0012).
 
-/// What people type, and the root of the app's files, folders and tags.
-pub const APP_COMMAND: &str = env!("APP_COMMAND");
-/// The prefix of the app's environment variables.
-pub const APP_ENV: &str = env!("APP_ENV");
+pub use maitty_shared::brand::{APP_COMMAND, ENV_PREFIX as APP_ENV};

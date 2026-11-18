@@ -1,6 +1,6 @@
 # Tauri notification
 
-> **Use for:** Native system notifications from the Maitty desktop GUI.
+> **Use for:** Native system notifications from the Maiker desktop GUI.
 > **Requires:** Tauri 2
 > **Fills:** SECURITY § desktop capabilities
 

@@ -97,7 +97,7 @@ describe('text selected in the chat', () => {
     await waitFor(() => { expect(failed).toHaveBeenCalledWith('Could not copy the selection') })
   })
 
-  it('quotes the text into the message box under what was already written, with a line to reply on', async () => {
+  it('puts the quoted text in the strip above the message box and leaves what was typed alone', async () => {
     const { user, said, box } = await open()
     await user.type(box, 'About this:')
     select(said)
@@ -105,7 +105,9 @@ describe('text selected in the chat', () => {
 
     await user.click(screen.getByRole('button', { name: 'Quote' }))
 
-    expect(box).toHaveValue('About this:\n\n> The lockfile was out of date.\n\n')
+    expect(box).toHaveValue('About this:')
+    const strip = screen.getByRole('group', { name: 'Quotes for your next message' })
+    expect(strip).toHaveTextContent('The lockfile was out of date.')
     expect(screen.queryByRole('group', { name: 'Selected text' })).not.toBeInTheDocument()
     expect(writeText).not.toHaveBeenCalled()
   })
@@ -119,6 +121,18 @@ describe('text selected in the chat', () => {
     select(said)
     fireEvent.mouseUp(box)
     expect(screen.queryByRole('group', { name: 'Selected text' })).not.toBeInTheDocument()
+  })
+
+  it('draws the bar over everything, outside the chat, kept inside the window', async () => {
+    const { said } = await open()
+    select(said)
+
+    fireEvent.mouseUp(said, { clientX: 2, clientY: 3 })
+
+    const bar = screen.getByRole('group', { name: 'Selected text' })
+    expect(bar.closest('.mx-chat')).toBeNull()
+    expect(bar.style.left).toBe('90px')
+    expect(bar.style.top).toBe('48px')
   })
 
   it('puts the bar away on Esc', async () => {

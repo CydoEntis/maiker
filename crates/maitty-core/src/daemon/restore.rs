@@ -10,6 +10,7 @@ struct Kept {
     agent: Option<String>,
     session: Option<String>,
     cmd: Option<String>,
+    began_as_agent: bool,
     label: String,
     pinned: bool,
     archived: bool,
@@ -34,6 +35,7 @@ impl Kept {
             agent: t.agent.clone(),
             session: t.session.clone(),
             cmd: t.cmd.clone(),
+            began_as_agent: t.began_as_agent,
             label: t.label.clone(),
             pinned: t.pinned,
             archived: t.archived,
@@ -54,6 +56,7 @@ impl Kept {
 
     fn give(self, t: &mut Term) {
         (t.agent, t.session, t.cmd) = (self.agent, self.session, self.cmd);
+        t.began_as_agent = self.began_as_agent;
         (t.label, t.name, t.first_prompt) = (self.label, self.name, self.first_prompt);
         (t.pinned, t.archived, t.snoozed_until) = (self.pinned, self.archived, self.snoozed_until);
         t.put_away_for = self.put_away_for;
@@ -303,6 +306,7 @@ impl Daemon {
             snoozed_until: term.snoozed_until,
             started_by: term.started_by,
             owner: term.owner,
+            began_as_agent: term.began_as_agent,
             tab_of: term.tab_of,
             queue: term.queue.iter().cloned().collect(),
             held_message: term.held_message.as_ref().map(|held| held.text.clone()),
@@ -463,6 +467,7 @@ impl Daemon {
                     Some(runs) => self.running_as(cmd, &def.name, runs),
                     None => cmd,
                 };
+                let cmd = self.keeping_bypass(cmd, &def.name, p.cmd.as_deref());
                 p.account
                     .as_deref()
                     .map(|a| self.cfg.as_account(a, &cmd))
@@ -587,6 +592,8 @@ impl Daemon {
                         .clone()
                         .filter(|p| p.is_dir())
                         .unwrap_or_else(|| sw.cwd.clone());
+                    let began_as_agent = pane.began_as_agent
+                        || pane.cmd.as_deref().is_some_and(|c| self.agent_in_cmd(c).is_some());
                     let cmd = self.restore_cmd_once(&mut pane, &cwd, &mut resuming);
                     // An agent that died mid-turn is not started again on its own, whichever app
                     // owns the session: resumed, it would sit at its prompt as if it had finished,
@@ -623,6 +630,9 @@ impl Daemon {
                                     (pane.pinned, pane.archived, pane.snoozed_until);
                                 t.put_away_for = pane.put_away_for.clone();
                                 t.owner = pane.owner;
+                                // A pane saved before this was recorded began as an agent when its command
+                                // says so; one that only had an agent typed into it has none.
+                                t.began_as_agent = began_as_agent;
                                 t.queue = pane.queue.iter().cloned().collect();
                                 t.held_message =
                                     pane.held_message.as_deref().map(term::HeldMessage::new);
@@ -734,6 +744,15 @@ impl Daemon {
         }
     }
 
+    /// A resume of an agent that started without permission prompts starts without them again, while its
+    /// switch is still on (ADR 0005): one that started asking keeps asking, so a resume never widens it.
+    pub(super) fn keeping_bypass(&self, cmd: String, agent: &str, started: Option<&str>) -> String {
+        match started {
+            Some(started) if self.cfg.started_bypassed(agent, started) => self.cfg.with_bypass(agent, &cmd),
+            _ => cmd,
+        }
+    }
+
     /// The command that resumes an agent's conversation, if its kind supports it.
     pub(super) fn resume_cmd(&self, t: &Term) -> Option<String> {
         let def = t
@@ -745,12 +764,15 @@ impl Daemon {
             _ => def.resume_last.clone(),
         };
         // Under the account it was started as: its conversation is in that account's folder.
-        resume.map(|cmd| self.running_as(cmd, &def.name, &t.runs_with)).map(|cmd| {
-            t.account
-                .as_deref()
-                .map(|a| self.cfg.as_account(a, &cmd))
-                .unwrap_or(cmd)
-        })
+        resume
+            .map(|cmd| self.running_as(cmd, &def.name, &t.runs_with))
+            .map(|cmd| self.keeping_bypass(cmd, &def.name, t.cmd.as_deref()))
+            .map(|cmd| {
+                t.account
+                    .as_deref()
+                    .map(|a| self.cfg.as_account(a, &cmd))
+                    .unwrap_or(cmd)
+            })
     }
 
     /// Restart an agent that is running, in the same spot and conversation, so it loads hooks

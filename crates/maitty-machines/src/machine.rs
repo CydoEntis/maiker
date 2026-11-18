@@ -168,14 +168,14 @@ impl Machine {
     /// The machine `--remote host` (or `<APP>_REMOTE`) names, else this one. The flag's
     /// only reader: everything else is handed a `Machine`.
     pub fn current() -> Machine {
-        let Some(host) = std::env::var(concat!(env!("APP_ENV"), "_REMOTE"))
+        let Some(host) = maitty_shared::brand::env_var("REMOTE")
             .ok()
             .filter(|s| !s.trim().is_empty())
         else {
             return Machine::local();
         };
-        let ssh = std::env::var(concat!(env!("APP_ENV"), "_SSH")).ok();
-        let remote_cmd = std::env::var(concat!(env!("APP_ENV"), "_REMOTE_CMD")).ok();
+        let ssh = maitty_shared::brand::env_var("SSH").ok();
+        let remote_cmd = maitty_shared::brand::env_var("REMOTE_CMD").ok();
         Machine::adhoc(&host, ssh.as_deref(), remote_cmd)
     }
 
@@ -201,6 +201,12 @@ impl Machine {
             &route.target,
             &route.remote_cmd,
         )?)
+    }
+
+    /// `probe_argv` for the app under another command there (a name it had before a rename).
+    pub fn probe_argv_for(&self, remote_cmd: &str) -> Result<Vec<String>> {
+        let route = self.ssh_route()?;
+        Ok(ssh_command::ssh_argv_probe(&route.ssh, &route.target, remote_cmd)?)
     }
 
     /// The line that asks this machine for its platform (`uname -sm`), without asking a person.
@@ -302,15 +308,14 @@ impl Machine {
         )?)
     }
 
-    /// The line that has the app installed at `program` there restart its daemon if idle, or
-    /// with `now` also when its sessions are saved.
-    pub fn restart_if_idle_argv(&self, program: &str, now: bool) -> Result<Vec<String>> {
+    /// The line that has the app installed at `program` there restart its daemon when `when` allows it.
+    pub fn restart_if_idle_argv(&self, program: &str, when: ssh_command::RestartWhen) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_restart_if_idle(
             &route.ssh,
             &route.target,
             program,
-            now,
+            when,
         )?)
     }
 
@@ -785,6 +790,20 @@ mod tests {
         }
     }
 
+    /// The window dials newest-only, so a machine whose daemon predates documents (`FILE_EDIT_SINCE`) is turned away
+    /// at connect time and offered its update: a document is never asked of one that would not answer it.
+    #[test]
+    fn a_daemon_older_than_saving_documents_is_not_used_by_the_window_but_the_newest_is() {
+        use maitty_ipc_transport::Welcomed;
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, FILE_EDIT_SINCE, PROTOCOL_VERSION};
+        let daemon = |version| Welcomed { version, compatible_since: COMPATIBLE_SINCE };
+        assert!(!super::accepts(true, daemon(FILE_EDIT_SINCE - 1)));
+        assert!(!super::accepts(true, daemon(PROTOCOL_VERSION - 1)));
+        assert!(super::accepts(true, daemon(PROTOCOL_VERSION)));
+        // A line that is not the window's (the terminal app) may still use an older daemon the two can talk to.
+        assert!(super::accepts(false, daemon(FILE_EDIT_SINCE - 1)));
+    }
+
     #[test]
     fn a_configured_machine_runs_ssh_with_its_args_and_the_default_command() {
         let m = super::Machine::from_def(&configured("box"), "ssh");
@@ -801,12 +820,12 @@ mod tests {
     #[test]
     fn a_configured_machine_uses_its_own_remote_command() {
         let mut def = configured("box");
-        def.remote_cmd = Some("~/bin/maitty".into());
+        def.remote_cmd = Some("~/bin/maiker".into());
         let m = super::Machine::from_def(&def, "ssh");
         let want = super::Machine::ssh(
             "me@10.0.0.2",
             vec!["ssh".into(), "-p".into(), "2222".into()],
-            "~/bin/maitty",
+            "~/bin/maiker",
         )
         .attach_only();
         assert_eq!(m.route, want.route);
@@ -814,11 +833,11 @@ mod tests {
 
     #[test]
     fn remote_host_is_a_machine_named_after_the_host() {
-        let m = super::Machine::adhoc("box", Some("ssh -p 2222"), Some("~/maitty".into()));
+        let m = super::Machine::adhoc("box", Some("ssh -p 2222"), Some("~/maiker".into()));
         let want = super::Machine::ssh(
             "box",
             vec!["ssh".into(), "-p".into(), "2222".into()],
-            "~/maitty",
+            "~/maiker",
         );
         assert_eq!((m.name(), m.host()), ("box", Some("box")));
         assert_eq!(m, want);
@@ -839,17 +858,17 @@ mod tests {
     fn only_a_remote_machine_has_a_host_to_show() {
         let local = super::Machine::local();
         assert!(!local.is_remote() && local.host().is_none());
-        let box_ = super::Machine::ssh("box", vec!["ssh".into()], "maitty");
+        let box_ = super::Machine::ssh("box", vec!["ssh".into()], "maiker");
         assert!(box_.is_remote());
         assert_eq!((box_.host(), box_.name()), (Some("box"), "box"));
     }
 
     #[test]
     fn an_ssh_failure_is_told_from_what_ssh_said() {
-        let missing = super::ssh_failure("box", "bash: maitty: command not found");
+        let missing = super::ssh_failure("box", "bash: maiker: command not found");
         assert!(missing.starts_with("box has no `"), "{missing}");
         assert!(
-            missing.ends_with("(bash: maitty: command not found)"),
+            missing.ends_with("(bash: maiker: command not found)"),
             "the words stay: {missing}"
         );
         assert_eq!(
@@ -1081,7 +1100,7 @@ mod tests {
         let claim =
             |m: &super::Machine| super::pane_claim(m, Some("7".into()), Some("secret".into()));
         assert_eq!(claim(&super::Machine::local()), Some((7, "secret".into())));
-        let remote = super::Machine::ssh("box", vec!["ssh".into()], "maitty");
+        let remote = super::Machine::ssh("box", vec!["ssh".into()], "maiker");
         assert_eq!(claim(&remote), None);
         assert_eq!(
             super::pane_claim(&super::Machine::local(), None, None),
@@ -1115,19 +1134,7 @@ mod tests {
         assert!(structured(&super::Machine::local()).is_some());
         assert!(structured(&configured_machine()).is_none());
         assert!(structured(&through(&["relay", "{command}"])).is_none());
-        assert!(structured(&super::Machine::ssh("box", vec!["ssh".into()], "maitty")).is_none());
-    }
-
-    #[test]
-    fn a_link_that_wants_the_newest_refuses_an_older_daemon_it_could_still_talk_to() {
-        use super::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION};
-        const { assert!(COMPATIBLE_SINCE < PROTOCOL_VERSION) };
-        let welcomed = |version| maitty_ipc_transport::Welcomed { version, compatible_since: COMPATIBLE_SINCE };
-        let older = welcomed(PROTOCOL_VERSION - 1);
-        assert!(super::accepts(false, older));
-        assert!(!super::accepts(true, older));
-        assert!(super::accepts(true, welcomed(PROTOCOL_VERSION)));
-        assert!(!super::accepts(false, welcomed(COMPATIBLE_SINCE - 1)));
+        assert!(structured(&super::Machine::ssh("box", vec!["ssh".into()], "maiker")).is_none());
     }
 
     #[test]
@@ -1149,7 +1156,7 @@ mod tests {
         assert_eq!(from(&configured_machine()), None);
         assert_eq!(from(&through(&["relay", "{command}"])), None);
         assert_eq!(
-            from(&super::Machine::ssh("box", vec!["ssh".into()], "maitty")),
+            from(&super::Machine::ssh("box", vec!["ssh".into()], "maiker")),
             None
         );
     }

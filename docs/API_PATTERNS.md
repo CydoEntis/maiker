@@ -101,7 +101,7 @@ entry point (handler / route / command / consumer)
 ## Project-specific: API style
 
 Not HTTP. A private IPC protocol between client and daemon over a local socket
-(or `ssh host maitty proxy`): length-delimited frames carrying msgpack-encoded
+(or `ssh host maiker proxy`): length-delimited frames carrying msgpack-encoded
 `ClientMsg` / `ServerMsg` enums (`crates/maitty-shared/src/protocol.rs`). The first exchange is
 `Hello { version }` → `Welcome { version, compatible_since }`. The client decides whether
 the two talk (`protocol::speaks_with`): the same `PROTOCOL_VERSION` always does, and another
@@ -121,8 +121,15 @@ too, but a hook or usage report is also accepted by an older daemon back to
 `REPORTS_READ_SINCE` (`ipc::open_for_report`), so an update does not stop hooked panes
 reporting before the daemon restarts. When `Hook`, `Usage` or `HookStatus` changes in a way an
 older daemon cannot read, set `REPORTS_READ_SINCE` to the new version in the same change; the
-test `todays_reports_are_read_by_the_oldest_daemon_they_are_sent_to` holds the shapes. The CLI subcommands and the MCP server (`maitty mcp`, JSON-RPC over stdio)
+test `todays_reports_are_read_by_the_oldest_daemon_they_are_sent_to` holds the shapes. The CLI subcommands and the MCP server (`maiker mcp`, JSON-RPC over stdio)
 are thin wrappers that send the same commands.
+
+Protocol 115 removed the in-app tickets (ADR 0013): `Query::Tickets`, `TicketKeys`, `TicketWrite` and `TicketLinks`, their
+replies, `Command::OpenTicketSetup` and `ServerMsg::TicketSetup`. A peer from 105 to 114 sent or waited for them, so
+`COMPATIBLE_SINCE` moved to 115 (the window is one version) and every older peer is refused. That made each earlier
+message's `*_SINCE` gate and `introduced_in` arm dead, and they were removed; `ServerMsg::introduced_in` and
+`ClientMsg::introduced_in` stay, answering `COMPATIBLE_SINCE`, for the next message added inside a window. Below, the
+"came in protocol N" and "`COMPATIBLE_SINCE` stays 78" lines record when each message appeared, not a live gate.
 
 A conversation that changed is announced to the desktop app's attached clients as
 `ServerMsg::ConversationChanged { id, generation }` (`daemon/conversation/news.rs`): after each
@@ -179,7 +186,7 @@ commands are `prewarm_agent_session` (the agent names and flag rules of `start_a
 daemon running is older) and `drop_prewarmed_agent`.
 
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
-app's new chat page and ticket starts, on this computer or another machine, whose own daemon makes it in its checkout
+app's New session dialog, on this computer or another machine, whose own daemon makes it in its checkout
 over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
 absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
@@ -194,7 +201,7 @@ setup hook may take ten, and says the service is from an older release instead o
 answer. It is this computer's daemon only. Structured runtimes may not ask for it.
 
 Protocol 113 removes `ClientMsg::WorkflowReport` and `TermInfo.workflows` (ADR 0011). An older
-`maitty workflow report` is a one-shot connection whose frame the daemon cannot read, so that call
+`maiker workflow report` is a one-shot connection whose frame the daemon cannot read, so that call
 fails and nothing else does; an older window reading a pane without `workflows` defaults it to none.
 `COMPATIBLE_SINCE` stays 78.
 
@@ -222,6 +229,13 @@ the alias (`opus`, `sonnet`, `haiku`) of a `/model` typed after it. A read that 
 restart, a wake, a reload, a move) adds them as `--model` and `--effort` (`Daemon::running_as`), quoted for the shell, only for
 Claude and only when they pass `TurnChoice::validate`: Claude starts a resumed session on the account's default model, which a
 `/model` in any other session changes, and an effort set for the session only is gone.
+
+`TermInfo.began_as_agent` says the pane was started as an agent (its command is one), not as a shell an agent was typed
+into. The daemon sets it once at start, saves it with the pane and keeps it across restarts; a pane saved before it
+existed reads from its command. It is a `#[serde(default)]` field, so it needed no new `PROTOCOL_VERSION` and
+`COMPATIBLE_SINCE` stays (a test decodes the old shape, which reads as a terminal, never ended on an agent's account). A
+pane with it whose agent ended, said by its hook or lost by several process scans in a row, is ended by the daemon unless
+an agent is back, a program runs in it or someone typed since (`close_ended_agents`).
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
 into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
@@ -291,14 +305,14 @@ window's scrollback holds. Any replay of a pane on the alternate screen repaints
 switches, then repaints the alternate one, so the view is on the right screen even when the
 program's own switch is older than the ring.
 
-Over ssh, `maitty proxy` writes `STREAM_MARKER` (`maitty-ipc-transport`) to stdout once, after it
+Over ssh, `maiker proxy` writes `STREAM_MARKER` (`maitty-ipc-transport`) to stdout once, after it
 reaches the daemon and before it relays a byte. The marker sits outside the frames, so it is
 not a protocol change. The client sends its Hello, then discards stdout up to the marker (a
 remote login that prints text, such as `.bashrc`, would otherwise corrupt the frames) and
 reads frames from the first byte after it. At most 64 KiB is discarded and the wait is 30 s,
 longer than ssh's `ConnectTimeout` so a slow login is not cut off. If text arrived and the
-marker did not, the connection fails with "the remote login printed text before maitty
-started (or it runs an older maitty: update it)". If nothing arrived, the error is what ssh
+marker did not, the connection fails with "the remote login printed text before maiker
+started (or it runs an older maiker: update it)". If nothing arrived, the error is what ssh
 said. A remote from before the marker is not refused: when the first four bytes of its
 output are a plausible frame length (up to `MAX_FRAME_BYTES`), the client reads them as the
 first frame and the usual version check applies. Text never passes as a length. An old remote
@@ -356,12 +370,17 @@ and exit non-zero.
 ## Project-specific: auth model
 
 Socket access is the auth (see `docs/SECURITY.md`); pane status reports also need
-the pane's process tree or `MAITTY_PANE_TOKEN`.
+the pane's process tree or `AGENT_PANE_TOKEN` (a pane started before the prefix change has
+`MAITTY_PANE_TOKEN`, which is read the same way; ADR 0012). The names of the daemon, the socket and
+the variables are not part of the protocol: renaming one is no `PROTOCOL_VERSION` change, and the socket
+name still comes from the command, so a client of another version finds the same daemon and
+the handshake decides whether they can talk. A rename of the command moves the socket; the first run under the
+new name stops the daemon of the old one so it saves its sessions (`ipc::stop_previous_daemon`, ADR 0008).
 
 ## Project-specific: feature/module structure
 
 Saved role profiles and sequenced planner/worker/reviewer workflows are not part
-of Maitty's interface, and neither is a fleet commander (`maitty brief`, `[team]`): old
+of Maiker's interface, and neither is a fleet commander (`maiker brief`, `[team]`): old
 config keys for them are read and ignored. Sessions, ordinary agent launches, helpers, and
 MCP session controls remain supported. The wire protocol version is `PROTOCOL_VERSION` in `crates/maitty-shared/src/protocol.rs`.
 Conversation tool-history entries carry a bounded provider-supplied `label` for
@@ -379,8 +398,8 @@ tool-use id when Claude names it, so it links to the tool step; an edit tool is 
 `SwapPanes { a, b }` trades the places of two panes of one tab (the split ratios stay with
 their slots). Panes in different tabs, or one that isn't there, are an error.
 
-`maitty_answer` takes the `prompt` id that `maitty_list` (`prompt` on a session that needs you) or
-`maitty_wait` (`prompt <id>`) gave. It hashes the question and its choices, whitespace aside. If the
+`maiker_answer` takes the `prompt` id that `maiker_list` (`prompt` on a session that needs you) or
+`maiker_wait` (`prompt <id>`) gave. It hashes the question and its choices, whitespace aside. If the
 prompt on screen has a different id, nothing is sent and the error shows the current question,
 choices and id.
 
@@ -395,7 +414,7 @@ starts (`daemon/last_lines.rs`). `TermInfo.helper_ask`
 lists the recorded tasks (not empty: the pane needs you, and `TermInfo.status` reads Blocked
 whatever its hooks report), and the request is announced like any needs-you. Only you answer
 it, with `Command::AnswerHelpers { term, choice }`: `Allow` (this session may from now on),
-`Always` (and every session in its project; kept in `helper-projects.json` in Maitty's data
+`Always` (and every session in its project; kept in `helper-projects.json` in Maiker's data
 folder), or `No` (its starts are refused for the rest of its run). A pane may not send it, and
 it is an error unless the pane is asking. `always` and `never` skip the question; `never`
 refuses with an error the agent can read. `sessions.helpers_at_once` (2, 3 or 4) bounds the
@@ -406,7 +425,7 @@ person's shell (no agent in the pane) is never asked. Sessions saved before a re
 **Pull requests.** The daemon polls `gh` off the event loop for each pane's branch, or the URL
 set by `Command::LinkPr { term, url }`; `None` returns to branch discovery. A pane may only link
 its own PR. `TermInfo.pr` holds the latest checks, review, conflict, title and URL. When a new
-reading has a failed check, review request or merge conflict, Maitty queues a short follow-up
+reading has a failed check, review request or merge conflict, Maiker queues a short follow-up
 for the pane's next idle turn when `[sessions] pr_wake` is enabled. It never types into a question.
 
 **Secrets.** A pane asks through `Command::RequestSecret { term, label, reason }` on its
@@ -531,12 +550,12 @@ completion uses the soft completion sound; helper completion stays quiet. Helper
 questions may ring after the same blocked delay.
 
 A session whose project has a check is not finished until the check settles. While it
-runs, no finished alert (desktop or phone) rings and `maitty wait`, `maitty send --wait` and
-MCP `maitty_wait` / `maitty_send` with `wait` stay blocked, bounded by their timeout. A
+runs, no finished alert (desktop or phone) rings and `maiker wait`, `maiker send --wait` and
+MCP `maiker_wait` / `maiker_send` with `wait` stay blocked, bounded by their timeout. A
 passed check lets the normal finished alert ring. A failed check raises a blocked
 attention alert and a notice saying "check failed", rings no finished alert (desktop or
 phone), and the waiter returns with the result: `Waited::Turn` carries the check's
-`CheckInfo`, MCP replies end with its one-line result, and `maitty wait` prints that line
+`CheckInfo`, MCP replies end with its one-line result, and `maiker wait` prints that line
 to stderr and exits 4 (2 is timed out, 3 needs you). A check that could not run gives a
 notice and then the normal finished alert. Queued follow-ups still send when the turn
 ends, and `sessions.helpers_at_once` still counts only working sessions. A session with no check
@@ -550,19 +569,19 @@ run and a stale pass all exit 0. Waiting for approval raises a blocked attention
 the notice `<place>: approve check: <command>` once a turn; it is never a finish.
 
 A working agent the daemon marks quiet (`TermInfo::quiet_since`) reads `[claude: working · quiet
-12m]` in `maitty ls`; `ls --json` and `maitty_list` add `quiet_since` (unix seconds) only then. A
-`maitty wait` or `maitty_wait` that times out on one says `still working, but quiet for 12m`.
+12m]` in `maiker ls`; `ls --json` and `maiker_list` add `quiet_since` (unix seconds) only then. A
+`maiker wait` or `maiker_wait` that times out on one says `still working, but quiet for 12m`.
 A working agent the daemon marks repeating (`TermInfo::repeats`, the calls the repeat has reached)
-reads `[claude: working · repeating 6x]` in `maitty ls`; `ls --json` and `maitty_list` add `repeats`
+reads `[claude: working · repeating 6x]` in `maiker ls`; `ls --json` and `maiker_list` add `repeats`
 only then; and a wait that times out on one says `still working, but repeating itself (6x)`. A quiet
 agent says so first. The count is a hint, never a status: nothing waits on it or rings for it.
 
-`maitty ls`, `maitty ls --json` and MCP `maitty_list` report a check next to the status, never in
+`maiker ls`, `maiker ls --json` and MCP `maiker_list` report a check next to the status, never in
 place of it: `status` keeps its value (`done`) and `TermInfo::reported_check` decides whether a
 result is shown (not while the agent is working or asking, as in the sidebar). `cli::check_note`
 is the one wording for both text surfaces: `check failed (exit 1)`, `checking`, `check passed`,
 `check could not run`, `check overridden`. `ls` prints it in the agent tag
-(`[claude: done · check failed (exit 1)]`); `maitty_list` adds it as a `check` string. `ls --json`
+(`[claude: done · check failed (exit 1)]`); `maiker_list` adds it as a `check` string. `ls --json`
 adds a `check` object (`state` as `checking`, `passed`, `failed`, `overridden` or
 `could_not_run`; `command`; `exit_code`; `duration_ms`; `first_failing_line`; `rerun_queued`;
 `overridden_at`). A pane with no check has no `check` key and its output is unchanged.
@@ -702,8 +721,9 @@ thinking is not kept.
 `ConversationSend` carries an optional `choice` (`TurnChoice { model, effort }`, `#[serde(default)]`, no
 protocol bump; a send from before it decodes as no choice). The daemon validates it (a plain model name that
 cannot read as an option, an effort in `low | medium | high | xhigh | max`) and keeps it with a queued
-message. For Claude every message starts its own `claude` process, so the choice becomes `--model` and
-`--effort` on that process; for Codex it rides on `turn/start` as `model` and `effort`, which Codex applies
+message. For Claude every message has its own `claude` process, so the choice becomes `--model` and
+`--effort` on that process (one started ahead with the last message's choice is used only when the arguments
+match exactly; see [PERFORMANCE](PERFORMANCE.md#a-claude-chats-next-message-2026-11-18)); for Codex it rides on `turn/start` as `model` and `effort`, which Codex applies
 to that turn and the ones after. The choice never touches the permission arguments or the thread's sandbox
 (ADR 0005). The window sends the picked values with each message, so the daemon stores nothing.
 
@@ -745,6 +765,11 @@ gets `ServerMsg::SettingsChanged`. Keys, values and limits are in
 [ENVIRONMENT](ENVIRONMENT.md#project-specific-settings-both-apps-share). A value of the wrong kind or
 out of range answers `ServerMsg::Error` and leaves the file as it was. A peer that predates the
 variants cannot decode them (a test), and another machine's `SettingsChanged` is ignored.
+Protocol 118 adds `SharedSettings.bypass_off` (defaulted, so an older reply reads as every agent on; a
+test) and `SettingKey::BypassOff`, which a client sends only to a daemon at `BYPASS_SETTING_SINCE` or
+later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays 115. It also adds `SharedSettings.update_machines`
+(defaulted to true, the setting's default; a test) and `SettingKey::UpdateMachines`, sent only from
+`UPDATE_MACHINES_SINCE`.
 
 Protocol 76 adds `Provider::Gemini` (a conversation's provider on the wire). A Gemini CLI agent in a pane gets the same read-only, transcript-following conversation as Claude and Codex (`follow_transcript.rs`, `Format::Gemini`); the file is the one its hook's `transcript_path` names, and its name must start `session-` and end with the first 8 characters of the hook's session id. Gemini has no structured runtime: starting one is refused. A peer that predates the variant cannot decode it (a test decodes the old provider names).
 
@@ -828,6 +853,26 @@ snapshot against a tree of the checkout as it is, untracked files included), wit
 The commit must be one of the checkout's snapshots. The desktop app asks it before it offers a restore
 (`snapshot_restore_count`, this computer's panes only). The request has its own `introduced_in` arm
 (`RESTORE_COUNT_SINCE`), so an older daemon is not asked and the app says to restart it; `COMPATIBLE_SINCE` stays 78.
+
+Protocol 116 adds saving a document from the desktop app's viewer with a conflict check: `RepoRequest::FileStamped { path }`
+answers `RepoReply::FileStamped { text, version }` (the text and the file's *version*, its length and an FNV-1a hash of
+its bytes as one opaque word: equal only for the same bytes, so a touch that changes none is not a change), and
+`Command::SaveFile { term, tag, path, contents, version }` answers `RepoReply::Saved { version }`, or
+`RepoReply::ChangedOnDisk` with nothing written when `version` is `Some` and the file on disk no longer has it (`None`
+is the person's explicit Overwrite after that answer). The path rules, the 256 KiB cap, the refusal of links and
+`.git`, "an existing file only" and the temporary-file-and-rename write are those of `WriteFile`; the version is
+checked again just before the rename, and the permissions of the old file are kept. A save that cannot be written is an
+error with the system's reason, never a quiet success. Only a human client can send it. Both are new messages: an
+older peer is never sent them (`ClientMsg::introduced_in` answers `FILE_EDIT_SINCE`, 116), so `COMPATIBLE_SINCE` stays
+115, and the window offers Edit only to a daemon that answers the stamped read; against an older one it shows Drawn and
+Source. The pinned bytes of `Saved` and `ChangedOnDisk` are in `a_file_write_is_asked_only_of_a_daemon_that_knows_it`.
+For a pane on another machine the window sends `Tree`, `FileStamped` (markdown names only) and `SaveFile` (markdown only) to
+that machine's daemon on a request line (ADR 0014), each answer vetted to the kind that was asked
+(`remote_repo::vet_repo_reply(&request, reply)`, `vet_save_reply`); no message is added or changed, so `PROTOCOL_VERSION`
+stays 117 here and `COMPATIBLE_SINCE` as it is. The window dials machines newest-only, so an older daemon is turned away
+at connect time and offered its update rather than asked. An empty `version` in a vetted `FileStamped` means the text was
+cleaned and must not be saved.
+Line endings are the window's business (`documents/lineEndings.ts`): the daemon stores and compares the bytes it is given.
 
 Protocol 89 adds `RepoRequest::FindFiles { query, limit }` and `RepoReply::Files { paths, truncated }`: the files
 under the pane's checkout (the repository top, or the pane's folder when it is not a repository, as for `Tree` and
@@ -978,93 +1023,6 @@ state, link, code, failure}` (`apps/gui/src/api/agentSignIn.ts` re-checks the li
 address). Asking twice changes nothing, so it may go on a kept line. The spike and the behaviour:
 [chat-sign-in spec](features/chat-sign-in/spec.md).
 
-Protocol 105 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets { tag, answer }`
-(`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
-arm, and nothing an older peer sends or reads changed). It reads tickets, read-only; there is no
-request that writes. `source` is a GitHub repository, `owner/name`, read with the machine's own
-`gh` (`daemon/tickets_github.rs`), or `plane` or `linear`, read with the key the daemon kept
-(`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`; below). A repository name has a slash and the
-providers' do not, so the one message carries all three and an older daemon answers `Invalid`. `request` is a `TicketsRequest`: `Groups` (the repository as a
-`Project` group and its milestones as `Milestone` groups with their ticket count), `List(Filter)`
-(`group`, `state` category, `assignee`, `label`, `search`, `page`; `TICKETS_PAGE_SIZE` (30) a page,
-page 0 to `TICKETS_PAGE_MAX`; `gh` pages only by size, so it is asked for everything up to one past
-the page; GitHub has no `Started` state, so that filter lists nothing) or `Get { id }`. `answer` is
-`Ok(TicketsReply)` (`Groups`, `List(TicketPage)` or `Ticket`) or `Err(TicketError)`: `NotInstalled`,
-`SignedOut`, `NotFound`, `RateLimited`, or `Unreachable(line)` and `Invalid(line)`, whose lines are
-fixed words, never `gh`'s own. Ids are `provider:key`: `github:owner/name#12` for an issue,
-`github:owner/name!3` for a milestone, `github:owner/name` for the repository; an address is built
-from the checked repository and number, never copied. A ticket carries its body, at most
-`TICKET_COMMENTS_MAX` (50, the oldest first, `comments_more` says there were more), the pull
-requests that close it as `links`, and `blocked_by` ids (`gh api …/dependencies/blocked_by`; a GitHub
-that does not know it gives none). Every string is cleaned and cut and every list capped by the pure
-rules in `crates/maitty-shared/src/tickets.rs` (`TicketsReply::cleaned`), by the daemon and again
-for an answer from another machine (`remote_policy::vet`; the verdict is *answer*). Human clients
-only: a pane or a structured runtime gets `ServerMsg::Error`. `gh` runs off the event loop, at most
-twice (30 seconds each), and `gh`'s output is read only up to 4 MiB.
-
-Protocol 106 adds `Query::TicketKeys { change, tag }` with `Reply::TicketKeys { tag, answer }`
-(`TICKET_KEYS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own
-`introduced_in` arm, and no field or variant an older peer reads changed). It keeps the key a keyed
-ticket provider needs. `change` is a `TicketKeyChange`: `Status`, `Set { provider, address, workspace,
-key }` (the key is a `SecretText`, which prints as hidden) or `Remove { provider }`; `provider` is
-`Plane` or `Linear`. `answer` is the state after the change, one `TicketKeyState { provider, set, address,
-workspace, stored_in }` per provider (`stored_in` is `Keychain` or `File`, `#[serde(default)]` to `File`:
-an older daemon sends none and keeps every key in a file, and an older client passes over it, so it
-needs no protocol version), or an `Invalid(line)`; it never holds a key. Plane takes a server address
-(`check_base_url`: https anywhere, http only to your own network) and a workspace; Linear takes a key
-alone, because its one server is fixed in the code. Human clients only: a pane or a structured runtime
-gets `ServerMsg::Error`. A request for a provider with no key answers `TicketError::NotInstalled` (the
-client shows "add your key"); a key the provider refuses is `SignedOut`. The files are written off the
-event loop. Where the key lives: [SECURITY](SECURITY.md) and [DATABASE](DATABASE.md#project-specific-ticket-keys).
-
-Plane and Linear ids follow `provider:key` with `.`, `!` and `#` as separators: Plane `plane:<project>`
-(a project), `plane:<project>!<module>` (a module), `plane:<project>#<work item>`; Linear
-`linear:team.<id>` (a `Project` group), `linear:project.<id>` (a `Module`), `linear:cycle.<id>` (a
-`Cycle`) and `linear:issue.<id>`. A Plane list needs a `group` (a project or module); a Linear list may
-have none. Plane filters nothing server-side, so a page is cut from at most five pages of 100 work items
-read in Plane's order; Linear is asked for the state, assignee, label, title text and group, and read a
-cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 seconds each) before
-`RateLimited`; Linear's is reported at once. A Plane `blocked_by` comes from
-`work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
-inverse `blocks` relations.
-
-`Query::TicketWrite` and `Reply::TicketWrite` (protocol 107, `TICKET_WRITE_SINCE`) are retired: Maitty only
-reads tickets (ADR 0011). They stay on the wire so a window from 107 to 112 that still asks gets `Reply::TicketWrite`
-with `Err(Invalid)` ("Maitty no longer changes tickets; change it in the tracker") and keeps its connection. The
-daemon writes nothing, and no client of protocol 113 asks.
-
-Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
-(`TICKET_LINKS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm).
-The daemon keeps which sources each project reads (`maitty_shared::ticket_links`, `daemon/ticket_links.rs`,
-`<data folder>/ticket-links.json`), so every client of a computer shows a project the same tickets. A provider's key is
-set once for all projects (`TicketKeys`); a link is per project: `github` (`Origin`, the default; `Repo("owner/name")`;
-`Off`), a Plane project and a Linear team (`TicketPick { id, name }`). A project is a `TicketPlace { machine, folder }`:
-`machine` is `None` for this computer, whose folder the daemon takes to its repository's main checkout (the parent of
-`git rev-parse --git-common-dir`), so every worktree of a repository shares one link; another machine's folder (by its
-`[[machines]]` name) is kept as the client gave it. `place` is the folder in front, answered back resolved in
-`answer.project` (with an empty link when it has none); `change` is `Read`, `Set { place, link }`, `Unlink { place }`,
-`SetMe { provider, name }` (your name in Plane or Linear, for Mine) or `Import { projects, me }` (links a client kept
-before protocol 108: each added only when its project has none, a name only when unset). `answer` is
-`Ok(TicketLinks { project, projects, me })`, every linked project sorted by machine and folder, or `Invalid` for a
-folder that is not absolute, a repository not written `owner/name`, or a pick whose id is not a ticket id; nothing
-refused is written. At most 500 projects. Human clients only. A damaged file is logged and read as no links.
-
-Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
-`introduced_in` arm, and the new field is `#[serde(default)]`, which an older peer skips) adds:
-
-- `TicketLinks::repo_file: Option<RepoTicketFile { github, plane, linear, notes }>`. For a place on this computer,
-  `answer.project`'s link is what you linked here with the repository's `.maitty/tickets.toml` filling each source
-  you did not (`daemon/ticket_repo_file.rs`); the flags say which parts came from the file and `notes` (at most 4,
-  160 characters each) why any part was not used. `projects` lists only what was linked here, never the file.
-- `Command::OpenTicketSetup { term, folder, source, link }`, from a pane's agent (`<app>_tickets_setup` in
-  `maitty mcp`). Allowed only for the pane's own client (`client.from == Some(term)`), for its own project
-  (`folder`, when given, must be in it). The daemon reads the project's links and key states off the loop, then
-  broadcasts `ServerMsg::TicketSetup(TicketSetupAsk { term, folder, source, link })` to attached human clients
-  (not panes, not structured runtimes), at most once per project every 5 seconds, and replies `Reply::Text` with
-  what is set up, in words: never a key or where it is sent. `link` is one cleaned word (`clean_suggested_link`,
-  512 characters), shown as text. Nothing is saved; the person finishes the setup in the window. Another machine's
-  `TicketSetup` is ignored (`remote_policy`).
-
 Protocol 110 adds `Query::Extensions { request, tag }` with `Reply::Extensions { tag, answer }` (`EXTENSIONS_SINCE`;
 `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm). It reads and changes the
 skills, plugins, MCP servers and marketplaces of Claude Code and Codex on the daemon's computer (design:
@@ -1098,18 +1056,41 @@ that is offline (a daemon older than the window is one that needs its update, AD
 and shown in the picker; nothing falls back to this computer's list. Names and lines from another machine are cleaned and capped again
 (`remote_policy::vet`, `maitty_shared::agent_commands`).
 
-The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
-`ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
-`{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them
-with zod). A source longer than 256 bytes is refused in the host. Ticket answers are expected for 60 seconds plus
-the clone margin (`routing::TICKETS_ANSWER_WINDOW`); the window waits 95 seconds. `github_repo_of(folder)` answers
-the `owner/name` a folder of this computer pushes to (`git remote get-url origin`, read by
-`maitty_shared::github::repo_of_remote`), or null.
+Protocol 117 (`FOLDER_CREATE_SINCE`; `COMPATIBLE_SINCE` stays at 115: the question is new and has its own
+`introduced_in` arm) adds `Query::CreateFolder { parent, name, tag }` with `Reply::FolderCreated { tag, outcome }`,
+where `outcome` is `FolderCreated::Created { path }` (absolute, `/` separators), `Exists`, `NotAllowed { reason }` (the
+name or the parent is not accepted) or `Failed { reason }` (the disk refused). `FolderListing` gains
+`can_create: bool` (`#[serde(default)]`: a daemon from before it reads as false), which is how a window knows a machine
+can make folders without asking it in vain: an older daemon passes over an unknown question and never answers. The rules
+are in [SECURITY](SECURITY.md#project-specific-auth-and-permissions). The desktop host sends it through
+`create_folder(machine, parent, name, tag)` and raises a `folder-created` event `{ machine, tag, outcome }`
+(`apps/gui/src/api/folders.ts` `createFolder` waits 10 seconds on it); a daemon's reply is not safe to ask twice
+(`safe_to_ask_twice`).
+
+Protocol 114 (`REPOSITORIES_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
+`introduced_in` arm) adds `Query::Repositories { rescan, tag }` with `Reply::Repositories { tag, found }`, where
+`found` is `RepositoryIndex { repos, indexed_at, more }` and each repo is `IndexedRepository { path, branch,
+last_used }` (`maitty_shared::repositories`; `path` absolute with `/`, `last_used` unix seconds, 0 when unknown). The
+daemon keeps the list in memory (`daemon::repo_index`): a search walks the home folder on a blocking thread, breadth
+first, at most 5 folders deep, 100,000 folders and 15 seconds (`REPOSITORY_SEARCH_LIMIT_SECS`), skipping hidden folders,
+build and package folders (`node_modules`, `target`, ...), the system's media and app folders, links (never followed),
+network mounts (Linux: nfs, cifs, sshfs, ...) and linked worktrees; a repository is listed and not entered. It runs no
+git: the branch is `HEAD`, the use is the time of `.git/logs/HEAD`. The first search starts with the daemon; the answer
+to a question counts the repositories panes run in (found or not, outside the home folder too) as used when a pane there
+last had output or input. Without `rescan` the list is answered at once, except that a daemon that has not finished one
+search yet waits for it; with `rescan` a search starts (one at a time; a question during one joins it) and every
+waiting question is answered when it ends. The list is cut at 300, most recently used first, and `more` says it was cut
+or a search ran out of time. Human clients only. The desktop host asks through `repositories(machine, rescan, tag)`
+(this computer when `machine` is left out) and raises a `repositories` event `{ machine, tag, answer }`; the window
+(no longer asked by the desktop window, whose folder picker only browses; the host command remains) would wait 50 seconds, the host expects the
+answer for the search limit plus the clone margin (`routing::REPOSITORIES_ANSWER_WINDOW`). Another machine's list is
+cleaned and capped again (`remote_policy::vet`, `RepositoryIndex::cleaned`). A daemon from before 114 never answers, so
+the window's wait ends with its own words.
 
 Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
 (`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`
 answers the lines `Apply` would write and writes nothing; `Apply { folder, identity }` writes them;
-`Remove { folder }` takes away the rule Maitty wrote for a folder (named as the report names it). `outcome`
+`Remove { folder }` takes away the rule Maiker wrote for a folder (named as the report names it). `outcome`
 is the lines by file (`GitConfigWrite { file, lines }`, each line `key = value`) or one line saying why not.
 A rule is a file `<data dir>/git-identities/<16 hex digits of the folder's SHA-256>.gitconfig` holding
 `user.name`, `user.email`, `credential.https://github.com.username`, an empty
@@ -1119,7 +1100,7 @@ A rule is a file `<data dir>/git-identities/<16 hex digits of the folder's SHA-2
 it. `gh auth git-credential` is not used because it only answers for the active account. The folder must
 exist, is made absolute with `/` separators, and may not hold `* ? [ \ "`; the name and email are one
 line each; the login must be signed in on the machine (`gh auth status`). A folder whose entry points
-anywhere else (a rule set outside Maitty) is refused, both to write and to remove. Applying twice leaves
+anywhere else (a rule set outside Maiker) is refused, both to write and to remove. Applying twice leaves
 one entry. Everything is written with `git config --global` and `--file`, never as text; the desktop host
 sends it with `git_identity_rule(machine, change)`, and an answer from another machine is cleaned and cut
 to 4 files of 16 lines (`remote_policy::vet_rule_reply`). Human clients only.
@@ -1128,7 +1109,7 @@ Protocol 101 adds `Query::GitIdentities { tag }` with `Reply::GitIdentities { ta
 (`GIT_IDENTITIES_SINCE`; `COMPATIBLE_SINCE` stays). The report is the machine's global `user.name`
 and `user.email` (each absent when not set) and its folder rules: every
 `includeIf "gitdir:<folder>/"` (or `gitdir/i:`) entry of the global git config, in git's order, the
-last one for a folder standing for it, at most `GIT_IDENTITY_RULES_MAX` (100). A rule Maitty wrote
+last one for a folder standing for it, at most `GIT_IDENTITY_RULES_MAX` (100). A rule Maiker wrote
 has an `identity` (`name`, `email`, GitHub `login`): its entry points at a file directly inside
 `<data dir>/git-identities/` whose `maitty.folder` names that folder, and the login is that file's
 `credential.https://github.com.username`. Any other rule has `identity: None` and only its folder is
@@ -1313,7 +1294,7 @@ secret is inserted into provider config, persisted thread settings or metadata.
 MCP references revalidate authenticated read access before filesystem listing.
 
 Start targets are Create with explicit launch settings, Session with an exact
-Codex `Thread.id`, or Conversation with a Maitty ID and expected generation.
+Codex `Thread.id`, or Conversation with a Maiker ID and expected generation.
 Paths are resolved in background before admission. Explicit resume never uses
 latest, a picker, a fork, alternate history or a missing-thread fallback. Native
 profile-v2 remains unsupported. Effective cwd/model/provider/approval reviewer
@@ -1426,7 +1407,7 @@ and one of three fixed tokens in stderr (`Permission denied`, `Host key verifica
 Everything else is `Unreachable` with ssh's last stderr line, control characters removed and
 cut to 200 characters. The fix text of each class is one constant in `maitty-machines` (`link_failure.rs`)
 (`FIX_LOGIN`, `FIX_UPDATE`, `FIX_INSTALL`, `FIX_NO_DAEMON`); `FIX_UPDATE` and `FIX_INSTALL` name
-`maitty machine update <name>` (and `--install`), with `<name>` as written, one text for every machine.
+`maiker machine update <name>` (and `--install`), with `<name>` as written, one text for every machine.
 
 **Custom transport.** A machine with `via` is reached by running the user's program
 (`Route::Command`, `ssh_command::command_argv`, both in `maitty-machines`) in place of ssh: the same pipes, stream marker skipping,
@@ -1541,7 +1522,7 @@ the rest are dropped silently. Nothing blocks and nothing is queued.
 pane address `machine/id`, else `--on`, else the `--remote` adapter (`ipc::Machine::current()`),
 else this computer. Each command is handed that `Target` and opens its connection with
 `ipc::open_to` (for another machine, `maitty_machines::open_remote`); nothing reads the environment for the machine after that. A configured machine only
-attaches. The pane a command runs in (`$MAITTY_TERM_ID`) is a pane of this computer's daemon, so it is
+attaches. The pane a command runs in (`$AGENT_TERM_ID`) is a pane of this computer's daemon, so it is
 the default pane only when the target is this computer or the ad-hoc `--remote` route; a command
 aimed at a named machine needs an explicit `--pane machine/id`. `ls` is unchanged for this computer;
 named at a machine it heads the list with `machine <name>`, writes panes as `name/id`, and
@@ -1550,7 +1531,7 @@ machine at the same time and prints those that answer; each that does not gets a
 `<name>: unreachable (<why>)` (or `needs a login`, `is another version`, ...) on stderr, and the command
 fails only when none answered.
 
-**MCP tools.** `maitty_list`, `_read`, `_send`, `_wait` and `_start` take an optional `machine`; a
+**MCP tools.** `maiker_list`, `_read`, `_send`, `_wait` and `_start` take an optional `machine`; a
 session of another machine is written `machine/id` in a list and accepted as an `id` by every pane
 tool (the `machine` argument may then be left out; if both are given and differ, the call is an
 error). Omitted, a call is exactly as before. `machine = "all"` is for the list only. Errors that

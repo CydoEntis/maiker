@@ -198,16 +198,7 @@ impl Launch {
                 self.environment
                     .iter()
                     .filter(|(key, _)| {
-                        !crate::ipc::STRUCTURED_ENV
-                            .iter()
-                            .chain(
-                                [
-                                    concat!(env!("APP_ENV"), "_TERM_ID"),
-                                    concat!(env!("APP_ENV"), "_PANE_TOKEN"),
-                                ]
-                                .iter(),
-                            )
-                            .any(|excluded| key.to_string_lossy().eq_ignore_ascii_case(excluded))
+                        !crate::ipc::is_identity_env(&key.to_string_lossy())
                     })
                     .cloned(),
             )
@@ -226,20 +217,17 @@ impl Launch {
     ) -> Result<Connection, StartupFailure> {
         let turn_steer = self.preflight().await?;
         let mut command = self.command(self.paths().0);
-        command
-            .env(
-                crate::ipc::STRUCTURED_ENV[0],
-                identity.conversation.0.to_string(),
-            )
-            .env(
-                crate::ipc::STRUCTURED_ENV[1],
-                identity.generation.to_string(),
-            )
-            .env(
-                crate::ipc::STRUCTURED_ENV[2],
-                identity.connection.to_string(),
-            )
-            .env(crate::ipc::STRUCTURED_ENV[3], &identity.token);
+        let [id, generation, connection, token] = crate::ipc::STRUCTURED_KEYS;
+        for (key, value) in [
+            (id, identity.conversation.0.to_string()),
+            (generation, identity.generation.to_string()),
+            (connection, identity.connection.to_string()),
+            (token, identity.token.clone()),
+        ] {
+            for name in maitty_shared::brand::env_names(key) {
+                command.env(name, &value);
+            }
+        }
         command.arg("app-server").args(["--listen", "stdio://"]);
         let mut process = OwnedChild::spawn(command)
             .await
@@ -687,6 +675,8 @@ impl Connection {
         )
         .await?;
         let mut notifications = Vec::new();
+        let structured = crate::ipc::structured_env();
+        let route = crate::ipc::runtime_route_env();
         loop {
             match self.next().await? {
                 Envelope::Response {
@@ -696,8 +686,8 @@ impl Connection {
                     return Ok((
                         maitty_provider_codex::runtime_policy_overrides(
                             &response,
-                            &crate::ipc::STRUCTURED_ENV,
-                            &crate::ipc::RUNTIME_ROUTE_ENV,
+                            &structured.iter().map(String::as_str).collect::<Vec<_>>(),
+                            &route.iter().map(String::as_str).collect::<Vec<_>>(),
                         )?,
                         notifications,
                     ));

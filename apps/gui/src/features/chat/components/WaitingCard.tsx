@@ -1,6 +1,5 @@
 import type { KeyboardEvent, ReactNode } from 'react'
 import { cardVariants } from '@/components/ui/card'
-import { StatusMark } from '@/components/ui/status-mark'
 import { cn } from '@/lib/utils'
 
 type Props = {
@@ -16,6 +15,8 @@ type Props = {
   foot?: ReactNode
   /** What Enter does while the card itself has the keys: its main answer. Absent where there is none. */
   onEnter?: (() => void) | undefined
+  /** `neutral` is for a card the agent is not blocked on (the reply tray): the same card with a quiet mark instead of the amber `!`. */
+  tone?: 'needs' | 'neutral'
 }
 
 /**
@@ -23,7 +24,7 @@ type Props = {
  * amber-edged card open at the bottom, a head with the needs mark and what is asked, the detail, and the answers in
  * its foot. Only one shows at a time; the chat keeps the rest in order behind it.
  */
-export function WaitingCard({ label, title, aside, children, flush = false, foot, onEnter }: Props) {
+export function WaitingCard({ label, title, aside, children, flush = false, foot, onEnter, tone = 'needs' }: Props) {
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
     // Only on the card itself: a focused button already presses with Enter, and a field's Enter is its own.
     if (onEnter === undefined || event.key !== 'Enter' || event.target !== event.currentTarget) return
@@ -32,14 +33,16 @@ export function WaitingCard({ label, title, aside, children, flush = false, foot
   }
   return (
     <section
+      role={tone === 'neutral' ? 'group' : undefined}
       aria-label={label}
       tabIndex={onEnter === undefined ? undefined : 0}
       aria-keyshortcuts={onEnter === undefined ? undefined : 'Enter'}
-      className={cn(cardVariants({ tone: 'needs' }), 'mx-waiting')}
+      data-float=""
+      className={cn(cardVariants({ tone: 'none' }), 'mx-waiting', tone === 'neutral' && 'is-neutral')}
       onKeyDown={onKeyDown}
     >
       <div className="mx-waiting-head">
-        <StatusMark state="needs" />
+        <span className="mx-waiting-bang" aria-hidden="true">{tone === 'neutral' ? '↩' : '!'}</span>
         <span className="mx-waiting-title">{title}</span>
         <span className="mx-spacer" />
         {aside !== undefined && <span className="mx-waiting-aside">{aside}</span>}

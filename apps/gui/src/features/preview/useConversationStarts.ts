@@ -5,7 +5,6 @@ import { toast } from '@/lib/toast'
 import { createConversation as createDaemonConversation, defaultSessionFolder, loadConversations, type SessionPermissions, startShellSession, startTerminalSession } from '@/api/daemon'
 import type { Conversation, Message } from '@/data/preview'
 import { readConversationPermissions, rememberConversationPermissions } from '@/data/conversationPermissions'
-import { errorMessage } from '@/lib/error-message'
 import type { PanelTab } from './shared'
 
 /** Starts a session: a shell at once in the desktop app, through the dialog in the browser preview. */
@@ -56,7 +55,7 @@ export function useConversationStarts({ desktop, setNewDialogOpen, daemonDisconn
         if (created) selectConversation(created.id)
       })
       .catch((error: unknown) => {
-        toast.error(errorMessage(error, 'Could not start a shell'))
+        toast.failed('Could not start a shell', error)
       })
       .finally(() => {
         conversationCreationPendingRef.current = false
@@ -78,7 +77,7 @@ export function useConversationStarts({ desktop, setNewDialogOpen, daemonDisconn
         else toast.error('Choose a project folder first')
       })
       .catch((error: unknown) => {
-        toast.error(errorMessage(error, 'Could not find your home folder'))
+        toast.failed('Could not find your home folder', error)
       })
   }
 
@@ -104,9 +103,7 @@ export function useConversationStarts({ desktop, setNewDialogOpen, daemonDisconn
           if (created) selectConversation(created.id)
         })
         .catch((error: unknown) => {
-          toast.error(
-            errorMessage(error, `Could not start ${newProvider} terminal`),
-          )
+          toast.failed(`Could not start ${newProvider} terminal`, error)
         })
         .finally(() => {
           conversationCreationPendingRef.current = false
@@ -141,9 +138,7 @@ export function useConversationStarts({ desktop, setNewDialogOpen, daemonDisconn
         .catch((error: unknown) => {
           // Reopen the dialog with the same choices so nothing has to be retyped.
           setNewDialogOpen(true)
-          toast.error(
-            errorMessage(error, `Could not start ${newProvider} conversation`),
-          )
+          toast.failed(`Could not start ${newProvider} conversation`, error)
         })
         .finally(() => {
           setStartingSessions((current) =>
@@ -174,7 +169,7 @@ export function useConversationStarts({ desktop, setNewDialogOpen, daemonDisconn
     selectConversation(conversation.id)
     setActivePanel('details')
     setNewDialogOpen(false)
-    toast.message('Created in local preview')
+    toast.info('Created in local preview')
   }
   return { openNewSession, createConversation }
 }

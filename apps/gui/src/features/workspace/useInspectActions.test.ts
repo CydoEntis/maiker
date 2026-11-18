@@ -4,7 +4,7 @@ import { toast } from '@/lib/toast'
 import type { SessionView } from './model/session'
 import { useInspectActions, useTurnDiff } from './useInspectActions'
 
-vi.mock('@/lib/toast', () => ({ toast: { message: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), info: vi.fn() } }))
 
 const TURN = { startedAtMs: 1_000, endedAtMs: 9_000 }
 
@@ -54,7 +54,7 @@ describe('showing a session’s changes from its chat', () => {
   it('refuses a session on another machine and keeps no turn', () => {
     const { actions, setTurnDiff, setInspectOpen } = mount()
     actions.showChanges('pane-3', 'far', 'a.ts', TURN)
-    expect(toast.message).toHaveBeenCalled()
+    expect(toast.info).toHaveBeenCalled()
     expect(setTurnDiff).not.toHaveBeenCalled()
     expect(setInspectOpen).not.toHaveBeenCalled()
   })

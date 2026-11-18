@@ -8,7 +8,7 @@ const DEFAULTS: SettingsPreferences = {
   reduceMotion: false,
   animateSidebarActivity: true,
   compactSidebar: false,
-  toastPosition: 'top-right',
+ 
   notifyNeedsYou: true,
   notifyFinished: true,
   notifyError: true,
@@ -20,14 +20,14 @@ const DEFAULTS: SettingsPreferences = {
   startFolder: '',
   exportFolder: '',
   themeMode: 'system',
-  darkTheme: 'Maitty Night',
-  lightTheme: 'Maitty Day',
+  darkTheme: 'Maiker Dark',
+  lightTheme: 'Maiker Day',
   cursorStyle: 'block',
   scrollback: 10000, scrollSpeed: 1,
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, morePanelTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -55,12 +55,22 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().restartWhenIdle).toBe(false)
   })
 
+  it('restarts an older service by itself only when asked, and reads an old store without the key as off', () => {
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartWhenIdle: true }))
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: true }))
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(true)
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: 'yes' }))
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
+  })
+
   it('uses the defaults until preferences are saved', () => {
     expect(readSettingsPreferences()).toEqual(DEFAULTS)
   })
 
   it('restores every saved choice', () => {
-    const saved: SettingsPreferences = { ...DEFAULTS, accent: 'violet', spinner: 'snake', restoreLayout: false, reduceMotion: true, toastPosition: 'top-left', notifyNeedsYou: false, notificationSound: true, terminalFontSize: 15, themeMode: 'dark', darkTheme: 'Tokyo Night', cursorStyle: 'underline', scrollback: 50000, }
+    const saved: SettingsPreferences = { ...DEFAULTS, accent: 'violet', spinner: 'snake', restoreLayout: false, reduceMotion: true, notifyNeedsYou: false, notificationSound: true, terminalFontSize: 15, themeMode: 'dark', darkTheme: 'Tokyo Night', cursorStyle: 'underline', scrollback: 50000, }
     writeSettingsPreferences(saved)
 
     expect(readSettingsPreferences()).toEqual(saved)
@@ -91,9 +101,9 @@ describe('settings preferences', () => {
   })
 
   it('reads preferences saved before the terminal settings existed', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
 
-    expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, accent: 'blue', spinner: 'bars', compactSidebar: true, toastPosition: 'bottom-right', notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
+    expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, accent: 'blue', spinner: 'bars', compactSidebar: true, notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
   })
 
   it('reads the layout choice saved as restoreTabs before fleets, and prefers the new name', () => {
@@ -103,12 +113,24 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().restoreLayout).toBe(true)
   })
 
-  it('starts a fresh install with square corners and keeps saved corners', () => {
-    expect(readSettingsPreferences()).toMatchObject({ corners: 'square' })
-    for (const corners of ['square', 'rounded']) {
-      localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners }))
+  it('starts a fresh install with folded corners and keeps saved corners', () => {
+    expect(readSettingsPreferences()).toMatchObject({ corners: 'folded' })
+    for (const corners of ['square', 'rounded', 'folded']) {
+      localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners, cornersEra: 2 }))
       expect(readSettingsPreferences()).toMatchObject({ corners })
     }
+  })
+
+  it('reads corners saved before folded became the default (no era stamp) as the default, not as a choice', () => {
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners: 'square' }))
+    expect(readSettingsPreferences().corners).toBe('folded')
+  })
+
+  it('reads a Terminal view default saved before the redesign (no era stamp) as the Chat default', () => {
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' } }))
+    expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'chat', gemini: 'chat' } }))
+    expect(readSettingsPreferences().chatViewDefault.claude).toBe('terminal')
   })
 
   it('carries a window style saved before the corner switch over to its corners, and falls back from nonsense', () => {
@@ -117,8 +139,8 @@ describe('settings preferences', () => {
       return readSettingsPreferences().corners
     }
     expect(['glass', 'console', 'flat', 'tiled', 'minimal', 'expressive', 'frosted'].map(corners)).toEqual(Array(7).fill('rounded'))
-    expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'square'])
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square' }))
+    expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'folded'])
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square', cornersEra: 2 }))
     expect(readSettingsPreferences().corners).toBe('square')
   })
 
@@ -131,18 +153,9 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
   })
 
-  it('keeps Files and History off the tools bar unless they were added', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({}))
-    expect(readSettingsPreferences().morePanelTools).toBe(false)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ morePanelTools: true }))
-    expect(readSettingsPreferences().morePanelTools).toBe(true)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ morePanelTools: 'yes' }))
-    expect(readSettingsPreferences().morePanelTools).toBe(false)
-  })
-
   it('opens agent sessions in the chat unless a view was chosen, and ignores nonsense', () => {
     expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'terminal', codex: 'sideways' } }))
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'sideways' } }))
     expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'terminal', codex: 'chat', gemini: 'chat' })
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: 'terminal' }))
     expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })
@@ -178,7 +191,7 @@ describe('settings preferences', () => {
   })
 
   it('ignores per-project colours saved by an older version, without an error', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ density: 'spacious', projectColors: { '/code/maitty': 'violet' } }))
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ density: 'spacious', projectColors: { '/code/maiker': 'violet' } }))
 
     const read = readSettingsPreferences()
 
@@ -186,26 +199,32 @@ describe('settings preferences', () => {
     expect(read).not.toHaveProperty('projectColors')
   })
 
+  it('keeps a theme saved under the old name Maitty', () => {
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'light', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Day' }))
+
+    expect(readSettingsPreferences()).toMatchObject({ darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day' })
+  })
+
   it('carries over the theme chosen before the theme browser', () => {
     localStorage.setItem('maitty.gui.theme.v1', 'day')
 
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Maitty Day', darkTheme: 'Maitty Night' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Maiker Day', darkTheme: 'Maiker Dark' })
   })
 
   it('moves a single saved theme into its dark or light slot and keeps using it', () => {
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ theme: 'Tokyo Night' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Tokyo Night', lightTheme: 'Maitty Day' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Tokyo Night', lightTheme: 'Maiker Day' })
 
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ theme: 'Gruvbox Light' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Gruvbox Light', darkTheme: 'Maitty Night' })
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Gruvbox Light', darkTheme: 'Maiker Dark' })
   })
 
   it('keeps each slot to its own kind of theme and the mode to its three values', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'dark', darkTheme: 'Maitty Day', lightTheme: 'Tokyo Night' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Maitty Night', lightTheme: 'Maitty Day' })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'dark', darkTheme: 'Maiker Day', lightTheme: 'Tokyo Night' }))
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day' })
 
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'auto', darkTheme: 'Maitty Dark' }))
-    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'system', darkTheme: 'Maitty Dark' })
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'auto', darkTheme: 'Maiker Dark' }))
+    expect(readSettingsPreferences()).toMatchObject({ themeMode: 'system', darkTheme: 'Maiker Dark' })
   })
 
   it('has no monthly budget by default and keeps only a positive amount in range', () => {

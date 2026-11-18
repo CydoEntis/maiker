@@ -10,12 +10,12 @@ export function readConversationDrafts(): ConversationDrafts {
   try {
     value = JSON.parse(stored)
   } catch (error) {
-    console.warn('Ignoring invalid Maitty conversation drafts', error)
+    console.warn('Ignoring invalid Maiker conversation drafts', error)
     return {}
   }
 
   if (!isConversationDrafts(value)) {
-    console.warn('Ignoring unsupported Maitty conversation drafts')
+    console.warn('Ignoring unsupported Maiker conversation drafts')
     return {}
   }
 

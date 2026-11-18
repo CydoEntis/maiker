@@ -3,10 +3,11 @@ import { findTheme, themeStyle } from './themes'
 import { CORNERS, cornersOfWindowStyle, DEFAULT_CORNERS, isCorners, withLook } from './corners'
 
 describe('corners', () => {
-  it('are square or rounded, square by default', () => {
-    expect(CORNERS).toEqual(['square', 'rounded'])
-    expect(DEFAULT_CORNERS).toBe('square')
+  it('are square, rounded or folded, square by default', () => {
+    expect(CORNERS).toEqual(['square', 'rounded', 'folded'])
+    expect(DEFAULT_CORNERS).toBe('folded')
     expect(isCorners('rounded')).toBe(true)
+    expect(isCorners('folded')).toBe(true)
     expect(isCorners('glass')).toBe(false)
   })
 
@@ -19,7 +20,7 @@ describe('corners', () => {
 
 describe('the one look', () => {
   it('keeps the theme its own colours and gives it Inter with JetBrains Mono', () => {
-    for (const theme of [findTheme('Maitty Night'), findTheme('Maitty Day'), findTheme('Catppuccin Mocha')]) {
+    for (const theme of [findTheme('Maiker Dark'), findTheme('Maiker Day'), findTheme('Catppuccin Mocha')]) {
       const looked = withLook(theme)
       expect(looked.tokens).toEqual(theme.tokens)
       expect(themeStyle(looked)['--ui']).toContain('Inter')
@@ -33,7 +34,7 @@ describe('the one look', () => {
   })
 
   it('draws flat: no sheen', () => {
-    const style = themeStyle(withLook(findTheme('Maitty Night')))
+    const style = themeStyle(withLook(findTheme('Maiker Dark')))
     expect(style['--sh']).toBe('none')
   })
 })

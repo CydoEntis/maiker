@@ -449,7 +449,7 @@ mod tests {
     use super::*;
 
     fn remote() -> Target {
-        Target::of(ipc::Machine::ssh("build", vec!["ssh".into()], "maitty"))
+        Target::of(ipc::Machine::ssh("build", vec!["ssh".into()], "maiker"))
     }
 
     #[test]
@@ -613,7 +613,7 @@ mod tests {
         };
         let absent = format!("no pane {PROBE_TERM}");
         let leak: &'static str = Box::leak(absent.into_boxed_str());
-        let denied = "this pane may not read other panes through maitty";
+        let denied = "this pane may not read other panes through maiker";
         assert!(reach(leak, "").caller_may(Needs::Read).is_ok());
         assert!(reach(leak, "").caller_may(Needs::Write).is_ok());
         assert_eq!(
@@ -624,7 +624,7 @@ mod tests {
             reach(leak, "no write").caller_may(Needs::Write),
             Err("no write".into())
         );
-        let down = "couldn't reach the maitty server";
+        let down = "couldn't reach the maiker server";
         assert!(
             reach(down, "").caller_may(Needs::Read).is_err(),
             "no answer is no"

@@ -561,7 +561,7 @@ impl Daemon {
                     }
                     // A pane the desktop app started as this agent ends with it, unless an agent
                     // is back in a moment (`Daemon::close_ended_agents`).
-                    if t.owner == Surface::Desktop && t.cmd.is_some() && !t.popup && !t.spare {
+                    if t.owner == Surface::Desktop && t.began_as_agent && !t.popup && !t.spare {
                         t.agent_ended = Some(now);
                     }
                 }

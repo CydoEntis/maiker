@@ -11,12 +11,12 @@ again. It is not silent, so the quiet mark never shows, and its row reads workin
 ## Goal
 
 A working agent that has made the same call five times running, or has been taking turns between
-the same two calls, says so in words on its row: `repeating 6x`. `ls`, `maitty_list` and `wait`
+the same two calls, says so in words on its row: `repeating 6x`. `ls`, `maiker_list` and `wait`
 say it too. Its status stays working and nothing rings.
 
 ## Scope
 
-Anyone running Claude, Qwen, Codex or Gemini in a pane with Maitty's hooks connected. The hook
+Anyone running Claude, Qwen, Codex or Gemini in a pane with Maiker's hooks connected. The hook
 report, the daemon, the protocol, the terminal app's sidebar row, `ls`, `wait` and the MCP tools.
 
 ## Decisions (the owner, 2026-11-06)
@@ -31,7 +31,7 @@ report, the daemon, the protocol, the terminal app's sidebar row, `ls`, `wait` a
 
 ## Out of scope
 
-Failed calls in a row (Later). Stopping, nudging or restarting the agent: Maitty remains the
+Failed calls in a row (Later). Stopping, nudging or restarting the agent: Maiker remains the
 session manager (ROADMAP, Out, 2026-10-18). Agents whose hooks pass no tool input (Kimi,
 Mastracode, Kilo, OpenCode, Pi, OMP).
 

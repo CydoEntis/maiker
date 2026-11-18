@@ -11,6 +11,7 @@ import { installNote, UPDATE_WORDS, updateVerb, updateWarning, type MachineHead,
 import { SettingsSearch } from '../settingsSearch'
 import { Card, Row, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
+import { DAEMON_NAME } from '@/brand'
 
 /** A computer: this one, and the tile of a remote one. The window does not know a machine's kind, so every remote is a server. */
 const MONITOR_PATH = 'M3 4h18v12H3zM8 20h8M12 16v4'
@@ -213,16 +214,16 @@ function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSi
   const saveLog = () => {
     exportDaemonLog().then(
       (path) => { toast.success('Log saved', { description: path }) },
-      (error: unknown) => { toast.error(errorMessage(error, 'Could not save the log')) },
+      (error: unknown) => { toast.failed('Could not save the log', error) },
     )
   }
-  const showLog = () => { openDaemonLog().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the log')) }) }
+  const showLog = () => { openDaemonLog().catch((error: unknown) => { toast.failed('Could not open the log', error) }) }
   return (
     <>
       <Card title="This computer"
         meta={<span role="status" className="mx-mach-meta" style={{ color }}><span className="mx-mach-dot" style={{ background: color }} />{daemon.online ? 'Connected' : 'Disconnected'}</span>}
       >
-        {daemon.version && <ValueRow label="Version" detail="Shared by the GUI and the Maitty TUI.">{daemon.version}</ValueRow>}
+        {daemon.version && <ValueRow label="Version" detail="Shared by the GUI and the Maiker TUI.">{daemon.version}</ValueRow>}
         {daemon.socket && <ValueRow label="Socket" detail="Where clients connect.">{daemon.socket}</ValueRow>}
         <ValueRow label="Sessions" detail="Owned by the daemon. The GUI only attaches.">{daemon.sessionCount}</ValueRow>
         <Row label="Service log" detail="What the service did lately, for working out a problem. Save a copy puts it in your Downloads folder as maitty-log.txt. It names your folders and repositories, so look before you share it.">
@@ -245,10 +246,10 @@ function MachineDetail({ head, sessions, machines, github, onRemoved }: { head: 
   return (
     <>
       <Card title="Connection">
-        {health === 'ok' && <ValueRow label="Link" detail="Over ssh, through its own maittyd.">connected</ValueRow>}
-        {health === 'quiet' && <ValueRow label="Link" detail="Over ssh, through its own maittyd.">{head.chip?.word ?? 'connecting'}</ValueRow>}
+        {health === 'ok' && <ValueRow label="Link" detail={`Over ssh, through its own ${DAEMON_NAME}.`}>connected</ValueRow>}
+        {health === 'quiet' && <ValueRow label="Link" detail={`Over ssh, through its own ${DAEMON_NAME}.`}>{head.chip?.word ?? 'connecting'}</ValueRow>}
         {down && (
-          <Row label={capitalised(head.chip?.word ?? 'unreachable')} detail={head.why ?? 'Maitty keeps trying to reach it.'}>
+          <Row label={capitalised(head.chip?.word ?? 'unreachable')} detail={head.why ?? 'Maiker keeps trying to reach it.'}>
             <span className="mx-mach-buttons">
               <button type="button" className="mx-scard-button is-primary" aria-label={`Retry ${name}`} onClick={() => { machines.onRetry(name) }}>Retry now</button>
             </span>
@@ -302,9 +303,9 @@ function VersionCard({ head, machines }: { head: MachineHead; machines: Machines
     : running && words !== null ? words.running(name) : head.updateCommand ?? head.why ?? ''
   return (
     <Card title="Version">
-      <Row label={words === null ? 'Maitty' : words.need(name)} detail={detail}>
+      <Row label={words === null ? 'Maiker' : words.need(name)} detail={detail}>
         <span className="mx-mach-buttons">
-          {action !== null && words !== null && !asking && <button type="button" className="mx-scard-button is-primary" disabled={running || checking} aria-label={`${words.verb} Maitty on ${name}`} onClick={() => { ask(action) }}>{checking ? 'Checking…' : words.verb}</button>}
+          {action !== null && words !== null && !asking && <button type="button" className="mx-scard-button is-primary" disabled={running || checking} aria-label={`${words.verb} Maiker on ${name}`} onClick={() => { ask(action) }}>{checking ? 'Checking…' : words.verb}</button>}
           {asking && action === 'install' && <button type="button" className="mx-scard-button is-primary" onClick={() => { run(action, false) }}>Install on {name} now</button>}
           {asking && action === 'update' && (
             <>
@@ -383,7 +384,7 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
     setState({ step: 'checking', target })
     add.onAdd(target, typedName === '' ? undefined : typedName).then(
       (result) => {
-        if (result.outcome === 'needs-name') { setState({ step: 'form', note: `Give ${target} a name in Maitty to add it.` }); return }
+        if (result.outcome === 'needs-name') { setState({ step: 'form', note: `Give ${target} a name in Maiker to add it.` }); return }
         if (result.outcome === 'cancelled') { setState({ step: 'form', note: 'Cancelled. Nothing was added.' }); return }
         setHosts((now) => (now.status === 'ready' ? { status: 'ready', hosts: now.hosts.filter((choice) => choice.alias !== target) } : now))
         setState({ step: 'done', target, added: result })
@@ -417,12 +418,12 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
             )}
             {mode === 'ssh' && <HostChoices hosts={hosts} picked={host} onPick={(alias) => { setHost(alias) }} />}
             <label className="mx-mach-field">
-              <span>Name in Maitty</span>
-              <input aria-label="Name in Maitty" value={name} placeholder={target === '' ? 'e.g. homelab' : target} spellCheck={false} onChange={(event) => { setName(event.target.value) }} />
+              <span>Name in Maiker</span>
+              <input aria-label="Name in Maiker" value={name} placeholder={target === '' ? 'e.g. homelab' : target} spellCheck={false} onChange={(event) => { setName(event.target.value) }} />
             </label>
             {state.note !== null && <p className="mx-mach-note" role="status">{state.note}</p>}
             <div className="mx-mach-formfoot">
-              <span>Connects over ssh. If Maitty isn't on the machine yet, you can install it from its settings once it is added.</span>
+              <span>Connects over ssh. If Maiker isn't on the machine yet, you can install it from its settings once it is added.</span>
               <button type="button" className="mx-mach-quiet" onClick={onClose}>Cancel</button>
               <button type="submit" className="mx-mach-go" disabled={target === ''}>Connect {typedName === '' ? (target === '' ? 'machine' : target) : typedName}</button>
             </div>

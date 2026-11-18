@@ -21,9 +21,9 @@ const GLYPH_SHRINK = 2
 // Windows draws 46x32 captions; Linux 20px round buttons; macOS 12px traffic lights.
 const BUTTON_CLASS: Record<TitleBarPlatform, string> = {
   windows:
-    'flex h-full w-[46px] items-center justify-center text-(--muted-text) transition-colors hover:bg-(--hover) hover:text-(--fg)',
+    'flex h-full w-[46px] items-center justify-center text-(--muted-text) transition-colors duration-(--t-fast) ease-(--ease) hover:bg-(--hover) hover:text-(--fg)',
   linux:
-    'my-auto flex size-5 items-center justify-center rounded-full bg-(--hover) text-(--muted-text) transition-colors hover:text-(--fg)',
+    'my-auto flex size-5 items-center justify-center rounded-full bg-(--hover) text-(--muted-text) transition-colors duration-(--t-fast) ease-(--ease) hover:text-(--fg)',
   macos: 'group/light flex size-3 items-center justify-center rounded-full text-black/60',
 }
 
@@ -52,7 +52,7 @@ function WindowButton(props: { platform: TitleBarPlatform; kind: Kind; label: st
           onClick={onClick}
         >
           {/* The traffic lights show their glyph only while hovered, as on macOS. */}
-          {platform === 'macos' ? <span className="opacity-0 group-hover/light:opacity-100">{icon}</span> : icon}
+          {platform === 'macos' ? <span className="opacity-0 transition-opacity duration-(--t-fast) ease-(--ease) group-hover/light:opacity-100 group-focus-visible/light:opacity-100">{icon}</span> : icon}
         </button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>

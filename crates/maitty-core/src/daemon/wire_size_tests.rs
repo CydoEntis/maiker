@@ -27,7 +27,7 @@ const SNAPSHOT_BUDGET_BYTES: usize = 422_763;
 
 const SESSIONS: u32 = 50;
 const PROJECTS: [&str; 5] = [
-    "maitty",
+    "maiker",
     "affiliate-site",
     "pixls",
     "dev-deck",
@@ -99,7 +99,7 @@ fn turn_contents() -> [Content; ENTRIES_PER_TURN] {
             &format!("Read {file}"),
             "commandExecution",
             prose(1_200),
-            Some(json!({ "file_path": format!("/home/dev/src/maitty/{file}") })),
+            Some(json!({ "file_path": format!("/home/dev/src/maiker/{file}") })),
         ),
         tool(
             "cargo test -p maitty-core history",
@@ -236,7 +236,7 @@ fn checks_of(i: u32) -> Vec<CheckInfo> {
             path: "crates/maitty-core/src/daemon/mod.rs".into(),
         }],
         source: CheckSource::Repo {
-            file: ".maitty/checks.toml".into(),
+            file: ".maiker/checks.toml".into(),
             commit: Some("dcb1091d2a4f".into()),
             committed_at: Some(NOW - 86_400),
             uncommitted: false,
@@ -290,7 +290,7 @@ fn helper(i: u32) -> SubagentActivity {
 fn pr_of(i: u32) -> PrInfo {
     PrInfo {
         number: 340 + i,
-        url: format!("https://github.com/example/maitty/pull/{}", 340 + i),
+        url: format!("https://github.com/example/maiker/pull/{}", 340 + i),
         title: "Keep a starting session in the sidebar".into(),
         state: PrState::Open,
         draft: false,
@@ -405,6 +405,7 @@ fn pane(i: u32) -> TermInfo {
             code: Some(1),
             at: NOW - 400,
         }),
+        began_as_agent: false,
     }
 }
 

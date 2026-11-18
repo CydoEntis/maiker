@@ -11,10 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 113;
-
-/// The first version whose daemon answers beside a Claude conversation (`Query::SideAnswer`).
-pub const SIDE_ANSWER_SINCE: u32 = 104;
+pub const PROTOCOL_VERSION: u32 = 118;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -71,35 +68,6 @@ pub enum SideAnswer {
     Failed { reason: String },
 }
 
-/// The first version whose daemon sends a queued chat message now (`Command::ConversationSendNow`).
-pub const SEND_NOW_SINCE: u32 = 94;
-
-/// The first version whose client reads a reasoning item in a chat's history
-/// (`conversation::history::Content::Reasoning`). The daemon leaves them out of the pages it
-/// sends an older client, which could not decode a page that held one.
-pub const REASONING_ITEM_SINCE: u32 = 93;
-
-/// The first version whose daemon snoozes a pane (`Command::SnoozePane`).
-pub const SNOOZE_SINCE: u32 = 92;
-
-/// The first version whose daemon honours `operation` on `QueueFollowUp` and `SendWhenReady`; an
-/// older one reads the field and ignores it, so a retry there could be typed twice.
-pub const TERMINAL_SEND_OPERATIONS_SINCE: u32 = 91;
-
-/// The first version whose daemon says where a worktree stands (`Query::WorktreeStanding`).
-pub const WORKTREE_STANDING_SINCE: u32 = 90;
-
-/// The first version whose daemon searches a checkout's file paths (`RepoRequest::FindFiles`).
-pub const FIND_FILES_SINCE: u32 = 89;
-
-/// The first version whose daemon counts the files a snapshot restore would change
-/// (`RepoRequest::RestoreCount`).
-pub const RESTORE_COUNT_SINCE: u32 = 88;
-
-/// The first version whose daemon lists an agent's saved conversations for a folder
-/// (`Query::SavedConversations`).
-pub const SAVED_CONVERSATIONS_SINCE: u32 = 85;
-
 /// The most conversations one `Reply::SavedConversations` carries.
 pub const SAVED_CONVERSATIONS_MAX: usize = 20;
 
@@ -127,21 +95,8 @@ pub enum SavedConversations {
     NotSupported,
 }
 
-/// The first version whose daemon lists the agent sessions that closed or crashed
-/// (`Query::ClosedSessions`).
-pub const CLOSED_SESSIONS_SINCE: u32 = 86;
-
 /// The most closed sessions the daemon keeps and a list carries; the oldest go first.
 pub const CLOSED_SESSIONS_MAX: usize = 50;
-
-/// The first version whose daemon reopens a closed session (`Command::ReopenClosedSession`).
-pub const REOPEN_CLOSED_SINCE: u32 = 87;
-
-/// The first version whose daemon reads a helper's own record (`Query::HelperRead`).
-pub const HELPER_READ_SINCE: u32 = 95;
-
-/// The first version whose daemon lists a pane's specialist agent files (`Query::Specialists`).
-pub const SPECIALISTS_SINCE: u32 = 95;
 
 /// What a helper did, read from the provider's own file for it (ADR 0010). Display only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -179,51 +134,10 @@ pub struct ClosedSession {
     pub repo: Option<PathBuf>,
 }
 
-/// The first version whose daemon writes and removes a folder's GitHub account and commit identity
-/// rule on request (`Query::GitIdentityRule`).
-pub const GIT_RULES_SINCE: u32 = 103;
-
-/// The first version whose daemon lists an agent's slash commands and skills on request
-/// (`Query::AgentCommands`). 110 and 111 belong to changes that landed beside it.
-pub const AGENT_COMMANDS_SINCE: u32 = 112;
-
-/// The first version whose daemon reads the tickets of a source on request (`Query::Tickets`).
-pub const TICKETS_SINCE: u32 = 105;
-
-/// The first version whose daemon keeps the key of a ticket provider on request
-/// (`Query::TicketKeys`).
-pub const TICKET_KEYS_SINCE: u32 = 106;
-
-/// The first version whose daemon answered `Query::TicketWrite`. Since 113 the answer is always
-/// that tickets are read-only (ADR 0011).
-pub const TICKET_WRITE_SINCE: u32 = 107;
-
-/// The first version whose daemon keeps which ticket sources each project reads
-/// (`Query::TicketLinks`).
-pub const TICKET_LINKS_SINCE: u32 = 108;
-
-/// The first version whose daemon shows an agent's ask for its project's ticket setup to the
-/// windows (`Command::OpenTicketSetup`, `ServerMsg::TicketSetup`) and reads a repository's
-/// `.maitty/tickets.toml` (`TicketLinks::repo_file`).
-pub const TICKET_SETUP_SINCE: u32 = 109;
-
-/// The first version whose daemon lists, adds, switches and removes the skills, plugins, MCP
-/// servers and marketplaces of Claude Code and Codex on request (`Query::Extensions`).
-pub const EXTENSIONS_SINCE: u32 = 110;
 /// The most files and lines one answer about a rule carries.
 pub const GIT_RULE_FILES_MAX: usize = 4;
 pub const GIT_RULE_LINES_MAX: usize = 16;
 
-/// What a `Query::TicketKeys` does to the keys of ticket providers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum TicketKeyChange {
-    /// Change nothing; say which providers have a key.
-    Status,
-    /// Keep `key` for `provider`, replacing any. `address` and `workspace` are what that provider
-    /// needs besides a key (Plane's server and workspace; Linear's are fixed and must be empty).
-    Set { provider: crate::tickets::TicketProvider, address: String, workspace: String, key: SecretText },
-    Remove { provider: crate::tickets::TicketProvider },
-}
 
 /// What a `Query::GitIdentityRule` does to a folder's rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -231,10 +145,10 @@ pub enum GitRuleChange {
     /// The lines that `Apply` would write, written nowhere.
     Preview { folder: String, identity: GitIdentity },
     /// Write the rule: `folder` (which must be there) commits as `identity` and signs in to
-    /// github.com as its login, which must be signed in on the machine. A rule Maitty wrote for
-    /// the folder before is replaced; one set outside Maitty is refused.
+    /// github.com as its login, which must be signed in on the machine. A rule Maiker wrote for
+    /// the folder before is replaced; one set outside Maiker is refused.
     Apply { folder: String, identity: GitIdentity },
-    /// Take away the rule Maitty wrote for `folder`, named as `GitIdentityRule::folder` names it.
+    /// Take away the rule Maiker wrote for `folder`, named as `GitIdentityRule::folder` names it.
     Remove { folder: String },
 }
 
@@ -245,9 +159,6 @@ pub struct GitConfigWrite {
     pub lines: Vec<String>,
 }
 
-/// The first version whose daemon says which commit identity its machine's git uses, and for
-/// which folders a different one applies (`Query::GitIdentities`).
-pub const GIT_IDENTITIES_SINCE: u32 = 102;
 /// The most folder rules one report carries.
 pub const GIT_IDENTITY_RULES_MAX: usize = 100;
 /// The longest name, email or folder a report carries, in characters.
@@ -272,7 +183,7 @@ pub struct GitIdentityReport {
 pub struct GitIdentityRule {
     /// The folder as the entry writes it, without the closing slash.
     pub folder: String,
-    /// What the rule sets, when Maitty wrote it. `None` for a rule set outside Maitty: it is
+    /// What the rule sets, when Maiker wrote it. `None` for a rule set outside Maiker: it is
     /// listed so it can be seen, and nothing of what it sets is read.
     pub identity: Option<GitIdentity>,
 }
@@ -285,13 +196,6 @@ pub struct GitIdentity {
     pub login: String,
 }
 
-/// The first version whose daemon opens a pull request for a pane's checkout on request
-/// (`GitRequest::PullRequest`).
-pub const GIT_PULL_REQUEST_SINCE: u32 = 101;
-
-/// The first version whose daemon commits files of a pane's checkout on request
-/// (`GitRequest::Commit`).
-pub const GIT_COMMIT_SINCE: u32 = 100;
 /// How long the daemon gives one commit, in seconds: the repository's own hooks run in it.
 pub const GIT_COMMIT_LIMIT_SECS: u64 = 120;
 /// The longest commit message taken, in bytes.
@@ -300,9 +204,6 @@ pub const GIT_COMMIT_MESSAGE_MAX_BYTES: usize = 16 * 1024;
 /// arguments, and a command line only holds so much.
 pub const GIT_COMMIT_PATHS_MAX_BYTES: usize = 24 * 1024;
 
-/// The first version whose daemon fetches, pulls and pushes a pane's checkout on request
-/// (`Query::Git`).
-pub const GIT_SYNC_SINCE: u32 = 99;
 /// How long the daemon gives one fetch, pull or push, in seconds.
 pub const GIT_SYNC_LIMIT_SECS: u64 = 60;
 
@@ -331,18 +232,12 @@ pub enum GitRequest {
     PullRequest,
 }
 
-/// The first version whose daemon lists the repositories its machine's GitHub account can clone
-/// (`Query::GitHubRepos`, `Query::GitHubOwners`).
-pub const GITHUB_REPOS_SINCE: u32 = 98;
 /// How long the daemon gives `gh` to list repositories or organisations.
 pub const GITHUB_LIST_LIMIT_SECS: u64 = 30;
 
 /// GitHub's own sign-in, as a terminal session runs it: the person finishes it there and in their
 /// browser. Both clients start exactly this line; nothing a window sends is part of it.
 pub const GITHUB_SIGN_IN_COMMAND: &str = "gh auth login --web --git-protocol https";
-
-/// The first version whose daemon signs an agent in on request (`Query::AgentSignIn`).
-pub const AGENT_SIGN_IN_SINCE: u32 = 111;
 
 /// The longest sign-in link a reply carries, in bytes. A longer one is dropped, not cut.
 pub const SIGN_IN_LINK_MAX_BYTES: usize = 2048;
@@ -407,20 +302,9 @@ pub enum SignInState {
     Failed(SignInFailure),
 }
 
-/// The first version whose daemon says who is signed in to GitHub on its machine
-/// (`Query::GitHubAccounts`).
-pub const GITHUB_ACCOUNTS_SINCE: u32 = 97;
-
-/// The first version whose daemon clones a repository on request (`Query::CloneRepo`).
-pub const CLONE_SINCE: u32 = 96;
-
 /// How long a daemon lets one clone run before it stops it, in seconds. A client waits a little
 /// longer than this for the answer.
 pub const CLONE_LIMIT_SECS: u64 = 600;
-
-/// The first version whose daemon lists and forgets the commands approved "always in this project"
-/// (`Query::AllowedCommands`, `Command::ForgetAllowedCommand`).
-pub const ALLOWED_COMMANDS_SINCE: u32 = 84;
 
 /// A command a person approved "always in this project" for a chat.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -435,33 +319,26 @@ pub struct AllowedCommand {
     pub at: u64,
 }
 
-/// The first version whose daemon closes a chat with an undo window (`Command::ConversationClose`,
-/// `Command::ConversationUndoClose`).
-pub const CHAT_CLOSE_SINCE: u32 = 83;
-
-/// The first version whose daemon remembers a command approval for a project (`Command::ConversationAllowAlways`).
-pub const ALLOW_ALWAYS_SINCE: u32 = 83;
-
-/// The first version whose daemon writes a file of a pane's checkout for the person (`Command::WriteFile`).
-pub const WRITE_FILE_SINCE: u32 = 82;
-
-/// The first version whose daemon makes a trusted, tracked worktree for a branch from a folder
-/// (`Command::BranchWorktree`).
-pub const BRANCH_WORKTREE_SINCE: u32 = 81;
-
-/// The first version whose daemon drops one queued follow-up (`Command::DropQueued`).
-pub const DROP_QUEUED_SINCE: u32 = 80;
-
-/// The first version whose daemon keeps an agent warm (`Command::Prewarm`, `Command::DropPrewarm`).
-pub const PREWARM_SINCE: u32 = 79;
-
 /// The oldest `PROTOCOL_VERSION` this build still talks to, in either role. It stays behind
 /// `PROTOCOL_VERSION` only across changes an older peer can live with: a new message it is never
 /// sent (`ServerMsg::introduced_in`), or a field it does not need. Set it to the current version
 /// in the change that removes, renames or retypes anything an older peer reads or writes, or
 /// that adds a value inside a message it is still sent (a new `Status`, say): such a peer would
-/// misread, and that is refused. 78 is the first version that knows about the window at all.
-pub const COMPATIBLE_SINCE: u32 = 78;
+/// misread, and that is refused. 115 removed the in-app tickets (ADR 0013): a peer before it sent
+/// or waited for messages that no longer exist.
+pub const COMPATIBLE_SINCE: u32 = 115;
+/// The first version that reads `Command::SaveFile` and `RepoRequest::FileStamped`: a window offers
+/// editing only to a daemon at least this new.
+pub const FILE_EDIT_SINCE: u32 = 116;
+/// The first version that reads `Query::CreateFolder`. A window learns whether a machine's daemon
+/// does from `FolderListing::can_create`, so it never sends the question to one that would not answer.
+pub const FOLDER_CREATE_SINCE: u32 = 117;
+/// The first version whose daemon keeps the bypass-permissions switches (`SettingKey::BypassOff`). An older
+/// daemon ignores `SharedSettings::bypass_off` and cannot read the key, so it is not sent there.
+pub const BYPASS_SETTING_SINCE: u32 = 118;
+/// The first version whose daemon keeps `[updates] machines` (`SettingKey::UpdateMachines`); an older one
+/// cannot read the key, so it is not sent there.
+pub const UPDATE_MACHINES_SINCE: u32 = 118;
 
 /// Whether this build and a peer talk. The older of the two cannot know what came after it, so
 /// the newer one decides: `peer_compatible_since` is what the peer said in the handshake (0 from
@@ -970,6 +847,16 @@ pub enum Command {
         path: String,
         contents: String,
     },
+    /// `WriteFile` for an editor: the file must still be the `version` that `RepoRequest::FileStamped` gave
+    /// (`None`: write whatever is there, only after the person chose to overwrite). The answer is
+    /// `Reply::Repo { tag, Saved }`, or `ChangedOnDisk` with nothing written.
+    SaveFile {
+        term: TermId,
+        tag: u64,
+        path: String,
+        contents: String,
+        version: Option<String>,
+    },
     /// `git worktree add` next to the workspace's repo, then open it as a new workspace.
     /// `split`: open the worktree as a pane beside this one instead of as a workspace.
     /// `from`: the repo to branch from (default: the workspace's folder).
@@ -988,7 +875,8 @@ pub enum Command {
         prompt: Option<String>,
     },
     /// A worktree of `project` on `branch` (an existing local or remote branch, else a new one
-    /// from HEAD), made the way every other worktree is: named by the `worktree.dir` template,
+    /// from HEAD; a branch already checked out somewhere, which git cannot check out twice, gets a
+    /// new branch with a made-up name cut from it), made the way every other worktree is: named by the `worktree.dir` template,
     /// trusted like its repo, the repo's setup hook run, and listed with the checkouts the app
     /// made so the usual tidy-up offers it. Replies with the new folder as text. For a window
     /// that has no pane to ask from (the new chat page). `project` must be one the daemon has
@@ -1175,20 +1063,6 @@ pub enum Command {
         label: String,
         reason: String,
     },
-    /// Pane `term`'s agent asks for its project's ticket setup to be shown in the windows, on
-    /// `source`, with `link` suggested (`ServerMsg::TicketSetup`). Only from that pane itself.
-    /// It saves nothing and carries no key: you finish the setup in the window. The answer is a
-    /// `Reply::Text` the agent reads: what was opened, and what is already linked and connected.
-    OpenTicketSetup {
-        term: TermId,
-        /// A folder inside the pane's project to set up, when not the pane's own.
-        #[serde(default)]
-        folder: Option<String>,
-        #[serde(default)]
-        source: Option<crate::ticket_links::TicketSetupSource>,
-        #[serde(default)]
-        link: String,
-    },
     AnswerSecret {
         id: u64,
         value: Option<SecretText>,
@@ -1287,6 +1161,15 @@ pub enum Query {
         path: String,
         tag: u64,
     },
+    /// Make one new folder called `name` directly inside `parent` on this daemon's computer (human
+    /// clients only). `parent` is absolute or starts with `~` and must already be a folder; `name`
+    /// is one name, never a path. The daemon checks both again and creates nothing recursively. The
+    /// answer is `Reply::FolderCreated` with the same `tag`.
+    CreateFolder {
+        parent: String,
+        name: String,
+        tag: u64,
+    },
     /// Clone the git repository at `address` into a new folder, named after it, inside `parent`
     /// on this daemon's computer (human clients only). `address` is an `https://`, `ssh://` or
     /// `git://` address or the `user@host:path` form; `parent` is absolute or starts with `~`.
@@ -1331,31 +1214,12 @@ pub enum Query {
         folder: String,
         tag: u64,
     },
-    /// Read tickets from `source` on this daemon's computer (human clients only): its groups, a
-    /// page of its tickets or one ticket. `source` is a GitHub repository, `owner/name`, read
-    /// with the machine's own `gh`, or `plane` or `linear`, read with the key the daemon kept
-    /// (`TicketKeys`). Nothing is written. The answer is `Reply::Tickets` with the
-    /// same `tag`.
-    Tickets {
-        source: String,
-        request: crate::tickets::TicketsRequest,
-        tag: u64,
-    },
-    /// Say, set or remove the key of a ticket provider (Plane, Linear) on this daemon's computer
-    /// (human clients only). The daemon keeps the key; the answer, `Reply::TicketKeys` with the
-    /// same `tag`, says only whether each provider has one, never its value.
-    TicketKeys {
-        change: TicketKeyChange,
-        tag: u64,
-    },
-    /// Retired (ADR 0011): Maitty only reads tickets. It stays on the wire so a window from
-    /// versions 107 to 112, which may still ask, gets `Reply::TicketWrite` with an error instead
-    /// of losing its connection. The daemon writes nothing; no client of this version asks.
-    TicketWrite {
-        source: String,
-        id: String,
-        write: crate::tickets::TicketWrite,
-        confirmed: bool,
+    /// The git repositories this daemon found on its computer, most recently used first (human
+    /// clients only). With `rescan` the daemon searches again first; without it a search that has
+    /// not finished once is waited for and an earlier one's list is answered at once. The answer
+    /// is `Reply::Repositories` with the same `tag`.
+    Repositories {
+        rescan: bool,
         tag: u64,
     },
     /// Read or change the skills, plugins, MCP servers and marketplaces of Claude Code and Codex on
@@ -1364,16 +1228,6 @@ pub enum Query {
     /// The answer is `Reply::Extensions` with the same `tag`.
     Extensions {
         request: crate::extensions::ExtRequest,
-        tag: u64,
-    },
-    /// Say or change which ticket sources a project reads on this daemon's computer (human clients
-    /// only). `place` is the folder in front, which the answer resolves to its project (this
-    /// computer's folders to their repository's main checkout); `None` asks only for the list. The
-    /// answer is `Reply::TicketLinks` with the same `tag`.
-    TicketLinks {
-        #[serde(default)]
-        place: Option<crate::ticket_links::TicketPlace>,
-        change: crate::ticket_links::TicketLinkChange,
         tag: u64,
     },
     /// Which commit name and email git uses on this daemon's computer, and the folders where a
@@ -1609,9 +1463,6 @@ pub enum ServerMsg {
         id: crate::conversation::ConversationId,
         generation: u64,
     },
-    /// An agent asked for its project's ticket setup (`Command::OpenTicketSetup`): show it. Sent
-    /// to the windows (attached clients that are not panes).
-    TicketSetup(crate::ticket_links::TicketSetupAsk),
     Bye,
 }
 
@@ -1647,6 +1498,11 @@ pub enum Reply {
         tag: u64,
         listing: FolderListing,
     },
+    /// How a `Query::CreateFolder` ended.
+    FolderCreated {
+        tag: u64,
+        outcome: FolderCreated,
+    },
     /// How a `Query::CloneRepo` ended: the new folder's path with `/` separators, or one line
     /// saying why nothing was cloned.
     Cloned {
@@ -1676,30 +1532,15 @@ pub enum Reply {
         tag: u64,
         answer: Result<Vec<crate::agent_commands::AgentCommand>, String>,
     },
-    /// What a `Query::Tickets` found, or why it found nothing.
-    Tickets {
+    /// The repositories a `Query::Repositories` found.
+    Repositories {
         tag: u64,
-        answer: Result<crate::tickets::TicketsReply, crate::tickets::TicketError>,
-    },
-    /// Where each ticket provider's key stands after a `Query::TicketKeys`, or why it was refused.
-    TicketKeys {
-        tag: u64,
-        answer: Result<Vec<crate::tickets::TicketKeyState>, crate::tickets::TicketError>,
-    },
-    /// The answer to a retired `Query::TicketWrite`: always an error, as nothing is written.
-    TicketWrite {
-        tag: u64,
-        answer: Result<crate::tickets::TicketWritten, crate::tickets::TicketError>,
+        found: crate::repositories::RepositoryIndex,
     },
     /// What a `Query::Extensions` found or did, or why it did nothing.
     Extensions {
         tag: u64,
         answer: Result<crate::extensions::ExtReply, crate::extensions::ExtError>,
-    },
-    /// The projects' ticket links after a `Query::TicketLinks`, or why the change was refused.
-    TicketLinks {
-        tag: u64,
-        answer: Result<crate::ticket_links::TicketLinks, crate::tickets::TicketError>,
     },
     /// How a `Query::Git` ended: one line saying what happened ("Pulled", "Pushed main"), or one
     /// line saying why nothing did.
@@ -1802,6 +1643,23 @@ pub struct FolderListing {
     pub exists: bool,
     pub entries: Vec<FolderEntry>,
     pub truncated: bool,
+    /// This daemon answers `Query::CreateFolder`. A daemon from before it leaves this out, which
+    /// reads as false, so a window can say the service is older instead of asking it in vain.
+    #[serde(default)]
+    pub can_create: bool,
+}
+
+/// How a `Query::CreateFolder` ended. Every case says why; nothing is swallowed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FolderCreated {
+    /// The folder is there now: its absolute path with `/` separators.
+    Created { path: String },
+    /// Something with that name is already in the parent (a folder, a file or a link).
+    Exists,
+    /// The daemon will not make it: the name or the parent is not one it accepts. One line of why.
+    NotAllowed { reason: String },
+    /// The disk refused (no permission, full, read-only, gone). One line of why.
+    Failed { reason: String },
 }
 
 impl FolderListing {
@@ -1812,6 +1670,7 @@ impl FolderListing {
             exists: false,
             entries: Vec::new(),
             truncated: false,
+            can_create: false,
         }
     }
 }
@@ -2325,6 +2184,11 @@ pub struct TermInfo {
     /// How the last command in the pane ended, when it ended in failure. See [`ExitInfo`].
     #[serde(default)]
     pub exit: Option<ExitInfo>,
+    /// The pane was started as an agent, not as a terminal. Once its agent is gone, a pane with
+    /// this set that is still listed is the shell an agent left behind; a pane without it is a
+    /// terminal someone opened. Absent from an older daemon, which reads as a terminal.
+    #[serde(default)]
+    pub began_as_agent: bool,
 }
 
 /// A command in a pane that ended in failure, as the shell reported it (OSC 133 D), never read
@@ -2615,23 +2479,10 @@ impl ServerMsg {
     /// a client older than that. A message added while `COMPATIBLE_SINCE` stays behind gets its
     /// own arm here; everything else is as old as the window.
     pub fn introduced_in(&self) -> u32 {
-        match self {
-            ServerMsg::Reply(Reply::SavedConversations { .. }) => SAVED_CONVERSATIONS_SINCE,
-            ServerMsg::Reply(Reply::ClosedSessions(_)) => CLOSED_SESSIONS_SINCE,
-            ServerMsg::Reply(Reply::HelperRead(_)) => HELPER_READ_SINCE,
-            ServerMsg::Reply(Reply::Specialists(_)) => SPECIALISTS_SINCE,
-            ServerMsg::Reply(Reply::WorktreeStanding(_)) => WORKTREE_STANDING_SINCE,
-            ServerMsg::Reply(Reply::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
-            ServerMsg::Reply(Reply::AgentCommands { .. }) => AGENT_COMMANDS_SINCE,
-            ServerMsg::Reply(Reply::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
-            ServerMsg::Reply(Reply::Tickets { .. }) => TICKETS_SINCE,
-            ServerMsg::Reply(Reply::TicketKeys { .. }) => TICKET_KEYS_SINCE,
-            ServerMsg::Reply(Reply::TicketWrite { .. }) => TICKET_WRITE_SINCE,
-            ServerMsg::Reply(Reply::TicketLinks { .. }) => TICKET_LINKS_SINCE,
-            ServerMsg::Reply(Reply::Extensions { .. }) => EXTENSIONS_SINCE,
-            ServerMsg::TicketSetup(_) => TICKET_SETUP_SINCE,
-            _ => COMPATIBLE_SINCE,
-        }
+        // Nothing is newer than the window yet. A message added while `COMPATIBLE_SINCE` stays
+        // behind gets an arm here, with a `match self`.
+        let _ = self;
+        COMPATIBLE_SINCE
     }
 }
 
@@ -2640,50 +2491,14 @@ impl ClientMsg {
     /// a request to an older daemon, which would otherwise never answer it.
     pub fn introduced_in(&self) -> u32 {
         match self {
-            ClientMsg::Command(Command::Prewarm { .. } | Command::DropPrewarm) => PREWARM_SINCE,
-            ClientMsg::Command(Command::DropQueued { .. }) => DROP_QUEUED_SINCE,
-            ClientMsg::Command(Command::BranchWorktree { .. }) => BRANCH_WORKTREE_SINCE,
-            ClientMsg::Command(Command::WriteFile { .. }) => WRITE_FILE_SINCE,
-            ClientMsg::Command(Command::ConversationClose { .. } | Command::ConversationUndoClose { .. }) => CHAT_CLOSE_SINCE,
-            ClientMsg::Command(Command::ConversationAllowAlways { .. }) => ALLOW_ALWAYS_SINCE,
-            ClientMsg::Query(Query::AllowedCommands) | ClientMsg::Command(Command::ForgetAllowedCommand { .. }) => ALLOWED_COMMANDS_SINCE,
-            ClientMsg::Query(Query::CloneRepo { .. }) => CLONE_SINCE,
-            ClientMsg::Query(Query::AgentSignIn { .. }) => AGENT_SIGN_IN_SINCE,
-            ClientMsg::Query(Query::GitHubAccounts { .. }) => GITHUB_ACCOUNTS_SINCE,
-            ClientMsg::Query(Query::GitHubRepos { .. } | Query::GitHubOwners { .. }) => GITHUB_REPOS_SINCE,
-            ClientMsg::Query(Query::AgentCommands { .. }) => AGENT_COMMANDS_SINCE,
-            ClientMsg::Query(Query::Tickets { .. }) => TICKETS_SINCE,
-            ClientMsg::Query(Query::TicketKeys { .. }) => TICKET_KEYS_SINCE,
-            ClientMsg::Query(Query::TicketWrite { .. }) => TICKET_WRITE_SINCE,
-            ClientMsg::Query(Query::TicketLinks { .. }) => TICKET_LINKS_SINCE,
-            ClientMsg::Query(Query::Extensions { .. }) => EXTENSIONS_SINCE,
-            ClientMsg::Command(Command::OpenTicketSetup { .. }) => TICKET_SETUP_SINCE,
-            ClientMsg::Query(Query::GitIdentities { .. }) => GIT_IDENTITIES_SINCE,
-            ClientMsg::Query(Query::GitIdentityRule { .. }) => GIT_RULES_SINCE,
-            ClientMsg::Query(Query::Git { request: GitRequest::Commit { .. }, .. }) => GIT_COMMIT_SINCE,
-            ClientMsg::Query(Query::Git { request: GitRequest::PullRequest, .. }) => GIT_PULL_REQUEST_SINCE,
-            ClientMsg::Query(Query::Git { .. }) => GIT_SYNC_SINCE,
-            ClientMsg::Query(Query::SavedConversations { .. }) => SAVED_CONVERSATIONS_SINCE,
-            ClientMsg::Query(Query::ClosedSessions) => CLOSED_SESSIONS_SINCE,
-            ClientMsg::Query(Query::WorktreeStanding { .. }) => WORKTREE_STANDING_SINCE,
-            ClientMsg::Command(Command::ReopenClosedSession { .. }) => REOPEN_CLOSED_SINCE,
-            ClientMsg::Query(Query::HelperRead { .. }) => HELPER_READ_SINCE,
-            ClientMsg::Query(Query::Specialists { .. }) => SPECIALISTS_SINCE,
-            ClientMsg::Command(Command::SnoozePane { .. }) => SNOOZE_SINCE,
-            ClientMsg::Command(Command::ConversationSendNow { .. }) => SEND_NOW_SINCE,
-            ClientMsg::Query(Query::SideAnswer { .. }) => SIDE_ANSWER_SINCE,
-            ClientMsg::Command(
-                Command::QueueFollowUp { operation: Some(_), .. }
-                | Command::SendWhenReady { operation: Some(_), .. },
-            ) => TERMINAL_SEND_OPERATIONS_SINCE,
-            ClientMsg::Query(Query::Repo {
-                request: crate::repo::RepoRequest::RestoreCount { .. },
+            ClientMsg::Query(Query::CreateFolder { .. }) => FOLDER_CREATE_SINCE,
+            ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::BypassOff, .. }) => BYPASS_SETTING_SINCE,
+            ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::UpdateMachines, .. }) => UPDATE_MACHINES_SINCE,
+            ClientMsg::Command(Command::SaveFile { .. })
+            | ClientMsg::Query(Query::Repo {
+                request: crate::repo::RepoRequest::FileStamped { .. },
                 ..
-            }) => RESTORE_COUNT_SINCE,
-            ClientMsg::Query(Query::Repo {
-                request: crate::repo::RepoRequest::FindFiles { .. },
-                ..
-            }) => FIND_FILES_SINCE,
+            }) => FILE_EDIT_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2720,17 +2535,10 @@ mod tests {
     /// client asks only a daemon that says it is new enough.
     #[test]
     fn keeping_an_agent_warm_is_asked_only_of_a_daemon_that_knows_it() {
-        let warm = ClientMsg::Command(Command::Prewarm {
-            cwd: PathBuf::from("/code"),
-            cmd: "claude".into(),
-        });
-        assert_eq!(warm.introduced_in(), PREWARM_SINCE);
-        assert_eq!(ClientMsg::Command(Command::DropPrewarm).introduced_in(), PREWARM_SINCE);
         assert_eq!(
             ClientMsg::Command(Command::KillServer { forget: false }).introduced_in(),
             COMPATIBLE_SINCE
         );
-        const { assert!(PREWARM_SINCE > COMPATIBLE_SINCE && PREWARM_SINCE <= PROTOCOL_VERSION) };
 
         #[derive(Debug, Deserialize)]
         #[allow(dead_code)]
@@ -3004,12 +2812,17 @@ mod tests {
                     path: "/home/me/code".into(),
                     exists: true,
                     entries: vec![FolderEntry {
-                        name: "maitty".into(),
+                        name: "maiker".into(),
                         git: Some("dev".into()),
                         has_children: true,
                     }],
                     truncated: false,
+                    can_create: true,
                 },
+            }),
+            ServerMsg::Reply(Reply::FolderCreated {
+                tag: 9,
+                outcome: FolderCreated::Created { path: "/home/me/code/new".into() },
             }),
             ServerMsg::Reply(Reply::SavedConversations {
                 tag: 8,
@@ -3107,7 +2920,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 113);
+        assert_eq!(PROTOCOL_VERSION, 118);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3230,9 +3043,6 @@ mod tests {
         };
         assert!(!first);
 
-        let drop = ClientMsg::Command(Command::DropQueued { term: 3, index: 0, text: "next".into() });
-        assert_eq!(drop.introduced_in(), DROP_QUEUED_SINCE);
-        const { assert!(DROP_QUEUED_SINCE > COMPATIBLE_SINCE && DROP_QUEUED_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// `operation` was added to `QueueFollowUp` and `SendWhenReady` as a defaulted field: a send
@@ -3274,11 +3084,8 @@ mod tests {
     fn only_a_terminal_send_with_an_operation_needs_a_daemon_that_honours_it() {
         let queue = |operation| ClientMsg::Command(Command::QueueFollowUp { term: 3, text: "next".into(), first: false, operation });
         let hold = |operation| ClientMsg::Command(Command::SendWhenReady { term: 3, text: "fix it".into(), operation });
-        assert_eq!(queue(Some(9)).introduced_in(), TERMINAL_SEND_OPERATIONS_SINCE);
-        assert_eq!(hold(Some(9)).introduced_in(), TERMINAL_SEND_OPERATIONS_SINCE);
         assert_eq!(queue(None).introduced_in(), COMPATIBLE_SINCE);
         assert_eq!(hold(None).introduced_in(), COMPATIBLE_SINCE);
-        const { assert!(TERMINAL_SEND_OPERATIONS_SINCE > COMPATIBLE_SINCE && TERMINAL_SEND_OPERATIONS_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// `choice` was added to `ConversationSend` as a defaulted field: a send from before it still
@@ -3310,15 +3117,9 @@ mod tests {
     }
 
     /// A worktree from a folder is a new command: a daemon built before it cannot read it, so a
-    /// client asks only a daemon that says it is new enough, and the window stays where it was.
+    /// client asks only a daemon that says it is new enough.
     #[test]
     fn a_branch_worktree_is_asked_only_of_a_daemon_that_knows_it() {
-        let ask = ClientMsg::Command(Command::BranchWorktree {
-            project: PathBuf::from("/code"),
-            branch: "feat/x".into(),
-        });
-        assert_eq!(ask.introduced_in(), BRANCH_WORKTREE_SINCE);
-        const { assert!(BRANCH_WORKTREE_SINCE > COMPATIBLE_SINCE && BRANCH_WORKTREE_SINCE <= PROTOCOL_VERSION) };
         let Command::BranchWorktree { project, branch } = decode(&encode(&Command::BranchWorktree {
             project: PathBuf::from("/code"),
             branch: "feat/x".into(),
@@ -3334,14 +3135,32 @@ mod tests {
     /// daemon that says it is new enough.
     #[test]
     fn a_file_write_is_asked_only_of_a_daemon_that_knows_it() {
-        let ask = ClientMsg::Command(Command::WriteFile {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum Old115Command {
+            WriteFile { term: TermId, tag: u64, path: String, contents: String },
+        }
+        let save = Command::SaveFile {
             term: 3,
             tag: 1,
-            path: "src/a.rs".into(),
-            contents: "fn a() {}\n".into(),
-        });
-        assert_eq!(ask.introduced_in(), WRITE_FILE_SINCE);
-        const { assert!(WRITE_FILE_SINCE > COMPATIBLE_SINCE && WRITE_FILE_SINCE <= PROTOCOL_VERSION) };
+            path: "README.md".into(),
+            contents: "# hi\r\n".into(),
+            version: Some("5-abc".into()),
+        };
+        assert!(decode::<Old115Command>(&encode(&save).unwrap()).is_err());
+        assert_eq!(ClientMsg::Command(save).introduced_in(), FILE_EDIT_SINCE);
+        let stamped = crate::repo::RepoRequest::FileStamped { path: "README.md".into() };
+        assert_eq!(ClientMsg::Query(Query::Repo { term: 3, tag: 1, request: stamped }).introduced_in(), FILE_EDIT_SINCE);
+        // Every older message keeps the window's version, so an older daemon is still talked to.
+        assert_eq!(ClientMsg::Query(Query::Repo { term: 3, tag: 1, request: crate::repo::RepoRequest::Snapshots }).introduced_in(), COMPATIBLE_SINCE);
+        const { assert!(FILE_EDIT_SINCE > COMPATIBLE_SINCE && FILE_EDIT_SINCE <= PROTOCOL_VERSION) };
+        // The wire shapes are pinned: a peer on the same version reads these bytes.
+        let reply = crate::repo::RepoReply::Saved { version: "7-ab".into() };
+        assert_eq!(
+            encode(&reply).unwrap().as_ref(),
+            [0x81, 0xa5, b'S', b'a', b'v', b'e', b'd', 0x81, 0xa7, b'v', b'e', b'r', b's', b'i', b'o', b'n', 0xa4, b'7', b'-', b'a', b'b']
+        );
+        assert_eq!(encode(&crate::repo::RepoReply::ChangedOnDisk).unwrap().as_ref(), [0xad, b'C', b'h', b'a', b'n', b'g', b'e', b'd', b'O', b'n', b'D', b'i', b's', b'k']);
     }
 
     /// Counting a restore is a new repository question: a daemon from before it cannot read it, so it is not
@@ -3358,9 +3177,7 @@ mod tests {
         };
         assert!(decode::<OldRepoRequest>(&encode(&count).unwrap()).is_err());
         let ask = |request| ClientMsg::Query(Query::Repo { term: 3, tag: 1, request });
-        assert_eq!(ask(count).introduced_in(), RESTORE_COUNT_SINCE);
         assert_eq!(ask(crate::repo::RepoRequest::Snapshots).introduced_in(), COMPATIBLE_SINCE);
-        const { assert!(RESTORE_COUNT_SINCE > COMPATIBLE_SINCE && RESTORE_COUNT_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// Finding files is a new repository question: a daemon from before it cannot read it, so it is
@@ -3378,9 +3195,6 @@ mod tests {
             limit: 20,
         };
         assert!(decode::<OldRepoRequest>(&encode(&find).unwrap()).is_err());
-        let ask = |request| ClientMsg::Query(Query::Repo { term: 3, tag: 1, request });
-        assert_eq!(ask(find).introduced_in(), FIND_FILES_SINCE);
-        const { assert!(FIND_FILES_SINCE > COMPATIBLE_SINCE && FIND_FILES_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// `agent` and `prompt` were added to `NewWorktree` as defaulted fields: a peer that does not
@@ -3597,7 +3411,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 113);
+        assert_eq!(PROTOCOL_VERSION, 118);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -3699,7 +3513,7 @@ mod tests {
             ],
             overridden_by: "you".into(),
             source: CheckSource::Repo {
-                file: ".maitty/checks.toml".into(),
+                file: ".maiker/checks.toml".into(),
                 commit: Some("a1b2c3d".into()),
                 committed_at: Some(80),
                 uncommitted: true,
@@ -3729,6 +3543,14 @@ mod tests {
         assert_eq!((old.diff_added, old.diff_removed), (0, 0));
         let new = pane_from(serde_json::json!({"diff_added": 7, "diff_removed": 2}));
         assert_eq!((new.diff_added, new.diff_removed), (7, 2));
+    }
+
+    /// A daemon from before `began_as_agent` sends none: the pane reads as a terminal, which is
+    /// never ended for an agent, so no peer is misread and the version stays.
+    #[test]
+    fn a_pane_from_before_began_as_agent_reads_as_a_terminal() {
+        assert!(!pane_from(serde_json::json!({})).began_as_agent);
+        assert!(pane_from(serde_json::json!({"began_as_agent": true})).began_as_agent);
     }
 
     /// A peer from before the effort field sends none: the pane reads as not saying, and one that does is read.
@@ -3829,7 +3651,59 @@ mod tests {
             start_dir: "C:\\Users\\me\\code".into(),
             reduce_motion: true,
             window_style: WindowStyle::Glass,
+            bypass_off: vec!["codex".into()],
+            update_machines: false,
         }
+    }
+
+    /// An older daemon's settings have no bypass switches: they read as all on, and the key is only sent
+    /// to a daemon that knows it.
+    #[test]
+    fn settings_from_before_the_bypass_switches_read_as_all_on() {
+        use crate::settings_view::*;
+        #[derive(Serialize)]
+        struct Old {
+            default_agent: String,
+            new_session_view: NewSessionView,
+            sidebar_side: SidebarSide,
+            theme_dark: String,
+            theme_light: String,
+            appearance: Appearance,
+            spinner: Vec<String>,
+            start_dir: String,
+            reduce_motion: bool,
+            window_style: WindowStyle,
+        }
+        let now = sample_settings();
+        let old = Old {
+            default_agent: now.default_agent.clone(),
+            new_session_view: now.new_session_view,
+            sidebar_side: now.sidebar_side,
+            theme_dark: now.theme_dark.clone(),
+            theme_light: now.theme_light.clone(),
+            appearance: now.appearance,
+            spinner: now.spinner.clone(),
+            start_dir: now.start_dir.clone(),
+            reduce_motion: now.reduce_motion,
+            window_style: now.window_style,
+        };
+        let read: SharedSettings = decode(&rmp_serde::to_vec_named(&old).unwrap()).unwrap();
+        assert_eq!(read, SharedSettings { bypass_off: Vec::new(), update_machines: true, ..now });
+        let machines = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::UpdateMachines,
+            value: SettingValue::Bool(false),
+        });
+        assert_eq!(machines.introduced_in(), UPDATE_MACHINES_SINCE);
+        let set = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::BypassOff,
+            value: SettingValue::List(vec!["codex".into()]),
+        });
+        assert_eq!(set.introduced_in(), BYPASS_SETTING_SINCE);
+        let other = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::ReduceMotion,
+            value: SettingValue::Bool(true),
+        });
+        assert_eq!(other.introduced_in(), COMPATIBLE_SINCE);
     }
 
     #[test]
@@ -3851,6 +3725,8 @@ mod tests {
             (SettingKey::ReduceMotion, SettingValue::Bool(true)),
             (SettingKey::Spinner, SettingValue::List(vec!["x".into()])),
             (SettingKey::StartDir, SettingValue::Text("~/code".into())),
+            (SettingKey::BypassOff, SettingValue::List(vec!["gemini".into()])),
+            (SettingKey::UpdateMachines, SettingValue::Bool(false)),
             (
                 SettingKey::WindowStyle,
                 SettingValue::WindowStyle(WindowStyle::Glass),
@@ -3904,7 +3780,7 @@ mod tests {
     }
 
     /// Snoozing is a new command: a daemon built before it cannot read it, so a client asks only a
-    /// daemon that says it is new enough, and the window stays where it was.
+    /// daemon that says it is new enough.
     #[test]
     fn a_snooze_is_asked_only_of_a_daemon_that_knows_it() {
         #[derive(Debug, Deserialize)]
@@ -3919,12 +3795,10 @@ mod tests {
             decode::<Command>(&bytes),
             Ok(Command::SnoozePane { term: 3, until: Some(1_000) })
         ));
-        assert_eq!(ClientMsg::Command(snooze).introduced_in(), SNOOZE_SINCE);
-        const { assert!(SNOOZE_SINCE > COMPATIBLE_SINCE && SNOOZE_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// Sending a queued message now is a new command: a daemon built before it cannot read it, so a
-    /// client asks only a daemon that says it is new enough, and `COMPATIBLE_SINCE` stays behind.
+    /// client asks only a daemon that says it is new enough.
     #[test]
     fn sending_a_queued_message_now_is_asked_only_of_a_daemon_that_knows_it() {
         #[derive(Debug, Deserialize)]
@@ -3940,8 +3814,6 @@ mod tests {
             decode::<Command>(&bytes),
             Ok(Command::ConversationSendNow { generation: 2, operation: 5, .. })
         ));
-        assert_eq!(ClientMsg::Command(now).introduced_in(), SEND_NOW_SINCE);
-        const { assert!(SEND_NOW_SINCE > COMPATIBLE_SINCE && SEND_NOW_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// A side answer is a new query and a new reply: a peer built before them cannot read either,
@@ -3968,9 +3840,6 @@ mod tests {
             Ok(Query::SideAnswer { ask: SideAsk::Command(SideCommand::SkillDoctor), tag: 3, .. })
         ));
         assert_eq!(SideCommand::SkillDoctor.typed(), "/skill-doctor");
-        assert_eq!(ClientMsg::Query(ask).introduced_in(), SIDE_ANSWER_SINCE);
-        assert_eq!(ServerMsg::Reply(answer).introduced_in(), SIDE_ANSWER_SINCE);
-        const { assert!(SIDE_ANSWER_SINCE > COMPATIBLE_SINCE && SIDE_ANSWER_SINCE <= PROTOCOL_VERSION) };
     }
 
     #[test]
@@ -4040,18 +3909,13 @@ mod tests {
 
     #[test]
     fn a_helper_read_and_specialists_are_asked_only_of_a_daemon_that_reads_them() {
-        let ask = ClientMsg::Query(Query::HelperRead { term: 1, helper: "a1".into() });
-        assert_eq!(ask.introduced_in(), HELPER_READ_SINCE);
         let answer = ServerMsg::Reply(Reply::HelperRead(HelperRecord {
             term: 1,
             helper: "a1".into(),
             entries: Vec::new(),
             start_missing: true,
         }));
-        assert_eq!(answer.introduced_in(), HELPER_READ_SINCE);
         round_trips(&answer);
-        let ask = ClientMsg::Query(Query::Specialists { term: 1 });
-        assert_eq!(ask.introduced_in(), SPECIALISTS_SINCE);
         let listed = ServerMsg::Reply(Reply::Specialists(crate::specialists::SpecialistList {
             term: 1,
             project: "/p".into(),
@@ -4066,12 +3930,11 @@ mod tests {
             }],
             truncated: false,
         }));
-        assert_eq!(listed.introduced_in(), SPECIALISTS_SINCE);
         round_trips(&listed);
     }
 
     /// Workflow reports are gone (ADR 0011). A pane from a daemon that still keeps runs reads
-    /// without them, and a report from an older `maitty workflow report` is not read as anything
+    /// without them, and a report from an older `maiker workflow report` is not read as anything
     /// else: that one-shot call is refused, never misread.
     #[test]
     fn a_pane_with_workflow_runs_reads_without_them_and_a_report_is_refused() {
@@ -4541,150 +4404,6 @@ mod tests {
         assert!(ask.choices.is_empty(), "an older peer sends no choices");
     }
 
-    /// Closing a chat with an undo window and remembering an approval are new commands: a daemon built
-    /// before them cannot read them, so a client asks only a daemon that says it is new enough.
-    #[test]
-    fn chat_close_and_allow_always_are_asked_only_of_a_daemon_that_knows_them() {
-        let id = crate::conversation::ConversationId(4);
-        let close = ClientMsg::Command(Command::ConversationClose { id, generation: 1 });
-        let undo = ClientMsg::Command(Command::ConversationUndoClose { id });
-        let always = ClientMsg::Command(Command::ConversationAllowAlways { id, generation: 1, request_id: crate::conversation::ProviderRequestId::Integer(9) });
-        assert_eq!((close.introduced_in(), undo.introduced_in()), (CHAT_CLOSE_SINCE, CHAT_CLOSE_SINCE));
-        assert_eq!(always.introduced_in(), ALLOW_ALWAYS_SINCE);
-        const { assert!(CHAT_CLOSE_SINCE > COMPATIBLE_SINCE && ALLOW_ALWAYS_SINCE <= PROTOCOL_VERSION) };
-    }
-
-    #[test]
-    fn listing_and_forgetting_approved_commands_are_asked_only_of_a_daemon_that_knows_them() {
-        let list = ClientMsg::Query(Query::AllowedCommands);
-        let forget = ClientMsg::Command(Command::ForgetAllowedCommand { project: PathBuf::from("/code"), command_sha256: "ab".into() });
-        assert_eq!((list.introduced_in(), forget.introduced_in()), (ALLOWED_COMMANDS_SINCE, ALLOWED_COMMANDS_SINCE));
-        const { assert!(ALLOWED_COMMANDS_SINCE > COMPATIBLE_SINCE && ALLOWED_COMMANDS_SINCE <= PROTOCOL_VERSION) };
-        let clone = ClientMsg::Query(Query::CloneRepo { address: "https://example.com/o/r.git".into(), parent: "~".into(), tag: 1 });
-        assert_eq!(clone.introduced_in(), CLONE_SINCE);
-        const { assert!(CLONE_SINCE > COMPATIBLE_SINCE && CLONE_SINCE <= PROTOCOL_VERSION) };
-        assert_eq!(ClientMsg::Query(Query::GitHubAccounts { tag: 1 }).introduced_in(), GITHUB_ACCOUNTS_SINCE);
-        const { assert!(GITHUB_ACCOUNTS_SINCE > COMPATIBLE_SINCE && GITHUB_ACCOUNTS_SINCE <= PROTOCOL_VERSION) };
-        let repos = Query::GitHubRepos { owner: None, search: None, tag: 1 };
-        for query in [repos, Query::GitHubOwners { tag: 1 }] {
-            assert_eq!(ClientMsg::Query(query).introduced_in(), GITHUB_REPOS_SINCE);
-        }
-        const { assert!(GITHUB_REPOS_SINCE > COMPATIBLE_SINCE && GITHUB_REPOS_SINCE <= PROTOCOL_VERSION) };
-        for request in [GitRequest::Fetch, GitRequest::Pull, GitRequest::Push] {
-            assert_eq!(ClientMsg::Query(Query::Git { term: 3, request, tag: 1 }).introduced_in(), GIT_SYNC_SINCE);
-        }
-        const { assert!(GIT_SYNC_SINCE > COMPATIBLE_SINCE && GIT_SYNC_SINCE <= PROTOCOL_VERSION) };
-        let commit = GitRequest::Commit { message: "m".into(), paths: None };
-        assert_eq!(ClientMsg::Query(Query::Git { term: 3, request: commit, tag: 1 }).introduced_in(), GIT_COMMIT_SINCE);
-        const { assert!(GIT_COMMIT_SINCE > GIT_SYNC_SINCE && GIT_COMMIT_SINCE <= PROTOCOL_VERSION) };
-        let open = Query::Git { term: 3, request: GitRequest::PullRequest, tag: 1 };
-        assert_eq!(ClientMsg::Query(open).introduced_in(), GIT_PULL_REQUEST_SINCE);
-        const { assert!(GIT_PULL_REQUEST_SINCE > GIT_COMMIT_SINCE && GIT_PULL_REQUEST_SINCE <= PROTOCOL_VERSION) };
-        assert_eq!(ClientMsg::Query(Query::GitIdentities { tag: 1 }).introduced_in(), GIT_IDENTITIES_SINCE);
-        const { assert!(GIT_IDENTITIES_SINCE > COMPATIBLE_SINCE && GIT_IDENTITIES_SINCE <= PROTOCOL_VERSION) };
-        let remove = Query::GitIdentityRule { change: GitRuleChange::Remove { folder: "/code".into() }, tag: 1 };
-        assert_eq!(ClientMsg::Query(remove).introduced_in(), GIT_RULES_SINCE);
-        const { assert!(GIT_RULES_SINCE > GIT_IDENTITIES_SINCE && GIT_RULES_SINCE <= PROTOCOL_VERSION) };
-    }
-
-    /// Reading tickets is a new request and a new reply: a peer built before them cannot read
-    /// either, but nothing an older peer already sends or reads changed, so the window stays open
-    /// and the daemon is asked only when it is new enough.
-    #[test]
-    fn reading_tickets_is_asked_only_of_a_daemon_that_knows_it_and_changes_nothing_older() {
-        use crate::tickets::{TicketError, TicketsReply, TicketsRequest};
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            GitIdentities { tag: u64 },
-        }
-        let ask = Query::Tickets { source: "me/widgets".into(), request: TicketsRequest::Groups, tag: 7 };
-        let bytes = encode(&ask).unwrap();
-        assert!(decode::<OldQuery>(&bytes).is_err());
-        assert!(matches!(decode::<Query>(&bytes), Ok(Query::Tickets { tag: 7, request: TicketsRequest::Groups, .. })));
-        assert_eq!(ClientMsg::Query(ask).introduced_in(), TICKETS_SINCE);
-
-        let found = ServerMsg::Reply(Reply::Tickets { tag: 7, answer: Ok(TicketsReply::Groups(Vec::new())) });
-        let refused = ServerMsg::Reply(Reply::Tickets { tag: 8, answer: Err(TicketError::SignedOut) });
-        for reply in [found, refused] {
-            assert_eq!(reply.introduced_in(), TICKETS_SINCE);
-            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
-            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
-        }
-        const { assert!(TICKETS_SINCE > COMPATIBLE_SINCE && TICKETS_SINCE <= PROTOCOL_VERSION) };
-    }
-
-    /// Keeping a provider's key is a new request and a new reply, so the window stays open and a
-    /// daemon is asked only when it is new enough. The key rides in a type that never prints, and
-    /// the reply carries no key.
-    #[test]
-    fn ticket_keys_are_asked_only_of_a_daemon_that_knows_them_and_the_key_never_prints() {
-        use crate::tickets::{TicketError, TicketKeyState, TicketProvider};
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            GitIdentities { tag: u64 },
-        }
-        let set = Query::TicketKeys {
-            change: TicketKeyChange::Set { provider: TicketProvider::Plane, address: "https://plane.example".into(), workspace: "w".into(), key: SecretText("plane_api_SECRET123".into()) },
-            tag: 4,
-        };
-        assert!(!format!("{set:?} {:?}", ClientMsg::Query(set.clone())).contains("SECRET123"));
-        let bytes = encode(&set).unwrap();
-        assert!(decode::<OldQuery>(&bytes).is_err());
-        assert!(matches!(decode::<Query>(&bytes), Ok(Query::TicketKeys { tag: 4, change: TicketKeyChange::Set { .. } })));
-        assert_eq!(ClientMsg::Query(set).introduced_in(), TICKET_KEYS_SINCE);
-
-        let state = TicketKeyState { provider: TicketProvider::Linear, set: true, address: String::new(), workspace: String::new(), stored_in: crate::tickets::KeyStorage::File };
-        for answer in [Ok(vec![state]), Err(TicketError::Invalid("no".into()))] {
-            let reply = ServerMsg::Reply(Reply::TicketKeys { tag: 4, answer });
-            assert_eq!(reply.introduced_in(), TICKET_KEYS_SINCE);
-            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
-            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
-        }
-        // Where the key is kept is a field an older peer passes over, and a state from an older
-        // daemon, which kept every key in a file, reads as kept in a file: no version change.
-        #[derive(serde::Serialize, serde::Deserialize)]
-        struct OldKeyState {
-            provider: TicketProvider,
-            set: bool,
-            address: String,
-            workspace: String,
-        }
-        let old = OldKeyState { provider: TicketProvider::Plane, set: true, address: "https://plane.example".into(), workspace: "w".into() };
-        let read: TicketKeyState = decode(&encode(&old).unwrap()).unwrap();
-        assert_eq!(read.stored_in, crate::tickets::KeyStorage::File);
-        let new = TicketKeyState { stored_in: crate::tickets::KeyStorage::Keychain, ..read };
-        let by_old: OldKeyState = decode(&encode(&new).unwrap()).unwrap();
-        assert_eq!((by_old.set, by_old.workspace.as_str()), (true, "w"));
-        // A message an older peer already reads is not changed, so the window stays where it was.
-        const { assert!(TICKET_KEYS_SINCE > TICKETS_SINCE && TICKET_KEYS_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_KEYS_SINCE) };
-    }
-
-    /// Writing to a ticket is a new request and a new reply, so the window stays open and a daemon
-    /// is asked only when it is new enough; an older one is never sent a write.
-    #[test]
-    fn writing_a_ticket_is_asked_only_of_a_daemon_that_knows_it_and_changes_nothing_older() {
-        use crate::tickets::{TicketError, TicketWrite, TicketWritten};
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            GitIdentities { tag: u64 },
-        }
-        let write = Query::TicketWrite { source: "me/widgets".into(), id: "github:me/widgets#1".into(), write: TicketWrite::Close, confirmed: true, tag: 5 };
-        let bytes = encode(&write).unwrap();
-        assert!(decode::<OldQuery>(&bytes).is_err());
-        assert!(matches!(decode::<Query>(&bytes), Ok(Query::TicketWrite { tag: 5, confirmed: true, write: TicketWrite::Close, .. })));
-        assert_eq!(ClientMsg::Query(write).introduced_in(), TICKET_WRITE_SINCE);
-        for answer in [Ok(TicketWritten::Commented), Err(TicketError::SignedOut)] {
-            let reply = ServerMsg::Reply(Reply::TicketWrite { tag: 5, answer });
-            assert_eq!(reply.introduced_in(), TICKET_WRITE_SINCE);
-            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
-            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
-        }
-        const { assert!(TICKET_WRITE_SINCE > TICKET_KEYS_SINCE && TICKET_WRITE_SINCE < PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_WRITE_SINCE) };
-    }
-
     /// The extensions page is a new request and a new reply: a daemon built before them is never
     /// asked, a client built before them is never sent the answer, and nothing older changes.
     #[test]
@@ -4700,70 +4419,11 @@ mod tests {
         let bytes = encode(&query).unwrap();
         assert!(decode::<OldQuery>(&bytes).is_err());
         assert!(matches!(decode::<Query>(&bytes), Ok(Query::Extensions { tag: 7, request: ExtRequest::Remove { .. } })));
-        assert_eq!(ClientMsg::Query(query).introduced_in(), EXTENSIONS_SINCE);
         for answer in [Ok(ExtReply::Done("x".into())), Err(ExtError::NeedsTerminal("claude mcp login x".into()))] {
             let reply = ServerMsg::Reply(Reply::Extensions { tag: 7, answer });
-            assert_eq!(reply.introduced_in(), EXTENSIONS_SINCE);
             let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
             assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
         }
-        // New messages only, so the window an older peer talks in stays where it was.
-        const { assert!(EXTENSIONS_SINCE > TICKET_SETUP_SINCE && EXTENSIONS_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < EXTENSIONS_SINCE) };
-    }
-
-    /// A project's ticket links are a new request and a new reply: a daemon built before them is
-    /// never asked, a client built before them is never sent the answer, and the window stays open.
-    #[test]
-    fn ticket_links_are_asked_only_of_a_daemon_that_keeps_them() {
-        use crate::ticket_links::{GitHubLink, LinkedProject, TicketLink, TicketLinkChange, TicketLinks, TicketPlace};
-        use crate::tickets::TicketError;
-        let place = TicketPlace { machine: None, folder: "/home/me/shop".into() };
-        let set = Query::TicketLinks {
-            place: Some(place.clone()),
-            change: TicketLinkChange::Set { place, link: TicketLink { github: GitHubLink::Off, ..TicketLink::default() } },
-            tag: 9,
-        };
-        let bytes = encode(&set).unwrap();
-        assert!(matches!(decode::<Query>(&bytes), Ok(Query::TicketLinks { tag: 9, change: TicketLinkChange::Set { .. }, .. })));
-        assert_eq!(ClientMsg::Query(set).introduced_in(), TICKET_LINKS_SINCE);
-        let found = TicketLinks {
-            project: Some(LinkedProject { machine: None, folder: "/home/me/shop".into(), link: TicketLink::default() }),
-            ..TicketLinks::default()
-        };
-        for answer in [Ok(found), Err(TicketError::Invalid("no".into()))] {
-            let reply = ServerMsg::Reply(Reply::TicketLinks { tag: 9, answer });
-            assert_eq!(reply.introduced_in(), TICKET_LINKS_SINCE);
-            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
-            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
-        }
-        const { assert!(COMPATIBLE_SINCE < TICKET_LINKS_SINCE) };
-    }
-
-    /// An agent's ask for the ticket setup is a new command and a new message: a daemon built
-    /// before it is never sent the ask, a window built before it never gets the message, and a
-    /// links answer with the repository file in it still reads in a client that knows nothing of it.
-    #[test]
-    fn a_ticket_setup_ask_passes_only_between_peers_that_know_it() {
-        use crate::ticket_links::{RepoTicketFile, TicketLinks, TicketSetupAsk, TicketSetupSource};
-        let ask = Command::OpenTicketSetup { term: 3, folder: None, source: Some(TicketSetupSource::Plane), link: "https://plane.example/acme/projects/p1/issues/".into() };
-        let bytes = encode(&ask).unwrap();
-        assert!(matches!(decode::<Command>(&bytes), Ok(Command::OpenTicketSetup { term: 3, source: Some(TicketSetupSource::Plane), .. })));
-        assert_eq!(ClientMsg::Command(ask).introduced_in(), TICKET_SETUP_SINCE);
-        let shown = ServerMsg::TicketSetup(TicketSetupAsk { term: 3, folder: "/home/me/shop".into(), source: None, link: String::new() });
-        assert_eq!(shown.introduced_in(), TICKET_SETUP_SINCE);
-        let again: ServerMsg = decode(&encode(&shown).unwrap()).unwrap();
-        assert_eq!(encode(&again).unwrap(), encode(&shown).unwrap());
-        // A 108 client's answer type, without the repository file: the new field is passed over.
-        #[derive(Debug, Serialize, Deserialize)]
-        struct OldLinks {
-            #[serde(default)]
-            projects: Vec<crate::ticket_links::LinkedProject>,
-        }
-        let links = TicketLinks { repo_file: Some(RepoTicketFile { plane: true, ..RepoTicketFile::default() }), ..TicketLinks::default() };
-        assert!(decode::<OldLinks>(&encode(&links).unwrap()).is_ok());
-        let none: TicketLinks = decode(&encode(&OldLinks { projects: Vec::new() }).unwrap()).unwrap();
-        assert_eq!(none.repo_file, None, "a 108 daemon's answer reads as no repository file");
-        const { assert!(TICKET_SETUP_SINCE <= PROTOCOL_VERSION && COMPATIBLE_SINCE < TICKET_SETUP_SINCE) };
     }
 
     /// Asking an agent for its commands is a new query and a new reply: a daemon built before it is
@@ -4774,18 +4434,99 @@ mod tests {
         use crate::conversation::Provider;
         let ask = Query::AgentCommands { agent: Provider::Claude, folder: "/code".into(), tag: 5 };
         assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::AgentCommands { agent: Provider::Claude, tag: 5, .. })));
-        assert_eq!(ClientMsg::Query(ask).introduced_in(), AGENT_COMMANDS_SINCE);
         let found = ServerMsg::Reply(Reply::AgentCommands {
             tag: 5,
             answer: Ok(vec![AgentCommand { name: "compact".into(), description: "d".into(), hint: String::new(), aliases: Vec::new() }]),
         });
         let refused = ServerMsg::Reply(Reply::AgentCommands { tag: 6, answer: Err("Claude Code is not installed".into()) });
         for reply in [found, refused] {
-            assert_eq!(reply.introduced_in(), AGENT_COMMANDS_SINCE);
             let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
             assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
         }
-        const { assert!(AGENT_COMMANDS_SINCE > COMPATIBLE_SINCE && AGENT_COMMANDS_SINCE < PROTOCOL_VERSION) };
+    }
+
+    /// Listing a machine's repositories is a new query and a new reply: a peer built before them
+    /// cannot read either, so the window stays open (`COMPATIBLE_SINCE` does not move) and each
+    /// message has its own `introduced_in` arm; an older peer's messages still read.
+    #[test]
+    fn a_repositories_ask_passes_only_between_peers_that_know_it() {
+        use crate::repositories::{IndexedRepository, RepositoryIndex};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            ListFolders { path: String, tag: u64 },
+        }
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldReply {
+            Ok,
+        }
+        let ask = Query::Repositories { rescan: true, tag: 8 };
+        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err(), "a daemon from before cannot read the question");
+        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::Repositories { rescan: true, tag: 8 })));
+        let old_listing = encode(&Query::ListFolders { path: "~".into(), tag: 1 }).unwrap();
+        assert!(matches!(decode::<Query>(&old_listing), Ok(Query::ListFolders { tag: 1, .. })), "an older client's query still reads");
+        let found = RepositoryIndex {
+            repos: vec![IndexedRepository { path: "/home/me/app".into(), branch: Some("main".into()), last_used: 1_794_000_000 }],
+            indexed_at: 1_794_000_100,
+            more: false,
+        };
+        let answer = Reply::Repositories { tag: 8, found };
+        assert!(decode::<OldReply>(&encode(&answer).unwrap()).is_err(), "a client from before cannot read the answer");
+        let reply = ServerMsg::Reply(answer);
+        let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+        assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+    }
+
+    /// Making a folder is a new query and a new reply: a daemon built before it cannot read the
+    /// question, so a window asks only one whose listing says `can_create`, and `COMPATIBLE_SINCE`
+    /// stays where it is. The fields added to older messages read as their old selves.
+    #[test]
+    fn a_folder_is_created_only_by_a_daemon_that_knows_how() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            ListFolders { path: String, tag: u64 },
+        }
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct OldListing {
+            path: String,
+            exists: bool,
+            entries: Vec<FolderEntry>,
+            truncated: bool,
+        }
+        let ask = Query::CreateFolder { parent: "~/code".into(), name: "new".into(), tag: 4 };
+        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err(), "a daemon from before cannot read the question");
+        assert_eq!(ClientMsg::Query(ask.clone()).introduced_in(), FOLDER_CREATE_SINCE);
+        const { assert!(FOLDER_CREATE_SINCE > COMPATIBLE_SINCE && FOLDER_CREATE_SINCE <= PROTOCOL_VERSION) };
+        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::CreateFolder { tag: 4, .. })));
+
+        // The answers keep their shape: a pinned encoding of each, so a reorder or a rename is seen.
+        let created = FolderCreated::Created { path: "/a/b".into() };
+        assert_eq!(
+            encode(&created).unwrap().as_ref(),
+            [0x81, 0xa7, b'C', b'r', b'e', b'a', b't', b'e', b'd', 0x81, 0xa4, b'p', b'a', b't', b'h', 0xa4, b'/', b'a', b'/', b'b']
+        );
+        assert_eq!(encode(&FolderCreated::Exists).unwrap().as_ref(), [0xa6, b'E', b'x', b'i', b's', b't', b's']);
+        for outcome in [created, FolderCreated::NotAllowed { reason: "x".into() }, FolderCreated::Failed { reason: "y".into() }] {
+            let reply = ServerMsg::Reply(Reply::FolderCreated { tag: 4, outcome });
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+
+        // An older daemon's listing has no `can_create` and reads as one that cannot; a new listing still reads to an old window.
+        #[derive(Serialize)]
+        struct Listing {
+            path: String,
+            exists: bool,
+            entries: Vec<FolderEntry>,
+            truncated: bool,
+        }
+        let old = encode(&Listing { path: "/a".into(), exists: true, entries: Vec::new(), truncated: false }).unwrap();
+        assert!(!decode::<FolderListing>(&old).unwrap().can_create);
+        let new = encode(&FolderListing { can_create: true, ..FolderListing::missing("/a") }).unwrap();
+        assert!(decode::<OldListing>(&new).is_ok());
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never
@@ -4812,13 +4553,10 @@ mod tests {
         ));
         let old_listing = encode(&Query::ListFolders { path: "~".into(), tag: 1 }).unwrap();
         assert!(matches!(decode::<Query>(&old_listing), Ok(Query::ListFolders { tag: 1, .. })), "an older client's query still reads");
-        assert_eq!(ClientMsg::Query(ask).introduced_in(), SAVED_CONVERSATIONS_SINCE);
-        assert_eq!(ServerMsg::Reply(answer).introduced_in(), SAVED_CONVERSATIONS_SINCE);
-        const { assert!(SAVED_CONVERSATIONS_SINCE > COMPATIBLE_SINCE && SAVED_CONVERSATIONS_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// Listing closed sessions is a new query and a new reply: a peer built before them cannot read
-    /// either, so a client asks only a daemon that says it is new enough, and the window stays open.
+    /// either, so a client asks only a daemon that says it is new enough.
     #[test]
     fn closed_sessions_are_asked_only_of_a_daemon_that_knows_them() {
         #[derive(Debug, Deserialize)]
@@ -4831,10 +4569,6 @@ mod tests {
         enum OldReply {
             Ok,
         }
-        let ask = ClientMsg::Query(Query::ClosedSessions);
-        assert_eq!(ask.introduced_in(), CLOSED_SESSIONS_SINCE);
-        assert_eq!(ServerMsg::Reply(Reply::ClosedSessions(Vec::new())).introduced_in(), CLOSED_SESSIONS_SINCE);
-        const { assert!(CLOSED_SESSIONS_SINCE > COMPATIBLE_SINCE && CLOSED_SESSIONS_SINCE <= PROTOCOL_VERSION) };
         assert!(decode::<OldQuery>(&encode(&Query::ClosedSessions).unwrap()).is_err());
 
         let closed = ClosedSession {
@@ -4870,8 +4604,6 @@ mod tests {
         let ask = Query::WorktreeStanding { repo: PathBuf::from("/code/app"), folder: PathBuf::from("/code/app-worktrees/task") };
         assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err());
         assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::WorktreeStanding { .. })));
-        assert_eq!(ClientMsg::Query(ask).introduced_in(), WORKTREE_STANDING_SINCE);
-        const { assert!(WORKTREE_STANDING_SINCE > COMPATIBLE_SINCE && WORKTREE_STANDING_SINCE <= PROTOCOL_VERSION) };
 
         let standing = WorktreeStanding {
             dirty: 0,
@@ -4883,11 +4615,10 @@ mod tests {
         let reply = Reply::WorktreeStanding(Some(standing.clone()));
         assert!(decode::<OldReply>(&encode(&reply).unwrap()).is_err());
         assert!(matches!(decode::<Reply>(&encode(&reply).unwrap()), Ok(Reply::WorktreeStanding(Some(read))) if read == standing));
-        assert_eq!(ServerMsg::Reply(reply).introduced_in(), WORKTREE_STANDING_SINCE);
     }
 
     /// Reopening a closed session is a new command: a daemon built before it cannot read it, so a
-    /// client asks only a daemon that says it is new enough, and the window stays open.
+    /// client asks only a daemon that says it is new enough.
     #[test]
     fn reopening_a_closed_session_is_asked_only_of_a_daemon_that_knows_it() {
         #[derive(Debug, Deserialize)]
@@ -4901,8 +4632,6 @@ mod tests {
             decode::<Command>(&encode(&reopen).unwrap()),
             Ok(Command::ReopenClosedSession { agent, session }) if agent == "claude" && session == "abc"
         ));
-        assert_eq!(ClientMsg::Command(reopen).introduced_in(), REOPEN_CLOSED_SINCE);
-        const { assert!(REOPEN_CLOSED_SINCE > COMPATIBLE_SINCE && REOPEN_CLOSED_SINCE <= PROTOCOL_VERSION) };
     }
 
     /// A closed session from a peer that records no worktree still reads, with neither set.
@@ -4929,13 +4658,10 @@ mod tests {
         assert_eq!((read.worktree, read.repo), (None, None));
         assert_eq!(read.branch.as_deref(), Some("feat"));
     }
+
     #[test]
     fn an_agent_sign_in_is_a_new_message_older_peers_are_never_sent() {
-        use super::{SignInAgent, SignInFailure, SignInRequest, SignInState};
-        let ask = ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Codex, request: SignInRequest::Start, tag: 3 });
-        let answer = ServerMsg::Reply(Reply::AgentSignIn { tag: 3, agent: SignInAgent::Codex, state: SignInState::Failed(SignInFailure::TimedOut) });
-        assert_eq!((ask.introduced_in(), answer.introduced_in()), (AGENT_SIGN_IN_SINCE, AGENT_SIGN_IN_SINCE));
-        const { assert!(AGENT_SIGN_IN_SINCE > COMPATIBLE_SINCE && AGENT_SIGN_IN_SINCE <= PROTOCOL_VERSION) };
+        use super::{SignInAgent, SignInState};
         let waiting = SignInState::Waiting { link: Some("https://auth.example/device".into()), code: Some("AB-12".into()) };
         let back: ServerMsg = decode(&encode(&ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state: waiting.clone() })).unwrap()).unwrap();
         assert!(matches!(back, ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state }) if state == waiting));

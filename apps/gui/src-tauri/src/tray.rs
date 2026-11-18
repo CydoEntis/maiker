@@ -8,7 +8,7 @@ use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
-const APP: &str = "Maitty";
+const APP: &str = "Maiker";
 const TRAY_ID: &str = "main";
 const MAIN_WINDOW: &str = "main";
 /// The window is told the chosen session by this event; its payload is the session's id.
@@ -135,6 +135,26 @@ fn show_window(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
+    }
+}
+
+/// A quit asked for while the window is open (the tray's Quit, the system's) closes the window instead, so the window
+/// can first ask about an unsaved document draft; closing the last window then quits. A restart is never held up: the
+/// window asks before it restarts for an update.
+pub fn close_instead_of_exit(app: &AppHandle, code: i32) -> bool {
+    if code == tauri::RESTART_EXIT_CODE {
+        return false;
+    }
+    let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
+        return false;
+    };
+    show_window(app);
+    match window.close() {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("closing the window before quitting: {error}");
+            false
+        }
     }
 }
 

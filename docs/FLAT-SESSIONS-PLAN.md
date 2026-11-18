@@ -1,7 +1,7 @@
 # Flat sessions: audit and plan (draft, 2026-11-06)
 
 Status: **built on `dev` as of 2026-11-07 (sections 7 and 8 are current for the desktop app; section 9, the redesign, is current for the TUI and supersedes 8 there).** The decisions in section 3 were taken on the owner's say-so; ADR 0004, ADR 0007 and `FEATURES.md` are edited to match (uncommitted). It compares the v26 spec
-(`Maitty Desktop specification (3).zip`: `README.md` for the desktop app, `TUI_SPEC.md` for the
+(`Maiker Desktop specification (3).zip`: `README.md` for the desktop app, `TUI_SPEC.md` for the
 terminal app) with the repo at v0.66.0 (`dev` 5687632f). Facts come from three read-only audits
 of the daemon, the desktop app and the terminal app; guesses are marked.
 
@@ -10,7 +10,7 @@ of the daemon, the desktop app and the terminal app; guesses are marked.
 - **One flat list.** The sidebar lists sessions in creation order. Folder and machine are badges on
   a row. No projects, folders, spaces, machine headers, tab bar, activity bar or Inspector.
 - **A session is one shell PTY.** A window layout (up to 4 panes) is local client state; the spec
-  says "keep this as local layout state; sessions come from maittyd".
+  says "keep this as local layout state; sessions come from maikerd".
 - **Close means end, with a 6-second Undo.** Only closing the window leaves sessions running.
 - **One New session modal** (sentence header: project, machine, agent, view) replaces every other
   way to start a session.
@@ -91,7 +91,7 @@ updates and states -> settings -> narrow rail. Expect to rewrite or delete most 
 The 793 KB prototype HTML. The spec says the README wins on behaviour and the prototype on exact
 pixels, so read it per screen when building that screen.
 
-## 7. The TUI handoff (`tui.zip`, "Maitty TUI v26") against the rest
+## 7. The TUI handoff (`tui.zip`, "Maiker TUI v26") against the rest
 
 It replaces `TUI_SPEC.md` as the terminal app's spec. The desktop README still owns the desktop
 app. Where the two disagree, each app follows its own handoff, and the model underneath (the
@@ -130,7 +130,7 @@ Daemon work is unchanged by this: it needs the same flat list, `Exited`, Undo an
 > as its chat ([DESIGN](DESIGN.md#desktop-app), [UI](UI.md)). The daemon keeps its workspaces for the terminal app.
 
 The owner replaced both specs after the first wave landed (`dev` 8f52406e). The sources are
-`Maitty Desktop specification (4).zip` (desktop README v31 plus `TUI_SPEC_v31.md`) and
+`Maiker Desktop specification (4).zip` (desktop README v31 plus `TUI_SPEC_v31.md`) and
 `Sidebar design for remote and local machines (2).zip` (TUI v27). **They supersede sections 1 and 7.**
 
 **The model changes back to named groups, with different words:**

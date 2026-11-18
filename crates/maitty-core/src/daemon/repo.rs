@@ -34,7 +34,10 @@ pub fn answer(dir: &Path, request: &RepoRequest) -> Result<RepoReply> {
     let top = match git(dir, &["rev-parse", "--show-toplevel"]) {
         Ok(top) => top,
         Err(error) => match request {
-            RepoRequest::Tree { .. } | RepoRequest::File { .. } | RepoRequest::FindFiles { .. }
+            RepoRequest::Tree { .. }
+            | RepoRequest::File { .. }
+            | RepoRequest::FileStamped { .. }
+            | RepoRequest::FindFiles { .. }
                 if dir.is_dir() =>
             {
                 dir.to_string_lossy().into_owned()
@@ -47,6 +50,10 @@ pub fn answer(dir: &Path, request: &RepoRequest) -> Result<RepoReply> {
         RepoRequest::Status => RepoReply::Status(status(root)?),
         RepoRequest::Tree { path } => RepoReply::Tree(conversation_files(root, path.as_deref())?),
         RepoRequest::File { path } => RepoReply::File(conversation_file(root, path)?),
+        RepoRequest::FileStamped { path } => {
+            let (text, version) = super::git::conversation_file_stamped(root, path)?;
+            RepoReply::FileStamped { text, version }
+        }
         RepoRequest::Locate { path } => RepoReply::Located(locate(dir, root, path)?),
         RepoRequest::Diff { path } => RepoReply::Diff(diff(root, path.as_deref())?),
         RepoRequest::DiffRange { from, to, path } => {
@@ -108,6 +115,16 @@ pub fn write_file(dir: &Path, relative: &str, contents: &str) -> Result<RepoRepl
     let top = git(dir, &["rev-parse", "--show-toplevel"]).unwrap_or_else(|_| dir.to_string_lossy().into_owned());
     super::git::conversation_write(Path::new(&top), relative, contents)?;
     Ok(RepoReply::Written)
+}
+
+/// `write_file` for an editor: the file must still be `version` (when given). A file that changed
+/// since is answered `ChangedOnDisk` and left as it is; a save that fails is an error, never swallowed.
+pub fn save_file(dir: &Path, relative: &str, contents: &str, version: Option<&str>) -> Result<RepoReply> {
+    let top = git(dir, &["rev-parse", "--show-toplevel"]).unwrap_or_else(|_| dir.to_string_lossy().into_owned());
+    Ok(match super::git::conversation_save(Path::new(&top), relative, contents, version)? {
+        super::git::Saved::Written(version) => RepoReply::Saved { version },
+        super::git::Saved::ChangedOnDisk => RepoReply::ChangedOnDisk,
+    })
 }
 
 fn references(root: &Path) -> Result<Vec<RepoReference>> {
@@ -480,6 +497,58 @@ mod tests {
         assert!(!root.parent().unwrap().join("outside.txt").exists());
         // A text past the preview limit is refused rather than cut.
         assert!(write_file(root, "src/a.txt", &"x".repeat(300 * 1024)).is_err());
+    }
+
+    #[test]
+    fn a_save_that_names_the_version_it_read_is_refused_when_the_file_changed_since() {
+        let dir = crate::daemon::persist::scratch_dir();
+        let root = dir.path();
+        std::fs::create_dir_all(root).expect("folder");
+        std::fs::write(root.join("README.md"), "# one\r\n").expect("file");
+        let RepoReply::FileStamped { text, version } = answer(root, &RepoRequest::FileStamped { path: "README.md".into() }).expect("read") else {
+            panic!("a stamped file");
+        };
+        assert_eq!(text, "# one\r\n", "the text is the bytes, line endings and all");
+
+        // An agent edits it meanwhile: the save is refused, the agent's text stays.
+        std::fs::write(root.join("README.md"), "# agent\n").expect("agent edit");
+        assert_eq!(save_file(root, "README.md", "# mine\n", Some(&version)).expect("answered"), RepoReply::ChangedOnDisk);
+        assert_eq!(std::fs::read_to_string(root.join("README.md")).unwrap(), "# agent\n");
+        let stray: Vec<_> = std::fs::read_dir(root).unwrap().flatten().map(|e| e.file_name()).collect();
+        assert_eq!(stray.len(), 1, "a refused save leaves no staging file: {stray:?}");
+
+        // Overwriting is the person's explicit choice, and a save of the current version goes through.
+        assert!(matches!(save_file(root, "README.md", "# mine\n", None).expect("overwrite"), RepoReply::Saved { .. }));
+        let RepoReply::FileStamped { version, .. } = answer(root, &RepoRequest::FileStamped { path: "README.md".into() }).unwrap() else { panic!() };
+        let RepoReply::Saved { version: after } = save_file(root, "README.md", "# third\r\n", Some(&version)).expect("current") else { panic!("saved") };
+        assert_eq!(std::fs::read(root.join("README.md")).unwrap(), b"# third\r\n", "CRLF is written as given");
+        assert_eq!(after, super::super::git::file_version(b"# third\r\n"));
+    }
+
+    #[test]
+    fn a_version_is_pinned_and_follows_the_bytes() {
+        assert_eq!(super::super::git::file_version(b""), "0-cbf29ce484222325");
+        assert_eq!(super::super::git::file_version(b"a"), "1-af63dc4c8601ec8c");
+        assert_ne!(super::super::git::file_version(b"a\n"), super::super::git::file_version(b"a\r\n"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_save_that_cannot_write_says_so_and_leaves_the_file() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = crate::daemon::persist::scratch_dir();
+        let root = dir.path();
+        std::fs::create_dir_all(root).expect("folder");
+        std::fs::write(root.join("a.md"), "keep").expect("file");
+        std::fs::set_permissions(root, std::fs::Permissions::from_mode(0o555)).expect("read-only folder");
+        let outcome = save_file(root, "a.md", "new", None);
+        std::fs::set_permissions(root, std::fs::Permissions::from_mode(0o755)).expect("restore");
+        // A privileged user can write anyway; everyone else must hear an error, not a quiet success.
+        if outcome.is_ok() {
+            return;
+        }
+        assert!(format!("{:#}", outcome.unwrap_err()).contains("saving the file"));
+        assert_eq!(std::fs::read_to_string(root.join("a.md")).unwrap(), "keep");
     }
 
     #[test]

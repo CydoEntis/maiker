@@ -213,24 +213,8 @@ fn a_fix_names_the_machine_so_the_command_can_be_run_as_it_stands() {
         },
     );
     let why = told.why.expect("a fix");
-    assert!(why.contains("`maitty machine update build --install`"), "{why}");
+    assert!(why.contains("`maiker machine update build --install`"), "{why}");
     assert!(!why.contains("<name>"), "{why}");
-}
-
-#[tokio::test]
-async fn a_machine_one_version_behind_needs_its_update_though_it_could_still_talk() {
-    const { assert!(maitty_shared::protocol::COMPATIBLE_SINCE < maitty_shared::protocol::PROTOCOL_VERSION) };
-    let sandbox = Sandbox::new();
-    let mut watch = Watch::new(&[machine("box", &sandbox, "older")], &sandbox, quick(WAIT));
-    watch
-        .until("needs-update", |w| w.is(BOX, "needs-update"))
-        .await;
-    assert_eq!(
-        watch.state_of(BOX),
-        Some(&ConnectionState::NeedsUpdate {
-            why: FIX_UPDATE.into()
-        })
-    );
 }
 
 #[tokio::test]
@@ -906,7 +890,7 @@ async fn a_chat_request_reaches_a_machines_daemon_on_a_line_of_its_own() {
 
     assert!(wire.daemon(Some(BOX.0 + 5), || Err("unused".into())).is_err(), "a machine that is not listed takes nothing");
     assert!(matches!(
-        wire.daemon(None, || Ok(PathBuf::from("maitty"))),
+        wire.daemon(None, || Ok(PathBuf::from("maiker"))),
         Ok(Daemon::Local(_))
     ));
 }

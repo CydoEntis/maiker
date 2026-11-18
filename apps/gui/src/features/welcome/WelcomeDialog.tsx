@@ -4,6 +4,11 @@ import { Icon } from '@/features/workspace/components/glyphs'
 import { hotkeyRows, type Platform } from '@/features/workspace/model/shortcuts'
 import { useKeyOverrides } from '@/features/shortcuts/platform'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
+import { APP_NAME } from '@/brand'
+import { FieldError, fieldErrorProps } from '@/components/ui/feedback'
+
+const FOLDER_ERROR_ID = 'mx-wel-folder-error'
+const FOLDER_MISSING = 'That folder was not found. Check the path, or leave it empty for your home folder.'
 
 /** The shortcuts worth knowing on day one, as the keymap names them, with a shorter label for the long ones. */
 const FIRST_KEYS: ReadonlyArray<readonly [action: string, label: string]> = [
@@ -64,9 +69,9 @@ export function WelcomeDialog({ platform, startFolder, portalContainer, validate
             {step === 0 ? (
               <>
                 <span className="mx-wel-icon"><Icon name="prompt" size={22} /></span>
-                <DialogPrimitive.Title className="mx-wel-title">Welcome to Maitty</DialogPrimitive.Title>
+                <DialogPrimitive.Title className="mx-wel-title">Welcome to {APP_NAME}</DialogPrimitive.Title>
                 <DialogPrimitive.Description className="mx-wel-text">
-                  Every session is a real shell, owned by the same daemon the Maitty TUI uses. Closing this window never stops an agent.
+                  Every session is a real shell, owned by the same daemon the {APP_NAME} TUI uses. Closing this window never stops an agent.
                 </DialogPrimitive.Description>
                 <label className="mx-wel-field">
                   <span>New sessions start in</span>
@@ -76,15 +81,13 @@ export function WelcomeDialog({ platform, startFolder, portalContainer, validate
                       value={draft}
                       placeholder="~"
                       aria-label="New sessions start in"
-                      aria-invalid={missing}
+                      {...fieldErrorProps(FOLDER_ERROR_ID, missing ? FOLDER_MISSING : null)}
                       spellCheck={false}
                       onChange={(event) => { setDraft(event.target.value); setMissing(false) }}
                       onKeyDown={(event) => { if (event.key === 'Enter') void next() }}
                     />
                   </span>
-                  <small role={missing ? 'alert' : undefined} className={missing ? 'is-error' : undefined}>
-                    {missing ? 'That folder was not found.' : 'Leave it empty for your home folder.'}
-                  </small>
+                  {missing ? <FieldError id={FOLDER_ERROR_ID}>{FOLDER_MISSING}</FieldError> : <small>Leave it empty for your home folder.</small>}
                 </label>
               </>
             ) : (

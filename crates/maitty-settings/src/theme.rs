@@ -81,7 +81,7 @@ pub const DEFAULT: &str = "night";
 /// The light theme when none is chosen.
 pub const DEFAULT_LIGHT: &str = "day";
 
-/// Where a theme that is no longer built in went: each removed id, and the two Maitty long names, name the surviving theme
+/// Where a theme that is no longer built in went: each removed id, and the two Maiker long names, name the surviving theme
 /// nearest to it on the same side (dark to a dark one, light to a light one, by the colour of the ground), so a config that
 /// still says it keeps loading. `canonical` follows it once.
 const ALIASES: &[(&str, &str)] = &[
@@ -324,12 +324,12 @@ pub const DESIGN: &[(&str, &str)] = &[
     ("gruvbox-material-light", "Gruvbox Material Light"),
     ("kanagawa-lotus", "Kanagawa Lotus"),
     ("kanagawa-wave", "Kanagawa Wave"),
-    ("maitty-dark", "Maitty Dark"),
-    ("day", "Maitty Day"),
-    ("maitty-light", "Maitty Light"),
-    ("night", "Maitty Night"),
-    ("maitty-retro-dark", "Maitty Retro Dark"),
-    ("maitty-retro-light", "Maitty Retro Light"),
+    ("maitty-dark", "Maiker Dark"),
+    ("day", "Maiker Day"),
+    ("maitty-light", "Maiker Light"),
+    ("night", "Maiker Night"),
+    ("maitty-retro-dark", "Maiker Retro Dark"),
+    ("maitty-retro-light", "Maiker Retro Light"),
     ("melange-dark", "Melange Dark"),
     ("melange-light", "Melange Light"),
     ("maitty-moss", "Moss"),
@@ -366,7 +366,7 @@ const MID_ORANGE: Color = Color::Rgb(0xff, 0x9f, 0x2e);
 const PALE_AMBER: Color = Color::Rgb(0xff, 0xd0, 0x70);
 const DEEP_AMBER_ON_LIGHT: Color = Color::Rgb(0x8f, 0x4a, 0x00);
 
-/// The Maitty colour tokens, parsed once from `maitty-tokens.json`.
+/// The Maiker colour tokens, parsed once from `maitty-tokens.json`.
 fn maitty_tokens() -> &'static serde_json::Value {
     static TOKENS: OnceLock<serde_json::Value> = OnceLock::new();
     TOKENS.get_or_init(|| {
@@ -374,7 +374,7 @@ fn maitty_tokens() -> &'static serde_json::Value {
     })
 }
 
-/// One token of the Maitty file, e.g. `maitty_token("night", "bg.page")`.
+/// One token of the Maiker file, e.g. `maitty_token("night", "bg.page")`.
 pub fn maitty_token(side: &str, path: &str) -> String {
     let mut node = &maitty_tokens()[side];
     for key in path.split('.') {
@@ -696,9 +696,9 @@ impl Theme {
         }
     }
 
-    /// The Maitty theme for `side` (`night`, `day`, `dark` or `light`), made from the tokens file so every Maitty theme follows it.
+    /// The Maiker theme for `side` (`night`, `day`, `dark` or `light`), made from the tokens file so every Maiker theme follows it.
     /// An error red is the one colour the file does not carry: it must not read as the coral of needs-you.
-    fn maitty(side: &str) -> Theme {
+    fn maiker(side: &str) -> Theme {
         // The two light sides (the sea-glass day and the neutral light) read the same way: darker brass text, card ink.
         let day = side == "day" || side == "light";
         let t = |path: &str| maitty_token(side, path);
@@ -793,12 +793,12 @@ impl Theme {
 
     fn base(name: &str) -> Theme {
         match name {
-            // The app's own pair, Maitty Sea-glass and Brass, built from `maitty-tokens.json`: teal only
+            // The app's own pair, Maiker Sea-glass and Brass, built from `maitty-tokens.json`: teal only
             // means working, coral only means needs you, brass is the accent, the AI in the wordmark is gold.
-            "night" => Theme::maitty("night"),
-            "day" => Theme::maitty("day"),
-            "maitty-dark" => Theme::maitty("dark"),
-            "maitty-light" => Theme::maitty("light"),
+            "night" => Theme::maiker("night"),
+            "day" => Theme::maiker("day"),
+            "maitty-dark" => Theme::maiker("dark"),
+            "maitty-light" => Theme::maiker("light"),
             "tokyo-night" => Theme::design(
                 [
                     "#1a1b26", "#c0caf5", "#16161e", "#1f2335", "#292e42", "#292e42", "#7a82ad",
@@ -1634,7 +1634,7 @@ mod audit {
 }
 
 #[cfg(test)]
-mod maitty {
+mod maiker {
     use super::{Theme, contrast, hex, maitty_token};
 
     const AA: f64 = 4.5;
@@ -1702,10 +1702,10 @@ mod maitty {
     #[test]
     fn the_settings_list_names_them_maitty_night_and_maitty_day_and_the_old_ids_still_load() {
         let label = |id: &str| super::DESIGN.iter().find(|(name, _)| *name == id).map(|(_, shown)| *shown);
-        assert_eq!(label("night"), Some("Maitty Night"));
-        assert_eq!(label("day"), Some("Maitty Day"));
-        assert_eq!(label("maitty-dark"), Some("Maitty Dark"));
-        assert_eq!(label("maitty-light"), Some("Maitty Light"));
+        assert_eq!(label("night"), Some("Maiker Night"));
+        assert_eq!(label("day"), Some("Maiker Day"));
+        assert_eq!(label("maitty-dark"), Some("Maiker Dark"));
+        assert_eq!(label("maitty-light"), Some("Maiker Light"));
         assert_eq!(super::canonical("maitty-night"), "night");
         assert_eq!(super::canonical("maitty-day"), "day");
     }

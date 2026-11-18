@@ -664,11 +664,11 @@ mod refresh_tests {
     fn an_agent_is_nested_when_another_of_its_name_is_above_it() {
         let path = |names: &[&str]| names.iter().map(|name| (*name).to_string()).collect::<Vec<_>>();
         // The pane's own agent: its hook, the agent, the shells the pane started it in.
-        assert!(!super::is_nested(&path(&["maitty", "sh", "claude", "bash", "bash"]), "claude"));
+        assert!(!super::is_nested(&path(&["maiker", "sh", "claude", "bash", "bash"]), "claude"));
         // An agent the pane's agent ran as a command.
-        assert!(super::is_nested(&path(&["maitty", "claude", "bash", "claude", "bash"]), "claude"));
+        assert!(super::is_nested(&path(&["maiker", "claude", "bash", "claude", "bash"]), "claude"));
         // Another agent's name, or none: nothing to tell.
-        assert!(!super::is_nested(&path(&["maitty", "claude", "bash", "claude"]), "codex"));
-        assert!(!super::is_nested(&path(&["maitty", "node", "node"]), ""));
+        assert!(!super::is_nested(&path(&["maiker", "claude", "bash", "claude"]), "codex"));
+        assert!(!super::is_nested(&path(&["maiker", "node", "node"]), ""));
     }
 }

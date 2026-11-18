@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from '@/lib/toast'
+import { APP_NAME } from '@/brand'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadDaemonRestartStatus, restartMismatchedDaemon } from '@/api/daemon'
@@ -29,7 +30,7 @@ export function ServiceRestartDialog({ daemonRestartDialogOpen, daemonRestartPen
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Restart the older Maitty service?</DialogTitle>
+          <DialogTitle>Restart the older Maiker service?</DialogTitle>
           <DialogDescription>
             {daemonRestartStatus?.canRestart
               ? daemonRestartStatus.activeTurnCount === null
@@ -38,16 +39,16 @@ export function ServiceRestartDialog({ daemonRestartDialogOpen, daemonRestartPen
                   ? `The old service has ${String(daemonRestartStatus.sessionCount)} session${daemonRestartStatus.sessionCount === 1 ? '' : 's'} and ${String(daemonRestartStatus.activeTurnCount)} active agent turn${daemonRestartStatus.activeTurnCount === 1 ? '' : 's'}. Active turns will stop, and output since the last save may be lost.`
                   : `The old service has ${String(daemonRestartStatus.sessionCount)} saved session${daemonRestartStatus.sessionCount === 1 ? '' : 's'} and no active agent turns. Restarting lets this GUI reconnect to the updated service.`
               : daemonRestartStatusQuery.isError
-                ? 'Maitty could not confirm the service status. No restart has happened; retry the check or reconnect.'
+                ? 'Maiker could not confirm the service status. No restart has happened; retry the check or reconnect.'
                 : daemonRestartStatusQuery.isPending
                   ? 'Checking whether the local service can be safely replaced.'
                   : mismatch.daemonProtocol > mismatch.guiProtocol
-                    ? 'This service is newer than the one bundled with this GUI. Update the GUI before reconnecting; Maitty will not replace a newer service.'
+                    ? 'This service is newer than the one bundled with this GUI. Update the GUI before reconnecting; Maiker will not replace a newer service.'
                     : daemonRestartStatus?.sessionCount
-                      ? `This older service owns ${String(daemonRestartStatus.sessionCount)} sessions but is not saving them, so a restart would lose them. Maitty will leave it running.`
+                      ? `This older service owns ${String(daemonRestartStatus.sessionCount)} sessions but is not saving them, so a restart would lose them. Maiker will leave it running.`
                       : daemonRestartStatus?.activeTurnCount === null
-                        ? 'Maitty could not verify that the older service is idle, so it will leave the service running.'
-                        : 'This older service still reports active work, so Maitty will leave it running.'}
+                        ? 'Maiker could not verify that the older service is idle, so it will leave the service running.'
+                        : 'This older service still reports active work, so Maiker will leave it running.'}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -71,13 +72,7 @@ export function ServiceRestartDialog({ daemonRestartDialogOpen, daemonRestartPen
                   await sessionsQuery.refetch()
                 })
                 .catch((error: unknown) => {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : typeof error === 'string'
-                        ? error
-                        : 'Could not restart the Maitty service',
-                  )
+                  toast.failed(`Could not restart the ${APP_NAME} service`, error)
                   void daemonRestartStatusQuery.refetch()
                 })
                 .finally(() => {

@@ -10,9 +10,9 @@ describe('chooseProjectFolder', () => {
   })
 
   it('opens a single-directory picker and returns the selected path', async () => {
-    vi.mocked(open).mockResolvedValueOnce('/home/casey/projects/maitty')
+    vi.mocked(open).mockResolvedValueOnce('/home/casey/projects/maiker')
 
-    await expect(chooseProjectFolder()).resolves.toBe('/home/casey/projects/maitty')
+    await expect(chooseProjectFolder()).resolves.toBe('/home/casey/projects/maiker')
     expect(open).toHaveBeenCalledWith({ directory: true, multiple: false })
   })
 

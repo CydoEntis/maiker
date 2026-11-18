@@ -14,7 +14,7 @@ pub use status_hooks::{HooksState, StatusHookOptions, hooks_state, update_status
 /// The tool Codex calls to ask you a question mid-turn.
 const QUESTION_TOOL: &str = "request_user_input";
 
-/// Maps what only Codex says to Maitty's shared hook status: its completion notification, an
+/// Maps what only Codex says to Maiker's shared hook status: its completion notification, an
 /// interrupted turn, and a question to you. Every other Codex hook event is in Claude's
 /// dialect and maps there.
 pub fn status_from_hook(payload: &Value) -> Option<maitty_shared::protocol::HookStatus> {
@@ -219,8 +219,9 @@ mod usage_tests {
 }
 
 /// Codex app-server versions whose required methods and payloads are verified.
-pub const VERIFIED_VERSIONS: &[&str] = &["0.164.0", "0.165.0", "0.166.0-alpha.5.1", "0.166.0"];
-const VERIFIED_VERSIONS_TEXT: &str = "0.164.0, 0.165.0, 0.166.0-alpha.5.1 or 0.166.0";
+pub const VERIFIED_VERSIONS: &[&str] =
+    &["0.164.0", "0.165.0", "0.166.0-alpha.5.1", "0.166.0", "0.170.0"];
+const VERIFIED_VERSIONS_TEXT: &str = "0.164.0, 0.165.0, 0.166.0-alpha.5.1, 0.166.0 or 0.170.0";
 const CLIENT_METHODS: &[(&str, &str)] = &[
     ("initialize", "InitializeParams"),
     ("config/read", "ConfigReadParams"),
@@ -280,7 +281,7 @@ pub fn is_verified_version(version: &str) -> bool {
     VERIFIED_VERSIONS.contains(&version)
 }
 
-/// Checks that a verified Codex server advertises every operation Maitty uses.
+/// Checks that a verified Codex server advertises every operation Maiker uses.
 ///
 /// This preflight takes no session handle, so refusal cannot mutate a thread.
 pub fn check_compatibility(version: &str, schema: &str) -> Result<(), CompatibilityError> {
@@ -398,7 +399,9 @@ mod tests {
         for version in VERIFIED_VERSIONS {
             let schema = if *version == "0.166.0-alpha.5.1" {
                 CURRENT_SCHEMA
-            } else if *version == "0.166.0" {
+            } else if *version == "0.166.0" || *version == "0.170.0" {
+                // 0.170.0's generated schema declares the same required methods and params
+                // references as 0.166.0 (docs/stack/codex-app-server.md).
                 STABLE_SCHEMA
             } else {
                 SUPPORTED_SCHEMA
@@ -496,7 +499,7 @@ mod tests {
         assert!(session_requests.is_empty());
         assert_eq!(
             result.unwrap_err().to_string(),
-            "Unsupported Codex app-server: turn/interrupt. Select a verified Codex 0.164.0, 0.165.0, 0.166.0-alpha.5.1 or 0.166.0 executable; no session was started or resumed."
+            "Unsupported Codex app-server: turn/interrupt. Select a verified Codex 0.164.0, 0.165.0, 0.166.0-alpha.5.1, 0.166.0 or 0.170.0 executable; no session was started or resumed."
         );
     }
 

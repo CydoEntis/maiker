@@ -1,7 +1,35 @@
 import { describe, expect, it } from 'vitest'
 import type { TurnEvent } from './chatEvents'
-import { approvalEvent, commandEvent, editEvent, messageEvent, reasoningEvent, todoEvent, toolEvent } from './eventFixtures'
-import { buildRows, dividerText, formatDuration, paragraphsOf, splitLead, streamingParagraphs } from './chatRows'
+import { approvalEvent, commandEvent, editEvent, fields, messageEvent, reasoningEvent, todoEvent, toolEvent } from './eventFixtures'
+import { buildRows, dividerText, formatDuration, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from './chatRows'
+
+describe('the rows drawn while the agent works', () => {
+  const asked = messageEvent('u1', 'user', 'Fix it')
+  const writing = { ...messageEvent('a1', 'agent', 'Looking at the'), ...fields('a1', 'running') }
+  const turnSoFar = [asked, reasoningEvent('r1', 'Where is it read?'), toolEvent('s1', { target: 'a.ts' }), toolEvent('s2', { target: 'b.ts' }), writing]
+  const working = (rows: readonly ChatRow[]) => rows.find((row): row is Extract<ChatRow, { kind: 'working' }> => row.kind === 'working')
+
+  it('draws the turn as it arrives: its thought, its steps folded into a run, and the reply still being written, then the working line', () => {
+    const rows = buildRows(turnSoFar, true)
+
+    expect(rows.map((row) => row.kind)).toEqual(['user', 'thought', 'work', 'agent', 'working'])
+    expect(rows[3]).toMatchObject({ kind: 'agent', status: 'running', paragraphs: ['Looking at the'] })
+  })
+
+  it('holds the place of the first row with a skeleton until the turn has drawn something', () => {
+    expect(working(buildRows([asked], true))?.placeholder).toBe(true)
+    expect(working(buildRows([], false, null, 'Fix it'))?.placeholder).toBe(true)
+    expect(working(buildRows(turnSoFar, true))?.placeholder).toBe(false)
+  })
+
+  it('keeps every row a stable key as the turn grows, so a row that is drawn is never drawn again in another place', () => {
+    const before = buildRows(turnSoFar.slice(0, 3), true).map((row) => row.key)
+    const after = buildRows([...turnSoFar, commandEvent('c1', { command: 'pnpm test' })], true).map((row) => row.key)
+
+    expect(after.slice(0, before.length - 1)).toEqual(before.slice(0, -1))
+    expect(after.at(-1)).toBe('working')
+  })
+})
 
 const message = messageEvent
 const command = (id: string, turnId = 't1') => ({ ...commandEvent(id), turnId })

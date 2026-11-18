@@ -5,7 +5,7 @@ import { PopupContent } from '@/components/ui/popup'
 import { Icon } from './glyphs'
 
 /** One row of a chip's list: a name, what is under it, and what sits at its right. */
-export type ChipItem = { key: string; label: string; sub?: string; icon?: ReactNode; badge?: string; right?: ReactNode; checked: boolean; disabled?: boolean; onPick: () => void }
+export type ChipItem = { key: string; label: string; sub?: string; icon?: ReactNode; badge?: string; /** The name is a branch or a path: set in the mono face. */ mono?: boolean; right?: ReactNode; checked: boolean; disabled?: boolean; onPick: () => void }
 export type ChipSection = { heading: string; items: readonly ChipItem[] }
 
 type Props = {
@@ -29,14 +29,18 @@ type Props = {
   width?: number
   /** Which way the list opens from the chip: up from the message box, or down from the top of a page. */
   side?: 'top' | 'bottom'
-  /** `crumb`: a plain header button (a breadcrumb of the chat's place) instead of a filled chip. */
-  variant?: 'chip' | 'crumb'
+  /** `crumb`: a plain header button (a breadcrumb of the chat's place) instead of a filled chip. `token`: one of the new session dialog's three tokens, whose list grows from the token. */
+  variant?: 'chip' | 'crumb' | 'token'
   /** A small heading over the list, in place of the section headings (`Branch in shop`). */
   heading?: string
+  /** The token's list head: what it is a list of, and a dim word at its right (`Project`, `on devbox`). */
+  hint?: string
+  /** The trigger's own class, for the token's look. */
+  triggerClass?: string
 }
 
 /** One fact of the context row over the message box, as a small chip that opens a searchable list above it. */
-export function ChipMenu({ label, summary, title, icon, search, sections, footer, extra, below, fromQuery, width = 340, side = 'top', variant = 'chip', heading }: Props) {
+export function ChipMenu({ label, summary, title, icon, search, sections, footer, extra, below, fromQuery, width = 340, side = 'top', variant = 'chip', heading, hint, triggerClass }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
@@ -49,9 +53,10 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
   return (
     <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery('') }}>
       <Popover.Trigger asChild>
-        <button type="button" className={variant === 'crumb' ? 'mx-crumb' : 'mx-chip'} title={title} aria-label={`${title}: ${summary ?? (typeof label === 'string' ? label : '')}`}>{icon}{label}<Icon name="chevronDown" /></button>
+        <button type="button" className={triggerClass ?? (variant === 'crumb' ? 'mx-crumb' : 'mx-chip')} title={title} {...(variant === 'token' ? { 'aria-haspopup': 'listbox' as const } : {})} aria-label={`${title}: ${summary ?? (typeof label === 'string' ? label : '')}`}>{icon}{label}{variant === 'token' ? <Icon name="chevronDown" size={9} /> : <Icon name="chevronDown" />}</button>
       </Popover.Trigger>
-      <PopupContent side={side} align="start" aria-label={title} className={`mx-chip-menu${variant === 'crumb' ? ' is-crumb' : ''}`} style={{ width: `min(${String(width)}px, calc(100vw - 32px))` }}>
+      <PopupContent side={side} align="start" aria-label={title} {...(variant === 'token' ? { sideOffset: 4 } : {})} className={`mx-chip-menu${variant === 'crumb' ? ' is-crumb' : ''}${variant === 'token' ? ' is-token' : ''}`} style={{ width: `min(${String(width)}px, calc(100vw - 32px))` }}>
+        {variant === 'token' && <div className="mx-token-head"><span>{title}</span><span>{hint}</span></div>}
         {heading !== undefined && <h3 className="mx-chip-title">{heading}</h3>}
         {search !== undefined && (
           <label className="mx-chip-search">
@@ -70,7 +75,7 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
               {section.items.map((item) => <ChipRow key={item.key} item={item} onPick={pick} />)}
             </div>
           ))}
-          {kept.length === 0 && !made && <p className="mx-chip-none">Nothing matches</p>}
+          {kept.length === 0 && !made && <p className="mx-chip-none">{variant === 'token' ? 'Nothing matches.' : 'Nothing matches'}</p>}
         </ChoiceList>
         {below}
         {footer !== undefined && <div className="mx-chip-footer">{footer}</div>}
@@ -84,7 +89,7 @@ function ChipRow({ item, onPick }: { item: ChipItem; onPick: (item: ChipItem) =>
     <ChoiceItem value={item.key} disabled={item.disabled} className={`mx-chip-row${item.checked ? ' is-checked' : ''}`} onPick={() => { onPick(item) }}>
       {item.icon}
       <span className="mx-chip-row-text">
-        <span className="mx-chip-row-label">{item.label}{item.badge !== undefined && <span className="mx-chip-badge">{item.badge}</span>}</span>
+        <span className={`mx-chip-row-label${item.mono === true ? ' is-mono' : ''}`}>{item.label}{item.badge !== undefined && <span className="mx-chip-badge">{item.badge}</span>}</span>
         {item.sub !== undefined && <span className="mx-chip-row-sub">{item.sub}</span>}
       </span>
       {item.right}

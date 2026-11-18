@@ -19,7 +19,7 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     if (this.state.hasError) {
       return (
         <main className="fatal-error" role="alert">
-          <h1>Maitty hit a problem</h1>
+          <h1>Maiker hit a problem</h1>
           <p>Reload the app to try again.</p>
           <button type="button" onClick={() => { window.location.reload() }}>Reload app</button>
         </main>

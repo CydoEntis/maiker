@@ -13,7 +13,7 @@ transcripts and logs.
 - An agent requests a secret through the MCP server. Only the user can answer, never from inside
   a pane.
 - The agent receives a path or a ref, never the value. Two uses: a `0600` file in a `0700` folder,
-  and `maitty secret run <ref> -- <command>`, which puts the value in that one command's environment.
+  and `maiker secret run <ref> -- <command>`, which puts the value in that one command's environment.
 - The daemon holds the value in memory only. A ref works once and expires after 24 hours. A
   delivery file is deleted when used or expired. A daemon restart forgets every secret.
 

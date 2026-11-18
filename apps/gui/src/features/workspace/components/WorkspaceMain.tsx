@@ -1,63 +1,53 @@
 import { Fragment, useState } from 'react'
-import { toast } from '@/lib/toast'
-import { openDaemonLog } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { daemonConnectionError } from '@/lib/daemon-connection'
-import { errorMessage } from '@/lib/error-message'
 import { SplitHandle } from './SplitHandle'
 import { FindBar } from '@/features/find/FindBar'
-import { RestoreBanner } from './RestoreBanner'
 import { chatFindOf } from '@/features/chat/chatSearch'
 import { chooseProjectFolder } from '@/api/folderPicker'
 import { useCloneRepo } from './useCloneRepo'
 import { busyBranchesOf, machineProjects } from '../model/newSession'
-import { NewChatPage } from './NewChatPage'
-import { useRemoteFolderPick } from './useRemoteFolderPick'
+import { NewSessionDialog } from './NewSessionDialog'
+import { useFolderPick } from './useFolderPick'
 import { EmptyState } from './states'
-import { ServiceStatus, UpdateReadyBanner } from './ServiceStatus'
+import { useUpdateReadyToast } from './useUpdateReadyToast'
 import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
 import { displayName } from '../model/session'
 import { rowTitle } from '../model/sidebar'
 import { resolveStartFolder } from '../model/startFolder'
 import { WorkspacePane } from './WorkspacePane'
-import { TicketsOverlay, TICKETS_EXIT_MS } from '@/features/tickets/TicketsOverlay'
+import { DocPane } from './DocPane'
 import { usePresence } from '@/lib/usePresence'
 import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
 import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
-import { useTipWithKeys } from '@/features/shortcuts/platform'
-import { ShowSidebarButton } from './ShowSidebarButton'
 
-/** The middle of the window: the new chat page, find, the service's state, and the panes of each mounted tab. */
+/** The middle of the window: the New session dialog, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, ticketsOpen, updater, restartNow, terminalShown, setDockFocused, sessionMap, sidebarMode, toggleSidebar, focusMode, newTerminal } = useWorkspace()
-  const tip = useTipWithKeys()
-  // The version whose Update ready banner Later put away; the sidebar's chip still offers the restart.
-  const [updateLater, setUpdateLater] = useState<string | null>(null)
-  // With no chat at all, the window is the new chat page: there is nothing else to show (layout 2h).
-  const noChats = sessions.length === 0 && online && sessionsQuery.isSuccess
+  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, newTerminal } = useWorkspace()
+  useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
   const reduced = useReducedMotion()
-  const tickets = usePresence(ticketsOpen, TICKETS_EXIT_MS, reduced)
   const terminal = usePresence(terminalShown, TERMINAL_DOCK_EXIT_MS, reduced)
   // The dock shows the focused session's terminals; while it slides out it keeps the session it was showing.
   const [dockAgentId, setDockAgentId] = useState(focusedSession?.id)
   if (terminalShown && focusedSession !== undefined && focusedSession.id !== dockAgentId) setDockAgentId(focusedSession.id)
   const dockAgent = dockAgentId === undefined ? undefined : sessionMap.get(dockAgentId)
   const dock = terminal.shown && dockAgent !== undefined ? preferences.terminalDock : null
-  const newChatMachineLabel = sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine'
-  const remotePick = useRemoteFolderPick(newChatMachine, newChatMachineLabel)
-  const newChatBrowse = newChatMachine === LOCAL_MACHINE ? chooseProjectFolder : remotePick.browse
+  // The folder picker reads every machine the window knows, this computer and the others; one that is not up is listed with why.
+  const pickerMachines = sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, ready: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok', word: head.machine === LOCAL_MACHINE ? null : head.chip?.word ?? null }))
+  const folderPick = useFolderPick(pickerMachines)
   const newChatStartFolder = newChatMachine === LOCAL_MACHINE ? resolveStartFolder(preferences.startFolder, home) : '~'
-  const cloneRepo = useCloneRepo({ machine: newChatMachine, where: newChatMachine === LOCAL_MACHINE ? 'this computer' : newChatMachineLabel, startIn: newChatStartFolder, chooseFolder: newChatBrowse, onOpenGitHubSettings: () => { setSettingsSection('machines') } })
+  // Cloning picks where the clone goes: the system's folder dialog here, the window's own picker on another machine.
+  const chooseCloneFolder = newChatMachine === LOCAL_MACHINE ? chooseProjectFolder : () => folderPick.pick(newChatMachine).then((picked) => picked?.folder ?? null)
+  const cloneRepo = useCloneRepo({ machine: newChatMachine, where: newChatMachine === LOCAL_MACHINE ? 'this computer' : sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine', startIn: newChatStartFolder, chooseFolder: chooseCloneFolder, onOpenGitHubSettings: () => { setSettingsSection('machines') } })
   return (
     <div className="mx-main-wrap">
               {cloneRepo.dialog}
-              {remotePick.dialog}
+              {folderPick.dialog}
               <div className="mx-termwrap" data-dock={dock ?? undefined} data-leaving={terminal.leaving ? 'true' : undefined}>
               <main className="mx-main" aria-label="Terminals" onPointerDownCapture={() => { setDockFocused(false) }}>
-                {(newChatOpen || noChats) && (
-                  <NewChatPage
-                    key={`${String(newChatMachine)}:${newChatSeed?.folder ?? ''}`}
+                {newChatOpen && (
+                  <NewSessionDialog
+                    key={newChatSeed?.folder ?? ''}
                     seed={newChatSeed}
                     machine={newChatMachine}
                     machines={sidebarMachineHeads.filter((head) => head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok').map((head) => ({ machine: head.machine, label: head.label, local: head.machine === LOCAL_MACHINE }))}
@@ -66,18 +56,15 @@ export function WorkspaceMain() {
                     busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}
                     viewDefaults={preferences.chatViewDefault}
                     defaultAgent={preferences.defaultAgent}
-                    bypassAllowed={preferences.yoloClaude}
-                    codexYolo={preferences.yoloCodex}
-                    fullAccess={preferences.fullAccessNewChats}
-                    leading={sidebarMode === 'hidden' && !focusMode ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
-                    browse={newChatBrowse}
+                    bypassOff={preferences.bypassOff}
+                    pickFolder={folderPick.pick}
                     clone={cloneRepo.open}
                     onStart={startNewChat}
                     onWarm={warmNewChat}
                     onAgentChange={setNewChatAgent}
                     onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}
                     onNewShell={(machine) => { setNewChatOpen(false); setNewChatSeed(null); newTerminal(machine) }}
-                    onCancel={noChats ? undefined : () => { setNewChatOpen(false); setNewChatSeed(null) }}
+                    onCancel={() => { setNewChatOpen(false); setNewChatSeed(null) }}
                   />
                 )}
                 {findOpen && (
@@ -100,16 +87,6 @@ export function WorkspaceMain() {
                     onClose={() => { setFindOpen(false); if (focusedId) terminalHandles.current.get(focusedId)?.focus() }}
                   />
                 )}
-                <RestoreBanner
-                  sessions={sessions.filter((item) => item.interrupted !== null && !dismissedRestores.has(item.id))}
-                  online={online}
-                  onResume={resumeInterrupted}
-                  onDismiss={(id) => { setDismissedRestores((current) => new Set(current).add(id)) }}
-                />
-                {updater.state.status === 'ready' && updater.state.version !== updateLater && (
-                  <UpdateReadyBanner version={updater.state.version} onRestart={restartNow} onLater={() => { if (updater.state.status === 'ready') setUpdateLater(updater.state.version) }} />
-                )}
-                <ServiceStatus online={online} failures={failures} mismatch={Boolean(mismatch)} retryAt={retryAt} detail={offlineDetail ?? (sessionsQuery.isError ? daemonConnectionError(sessionsQuery.error) : null)} restart={restartOffer} appBehind={appBehindOffer} sessions={sessions.length} onRetry={() => { void refetchSessions() }} onOpenLog={() => { openDaemonLog().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the log')) }) }} />
                 {tab ? (
                   <div className="mx-pane-stack">
                   {mountedTabs.map((tab) => {
@@ -138,7 +115,7 @@ export function WorkspaceMain() {
                               />
                             )}
                             <div className={`mx-pane-cell${closingPanes.has(pane.id) ? ' is-closing' : ''}`} style={pane.h !== undefined && tab.max === null && !narrow ? { flexGrow: pane.h } : undefined}>
-                              <WorkspacePane shown={tab} pane={pane} kept={kept} />
+                              {pane.doc ? <DocPane shown={tab} pane={pane} kept={kept} /> : <WorkspacePane shown={tab} pane={pane} kept={kept} />}
                             </div>
                           </Fragment>
                         ))}
@@ -159,7 +136,6 @@ export function WorkspaceMain() {
                     onChangeStartFolder={() => { setSettingsSection('general') }}
                   />
                 )}
-                {tickets.shown && !newChatOpen && <TicketsOverlay leaving={tickets.leaving} />}
               </main>
               {dock !== null && dockAgent !== undefined && <TerminalDock agent={dockAgent} leaving={terminal.leaving} />}
               </div>

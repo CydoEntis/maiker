@@ -35,7 +35,7 @@ const { loadTerminalReplay, resizeTerminal, sendTerminalInput, loadTerminalHisto
   toastError: vi.fn(),
 }))
 
-vi.mock('@/lib/toast', () => ({ toast: { error: toastError } }))
+vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), error: toastError } }))
 
 vi.mock('@/api/daemon', () => ({
   isDesktop: () => true,
@@ -94,8 +94,8 @@ const conversation: Conversation = {
   id: 't47',
   generation: 0,
   title: 'Shell',
-  project: 'maitty',
-  folder: '/home/casey/maitty',
+  project: 'maiker',
+  folder: '/home/casey/maiker',
   branch: 'main',
   execution: 'Native',
   kind: 'terminal',

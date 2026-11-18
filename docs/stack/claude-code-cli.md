@@ -1,6 +1,6 @@
 # Claude Code CLI
 
-> **Use for:** daemon-owned Claude Code conversations in Maitty's optional chat GUI.
+> **Use for:** daemon-owned Claude Code conversations in Maiker's optional chat GUI.
 > **Requires:** the Claude Code CLI installed on the user's machine.
 > **Fills:** ARCHITECTURE § planned structured conversations; API_PATTERNS § structured conversation IPC.
 
@@ -8,7 +8,7 @@
 
 - Drive the installed Claude Code executable through headless JSON streaming.
   Keep process ownership, session identity and durable conversation state in
-  Maitty's daemon; the GUI and Tauri host are clients.
+  Maiker's daemon; the GUI and Tauri host are clients.
 - Keep the Claude protocol in its own provider adapter. Do not emulate Codex
   JSON-RPC or expose provider frames to the GUI.
 - Preserve and resume only the exact native session ID and its verified
@@ -29,7 +29,7 @@
   tree cleanup before releasing conversation ownership. Client disconnects do
   not stop daemon-owned work.
 - Let the installed Claude Code CLI own authentication. The user signs in with
-  `claude auth login`; Maitty does not collect, copy, store or transmit Claude
+  `claude auth login`; Maiker does not collect, copy, store or transmit Claude
   credentials. Do not put credentials in process arguments, logs, conversation
   records or GUI IPC.
 - Keep the TUI-only build independent of desktop packaging. Test Windows,
@@ -40,21 +40,34 @@
 The selected protocol is Claude Code's `stream-json` input/output, following
 PandaCode's installed-CLI provider shape. The user approved subscription sign-in
 through the installed CLI. Anthropic's Help Center currently says third-party
-app usage continues to draw from Claude subscription limits; Maitty does not
+app usage continues to draw from Claude subscription limits; Maiker does not
 provide a separate Claude login or implement its own agent harness. The official
 Agent SDK uses `--permission-prompt-tool=stdio` for its `canUseTool` callback.
-The Maitty adapter follows that wire contract. See ADR
+The Maiker adapter follows that wire contract. See ADR
 0039 and
 the [transport research](../research/claude-code-gui-transport.md).
 
-Windows Claude Code 2.1.314 was verified directly and through Maitty's daemon on
+Windows Claude Code 2.1.314 was verified directly and through Maiker's daemon on
 2026-10-30. The daemon smoke covered conversation creation, streamed
 response/history, exact-session resume, an SDK stdio permission request, user
 approval, and a completed file write. A direct CLI check covered active-turn
 interruption. Authentication uses the existing local Claude Code sign-in.
-Claude Code 2.1.316 also passed a Windows GUI smoke on 2026-10-31: Maitty
+Claude Code 2.1.316 also passed a Windows GUI smoke on 2026-10-31: Maiker
 created a Claude conversation, sent a prompt, and displayed the reply in that
 conversation. This smoke does not replace the deeper 2.1.314 permission and
 resume checks.
+Claude Code 2.1.327 passed on Linux on 2026-11-18 (`--model haiku`, a scratch project), both
+through the adapter's own launch arguments and parser and through a nested daemon: initialize,
+streamed text, a Bash `can_use_tool` request approved once and denied once, an interrupt, `--resume`
+of the exact session (it recalled the first turn) and the result frames with `usage` and
+`modelUsage`. Every frame parsed; the ones the adapter does not use (`system` `hook_started`,
+`hook_response`, `status`, `thinking_tokens`, `rate_limit_event`, thinking and signature deltas)
+are ignored. Two shapes, also seen on 2.1.325: `system`/`init` arrives after the user message,
+not before the initialize answer, so the adapter checks its session during the turn too; and an
+interrupted turn ends with `is_error: true`, `subtype: "error_during_execution"`, which the adapter
+reports as `interrupted` once Claude acknowledged the interrupt. Verified versions:
+2.1.312, 2.1.314, 2.1.316 and 2.1.327 (`VERIFIED_VERSIONS` in `maitty-provider-claude`).
+A Claude chat with history is not taken up again after a daemon restart; that is the daemon's
+history rule, not a version limit.
 Native Linux/Omarchy and macOS checks, plus daemon recovery after interruption,
 remain open; keep those as release acceptance items in the roadmap.

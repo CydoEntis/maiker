@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { chooseProjectFolder } from '@/api/folderPicker'
 import type { GitHubAccount } from '@/api/githubAccounts'
 import { changeGitRule, loadGitIdentities, type GitIdentity, type GitIdentityReport, type GitIdentityRule } from '@/api/gitIdentities'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
-import { useRemoteFolderPick } from '@/features/workspace/components/useRemoteFolderPick'
+import { useFolderPick } from '@/features/workspace/components/useFolderPick'
 import { GitRuleDialog } from './GitRuleDialog'
 
 type Loaded = { status: 'loading' } | { status: 'ready'; report: GitIdentityReport } | { status: 'failed'; message: string }
@@ -23,9 +23,9 @@ function defaultWords(report: GitIdentityReport): string {
   return 'No name or email is set for commits'
 }
 
-/** What a rule gives its folder, or that Maitty did not write it and so knows only the folder. */
+/** What a rule gives its folder, or that Maiker did not write it and so knows only the folder. */
 function ruleWords(rule: GitIdentityRule): string {
-  if (rule.identity === null) return 'set outside Maitty'
+  if (rule.identity === null) return 'set outside Maiker'
   const { login, name, email } = rule.identity
   return `${login} · ${name} <${email}>`
 }
@@ -85,7 +85,7 @@ function Identities({ state, active, actions }: { state: Loaded; active: string 
 
 /**
  * Under a machine's row on the GitHub page: every account signed in there, the name and email its
- * commits carry, and the folders where a rule gives another account and identity. A rule Maitty
+ * commits carry, and the folders where a rule gives another account and identity. A rule Maiker
  * wrote can be changed or removed here, and another added; that machine's daemon writes git's config.
  */
 export function GitHubDetails({ machine, label, accounts, asked, onAddAccount }: {
@@ -102,7 +102,7 @@ export function GitHubDetails({ machine, label, accounts, asked, onAddAccount }:
   const [editing, setEditing] = useState<Editing>(null)
   const [removing, setRemoving] = useState<Removing>(null)
   const [failure, setFailure] = useState<string | null>(null)
-  const remotePick = useRemoteFolderPick(machine, label)
+  const remotePick = useFolderPick(useMemo(() => [{ machine, label, ready: true, word: null }], [machine, label]))
   useEffect(() => {
     let current = true
     loadGitIdentities(machine).then(
@@ -153,7 +153,7 @@ export function GitHubDetails({ machine, label, accounts, asked, onAddAccount }:
           where={label}
           logins={accounts.map((account) => account.login)}
           rule={editing.rule}
-          chooseFolder={machine === LOCAL_MACHINE ? chooseProjectFolder : remotePick.browse}
+          chooseFolder={machine === LOCAL_MACHINE ? chooseProjectFolder : () => remotePick.pick(machine).then((picked) => picked?.folder ?? null)}
           onWritten={() => { setEditing(null); reread() }}
           onCancel={() => { setEditing(null) }}
         />

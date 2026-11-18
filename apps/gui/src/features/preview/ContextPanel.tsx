@@ -190,7 +190,7 @@ function DetailsView({ conversation }: { conversation: Conversation }) {
           <span>{conversation.permission}</span>
         </div>
         <p className="permission-note">
-          Maitty keeps the provider’s permission settings. Approval requests
+          Maiker keeps the provider’s permission settings. Approval requests
           appear in this conversation.
         </p>
       </DetailSection>
@@ -212,7 +212,7 @@ function DetailsView({ conversation }: { conversation: Conversation }) {
       <div className="daemon-note">
         <span className="connection-dot" />
         <div>
-          <strong>Owned by Maitty daemon</strong>
+          <strong>Owned by Maiker daemon</strong>
           <p>Closing the window will not stop this session.</p>
         </div>
       </div>
@@ -262,7 +262,7 @@ export function TerminalView({
         Native session · pane {conversation.nativePane || 'pending'}
       </div>
       <pre className="terminal-output">
-        <span className="terminal-dim">~/maitty · {conversation.branch}</span>
+        <span className="terminal-dim">~/maiker · {conversation.branch}</span>
         {'\n'}
         <span className="terminal-green">$ cargo test branch_view_tests</span>
         {'\n'}running 8 tests{'\n'}

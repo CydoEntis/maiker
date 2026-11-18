@@ -52,7 +52,7 @@ fn draw(app: &mut App, width: u16, height: u16) -> String {
                 + "\n"
         })
         .collect::<String>();
-    if std::env::var_os(concat!(env!("APP_ENV"), "_SHOW")).is_some() {
+    if maitty_shared::brand::env_var_os("SHOW").is_some() {
         println!("{width}x{height}\n{text}");
     }
     text

@@ -99,10 +99,7 @@ fn owned_by_app(dir: &Path) -> bool {
 
 /// The settings that point the app's files somewhere of the user's choosing. What they name
 /// could be any folder (a repo, a synced drive), so `--purge` never deletes it.
-const PLACED_BY_USER: [&str; 2] = [
-    concat!(env!("APP_ENV"), "_CONFIG"),
-    concat!(env!("APP_ENV"), "_DATA_DIR"),
-];
+const PLACED_BY_USER: [&str; 2] = ["CONFIG", "DATA_DIR"];
 
 /// Delete one of the app's folders, and its parent when that is the app's too and now empty.
 /// A folder that is not the app's own is left, and said.
@@ -284,7 +281,7 @@ pub fn run(yes: bool, purge: bool) -> Result<()> {
     if purge {
         let placed = PLACED_BY_USER
             .iter()
-            .any(|name| std::env::var_os(name).is_some());
+            .any(|key| maitty_shared::brand::env_var_os(key).is_some());
         delete_owned(&plan.data, placed)?;
         delete_owned(&plan.config, placed)?;
     }

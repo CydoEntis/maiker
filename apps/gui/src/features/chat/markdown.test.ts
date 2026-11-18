@@ -263,3 +263,68 @@ describe('a reply that is still streaming', () => {
   })
 })
 
+
+describe('task lists', () => {
+  const list = (source: string) => {
+    const block = parseMarkdown(source)[0]
+    if (block?.kind !== 'list') throw new Error('not a list')
+    return block
+  }
+  const text = (inlines: readonly Inline[]) => inlines.map((node) => (node.kind === 'text' ? node.text : '')).join('')
+
+  it('reads - [ ] and - [x] as unticked and ticked entries without the marker', () => {
+    const block = list('- [ ] write\n- [x] test\n- [X] ship\n- plain')
+    expect(block.items.map(text)).toEqual(['write', 'test', 'ship', 'plain'])
+    expect(block.marks?.map((mark) => mark.checked)).toEqual([false, true, true, null])
+  })
+
+  it('works in a numbered list too', () => {
+    expect(list('1. [x] one\n2. [ ] two').marks?.map((mark) => mark.checked)).toEqual([true, false])
+  })
+
+  it('nests entries by indent and ticks the nested ones', () => {
+    const block = list('- [x] top\n  - [ ] child\n    - [x] grandchild\n- [ ] next')
+    expect(block.marks).toEqual([
+      { level: 0, checked: true },
+      { level: 1, checked: false },
+      { level: 2, checked: true },
+      { level: 0, checked: false },
+    ])
+    expect(block.items.map(text)).toEqual(['top', 'child', 'grandchild', 'next'])
+  })
+
+  it.each([
+    ['- [] none'],
+    ['- [ ]'],
+    ['- [ ]x'],
+    ['- [y] other'],
+    ['- [ x] spaced'],
+    ['- text [ ] later'],
+  ])('leaves %j plain', (source) => {
+    const block = list(source)
+    expect(block.marks?.some((mark) => mark.checked !== null) ?? false).toBe(false)
+  })
+
+  it('leaves [ ] in a paragraph or in code as it was', () => {
+    expect(parseMarkdown('[ ] not a list')[0]?.kind).toBe('paragraph')
+    const code = parseMarkdown('```\n- [x] code\n```')[0]
+    expect(code).toEqual({ kind: 'code', language: '', text: '- [x] code' })
+  })
+
+  it('keeps a plain list in its old shape, with no marks', () => {
+    expect(list('- a\n- b')).toEqual({ kind: 'list', ordered: false, items: [[{ kind: 'text', text: 'a' }], [{ kind: 'text', text: 'b' }]] })
+  })
+
+  it('numbers a nested ordered list within its own level', async () => {
+    const { listBullets } = await import('./markdown')
+    expect(listBullets(list('1. a\n  1. b\n  2. c\n2. d'))).toEqual(['1.', '1.', '2.', '2.'])
+  })
+
+  it('handles adversarial depth and width without throwing', () => {
+    const deep = Array.from({ length: 400 }, (_, i) => `${' '.repeat(Math.min(i, 12))}- [x] ${String(i)}`).join('\n')
+    const block = list(deep)
+    expect(Math.max(...(block.marks ?? []).map((mark) => mark.level))).toBeLessThanOrEqual(3)
+    expect(() => parseMarkdown('- [x] ' + '[ ]'.repeat(5000))).not.toThrow()
+    expect(() => parseMarkdown('- [ ] a\n\n\n   \n  - [x]' + ' '.repeat(10000))).not.toThrow()
+  })
+})

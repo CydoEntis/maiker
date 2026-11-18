@@ -1,13 +1,13 @@
 # GUI chat and native terminal conversation continuity
 
 Research date: 2026-10-27. Source inspection only; the three applications were not run.
-This is a proposal, not a change to Maitty's terminal-only policy or roadmap.
+This is a proposal, not a change to Maiker's terminal-only policy or roadmap.
 
 ## Requirement
 
-A conversation started in the GUI must continue in Maitty's existing terminal
+A conversation started in the GUI must continue in Maiker's existing terminal
 workflow, and a conversation started there must continue in GUI chat. Here,
-terminal workflow means the agent's own interactive CLI inside a Maitty pane.
+terminal workflow means the agent's own interactive CLI inside a Maiker pane.
 A shell panel beside a separate chat does not satisfy this requirement.
 
 Two different capabilities matter: attaching two views to one live process, and
@@ -94,9 +94,9 @@ Inspected commit: `640e8b2e6b9a9904af3d1b1161ad936864eb4a9a`.
 
 Conclusion: terminal-aware chat is supported, but that does not establish that a
 native CLI can resume the same conversation. Adopting this model would require
-Maitty to own an agent runtime or add a separate native-session bridge.
+Maiker to own an agent runtime or add a separate native-session bridge.
 
-## Recommendation for Maitty
+## Recommendation for Maiker
 
 This section is an inference and proposed design, not existing functionality.
 
@@ -104,7 +104,7 @@ Keep the daemon as the owner of every process. Add structured provider adapters
 there, and let GUI chat consume daemon messages. Preserve the existing PTY
 terminal path for the TUI and for providers without verified structured support.
 
-Use a stable Maitty conversation identity that records provider, exact native
+Use a stable Maiker conversation identity that records provider, exact native
 session ID, account/profile, working directory/worktree, execution owner and a
 history cursor. Never use a most-recent-session fallback for a deliberate
 handoff: it can silently continue a different conversation.
@@ -115,12 +115,12 @@ Start with idle handoff under daemon control:
 2. Before native terminal takeover, reach a safe idle state and relinquish the
    structured runtime's ownership. Reuse the same exact provider session.
 3. Launch the native interactive CLI inside a daemon-owned PTY; the existing
-   Maitty TUI attaches to that pane.
+   Maiker TUI attaches to that pane.
 4. Before returning to GUI control, relinquish terminal runtime ownership and
    read provider history since the saved cursor. Reconcile messages and tool
    results without duplicates, then resume structured execution.
 5. Support the reverse starting point by discovering a terminal-created native
-   session through trusted pane evidence and binding it to a Maitty conversation.
+   session through trusted pane evidence and binding it to a Maiker conversation.
 
 Do not promise simultaneous input to a native CLI and structured runtime. Both
 frontends can observe daemon state, but one runtime must own conversation writes
@@ -152,4 +152,4 @@ No upstream app, model call or cross-interface live test was run. Sources were
 read from shallow clones pinned above. T3's full Windows checkout encountered a
 vendored-path limit; relevant files were inspected directly from Git objects.
 No dependency, schema, configuration, policy or roadmap was changed, and no
-Maitty verification gate was run for this research-only document.
+Maiker verification gate was run for this research-only document.

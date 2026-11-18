@@ -3,7 +3,7 @@
 Checked 2026-10-29 against Anthropic's current Claude Code documentation and
 first-party SDK repository. The locally installed CLI reports `2.1.314`; the
 first-party TypeScript SDK changelog currently lists `0.3.312`, aligned with
-Claude Code `2.1.312`. Maitty's adapter only accepts `2.1.312`, so this local
+Claude Code `2.1.312`. Maiker's adapter only accepts `2.1.312`, so this local
 CLI is intentionally rejected until a version is verified.
 
 ## Verified facts
@@ -25,7 +25,7 @@ CLI is intentionally rejected until a version is verified.
   stream-json --verbose --permission-prompts host --version` exits successfully.
   This is argument parsing only. PandaCode's current source sends
   `--permission-prompt-tool stdio`, an implementation detail beyond the public
-  flag contract. The host protocol still needs a live Maitty roundtrip before
+  flag contract. The host protocol still needs a live Maiker roundtrip before
   enabling approvals. See the
   [CLI reference](https://code.claude.com/docs/en/cli-usage) and
   [PandaCode provider guide](https://github.com/aicodeking/pandacode/blob/main/docs/providers.md).
@@ -40,7 +40,7 @@ CLI is intentionally rejected until a version is verified.
 - The CLI reference describes `claude -p` as print mode and directs programmatic
   use to the Agent SDK. The SDK quickstart instructs developers to use an API
   key and says third-party products need prior approval before offering their
-  own claude.ai login or subscription rate limits. Maitty does not offer a
+  own claude.ai login or subscription rate limits. Maiker does not offer a
   separate login; the user signs into the official local CLI. See the
   [CLI reference](https://code.claude.com/docs/en/cli-usage) and
   [SDK quickstart](https://code.claude.com/docs/en/agent-sdk/quickstart).
@@ -49,8 +49,8 @@ CLI is intentionally rejected until a version is verified.
   updated June 15 and October 7, 2026, says third-party app usage, the Agent
   SDK and `claude -p` still draw from Claude subscription limits when signed in
   with a Claude plan. It also documents separate API credits for linked Console
-  keys. This supports Maitty delegating to the installed CLI and its existing
-  sign-in; Maitty does not collect OAuth tokens, proxy requests or resell usage.
+  keys. This supports Maiker delegating to the installed CLI and its existing
+  sign-in; Maiker does not collect OAuth tokens, proxy requests or resell usage.
 - Anthropic's [Consumer Terms of Service, section 3](https://www.anthropic.com/legal/consumer-terms)
   allows automated access through an API key or where Anthropic explicitly
   permits it. The cited consumer-terms page is for EEA and Swiss consumers;
@@ -64,7 +64,7 @@ CLI is intentionally rejected until a version is verified.
   These give a concrete basis for a capability spike: page exact-session
   history, then correlate a submission through its supplied UUID and lifecycle
   events. They do not by themselves prove exhaustive history or a durable
-  provider acknowledgement for Maitty. The changelog also records fixes to
+  provider acknowledgement for Maiker. The changelog also records fixes to
   transcript omissions and turn correlation, so the worker must pin and test an
   exact SDK/CLI pair. See the [first-party SDK changelog](https://github.com/anthropics/claude-agent-sdk-typescript/blob/main/CHANGELOG.md).
 - Anthropic's TypeScript Agent SDK is a first-party package. Its docs say it
@@ -80,7 +80,7 @@ CLI is intentionally rejected until a version is verified.
 - T3 Code documents a different Claude path: its FAQ says it uses Anthropic's
   Agent SDK and supports Claude account login, and it describes working with
   Anthropic on that arrangement. That product-specific statement does not grant
-  the same permission to Maitty. PandaCode's installed-CLI approach and T3's
+  the same permission to Maiker. PandaCode's installed-CLI approach and T3's
   Agent-SDK approach are not the same integration. See the
   [T3 Code FAQ](https://github.com/pingdotgg/t3code/blob/main/docs/user/faq.md).
 - Official Claude Code system requirements list macOS, Windows, Ubuntu, Debian
@@ -95,11 +95,11 @@ CLI is intentionally rejected until a version is verified.
 
 ## Options and tradeoffs
 
-| Option | Fits Maitty | Main tradeoff |
+| Option | Fits Maiker | Main tradeoff |
 | --- | --- | --- |
 | Call the installed CLI using JSON streaming | Uses the user's installed executable and its existing sign-in; Rust can own its process directly, expose text/tool events, and preserve exact session IDs | Lower-level control frames and interactive permissions need version-specific verification. History completeness and operation acknowledgement need evidence. |
 | Run a small TypeScript worker with the Agent SDK | First-party structured stream, multi-turn input, tool events, approval callbacks, paginated session history, per-message turn correlation and interruption support | Adds a Node/SDK runtime and a packaged worker. The available APIs still need a live capability spike. The SDK guide says third-party products must not offer their own claude.ai login without approval. |
-| Open Claude Desktop | Reuses Anthropic's own GUI | It is not available on Linux and would take the user out of Maitty. |
+| Open Claude Desktop | Reuses Anthropic's own GUI | It is not available on Linux and would take the user out of Maiker. |
 
 ## Selected direction
 
@@ -110,16 +110,16 @@ control protocol. Pin the CLI version and prove history completeness,
 operation-correlated acknowledgement, approval mapping, interruption and full
 process-tree cleanup before enabling the provider. The Rust daemon owns the CLI
 and its full process tree. The SDK remains a higher-level alternative if the
-CLI protocol cannot meet Maitty's contract.
+CLI protocol cannot meet Maiker's contract.
 
 The approved product path delegates authentication and execution to the user's
-installed Claude Code CLI. Maitty has no Claude login UI and never handles
+installed Claude Code CLI. Maiker has no Claude login UI and never handles
 credentials. Keep the provider disabled until the installed CLI's protocol,
 history, permission and cancellation behavior are verified end to end.
 
 For Linux, build and exercise the Claude worker on Arch/Omarchy even though
 Anthropic's published OS list names Ubuntu, Debian and Alpine rather than Arch.
-Keep the terminal-only Maitty build independent of Node and the GUI worker.
+Keep the terminal-only Maiker build independent of Node and the GUI worker.
 
 ## Not established by documentation
 

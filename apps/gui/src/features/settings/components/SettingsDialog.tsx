@@ -1,9 +1,11 @@
 import { useEffect, useState, type KeyboardEvent } from 'react'
 import { Bell, Keyboard, Monitor, Radio, Settings2, SlidersHorizontal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { ThemePreference } from '@/data/themePreference'
 import { TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, type SettingsPreferences } from '../preferences'
+import { DAEMON_NAME } from '@/brand'
 
 type SettingsSection = 'general' | 'appearance' | 'notifications' | 'daemon' | 'keyboard'
 type SettingsNavOrientation = 'horizontal' | 'vertical'
@@ -80,7 +82,7 @@ function SettingsDialog({ open, onClose, theme, onThemeChange, preferences, onPr
     <DialogContent className="settings-dialog">
       <DialogHeader className="settings-heading">
         <DialogTitle>Settings</DialogTitle>
-        <DialogDescription>Personalize Maitty Desktop.</DialogDescription>
+        <DialogDescription>Personalize Maiker Desktop.</DialogDescription>
       </DialogHeader>
       <div className="settings-layout">
         <div className="settings-nav" role="tablist" aria-label="Settings sections" aria-orientation={navOrientation} onKeyDown={handleNavigationKeyDown}>
@@ -88,13 +90,13 @@ function SettingsDialog({ open, onClose, theme, onThemeChange, preferences, onPr
         </div>
         <section className="settings-content" role="tabpanel" id="settings-panel" aria-labelledby={`settings-tab-${section}`} tabIndex={0}>
           {section === 'general' && <>
-            <div className="settings-section-title"><h3>General</h3><p>How Maitty opens and what happens when you close it.</p></div>
+            <div className="settings-section-title"><h3>General</h3><p>How Maiker opens and what happens when you close it.</p></div>
             <div className="settings-row"><span><strong>On launch</strong><small>Reopen the tabs you had open, or start with only the selected conversation.</small></span><div className="segmented" role="group" aria-label="On launch">
               <button type="button" className={preferences.restoreLayout ? 'is-selected' : ''} aria-pressed={preferences.restoreLayout} onClick={() => { updatePreference('restoreLayout', true) }}>Restore tabs</button>
               <button type="button" className={!preferences.restoreLayout ? 'is-selected' : ''} aria-pressed={!preferences.restoreLayout} onClick={() => { updatePreference('restoreLayout', false) }}>Start empty</button>
             </div></div>
             <label className="settings-row"><span><strong>Start folder</strong><small>New sessions open a shell here. Leave empty for your home folder, then cd anywhere.</small></span><input type="text" className="settings-text-input" placeholder="Home folder" value={preferences.startFolder} onChange={(event) => { updatePreference('startFolder', event.target.value) }} /></label>
-            <div className="settings-row"><span><strong>Closing this window</strong><small>Conversations belong to maittyd, so closing the window or a tab never stops an agent.</small></span><span className="settings-value">Always keeps running</span></div>
+            <div className="settings-row"><span><strong>Closing this window</strong><small>Conversations belong to {DAEMON_NAME}, so closing the window or a tab never stops an agent.</small></span><span className="settings-value">Always keeps running</span></div>
           </>}
           {section === 'appearance' && <>
             <div className="settings-section-title"><h3>Appearance</h3><p>Choose the color theme for this device.</p></div>
@@ -107,35 +109,29 @@ function SettingsDialog({ open, onClose, theme, onThemeChange, preferences, onPr
             <div className="accent-options" role="group" aria-label="Accent color">
               {(['teal', 'blue', 'violet'] as const).map((accent) => <button key={accent} type="button" className={`accent-option accent-${accent} ${preferences.accent === accent ? 'is-selected' : ''}`} aria-pressed={preferences.accent === accent} onClick={() => { updatePreference('accent', accent) }}><span aria-hidden="true" />{accent === 'teal' ? 'Sea glass' : accent === 'blue' ? 'Blue' : 'Violet'}</button>)}
             </div>
-            <div className="settings-subsection-title"><h3>Working spinner</h3></div>
-            <div className="accent-options" role="group" aria-label="Working spinner">
-              {([['braille', 'Braille', '⠋⠙⠹'], ['snake', 'Snake', '⠇⠋⠙'], ['bars', 'Bars', '⣰⡄⣼⡀']] as const).map(([id, label, glyphs]) => <button key={id} type="button" className={`accent-option ${preferences.spinner === id ? 'is-selected' : ''}`} aria-pressed={preferences.spinner === id} onClick={() => { updatePreference('spinner', id) }}><span aria-hidden="true" className="spinner-sample">{glyphs}</span>{label}</button>)}
-            </div>
             <div className="settings-row"><span><strong>Terminal text size</strong><small>Size of the native terminal text, {preferences.terminalFontSize}px.</small></span><div className="segmented" role="group" aria-label="Terminal text size">
               <button type="button" aria-label="Smaller terminal text" disabled={preferences.terminalFontSize <= TERMINAL_FONT_SIZE_MIN} onClick={() => { updatePreference('terminalFontSize', preferences.terminalFontSize - 1) }}>A−</button>
               <button type="button" aria-label="Larger terminal text" disabled={preferences.terminalFontSize >= TERMINAL_FONT_SIZE_MAX} onClick={() => { updatePreference('terminalFontSize', preferences.terminalFontSize + 1) }}>A+</button>
             </div></div>
-            <label className="settings-row"><span><strong>Reduce motion</strong><small>Stop animated transitions and activity indicators.</small></span><input type="checkbox" checked={preferences.reduceMotion} onChange={(event) => { updatePreference('reduceMotion', event.target.checked) }} /></label>
-            <label className="settings-row"><span><strong>Animate sidebar activity</strong><small>Show motion while a conversation is working.</small></span><input type="checkbox" checked={preferences.animateSidebarActivity} disabled={preferences.reduceMotion} onChange={(event) => { updatePreference('animateSidebarActivity', event.target.checked) }} /></label>
-            <label className="settings-row"><span><strong>Hide sidebar</strong><small>Keep the conversation list hidden until you show it.</small></span><input type="checkbox" checked={preferences.compactSidebar} onChange={(event) => { updatePreference('compactSidebar', event.target.checked) }} /></label>
+            <label className="settings-row"><span><strong>Reduce motion</strong><small>Stop animated transitions and activity indicators.</small></span><Switch checked={preferences.reduceMotion} onCheckedChange={(value) => { updatePreference('reduceMotion', value) }} /></label>
+            <label className="settings-row"><span><strong>Animate sidebar activity</strong><small>Show motion while a conversation is working.</small></span><Switch checked={preferences.animateSidebarActivity} disabled={preferences.reduceMotion} onCheckedChange={(value) => { updatePreference('animateSidebarActivity', value) }} /></label>
+            <label className="settings-row"><span><strong>Hide sidebar</strong><small>Keep the conversation list hidden until you show it.</small></span><Switch checked={preferences.compactSidebar} onCheckedChange={(value) => { updatePreference('compactSidebar', value) }} /></label>
           </>}
           {section === 'notifications' && <>
             <div className="settings-section-title"><h3>Notifications</h3><p>Choose which conversation updates appear as desktop toasts.</p></div>
-            <label className="settings-row"><span><strong>Needs your attention</strong><small>When a conversation asks for input or approval.</small></span><input type="checkbox" checked={preferences.notifyNeedsYou} onChange={(event) => { updatePreference('notifyNeedsYou', event.target.checked) }} /></label>
-            <label className="settings-row"><span><strong>Conversation finished</strong><small>When an active response completes.</small></span><input type="checkbox" checked={preferences.notifyFinished} onChange={(event) => { updatePreference('notifyFinished', event.target.checked) }} /></label>
-            <div className="settings-toast-position"><div className="settings-row-label"><strong>Toast position</strong><small>Choose where notifications appear, then send a test.</small></div><div className="toast-position-grid" role="group" aria-label="Toast position">
-              {(['top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'] as const).map((position) => <button key={position} type="button" className={`toast-position-option ${preferences.toastPosition === position ? 'is-selected' : ''}`} aria-label={position.replace('-', ' ')} aria-pressed={preferences.toastPosition === position} onClick={() => { updatePreference('toastPosition', position) }}><span className={`toast-position-preview toast-${position}`}><i /></span></button>)}
-            </div><Button variant="soft" size="sm" onClick={onTestNotification}>Send a test</Button></div>
-            <label className="settings-row"><span><strong>Sound</strong><small>Play a quiet tone for conversation updates.</small></span><input type="checkbox" checked={preferences.notificationSound} onChange={(event) => { if (onNotificationSoundChange(event.target.checked)) updatePreference('notificationSound', event.target.checked) }} /></label>
+            <label className="settings-row"><span><strong>Needs your attention</strong><small>When a conversation asks for input or approval.</small></span><Switch checked={preferences.notifyNeedsYou} onCheckedChange={(value) => { updatePreference('notifyNeedsYou', value) }} /></label>
+            <label className="settings-row"><span><strong>Conversation finished</strong><small>When an active response completes.</small></span><Switch checked={preferences.notifyFinished} onCheckedChange={(value) => { updatePreference('notifyFinished', value) }} /></label>
+            <div className="settings-row"><span><strong>Try it</strong><small>Notifications appear at the bottom right.</small></span><Button variant="soft" size="sm" onClick={onTestNotification}>Send a test</Button></div>
+            <label className="settings-row"><span><strong>Sound</strong><small>Play a quiet tone for conversation updates.</small></span><Switch checked={preferences.notificationSound} onCheckedChange={(value) => { if (onNotificationSoundChange(value)) updatePreference('notificationSound', value) }} /></label>
           </>}
           {section === 'daemon' && <>
-            <div className="settings-section-title"><h3>Daemon & providers</h3><p>Maitty’s daemon owns your conversations and keeps them running.</p></div>
-            <div className="daemon-status-row"><span className={`connection-dot ${daemonConnectionState === 'connected' ? 'is-connected' : ''}`} /><span><strong>Maitty daemon</strong><small>{daemonConnectionState === 'connected' ? 'Connected on this device' : daemonConnectionState === 'connecting' ? 'Connecting to this device…' : daemonConnectionState === 'preview' ? 'Connection status is available in the desktop app.' : 'Disconnected'}</small></span>{daemonConnectionState === 'disconnected' && <Button variant="soft" size="sm" onClick={onReconnect}>Reconnect</Button>}</div>
+            <div className="settings-section-title"><h3>Daemon & providers</h3><p>Maiker’s daemon owns your conversations and keeps them running.</p></div>
+            <div className="daemon-status-row"><span className={`connection-dot ${daemonConnectionState === 'connected' ? 'is-connected' : ''}`} /><span><strong>Maiker daemon</strong><small>{daemonConnectionState === 'connected' ? 'Connected on this device' : daemonConnectionState === 'connecting' ? 'Connecting to this device…' : daemonConnectionState === 'preview' ? 'Connection status is available in the desktop app.' : 'Disconnected'}</small></span>{daemonConnectionState === 'disconnected' && <Button variant="soft" size="sm" onClick={onReconnect}>Reconnect</Button>}</div>
             <div className="provider-info"><strong>Codex</strong><span>{codexExecutableState === 'available' ? 'Ready on this machine.' : codexExecutableState === 'checking' ? 'Checking this machine…' : codexExecutableState === 'unavailable' ? 'Codex was not found on this machine.' : 'Run the desktop app to check Codex availability.'}</span>{codexExecutablePath && <code>{codexExecutablePath}</code>}{codexExecutableState === 'unavailable' && <Button variant="link" size="sm" onClick={onCodexRecheck}>Recheck</Button>}<small>Codex sign-in and provider settings come from your machine.</small></div>
-            <div className="provider-info"><strong>Claude Code</strong><span>{claudeExecutableState === 'available' ? 'CLI found. Claude Code manages sign-in on this machine.' : claudeExecutableState === 'checking' ? 'Checking this machine…' : claudeExecutableState === 'unavailable' ? 'Claude Code was not found on this machine.' : 'Run the desktop app to check Claude Code availability.'}</span>{claudeExecutablePath && <code>{claudeExecutablePath}</code>}{claudeExecutableState === 'unavailable' && <Button variant="link" size="sm" onClick={onClaudeRecheck}>Recheck</Button>}<small>Maitty uses the installed Claude Code CLI; sign in with Claude Code.</small></div>
+            <div className="provider-info"><strong>Claude Code</strong><span>{claudeExecutableState === 'available' ? 'CLI found. Claude Code manages sign-in on this machine.' : claudeExecutableState === 'checking' ? 'Checking this machine…' : claudeExecutableState === 'unavailable' ? 'Claude Code was not found on this machine.' : 'Run the desktop app to check Claude Code availability.'}</span>{claudeExecutablePath && <code>{claudeExecutablePath}</code>}{claudeExecutableState === 'unavailable' && <Button variant="link" size="sm" onClick={onClaudeRecheck}>Recheck</Button>}<small>Maiker uses the installed Claude Code CLI; sign in with Claude Code.</small></div>
           </>}
           {section === 'keyboard' && <>
-            <div className="settings-section-title"><h3>Keyboard</h3><p>Shortcuts available in Maitty Desktop.</p></div>
+            <div className="settings-section-title"><h3>Keyboard</h3><p>Shortcuts available in Maiker Desktop.</p></div>
             <div className="keyboard-shortcut-list settings-shortcut-list">{[
               ['Open command switcher', primaryModifier, 'K'], ['Move through switcher results', '↑ or ↓', ''], ['Open the focused result', 'Enter', ''], ['Open focused conversation in terminal', primaryModifier, 'Enter'], ['Close the command switcher', 'Esc', ''], ['Start a session in a folder', primaryModifier, 'O'], ['New conversation', primaryModifier, 'N'], ['Open settings', primaryModifier, ','], ['Next conversation needing attention', `${primaryModifier}+Shift`, 'A'], ['Show or hide Changes', `${primaryModifier}+Shift`, 'D'], ['Show or hide Context', primaryModifier, 'I'], ['Collapse or expand sidebar', primaryModifier, '\\'], ['Switch between chat and terminal', primaryModifier, '`'], ['Stop the current turn', primaryModifier, '.'], ['Previous conversation', 'Alt', '↑ or K'], ['Next conversation', 'Alt', '↓ or J'], ['Allow approval once', 'Y or A', ''], ['Decline approval', 'N', ''], ['Decline and stop turn', 'Shift', 'N'], ['Send message', 'Enter', ''], ['Add a new line', 'Shift', 'Enter'], ['Rename conversation', 'F2', ''], ['Show this shortcut list', '?', ''],
             ].concat([['Previous changed file', '[', ''], ['Next changed file', ']', '']]).map(([action, modifier, key]) => <div className="keyboard-shortcut-row" key={action}><span>{action}</span><span>{modifier && modifier.split('+').map((part) => <kbd key={part}>{part}</kbd>)}{key && <kbd>{key}</kbd>}</span></div>)}</div>

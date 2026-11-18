@@ -10,7 +10,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(fileURLToPath(new URL('.', import.meta.url)), 'src'),
-      // The Maitty colours live once, in the settings crate, and the TUI reads the same file.
+      // The Maiker colours live once, in the settings crate, and the TUI reads the same file.
       '@tokens': path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../crates/maitty-settings'),
     },
   },

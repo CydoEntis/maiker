@@ -1,40 +1,41 @@
 import type { ReactNode } from 'react'
 import { fileTag } from '@/features/inspect/fileTag'
-import { StatusMark, type MarkState } from '@/components/ui/status-mark'
 import { FileBadge as UiFileBadge, Tag } from '@/components/ui/tag'
-import { Icon, Spinner } from '@/features/workspace/components/glyphs'
+import { Icon } from '@/features/workspace/components/glyphs'
+import { StatusIcon } from '@/components/ui/status-icon'
 import type { FileChangeKind, ItemStatus } from '../chatEvents'
 
 /** Small pieces the chat's steps and cards share. Colours are theme tokens. */
 
+/** The running light inside a step's 14px mark. */
+const RUNNING_LIGHT_PX = 12
+
 const STATUS_WORD: Record<ItemStatus, string> = { running: 'Running', completed: 'Done', failed: 'Failed', interrupted: 'Stopped' }
 
-const MARK_OF: Record<ItemStatus, MarkState> = { running: 'running', completed: 'done', failed: 'failed', interrupted: 'stopped' }
+/** The characters a finished step is marked with, in the design's 16px mono slot: ✓ quiet, × red, ■ quiet. */
+const MARK_CHAR: Record<Exclude<ItemStatus, 'running'>, { char: string; tone: string }> = {
+  completed: { char: '✓', tone: 'is-done' },
+  failed: { char: '×', tone: 'is-failed' },
+  interrupted: { char: '■', tone: 'is-stopped' },
+}
 
 /**
- * The mark every step starts with (`StatusMark`): the spinner while it runs, ✓ when done, × when it failed, ■ when it
- * was stopped, and ! on the needs square while it waits on the person. The row says the state in words, so the mark
- * is hidden from screen readers here.
+ * The mark every step starts with: the running light while it runs, a quiet ✓ when done, a red × when it failed, ■ when
+ * it was stopped, and an amber ! while it waits on the person. The row says the state in words, so the mark is hidden
+ * from screen readers here.
  */
 export function StepGlyph({ status, waiting = false }: { status: ItemStatus; waiting?: boolean }) {
-  return (
-    <span className="mx-step-glyph" aria-hidden="true">
-      <StatusMark state={waiting ? 'needs' : MARK_OF[status]} spinner={<Spinner />} />
-    </span>
-  )
+  if (waiting) return <span className="mx-step-glyph is-needs" aria-hidden="true">!</span>
+  if (status === 'running') return <span className="mx-step-glyph" aria-hidden="true"><StatusIcon status="working" size={RUNNING_LIGHT_PX} /></span>
+  const mark = MARK_CHAR[status]
+  return <span className={`mx-step-glyph ${mark.tone}`} aria-hidden="true">{mark.char}</span>
 }
 
 export type MetaTone = 'dim' | 'danger' | 'working' | 'warn'
 
-/** The kinds of step that wear a mark of their own, each with its glyph. */
-export type StepTool = 'read' | 'edit' | 'run'
-const TOOL_ICON = { read: 'toolRead', edit: 'toolEdit', run: 'toolRun' } as const
-
 type StepRowProps = {
   status: ItemStatus
   verb: ReactNode
-  /** What kind of work the step did, as a small mark before its verb: looked at something, changed a file, ran a command. */
-  tool?: StepTool
   target?: ReactNode
   meta?: ReactNode
   metaTone?: MetaTone
@@ -45,12 +46,11 @@ type StepRowProps = {
   waiting?: boolean
 }
 
-/** One step as a 30px line: its mark, the kind of work, a verb, what it acted on, and how it ended at the right. */
-export function StepRow({ status, verb, tool, target, meta, metaTone = 'dim', open, onToggle, waiting = false }: StepRowProps) {
+/** One step as a 30px line: its mark, a verb, what it acted on, and how it ended at the right. */
+export function StepRow({ status, verb, target, meta, metaTone = 'dim', open, onToggle, waiting = false }: StepRowProps) {
   const body = (
     <>
       <StepGlyph status={status} waiting={waiting} />
-      {tool !== undefined && <span className="mx-step-tool" aria-hidden="true"><Icon name={TOOL_ICON[tool]} size={13} /></span>}
       <span className="mx-step-verb">{verb}</span>
       {target !== undefined && <span className="mx-step-target">{target}</span>}
       <span className="sr-only">{STATUS_WORD[status]}</span>

@@ -56,11 +56,19 @@ impl OwnedChild {
     fn spawn_suspended(mut command: Command) -> io::Result<(Self, Option<io::Error>)> {
         crate::proc::quiet(&mut command);
         configure(&mut command);
+        let command_program = command.get_program().to_os_string();
         let tree = Tree::new()?;
         let child = tokio::process::Command::from(command)
             .kill_on_drop(true)
             .spawn()
-            .map_err(|error| context("starting provider process", error))?;
+            .map_err(|error| {
+                let program = command_name(&command_program);
+                if error.kind() == io::ErrorKind::NotFound {
+                    io::Error::new(error.kind(), format!("{program} is not installed, or this service cannot find it on its PATH. Install it, or run `{program}` once in a terminal to check."))
+                } else {
+                    context(&format!("Could not start {program}"), error)
+                }
+            })?;
         let mut owned = Self {
             child,
             tree,
@@ -110,6 +118,13 @@ impl Drop for OwnedChild {
             tracing::warn!("stopping provider process tree on disposal: {error}");
         }
     }
+}
+
+/// The program's file name, as a person typed it (`claude`, not its full path).
+fn command_name(program: &std::ffi::OsStr) -> String {
+    std::path::Path::new(program)
+        .file_stem()
+        .map_or_else(|| program.to_string_lossy().into_owned(), |name| name.to_string_lossy().into_owned())
 }
 
 fn context(operation: &str, error: io::Error) -> io::Error {

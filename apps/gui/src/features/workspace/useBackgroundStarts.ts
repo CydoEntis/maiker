@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DraftAttachment } from '@/features/chat/composerStore'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { revokePreviews } from '@/features/chat/useAttachmentIntake'
-import { errorMessage } from '@/lib/error-message'
+import { explainError, type ExplainedError } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import { useLatest } from '@/lib/useLatest'
-import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
+import type { NewChatRequest, NewChatStartOptions } from './components/NewSessionDialog'
 import { nameFromMessage } from './model/newSession'
 
 /** What a start in the background took out of the message box, given back as it was when the start fails. */
@@ -16,14 +16,14 @@ export type StartDraft = { text: string; attachments: readonly DraftAttachment[]
  * reason and what it took from the box. Every start of one prompt shares a `group` and its draft; `draft` is null where
  * there is nothing to put back: the box still holds the message, or another failed start of the prompt put it back.
  */
-export type FailedStart = { key: number; group: number; name: string; agent: string | null; reason: string; draft: StartDraft | null }
+export type FailedStart = { key: number; group: number; name: string; agent: string | null; error: ExplainedError; draft: StartDraft | null }
 
 /** How a failed start is named: by the words its session would have been named with, and its agent when one prompt went to several. */
 export const failedStartLabel = ({ name, agent }: Pick<FailedStart, 'name' | 'agent'>): string =>
   `${name === '' ? 'the empty chat' : `“${name}”`}${agent === null ? '' : ` with ${agent}`}`
 
 /**
- * The new chat page's starts in the background: each runs on its own while the page is written in again. `pending`
+ * The New session dialog's starts in the background: each runs on its own while the dialog is written in again. `pending`
  * counts the ones still starting; a failed one is kept in `failed` until it is taken back or dismissed, and is a toast
  * instead once the page is gone.
  */
@@ -66,17 +66,18 @@ export function useBackgroundStarts(onStart: (request: NewChatRequest, options?:
       onStart(request, { background: true })
         .then(() => { if (draft !== null) release(group, draft) })
         .catch((failure: unknown) => {
-          const reason = errorMessage(failure, 'Could not start the chat')
           const start = { name: nameFromMessage(request.message), agent: several ? AGENT_LABEL[request.agent] : null }
+          const action = `Could not start ${failedStartLabel(start)}`
           if (!open.current) {
             if (draft !== null) release(group, draft)
-            toast.error(`Could not start ${failedStartLabel(start)}: ${reason}`)
+            toast.failed(action, failure)
             return
           }
+          const error = explainError(failure, action)
           lastKey.current += 1
           const key = lastKey.current
           // Once another start of the prompt put it back, the box holds the draft: this one has nothing to give back.
-          setFailed((now) => [...now, { ...start, key, group, reason, draft: holders.current.has(group) ? draft : null }])
+          setFailed((now) => [...now, { ...start, key, group, error, draft: holders.current.has(group) ? draft : null }])
         })
         .finally(() => { setPending((count) => count - 1) })
     }

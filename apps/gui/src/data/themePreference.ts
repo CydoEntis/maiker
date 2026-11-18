@@ -14,7 +14,7 @@ export function readThemePreference(): ThemePreference {
   if (stored === null) return DEFAULT_THEME
   if (stored === 'night' || stored === 'abyss' || stored === 'day') return stored
 
-  console.warn('Ignoring unsupported Maitty theme preference')
+  console.warn('Ignoring unsupported Maiker theme preference')
   return DEFAULT_THEME
 }
 

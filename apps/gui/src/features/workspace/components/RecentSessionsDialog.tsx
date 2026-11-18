@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { windowRoot } from './windowRoot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { ClosedSession } from '@/api/daemon'
 import { agentName } from '../model/agentMessage'
@@ -44,7 +45,7 @@ function RemakeLine({ state }: { state: RemakeState }) {
 
 function Body({ read, home, locked, onPick, onRetry }: { read: RecentRead; home: string; locked: boolean; onPick: Props['onPick']; onRetry: () => void }) {
   if (read.kind === 'loading') return <p role="status">Looking for closed sessions…</p>
-  if (read.kind === 'older') return <p role="status">Restart the Maitty service to see closed sessions.</p>
+  if (read.kind === 'older') return <p role="status">Restart the Maiker service to see closed sessions.</p>
   if (read.kind === 'failed') {
     return (
       <p role="status">
@@ -73,7 +74,7 @@ export function RecentSessionsDialog({ home, onPick, onReopened, onCancel }: Pro
   const dialog = useRef<HTMLDivElement>(null)
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel() }}>
-      <DialogContent unstyled asChild aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); dialog.current?.focus() }}>
+      <DialogContent unstyled asChild container={windowRoot()} aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); dialog.current?.focus() }}>
         <div
           ref={dialog}
           tabIndex={-1}

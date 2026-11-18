@@ -38,6 +38,7 @@ pub use machine::{
     CONNECT_BUDGET, Dial, Machine, NO_DAEMON_EXIT, OtherVersion, PROXY_ATTACH_ONLY_FLAG,
     SSH_PROGRAM, hello, open_remote, other_version,
 };
+pub use ssh_command::RestartWhen;
 pub use brand::{APP_COMMAND, APP_ENV};
 pub use remote_browse::{Index, Listing, index_files, list_folder, parse_index, parse_listing};
 pub use remote_folder::get_folder;

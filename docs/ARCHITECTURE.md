@@ -54,21 +54,19 @@ layers*. Never reverse the direction.
 src/
   main.rs        argument parsing, picks client / daemon / CLI role
   cli.rs         one-shot subcommands (send, read, wait, hook, allow, doctor, â€¦)
-  cli/target.rs  which machine a one-shot command talks to and which pane it means: `PaneAddress` (`4`, `build/4`), `resolve_machine` (`local` or a configured name), `Target` (the machine, whether it was named, whether `$MAITTY_TERM_ID` is its pane, how its failures and replies are shown); the flags that choose it are in ENVIRONMENT "The command line on a machine"
+  cli/target.rs  which machine a one-shot command talks to and which pane it means: `PaneAddress` (`4`, `build/4`), `resolve_machine` (`local` or a configured name), `Target` (the machine, whether it was named, whether `$AGENT_TERM_ID` is its pane, how its failures and replies are shown); the flags that choose it are in ENVIRONMENT "The command line on a machine"
   cli/doctor_machines.rs  the machines section of `doctor`: per machine, reachable, app version, protocol, login PATH and ssh options (a custom transport: the protocol check and its program's name), each one line, all machines at once within one budget each (`machine_probe`, `link_failure`; nothing from a machine is shown uncleaned)
   cli/machines_ls.rs  `ls --all`: this computer and every configured machine asked at the same time, one that does not answer reported on its own line
   cli/mcp/machines.rs  the MCP tools' `machine` argument and `machine/id` ids: routing, the `mcp` opt-in, the calling pane's grants checked here before a machine is dialled, typed errors (`McpError`) and the cleaned, cut, `[machine: name]`-led replies (SECURITY "MCP across machines")
   tidy.rs        what removing a worktree would lose (shared by the close-time removal and the clean-up list)
   snapshot.rs    a checkout's files kept before and after each agent turn, and put back (the server takes them, the client lists and restores)
-  references.rs  a project's reference files (`.maitty/references/`): listed, added and removed (the terminal app edits them, the server lists them for the desktop app)
+  references.rs  a project's reference files (`.maiker/references/`): listed, added and removed (the terminal app edits them, the server lists them for the desktop app)
   prompt.rs      the question and numbered choices an agent is stopped on, read off its screen (the MCP answer tool and the inbox card share it)
   output_line.rs  one line of a check's output: made safe to show, and read as pass or failure (the server picks the first failing line, the client colours with the same rule)
   ipc.rs         local sockets and the `proxy` command; opening a connection to another machine (ssh or a custom transport) is `maitty-machines`, which this module re-exports
   remote_paste.rs (now `maitty-machines`' `remote_paste`, re-exported here) sending a pasted image or a file to another machine ([ADR 0007](adr/0007-multiple-machines.md)): the file name, the check of the path the far side prints, the failure words; the script itself is also in `maitty-machines`, as is `remote_send` (the upload) and `ssh_run` (the runner that counts bytes and takes a cancel flag; the desktop app uses them too)
   remote_install.rs installing the app on another machine, as pure rules: the `uname -sm` parser, the installed-version check, the decision table (nothing is installed without a yes), the destination, the install script's exit-code table (the script itself is in `maitty-machines`)
-  machine_probe.rs (now `maitty-machines`' `machine_probe`, re-exported here) a look at a machine before it is added: `ssh ... maitty --version` with no prompt, ended by a limit or a cancel flag, and its result classified (ready, a failure class, cancelled); `locate` asks the same way where the login shell finds the app (`command -v`)
-  http.rs        the seam a keyed request goes through: `Http`, `Request`, `Response`, a `Secret` that never prints, and `check_base_url` (https anywhere, http only to your own network); a fake `Http` for tests
-  curl_http.rs   the one sender: the system `curl`, the key on its standard input as a config, no redirects, 20 seconds, 4 MiB, every failure a fixed line (no HTTP crate is added)
+  machine_probe.rs (now `maitty-machines`' `machine_probe`, re-exported here) a look at a machine before it is added: `ssh ... maiker --version` with no prompt, ended by a limit or a cancel flag, and its result classified (ready, a failure class, cancelled); `locate` asks the same way where the login shell finds the app (`command -v`)
   config.rs      config.toml (+ config.local.toml) loading, atomic state files
   keys.rs        actions, default bindings, key parsing
   theme.rs       built-in themes and contrast audit
@@ -86,7 +84,7 @@ src/
     repo.rs      read-only answers about the repository a pane is in (`Query::Repo`), and the one snapshot restore
     search.rs    find across sessions: text in what each pane printed recently
     check.rs     a pane's check result, and the runner: the project's check command run in the session's worktree when a turn ends
-    check_source.rs which checks a project has (yours, else the repo's .maitty/checks.toml), where each comes from, whether it may run
+    check_source.rs which checks a project has (yours, else the repo's .maiker/checks.toml), where each comes from, whether it may run
     check_stale.rs  a pass gone stale: the worktree's tree when a run starts, compared on the git poll
     closed_sessions.rs the agent sessions that closed for good or crashed, newest 50 (closed-sessions-<socket>.json): what a close or a failed exit records, read at start and written off the loop
     reopen.rs    reopening a closed session: its worktree made again when the folder is gone (recorded path, branch and repository only), then its conversation resumed in a new session
@@ -95,13 +93,7 @@ src/
     identity.rs  the daemon's random id, made on first start and kept in the data folder (daemon-id); sent in every snapshot
     secrets.rs   secrets agents ask you for: the pending requests, and what you typed, held in memory as single-use references (ADR 0006)
     pr.rs        each pane's pull request read through `gh`: the poll, the answer parsed, what changed between two readings, and the message queued for the agent
-    tickets.rs   which provider answers a `Query::Tickets`: `owner/name` is GitHub, `plane` and `linear` read with the key the daemon kept
-    ticket_keys.rs  the key, server and workspace of Plane and Linear: one 0600 file each in a 0700 folder of the data folder, set by a person's client (`Query::TicketKeys`), read back only as set or not
-    ticket_http.rs  what Plane and Linear share: a failure or a status as a fixed `TicketError`, JSON from an answer, a filter's plain words
-    tickets_plane.rs  Plane's projects, modules and work items over REST (`curl_http`): groups, a page, one work item with comments and blockers; read-only, cleaned and capped
-    tickets_linear.rs  Linear's teams, projects, cycles and issues over GraphQL to api.linear.app: the same three questions, every query a read with its cost capped
-    tickets_github.rs  a repository's milestones and issues read through `gh` (`Query::Tickets`): groups, a page of issues, one issue with its comments; read-only, cleaned and capped, `gh`'s words never in an error
-    approvals.rs your Always / Never / Once for repo-supplied check commands (kept in Maitty's data folder, read at start), and the ApproveCheck / ForgetCheckApproval commands
+    approvals.rs your Always / Never / Once for repo-supplied check commands (kept in Maiker's data folder, read at start), and the ApproveCheck / ForgetCheckApproval commands
     term.rs      one pane: PTY, input thread, vt100 emulator
     scan.rs, git.rs, persist.rs
   client/        the UI
@@ -146,7 +138,7 @@ src/
   cli/machine_update.rs (`machine update <name>`: probe, decide, send, swap, ask the daemon; with `machine_update/binary.rs` for this computer's own build or a fetched, verified release; its ssh line runs through `maitty-machines`' `ssh_run`)
   secret_files.rs  a secret handed to an agent as a private file, and clearing the stale ones
   login_path.rs  the daemon host's login-shell PATH, resolved once at start and applied to panes, providers and lookups
-  shim.rs        the per-agent launchers on a shell pane's PATH, and the PATH code `maitty agent-launch` shares
+  shim.rs        the per-agent launchers on a shell pane's PATH, and the PATH code `maiker agent-launch` shares
 docs/            these docs, the roadmap, design briefs
 config.example.toml
 ```
@@ -205,9 +197,11 @@ monorepo split.
 
 ## Project-specific: system context
 
-The terminal `maitty` binary runs as a daemon or as a client:
+The terminal `maiker` binary runs as a daemon or as a client:
 
-- **Daemon (server):** started on demand, one per user (or per `MAITTY_SOCKET`
+- **Daemon (server):** called `maikerd` on screen and as the desktop app's bundled file (it is the
+  `daemon` subcommand of the one binary; a service started under the older bundled name
+  `maitty-gui-daemon` is still recognised). Started on demand, one per user (or per `AGENT_SOCKET`
   name). Owns every pane: spawns shells and agents in pseudo-terminals
   (ConPTY on Windows), parses their output with `vt100`, detects agent status,
   manages worktrees, persists sessions, and restores them after a restart.
@@ -217,8 +211,8 @@ The terminal `maitty` binary runs as a daemon or as a client:
 - **Client (UI):** the full-screen TUI. Connects over a local socket (named pipe
   on Windows, Unix socket elsewhere), receives snapshots and pane output, sends
   commands and keystrokes. Many clients can attach; any can detach.
-- **CLI subcommands** (`maitty send`, `maitty read`, `maitty wait`, `maitty worktree`,
-  `maitty handoff`, `maitty doctor`, `maitty mcp`, `maitty proxy`, â€¦) talk to the same daemon.
+- **CLI subcommands** (`maiker send`, `maiker read`, `maiker wait`, `maiker worktree`,
+  `maiker handoff`, `maiker doctor`, `maiker mcp`, `maiker proxy`, â€¦) talk to the same daemon.
 
 The optional desktop GUI is a separate Tauri application. It connects to the same
 daemon through the local protocol and does not link the terminal runtime. The
@@ -226,9 +220,9 @@ daemon remains the owner of sessions, conversations, persistence and agent
 processes.
 
 External systems: the agent CLIs it runs (claude, codex, â€¦) and their hook
-callbacks (`maitty hook`), `git` and `gh`, `ssh`
-for remote machines (`--remote host` runs `ssh host maitty proxy`), the OS
-clipboard and notifications, and an MCP server (`maitty mcp`) agents use to talk to
+callbacks (`maiker hook`), `git` and `gh`, `ssh`
+for remote machines (`--remote host` runs `ssh host maiker proxy`), the OS
+clipboard and notifications, and an MCP server (`maiker mcp`) agents use to talk to
 each other.
 
 ## Project-specific: stack
@@ -261,7 +255,7 @@ for daemon IPC and GUI operations; it does not link `maitty-terminal-client`. Th
 daemon status; process-tree and lifecycle status remain daemon-owned. The
 `maitty-agent-integrations` package owns the catalog of agents with native
 status integrations; config discovery and installation remain terminal-client
-owned. The `apps/tui` `maitty` package preserves the installed command and re-exports
+owned. The `apps/tui` `maiker` package preserves the installed command and re-exports
 the terminal client library for compatibility. Codex compatibility preflight,
 session metadata, usage extraction, effective-config policy, native hook
 configuration projection and completion-event mapping live in
@@ -313,13 +307,13 @@ IPC, so closing either UI cannot end an agent session.
 
 ```text
 apps/
-  tui/                            installed `maitty` command and TUI entry point; `examples/fake-ssh.rs` stands in for ssh in tests and `tests/fake_ssh.rs` drives the remote path through it (TESTING)
+  tui/                            installed `maiker` command and TUI entry point; `examples/fake-ssh.rs` stands in for ssh in tests and `tests/fake_ssh.rs` drives the remote path through it (TESTING)
   gui/                            Tauri host and React interface
 crates/
   maitty-core/                    daemon, PTYs, persistence and process lifetime
   maitty-terminal-client/         terminal CLI and TUI implementation
   maitty-desktop-client/          desktop IPC client
-  maitty-shared/                  wire protocol and shared contracts, including `tickets.rs`: the read-only, provider-neutral ticket model (groups, summaries, tickets, filter, typed error) and the pure rules that clean and cap it, with no I/O
+  maitty-shared/                  wire protocol and shared contracts, with no I/O
   maitty-settings/                preference schemas, key actions and themes
   maitty-ipc-transport/           shared IPC framing and handshake
   maitty-agent-ask/               asking an agent's own program what it offers (Claude Code's models and slash commands, Codex's skills) and checking the pinned command lists against the installed agent (`pinned`); the host asks for this computer and a daemon for its machine, so the questions live once. Never depends on `maitty-core`
@@ -333,21 +327,30 @@ docs/                             architecture, roadmap and design specs
 
 ## Project-specific: patterns and conventions
 
-**The app's name** lives in `apps/tui/Cargo.toml` and nowhere else in the code (ADR 0008): the package
-name is the command, `[package.metadata.brand]` holds the name people see and the names it had
-before. `build.rs` hands them to the code as `APP_COMMAND`, `APP_NAME`, `APP_ENV` and
-`APP_PREVIOUS`; `crates/maitty-core/src/brand.rs` wraps them. Write a
+**The app's names** live in `apps/tui/Cargo.toml` and nowhere else in the code (ADR 0008, 0012): the
+package name is the command, `[package.metadata.brand]` holds the name people see, the daemon's
+name (`maikerd`), the environment prefix (`AGENT`, brand-free) and the names each had before.
+`build.rs` hands them to the code as `APP_COMMAND`, `APP_NAME`, `APP_DAEMON`, `APP_ENV`,
+`APP_PREVIOUS`, `APP_DAEMON_PREVIOUS` and `APP_ENV_PREVIOUS`; `crates/maitty-shared/src/brand.rs` is the
+one Rust module that reads them (`DAEMON_NAME`, `DATA_DIR_NAME`, `SOCKET_BASE_NAME`, `ENV_PREFIX`,
+`env_var`, `env_names`, ...; `maitty-core`'s `brand.rs` re-exports it), and `apps/gui/src/brand.ts`
+is the same set for the desktop app and its scripts (a test keeps them equal). Environment
+variables are written as a key without a prefix: read one with `brand::env_var("SOCKET")`, which
+also finds the old `MAITTY_` name, and set a child's with `set_child_env`, which sets both. Write a
 name-bearing string as
 `concat!(".", env!("APP_COMMAND"), ".toml")`, or name `APP_NAME` in a format string with
 arguments of its own. Adapters in `crates/maitty-terminal-client/src/cli/*.js` are
 templates (`__APP_NAME__`,
-`__APP_COMMAND__`, `__APP_ENV__`, `__APP_EXE__`) filled in when installed. `tests/naming.rs`
-fails on the name written out. To rename the app:
+`__APP_COMMAND__`, `__APP_ENV__`, `__APP_ENV_PREVIOUS__`, `__APP_EXE__`) filled in when
+installed. `tests/naming.rs` fails on the name, the daemon's name or an environment prefix
+written out. To rename the app:
 
 1. In `apps/tui/Cargo.toml`, set the package `name` (the command) and `[package.metadata.brand] name`,
    and put the old command first in `previous`. Build once and commit `Cargo.lock` too (it
    records the package name; releases build `--locked`).
-2. In `install.sh` and `install.ps1`, set `APP` / `$app` and the repository (a test checks them).
+2. In `install.sh` and `install.ps1`, set `APP` / `$app` and the repository (a test checks them),
+   and in `apps/gui/src/brand.ts` the same names. The daemon's name and the environment prefix
+   are separate decisions and stay as they are.
 3. Replace the name in the reference frames by hand (they show it; see
    [TESTING](TESTING.md#project-specific-layout-and-fixtures)).
 4. Replace the name in the docs (not the ADRs), then rename the GitHub repository.
@@ -363,20 +366,20 @@ opens the search, `Action::Help` opens All keys). The Menu and tab renaming are 
 `client/screen/leader.rs`. `docs/shortcuts.md` is documentation only; the app does not embed it.
 
 **Agent launchers.** A plain shell pane (no command, not a popup) starts with a launcher per
-agent first on its `PATH` (`shim.rs`, written to `<data>/shell/bin/`; only files maitty wrote are
-replaced or removed): `claude` there runs `maitty agent-dir claude â€¦`, goes to the folder it
+agent first on its `PATH` (`shim.rs`, written to `<data>/shell/bin/`; only files maiker wrote are
+replaced or removed): `claude` there runs `maiker agent-dir claude â€¦`, goes to the folder it
 prints, and execs the next `claude` on `PATH` with the launcher folder taken off (a `.cmd`
-calling `maitty agent-launch` on Windows). The agents are the built-in four plus the programs the quick
+calling `maiker agent-launch` on Windows). The agents are the built-in four plus the programs the quick
 agents run (the first word of a plain-named `command`, so an agent named `work` that runs `claude` adds nothing), and only when `worktree.per_agent` is on. `daemon/term.rs` also defines a shell
 function per agent (bash `--rcfile`, zsh `ZDOTDIR`, fish `-C`, PowerShell's startup script) and
 keeps the launcher folder first on `PATH` before each prompt or command, since a manager like
-mise puts its own shims in front. The function sets `MAITTY_AGENT_DIR_DONE` for the one command
+mise puts its own shims in front. The function sets `AGENT_DIR_DONE` for the one command
 so the launcher does not ask a second time. The daemon decides (`Command::AgentWorktree`): only
 a pane with no agent yet, only in a git repo's main checkout, and a caller without the pane's
 secret gets an empty answer.
 
 `client/restart_prompt.rs` is the one screen outside the app loop: before a window opens, it
-asks once to replace a running server of another version that has agents working or waiting (`main.rs` calls it). `restart.rs` owns the rest of the one-step update: the activity file a server publishes beside its pid file (`Activity`, so a newer maitty can decide without asking an older server anything), the plan for a mismatch (`plan_for_mismatch`), waiting for the old server's socket to close, and re-opening the window on the installed maitty (`relaunch`). The stop itself is `cli::kill_server`, which reaches servers of any version by process and only ever the server of this `MAITTY_SOCKET`.
+asks once to replace a running server of another version that has agents working or waiting (`main.rs` calls it). `restart.rs` owns the rest of the one-step update: the activity file a server publishes beside its pid file (`Activity`, so a newer maiker can decide without asking an older server anything), the plan for a mismatch (`plan_for_mismatch`), waiting for the old server's socket to close, and re-opening the window on the installed maiker (`relaunch`). The stop itself is `cli::kill_server`, which reaches servers of any version by process and only ever the server of this `AGENT_SOCKET`.
 offers to replace a running server of another version (`main.rs` calls it; the restart itself is
 `cli::kill_server`, which reaches servers of any version).
 
@@ -390,8 +393,8 @@ Source provenance and redistribution terms are in the vendor NOTICE and LICENSE.
 Kilo's plugin and native Kimi/Mastracode hook configurations. OpenCode configuration
 editing lives in `cli/opencode_config.rs` and preserves its V1-to-V2 migration.
 Actions invokes installation through
-`spawn_bg`; adapters send authenticated `maitty hook` reports and remain inert
-outside Maitty. No provider-specific status adapter is needed.
+`spawn_bg`; adapters send authenticated `maiker hook` reports and remain inert
+outside Maiker. No provider-specific status adapter is needed.
 
 - **Commands and snapshots.** The client sends `Command`s; the daemon answers
   with full `Snapshot`s plus per-pane output. The client derives its view model
@@ -418,7 +421,7 @@ Decisions are the ten in [`adr/`](adr/README.md): the daemon owns every session 
 terminal substrate and wire protocol (0002), status trust (0003), the client split (0004),
 provider adapters (0005), secrets (0006), multiple machines (0007), Windows and the product
 name (0008), and provider-reported usage (0009). Workflows and specialist agents stay
-outside Maitty, which shows them (0010).
+outside Maiker, which shows them (0010).
 
 ## Project-specific: planned structured conversations
 
@@ -432,16 +435,20 @@ final GUI design were selected in phases 35â€“37.
 Structured provider integrations follow the provider-appropriate pattern
 documented by [T3 Code's provider guide](research/t3code-provider-integrations.md):
 use a provider's supported native runtime/protocol when it carries capabilities
-Maitty needs; use ACP for compatible agents; add a thin provider-specific flavor
+Maiker needs; use ACP for compatible agents; add a thin provider-specific flavor
 only for behavior ACP does not express. Normalize events and truthful capability
 flags at the daemon adapter boundary. Keep each provider's identity, account and
 configuration isolated, and preserve its native approval and session semantics.
 Do not infer that another product's authentication choices are permitted for
-Maitty. This rule guides future provider integrations; it does not expand the
+Maiker. This rule guides future provider integrations; it does not expand the
 current GUI release scope beyond Codex and Claude.
 
 See [stack/claude-code-cli.md](stack/claude-code-cli.md) for the Claude CLI
-adapter's authentication, lifecycle and platform rules.
+adapter's authentication, lifecycle and platform rules. The Claude adapter
+(`claude.rs`) runs inside the conversation's runtime actor, one `claude` process
+per message; once a turn ends it starts the next message's process ahead and
+hands it the message only if its arguments and the session's transcript are
+unchanged ([PERFORMANCE](PERFORMANCE.md#a-claude-chats-next-message-2026-11-18)).
 
 The Codex transport foundation lives in
 `crates/maitty-core/src/daemon/conversation/`: `codex.rs` checks

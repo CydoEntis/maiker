@@ -29,7 +29,7 @@ every client must be able to talk to it, including across versions and over ssh.
   `REPORTS_READ_SINCE`, the oldest version that reads today's reports. An update replaces the
   binary hooks run while the old daemon keeps its sessions, and their status must stay right
   until it restarts. A newer daemon is still refused.
-- A remote machine uses the same frames through `ssh host maitty proxy`.
+- A remote machine uses the same frames through `ssh host maiker proxy`.
 
 ## Alternatives considered
 

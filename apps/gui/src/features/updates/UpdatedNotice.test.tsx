@@ -2,20 +2,26 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { markRestarting, takeRestarted } from './updateMemory'
-import { UPDATED_TOAST_MS, UpdatedNotice } from './UpdatedNotice'
+import { UpdatedNotice } from './UpdatedNotice'
+import { Toaster } from '@/components/ui/toaster'
+import { resetToasts, TOAST_HIDE_MS } from '@/lib/toast'
 
 const update = { version: '0.65.0', previous: '0.64.0', notes: '- Faster switching\n- Idle updates', automatic: true }
 
 describe('updated notice', () => {
-  beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }) })
-  afterEach(() => { vi.useRealTimers() })
+  beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }); resetToasts() })
+  afterEach(() => { resetToasts(); vi.useRealTimers() })
 
-  it('shows the pill for nine seconds, then goes', () => {
-    const onDone = vi.fn()
-    render(<UpdatedNotice update={update} onDone={onDone} />)
+  function show(onDone = vi.fn()) {
+    render(<><UpdatedNotice update={update} onDone={onDone} /><Toaster /></>)
+    return onDone
+  }
+
+  it('says so in a success toast that goes after four seconds, as every success does', () => {
+    const onDone = show()
     expect(screen.getByRole('status')).toHaveTextContent('Updated to 0.65.0')
 
-    act(() => { vi.advanceTimersByTime(UPDATED_TOAST_MS - 1) })
+    act(() => { vi.advanceTimersByTime(TOAST_HIDE_MS - 1) })
     expect(screen.getByRole('status')).toBeInTheDocument()
     act(() => { vi.advanceTimersByTime(1) })
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
@@ -24,17 +30,16 @@ describe('updated notice', () => {
 
   it('can be dismissed', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    render(<UpdatedNotice update={update} onDone={vi.fn()} />)
+    show()
     await user.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
   it('opens What\'s new with the release notes and says nothing was interrupted', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const onDone = vi.fn()
-    render(<UpdatedNotice update={update} onDone={onDone} />)
+    const onDone = show()
 
-    await user.click(screen.getByRole('button', { name: "What's new" }))
+    await user.click(screen.getByRole('button', { name: 'What’s new' }))
 
     expect(await screen.findByRole('dialog')).toHaveTextContent('Faster switching')
     expect(screen.getByRole('dialog')).toHaveTextContent('Installed while nothing was running. No session was interrupted.')

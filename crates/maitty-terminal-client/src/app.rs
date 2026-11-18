@@ -3,6 +3,7 @@ use crate::cli::target::{Choice, PaneAddress, Target, TargetError};
 use crate::{alert, cli, client, config, ipc, protocol, restart, reveal, sync};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use maitty_machines::RestartWhen;
 
 /// An agent-aware terminal multiplexer.
 #[derive(Parser)]
@@ -240,8 +241,11 @@ enum Cmd {
     #[command(hide = true)]
     RestartIfIdle {
         /// Restart even with sessions open, when they are saved to come back.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "agents_idle")]
         now: bool,
+        /// Restart with sessions open when they are saved and no agent is working or waiting.
+        #[arg(long)]
+        agents_idle: bool,
     },
     /// Install the newest release over this one.
     Update {
@@ -375,6 +379,10 @@ enum MachineCmd {
         /// Wait until nothing is open on the machine, then restart its daemon (up to half an hour).
         #[arg(long, conflicts_with = "restart")]
         wait: bool,
+        /// Wait until its sessions are saved and no agent is working or waiting, then restart its
+        /// daemon (up to four hours): nothing is lost. The local service runs this after an update.
+        #[arg(long, conflicts_with_all = ["restart", "wait"])]
+        agents_idle: bool,
         /// Wait for Enter before exiting: the window runs this in a popup that closes when it ends.
         #[arg(long, hide = true)]
         hold: bool,
@@ -703,6 +711,7 @@ pub(crate) fn run() {
                     force,
                     restart,
                     wait,
+                    agents_idle,
                     hold,
                 },
         }) => machine_update(
@@ -713,6 +722,7 @@ pub(crate) fn run() {
                 force,
                 restart,
                 wait,
+                agents_idle,
             },
             hold,
         ),
@@ -726,7 +736,11 @@ pub(crate) fn run() {
             cmd: MachineCmd::Activity { name },
         }) => machine_activity(&name),
         Some(Cmd::Activity) => cli::activity(),
-        Some(Cmd::RestartIfIdle { now }) => cli::restart_if_idle(now),
+        Some(Cmd::RestartIfIdle { now, agents_idle }) => cli::restart_if_idle(match (now, agents_idle) {
+            (true, _) => RestartWhen::Now,
+            (_, true) => RestartWhen::AgentsIdle,
+            _ => RestartWhen::NoSession,
+        }),
         Some(Cmd::Allow { dir }) => cli::allow(dir),
         Some(Cmd::Proxy { attach_only }) => match cli::block_on(ipc::proxy(attach_only)) {
             Err(e) if ipc::is_no_daemon_here(&e) => {

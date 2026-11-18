@@ -43,14 +43,14 @@ export function visibleRange(layout: ListLayout, scrollTop: number, viewport: nu
   return { start: Math.max(0, first - overscan), end: Math.min(count, last + 1 + overscan) }
 }
 
-/** Within this many pixels of the bottom, a list counts as following its newest row. */
-export const FOLLOW_THRESHOLD_PX = 48
+/** Within this many pixels of the bottom, a list counts as being at its end. */
+export const AT_BOTTOM_PX = 48
 
 export function isAtBottom(scrollTop: number, viewport: number, total: number): boolean {
-  return total - scrollTop - viewport <= FOLLOW_THRESHOLD_PX
+  return total - scrollTop - viewport <= AT_BOTTOM_PX
 }
 
-/** Where the list was last seen, so the next scroll has a direction. */
+/** Whether the list follows its newest row, and where the view was last seen, so the next scroll has a direction. */
 export type FollowState = {
   readonly following: boolean
   readonly top: number
@@ -58,18 +58,12 @@ export type FollowState = {
 }
 
 /**
- * Whether the list follows its newest row after a scroll. It goes by the direction the reader
- * moves, not by how far from the bottom they are: any move up stops following at once (a streaming
- * reply growing under a reader who nudged up would otherwise pull them back down), and only a move
- * down that ends within `FOLLOW_THRESHOLD_PX` of the bottom starts it again. A scroll the list
- * caused itself, and the browser pulling the view in because the list got shorter, say nothing
- * about what the reader wants.
+ * Whether the list follows its newest row after a scroll. It goes by the direction the reader moves, not by how far from
+ * the bottom they are: any move up lets go at once (a reply growing under a reader who nudged up would otherwise pull
+ * them back down), and only a move down that ends within `AT_BOTTOM_PX` of the bottom takes it again. A scroll the list
+ * caused itself, and the web view pulling the view in because the list got shorter, say nothing about what the reader wants.
  */
-export function followAfterScroll(
-  previous: FollowState,
-  now: { readonly scrollTop: number; readonly viewport: number; readonly total: number },
-  causedByList: boolean,
-): FollowState {
+export function followAfterScroll(previous: FollowState, now: { readonly scrollTop: number; readonly viewport: number; readonly total: number }, causedByList: boolean): FollowState {
   const next: FollowState = { following: previous.following, top: now.scrollTop, total: now.total }
   if (causedByList) return next
   const pulledIn = now.total < previous.total && now.scrollTop >= now.total - now.viewport
@@ -77,6 +71,25 @@ export function followAfterScroll(
   if (now.scrollTop < previous.top) return { ...next, following: false }
   if (now.scrollTop > previous.top && isAtBottom(now.scrollTop, now.viewport, now.total)) return { ...next, following: true }
   return next
+}
+
+/**
+ * Where a message the person just sent stands in the view: this far under the top (the row's own 8px padding makes it
+ * 16 to the text), so the reply is read from its start and the chat never clears.
+ */
+export const SEND_TOP_GAP_PX = 8
+
+/** The scroll position that puts the row starting at `anchorOffset` at the top of the view. */
+export function sendTop(anchorOffset: number): number {
+  return Math.max(0, anchorOffset - SEND_TOP_GAP_PX)
+}
+
+/**
+ * The empty space below the rows, so the sent message can stand at the top even while the reply is short. It shrinks as
+ * the reply grows, and is gone once the rows from the message to the end fill the view.
+ */
+export function sendSpacer(viewport: number, anchorOffset: number, total: number): number {
+  return Math.max(0, viewport - SEND_TOP_GAP_PX - (total - anchorOffset))
 }
 
 /** The jump to the newest row glides for this long at least, and longer the further it goes, up to the most. */

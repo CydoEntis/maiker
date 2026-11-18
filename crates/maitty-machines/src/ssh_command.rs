@@ -208,6 +208,19 @@ pub(crate) fn ssh_argv_probe(
 const RESTART_IF_IDLE: &str = "restart-if-idle";
 /// Added to it to restart even with sessions open, when they are saved.
 const RESTART_NOW: &str = "--now";
+/// Added to it to restart with sessions open, when they are saved and no agent is working or waiting.
+const RESTART_AGENTS_IDLE: &str = "--agents-idle";
+
+/// When the far daemon may restart to take a new version.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestartWhen {
+    /// Only with no session open.
+    NoSession,
+    /// Also with sessions open, when they are saved; a turn in progress is lost.
+    Now,
+    /// Also with sessions open, when they are saved and no agent is mid-turn, so nothing is lost.
+    AgentsIdle,
+}
 /// The subcommand that prints how many sessions are open on the far side and how many are busy.
 const ACTIVITY: &str = "activity";
 
@@ -401,20 +414,24 @@ pub(crate) fn ssh_argv_put_folder(
     Ok(build(ssh, target, remote, Shape::PROXY))
 }
 
-/// `<program> restart-if-idle` on the far side: the installed app restarts its daemon when no
-/// session is open, or with `now` also when its sessions are saved. `program` is the path it
-/// was installed to.
+/// `<program> restart-if-idle` on the far side: the installed app restarts its daemon when
+/// `when` allows it. `program` is the path it was installed to.
 pub(crate) fn ssh_argv_restart_if_idle(
     ssh: &[String],
     target: &str,
     program: &str,
-    now: bool,
+    when: RestartWhen,
 ) -> Result<Vec<String>, SshCommandError> {
     validate_target(target)?;
     let mut remote = format!("{} {RESTART_IF_IDLE}", remote_program(program)?);
-    if now {
+    let flag = match when {
+        RestartWhen::NoSession => None,
+        RestartWhen::Now => Some(RESTART_NOW),
+        RestartWhen::AgentsIdle => Some(RESTART_AGENTS_IDLE),
+    };
+    if let Some(flag) = flag {
         remote.push(' ');
-        remote.push_str(RESTART_NOW);
+        remote.push_str(flag);
     }
     Ok(build(ssh, target, remote, Shape::PROBE))
 }
@@ -546,7 +563,7 @@ mod tests {
     fn a_custom_transport_gets_the_remote_command_as_the_placeholder_element() {
         let got = via(
             &["fly", "ssh", "console", "-C", "{command}"],
-            "~/.cargo/bin/maitty",
+            "~/.cargo/bin/maiker",
             ProxyMode::AttachOnly,
         );
         assert_eq!(
@@ -556,25 +573,25 @@ mod tests {
                 "ssh",
                 "console",
                 "-C",
-                "~/'.cargo/bin/maitty' proxy --attach-only"
+                "~/'.cargo/bin/maiker' proxy --attach-only"
             ])
         );
     }
 
     #[test]
     fn a_custom_transport_without_a_placeholder_gets_it_as_the_last_argument() {
-        let got = via(&["relay", "--to", "box"], "maitty", ProxyMode::AttachOnly);
+        let got = via(&["relay", "--to", "box"], "maiker", ProxyMode::AttachOnly);
         assert_eq!(
             got,
             args(&["relay", "--to", "box", &found("proxy --attach-only")])
         );
-        let starts = via(&["relay"], "maitty", ProxyMode::StartsDaemon);
+        let starts = via(&["relay"], "maiker", ProxyMode::StartsDaemon);
         assert_eq!(starts, args(&["relay", &found("proxy")]));
     }
 
     #[test]
     fn a_custom_transport_is_not_given_any_ssh_option() {
-        let got = via(&["relay", "{command}"], "maitty", ProxyMode::AttachOnly);
+        let got = via(&["relay", "{command}"], "maiker", ProxyMode::AttachOnly);
         assert_eq!(got.len(), 2);
         for ssh_only in ["-o", "-a", "-T", "--", "BatchMode=yes", "ForwardAgent=no"] {
             assert!(!got.iter().any(|word| word == ssh_only), "{ssh_only}");
@@ -599,7 +616,7 @@ mod tests {
     #[test]
     fn a_custom_transport_needs_a_program_and_a_valid_remote_command() {
         assert_eq!(
-            command_argv(&[], "maitty", ProxyMode::AttachOnly),
+            command_argv(&[], "maiker", ProxyMode::AttachOnly),
             Err(EmptyTransport)
         );
         assert_eq!(
@@ -611,7 +628,7 @@ mod tests {
     /// What the default command becomes: looked up with the install folder first on PATH.
     fn found(rest: &str) -> String {
         format!(
-            r#"sh -c 'PATH="$HOME/.local/bin:$PATH"; export PATH; exec "$@"' sh 'maitty' {rest}"#
+            r#"sh -c 'PATH="$HOME/.local/bin:$PATH"; export PATH; exec "$@"' sh 'maiker' {rest}"#
         )
     }
 
@@ -635,7 +652,7 @@ mod tests {
 
     #[test]
     fn the_target_follows_dash_dash_and_the_command_is_last() {
-        let argv = argv(&["ssh", "-p", "2222"], "me@box", "maitty");
+        let argv = argv(&["ssh", "-p", "2222"], "me@box", "maiker");
         let dashes = position(&argv, "--");
         assert_eq!(argv[dashes + 1], "me@box");
         assert_eq!(argv[dashes + 2], found("proxy"));
@@ -644,7 +661,7 @@ mod tests {
 
     #[test]
     fn the_hardening_options_are_present() {
-        let argv = argv(&["ssh"], "box", "maitty").join(" ");
+        let argv = argv(&["ssh"], "box", "maiker").join(" ");
         for want in [
             "-o BatchMode=yes",
             "-o ForwardAgent=no",
@@ -663,7 +680,7 @@ mod tests {
         let argv = argv(
             &["ssh", "-o", "BatchMode=no", "-A", "-o", "ConnectTimeout=3"],
             "box",
-            "maitty",
+            "maiker",
         );
         let first = |word: &str| position(&argv, word);
         assert!(first("BatchMode=yes") < first("BatchMode=no"));
@@ -682,7 +699,7 @@ mod tests {
         ] {
             assert!(
                 matches!(
-                    ssh_argv(&args(&["ssh"]), target, "maitty", ProxyMode::StartsDaemon),
+                    ssh_argv(&args(&["ssh"]), target, "maiker", ProxyMode::StartsDaemon),
                     Err(TargetIsOption(_))
                 ),
                 "{target}"
@@ -694,12 +711,12 @@ mod tests {
     fn a_host_with_whitespace_or_nothing_is_refused() {
         for target in ["box other", "box\n", "box\t-x"] {
             assert!(matches!(
-                ssh_argv(&args(&["ssh"]), target, "maitty", ProxyMode::StartsDaemon),
+                ssh_argv(&args(&["ssh"]), target, "maiker", ProxyMode::StartsDaemon),
                 Err(TargetNotAHost(_))
             ));
         }
         assert_eq!(
-            ssh_argv(&args(&["ssh"]), "", "maitty", ProxyMode::StartsDaemon),
+            ssh_argv(&args(&["ssh"]), "", "maiker", ProxyMode::StartsDaemon),
             Err(EmptyTarget)
         );
     }
@@ -707,8 +724,8 @@ mod tests {
     #[test]
     fn a_remote_command_with_shell_syntax_stays_one_literal_word() {
         assert_eq!(
-            remote_command("/opt/my tools/maitty").unwrap(),
-            "'/opt/my tools/maitty' proxy"
+            remote_command("/opt/my tools/maiker").unwrap(),
+            "'/opt/my tools/maiker' proxy"
         );
         assert_eq!(
             remote_command("$(touch /tmp/x)`id`;rm -rf ~ && echo \"hi\" | cat").unwrap(),
@@ -721,16 +738,16 @@ mod tests {
     #[test]
     fn a_leading_home_shorthand_still_expands_on_the_remote() {
         assert_eq!(
-            remote_command("~/.cargo/bin/maitty").unwrap(),
-            "~/'.cargo/bin/maitty' proxy"
+            remote_command("~/.cargo/bin/maiker").unwrap(),
+            "~/'.cargo/bin/maiker' proxy"
         );
         assert_eq!(
-            remote_command("~/my tools/maitty").unwrap(),
-            "~/'my tools/maitty' proxy"
+            remote_command("~/my tools/maiker").unwrap(),
+            "~/'my tools/maiker' proxy"
         );
         assert_eq!(
-            remote_command("~root/maitty").unwrap(),
-            "'~root/maitty' proxy",
+            remote_command("~root/maiker").unwrap(),
+            "'~root/maiker' proxy",
             "only the plain `~/` form is expanded"
         );
     }
@@ -759,11 +776,11 @@ mod tests {
     #[test]
     fn a_configured_machine_s_proxy_only_attaches() {
         let attach = |cmd| super::remote_command(cmd, ProxyMode::AttachOnly).unwrap();
-        assert_eq!(attach("maitty"), found("proxy --attach-only"));
-        assert_eq!(attach("~/bin/maitty"), "~/'bin/maitty' proxy --attach-only");
-        let full = ssh_argv(&args(&["ssh"]), "box", "maitty", ProxyMode::AttachOnly).unwrap();
+        assert_eq!(attach("maiker"), found("proxy --attach-only"));
+        assert_eq!(attach("~/bin/maiker"), "~/'bin/maiker' proxy --attach-only");
+        let full = ssh_argv(&args(&["ssh"]), "box", "maiker", ProxyMode::AttachOnly).unwrap();
         assert_eq!(full.last().unwrap(), &found("proxy --attach-only"));
-        assert_eq!(remote_command("maitty").unwrap(), found("proxy"));
+        assert_eq!(remote_command("maiker").unwrap(), found("proxy"));
     }
 
     /// A Windows client: its ssh program and arguments are Windows paths with backslashes.
@@ -777,24 +794,24 @@ mod tests {
                 r"C:\Users\me\.ssh\id ed25519",
             ],
             "me@linux-box",
-            "~/.cargo/bin/maitty",
+            "~/.cargo/bin/maiker",
         );
         let unix = argv(
             &["ssh", "-i", "/home/me/.ssh/id"],
             "me@linux-box",
-            "~/.cargo/bin/maitty",
+            "~/.cargo/bin/maiker",
         );
         assert_eq!(windows[0], r"C:\Program Files\OpenSSH\ssh.exe");
         assert!(windows.contains(&r"C:\Users\me\.ssh\id ed25519".to_string()));
         assert_eq!(windows.last(), unix.last());
-        assert_eq!(windows.last().unwrap(), "~/'.cargo/bin/maitty' proxy");
+        assert_eq!(windows.last().unwrap(), "~/'.cargo/bin/maiker' proxy");
     }
 
     #[test]
     fn a_windows_looking_remote_command_is_still_one_literal_word() {
         assert_eq!(
-            remote_command(r"C:\Program Files\maitty\maitty.exe").unwrap(),
-            r"'C:\Program Files\maitty\maitty.exe' proxy"
+            remote_command(r"C:\Program Files\maiker\maiker.exe").unwrap(),
+            r"'C:\Program Files\maiker\maiker.exe' proxy"
         );
     }
 
@@ -854,7 +871,7 @@ mod tests {
 
     #[test]
     fn the_probe_never_asks_and_runs_the_version() {
-        let argv = probe(&["ssh", "-p", "2222"], "me@box", "maitty").unwrap();
+        let argv = probe(&["ssh", "-p", "2222"], "me@box", "maiker").unwrap();
         let joined = argv.join(" ");
         assert!(joined.contains("-o BatchMode=yes") && joined.contains("-o ConnectTimeout=8"));
         assert!(!joined.contains("ServerAlive"));
@@ -865,7 +882,7 @@ mod tests {
 
     #[test]
     fn the_first_login_may_ask_but_keeps_the_hardening() {
-        let argv = first_login(&["ssh", "-A", "-p", "2222"], "me@box", "maitty").unwrap();
+        let argv = first_login(&["ssh", "-A", "-p", "2222"], "me@box", "maiker").unwrap();
         let joined = argv.join(" ");
         assert!(!joined.contains("BatchMode"), "{joined}");
         for want in ["-o ForwardAgent=no", "-o ConnectTimeout=15", " -a ", " -T "] {
@@ -873,21 +890,21 @@ mod tests {
         }
         assert!(position(&argv, "ForwardAgent=no") < position(&argv, "-A"));
         let dashes = position(&argv, "--");
-        assert_eq!(&argv[dashes + 1..], ["me@box", "maitty --version"]);
+        assert_eq!(&argv[dashes + 1..], ["me@box", "maiker --version"]);
     }
 
     #[test]
     fn the_first_login_and_the_probe_refuse_a_hostile_host() {
         for target in ["-oProxyCommand=x", "box other", ""] {
-            assert!(probe(&["ssh"], target, "maitty").is_err(), "{target}");
-            assert!(first_login(&["ssh"], target, "maitty").is_err(), "{target}");
+            assert!(probe(&["ssh"], target, "maiker").is_err(), "{target}");
+            assert!(first_login(&["ssh"], target, "maiker").is_err(), "{target}");
         }
     }
 
     #[test]
     fn the_first_login_needs_a_remote_command_that_is_a_plain_word() {
-        assert!(first_login(&["ssh"], "box", "~/.cargo/bin/maitty").is_ok());
-        for cmd in ["my tools/maitty", "$(id)", "a;b", "it's", "", "a`b`"] {
+        assert!(first_login(&["ssh"], "box", "~/.cargo/bin/maiker").is_ok());
+        for cmd in ["my tools/maiker", "$(id)", "a;b", "it's", "", "a`b`"] {
             assert!(
                 matches!(
                     first_login(&["ssh"], "box", cmd),
@@ -900,11 +917,11 @@ mod tests {
 
     #[test]
     fn a_popup_line_keeps_plain_words_bare_and_quotes_the_rest_once() {
-        let argv = first_login(&["ssh", "-p", "2222"], "me@box", "maitty").unwrap();
+        let argv = first_login(&["ssh", "-p", "2222"], "me@box", "maiker").unwrap();
         let line = popup_command(&argv).unwrap();
         assert_eq!(
             line,
-            "ssh -o ForwardAgent=no -p 2222 -o ConnectTimeout=15 -a -T -- me@box 'maitty --version'"
+            "ssh -o ForwardAgent=no -p 2222 -o ConnectTimeout=15 -a -T -- me@box 'maiker --version'"
         );
         assert_eq!(
             popup_command(&args(&["ssh", "-i", "my key"])).unwrap(),
@@ -926,10 +943,10 @@ mod tests {
 
     #[test]
     fn a_hostile_target_that_passes_the_host_check_is_one_quoted_word_in_the_popup_line() {
-        let argv = first_login(&["ssh"], "box;rm$IFS-rf", "maitty").unwrap();
+        let argv = first_login(&["ssh"], "box;rm$IFS-rf", "maiker").unwrap();
         let line = popup_command(&argv).unwrap();
         assert!(line.contains("-- 'box;rm$IFS-rf' "), "{line}");
-        let tilde = first_login(&["ssh"], "~root", "maitty").unwrap();
+        let tilde = first_login(&["ssh"], "~root", "maiker").unwrap();
         assert!(popup_command(&tilde).unwrap().contains("-- '~root' "));
     }
 
@@ -951,14 +968,14 @@ mod tests {
         let argv = ssh_argv_where(&args(&["ssh", "-p", "2222"]), "me@box").unwrap();
         let dashes = position(&argv, "--");
         assert_eq!(argv[dashes + 1], "me@box");
-        assert_eq!(argv[dashes + 2], "sh -c 'command -v maitty' sh");
+        assert_eq!(argv[dashes + 2], "sh -c 'command -v maiker' sh");
         assert!(argv.contains(&"BatchMode=yes".to_string()));
         assert!(ssh_argv_where(&args(&["ssh"]), "-oProxyCommand=x").is_err());
     }
 
     #[test]
     fn the_summary_names_the_options_every_connection_carries() {
-        let line = argv(&["ssh"], "box", "maitty");
+        let line = argv(&["ssh"], "box", "maiker");
         let summary = hardening_summary();
         for option in [
             "BatchMode=yes",
@@ -981,9 +998,9 @@ mod tests {
     #[test]
     fn the_install_line_passes_the_destination_and_count_as_separate_quoted_words() {
         let argv =
-            ssh_argv_install(&args(&["ssh"]), "box", "/opt/it's mine/maitty", 14200000).unwrap();
+            ssh_argv_install(&args(&["ssh"]), "box", "/opt/it's mine/maiker", 14200000).unwrap();
         let remote = argv.last().unwrap();
-        let tail = r" sh '/opt/it'\''s mine/maitty' '14200000'";
+        let tail = r" sh '/opt/it'\''s mine/maiker' '14200000'";
         let script = remote
             .strip_prefix("sh -c ")
             .and_then(|r| r.strip_suffix(tail))
@@ -1018,12 +1035,12 @@ mod tests {
 
     #[test]
     fn restart_if_idle_runs_the_installed_path_with_a_home_shorthand_kept() {
-        let argv = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", false).unwrap();
+        let argv = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maiker", RestartWhen::NoSession).unwrap();
         assert_eq!(
             argv.last().unwrap(),
-            "~/'.local/bin/maitty' restart-if-idle"
+            "~/'.local/bin/maiker' restart-if-idle"
         );
-        assert!(ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "", false).is_err());
+        assert!(ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "", RestartWhen::NoSession).is_err());
     }
 
     /// A POSIX shell reads the popup line back as exactly the argv it was built from.
@@ -1103,16 +1120,18 @@ mod tests {
 
     #[test]
     fn restart_now_adds_one_fixed_flag_and_nothing_else() {
-        let idle = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", false).unwrap();
-        let now = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maitty", true).unwrap();
-        assert_eq!(now.last().unwrap(), &format!("{} --now", idle.last().unwrap()));
-        assert_eq!(now[..now.len() - 1], idle[..idle.len() - 1]);
+        let idle = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maiker", RestartWhen::NoSession).unwrap();
+        for (when, flag) in [(RestartWhen::Now, "--now"), (RestartWhen::AgentsIdle, "--agents-idle")] {
+            let asked = ssh_argv_restart_if_idle(&args(&["ssh"]), "box", "~/.local/bin/maiker", when).unwrap();
+            assert_eq!(asked.last().unwrap(), &format!("{} {flag}", idle.last().unwrap()));
+            assert_eq!(asked[..asked.len() - 1], idle[..idle.len() - 1]);
+        }
     }
 
     #[test]
     fn activity_runs_the_installed_program_with_one_fixed_word() {
-        let argv = ssh_argv_activity(&args(&["ssh"]), "box", "~/.local/bin/maitty").unwrap();
-        assert_eq!(argv.last().unwrap(), "~/'.local/bin/maitty' activity");
+        let argv = ssh_argv_activity(&args(&["ssh"]), "box", "~/.local/bin/maiker").unwrap();
+        assert_eq!(argv.last().unwrap(), "~/'.local/bin/maiker' activity");
         assert!(ssh_argv_activity(&args(&["ssh"]), "box", "").is_err());
     }
 
