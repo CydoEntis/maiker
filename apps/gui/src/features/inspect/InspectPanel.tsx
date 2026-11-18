@@ -31,7 +31,7 @@ const MIN_WIDTH_PX = 360
 const MAX_WIDTH_PX = 1100
 const KEY_STEP_PX = 24
 // A new key since the panel docks beside the chat instead of over it, so a width kept from the overlay does not carry.
-const WIDTH_KEY = 'maitty.inspect.width.v4'
+const WIDTH_KEY = 'maiker.inspect.width.v4'
 
 function clampWidth(width: number): number {
   return Math.round(Math.min(Math.max(width, MIN_WIDTH_PX), MAX_WIDTH_PX))

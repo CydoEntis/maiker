@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'maitty.gui.theme.v1'
+const STORAGE_KEY = 'maiker.gui.theme.v1'
 
 export type ThemePreference = 'night' | 'abyss' | 'day'
 

@@ -1,6 +1,6 @@
 import { type DocumentMode, isDocumentMode } from './documentEdit'
 
-const KEY = 'maitty.documentModes'
+const KEY = 'maiker.documentModes'
 const MAX_REMEMBERED = 200
 
 type Remembered = Record<string, DocumentMode>

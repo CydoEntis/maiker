@@ -128,6 +128,7 @@ mod design_tests {
             },
             agent: agent.map(String::from),
             hooked: true,
+            hook_problem: None,
             status,
             cwd: PathBuf::from(cwd),
             summary: String::new(),

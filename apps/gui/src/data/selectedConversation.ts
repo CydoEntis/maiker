@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'maitty.gui.selection.v1'
+const STORAGE_KEY = 'maiker.gui.selection.v1'
 
 export function readSelectedConversation(): string | null {
   const conversationId = localStorage.getItem(STORAGE_KEY)

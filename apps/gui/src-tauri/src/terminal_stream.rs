@@ -1032,6 +1032,12 @@ pub fn react(
             if handle.is_refused(machine) {
                 told.state = "refused";
             }
+            if told.state == "needs-login" {
+                // A login the person can do: the same line the add flow opens in a session. A route
+                // that cannot make one (a custom transport) leaves the window with the fix text only.
+                told.login_command = handle.route(machine).and_then(|route| route.first_login_command().ok());
+            }
+            told.target = handle.route(machine).and_then(|route| route.target().map(str::to_owned));
             let opts = handle.opts_of(machine);
             (told.clipboard, told.notices, told.sounds) = (opts.clipboard, opts.notices, opts.sounds);
             told.since = handle.down_since(machine, state.is_connected(), now_ms());
@@ -1444,6 +1450,9 @@ mod tests {
             name: name.into(),
             state: kind,
             why: None,
+            said: None,
+            login_command: None,
+            target: None,
             attempt: None,
             unsent: None,
             since: None,

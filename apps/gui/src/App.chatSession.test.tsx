@@ -98,7 +98,7 @@ function chatSession(id: number, extra: Partial<Conversation> = {}): Conversatio
 }
 
 function renderDesktopApp() {
-  window.localStorage.setItem('maitty.gui.welcomed.v1', '1')
+  window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
 }

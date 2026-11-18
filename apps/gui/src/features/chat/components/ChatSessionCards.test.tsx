@@ -241,7 +241,7 @@ describe('the summary for a new chat', () => {
     render(<ChatSession link={link()} agent="claude" online root="/repo" hideSuccessfulTools problem={{ kind: 'context', agent: 'Claude', percent: 96, onCompact: vi.fn(), onNewWithSummary }} />)
     await settle()
 
-    fireEvent.click(screen.getByRole('button', { name: 'New chat with summary' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New session with summary' }))
 
     expect(onNewWithSummary).toHaveBeenCalledWith(expect.stringContaining('Final words.'))
   })

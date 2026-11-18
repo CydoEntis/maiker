@@ -15,7 +15,6 @@ import { copyBlock, saveBlock } from '../saveBlock'
 import { TypeTag } from '@/components/ui/tag'
 import { Block as BlockBox, BlockHead } from './Block'
 import type { Askable } from '../plainQuestions'
-import { FileBadge } from './cardParts'
 
 /**
  * Renders the agent's markdown as React elements (never as HTML; see `markdown.ts`). A link is
@@ -36,7 +35,8 @@ function LinkButton({ href, children }: { href: string; children: ReactNode }) {
 
 /**
  * Inline code. A web address opens like a link, still set as code: agents often quote the address to visit that way.
- * A file's name reads as a file badge that opens the file; anything else, or a name of no known type, stays code.
+ * A file's name stays plain code, with no icon, so a sentence that names files reads straight through; where the chat can
+ * open files it is a button that opens the file (and its line), still set as code.
  */
 function InlineCode({ text }: { text: string }) {
   const open = useContext(OpenFileContext)
@@ -44,9 +44,9 @@ function InlineCode({ text }: { text: string }) {
   if (href !== null) return <LinkButton href={href}><CodeChip className="text-(--link)">{text}</CodeChip></LinkButton>
   const named = FILE_NAME.exec(text)
   const path = named?.[1]
-  if (path === undefined || fileTag(path) === null) return <CodeChip>{text}</CodeChip>
+  if (open === null || path === undefined || fileTag(path) === null) return <CodeChip>{text}</CodeChip>
   const line = named?.[2] === undefined ? null : Number(named[2])
-  return <FileBadge path={path} line={line} onOpen={open === null ? undefined : () => { open(path, line) }} />
+  return <button type="button" title={`Open ${path}`} className="cursor-pointer border-0 bg-transparent p-0 text-left hover:underline" onClick={() => { open(path, line) }}><CodeChip>{text}</CodeChip></button>
 }
 
 function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {

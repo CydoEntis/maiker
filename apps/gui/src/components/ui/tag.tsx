@@ -68,7 +68,7 @@ function splitPath(path: string): { dir: string; name: string } {
 
 type FileBadgeProps = {
   path: string
-  /** The type tag, or a node (a folder icon) in its place; nothing for a type without one. */
+  /** A node before the path (a folder icon); a file has none, its extension is in its name. */
   tag?: React.ReactNode
   line?: number | null
   /** Opens the file; without it the badge is text, as inside a row that is itself a button. */
@@ -77,14 +77,14 @@ type FileBadgeProps = {
 }
 
 /**
- * The design's FileBadge: the type tag, then the path with its folder dimmed. A long path shortens from the front, so the
+ * The design's FileBadge: the path with its folder dimmed. A long path shortens from the front, so the
  * file's name always shows (the path is laid out right to left inside an isolate, so the ellipsis lands at its start).
  */
 function FileBadge({ path, tag, line = null, onOpen, className }: FileBadgeProps) {
   const { dir, name } = splitPath(path)
   const body = (
     <>
-      {typeof tag === "string" ? <TypeTag tag={tag} /> : tag}
+      {tag}
       <span className="min-w-0 overflow-hidden text-left font-(family-name:--mono) text-[12.5px] font-medium text-ellipsis whitespace-nowrap [direction:rtl]">
         <bdi>
           {dir !== "" && <span className="text-(--dim)">{dir}</span>}

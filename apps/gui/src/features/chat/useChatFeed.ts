@@ -40,6 +40,30 @@ export function peekChatFeed(conversation: number): ChatFeed | undefined {
   return cache.get(conversation)
 }
 
+/** A warm read is running: only one runs at a time, so hovering down a list never queues up reads. */
+let warming = false
+
+/**
+ * Reads a conversation into the cache before its chat is opened (a pointer on its sidebar row), so the click paints from
+ * memory. It uses the same read as the chat itself and changes nothing on screen. Skipped, with `false`, when the chat is
+ * already cached, or another warm read is running. A failed read is dropped: the chat reads for itself when it opens.
+ */
+export async function warmChatFeed(conversation: number, generation: number, provider: ChatProvider, read: ReadPage = (cursor) => readConversationPage(conversation, cursor)): Promise<boolean> {
+  const held = cache.get(conversation)
+  if (warming || (held !== undefined && (held.generation === null || held.generation === generation))) return false
+  warming = true
+  try {
+    const next = await syncFeed(createFeed(provider, conversation), read, Date.now)
+    // An open chat may have filled the cache meanwhile: what it read is newer than this.
+    if (!cache.has(conversation)) remember(next)
+  } catch (error) {
+    console.warn('Could not read a conversation ahead of opening it', error instanceof Error ? error.message : String(error))
+  } finally {
+    warming = false
+  }
+  return true
+}
+
 /** For tests: the cache belongs to the window's lifetime. */
 export function forgetChatFeeds(): void {
   cache.clear()

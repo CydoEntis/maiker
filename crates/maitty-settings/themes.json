@@ -82,7 +82,7 @@
    }
   },
   {
-   "id": "maitty-dark",
+   "id": "maiker-dark",
    "name": "Maiker Dark",
    "family": "Maiker",
    "light": false,
@@ -122,7 +122,7 @@
    }
   },
   {
-   "id": "maitty-light",
+   "id": "maiker-light",
    "name": "Maiker Light",
    "family": "Maiker",
    "light": true,
@@ -162,7 +162,7 @@
    }
   },
   {
-   "id": "maitty-abyss",
+   "id": "maiker-abyss",
    "name": "Abyss",
    "family": "Maiker",
    "light": false,
@@ -201,7 +201,7 @@
    }
   },
   {
-   "id": "maitty-ember",
+   "id": "maiker-ember",
    "name": "Ember",
    "family": "Maiker",
    "light": false,
@@ -240,7 +240,7 @@
    }
   },
   {
-   "id": "maitty-moss",
+   "id": "maiker-moss",
    "name": "Moss",
    "family": "Maiker",
    "light": false,
@@ -279,7 +279,7 @@
    }
   },
   {
-   "id": "maitty-dusk",
+   "id": "maiker-dusk",
    "name": "Dusk",
    "family": "Maiker",
    "light": false,
@@ -318,7 +318,7 @@
    }
   },
   {
-   "id": "maitty-paper",
+   "id": "maiker-paper",
    "name": "Paper",
    "family": "Maiker",
    "light": true,
@@ -357,7 +357,7 @@
    }
   },
   {
-   "id": "maitty-retro-dark",
+   "id": "maiker-retro-dark",
    "name": "Maiker Retro Dark",
    "family": "Maiker",
    "light": false,
@@ -369,7 +369,7 @@
    "green": "#A7F070"
   },
   {
-   "id": "maitty-retro-light",
+   "id": "maiker-retro-light",
    "name": "Maiker Retro Light",
    "family": "Maiker",
    "light": true,

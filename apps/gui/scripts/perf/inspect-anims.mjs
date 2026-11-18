@@ -34,9 +34,9 @@ const page = await context.newPage()
 const layout = { tabs: [{ id: 'tab-1', panes: [{ id: 'pane-1', sessionId: 't1', col: 0 }], focus: 'pane-1', max: null }], activeTabId: 'tab-1' }
 await page.addInitScript(({ sessions, layoutJson }) => {
   window.__SCENARIO = { sessions, bytesPerSec: 20000, tickMs: 50 }
-  localStorage.setItem('maitty.gui.welcomed.v1', '1')
-  localStorage.setItem('maitty.gui.settings.v1', '{}')
-  localStorage.setItem('maitty.gui.layout.v1', layoutJson)
+  localStorage.setItem('maiker.gui.welcomed.v1', '1')
+  localStorage.setItem('maiker.gui.settings.v1', '{}')
+  localStorage.setItem('maiker.gui.layout.v1', layoutJson)
 }, { sessions: SESSIONS[scenario], layoutJson: JSON.stringify(layout) })
 await page.addInitScript({ path: path.join(HERE, 'mock-tauri.js') })
 const cdp = await context.newCDPSession(page)

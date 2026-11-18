@@ -1,6 +1,6 @@
 import { hasSavedSettings } from '@/features/settings/preferences'
 
-const KEY = 'maitty.gui.welcomed.v1'
+const KEY = 'maiker.gui.welcomed.v1'
 
 /**
  * The first launch: no settings were ever saved and the welcome was never shown. A window that already

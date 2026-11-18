@@ -18,7 +18,7 @@ describe('conversation drafts', () => {
   })
 
   it('ignores corrupt draft data', () => {
-    localStorage.setItem('maitty.gui.drafts.v1', '{broken')
+    localStorage.setItem('maiker.gui.drafts.v1', '{broken')
 
     expect(readConversationDrafts()).toEqual({})
   })

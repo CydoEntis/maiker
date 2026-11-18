@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { z } from 'zod'
 import { conversationsFromSnapshot, isDesktop } from '@/api/daemon'
-import { LOCAL_MACHINE, addMachine, cancelAddMachine, listenMachineClipboard, listenMachineError, listenMachineNotice, listenMachineRemoved, listenMachineSessions, listenMachineState, listenMachineUpdateProgress, loadMachinesOverview, removeMachine, retryMachine, setMachineGrant, terminalOf, unregisterMachine, type Grant, type MachineState } from '@/api/machines'
+import { LOCAL_MACHINE, addMachine, cancelAddMachine, listenMachineClipboard, listenMachineError, listenMachineNotice, listenMachineRemoved, listenMachineSessions, listenMachineState, listenMachineUpdateProgress, loadMachinesOverview, openMachineLogin, removeMachine, retryMachine, setMachineGrant, terminalOf, unregisterMachine, type Grant, type MachineState } from '@/api/machines'
 import type { Conversation } from '@/data/preview'
 import { sendNativeNotice } from '@/features/notifications/native'
 import { COPY_TOAST_ID, COPY_TOAST_MS, copySaid } from '@/features/terminal/copyToast'
@@ -147,13 +147,18 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
     const timer = setInterval(checkLogins, LOGIN_CHECK_MS)
     return () => { clearInterval(timer) }
   }, [watchingLogins, checkLogins])
-  const addNamed = useCallback(async (target: string, name?: string) => {
-    const added = await addMachine(target, name)
-    if (added.outcome === 'login') {
-      loginsRef.current = [...loginsRef.current, startLoginWatch(added.name, localTermsRef.current, Date.now())]
-      setWatchingLogins(true)
-    }
-    return added
+  const addNamed = useCallback(async (target: string, name?: string, port?: number) => {
+    return addMachine(target, name, port)
+  }, [])
+  // The terminal is the way out when the card cannot do it; the machine is dialled again when it closes.
+  const openLoginNamed = useCallback((machine: number, name: string) => {
+    openMachineLogin(machine).then(
+      () => {
+        loginsRef.current = [...loginsRef.current, startLoginWatch(name, localTermsRef.current, Date.now())]
+        setWatchingLogins(true)
+      },
+      (error: unknown) => { toast.failed('Could not open ssh', error) },
+    )
   }, [])
   const grantNamed = useCallback((name: string, grant: Grant, on: boolean) => {
     setMachineGrant(name, grant, on).catch((error: unknown) => { toast.failed(`Could not change ${name}`, error) })
@@ -201,5 +206,5 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
       (error: unknown) => { toast.failed(`Could not remove ${name}`, error) },
     )
   }, [])
-  return { retryNamed, addNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed }
+  return { retryNamed, addNamed, openLoginNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed }
 }

@@ -185,11 +185,10 @@ async fn a_failed_login_needs_login_with_the_fix_and_the_retries_are_quiet() {
     watch
         .until("needs-login", |w| w.is(BOX, "needs-login"))
         .await;
-    assert_eq!(
-        watch.state_of(BOX),
-        Some(&ConnectionState::NeedsLogin {
-            why: FIX_LOGIN.into()
-        })
+    assert!(
+        matches!(watch.state_of(BOX), Some(ConnectionState::NeedsLogin { why, .. }) if why == FIX_LOGIN),
+        "{:?}",
+        watch.state_of(BOX)
     );
     let more = async {
         while sandbox.calls_made() < 3 {
@@ -524,6 +523,9 @@ fn the_window_is_told_the_kind_and_what_a_person_must_do() {
             name: "box".into(),
             state: "connected",
             why: None,
+            said: None,
+            login_command: None,
+            target: None,
             attempt: None,
             unsent: None,
             since: None,
@@ -544,6 +546,7 @@ fn the_window_is_told_the_kind_and_what_a_person_must_do() {
         (
             ConnectionState::NeedsLogin {
                 why: "log in".into(),
+                said: "denied".into(),
             },
             "needs-login",
         ),

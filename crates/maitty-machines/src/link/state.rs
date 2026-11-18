@@ -23,6 +23,8 @@ pub enum ConnectionState {
     /// ssh needs a login it cannot do without a person.
     NeedsLogin {
         why: String,
+        /// ssh's own last line, for the screen: why it could not log in.
+        said: String,
     },
     /// The far side needs another version of the app (or none installed): a person acts.
     NeedsUpdate {
@@ -85,8 +87,9 @@ pub fn next(state: &ConnectionState, event: Event, now: Instant) -> ConnectionSt
 fn failed(class: FailureClass, since: Instant) -> ConnectionState {
     use ConnectionState::*;
     match class {
-        FailureClass::Login => NeedsLogin {
+        FailureClass::Login(said) => NeedsLogin {
             why: FIX_LOGIN.into(),
+            said,
         },
         FailureClass::Update => NeedsUpdate {
             why: FIX_UPDATE.into(),
@@ -177,6 +180,8 @@ mod tests {
         *BASE.get_or_init(Instant::now) + Duration::from_secs(secs)
     }
 
+    const SAID: &str = "box: Permission denied (publickey).";
+
     fn unreachable(why: &str) -> FailureClass {
         FailureClass::Unreachable(why.into())
     }
@@ -193,10 +198,11 @@ mod tests {
         assert_eq!(
             run(
                 Connecting,
-                &[(Event::ConnectFailed(FailureClass::Login), 5)]
+                &[(Event::ConnectFailed(FailureClass::Login(SAID.into())), 5)]
             ),
             NeedsLogin {
-                why: FIX_LOGIN.into()
+                why: FIX_LOGIN.into(),
+                said: SAID.into()
             }
         );
         assert_eq!(
@@ -284,9 +290,10 @@ mod tests {
             run(Connected, &events)
         };
         assert_eq!(
-            then(FailureClass::Login),
+            then(FailureClass::Login(SAID.into())),
             NeedsLogin {
-                why: FIX_LOGIN.into()
+                why: FIX_LOGIN.into(),
+                said: SAID.into()
             }
         );
         assert_eq!(
@@ -314,11 +321,12 @@ mod tests {
     fn a_state_that_needs_a_person_moves_on_when_the_failure_changes_or_clears() {
         let login = NeedsLogin {
             why: FIX_LOGIN.into(),
+            said: SAID.into(),
         };
         assert_eq!(
             run(
                 login.clone(),
-                &[(Event::ConnectFailed(FailureClass::Login), 9)]
+                &[(Event::ConnectFailed(FailureClass::Login(SAID.into())), 9)]
             ),
             login,
             "the same failure again changes nothing"
@@ -338,7 +346,7 @@ mod tests {
     #[test]
     fn a_retry_shows_reconnecting_from_any_failed_state() {
         for failed in [
-            NeedsLogin { why: "x".into() },
+            NeedsLogin { why: "x".into(), said: "y".into() },
             NeedsUpdate { why: "x".into() },
             Unreachable {
                 since: at(1),

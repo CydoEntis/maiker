@@ -1,6 +1,6 @@
 //! Which commit name, email and GitHub account git uses on this machine, and for which folders a
 //! different one applies (`Query::GitIdentities`). It is read from the global git config with git
-//! itself, never by reading the file as text, and nothing is written. A folder's rule is an
+//! itself, never by reading the file as text, and the person's config is never written (a rule file Maiker wrote under the old key gains the new one). A folder's rule is an
 //! `includeIf "gitdir:<folder>/"` entry; one that Maiker wrote points at a file in Maiker's own
 //! folder that names the folder it is for, and only those are read further. Any other is reported
 //! by its folder alone.
@@ -20,7 +20,10 @@ const ASK_LIMIT: Duration = Duration::from_secs(5);
 /// The folder, inside Maiker's data folder, that holds the files its rules point at.
 pub(super) const RULES_FOLDER: &str = "git-identities";
 /// The key, in a file Maiker wrote, that names the folder the file is for.
-pub(super) const FOLDER_KEY: &str = "maitty.folder";
+pub(super) const FOLDER_KEY: &str = "maiker.folder";
+/// What `FOLDER_KEY` was called before the rename from Maitty. A file written then still names its folder under it; it is
+/// read, and copied to `FOLDER_KEY` the first time it is, and never written again.
+const LEGACY_FOLDER_KEY: &str = "maitty.folder";
 /// The key that names the GitHub login git signs in as, in a file Maiker wrote.
 pub(super) const LOGIN_KEY: &str = "credential.https://github.com.username";
 /// The two conditions of an `includeIf` that are about a folder.
@@ -178,7 +181,7 @@ fn folder_of(key: &str) -> Option<String> {
 
 /// The identity `file` gives `folder`, when Maiker wrote the file for that folder.
 fn written_by_us(place: &Place, folder: &str, file: &Path) -> Option<GitIdentity> {
-    if !place.holds(file) || place.in_file(file, FOLDER_KEY).as_deref() != Some(folder) {
+    if !place.holds(file) || !is_for(place, file, folder) {
         return None;
     }
     Some(GitIdentity {
@@ -186,6 +189,23 @@ fn written_by_us(place: &Place, folder: &str, file: &Path) -> Option<GitIdentity
         email: line(&place.in_file(file, "user.email")?),
         login: place.in_file(file, LOGIN_KEY).filter(|login| is_login(login))?,
     })
+}
+
+/// Whether a file Maiker may have written is for `folder`. A file from before the rename says so under the old key; once it
+/// does, that entry is copied under the new one (the old stays, so an older Maiker still reading the file finds its rule).
+fn is_for(place: &Place, file: &Path, folder: &str) -> bool {
+    if let Some(named) = place.in_file(file, FOLDER_KEY) {
+        return named == folder;
+    }
+    if place.in_file(file, LEGACY_FOLDER_KEY).as_deref() != Some(folder) {
+        return false;
+    }
+    if let Some(path) = file.to_str() {
+        // Only Maiker's own rule file is written (the caller checked `holds`). A failed copy changes nothing: the old key
+        // still answers, and the next report tries again.
+        let _ = place.config(&["--file", path, FOLDER_KEY, folder]);
+    }
+    true
 }
 
 /// `text` as one clean line of a length a report carries.
@@ -258,6 +278,46 @@ mod tests {
                 problem: None,
             }
         );
+    }
+
+    #[test]
+    fn a_rule_file_with_only_the_old_folder_key_is_still_ours_and_gains_the_new_key() {
+        let home = Home::new();
+        let file = home.rule("/code/a", "A", "a@example.invalid", "login-a");
+        let path = file.to_str().unwrap();
+        // The file as the version before the rename wrote it: the folder under the old name only.
+        home.set(&["--file", path, "--unset", FOLDER_KEY]);
+        home.set(&["--file", path, LEGACY_FOLDER_KEY, "/code/a"]);
+        assert_eq!(home.place.in_file(&file, FOLDER_KEY), None);
+        let global_before = home.global_text();
+
+        assert_eq!(report(&home.place).rules, [ours("/code/a", "A", "a@example.invalid", "login-a")]);
+        assert_eq!(home.place.in_file(&file, FOLDER_KEY).as_deref(), Some("/code/a"), "copied on first read");
+        assert_eq!(home.place.in_file(&file, LEGACY_FOLDER_KEY).as_deref(), Some("/code/a"), "the old key stays for an older Maiker");
+        assert_eq!(home.global_text(), global_before, "the person's own config is not touched");
+
+        let after = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(report(&home.place).rules, [ours("/code/a", "A", "a@example.invalid", "login-a")]);
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), after, "a second read changes nothing");
+    }
+
+    #[test]
+    fn an_old_folder_key_naming_another_folder_is_not_copied() {
+        let home = Home::new();
+        let file = home.rule("/code/a", "A", "a@example.invalid", "login-a");
+        let path = file.to_str().unwrap();
+        home.set(&["--file", path, "--unset", FOLDER_KEY]);
+        home.set(&["--file", path, LEGACY_FOLDER_KEY, "/code/other"]);
+        assert_eq!(report(&home.place).rules, [outside("/code/a")]);
+        assert_eq!(home.place.in_file(&file, FOLDER_KEY), None, "a file that is not that folder's gains nothing");
+    }
+
+    #[test]
+    fn rules_are_written_under_the_maiker_key_only() {
+        assert_eq!(FOLDER_KEY, "maiker.folder");
+        let home = Home::new();
+        let file = home.rule("/code/a", "A", "a@example.invalid", "login-a");
+        assert_eq!(home.place.in_file(&file, LEGACY_FOLDER_KEY), None);
     }
 
     #[test]

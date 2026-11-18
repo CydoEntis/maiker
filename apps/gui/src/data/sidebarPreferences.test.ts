@@ -22,7 +22,7 @@ describe('sidebar preferences', () => {
   })
 
   it('ignores corrupt preference data', () => {
-    localStorage.setItem('maitty.gui.sidebar.v1', '{broken')
+    localStorage.setItem('maiker.gui.sidebar.v1', '{broken')
 
     expect(readSidebarPreferences()).toEqual({ pinnedIds: [], archivedIds: [], renamedTitles: {} })
   })

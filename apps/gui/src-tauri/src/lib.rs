@@ -11,10 +11,10 @@ mod export;
 mod highlight;
 #[cfg(target_os = "linux")]
 mod linux_gpu;
+mod machine_access;
 mod machine_update;
 mod machines;
 mod changes;
-mod clone;
 mod new_chat;
 mod open_link;
 mod output_socket;
@@ -101,19 +101,34 @@ fn first_existing_daemon(candidates: &[PathBuf]) -> Option<PathBuf> {
 /// `maiker integrate`; the webview cannot choose what the host runs.
 const CONNECTABLE_AGENTS: [&str; 3] = ["claude", "codex", "gemini"];
 
+/// The config folder a window names for repairing one pane's Claude hooks: only Claude has one, and
+/// it must be an absolute path with no `..`, so the webview cannot reach elsewhere by a trick.
+fn connectable_config_dir(agent: &str, dir: &str) -> Result<PathBuf, String> {
+    let path = PathBuf::from(dir);
+    if agent != "claude" || !path.is_absolute() || path.components().any(|c| matches!(c, std::path::Component::ParentDir)) {
+        return Err(format!("{dir} is not a folder {agent} can be connected in"));
+    }
+    Ok(path)
+}
+
 /// Connect an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works,
 /// needs you or is done.
 #[tauri::command]
-async fn connect_agent(app: tauri::AppHandle, agent: String) -> Result<(), String> {
+async fn connect_agent(app: tauri::AppHandle, agent: String, config_dir: Option<String>) -> Result<(), String> {
     if !CONNECTABLE_AGENTS.contains(&agent.as_str()) {
         return Err(format!("{agent} cannot be connected from here"));
     }
+    let config_dir = config_dir.map(|dir| connectable_config_dir(&agent, &dir)).transpose()?;
     let executable = daemon_executable(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         let mut command = maitty_desktop_client::host_command(executable);
         command
             .args(["integrate", agent.as_str()])
             .stdin(std::process::Stdio::null());
+        // One pane's agent runs with its own config folder, which this app's environment does not name.
+        if let Some(dir) = &config_dir {
+            command.env("CLAUDE_CONFIG_DIR", dir);
+        }
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -1690,6 +1705,7 @@ pub fn run() {
         .manage(terminal_stream::Wire::default())
         .manage(performance::ProcessStats::default())
         .manage(add_machine::AddProbe::default())
+        .manage(machine_access::KeySetup::default())
         .manage(file_send::Transfers::default())
         .setup(|app| {
             // The development server's origin is let in only by a debug build.
@@ -1734,7 +1750,6 @@ pub fn run() {
             reopen_closed_session,
             new_chat::git_sync_state,
             new_chat::git_pull,
-            clone::git_clone,
             new_chat::open_agent_docs,
             changes::git_commit_all,
             changes::git_create_pull_request,
@@ -1758,6 +1773,13 @@ pub fn run() {
             add_machine::list_ssh_hosts,
             add_machine::add_machine,
             add_machine::cancel_add_machine,
+            add_machine::open_machine_login,
+            machine_access::inspect_host_key,
+            machine_access::trust_host_key,
+            machine_access::local_user_name,
+            machine_access::inspect_key_login,
+            machine_access::set_up_key_login,
+            machine_access::set_machine_user,
             file_send::send_files_to_machine,
             browse::list_remote_folder,
             browse::index_remote_files,
@@ -1883,6 +1905,14 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_an_absolute_claude_folder_without_dot_dot_can_be_repaired_from_the_window() {
+        assert!(super::connectable_config_dir("claude", "/srv/agents/claude-home").is_ok());
+        assert!(super::connectable_config_dir("claude", "relative/dir").is_err());
+        assert!(super::connectable_config_dir("claude", "/srv/../etc").is_err());
+        assert!(super::connectable_config_dir("codex", "/srv/agents/codex").is_err());
+    }
+
     #[test]
     fn codex_models_come_in_priority_order_without_the_hidden_ones() {
         let cache = r#"{"models":[

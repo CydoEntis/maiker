@@ -1254,11 +1254,10 @@ mod supervised {
         let _enter = runtime.enter();
         let mut window = Window::new(vec![(BOX, configured(&sandbox, "auth-fail"))], quick(WAIT));
         runtime.block_on(window.until("needs-login", |w| w.is(BOX, "needs-login")));
-        assert_eq!(
-            window.state_of(BOX),
-            Some(&ConnectionState::NeedsLogin {
-                why: FIX_LOGIN.into()
-            })
+        assert!(
+            matches!(window.state_of(BOX), Some(ConnectionState::NeedsLogin { why, .. }) if why == FIX_LOGIN),
+            "{:?}",
+            window.state_of(BOX)
         );
         runtime.block_on(window.until("another dial", |_| calls_made(&sandbox) >= 3));
         assert_eq!(

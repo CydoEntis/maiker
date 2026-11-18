@@ -100,13 +100,13 @@ function Primitives() {
           <Tag tone="err">exit 1</Tag><Tag tone="done">exit 0</Tag><Tag>round 2</Tag><Tag tone="err">Full access</Tag>
         </Sample>
         <Sample label="FileBadge">
-          <FileBadge path="src/auth/session.ts" tag="TS" />
-          <FileBadge path="README.md" tag="MD" />
-          <FileBadge path="web/components/LoginForm.tsx" tag="TSX" line={42} onOpen={() => undefined} />
-          <FileBadge path="config/deploy.yaml" tag="YAML" />
-          <FileBadge path="db/migrations/0042_sessions.sql" tag="SQL" />
-          <FileBadge path=".env.local" tag="ENV" />
-          <span className="w-[180px]"><FileBadge path="packages/server/src/middleware/auth/requireSession.ts" tag="TS" /></span>
+          <FileBadge path="src/auth/session.ts" />
+          <FileBadge path="README.md" />
+          <FileBadge path="web/components/LoginForm.tsx" line={42} onOpen={() => undefined} />
+          <FileBadge path="config/deploy.yaml" />
+          <FileBadge path="db/migrations/0042_sessions.sql" />
+          <FileBadge path=".env.local" />
+          <span className="w-[180px]"><FileBadge path="packages/server/src/middleware/auth/requireSession.ts" /></span>
         </Sample>
         <Sample label="CodeChip · Link">
           <span className="text-sm text-(--fg2)">Run <CodeChip>pnpm test</CodeChip> or read <TextLink href="#gallery">the guide</TextLink></span>

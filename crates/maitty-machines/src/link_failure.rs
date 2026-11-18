@@ -58,8 +58,9 @@ impl std::error::Error for SshEnd {}
 /// What to do about a failed connection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FailureClass {
-    /// ssh could not log in without a prompt.
-    Login,
+    /// ssh could not log in without a prompt. Carries ssh's own last line, so the screen can
+    /// show why (a key it could not use, a host key, a check it wants answered in a browser).
+    Login(String),
     /// The far side runs an older version of the app.
     Update,
     /// The far side runs a newer version of the app than this computer.
@@ -87,7 +88,7 @@ pub fn classify(error: &anyhow::Error) -> FailureClass {
         Some(COMMAND_NOT_FOUND) => FailureClass::Install,
         Some(NO_DAEMON_EXIT) => FailureClass::NoDaemon,
         Some(SSH_ERROR) if !end.custom && !end.streamed && says_login_failed(&end.said) => {
-            FailureClass::Login
+            FailureClass::Login(last_line(end))
         }
         _ => FailureClass::Unreachable(why_unreachable(end)),
     }
@@ -97,15 +98,18 @@ fn says_login_failed(said: &str) -> bool {
     LOGIN_TOKENS.iter().any(|token| said.contains(token))
 }
 
-fn why_unreachable(end: &SshEnd) -> String {
-    let last = end
-        .said
+/// ssh's last non-empty line, cleaned for the screen; the message when ssh said nothing.
+fn last_line(end: &SshEnd) -> String {
+    end.said
         .lines()
         .rev()
         .map(clean)
         .find(|line| !line.is_empty())
-        .unwrap_or_else(|| clean(&end.message));
-    in_plain_words(&last)
+        .unwrap_or_else(|| clean(&end.message))
+}
+
+fn why_unreachable(end: &SshEnd) -> String {
+    in_plain_words(&last_line(end))
 }
 
 /// ssh's usual network failures, put in plain words with what to check. Matched on its own
@@ -182,8 +186,17 @@ mod tests {
             "Host key verification failed.",
             "Received disconnect: Too many authentication failures",
         ] {
-            assert_eq!(class(Some(255), said), FailureClass::Login, "{said}");
+            assert!(matches!(class(Some(255), said), FailureClass::Login(_)), "{said}");
         }
+    }
+
+    #[test]
+    fn a_login_failure_keeps_ssh_s_last_line_so_the_screen_can_show_it() {
+        let said = "Warning: Permanently added '10.0.0.5' (ED25519) to the list of known hosts.\ndev@10.0.0.5: Permission denied (publickey).\n";
+        assert_eq!(
+            class(Some(255), said),
+            FailureClass::Login("dev@10.0.0.5: Permission denied (publickey).".into())
+        );
     }
 
     #[test]

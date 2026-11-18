@@ -27,7 +27,7 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -35,33 +35,33 @@ describe('settings preferences', () => {
 
   it('opens a new session as a chat with Claude until told otherwise, and ignores a value it does not know', () => {
     expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'claude' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ defaultAgent: 'codex' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ defaultAgent: 'codex' }))
     expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'codex' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ defaultAgent: 'gemini' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ defaultAgent: 'gemini' }))
     expect(readSettingsPreferences()).toMatchObject({ defaultAgent: 'claude' })
   })
 
   it('starts with a flat ground and a steady cursor, and keeps a stored choice', () => {
     expect(readSettingsPreferences()).toMatchObject({ cursorBlink: false })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cursorBlink: true }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ cursorBlink: true }))
     expect(readSettingsPreferences()).toMatchObject({ cursorBlink: true })
   })
 
   it('installs updates when idle by default, and a stored off stays off', () => {
     expect(readSettingsPreferences().restartWhenIdle).toBe(true)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({}))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({}))
     expect(readSettingsPreferences().restartWhenIdle).toBe(true)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartWhenIdle: false }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restartWhenIdle: false }))
     expect(readSettingsPreferences().restartWhenIdle).toBe(false)
   })
 
   it('restarts an older service by itself only when asked, and reads an old store without the key as off', () => {
     expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartWhenIdle: true }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restartWhenIdle: true }))
     expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: true }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: true }))
     expect(readSettingsPreferences().restartServiceWhenIdle).toBe(true)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: 'yes' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: 'yes' }))
     expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
   })
 
@@ -80,12 +80,12 @@ describe('settings preferences', () => {
     writeSettingsPreferences({ ...DEFAULTS, terminalPlainDrawing: true })
     expect(readSettingsPreferences().terminalPlainDrawing).toBe(true)
 
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ terminalPlainDrawing: 'yes' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ terminalPlainDrawing: 'yes' }))
     expect(readSettingsPreferences().terminalPlainDrawing).toBe(false)
   })
 
   it('falls back safely when saved preferences are malformed', () => {
-    localStorage.setItem('maitty.gui.settings.v1', '{')
+    localStorage.setItem('maiker.gui.settings.v1', '{')
 
     expect(readSettingsPreferences()).toEqual(DEFAULTS)
   })
@@ -101,97 +101,97 @@ describe('settings preferences', () => {
   })
 
   it('reads preferences saved before the terminal settings existed', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
 
     expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, accent: 'blue', spinner: 'bars', compactSidebar: true, notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
   })
 
   it('reads the layout choice saved as restoreTabs before fleets, and prefers the new name', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restoreTabs: false }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restoreTabs: false }))
     expect(readSettingsPreferences().restoreLayout).toBe(false)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restoreTabs: false, restoreLayout: true }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restoreTabs: false, restoreLayout: true }))
     expect(readSettingsPreferences().restoreLayout).toBe(true)
   })
 
   it('starts a fresh install with folded corners and keeps saved corners', () => {
     expect(readSettingsPreferences()).toMatchObject({ corners: 'folded' })
     for (const corners of ['square', 'rounded', 'folded']) {
-      localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners, cornersEra: 2 }))
+      localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners, cornersEra: 2 }))
       expect(readSettingsPreferences()).toMatchObject({ corners })
     }
   })
 
   it('reads corners saved before folded became the default (no era stamp) as the default, not as a choice', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ corners: 'square' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners: 'square' }))
     expect(readSettingsPreferences().corners).toBe('folded')
   })
 
-  it('reads a Terminal view default saved before the redesign (no era stamp) as the Chat default', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' } }))
-    expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'chat', gemini: 'chat' } }))
-    expect(readSettingsPreferences().chatViewDefault.claude).toBe('terminal')
+  it('reads the Claude view saved before there was one setting as the one setting, and a pre-redesign Terminal as Chat', () => {
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' } }))
+    expect(readSettingsPreferences().openSessionsIn).toBe('chat')
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'chat', gemini: 'chat' } }))
+    expect(readSettingsPreferences().openSessionsIn).toBe('terminal')
   })
 
   it('carries a window style saved before the corner switch over to its corners, and falls back from nonsense', () => {
     const corners = (value: string) => {
-      localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ style: value }))
+      localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ style: value }))
       return readSettingsPreferences().corners
     }
     expect(['glass', 'console', 'flat', 'tiled', 'minimal', 'expressive', 'frosted'].map(corners)).toEqual(Array(7).fill('rounded'))
     expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'folded'])
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square', cornersEra: 2 }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square', cornersEra: 2 }))
     expect(readSettingsPreferences().corners).toBe('square')
   })
 
   it('shows every tool call unless hiding the successful ones was turned on, as settings saved before it read', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({}))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({}))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: true }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: true }))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(true)
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: 'yes' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: 'yes' }))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
   })
 
-  it('opens agent sessions in the chat unless a view was chosen, and ignores nonsense', () => {
-    expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'sideways' } }))
-    expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'terminal', codex: 'chat', gemini: 'chat' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: 'terminal' }))
-    expect(readSettingsPreferences().chatViewDefault).toEqual({ claude: 'chat', codex: 'chat', gemini: 'chat' })
+  it('opens sessions in the chat unless a view was chosen, and ignores nonsense', () => {
+    expect(readSettingsPreferences().openSessionsIn).toBe('chat')
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
+    expect(readSettingsPreferences().openSessionsIn).toBe('terminal')
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'sideways' }))
+    expect(readSettingsPreferences().openSessionsIn).toBe('chat')
   })
 
   it('keeps icons in colour unless grayscale was chosen', () => {
     expect(readSettingsPreferences().iconColor).toBe('color')
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ iconColor: 'grayscale' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ iconColor: 'grayscale' }))
     expect(readSettingsPreferences()).toMatchObject({ iconColor: 'grayscale' })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ iconColor: 'sepia' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ iconColor: 'sepia' }))
     expect(readSettingsPreferences().iconColor).toBe('color')
   })
 
   it('keeps the interface sizes in range and falls back from nonsense', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ density: 'spacious', sidebarTextSize: 99, tabTextSize: 'big', sidebarWidth: 5 }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ density: 'spacious', sidebarTextSize: 99, tabTextSize: 'big', sidebarWidth: 5 }))
 
     expect(readSettingsPreferences()).toMatchObject({ density: 'spacious', sidebarTextSize: 17, tabTextSize: 13.5, sidebarWidth: 208 })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ density: 'huge', sidebarWidth: 9999 }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ density: 'huge', sidebarWidth: 9999 }))
     expect(readSettingsPreferences()).toMatchObject({ density: 'comfortable', sidebarWidth: 440 })
     // The old grouping and tray settings are gone: a saved copy is ignored, not carried.
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ }))
     expect(readSettingsPreferences()).not.toHaveProperty('trayStyle')
     expect(readSettingsPreferences()).not.toHaveProperty('groupBy')
   })
 
   it('keeps a valid terminal font and falls back to the defaults for nonsense', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ terminalFontFamily: ' Fira Code ', terminalFontWeight: 500, terminalFontWeightBold: 800 }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ terminalFontFamily: ' Fira Code ', terminalFontWeight: 500, terminalFontWeightBold: 800 }))
     expect(readSettingsPreferences()).toMatchObject({ terminalFontFamily: 'Fira Code', terminalFontWeight: 500, terminalFontWeightBold: 800 })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ terminalFontFamily: 'x"; background: red', terminalFontWeight: 450, terminalFontWeightBold: 'bold' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ terminalFontFamily: 'x"; background: red', terminalFontWeight: 450, terminalFontWeightBold: 'bold' }))
     expect(readSettingsPreferences()).toMatchObject({ terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700 })
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ terminalFontFamily: 7, terminalFontWeight: null }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ terminalFontFamily: 7, terminalFontWeight: null }))
     expect(readSettingsPreferences()).toMatchObject({ terminalFontFamily: '', terminalFontWeight: 400 })
   })
 
   it('ignores per-project colours saved by an older version, without an error', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ density: 'spacious', projectColors: { '/code/maiker': 'violet' } }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ density: 'spacious', projectColors: { '/code/maiker': 'violet' } }))
 
     const read = readSettingsPreferences()
 
@@ -200,37 +200,37 @@ describe('settings preferences', () => {
   })
 
   it('keeps a theme saved under the old name Maitty', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'light', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Day' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ themeMode: 'light', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Day' }))
 
     expect(readSettingsPreferences()).toMatchObject({ darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day' })
   })
 
   it('carries over the theme chosen before the theme browser', () => {
-    localStorage.setItem('maitty.gui.theme.v1', 'day')
+    localStorage.setItem('maiker.gui.theme.v1', 'day')
 
     expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Maiker Day', darkTheme: 'Maiker Dark' })
   })
 
   it('moves a single saved theme into its dark or light slot and keeps using it', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ theme: 'Tokyo Night' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ theme: 'Tokyo Night' }))
     expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Tokyo Night', lightTheme: 'Maiker Day' })
 
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ theme: 'Gruvbox Light' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ theme: 'Gruvbox Light' }))
     expect(readSettingsPreferences()).toMatchObject({ themeMode: 'light', lightTheme: 'Gruvbox Light', darkTheme: 'Maiker Dark' })
   })
 
   it('keeps each slot to its own kind of theme and the mode to its three values', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'dark', darkTheme: 'Maiker Day', lightTheme: 'Tokyo Night' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ themeMode: 'dark', darkTheme: 'Maiker Day', lightTheme: 'Tokyo Night' }))
     expect(readSettingsPreferences()).toMatchObject({ themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day' })
 
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ themeMode: 'auto', darkTheme: 'Maiker Dark' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ themeMode: 'auto', darkTheme: 'Maiker Dark' }))
     expect(readSettingsPreferences()).toMatchObject({ themeMode: 'system', darkTheme: 'Maiker Dark' })
   })
 
   it('has no monthly budget by default and keeps only a positive amount in range', () => {
     expect(readSettingsPreferences().monthlyBudget).toBeNull()
     for (const [stored, expected] of [[50, 50], [12.5, 12.5], [0, null], [-5, null], ['50', null], [2_000_000, null], [null, null]] as const) {
-      localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ monthlyBudget: stored }))
+      localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ monthlyBudget: stored }))
       expect(readSettingsPreferences().monthlyBudget).toBe(expected)
     }
   })

@@ -33,6 +33,62 @@ describe('the chat of a session that is still starting', () => {
     expect(daemon.connectAgent).toHaveBeenCalledWith('codex')
   })
 
+  it('says so, and offers the terminal, when it has waited long and the hooks never reported in', () => {
+    vi.useFakeTimers()
+    open()
+    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
+    expect(screen.getByRole('note')).toHaveTextContent(/status hooks are not connected/)
+    expect(screen.getByRole('button', { name: 'Open terminal' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Connect codex' })).toBeInTheDocument()
+    expect(screen.getByText(/No conversation to show yet/)).toBeInTheDocument()
+    expect(screen.queryByText(/Type below: it is sent as soon as/)).not.toBeInTheDocument()
+  })
+
+  it('names the settings file whose hooks are wrong and repairs that folder, not the app\'s own', async () => {
+    daemon.connectAgent.mockResolvedValue(undefined)
+    daemon.reloadAgentOnDaemon.mockResolvedValue(undefined)
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const problem = { file: '/srv/agents/claude-home/settings.json', why: 'its hooks run another program (/old/path/program)', repaired: false }
+    render(<StartingChat agent="claude" sessionId="s1" onBackToTerminal={noop} hooked={false} hookProblem={problem} />)
+    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
+    expect(screen.getByRole('note')).toHaveTextContent('/srv/agents/claude-home/settings.json')
+    await user.click(screen.getByRole('button', { name: 'Repair claude hooks' }))
+    await vi.waitFor(() => { expect(daemon.reloadAgentOnDaemon).toHaveBeenCalledWith({ id: 's1' }) })
+    expect(daemon.connectAgent).toHaveBeenCalledWith('claude', '/srv/agents/claude-home')
+  })
+
+  it('only restarts the agent when the daemon already fixed its hooks', async () => {
+    daemon.connectAgent.mockClear()
+    daemon.reloadAgentOnDaemon.mockResolvedValue(undefined)
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const problem = { file: '/home/me/.claude-work/settings.json', why: 'x; now fixed', repaired: true }
+    render(<StartingChat agent="claude" sessionId="s1" onBackToTerminal={noop} hooked={false} hookProblem={problem} />)
+    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
+    expect(screen.getByRole('note')).toHaveTextContent(/only loads them when it starts/)
+    await user.click(screen.getByRole('button', { name: 'Restart claude' }))
+    await vi.waitFor(() => { expect(daemon.reloadAgentOnDaemon).toHaveBeenCalledWith({ id: 's1' }) })
+    expect(daemon.connectAgent).not.toHaveBeenCalled()
+  })
+
+  it('does not blame the hooks when they have reported in but the conversation was not found', () => {
+    vi.useFakeTimers()
+    render(<StartingChat agent="claude" sessionId="s1" onBackToTerminal={noop} hooked />)
+    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
+    expect(screen.getByRole('note')).toHaveTextContent(/is reporting in, but Maiker has not found its conversation/)
+    expect(screen.getByRole('button', { name: 'Open terminal' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Connect claude' })).not.toBeInTheDocument()
+  })
+
+  it('says Starting <agent>… as a card the moment the session exists, never a blank screen or a raw terminal', () => {
+    open()
+    const card = screen.getByRole('status')
+    expect(card).toHaveTextContent('Starting Codex…')
+    expect(card).toHaveTextContent('Type below')
+    expect(document.querySelector('.mx-terminal, .xterm')).toBeNull()
+  })
+
   it('is there at once, with a message box for the agent that was chosen', () => {
     open()
     expect(screen.getByText(/Type below: it is sent as soon as codex is ready/)).toBeInTheDocument()

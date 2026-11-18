@@ -8,7 +8,7 @@ import { alwaysAllowChoices } from '../alwaysAllow'
 import type { AskedPlan } from '../planApproval'
 import { PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { KEY_ESCAPE } from '../terminalKeys'
-import { keysToPick, type ScreenMenu } from '../screenMenu'
+import { keysToPick, parseChoiceMenu, typeEach, type ScreenMenu } from '../screenMenu'
 import type { TrustPrompt } from '../trustPrompt'
 import type { ApprovalActions } from './ApprovalCard'
 import { FileBadge } from './cardParts'
@@ -147,6 +147,36 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
     >
       {reason}
       <RequestDetail event={event} />
+    </WaitingCard>
+  )
+}
+
+/**
+ * A numbered menu the agent draws on its own screen with no hook behind it (Claude's "Switch model?"): its words, a
+ * button and a number key per choice, and Cancel for Esc. Each pick moves the terminal's cursor to the choice and presses
+ * Enter, as a person's keys would. The terminal itself stays one click away under "Show terminal".
+ */
+export function ChoiceMenuTray({ label, title, aside, menu, send, sendKeys, readScreen }: { label: string; title: string; aside: string; menu: ScreenMenu; send: (keys: readonly string[]) => Promise<void>; sendKeys: (keys: string) => Promise<void>; readScreen: (() => Promise<string>) | undefined }) {
+  const [busy, setBusy] = useState(false)
+  const [terminal, setTerminal] = useState(false)
+  return (
+    <WaitingCard
+      label={label}
+      title={title}
+      aside={aside}
+      foot={(
+        <>
+          <Button variant="soft" disabled={busy} title="Esc in the terminal: closes the question without choosing" onClick={() => { RUN(() => sendKeys(KEY_ESCAPE), setBusy) }}>Cancel</Button>
+          <span className="mx-spacer" />
+          <Button variant="ghost" size="sm" aria-expanded={terminal} onClick={() => { setTerminal((now) => !now) }}>{terminal ? 'Hide terminal' : 'Show terminal'}</Button>
+        </>
+      )}
+    >
+      {menu.question !== '' && <p className="mx-waiting-text is-pre">{menu.question}</p>}
+      <div className="mx-waiting-options" role="group" aria-label={`${aside} choices`}>
+        {menu.options.map((option, index) => <Choice key={`${String(index)}-${option}`} label={option} index={index} picked={false} busy={busy} onPick={() => { RUN(() => send(keysToPick(menu, index)), setBusy) }} />)}
+      </div>
+      {terminal && <TerminalPrompt readScreen={readScreen} sendKeys={sendKeys} />}
     </WaitingCard>
   )
 }
@@ -427,6 +457,12 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
   const title = ask === null ? `${agentName(agent)} is waiting for you` : isQuestion ? `${agentName(agent)} has a question for you` : ask.tool === 'Bash' ? 'Wants to run a command' : `Wants to use ${ask.tool}`
   const detail = ask !== null && ask.detail !== '' ? ask.detail : null
   const shownDetail = detail === null ? null : isQuestion ? <p className="mx-waiting-text">{detail}</p> : <pre className="mx-waiting-command">{detail}</pre>
+
+  // The hook reported no question, so the screen is all there is: a clean numbered menu gets buttons, anything else the terminal.
+  const screenMenu = ask === null && mirror !== undefined ? parseChoiceMenu(asking) : null
+  if (screenMenu !== null && mirror !== undefined) {
+    return <ChoiceMenuTray label={label} title={title} aside={agent} menu={screenMenu} send={typeEach(mirror)} sendKeys={mirror} readScreen={readScreen} />
+  }
 
   if (!canAnswer && mirror !== undefined) {
     return (

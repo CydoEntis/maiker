@@ -4,7 +4,7 @@ import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, isFontFamily, isFontWeig
 import { readThemePreference, type ThemePreference } from '@/data/themePreference'
 import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/features/workspace/theme/themes'
 import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
-import { DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '@/features/workspace/model/chatView'
+import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
 
 export type CursorStyle = 'block' | 'bar' | 'underline'
 /** How much room the sidebar's rows, the tabs and the panes get. */
@@ -105,7 +105,8 @@ export type SettingsPreferences = {
   /** The size of everything in the chat, as a percentage (`CHAT_TEXT_SIZES`). */
   chatTextSize: number
   /** Which view a Claude or Codex session opens in. Terminal until you change it. */
-  chatViewDefault: ChatViewDefaults
+  /** The view a new session opens in; the other is one click away on its pane. */
+  openSessionsIn: PaneView
   /** The agent a new session starts. */
   defaultAgent: ChatAgent
   /** The chat leaves out runs of reads and searches that succeeded (`isQuietRun`). Off until you turn it on. */
@@ -155,7 +156,7 @@ export const UI_TEXT_SIZE_LARGE = 15
 const UI_TEXT_SIZE_MIN = 11
 const UI_TEXT_SIZE_MAX = 17
 
-const STORAGE_KEY = 'maitty.gui.settings.v1'
+const STORAGE_KEY = 'maiker.gui.settings.v1'
 
 // The theme was stored on its own before the desktop theme browser; carry that choice over.
 const THEME_FROM_PREFERENCE: Record<ThemePreference, string> = { night: DEFAULT_THEME, abyss: DEFAULT_THEME, day: DEFAULT_LIGHT_THEME }
@@ -201,7 +202,7 @@ function defaults(): SettingsPreferences {
     keyOverrides: NO_OVERRIDES,
     chatWidth: 'auto',
     chatTextSize: CHAT_TEXT_SIZE_DEFAULT,
-    chatViewDefault: DEFAULT_CHAT_VIEWS,
+    openSessionsIn: 'chat',
     defaultAgent: 'claude',
     hideSuccessfulTools: false,
     bypassOff: [],
@@ -300,7 +301,8 @@ export function readSettingsPreferences(): SettingsPreferences {
       corners: ((value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA && isCorners(preferences.corners) ? preferences.corners : null) ?? cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,
-      chatViewDefault: (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? chatViewDefault(preferences.chatViewDefault, fallback.chatViewDefault) : fallback.chatViewDefault,
+      // Before one setting there was one per agent: what was chosen for Claude carries over.
+      openSessionsIn: paneView(preferences.openSessionsIn, (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? paneView(((value as Record<string, unknown>).chatViewDefault as { claude?: unknown } | null | undefined)?.claude, fallback.openSessionsIn) : fallback.openSessionsIn),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
       // The old Yolo and Full access switches are not read: they were off by default, not a choice to keep.
@@ -370,12 +372,6 @@ function themeChoice(saved: Partial<Record<string, unknown>>, fallback: Settings
 }
 
 const paneView = (value: unknown, fallback: PaneView): PaneView => (value === 'chat' || value === 'terminal' ? value : fallback)
-
-function chatViewDefault(value: unknown, fallback: ChatViewDefaults): ChatViewDefaults {
-  if (typeof value !== 'object' || value === null) return fallback
-  const saved = value as Partial<Record<keyof ChatViewDefaults, unknown>>
-  return { claude: paneView(saved.claude, fallback.claude), codex: paneView(saved.codex, fallback.codex), gemini: paneView(saved.gemini, fallback.gemini) }
-}
 
 function isCursorStyle(value: unknown): value is CursorStyle {
   return value === 'block' || value === 'bar' || value === 'underline'

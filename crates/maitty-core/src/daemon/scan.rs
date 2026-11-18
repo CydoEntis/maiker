@@ -100,6 +100,10 @@ pub struct Found {
     /// The agent process's working directory: where it was started, whatever the shell
     /// reported.
     pub agent_cwd: Option<std::path::PathBuf>,
+    /// The agent process, to read its own environment from.
+    pub agent_pid: Option<u32>,
+    /// The `CLAUDE_CONFIG_DIR` the pane's Claude process runs with: where its hooks must be.
+    pub claude_dir: Option<std::path::PathBuf>,
     /// Memory used by everything running in the pane (bytes).
     pub mem: u64,
     /// CPU used by everything running in the pane since the last scan, as a share of the
@@ -233,7 +237,8 @@ pub fn start(shared: Arc<Mutex<Shared>>, tx: mpsc::Sender<Ev>) {
                 };
                 if !roots.is_empty() {
                     refresh_for_scan(&mut sys, &roots);
-                    let found = scan(&sys, &roots, &agents);
+                    let mut found = scan(&sys, &roots, &agents);
+                    read_claude_dirs(&mut sys, &mut found);
                     if tx.blocking_send(Ev::Scan(found)).is_err() {
                         return;
                     }
@@ -242,6 +247,40 @@ pub fn start(shared: Arc<Mutex<Shared>>, tx: mpsc::Sender<Ev>) {
             }
         })
         .expect("spawning scanner thread");
+}
+
+/// Fills in `claude_dir` for the panes running Claude Code, from the agent process's own
+/// environment (only that process is read, only for a pane whose hooks have not reported, which
+/// is the daemon's to decide: reading is cheap and this runs on the scan's own thread).
+fn read_claude_dirs(sys: &mut System, found: &mut [Found]) {
+    let pids: Vec<Pid> = found
+        .iter()
+        .filter(|f| f.agent.as_deref() == Some("claude"))
+        .filter_map(|f| f.agent_pid.map(Pid::from_u32))
+        .collect();
+    if pids.is_empty() {
+        return;
+    }
+    sys.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&pids),
+        true,
+        ProcessRefreshKind::nothing().with_environ(UpdateKind::OnlyIfNotSet),
+    );
+    for f in found.iter_mut() {
+        f.claude_dir = f
+            .agent_pid
+            .and_then(|pid| sys.process(Pid::from_u32(pid)))
+            .and_then(|p| config_dir_in(p.environ()));
+    }
+}
+
+/// `CLAUDE_CONFIG_DIR` among a process's `NAME=value` environment entries.
+fn config_dir_in(environ: &[std::ffi::OsString]) -> Option<std::path::PathBuf> {
+    environ.iter().find_map(|entry| {
+        let entry = entry.to_string_lossy();
+        let value = entry.strip_prefix("CLAUDE_CONFIG_DIR=")?;
+        (!value.is_empty()).then(|| std::path::PathBuf::from(value))
+    })
 }
 
 /// The most processes read under one pane: a runaway tree is cut off here.
@@ -328,6 +367,7 @@ fn scan(sys: &System, roots: &[(TermId, u32)], agents: &[CompiledAgent]) -> Vec<
             let mut queue = vec![(root, 0usize, false)];
             let mut agent = None;
             let mut agent_cwd = None;
+            let mut agent_pid = None;
             let mut deepest: Option<(usize, u64, String)> = None;
             let mut mem = 0u64;
             let mut cpu = 0f32;
@@ -354,6 +394,7 @@ fn scan(sys: &System, roots: &[(TermId, u32)], agents: &[CompiledAgent]) -> Vec<
                             agent = match_agent(&name, p.cmd(), agents);
                             if agent.is_some() {
                                 agent_cwd = p.cwd().map(|c| c.to_path_buf());
+                                agent_pid = Some(pid.as_u32());
                                 is_agent = true;
                             }
                         }
@@ -379,6 +420,8 @@ fn scan(sys: &System, roots: &[(TermId, u32)], agents: &[CompiledAgent]) -> Vec<
                 agent,
                 cwd,
                 agent_cwd,
+                agent_pid,
+                claude_dir: None,
                 mem,
                 cpu: cpu / cores,
                 remote,
@@ -492,6 +535,41 @@ fn entrypoint<'a>(name: &str, cmd: &'a [std::ffi::OsString]) -> Option<std::borr
         return Some(arg);
     }
     None
+}
+
+#[cfg(test)]
+mod config_dir_tests {
+    #[test]
+    fn the_folder_comes_from_the_agents_own_environment() {
+        let env: Vec<std::ffi::OsString> = ["HOME=/home/me", "CLAUDE_CONFIG_DIR=/srv/agents/claude-home"]
+            .map(Into::into)
+            .into();
+        assert_eq!(super::config_dir_in(&env), Some("/srv/agents/claude-home".into()));
+        let none: Vec<std::ffi::OsString> = vec!["HOME=/home/me".into(), "CLAUDE_CONFIG_DIR=".into()];
+        assert_eq!(super::config_dir_in(&none), None);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_running_process_environment_is_readable() {
+        // The reading is the part that differs by platform: a child started with a folder names it.
+        let mut child = std::process::Command::new("sleep")
+            .arg("5")
+            .env("CLAUDE_CONFIG_DIR", "/srv/agents/this-test")
+            .spawn()
+            .expect("sleep starts");
+        let mut sys = sysinfo::System::new();
+        let pid = sysinfo::Pid::from_u32(child.id());
+        sys.refresh_processes_specifics(
+            sysinfo::ProcessesToUpdate::Some(&[pid]),
+            true,
+            sysinfo::ProcessRefreshKind::nothing().with_environ(sysinfo::UpdateKind::OnlyIfNotSet),
+        );
+        let got = sys.process(pid).and_then(|p| super::config_dir_in(p.environ()));
+        let _ = child.kill();
+        let _ = child.wait();
+        assert_eq!(got, Some("/srv/agents/this-test".into()));
+    }
 }
 
 #[cfg(test)]

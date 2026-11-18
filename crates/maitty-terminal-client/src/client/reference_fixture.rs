@@ -101,6 +101,7 @@ pub(super) fn term(
         popup: false,
         agent: Some(agent.into()),
         hooked: true,
+        hook_problem: None,
         status,
         cwd: cwd.to_path_buf(),
         summary: String::new(),

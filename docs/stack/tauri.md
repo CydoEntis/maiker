@@ -126,7 +126,7 @@ a connection; this computer's commands are unchanged.
 
 In the web view (`api/machines.ts`, `features/workspace/model/machines.ts`): a session of another machine
 has an id `<name>/t<pane>` and is a row of the one flat list, marked with a server icon and its machine's name. The saved
-layout is `maitty.gui.layout.v3`; a v2 or v1 tab layout is dropped once, with a notice. Until the machine has listed its
+layout is `maiker.gui.layout.v3`; a v2 or v1 tab layout is dropped once, with a notice. Until the machine has listed its
 sessions, a layout's panes for it are kept.
 
 The glue's per-update logic is `terminal_stream::react` (no window involved), so the host's behaviour

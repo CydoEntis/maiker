@@ -186,7 +186,7 @@ commands are `prewarm_agent_session` (the agent names and flag rules of `start_a
 daemon running is older) and `drop_prewarmed_agent`.
 
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
-app's New session dialog, on this computer or another machine, whose own daemon makes it in its checkout
+app's New session draft, on this computer or another machine, whose own daemon makes it in its checkout
 over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
 absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
@@ -789,7 +789,7 @@ non-zero, and is only a signal for the red "exited with error" mark.
 Protocol 73 adds `Query::ListFolders { path, tag }` and `Reply::Folders { tag, listing }`: the folders
 directly inside `path` on the daemon's computer (`FolderListing`, `FolderEntry` in
 `crates/maitty-shared/src/protocol.rs`), for a client choosing where to start a session (the terminal
-app's New session dialog, the desktop app's folder dialog). `path` is absolute or starts with `~`
+app's New session draft, the desktop app's folder dialog). `path` is absolute or starts with `~`
 (the daemon's home folder), at most 4,096 bytes; anything else answers `exists: false`. Only folder
 names are listed, never file names or contents. Each entry carries the git branch when it is a
 checkout (read from `.git/HEAD`, no git run) and whether it holds a folder worth browsing into
@@ -1095,7 +1095,7 @@ is the lines by file (`GitConfigWrite { file, lines }`, each line `key = value`)
 A rule is a file `<data dir>/git-identities/<16 hex digits of the folder's SHA-256>.gitconfig` holding
 `user.name`, `user.email`, `credential.https://github.com.username`, an empty
 `credential.https://github.com.helper` (which drops earlier helpers), a helper that answers `get` with
-`gh auth token --hostname github.com --user <login>`, and `maitty.folder`; plus one
+`gh auth token --hostname github.com --user <login>`, and `maiker.folder`; plus one
 `includeIf "gitdir:<folder>/"` entry in the global config (`gitdir/i:` on Windows and macOS) pointing at
 it. `gh auth git-credential` is not used because it only answers for the active account. The folder must
 exist, is made absolute with `/` separators, and may not hold `* ? [ \ "`; the name and email are one
@@ -1111,7 +1111,7 @@ and `user.email` (each absent when not set) and its folder rules: every
 `includeIf "gitdir:<folder>/"` (or `gitdir/i:`) entry of the global git config, in git's order, the
 last one for a folder standing for it, at most `GIT_IDENTITY_RULES_MAX` (100). A rule Maiker wrote
 has an `identity` (`name`, `email`, GitHub `login`): its entry points at a file directly inside
-`<data dir>/git-identities/` whose `maitty.folder` names that folder, and the login is that file's
+`<data dir>/git-identities/` whose `maiker.folder` names that folder (a file from before the rename names it under `maitty.folder`, which is read, and copied to the new key on first read), and the login is that file's
 `credential.https://github.com.username`. Any other rule has `identity: None` and only its folder is
 read. A machine without git answers `installed: false`; a config git cannot read answers `problem`.
 The daemon asks git (`git config --global --get`, `--get-regexp`, `--file … --get`) and never reads

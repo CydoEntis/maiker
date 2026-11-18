@@ -1,14 +1,21 @@
+import { useHasParkedDraft } from '../model/newSessionDraft'
+import { useCallback } from 'react'
 import { Panel } from '@/components/ui/panel'
 import { UpdateSlot } from '@/features/updates/UpdateSlot'
 import { skipUpdate } from '@/features/updates/updateMemory'
 import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
+import { useChatPrefetch } from '../useChatPrefetch'
 
 const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, openSubagent, showSubagent, sidebarSessions, sidebarMachineHeads, focusedId, online, canStart, renameInline, renameId, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, newSession, newTerminal, setSettingsSection, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, openInSplit, copyPathOf, copyText, showChangesOf, markDone, putAway, bringBack, snooze, unsnooze, setGetFileId, endSession, newChatOpen, newChatMachine, newChatAgent, updateProgress, updater, runningVersion, skippedVersion, restartNow, setSkippedVersion, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, focusedId, online, canStart, renameInline, renameId, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, newSession, newTerminal, setSettingsSection, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, openInSplit, copyPathOf, copyText, showChangesOf, markDone, putAway, bringBack, snooze, unsnooze, setGetFileId, endSession, newChatOpen, newChatMachine, newChatAgent, updateProgress, updater, runningVersion, skippedVersion, restartNow, setSkippedVersion, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap } = useWorkspace()
+  // With no session at all the window is the draft, so its row is there too; a draft set aside with text in it can be opened from its row.
+  const parked = useHasParkedDraft()
+  const atHome = sidebarSessions.length === 0 && sessionsListed && online && !focusedId
+  const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const updateSlot = (variant: 'footer' | 'rail') => (
     <UpdateSlot
       variant={variant}
@@ -30,7 +37,6 @@ export function WorkspaceSidebars() {
       listed={sessionsListed}
       machines={sidebarMachineHeads}
       focusedId={focusedId}
-      openSubagent={openSubagent}
       mode={mode}
       online={online}
       canStart={canStart}
@@ -48,14 +54,14 @@ export function WorkspaceSidebars() {
         setPreferences((current) => ({ ...current, sidebarWidth: width }))
         setLiveSidebarWidth(null)
       }}
-      onNewAgentChat={(machine) => { afterPick(); newSession(machine) }}
+      onHoverSession={warmChat}
+      onNewSession={(machine) => { afterPick(); newSession(machine) }}
       onNewShell={(machine) => { afterPick(); newTerminal(machine) }}
       onAddMachine={() => { afterPick(); setSettingsSection('machines') }}
       onMachineSettings={() => { afterPick(); setSettingsSection('machines') }}
       onRenameMachine={setRenamingMachine}
       onUpdateMachine={(name, action) => { afterPick(); setUpdateAsk({ name, action }) }}
       onShowSession={(id) => { afterPick(); showSessionById(id) }}
-      onShowSubagent={(sessionId, subagentId) => { afterPick(); showSubagent(sessionId, subagentId) }}
       onRenameSession={setRenameId}
       onSetName={saveName}
       onSplitSession={(id, direction) => { afterPick(); openInSplit(id, direction) }}
@@ -74,7 +80,7 @@ export function WorkspaceSidebars() {
       onRecentSessions={() => { afterPick(); setRecentOpen(true) }}
       updateSlot={updateSlot('footer')}
       railUpdateSlot={updateSlot('rail')}
-      draft={newChatOpen ? { machine: newChatMachine, process: newChatAgent ?? preferences.defaultAgent } : null}
+      draft={newChatOpen || atHome ? { machine: newChatMachine, process: newChatAgent ?? preferences.defaultAgent } : parked ? { machine: newChatMachine, process: newChatAgent ?? preferences.defaultAgent, onOpen: () => { newSession(newChatMachine) } } : null}
       updateProgress={updateProgress}
     />
   )

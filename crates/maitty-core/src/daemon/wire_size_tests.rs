@@ -342,6 +342,7 @@ fn pane(i: u32) -> TermInfo {
         popup: false,
         agent: Some(agent.into()),
         hooked: true,
+        hook_problem: None,
         status,
         cwd: checkout_of(i),
         summary: prose(120),
@@ -550,4 +551,14 @@ fn a_fifty_session_list_stays_within_its_wire_budget() {
         encode(&ServerMsg::State(snapshot)).unwrap().len(),
         SNAPSHOT_BUDGET_BYTES,
     );
+}
+
+/// A daemon from before `hook_problem` sends none; a client reads that as nothing known, so the
+/// field needs no `PROTOCOL_VERSION` bump.
+#[test]
+fn a_pane_without_hook_problem_still_decodes() {
+    let mut json = serde_json::to_value(pane(1)).unwrap();
+    json.as_object_mut().unwrap().remove("hook_problem");
+    let old: TermInfo = serde_json::from_value(json).expect("the old shape decodes");
+    assert_eq!(old.hook_problem, None);
 }

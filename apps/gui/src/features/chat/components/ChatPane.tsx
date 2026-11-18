@@ -38,6 +38,10 @@ export type ChatPaneProps = {
   sessionId?: string
   /** The pane's live status, from the sidebar's source. */
   paneStatus?: SessionStatus
+  /** Whether the agent's hooks have reported in, so a chat that never starts can say whether it is the hooks or something after them. */
+  hooked?: boolean
+  /** Why the agent's hooks never report, with the settings file involved. */
+  hookProblem?: { file: string; why: string; repaired: boolean } | null
   /** Helpers keeping the session working after the agent's own turn ended (`Session.helpersOnly`). */
   helpersOnly?: number
   /** What runs in the pane: the agent, or the shell's own name. */
@@ -114,7 +118,7 @@ export function ChatPane(props: ChatPaneProps) {
           />
         )
         : availability.kind === 'no-events' && props.sessionId !== undefined
-          ? <StartingChat agent={availability.agent} sessionId={props.sessionId} onBackToTerminal={props.onBackToTerminal} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
+          ? <StartingChat agent={availability.agent} sessionId={props.sessionId} onBackToTerminal={props.onBackToTerminal} {...(props.hooked === undefined ? {} : { hooked: props.hooked })} hookProblem={props.hookProblem ?? null} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
           : <NoChat {...props} availability={availability} />}
     </section>
   )

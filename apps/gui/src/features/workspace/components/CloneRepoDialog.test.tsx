@@ -1,4 +1,4 @@
-import { cleanup, render, renderHook, screen, act, waitFor } from '@testing-library/react'
+import { cleanup, render, renderHook, screen, act, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GitHubList, GitHubRepoList } from '@/api/githubRepos'
@@ -100,9 +100,22 @@ describe('the Clone a repository dialog', () => {
     await user.click(cloneButton())
     const note = await screen.findByRole('alert')
     expect(note).toHaveTextContent('Could not clone the repository')
-    expect(note.querySelector('.mx-note-reason')?.textContent).toBe('/home/dev/code/widgets is already there')
+    expect(note.querySelector('.mx-note-reason')?.textContent).toBe('There is already a folder called widgets there. Use it, or pick another folder.')
+    expect(within(note).getByRole('button', { name: 'Use it' })).toBeInTheDocument()
     expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Repository address' }).value).toBe(ADDRESS)
     expect(cloneButton().disabled).toBe(false)
+    expect(onCloned).not.toHaveBeenCalled()
+  })
+
+  it('says in a plain sentence when git has no sign-in for the repository, and where to go', async () => {
+    const user = userEvent.setup()
+    const { onCloned } = open(vi.fn<Clone>(() => Promise.reject(new Error("fatal: repository 'https://github.com/o/widgets/' not found"))))
+    await user.type(addressBox(), ADDRESS)
+    await user.click(cloneButton())
+    const note = await screen.findByRole('alert')
+    expect(note).toHaveTextContent('it is private and git on that machine has no sign-in for it')
+    expect(note).toHaveTextContent('cannot sign you in to GitHub yet')
+    expect(within(note).queryByText(/fatal:/)).toBeNull()
     expect(onCloned).not.toHaveBeenCalled()
   })
 
@@ -126,7 +139,7 @@ describe('the folder last cloned into', () => {
     const user = userEvent.setup()
     api.cloneRepository.mockResolvedValue('/srv/projects/widgets')
     rememberCloneDestination('kingdom', '/srv/projects')
-    const hook = renderHook(() => useCloneRepo({ machine: 3, where: 'kingdom', startIn: '~', chooseFolder: null, onOpenGitHubSettings: vi.fn() }))
+    const hook = renderHook(() => useCloneRepo({ machine: 3, where: 'kingdom', chooseFolder: null, onOpenGitHubSettings: vi.fn() }))
     let answered: Promise<string | null> = Promise.resolve(null)
     act(() => { answered = hook.result.current.open() })
     const view = render(<>{hook.result.current.dialog}</>)
@@ -148,12 +161,13 @@ describe('the account a clone will use', () => {
   const WORK = { name: 'Casey', email: 'casey@work.invalid', login: 'work-me' }
 
   function Opened() {
-    const clone = useCloneRepo({ machine: 3, where: 'kingdom', startIn: '/srv/work', chooseFolder: null, onOpenGitHubSettings: vi.fn() })
+    const clone = useCloneRepo({ machine: 3, where: 'kingdom', chooseFolder: null, onOpenGitHubSettings: vi.fn() })
     return <><button type="button" onClick={() => { void clone.open() }}>Open</button>{clone.dialog}</>
   }
 
   it('is named under the destination when a folder rule on that machine covers it, and goes when none does', async () => {
     const user = userEvent.setup()
+    rememberCloneDestination('kingdom', '/srv/work')
     identities.loadGitIdentities.mockResolvedValue({ installed: true, name: null, email: null, rules: [{ folder: '/srv/work', identity: WORK }], problem: null })
     render(<Opened />)
     await user.click(screen.getByRole('button', { name: 'Open' }))

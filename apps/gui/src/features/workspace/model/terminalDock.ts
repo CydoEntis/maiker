@@ -10,7 +10,7 @@ export const DOCK_MAX_PX: Readonly<Record<DockAxis, number>> = { height: 640, wi
 /** The dock never takes more than this share of the room it shares with the chat, so the chat keeps the larger part. */
 export const DOCK_MAX_SHARE = 0.6
 
-const SIZE_KEY: Readonly<Record<DockAxis, string>> = { height: 'maitty.gui.terminal-dock.height', width: 'maitty.gui.terminal-dock.width' }
+const SIZE_KEY: Readonly<Record<DockAxis, string>> = { height: 'maiker.gui.terminal-dock.height', width: 'maiker.gui.terminal-dock.width' }
 
 /** A size the dock can have where it and the chat share `room` px. */
 export function clampDockSize(axis: DockAxis, size: number, room: number): number {

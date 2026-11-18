@@ -26,6 +26,14 @@ describe('the brand constants', () => {
     expect(config.bundle.externalBin).toEqual([`binaries/${DAEMON_NAME}`])
   })
 
+  it('leave no saved-settings key named maitty.* in the app source except the one migration that copies them', () => {
+    const written = sourceFiles(path.join(guiDirectory, 'src'))
+      .filter((file) => !file.endsWith(`${path.sep}storageMigration.ts`) && !file.endsWith(`${path.sep}storageMigration.test.ts`))
+      .filter((file) => /['"`]maitty\./.test(readFileSync(file, 'utf8')))
+      .map((file) => path.relative(guiDirectory, file))
+    expect(written, 'key the setting maiker.*; data/storageMigration.ts copies the old maitty.* one').toEqual([])
+  })
+
   it('are never written out as the daemon name or an old one in the app source', () => {
     const names = [DAEMON_NAME, ...PREVIOUS_DAEMON_NAMES, 'maittyd']
     const written = sourceFiles(path.join(guiDirectory, 'src'))

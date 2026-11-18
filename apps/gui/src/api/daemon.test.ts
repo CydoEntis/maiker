@@ -214,6 +214,23 @@ describe('conversation recovery', () => {
   })
 })
 
+describe('the chat of a pane whose conversation the daemon lists with more than this window knows', () => {
+  const pane = { id: 9, agent: 'gemini', process: 'gemini', status: 'Idle', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null, hooked: true }
+  const summary = { id: 6, generation: 1, execution: 'Native', provider: 'Gemini', cwd: '/srv', worktree: null, state: 'Running', status: 'Idle', native_term: 9, checks: [] }
+
+  beforeEach(() => { vi.mocked(isTauri).mockReturnValue(true) })
+
+  it('still links the pane to its chat, and says in the log what it could not read', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const [shown] = conversationsFromSnapshot({ terms: { '9': pane }, workspaces: [], conversations: [summary] })
+    expect(shown?.chat).toMatchObject({ conversation: 6, generation: 1, readOnly: true })
+    expect(shown?.details?.hooked).toBe(true)
+    expect(shown?.details?.hookProblem).toBeNull()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('provider'))
+    warn.mockRestore()
+  })
+})
+
 describe('the chat of a session on another machine', () => {
   const pane = { id: 7, agent: 'claude', process: 'claude', status: 'Idle', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null }
   const snapshot = {

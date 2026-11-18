@@ -168,6 +168,11 @@ pub struct Term {
     pub finish_said: Option<std::time::Instant>,
     /// Hooks reported for this agent session: trust them over heuristics.
     pub hooked: bool,
+    /// The config folder the pane's Claude runs with, read off its process (`scan`); in memory only.
+    pub claude_dir: Option<PathBuf>,
+    /// Why its hooks never report, when the daemon knows (`hook_repair`); in memory only.
+    pub hook_problem: Option<crate::protocol::HookProblem>,
+    pub hook_watch: super::hook_repair::HookWatch,
     pub last_output: Instant,
     pub last_input: Instant,
     /// The command the pane was started with (None for a plain shell).
@@ -1012,6 +1017,9 @@ impl Term {
             alert_due: None,
             finish_said: None,
             hooked: false,
+            claude_dir: None,
+            hook_problem: None,
+            hook_watch: Default::default(),
             last_output: now,
             last_input: now,
             began_as_agent: false,
