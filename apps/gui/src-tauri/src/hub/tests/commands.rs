@@ -326,6 +326,8 @@ async fn the_changes_of_a_pane_on_a_machine_are_read_from_that_machines_daemon_a
     ));
 }
 
+// Unix only: it plants a symlink out of the checkout, which Windows lets only an elevated user make.
+#[cfg(unix)]
 #[tokio::test]
 async fn a_markdown_document_on_a_machine_is_read_and_saved_by_that_machines_daemon_inside_its_checkout() {
     use maitty_shared::repo::{RepoReply, RepoRequest};
