@@ -606,3 +606,6 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 :root[data-corners="folded"] .mx-app .mx-quote-strip { border-radius: 10px 0 10px 0 !important; }
 /* The answer line is an underline, not a box: it has no cut corners of its own (Folded draws them on every textarea). */
 :root[data-corners="folded"] .mx-app .mx-reply-input { --fold-line: transparent !important; --fold: 0px !important; border-radius: 0 !important; }
+
+/* A file's name in a message, in its type's colour (`--tone` from `typeTone`); the Chat setting "Colour file names" turns it off. */
+:root[data-file-colours="on"] .mx-file-name { color: var(--tone); background: color-mix(in oklab, var(--tone) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 30%, transparent); }

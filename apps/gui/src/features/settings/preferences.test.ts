@@ -27,7 +27,7 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -142,6 +142,17 @@ describe('settings preferences', () => {
     expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'folded'])
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square', cornersEra: 2 }))
     expect(readSettingsPreferences().corners).toBe('square')
+  })
+
+  it('colours file names unless that was turned off, as settings saved before it read', () => {
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({}))
+    expect(readSettingsPreferences().colourFileNames).toBe(true)
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ colourFileNames: false }))
+    expect(readSettingsPreferences().colourFileNames).toBe(false)
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ colourFileNames: 'yes' }))
+    expect(readSettingsPreferences().colourFileNames).toBe(true)
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ colourFileNames: false }))
+    expect(readSettingsPreferences().colourFileNames).toBe(false)
   })
 
   it('shows every tool call unless hiding the successful ones was turned on, as settings saved before it read', () => {

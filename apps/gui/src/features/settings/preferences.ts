@@ -56,6 +56,8 @@ export type SettingsPreferences = {
   restoreLayout: boolean
   reduceMotion: boolean
   animateSidebarActivity: boolean
+  /** File names in a chat's messages are drawn in the colour of their type. */
+  colourFileNames: boolean
   /** The desktop sidebar is collapsed to its rail. */
   compactSidebar: boolean
   notifyNeedsYou: boolean
@@ -205,6 +207,7 @@ function defaults(): SettingsPreferences {
     openSessionsIn: 'chat',
     defaultAgent: 'claude',
     hideSuccessfulTools: false,
+    colourFileNames: true,
     bypassOff: [],
     updateMachines: true,
     perfOverlay: false,
@@ -305,6 +308,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       openSessionsIn: paneView(preferences.openSessionsIn, (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? paneView(((value as Record<string, unknown>).chatViewDefault as { claude?: unknown } | null | undefined)?.claude, fallback.openSessionsIn) : fallback.openSessionsIn),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
+      colourFileNames: bool(preferences.colourFileNames, fallback.colourFileNames),
       // The old Yolo and Full access switches are not read: they were off by default, not a choice to keep.
       bypassOff: bypassOffOf(preferences.bypassOff) ?? fallback.bypassOff,
       updateMachines: bool(preferences.updateMachines, fallback.updateMachines),
