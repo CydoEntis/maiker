@@ -42,6 +42,7 @@ import { Composer, type DockOpen } from './Composer'
 import { HelpersDock } from './HelpersDock'
 import { dockHelpers, HelpersLiveContext, liveAgentsRow, type HelpersLive } from '../helpersDock'
 import { ChatItem, type ChatItemContext } from './ChatItems'
+import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
@@ -181,7 +182,7 @@ export type WindowActions = {
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
 export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
-  const { feed, events, offline, readError, refresh, recordAnswer } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
+  const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
   const working = !agentFree && (feed.status === 'Working' || paneWorking)
@@ -511,6 +512,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     quote(picked.speaker === 'user' ? 'You' : agentName(agent), picked.text)
     setPicked(null)
   }
+  // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
+  // the chat opened (until then it shows what this window remembered, which may be behind) and one after the window was
+  // hidden. Only a reply that comes while the chat is being looked at is typed in.
+  const [known, setKnown] = useState<Set<string> | null>(null)
+  const [knownAsOf, setKnownAsOf] = useState(0)
+  if (feed.loaded && knownAsOf !== unwatchedReads) {
+    setKnownAsOf(unwatchedReads)
+    setKnown(new Set(rows.map(rowKey)))
+  }
   const pending = useMemo(() => allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event ?? null, [allRows])
   // The model and effort picked on the New session dialog are this conversation's choice from its first frame, so the picker shows them.
   // A chat that follows the terminal keeps no choice of its own: what its agent says it runs is the choice.
@@ -784,7 +794,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         <p className="mx-chat-empty">{hasTerminal ? 'No messages yet. Send one below, or type in the terminal.' : 'No messages yet. Send one below.'}</p>
       ) : feed.loaded || rows.length > 0 ? (
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
-        <OpenFileContext.Provider value={openFile}>
+        <KnownRowsContext.Provider value={known}>
+          <OpenFileContext.Provider value={openFile}>
           <HelpersLiveContext.Provider value={helpersLive}>
           <ChatActionsContext.Provider value={actions}>
           <RevealContext.Provider value={reveal}>
@@ -792,7 +803,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           </RevealContext.Provider>
           </ChatActionsContext.Provider>
           </HelpersLiveContext.Provider>
-        </OpenFileContext.Provider>
+          </OpenFileContext.Provider>
+        </KnownRowsContext.Provider>
       ) : (
         <ChatSkeleton />
       )}

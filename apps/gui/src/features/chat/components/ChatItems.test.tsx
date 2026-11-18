@@ -1,11 +1,15 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatRow } from '../chatRows'
 import { messageEvent } from '../eventFixtures'
+import { KnownRowsContext } from '../knownRows'
 import { ChatItem } from './ChatItems'
 
 const context = { agent: 'claude' as const, workingSince: null, approval: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
+
+/** A reply's lead is a paragraph of its own, so only its words are compared, not the space between them. */
+const noSpace = (text: string) => text.replace(/\s+/g, '')
 
 function reply(status: 'running' | 'completed', text: string) {
   const row: ChatRow = { kind: 'agent', key: 'm1', turnId: 't1', paragraphs: [text], status }
@@ -55,16 +59,35 @@ describe('a reply from the agent', () => {
     expect(container).toHaveTextContent('Two')
   })
 
-  it('grows in place as more of a running reply arrives, its earlier words where they were', () => {
-    const { container, rerender } = render(reply('running', 'The endpoint'))
-    const lead = container.querySelector('.mx-msg-lead')
-    expect(container).toHaveTextContent('The endpoint')
+  describe('typed in', () => {
+    beforeEach(() => { vi.useFakeTimers() })
+    afterEach(() => { vi.useRealTimers() })
 
-    rerender(reply('running', 'The endpoint is in. It has'))
+    it('keeps the words it had where they were, and types on as more of a running reply arrives', () => {
+      const { container, rerender } = render(reply('running', 'The endpoint'))
+      const lead = container.querySelector('.mx-msg-lead')
+      expect(container).toHaveTextContent('The endpoint')
 
-    expect(container.querySelector('.mx-msg-lead')).toBe(lead)
-    expect(lead).toHaveTextContent('The endpoint is in.')
-    expect(container.querySelector('.mx-msg-rest')).toHaveTextContent('It has')
+      rerender(reply('running', 'The endpoint is in. It has'))
+      expect(container.querySelector('.mx-msg-lead')).toBe(lead)
+      expect(lead).toHaveTextContent('The endpoint')
+
+      act(() => { vi.advanceTimersByTime(3_000) })
+      expect(lead).toHaveTextContent('The endpoint is in.')
+      expect(container.querySelector('.mx-msg-rest')).toHaveTextContent('It has')
+    })
+
+    it('types in a reply that came while it was watched, and shows one it already knew whole', () => {
+      const text = 'The endpoint is in and it has tests. '.repeat(6)
+      const fresh = render(<KnownRowsContext.Provider value={new Set()}>{reply('completed', text)}</KnownRowsContext.Provider>)
+      expect(fresh.container.textContent.length).toBeLessThan(text.length)
+      act(() => { vi.advanceTimersByTime(5_000) })
+      expect(noSpace(fresh.container.textContent)).toBe(noSpace(text))
+      fresh.unmount()
+
+      const known = render(<KnownRowsContext.Provider value={new Set(['m1'])}>{reply('completed', text)}</KnownRowsContext.Provider>)
+      expect(noSpace(known.container.textContent)).toBe(noSpace(text))
+    })
   })
 
   it('shows no half-typed table while it is still arriving', () => {
