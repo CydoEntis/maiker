@@ -662,6 +662,9 @@ function ChatSection({ preferences, update }: { preferences: SettingsPreferences
         <Row label="Hide successful tool calls" detail="Leaves out the file reads and searches that worked. Commands, edits, other tools and anything that failed still show.">
           <Switch aria-label="Hide successful tool calls" checked={preferences.hideSuccessfulTools} onCheckedChange={(value) => { update('hideSuccessfulTools', value) }} />
         </Row>
+        <Row label="Colour file names" detail="Draws a file's name in the message in the colour of its type (TypeScript, Rust, Markdown and so on). Off shows plain names.">
+          <Switch aria-label="Colour file names" checked={preferences.colourFileNames} onCheckedChange={(value) => { update('colourFileNames', value) }} />
+        </Row>
         <Row label="Open sessions in" detail="Where a new session opens. It is one session either way: the Chat and Terminal switch on each pane changes the view at any time. Gemini has no chat view and always opens in its terminal.">
           <SegmentedChoice label="Open sessions in" value={preferences.openSessionsIn} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('openSessionsIn', value) }} />
         </Row>
