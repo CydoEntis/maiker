@@ -53,8 +53,8 @@ An install made with the `.msi`, `.deb` or `.rpm` installer asks `latest.json` f
 release adds each of those entries when the build signed that installer, and says so in its log when
 one is missing; an install of that kind then has to be reinstalled to update.
 
-The desktop app is not released for macOS (the terminal app still is): nobody used or tested it there,
-and its build runner often never started, which held whole releases back. An older macOS desktop
+Nothing is released for macOS, neither the desktop nor the terminal app: nobody used or tested it there,
+and its build runners often never started, which held whole releases back. An older macOS
 install gets no further updates.
 
 While `apps/gui/RELEASE-HOLD` exists, a release leaves the desktop app out. The release workflow
