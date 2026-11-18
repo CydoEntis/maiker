@@ -10,6 +10,7 @@ struct Kept {
     agent: Option<String>,
     session: Option<String>,
     cmd: Option<String>,
+    began_as_agent: bool,
     label: String,
     pinned: bool,
     archived: bool,
@@ -34,6 +35,7 @@ impl Kept {
             agent: t.agent.clone(),
             session: t.session.clone(),
             cmd: t.cmd.clone(),
+            began_as_agent: t.began_as_agent,
             label: t.label.clone(),
             pinned: t.pinned,
             archived: t.archived,
@@ -54,6 +56,7 @@ impl Kept {
 
     fn give(self, t: &mut Term) {
         (t.agent, t.session, t.cmd) = (self.agent, self.session, self.cmd);
+        t.began_as_agent = self.began_as_agent;
         (t.label, t.name, t.first_prompt) = (self.label, self.name, self.first_prompt);
         (t.pinned, t.archived, t.snoozed_until) = (self.pinned, self.archived, self.snoozed_until);
         t.put_away_for = self.put_away_for;
@@ -303,6 +306,7 @@ impl Daemon {
             snoozed_until: term.snoozed_until,
             started_by: term.started_by,
             owner: term.owner,
+            began_as_agent: term.began_as_agent,
             tab_of: term.tab_of,
             queue: term.queue.iter().cloned().collect(),
             held_message: term.held_message.as_ref().map(|held| held.text.clone()),
@@ -587,6 +591,8 @@ impl Daemon {
                         .clone()
                         .filter(|p| p.is_dir())
                         .unwrap_or_else(|| sw.cwd.clone());
+                    let began_as_agent = pane.began_as_agent
+                        || pane.cmd.as_deref().is_some_and(|c| self.agent_in_cmd(c).is_some());
                     let cmd = self.restore_cmd_once(&mut pane, &cwd, &mut resuming);
                     // An agent that died mid-turn is not started again on its own, whichever app
                     // owns the session: resumed, it would sit at its prompt as if it had finished,
@@ -623,6 +629,9 @@ impl Daemon {
                                     (pane.pinned, pane.archived, pane.snoozed_until);
                                 t.put_away_for = pane.put_away_for.clone();
                                 t.owner = pane.owner;
+                                // A pane saved before this was recorded began as an agent when its command
+                                // says so; one that only had an agent typed into it has none.
+                                t.began_as_agent = began_as_agent;
                                 t.queue = pane.queue.iter().cloned().collect();
                                 t.held_message =
                                     pane.held_message.as_deref().map(term::HeldMessage::new);

@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 115;
+pub const PROTOCOL_VERSION: u32 = 117;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -327,6 +327,12 @@ pub struct AllowedCommand {
 /// misread, and that is refused. 115 removed the in-app tickets (ADR 0013): a peer before it sent
 /// or waited for messages that no longer exist.
 pub const COMPATIBLE_SINCE: u32 = 115;
+/// The first version that reads `Command::SaveFile` and `RepoRequest::FileStamped`: a window offers
+/// editing only to a daemon at least this new.
+pub const FILE_EDIT_SINCE: u32 = 116;
+/// The first version that reads `Query::CreateFolder`. A window learns whether a machine's daemon
+/// does from `FolderListing::can_create`, so it never sends the question to one that would not answer.
+pub const FOLDER_CREATE_SINCE: u32 = 117;
 
 /// Whether this build and a peer talk. The older of the two cannot know what came after it, so
 /// the newer one decides: `peer_compatible_since` is what the peer said in the handshake (0 from
@@ -835,6 +841,16 @@ pub enum Command {
         path: String,
         contents: String,
     },
+    /// `WriteFile` for an editor: the file must still be the `version` that `RepoRequest::FileStamped` gave
+    /// (`None`: write whatever is there, only after the person chose to overwrite). The answer is
+    /// `Reply::Repo { tag, Saved }`, or `ChangedOnDisk` with nothing written.
+    SaveFile {
+        term: TermId,
+        tag: u64,
+        path: String,
+        contents: String,
+        version: Option<String>,
+    },
     /// `git worktree add` next to the workspace's repo, then open it as a new workspace.
     /// `split`: open the worktree as a pane beside this one instead of as a workspace.
     /// `from`: the repo to branch from (default: the workspace's folder).
@@ -1136,6 +1152,15 @@ pub enum Query {
     /// `tag`, so a client typing a path can tell which of its questions this answers.
     ListFolders {
         path: String,
+        tag: u64,
+    },
+    /// Make one new folder called `name` directly inside `parent` on this daemon's computer (human
+    /// clients only). `parent` is absolute or starts with `~` and must already be a folder; `name`
+    /// is one name, never a path. The daemon checks both again and creates nothing recursively. The
+    /// answer is `Reply::FolderCreated` with the same `tag`.
+    CreateFolder {
+        parent: String,
+        name: String,
         tag: u64,
     },
     /// Clone the git repository at `address` into a new folder, named after it, inside `parent`
@@ -1466,6 +1491,11 @@ pub enum Reply {
         tag: u64,
         listing: FolderListing,
     },
+    /// How a `Query::CreateFolder` ended.
+    FolderCreated {
+        tag: u64,
+        outcome: FolderCreated,
+    },
     /// How a `Query::CloneRepo` ended: the new folder's path with `/` separators, or one line
     /// saying why nothing was cloned.
     Cloned {
@@ -1606,6 +1636,23 @@ pub struct FolderListing {
     pub exists: bool,
     pub entries: Vec<FolderEntry>,
     pub truncated: bool,
+    /// This daemon answers `Query::CreateFolder`. A daemon from before it leaves this out, which
+    /// reads as false, so a window can say the service is older instead of asking it in vain.
+    #[serde(default)]
+    pub can_create: bool,
+}
+
+/// How a `Query::CreateFolder` ended. Every case says why; nothing is swallowed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FolderCreated {
+    /// The folder is there now: its absolute path with `/` separators.
+    Created { path: String },
+    /// Something with that name is already in the parent (a folder, a file or a link).
+    Exists,
+    /// The daemon will not make it: the name or the parent is not one it accepts. One line of why.
+    NotAllowed { reason: String },
+    /// The disk refused (no permission, full, read-only, gone). One line of why.
+    Failed { reason: String },
 }
 
 impl FolderListing {
@@ -1616,6 +1663,7 @@ impl FolderListing {
             exists: false,
             entries: Vec::new(),
             truncated: false,
+            can_create: false,
         }
     }
 }
@@ -2129,6 +2177,11 @@ pub struct TermInfo {
     /// How the last command in the pane ended, when it ended in failure. See [`ExitInfo`].
     #[serde(default)]
     pub exit: Option<ExitInfo>,
+    /// The pane was started as an agent, not as a terminal. Once its agent is gone, a pane with
+    /// this set that is still listed is the shell an agent left behind; a pane without it is a
+    /// terminal someone opened. Absent from an older daemon, which reads as a terminal.
+    #[serde(default)]
+    pub began_as_agent: bool,
 }
 
 /// A command in a pane that ended in failure, as the shell reported it (OSC 133 D), never read
@@ -2430,10 +2483,15 @@ impl ClientMsg {
     /// The first version whose daemon reads this message: what a client checks before it sends
     /// a request to an older daemon, which would otherwise never answer it.
     pub fn introduced_in(&self) -> u32 {
-        // Nothing is newer than the window yet. A message added while `COMPATIBLE_SINCE` stays
-        // behind gets an arm here, with a `match self`.
-        let _ = self;
-        COMPATIBLE_SINCE
+        match self {
+            ClientMsg::Query(Query::CreateFolder { .. }) => FOLDER_CREATE_SINCE,
+            ClientMsg::Command(Command::SaveFile { .. })
+            | ClientMsg::Query(Query::Repo {
+                request: crate::repo::RepoRequest::FileStamped { .. },
+                ..
+            }) => FILE_EDIT_SINCE,
+            _ => COMPATIBLE_SINCE,
+        }
     }
 }
 
@@ -2750,7 +2808,12 @@ mod tests {
                         has_children: true,
                     }],
                     truncated: false,
+                    can_create: true,
                 },
+            }),
+            ServerMsg::Reply(Reply::FolderCreated {
+                tag: 9,
+                outcome: FolderCreated::Created { path: "/home/me/code/new".into() },
             }),
             ServerMsg::Reply(Reply::SavedConversations {
                 tag: 8,
@@ -2848,7 +2911,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 115);
+        assert_eq!(PROTOCOL_VERSION, 117);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3063,6 +3126,32 @@ mod tests {
     /// daemon that says it is new enough.
     #[test]
     fn a_file_write_is_asked_only_of_a_daemon_that_knows_it() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum Old115Command {
+            WriteFile { term: TermId, tag: u64, path: String, contents: String },
+        }
+        let save = Command::SaveFile {
+            term: 3,
+            tag: 1,
+            path: "README.md".into(),
+            contents: "# hi\r\n".into(),
+            version: Some("5-abc".into()),
+        };
+        assert!(decode::<Old115Command>(&encode(&save).unwrap()).is_err());
+        assert_eq!(ClientMsg::Command(save).introduced_in(), FILE_EDIT_SINCE);
+        let stamped = crate::repo::RepoRequest::FileStamped { path: "README.md".into() };
+        assert_eq!(ClientMsg::Query(Query::Repo { term: 3, tag: 1, request: stamped }).introduced_in(), FILE_EDIT_SINCE);
+        // Every older message keeps the window's version, so an older daemon is still talked to.
+        assert_eq!(ClientMsg::Query(Query::Repo { term: 3, tag: 1, request: crate::repo::RepoRequest::Snapshots }).introduced_in(), COMPATIBLE_SINCE);
+        const { assert!(FILE_EDIT_SINCE > COMPATIBLE_SINCE && FILE_EDIT_SINCE <= PROTOCOL_VERSION) };
+        // The wire shapes are pinned: a peer on the same version reads these bytes.
+        let reply = crate::repo::RepoReply::Saved { version: "7-ab".into() };
+        assert_eq!(
+            encode(&reply).unwrap().as_ref(),
+            [0x81, 0xa5, b'S', b'a', b'v', b'e', b'd', 0x81, 0xa7, b'v', b'e', b'r', b's', b'i', b'o', b'n', 0xa4, b'7', b'-', b'a', b'b']
+        );
+        assert_eq!(encode(&crate::repo::RepoReply::ChangedOnDisk).unwrap().as_ref(), [0xad, b'C', b'h', b'a', b'n', b'g', b'e', b'd', b'O', b'n', b'D', b'i', b's', b'k']);
     }
 
     /// Counting a restore is a new repository question: a daemon from before it cannot read it, so it is not
@@ -3313,7 +3402,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 115);
+        assert_eq!(PROTOCOL_VERSION, 117);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -3445,6 +3534,14 @@ mod tests {
         assert_eq!((old.diff_added, old.diff_removed), (0, 0));
         let new = pane_from(serde_json::json!({"diff_added": 7, "diff_removed": 2}));
         assert_eq!((new.diff_added, new.diff_removed), (7, 2));
+    }
+
+    /// A daemon from before `began_as_agent` sends none: the pane reads as a terminal, which is
+    /// never ended for an agent, so no peer is misread and the version stays.
+    #[test]
+    fn a_pane_from_before_began_as_agent_reads_as_a_terminal() {
+        assert!(!pane_from(serde_json::json!({})).began_as_agent);
+        assert!(pane_from(serde_json::json!({"began_as_agent": true})).began_as_agent);
     }
 
     /// A peer from before the effort field sends none: the pane reads as not saying, and one that does is read.
@@ -4316,6 +4413,57 @@ mod tests {
         let reply = ServerMsg::Reply(answer);
         let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
         assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+    }
+
+    /// Making a folder is a new query and a new reply: a daemon built before it cannot read the
+    /// question, so a window asks only one whose listing says `can_create`, and `COMPATIBLE_SINCE`
+    /// stays where it is. The fields added to older messages read as their old selves.
+    #[test]
+    fn a_folder_is_created_only_by_a_daemon_that_knows_how() {
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldQuery {
+            ListFolders { path: String, tag: u64 },
+        }
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        struct OldListing {
+            path: String,
+            exists: bool,
+            entries: Vec<FolderEntry>,
+            truncated: bool,
+        }
+        let ask = Query::CreateFolder { parent: "~/code".into(), name: "new".into(), tag: 4 };
+        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err(), "a daemon from before cannot read the question");
+        assert_eq!(ClientMsg::Query(ask.clone()).introduced_in(), FOLDER_CREATE_SINCE);
+        const { assert!(FOLDER_CREATE_SINCE > COMPATIBLE_SINCE && FOLDER_CREATE_SINCE <= PROTOCOL_VERSION) };
+        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::CreateFolder { tag: 4, .. })));
+
+        // The answers keep their shape: a pinned encoding of each, so a reorder or a rename is seen.
+        let created = FolderCreated::Created { path: "/a/b".into() };
+        assert_eq!(
+            encode(&created).unwrap().as_ref(),
+            [0x81, 0xa7, b'C', b'r', b'e', b'a', b't', b'e', b'd', 0x81, 0xa4, b'p', b'a', b't', b'h', 0xa4, b'/', b'a', b'/', b'b']
+        );
+        assert_eq!(encode(&FolderCreated::Exists).unwrap().as_ref(), [0xa6, b'E', b'x', b'i', b's', b't', b's']);
+        for outcome in [created, FolderCreated::NotAllowed { reason: "x".into() }, FolderCreated::Failed { reason: "y".into() }] {
+            let reply = ServerMsg::Reply(Reply::FolderCreated { tag: 4, outcome });
+            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
+            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
+        }
+
+        // An older daemon's listing has no `can_create` and reads as one that cannot; a new listing still reads to an old window.
+        #[derive(Serialize)]
+        struct Listing {
+            path: String,
+            exists: bool,
+            entries: Vec<FolderEntry>,
+            truncated: bool,
+        }
+        let old = encode(&Listing { path: "/a".into(), exists: true, entries: Vec::new(), truncated: false }).unwrap();
+        assert!(!decode::<FolderListing>(&old).unwrap().can_create);
+        let new = encode(&FolderListing { can_create: true, ..FolderListing::missing("/a") }).unwrap();
+        assert!(decode::<OldListing>(&new).is_ok());
     }
 
     /// Listing saved conversations is a new query and a new reply: a daemon built before it is never

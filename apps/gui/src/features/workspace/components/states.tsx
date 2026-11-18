@@ -59,7 +59,8 @@ export type RestartOffer = {
   label: string
   canRestart: boolean
   pending: boolean
-  onRestart: () => void
+  /** `automatic` marks a restart the window ran by itself (Settings › Restart the service when idle). */
+  onRestart: (automatic?: boolean) => void
   /** The service's protocol and the one this app needs, for "protocol 75 → 76". They are not app versions. */
   from: number
   to: number

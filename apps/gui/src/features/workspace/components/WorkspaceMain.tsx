@@ -13,7 +13,6 @@ import { useCloneRepo } from './useCloneRepo'
 import { busyBranchesOf, machineProjects } from '../model/newSession'
 import { NewSessionDialog } from './NewSessionDialog'
 import { useFolderPick } from './useFolderPick'
-import { REPOSITORY_SOURCE } from '../repositorySource'
 import { EmptyState } from './states'
 import { ServiceStatus, UpdateReadyBanner } from './ServiceStatus'
 import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
@@ -21,6 +20,7 @@ import { displayName } from '../model/session'
 import { rowTitle } from '../model/sidebar'
 import { resolveStartFolder } from '../model/startFolder'
 import { WorkspacePane } from './WorkspacePane'
+import { DocPane } from './DocPane'
 import { usePresence } from '@/lib/usePresence'
 import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
@@ -40,7 +40,7 @@ export function WorkspaceMain() {
   const dock = terminal.shown && dockAgent !== undefined ? preferences.terminalDock : null
   // The folder picker reads every machine the window knows, this computer and the others; one that is not up is listed with why.
   const pickerMachines = sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, ready: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok', word: head.machine === LOCAL_MACHINE ? null : head.chip?.word ?? null }))
-  const folderPick = useFolderPick(pickerMachines, REPOSITORY_SOURCE)
+  const folderPick = useFolderPick(pickerMachines)
   const newChatStartFolder = newChatMachine === LOCAL_MACHINE ? resolveStartFolder(preferences.startFolder, home) : '~'
   // Cloning picks where the clone goes: the system's folder dialog here, the window's own picker on another machine.
   const chooseCloneFolder = newChatMachine === LOCAL_MACHINE ? chooseProjectFolder : () => folderPick.pick(newChatMachine).then((picked) => picked?.folder ?? null)
@@ -133,7 +133,7 @@ export function WorkspaceMain() {
                               />
                             )}
                             <div className={`mx-pane-cell${closingPanes.has(pane.id) ? ' is-closing' : ''}`} style={pane.h !== undefined && tab.max === null && !narrow ? { flexGrow: pane.h } : undefined}>
-                              <WorkspacePane shown={tab} pane={pane} kept={kept} />
+                              {pane.doc ? <DocPane shown={tab} pane={pane} kept={kept} /> : <WorkspacePane shown={tab} pane={pane} kept={kept} />}
                             </div>
                           </Fragment>
                         ))}

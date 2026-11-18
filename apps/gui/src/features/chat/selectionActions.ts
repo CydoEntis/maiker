@@ -5,8 +5,15 @@ const EDITED = 'textarea, input, [contenteditable="true"]'
 /** The bar itself: a release on one of its buttons is that button's click, not a new selection. */
 export const SELECTION_BAR = '.mx-select-bar'
 
-/** Text selected in the chat, and where the mouse let go of it, measured from the chat's top left corner. */
-export type PickedText = { readonly text: string; readonly x: number; readonly y: number }
+/** Text selected in the chat, who said it (when the selection began in a message), and where the mouse let go of it, measured from the chat's top left corner. */
+export type PickedText = { readonly text: string; readonly speaker: 'user' | 'agent' | null; readonly x: number; readonly y: number }
+
+/** Whose message a selection began in: the person's bubble, the agent's reply, or neither (a step, a thought). */
+function speakerOf(node: Node | null): PickedText['speaker'] {
+  const from = node instanceof Element ? node : node?.parentElement ?? null
+  if (from?.closest('.mx-msg-user') != null) return 'user'
+  return from?.closest('.mx-msg-agent') != null ? 'agent' : null
+}
 
 /**
  * What a mouse release in the chat selected, or null when it selected nothing to act on: a plain click, a
@@ -26,16 +33,5 @@ export function pickedText(event: MouseEvent<HTMLElement>): PickedText | null | 
   // the chat's own measure, so the distance on screen is taken back to it.
   const drawn = event.currentTarget.offsetWidth > 0 ? frame.width / event.currentTarget.offsetWidth : 1
   const scale = drawn > 0 ? drawn : 1
-  return { text, x: (event.clientX - frame.left) / scale, y: (event.clientY - frame.top) / scale }
-}
-
-/** The text as a Markdown quote: each line behind `> `, with the blank lines at its ends dropped. */
-export function quoteOf(text: string): string {
-  return text.replace(/^\s*\n|\n\s*$/g, '').split('\n').map((line) => (line.trim() === '' ? '>' : `> ${line.trimEnd()}`)).join('\n')
-}
-
-/** The draft with the quote added under what was already written, and an empty line after it to reply on. */
-export function draftWithQuote(draft: string, text: string): string {
-  const written = draft.trimEnd()
-  return `${written === '' ? '' : `${written}\n\n`}${quoteOf(text)}\n\n`
+  return { text, speaker: speakerOf(selection.anchorNode), x: (event.clientX - frame.left) / scale, y: (event.clientY - frame.top) / scale }
 }

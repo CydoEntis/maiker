@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from '@/lib/toast'
@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadDaemonUpdateStatus, restartStaleDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
+import { serviceRestartStep } from './serviceRestart'
+import { useIdleServiceRestart } from './useIdleServiceRestart'
 
 const TOAST_ID = 'service-behind'
 const STATUS_KEY = ['daemon-update-status']
@@ -13,26 +15,24 @@ const STATUS_KEY = ['daemon-update-status']
 type ServiceBehindNoticeProps = {
   sessionsQuery: UseQueryResult<Conversation[]>
   /**
-   * Restart the older service without asking when it can be done with nothing lost: its sessions are saved and no
-   * agent is working or waiting, so each one comes back as it was (Settings › General › Install updates when idle).
+   * Restart the older service without asking, at a quiet moment (`serviceRestartStep`): its sessions are saved and no
+   * agent is working, waiting on the user or starting, so each one comes back as it was
+   * (Settings › General › Restart the service when idle).
    */
-  restartWhenIdle?: boolean
-}
-
-/** Whether restarting the service now interrupts nobody: it can be restarted, and it says no agent is mid-turn. */
-function restartsUnasked(status: { behind: boolean; canRestart: boolean; activeTurnCount: number | null } | undefined, restartWhenIdle: boolean): boolean {
-  return restartWhenIdle && status !== undefined && status.behind && status.canRestart && status.activeTurnCount === 0
+  restartServiceWhenIdle?: boolean
+  /** A session is being started from this window. */
+  starting?: boolean
 }
 
 const plural = (count: number, word: string) => `${String(count)} ${word}${count === 1 ? '' : 's'}`
 
 /**
  * A new release leaves a running service alone, because it may hold sessions. Without this the app says it is up to
- * date while the service still runs the old code, and none of the release's fixes to the service apply. When no
- * agent is mid-turn the service is restarted at once (idle agents come back resumed); otherwise this says so and
- * offers the restart, which asks first.
+ * date while the service still runs the old code, and none of the release's fixes to the service apply. This says
+ * so and offers the restart, which asks first. With Settings › Restart the service when idle on, it restarts by
+ * itself at the first quiet moment (idle agents come back resumed) and keeps the notice until then.
  */
-export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false }: ServiceBehindNoticeProps) {
+export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = false, starting = false }: ServiceBehindNoticeProps) {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -44,33 +44,46 @@ export function ServiceBehindNotice({ sessionsQuery, restartWhenIdle = false }: 
     retry: false,
     staleTime: Infinity,
   })
+  const refetchStatus = statusQuery.refetch
   const status = statusQuery.data
   const version = status?.behind ? status.daemonVersion : null
   const canRestart = Boolean(status?.canRestart)
-  const unasked = restartsUnasked(status, restartWhenIdle)
+  const [restartingNow, setRestartingNow] = useState(false)
+  const step = serviceRestartStep({
+    enabled: restartServiceWhenIdle && Boolean(status?.behind),
+    restarting: restartingNow || pending,
+    starting,
+    service: status,
+    sessionStatuses: sessionsQuery.data?.map((conversation) => conversation.status) ?? null,
+  })
+  // Only while the restart is actually under way is there nothing to ask; while it waits for a quiet moment the notice stays.
+  const unasked = step === 'restart' || restartingNow
   const sessionCount = status?.sessionCount ?? 0
   const refetchSessions = sessionsQuery.refetch
 
   // Tried once for each version found behind: a restart that failed leaves the notice and its button.
-  const tried = useRef<string | null>(null)
-  useEffect(() => {
-    if (!version || !unasked || tried.current === version) return
-    tried.current = version
-    restartStaleDaemon(version).then(
-      async () => {
-        await refetchSessions()
-        await queryClient.invalidateQueries({ queryKey: STATUS_KEY })
-        toast.success('Maitty service updated', { description: sessionCount === 0 ? 'It was restarted to finish the update.' : `It was restarted to finish the update. ${plural(sessionCount, 'session')} came back.` })
-      },
-      (error: unknown) => {
-        console.warn('Could not restart the older Maitty service', error)
-        setAutoFailed(true)
-      },
-    )
-  }, [version, unasked, sessionCount, refetchSessions, queryClient])
+  useIdleServiceRestart({
+    step,
+    key: version,
+    restart: () => {
+      if (!version) return
+      setRestartingNow(true)
+      restartStaleDaemon(version).then(
+        async () => {
+          await refetchSessions()
+          await queryClient.invalidateQueries({ queryKey: STATUS_KEY })
+          toast.success('Service restarted', { description: sessionCount === 0 ? 'It restarted by itself to finish the update.' : `It restarted by itself to finish the update. ${plural(sessionCount, 'session')} came back.` })
+        },
+        (error: unknown) => {
+          console.warn('Could not restart the older Maitty service', error)
+          setAutoFailed(true)
+        },
+      ).finally(() => { setRestartingNow(false) })
+    },
+    recheck: () => { void refetchStatus() },
+  })
 
   useEffect(() => {
-    // While the unasked restart runs there is nothing to ask.
     if (!version || (unasked && !autoFailed)) return
     toast.warning(`The Maitty service is still on ${version}`, {
       id: TOAST_ID,

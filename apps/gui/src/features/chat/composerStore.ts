@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import type { AttachmentKind } from '@/api/attachments'
 import { readComposerDrafts, writeComposerDrafts, type SavedDraft } from '@/data/composerDrafts'
 import { forgetOperations } from './sendOperation'
+import { MAX_QUOTES, sameQuote, type Quote } from './quoteMessage'
 
 /**
  * What a conversation's composer holds between views: the unsent text and the files attached to it. It lives here, not in the
@@ -28,10 +29,14 @@ export type DraftAttachment = {
  * `note` is a line the next message sent starts with (after Edit from here restored the files). It goes when the box is
  * emptied of everything typed and attached, as a discarded draft takes it along.
  */
-export type ComposerState = { readonly draft: string; readonly attachments: readonly DraftAttachment[]; readonly note: string | null }
+export type ComposerState = { readonly draft: string; readonly attachments: readonly DraftAttachment[]; readonly quotes: readonly DraftQuote[]; readonly note: string | null }
+
+/** A quote waiting in the strip above the box: whose words, which words, and a number that names it for its remove button. */
+export type DraftQuote = Quote & { readonly id: string }
 
 const NO_ATTACHMENTS: readonly DraftAttachment[] = []
-const EMPTY: ComposerState = { draft: '', attachments: NO_ATTACHMENTS, note: null }
+const NO_QUOTES: readonly DraftQuote[] = []
+const EMPTY: ComposerState = { draft: '', attachments: NO_ATTACHMENTS, quotes: NO_QUOTES, note: null }
 const stored = new Map<number, ComposerState>()
 const listeners = new Set<() => void>()
 /** When each box's text last changed, so the oldest drafts are the ones dropped from storage. */
@@ -41,7 +46,7 @@ const SAVE_AFTER_MS = 300
 let saveTimer: number | null = null
 
 for (const [conversation, saved] of readComposerDrafts(Date.now())) {
-  stored.set(conversation, { draft: saved.text, attachments: NO_ATTACHMENTS, note: null })
+  stored.set(conversation, { draft: saved.text, attachments: NO_ATTACHMENTS, quotes: NO_QUOTES, note: null })
   touched.set(conversation, saved.at)
 }
 
@@ -71,7 +76,7 @@ export function updateComposer(conversation: number, change: (state: ComposerSta
   const changed = change(before)
   if (changed === before) return
   const after = isEmptied(before, changed) ? { ...changed, note: null } : changed
-  if (after.draft === '' && after.attachments.length === 0 && after.note === null) stored.delete(conversation)
+  if (after.draft === '' && after.attachments.length === 0 && after.quotes.length === 0 && after.note === null) stored.delete(conversation)
   else stored.set(conversation, after)
   if (after.draft !== before.draft) {
     touched.set(conversation, Date.now())
@@ -80,7 +85,7 @@ export function updateComposer(conversation: number, change: (state: ComposerSta
   for (const listener of listeners) listener()
 }
 
-const holdsNothing = (state: ComposerState) => state.draft.trim() === '' && state.attachments.length === 0
+const holdsNothing = (state: ComposerState) => state.draft.trim() === '' && state.attachments.length === 0 && state.quotes.length === 0
 
 function isEmptied(before: ComposerState, after: ComposerState): boolean {
   return !holdsNothing(before) && holdsNothing(after)
@@ -106,6 +111,34 @@ export function useComposerSlice<T>(conversation: number, pick: (state: Composer
 /** The unsent text: only the box that shows it follows every change. */
 export function useComposerDraft(conversation: number): string {
   return useComposerSlice(conversation, (state) => state.draft)
+}
+
+let quoteCount = 0
+
+/** A name for a quote in the strip, for its remove button and its place in the list. */
+export function newQuoteId(): string {
+  quoteCount += 1
+  return `quote-${String(quoteCount)}`
+}
+
+/** What `addQuote` did: the quote is in the strip, was already there, or the strip is full. */
+export type QuoteAdded = 'added' | 'duplicate' | 'full'
+
+/** Puts a quote in the conversation's strip. The same words from the same speaker are ignored, and the strip holds `MAX_QUOTES`. */
+export function addQuote(conversation: number, quote: Quote): QuoteAdded {
+  const now = read(conversation).quotes
+  if (now.some((held) => sameQuote(held, quote))) return 'duplicate'
+  if (now.length >= MAX_QUOTES) return 'full'
+  updateComposer(conversation, (state) => ({ ...state, quotes: [...state.quotes, { ...quote, id: newQuoteId() }] }))
+  return 'added'
+}
+
+export function removeQuote(conversation: number, id: string): void {
+  updateComposer(conversation, (state) => (state.quotes.some((quote) => quote.id === id) ? { ...state, quotes: state.quotes.filter((quote) => quote.id !== id) } : state))
+}
+
+export function clearQuotes(conversation: number): void {
+  updateComposer(conversation, (state) => (state.quotes.length === 0 ? state : { ...state, quotes: NO_QUOTES }))
 }
 
 /** The conversation each session's chat last had, so what its box holds can follow it to a new one. */

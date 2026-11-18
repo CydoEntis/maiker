@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from '@/lib/toast'
 import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen } from '@/api/daemon'
 import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/machines'
@@ -13,6 +13,7 @@ import { buildRows, liveRows, type ChatRow } from '../chatRows'
 import { findRow, registerChatFind } from '../chatSearch'
 import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
+import { MAX_QUOTES } from '../quoteMessage'
 import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } from '../useChatComposer'
 import { countUserMessages } from '../workPhase'
 import { sentTexts } from '../promptRecall'
@@ -21,8 +22,15 @@ import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
 import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
-import { draftWithQuote, pickedText, type PickedText } from '../selectionActions'
-import { peekComposer } from '../composerStore'
+import { pickedText, type PickedText } from '../selectionActions'
+import { addQuote } from '../composerStore'
+import { ChatActionsContext, RevealContext, type ChatActions, type Reveal } from '../chatActions'
+import { quoteSourceRow } from '../quoteJump'
+import type { Askable } from '../plainQuestions'
+import { forgetReplyDraft } from '../quickReply'
+import { agentName } from '../commandCards'
+import { ReplyTray } from './ReplyTray'
+import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { COPY_TOAST_ID, COPY_TOAST_MS } from '@/features/terminal/copyToast'
 import { SelectionBar } from './SelectionBar'
 import { OpenFileContext, type OpenFile } from '../openFile'
@@ -103,6 +111,9 @@ const KEY_DECISION: Readonly<Record<string, ApprovalDecision>> = Object.fromEntr
 const typedInField = (target: EventTarget) => target instanceof Element && target.closest('input, textarea, [contenteditable="true"]') !== null
 
 const NO_SUBAGENTS: readonly SubagentView[] = []
+/** How long a jump marks the message it lands on, and how many frames it waits for the list to draw it. */
+const FLASH_MS = 1200
+const FLASH_FRAMES_MAX = 40
 const ERROR_WORDS_MAX = 140
 const truncateError = (reason: string) => (reason.length > ERROR_WORDS_MAX ? `${reason.slice(0, ERROR_WORDS_MAX)}…` : reason)
 
@@ -465,17 +476,23 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       },
     )
   }
-  const quotePicked = (box: HTMLElement) => {
-    if (picked === null) return
-    setComposerDraft(draftWithQuote(peekComposer(link.conversation).draft, picked.text))
-    setPicked(null)
+  const [quoteNote, setQuoteNote] = useState('')
+  // Words go to the strip above the message box, and the box takes the keys so the reply is typed under them.
+  const quote = useCallback((who: string, text: string) => {
+    const added = addQuote(link.conversation, { who, text })
+    if (added === 'full') toast.message(`A message can carry ${String(MAX_QUOTES)} quotes. Send it, or remove one.`)
+    else setQuoteNote(added === 'added' ? 'Quote added' : 'Already quoted')
     window.getSelection()?.removeAllRanges()
-    // The reply is typed under the quote: the box takes the keys, with the caret at its end.
-    const field = box.querySelector<HTMLTextAreaElement>('textarea.mx-box-text:not(:disabled)')
     window.requestAnimationFrame(() => {
+      const field = chat.current?.querySelector<HTMLTextAreaElement>('textarea.mx-box-text:not(:disabled)')
       field?.focus({ preventScroll: true })
       field?.setSelectionRange(field.value.length, field.value.length)
     })
+  }, [link.conversation])
+  const quotePicked = () => {
+    if (picked === null) return
+    quote(picked.speaker === 'user' ? 'You' : agentName(agent), picked.text)
+    setPicked(null)
   }
   const [known, setKnown] = useState<Set<string> | null>(null)
   const [knownAsOf, setKnownAsOf] = useState(0)
@@ -560,6 +577,67 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }
   const goToStep = useCallback((key: string) => { setScrollTarget((current) => ({ key, nonce: (current?.nonce ?? 0) + 1 })) }, [])
 
+  // A quote's stub goes to the message it came from: the view scrolls there, a folded block that holds it opens, and the
+  // row is outlined for a moment (not at all with reduced motion, where the scroll alone says where).
+  const reducedMotion = useContext(ReducedMotionContext)
+  const [reveal, setReveal] = useState<Reveal>({ key: null, nonce: 0 })
+  const [flash, setFlash] = useState<{ key: string; nonce: number } | null>(null)
+  const rowsLatest = useLatest(() => rows)
+  const jump = useCallback((text: string, from: string) => {
+    const key = quoteSourceRow(rowsLatest(), text, from)
+    if (key === null) {
+      toast.message('The message this quotes is no longer in the chat.')
+      return
+    }
+    setReveal((current) => ({ key, nonce: current.nonce + 1 }))
+    goToStep(key)
+    setFlash((current) => ({ key, nonce: (current?.nonce ?? 0) + 1 }))
+  }, [rowsLatest, goToStep])
+  useEffect(() => {
+    if (flash === null || reducedMotion) return undefined
+    let frames = 0
+    let frame = 0
+    let timer = 0
+    let marked: HTMLElement | null = null
+    // The row may not be drawn yet: the list draws it once the scroll gets there.
+    const mark = () => {
+      const row = Array.from(chat.current?.querySelectorAll<HTMLElement>('[data-key]') ?? []).find((element) => element.dataset.key === flash.key)
+      if (row === undefined) {
+        frames += 1
+        if (frames < FLASH_FRAMES_MAX) frame = window.requestAnimationFrame(mark)
+        return
+      }
+      marked = row
+      row.classList.add('is-flash')
+      timer = window.setTimeout(() => { row.classList.remove('is-flash') }, FLASH_MS)
+    }
+    frame = window.requestAnimationFrame(mark)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+      marked?.classList.remove('is-flash')
+    }
+  }, [flash, reducedMotion])
+
+  // Questions the agent asked in plain words, answered one by one in a tray over the box. What was written stays with the
+  // message when the tray closes, and goes when its reply is sent.
+  const [replying, setReplying] = useState<{ row: string; who: string; asked: readonly Askable[]; focus: string | null; nonce: number } | null>(null)
+  const reply = useCallback((row: string, who: string, asked: readonly Askable[], focus: string | null) => {
+    setReplying((current) => ({ row, who, asked, focus, nonce: (current?.nonce ?? 0) + 1 }))
+  }, [])
+  const { sendReply } = composer
+  const sendReplies = async (message: string, count: number) => {
+    const went = await sendReply(message)
+    if (went) {
+      setQuoteNote(count === 1 ? 'Reply sent' : `Reply sent, ${String(count)} answers`)
+      if (replying !== null) forgetReplyDraft(replying.row)
+    }
+    return went
+  }
+  // A message that is gone (regenerated, or the chat changed) takes its tray with it.
+  const replyRowGone = replying !== null && !rows.some((row) => row.key === replying.row)
+  if (replyRowGone) setReplying(null)
+
   // Find (the window's search bar) looks through this chat while it shows: the row that holds the text is scrolled to and marked.
   const [found, setFound] = useState<string | null>(null)
   const rowsNow = useLatest(() => rows)
@@ -578,6 +656,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }, [sessionId, rowsNow, foundNow, goToStep])
 
   const waitingStep = pending?.stepId ?? null
+  const draftable = composer.draftable
+  const actions = useMemo<ChatActions | null>(() => (draftable ? { quote, jump, reply, canReply: true } : null), [draftable, quote, jump, reply])
   const plan = useMemo(() => (ask?.tool === PLAN_TOOL ? askedPlan(events) : null), [ask?.tool, events])
   // The daemon refuses a restore while the agent works too: its files would be rolled back under it.
   const rewindBusy = !online ? 'The daemon is offline' : working ? `${agent} is working. Edit from here when it finishes.` : null
@@ -639,7 +719,21 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const question = pending !== null
     ? <ApprovalTray key={pending.requestId} event={pending} actions={approval} agent={agent} />
     : menuOpen && sendKeys !== undefined && online ? <CommandMenuTray agent="Codex" topic="model" readScreen={readScreen} sendKeys={sendKeys} onClose={() => { setMenuOpen(false) }} />
-    : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
+    : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} />
+    : replying !== null && !replyRowGone
+      ? (
+        <ReplyTray
+          key={`${replying.row}:${String(replying.nonce)}`}
+          who={replying.who}
+          asked={replying.asked}
+          focus={replying.focus}
+          message={replying.row}
+          blocked={composer.disabledReason}
+          onSend={sendReplies}
+          onClose={() => { setReplying(null) }}
+        />
+      )
+      : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
   const notices = [
     offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
     feed.error,
@@ -650,7 +744,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     <div ref={chat} className="mx-chat" onKeyDown={onKeyDown} onClick={keepComposerFocus} onMouseUp={(event) => { const next = pickedText(event); if (next !== undefined) setPicked(next) }}>
       {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
-      {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={() => { if (chat.current !== null) quotePicked(chat.current) }} />}
+      {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={composer.draftable ? quotePicked : undefined} />}
       {(notices.length > 0 || fullAccess) && (
         <div className="mx-chat-notices" role={offline ? 'status' : undefined}>
           {notices.map((notice) => <span key={notice}>{notice}</span>)}
@@ -659,6 +753,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       )}
       {/* Politely announces a change of state only; the log itself is not a live region, so streaming text never floods a screen reader. */}
       <div role="status" aria-live="polite" className="sr-only">{announcement(feed, agent, working)}</div>
+      <div role="status" aria-live="polite" className="sr-only">{quoteNote}</div>
       {subagent !== null ? (
         <>
           <SubagentBar subagent={subagent} onBack={() => { onBackToMain?.() }} />
@@ -671,7 +766,11 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         <KnownRowsContext.Provider value={known}>
           <OpenFileContext.Provider value={openFile}>
           <HelpersLiveContext.Provider value={helpersLive}>
+          <ChatActionsContext.Provider value={actions}>
+          <RevealContext.Provider value={reveal}>
           <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={sentCount} isSent={isSentRow} />
+          </RevealContext.Provider>
+          </ChatActionsContext.Provider>
           </HelpersLiveContext.Provider>
           </OpenFileContext.Provider>
         </KnownRowsContext.Provider>

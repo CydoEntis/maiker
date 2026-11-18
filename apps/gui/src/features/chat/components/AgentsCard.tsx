@@ -1,4 +1,5 @@
 import { useContext, useId, useState } from 'react'
+import { useRevealOpen } from '../chatActions'
 import type { SubagentEvent } from '../chatEvents'
 import { dockHelpers, helperCounts, HelpersLiveContext } from '../helpersDock'
 import { agentsSummary } from '../stepInfo'
@@ -23,6 +24,7 @@ export function AgentsCard({ agents, rowKey }: AgentsCardProps) {
   const counts = helperCounts(helpers)
   const [chosen, setChosen] = useState<boolean | null>(null)
   const list = useId()
+  useRevealOpen(rowKey, () => { setChosen(true) })
   if (rowKey !== undefined && live?.key === rowKey) return <HelpersMarker count={agents.length} onOpen={live.open} />
   const open = chosen ?? (counts.working > 0 || counts.failed > 0)
   return (

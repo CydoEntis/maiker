@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
  * The design's Card (`Card · shell, head, body, foot` in the chat handoff): a solid card with a hairline and no shadow.
  * Every card in the feed is one of these; buttons belong in its head or foot. `tone` is the edge: `needs` for something
  * waiting on the person, `err` for something that failed. A card that is itself clickable (`interactive`) shows its
- * edge in `--line2` on hover and the focus ring outside it.
+ * edge in `--line2` on hover and the focus underline inside it.
  */
 const cardVariants = cva(
   "flex min-w-0 flex-col rounded-(--r-panel) border bg-(--card) text-(--fg)",
@@ -18,7 +18,7 @@ const cardVariants = cva(
         err: "border-[color-mix(in_oklab,var(--err)_55%,var(--line))] [--fold-line:color-mix(in_oklab,var(--err)_55%,var(--line))]",
       },
       interactive: {
-        true: "cursor-pointer outline-none transition-[border-color] duration-(--t-fast) hover:border-(--line2) focus-visible:shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--focus)]",
+        true: "cursor-pointer outline-none transition-[border-color] duration-(--t-fast) hover:border-(--line2)",
         false: "",
       },
     },

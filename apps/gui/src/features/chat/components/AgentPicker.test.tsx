@@ -261,18 +261,25 @@ describe('the picker for a chat on another machine', () => {
   })
 })
 
-describe('the New session dialog\'s compact button', () => {
-  it('names the model and a dim effort, without the agent\'s name, its mark or the strength meter', () => {
+describe('the New session dialog\'s dropdown', () => {
+  it('names the agent with its mark, the model and the effort in one line, without the strength meter', () => {
     const { container } = render(<AgentPicker compact agent="claude" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} currentModel="claude-sonnet-5-5" />)
     const button = screen.getByRole('button', { name: /Agent, model and reasoning/ })
-    expect(button).toHaveTextContent('Sonnet 5.5· Medium')
-    expect(button).not.toHaveTextContent('Claude')
-    expect(container.querySelector('.mx-model-icon')).toBeNull()
+    expect(button).toHaveTextContent('Claude · Sonnet 5.5 · Medium')
+    expect(container.querySelector('.mx-model-icon')).not.toBeNull()
     expect(container.querySelector('.mx-mm-mini')).toBeNull()
   })
 
-  it('falls back to the agent\'s own name when no model is known', () => {
+  it('says Default for the model while none is known', () => {
     render(<AgentPicker compact agent="codex" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} />)
-    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Codex')
+    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Codex · Default')
+  })
+
+  it('has the agent list, the models and the efforts as a segmented control in its menu', async () => {
+    render(<AgentPicker compact agent="claude" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} onAgent={() => undefined} />)
+    await userEvent.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
+    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' })).toBeChecked()
+    expect(screen.getByRole('radiogroup', { name: 'Effort' })).toHaveAttribute('data-slot', 'segmented')
+    expect(screen.queryByText('Effort')).not.toBeInTheDocument()
   })
 })

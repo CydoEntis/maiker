@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type SyntheticEvent } from 'react'
 import { Popover } from 'radix-ui'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { MLoader } from '@/components/ui/m-loader'
@@ -6,12 +6,11 @@ import { ChoiceItem, ChoiceList } from '@/components/ui/choice-list'
 import { PopupContent } from '@/components/ui/popup'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import { Switch } from '@/components/ui/switch'
-import type { FolderListing } from '@/api/folders'
+import type { CreateFolderOutcome, FolderListing } from '@/api/folders'
 import { errorMessage } from '@/lib/error-message'
-import { nowSeconds } from '../model/newChatHost'
-import { agoOf, baseName, crumbsOf, groupRepositories, isPathQuery, isRoot, joinPath, niceOf, parentOf, visibleFolders, type PickedFolder, type Repository, type RepositoryIndex, type RepositorySource } from '../model/folderPick'
+import { folderNameProblem } from '../model/folderName'
+import { baseName, crumbsOf, isPathQuery, isRoot, joinPath, niceOf, parentOf, visibleFolders, type PickedFolder } from '../model/folderPick'
 import { Icon } from './glyphs'
-import { DAEMON_NAME } from '@/brand'
 
 /** Longest path the host accepts. */
 const MOST_PATH_CHARS = 4096
@@ -21,8 +20,6 @@ const START_FOLDER = '~'
 
 /** A read shorter than this shows no loader: a flash of the M for a local read is noise. */
 const LOADER_DELAY_MS = 160
-
-type Tab = 'repos' | 'browse'
 
 /** A machine the picker can read: `word` says why it cannot be, when it cannot. */
 export type PickerMachine = { machine: number; label: string; ready: boolean; word: string | null }
@@ -34,8 +31,8 @@ type Props = {
   /** The machine the picker opens on. */
   machine: number
   list: (machine: number, path: string) => Promise<FolderListing>
-  /** The daemon's repository index; null when this build has no way to ask for it. */
-  repositories: RepositorySource | null
+  /** Makes the folder `name` directly inside `parent` on a machine; the machine's daemon decides. */
+  create: (machine: number, parent: string, name: string) => Promise<CreateFolderOutcome>
   onPick: (picked: PickedFolder) => void
   onCancel: () => void
 }
@@ -52,17 +49,16 @@ function useAfterDelay(waiting: boolean, key: string): boolean {
 }
 
 /**
- * Open a folder on a machine. The machine is a list in the title; Repositories (the repositories the machine's daemon has
- * indexed, those used from here first) and Browse (folder by folder) are its two tabs; one input filters the rows, or
- * jumps when it starts with `/` or `~`. Up and Down select, Enter opens a repository or goes into a folder, Right goes
- * into a folder, Backspace goes up, Tab switches tab, Ctrl+Enter chooses, Esc clears the input and then closes.
- * Every name shown came from the machine's daemon.
+ * Open a folder on a machine. The machine is a list in the title; its folders are browsed one by one (a repository is just a
+ * folder, with its branch beside it); one input filters the rows, or jumps when it starts with `/` or `~`. Up and Down
+ * select, Enter goes into a folder, Right goes into a folder, Backspace goes up, Ctrl+Enter chooses, Ctrl+Shift+N makes a
+ * new folder here (a field at the top of the list: Enter creates, Esc cancels), Esc clears the input and then closes.
+ * Every name shown came from the machine's daemon, and so does every folder made.
  */
-export function PickFolderDialog({ machines, machine: first, list, repositories, onPick, onCancel }: Props) {
+export function PickFolderDialog({ machines, machine: first, list, create, onPick, onCancel }: Props) {
   const [machine, setMachine] = useState(first)
   // The window's root, where the theme's variables live; read once, so the dialog's portal never moves.
   const [root] = useState(() => window.document.querySelector<HTMLElement>('.mx-app'))
-  const [tab, setTab] = useState<Tab>(repositories === null ? 'browse' : 'repos')
   const [dir, setDir] = useState(START_FOLDER)
   // Each machine's home, learnt from the answer to `~`, so paths under it read `~/…` and the path bar starts there.
   const [homes, setHomes] = useState<Readonly<Record<number, string>>>({})
@@ -71,16 +67,23 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
   const [hidden, setHidden] = useState(false)
   const [machineOpen, setMachineOpen] = useState(false)
   const [folders, setFolders] = useState<Read<FolderListing> | null>(null)
-  const [index, setIndex] = useState<Read<RepositoryIndex> | null>(null)
-  const [rescans, setRescans] = useState(0)
+  // Bumped when a folder was made, so the folder is read again.
+  const [reads, setReads] = useState(0)
+  // The new-folder field: null while it is closed, the typed name while it is open.
+  const [naming, setNaming] = useState<string | null>(null)
+  const [nameShown, setNameShown] = useState(false)
+  const [nameWhy, setNameWhy] = useState<string | null>(null)
+  const [making, setMaking] = useState(false)
+  // The folder just made: selected once the read that lists it arrives.
+  const [made, setMade] = useState<string | null>(null)
   const input = useRef<HTMLInputElement>(null)
+  const nameInput = useRef<HTMLInputElement>(null)
   const rows = useRef<HTMLDivElement>(null)
   const home = homes[machine] ?? null
   const there = machines.find((candidate) => candidate.machine === machine)
   const label = there?.label ?? 'this machine'
   const asleep = there !== undefined && !there.ready
-  const folderKey = `${String(machine)}:${dir}`
-  const repoKey = `${String(machine)}:${String(rescans)}`
+  const folderKey = `${String(machine)}:${dir}:${String(reads)}`
 
   useEffect(() => { input.current?.focus() }, [])
 
@@ -98,46 +101,36 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
     return () => { live = false }
   }, [list, machine, dir, folderKey, asleep])
 
-  useEffect(() => {
-    if (repositories === null || asleep) return undefined
-    let live = true
-    // A rescan asks the daemon to look again; the first read and a machine switch read what it already knows.
-    const ask = rescans === 0 ? repositories.list(machine) : repositories.rescan(machine)
-    ask.then(
-      (value) => { if (live) setIndex({ key: repoKey, result: { state: 'ready', value } }) },
-      (error: unknown) => { if (live) setIndex({ key: repoKey, result: { state: 'failed', why: errorMessage(error, `Could not read the repositories on ${label}`) } }) },
-    )
-    return () => { live = false }
-  }, [repositories, machine, rescans, repoKey, asleep, label])
-
-  const isRepos = tab === 'repos'
   const pathQuery = isPathQuery(query)
   const listing = folders?.key === folderKey && folders.result.state === 'ready' ? folders.result.value : null
   const here = listing !== null && listing.exists ? listing.path : null
   const folderFailure = folders?.key === folderKey && folders.result.state === 'failed' ? folders.result.why : null
-  const indexRead = index?.key === repoKey ? index.result : null
-  const indexed = indexRead?.state === 'ready' ? indexRead.value : null
-  const waiting = !asleep && (isRepos ? repositories !== null && indexRead === null : folders?.key !== folderKey)
-  const loading = useAfterDelay(waiting, `${tab}:${folderKey}:${repoKey}`)
+  const waiting = !asleep && folders?.key !== folderKey
+  const loading = useAfterDelay(waiting, folderKey)
 
-  const groups = useMemo(() => (indexed === null || pathQuery ? { recent: [], rest: [] } : groupRepositories(indexed.repos, query)), [indexed, pathQuery, query])
-  const flat = useMemo<Repository[]>(() => [...groups.recent, ...groups.rest], [groups])
   const folderRows = useMemo(() => (listing === null || pathQuery ? [] : visibleFolders(listing.entries, query, hidden)), [listing, pathQuery, query, hidden])
-  const count = isRepos ? flat.length : folderRows.length
-  const at = Math.min(selected, count - 1)
+  const count = folderRows.length
+  // A folder just made is the one selected, until a key, a click or the filter picks another.
+  const madeRow = made === null ? -1 : folderRows.findIndex((entry) => entry.name === made)
+  const at = madeRow >= 0 && selected === -1 ? madeRow : Math.min(selected, count - 1)
   const chosenFolder = folderRows[at]
-  const target: string | null = isRepos ? flat[Math.max(at, 0)]?.path ?? null : here !== null && chosenFolder !== undefined ? joinPath(here, chosenFolder.name) : here
+  const target: string | null = here !== null && chosenFolder !== undefined ? joinPath(here, chosenFolder.name) : here
   const cantUse = asleep || waiting || target === null
+  const canCreate = listing !== null && listing.exists && listing.can_create
+  const olderService = listing !== null && listing.exists && !listing.can_create
+  const taken = useMemo(() => listing?.entries.map((entry) => entry.name) ?? [], [listing])
+  const nameProblem = naming === null ? null : folderNameProblem(naming, taken)
+  const nameError = nameWhy ?? (nameShown ? nameProblem : null)
 
   const scrollTo = (row: number) => { window.setTimeout(() => { rows.current?.querySelector<HTMLElement>(`[data-row="${String(row)}"]`)?.scrollIntoView({ block: 'nearest' }) }, 0) }
-  const go = (path: string) => { setDir(path); setQuery(''); setSelected(-1); setTab('browse') }
+  const stopNaming = () => { setNaming(null); setNameShown(false); setNameWhy(null) }
+  const go = (path: string) => { setDir(path); setQuery(''); setSelected(-1); setMade(null); stopNaming() }
   const resolved = (typed: string): string => {
     const text = typed.trim()
     if (text === '~' || text.startsWith('~/')) return home === null ? text : `${home}${text.slice(1)}`
     return text.length > 1 ? text.replace(/[\\/]+$/, '') : text
   }
   const choose = () => { if (!cantUse) onPick({ machine, folder: target }) }
-  const pickTab = (next: Tab) => { setTab(next); setSelected(-1); if (!isPathQuery(query)) setQuery('') }
   const pickMachine = (next: number) => {
     setMachine(next)
     setMachineOpen(false)
@@ -145,32 +138,78 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
     setQuery('')
     setSelected(-1)
     setFolders(null)
-    setIndex(null)
-    setRescans(0)
+    setMade(null)
+    stopNaming()
   }
+
+  const startNaming = () => {
+    if (!canCreate || making) return
+    if (naming === null) { setNaming(''); setNameShown(false); setNameWhy(null) }
+    window.setTimeout(() => { nameInput.current?.focus() }, 0)
+  }
+  const submitName = async (event: SyntheticEvent) => {
+    event.preventDefault()
+    if (naming === null || here === null || making) return
+    setNameShown(true)
+    if (nameProblem !== null) return
+    setMaking(true)
+    setNameWhy(null)
+    try {
+      const outcome = await create(machine, here, naming)
+      if (outcome.kind === 'created') {
+        if (naming.startsWith('.')) setHidden(true)
+        setMade(naming)
+        setQuery('')
+        setSelected(-1)
+        stopNaming()
+        setReads((now) => now + 1)
+        window.setTimeout(() => { input.current?.focus() }, 0)
+      } else if (outcome.kind === 'exists') setNameWhy(`A folder called ${naming} is already here.`)
+      else setNameWhy(outcome.reason)
+    } catch (error: unknown) {
+      setNameWhy(errorMessage(error, `Could not make the folder on ${label}`))
+    } finally {
+      setMaking(false)
+    }
+  }
+  const onNameKeyDown = (event: KeyboardEvent) => {
+    // The field has its own keys: nothing it handles reaches the list's.
+    event.stopPropagation()
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      stopNaming()
+      input.current?.focus()
+    }
+  }
+
+  useEffect(() => {
+    if (madeRow < 0) return
+    window.setTimeout(() => { rows.current?.querySelector<HTMLElement>(`[data-row="${String(madeRow)}"]`)?.scrollIntoView({ block: 'nearest' }) }, 0)
+  }, [madeRow])
 
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.nativeEvent.isComposing || waiting || asleep) return
     const mod = event.ctrlKey || event.metaKey
-    const typing = event.target === input.current
-    if (event.key === 'Enter' && (mod || (isRepos && !pathQuery))) {
+    if (mod && event.shiftKey && event.key.toLowerCase() === 'n') {
+      event.preventDefault()
+      startNaming()
+      return
+    }
+    if (event.key === 'Enter' && mod) {
       event.preventDefault()
       choose()
-    } else if (event.key === 'Tab' && !event.shiftKey && typing) {
-      event.preventDefault()
-      pickTab(isRepos ? 'browse' : 'repos')
     } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
       const next = event.key === 'ArrowDown' ? Math.min(count - 1, at + 1) : Math.max(0, at - 1)
       setSelected(count === 0 ? -1 : next)
       scrollTo(next)
-    } else if (event.key === 'Enter' || (event.key === 'ArrowRight' && query === '' && !isRepos)) {
+    } else if (event.key === 'Enter' || (event.key === 'ArrowRight' && query === '')) {
       event.preventDefault()
       const chosen = folderRows[at]
       if (pathQuery) go(resolved(query))
       else if (here !== null && chosen !== undefined) go(joinPath(here, chosen.name))
       else if (here !== null && folderRows.length === 1 && folderRows[0] !== undefined) go(joinPath(here, folderRows[0].name))
-    } else if ((event.key === 'Backspace' || event.key === 'ArrowLeft') && query === '' && !isRepos && here !== null && !isRoot(here)) {
+    } else if ((event.key === 'Backspace' || event.key === 'ArrowLeft') && query === '' && here !== null && !isRoot(here)) {
       event.preventDefault()
       go(parentOf(here))
     }
@@ -178,35 +217,15 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
 
   const noneText = asleep
     ? `${label} is asleep. Wake it, or pick another machine.`
-    : isRepos
-      ? query.trim() !== '' ? `No repository matches “${query.trim()}”. Try Browse, or type a path starting with / or ~.` : `No repositories found on ${label} yet. Try Browse.`
-      : query.trim() !== '' ? `No folder here matches “${query.trim()}”.` : (listing?.entries.length ?? 0) > 0 ? 'Only hidden folders here. Turn on Hidden folders to see them.' : 'No subfolders. Open this one, or go up.'
-  const now = nowSeconds()
+    : query.trim() !== '' ? `No folder here matches “${query.trim()}”.` : (listing?.entries.length ?? 0) > 0 ? 'Only hidden folders here. Turn on Hidden folders to see them.' : 'No subfolders. Open this one, make a new one, or go up.'
   const crumbs = here === null ? [] : crumbsOf(here, home)
-  const showNone = !waiting && !pathQuery && (asleep || (isRepos ? (repositories !== null && indexed !== null && flat.length === 0) : (listing !== null && listing.exists && folderRows.length === 0)))
+  const showNone = !waiting && !pathQuery && naming === null && (asleep || (listing !== null && listing.exists && folderRows.length === 0))
   const useName = target === null ? null : baseName(target)
-  const repoRow = (repo: Repository, row: number) => {
-    const on = row === at
-    return (
-      <ResultsOption key={repo.path} selected={on} data-row={row} title={niceOf(repo.path, home)} className={`mx-fp-row is-repo${on ? ' is-selected' : ''}`}
-        onClick={() => { if (on) choose(); else setSelected(row) }} onDoubleClick={choose}>
-        <Icon name="folder" size={14} />
-        <span className="mx-fp-row-text">
-          <span className="mx-fp-row-name">{baseName(repo.path)}</span>
-          <span className="mx-fp-row-sub">{`${niceOf(parentOf(repo.path), home)}/`}</span>
-        </span>
-        <span className="mx-fp-row-side">
-          {repo.branch !== null && <span className="mx-fp-branch"><Icon name="branch" size={11} stroke="currentColor" /><span className="mx-fp-branch-name">{repo.branch}</span></span>}
-          {repo.lastUsed !== null && <span className="mx-fp-when">{`Used ${agoOf(repo.lastUsed, now)}`}</span>}
-        </span>
-      </ResultsOption>
-    )
-  }
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel() }}>
       <DialogContent unstyled container={root} overlayClassName="mx-fp-scrim" aria-label="Choose a folder" aria-describedby={undefined} className="mx-fp" onKeyDown={onKeyDown}
-        onEscapeKeyDown={(event) => { if (query !== '') { event.preventDefault(); setQuery(''); setSelected(-1) } }}
+        onEscapeKeyDown={(event) => { if (naming !== null) { event.preventDefault(); stopNaming() } else if (query !== '') { event.preventDefault(); setQuery(''); setSelected(-1) } }}
         onOpenAutoFocus={(event) => { event.preventDefault(); input.current?.focus() }}>
         <DialogTitle className="sr-only">{`Open a folder on ${label}`}</DialogTitle>
         <div className="mx-fp-head">
@@ -234,20 +253,13 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
           <span className="mx-nsd-grow" />
           <button type="button" className="mx-nsd-close" aria-label="Close" title="Close (Esc)" onClick={onCancel}><Icon name="close" size={13} /></button>
         </div>
-        <div role="tablist" aria-label="How to find it" className="mx-fp-tabs">
-          {repositories !== null && (
-            <button type="button" role="tab" aria-selected={isRepos} className="mx-fp-tab" onClick={() => { pickTab('repos') }}>Repositories{indexed !== null && <span>{indexed.repos.length}</span>}</button>
-          )}
-          <button type="button" role="tab" aria-selected={!isRepos} className="mx-fp-tab" onClick={() => { pickTab('browse') }}>Browse</button>
-        </div>
         <div className="mx-fp-find">
           <label className="mx-fp-field">
             <Icon name="search" size={13} />
-            <input ref={input} aria-label="Find a folder or type a path" value={query} maxLength={MOST_PATH_CHARS} spellCheck={false} placeholder={isRepos ? 'Find a repository, or type a path' : 'Filter this folder, or type a path'}
-              onChange={(event) => { setQuery(event.target.value); setSelected(-1) }} />
+            <input ref={input} aria-label="Find a folder or type a path" value={query} maxLength={MOST_PATH_CHARS} spellCheck={false} placeholder="Filter this folder, or type a path"
+              onChange={(event) => { setQuery(event.target.value); setSelected(-1); setMade(null) }} />
           </label>
-          {!isRepos && (
-            <div className="mx-fp-path">
+          <div className="mx-fp-path">
               <button type="button" className="mx-fp-up" aria-label="Up one folder" title="Up one folder (Backspace)" disabled={here === null || isRoot(here)} onClick={() => { if (here !== null) go(parentOf(here)) }}><Icon name="arrowUp" size={13} strokeWidth={2.2} /></button>
               <nav aria-label="Path" className="mx-fp-crumbs">
                 {crumbs.map((crumb, place, all) => (
@@ -257,28 +269,34 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
                   </span>
                 ))}
               </nav>
+              <button type="button" className="mx-fp-new-button" disabled={!canCreate || making} aria-describedby={olderService ? 'mx-fp-older' : undefined} title="New folder (Ctrl+Shift+N)" onClick={startNaming}>
+                <Icon name="plus" size={12} strokeWidth={2.2} />
+                <span>New folder</span>
+              </button>
             </div>
-          )}
+          {olderService && <p id="mx-fp-older" className="mx-fp-note">This machine&apos;s service is older: restart it to create folders.</p>}
         </div>
         <ResultsList ref={rows} aria-label="Folders" className="mx-fp-list">
           {loading && <MLoader label={`Reading ${label}…`} className="mx-fp-loading" />}
+          {naming !== null && !waiting && (
+            <form className="mx-fp-new" onSubmit={(event) => { void submitName(event) }}>
+              <label className="mx-fp-new-row">
+                <Icon name="folder" size={14} />
+                <input ref={nameInput} aria-label="New folder name" aria-invalid={nameError !== null} aria-describedby={nameError === null ? undefined : 'mx-fp-new-why'} autoFocus value={naming} disabled={making} spellCheck={false} autoComplete="off" maxLength={300} placeholder="New folder name"
+                  onChange={(event) => { setNaming(event.target.value); setNameWhy(null) }} onKeyDown={onNameKeyDown} />
+                <span className="mx-fp-new-hint" aria-hidden="true">{making ? 'Making…' : '↵ Create · Esc'}</span>
+              </label>
+              {nameError !== null && <p id="mx-fp-new-why" role="alert" className="mx-fp-new-why">{nameError}</p>}
+            </form>
+          )}
           {!waiting && (
             <>
               {pathQuery && (
                 <button type="button" className="mx-fp-go" onClick={() => { go(resolved(query)) }}><span aria-hidden="true">↵</span><span>{`Go to ${niceOf(resolved(query), home)}`}</span></button>
               )}
-              {isRepos && !pathQuery && repositories !== null && indexRead?.state === 'failed' && <p role="alert" className="mx-fp-none">{indexRead.why}</p>}
-              {isRepos && !pathQuery && (
-                <>
-                  {groups.recent.length > 0 && <div className="mx-fp-group">{`Recent on ${label}`}</div>}
-                  {groups.recent.map((repo, row) => repoRow(repo, row))}
-                  {groups.rest.length > 0 && <div className="mx-fp-group">{groups.recent.length > 0 ? 'Other repositories' : 'Repositories'}</div>}
-                  {groups.rest.map((repo, row) => repoRow(repo, groups.recent.length + row))}
-                </>
-              )}
-              {!isRepos && folderFailure !== null && <p role="alert" className="mx-fp-none">{folderFailure}. You can still type a path above.</p>}
-              {!isRepos && listing !== null && !listing.exists && <p role="alert" className="mx-fp-none">{`There is no folder ${listing.path} on ${label}, or it cannot be read.`}</p>}
-              {!isRepos && here !== null && !pathQuery && folderRows.map((entry, row) => {
+              {folderFailure !== null && <p role="alert" className="mx-fp-none">{folderFailure}. You can still type a path above.</p>}
+              {listing !== null && !listing.exists && <p role="alert" className="mx-fp-none">{`There is no folder ${listing.path} on ${label}, or it cannot be read.`}</p>}
+              {here !== null && !pathQuery && folderRows.map((entry, row) => {
                 const on = row === at
                 const path = joinPath(here, entry.name)
                 return (
@@ -295,20 +313,12 @@ export function PickFolderDialog({ machines, machine: first, list, repositories,
             </>
           )}
         </ResultsList>
-        {!isRepos && listing?.truncated === true && <p role="status" className="mx-fp-note">{`Showing the first ${String(listing.entries.length)} folders only.`}</p>}
+        {listing?.truncated === true && <p role="status" className="mx-fp-note">{`Showing the first ${String(listing.entries.length)} folders only.`}</p>}
         <div className="mx-fp-foot">
-          {!isRepos && (
-            <label className="mx-nsd-worktree">
-              <Switch aria-label="Hidden folders" checked={hidden} onCheckedChange={setHidden} />
-              Hidden folders
-            </label>
-          )}
-          {isRepos && (
-            <>
-              <span className="mx-fp-index">{indexed === null || indexed.indexedAt === null ? `Indexed by ${DAEMON_NAME}` : `Indexed by ${DAEMON_NAME} · ${agoOf(indexed.indexedAt, now)}`}</span>
-              <button type="button" className="mx-fp-link" disabled={asleep || waiting} onClick={() => { setIndex(null); setRescans((count) => count + 1) }}>Rescan</button>
-            </>
-          )}
+          <label className="mx-nsd-worktree">
+            <Switch aria-label="Hidden folders" checked={hidden} onCheckedChange={setHidden} />
+            Hidden folders
+          </label>
           <span className="mx-nsd-grow" />
           <button type="button" className="mx-fp-cancel" onClick={onCancel}>Cancel</button>
           <button type="button" className="mx-nsd-start mx-fp-use" disabled={cantUse} title={target ?? ''} onClick={choose}>

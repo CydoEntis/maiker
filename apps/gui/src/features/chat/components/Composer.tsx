@@ -6,10 +6,11 @@ import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { abilitiesOf, runsMidTurn } from '@/features/workspace/model/agentAbilities'
 import { AppIcon, Icon } from '@/features/workspace/components/glyphs'
 import { registerComposerDrop } from '../composerDrop'
-import { updateComposer, useComposerDraft, useComposerSlice } from '../composerStore'
+import { clearQuotes, removeQuote, updateComposer, useComposerDraft, useComposerSlice } from '../composerStore'
 import type { ChatComposer } from '../useChatComposer'
 import { defaultChoice, useAgentChoice, type AgentChoice } from '../agentChoice'
 import { DraftAttachments } from './Attachments'
+import { QuoteStrip } from './QuoteStubs'
 import { AgentPicker } from './AgentPicker'
 import { modelName } from '../modelName'
 import { PLAN_MODE } from '../chatMeta'
@@ -137,6 +138,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
   const draft = composer.draft ?? storedDraft
+  const quotes = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.quotes)
   const off = disabledReason !== null
   const box = useRef<HTMLDivElement>(null)
   const text = useRef<HTMLTextAreaElement>(null)
@@ -280,6 +282,11 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   // agent draws its answer in the terminal and never writes it to the conversation, so the chat would wait for it forever.
   const send = () => {
     const typed = draft.trim()
+    // With quotes it is a message to the agent, whatever its first word.
+    if (quotes.length > 0) {
+      submit()
+      return
+    }
     const route = routeOf(typed)
     if (route !== null) {
       inWindowRun(route, typed)
@@ -368,6 +375,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
           sendingNow={sendingNow}
           note={queueNote}
         />
+        <QuoteStrip quotes={quotes} onRemove={(id) => { removeQuote(composer.conversationKey ?? NO_CONVERSATION, id) }} onClear={() => { clearQuotes(composer.conversationKey ?? NO_CONVERSATION) }} />
         <div className={`mx-box${off ? ' is-locked' : ''}`}>
           {picking && (
             <SlashPicker agent={agent} typed={draft.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={run} onHover={(index) => { setCursor({ query, index }) }} />

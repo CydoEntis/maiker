@@ -22,7 +22,7 @@
 .mx-inspect-count.is-bad { color: var(--danger); }
 .mx-inspect-close { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
 .mx-inspect-close:hover { background: var(--m-hover); color: var(--fg); }
-.mx-inspect-close:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+.mx-inspect-close:focus-visible { box-shadow: var(--focus-underline); }
 /* The design's drawer motion: it grows from nothing as it slides, so the chat beside it narrows with it instead of jumping. */
 @keyframes mx-inspect-in { from { opacity: 0; transform: translateX(28px); width: 0; min-width: 0; margin-right: 0; } }
 @keyframes mx-inspect-in-left { from { opacity: 0; transform: translateX(-28px); width: 0; min-width: 0; margin-left: 0; } }
@@ -43,6 +43,7 @@
 .mx-changes-row { width: 100%; min-height: 38px; display: flex; align-items: center; gap: 9px; padding: 4px 8px; border-radius: 8px; text-align: left; color: var(--fg2); }
 .mx-changes-row:hover { background: var(--m-hover); color: var(--fg); }
 .mx-changes-row.is-current { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); color: var(--fg); }
+.mx-changes-row.is-current:focus-visible { box-shadow: var(--focus-underline); }
 .mx-changes-letter { flex: none; width: 10px; font-family: var(--mono); font-size: 10.5px; font-weight: 700; text-align: center; }
 .mx-changes-letter.is-add, .mx-changes-chip.is-add { color: var(--ok); }
 .mx-changes-letter.is-edit, .mx-changes-chip.is-edit { color: var(--warn); }
@@ -113,7 +114,8 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-patch-line { min-inline-size: max-content; }
 .mx-patch-gap { display: block; height: 0; margin: 7px 0; border-top: 1px dashed var(--pane-line); overflow: hidden; }
 .mx-patch-line.is-commentable { cursor: pointer; }
-.mx-patch-line.is-commentable:hover, .mx-patch-line.is-commentable:focus-visible { box-shadow: inset 2px 0 0 var(--accent); outline: none; }
+.mx-patch-line.is-commentable:hover { box-shadow: inset 2px 0 0 var(--accent); }
+.mx-patch-line.is-commentable:focus-visible { box-shadow: var(--focus-underline); outline: none; }
 .mx-patch-comment, .mx-patch-sent { display: block; margin: 4px 10px 6px calc(8ch + 30px); white-space: normal; font-family: var(--ui, system-ui, sans-serif); font-size: 12.5px; }
 .mx-patch-comment { padding: 8px; border: 1px solid var(--pane-line); border-radius: 10px; background: var(--m-well); max-width: 560px; }
 .mx-patch-comment-text { display: block; width: 100%; resize: vertical; border: 0; background: transparent; color: var(--fg); font: inherit; outline: none; }
@@ -170,6 +172,7 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-files-row { width: 100%; min-height: 26px; display: flex; align-items: center; gap: 4px; padding-right: 8px; border-radius: 7px; font-size: 12.5px; color: var(--fg2); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-files-row:hover { background: var(--m-hover); color: var(--fg); }
 .mx-files-row.is-current { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); color: var(--fg); }
+.mx-files-row.is-current:focus-visible { box-shadow: var(--focus-underline); }
 .mx-files-row.is-folder { color: var(--fg); font-weight: 500; }
 .mx-files-wait { display: flex; flex-direction: column; gap: 14px; padding: 10px 10px; }
 .mx-files-wait > span { width: 58%; height: 10px; border-radius: 4px; background: var(--m-raise); }
@@ -223,6 +226,8 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-changes-all { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 12px 6px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .mx-changes-all-count { flex: 1; min-width: 0; }
 .mx-changes-tick { flex: none; width: 14px; height: 14px; accent-color: var(--accent); }
+/* A native checkbox paints no box-shadow, so its row takes the underline instead. */
+.mx-changes-line:has(.mx-changes-tick:focus-visible), .mx-changes-all:has(.mx-changes-tick:focus-visible) { box-shadow: var(--focus-underline); }
 /* History: Snapshots or the status log, picked above the list. */
 .mx-history { display: flex; flex-direction: column; gap: 10px; }
 .mx-history-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

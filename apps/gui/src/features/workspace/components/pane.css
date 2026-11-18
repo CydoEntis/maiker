@@ -1,5 +1,5 @@
 /* The workspace card and its panes (README: Workspace and panes). One pane is no card of its own; two or
-   more each get a faint card, and the focused one a teal ring drawn above its content. */
+   more each get a faint card, and the focused one a 2px accent line along its top edge, drawn above its content. */
 
 /* The chat column keeps room to be used: the side panel beside it gives way first (inspect.css). */
 .mx-main-wrap { flex: 1; min-width: min(var(--chat-min, 400px), 100%); display: flex; padding: 12px; }
@@ -31,7 +31,7 @@
 /* While a pane is dragged it dims, and the pane under the pointer says what letting go does. */
 .mx-pane.is-dragging { opacity: .6; }
 .mx-pane-drop { position: absolute; inset: 6px; z-index: 29; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; color: var(--accent-text); pointer-events: none; animation: v7scrim .12s ease-out; }
-.mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 0 0 1.5px var(--accent-line), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 2px 0 var(--focus-line); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
 .mx-pane.is-focused .mx-pane-ring { opacity: 1; }
 
 /* The session header (52px, two lines): the status icon and the name, and under the name where the chat works (folder,
@@ -44,7 +44,7 @@
 .mx-pane-id.is-shell { align-items: center; }
 .mx-pane-icon { flex: none; display: inline-flex; width: 14px; height: 14px; }
 .mx-pane-title { min-width: 0; display: flex; }
-.mx-pane-title .mx-inline-name { flex: 0 1 auto; min-width: 120px; height: 22px; padding: 0 6px; margin-left: -6px; font: 600 14px var(--ui); color: var(--fg); background: var(--m-well); border: 1px solid var(--accent); outline: none; }
+.mx-pane-title .mx-inline-name { flex: 0 1 auto; min-width: 120px; height: 22px; padding: 0 6px; margin-left: -6px; border-radius: 0; font: 600 14px var(--ui); color: var(--fg); background: transparent; border: 0; outline: none; box-shadow: var(--focus-underline); }
 .mx-pane-name { flex: 0 1 auto; min-width: 0; height: 22px; display: flex; align-items: center; padding: 0 4px; margin-left: -4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; letter-spacing: -.005em; color: var(--fg); }
 .mx-pane-name.is-editable { cursor: text; }
 .mx-pane-name.is-editable:hover { background: var(--m-hover); }
@@ -193,7 +193,7 @@
 .mx-tdock-column > .mx-tdock-split + .mx-tdock-split { border-top: 1px solid var(--line); }
 .mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: var(--tdock-pad); font-family: var(--mono); line-height: 1.6; background: var(--term); cursor: text; }
 /* The focused split of several: a 2px accent line along its top edge, drawn inside it so nothing moves. */
-.mx-tdock-split.is-focus { box-shadow: inset 0 2px 0 var(--accent); }
+.mx-tdock-split.is-focus { box-shadow: inset 0 2px 0 var(--focus-line); }
 .mx-tdock-split > :first-child { flex: 1; min-width: 0; min-height: 0; }
 .mx-tdock-split .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
 .mx-tdock-split .terminal-screen, .mx-tdock-split .terminal-screen:focus-within { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; }

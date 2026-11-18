@@ -21,12 +21,12 @@ vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const behind = { daemonVersion: '0.71.0', behind: true, canRestart: true, sessionCount: 11, activeTurnCount: 1 }
 
-function renderNotice(restartWhenIdle = false) {
+function renderNotice(restartServiceWhenIdle = false, { statuses = [] as string[], starting = false } = {}) {
   const refetch = vi.fn(() => Promise.resolve())
-  const sessionsQuery = { isSuccess: true, refetch } as unknown as UseQueryResult<Conversation[]>
+  const sessionsQuery = { isSuccess: true, refetch, data: statuses.map((status) => ({ status })) } as unknown as UseQueryResult<Conversation[]>
   render(
     <QueryClientProvider client={new QueryClient()}>
-      <ServiceBehindNotice sessionsQuery={sessionsQuery} restartWhenIdle={restartWhenIdle} />
+      <ServiceBehindNotice sessionsQuery={sessionsQuery} restartServiceWhenIdle={restartServiceWhenIdle} starting={starting} />
     </QueryClientProvider>,
   )
   return { refetch }
@@ -48,7 +48,7 @@ describe('a service a release behind, with nobody mid-turn', () => {
     await waitFor(() => { expect(toasts.success).toHaveBeenCalledTimes(1) })
     expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0')
     expect(refetch).toHaveBeenCalled()
-    expect(toasts.success.mock.calls[0]).toEqual(['Maitty service updated', { description: 'It was restarted to finish the update. 11 sessions came back.' }])
+    expect(toasts.success.mock.calls[0]).toEqual(['Service restarted', { description: 'It restarted by itself to finish the update. 11 sessions came back.' }])
     expect(toasts.warning).not.toHaveBeenCalled()
   })
 
@@ -56,6 +56,25 @@ describe('a service a release behind, with nobody mid-turn', () => {
     renderNotice(true)
     await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
     expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['an agent is working', { statuses: ['idle', 'working'] }],
+    ['an agent needs the user', { statuses: ['needs-you'] }],
+    ['a session is being restored', { statuses: ['recovery'] }],
+    ['a session status is unknown', { statuses: ['unknown'] }],
+    ['a session is starting', { starting: true }],
+  ])('is left alone and the notice stays while %s, though the service counts nobody', async (_name, options) => {
+    daemon.loadDaemonUpdateStatus.mockResolvedValue(idle)
+    renderNotice(true, options)
+    await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
+    expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+  })
+
+  it('restarts when every session rests', async () => {
+    daemon.loadDaemonUpdateStatus.mockResolvedValue(idle)
+    renderNotice(true, { statuses: ['idle', 'done'] })
+    await waitFor(() => { expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0') })
   })
 
   it('is asked about when the setting is off, even with nobody working', async () => {

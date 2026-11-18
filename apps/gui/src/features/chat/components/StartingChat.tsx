@@ -118,6 +118,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     ready: false,
     error: null,
     sendText: () => Promise.resolve(false),
+    sendReply: () => Promise.resolve(false),
     echo: null,
   }), [draft, held, sessionId, attachments, attach, draftKey])
 

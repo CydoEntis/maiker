@@ -151,6 +151,7 @@ pub(super) fn term(
         exit: None,
         ask: None,
         timeline: Vec::new(),
+        began_as_agent: false,
     }
 }
 

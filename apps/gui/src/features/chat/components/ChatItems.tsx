@@ -1,4 +1,5 @@
-import { memo, useContext, useEffect, type ReactNode } from 'react'
+import { memo, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { Quote as QuoteIcon } from 'lucide-react'
 import { Icon } from '@/features/workspace/components/glyphs'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import type { TurnSpan } from '@/features/inspect/turnRange'
@@ -11,6 +12,11 @@ import { WorkingMark } from './WorkingMark'
 import { LiveBox } from './LiveBox'
 import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { parseAttachmentMessage } from '../attachmentMessage'
+import { parseQuoteMessage } from '../quoteMessage'
+import { askablesOf, type Askable } from '../plainQuestions'
+import { ChatActionsContext } from '../chatActions'
+import { agentName } from '../commandCards'
+import { QuoteStub } from './QuoteStubs'
 import { withoutPasteTags } from '../messagePreview'
 import { AgentsCard } from './AgentsCard'
 import { SentAttachments } from './Attachments'
@@ -111,45 +117,103 @@ function sameProps(a: RowProps, b: RowProps): boolean {
  * each count as one), so what shows is always finished; one that was already there shows whole. A reply still arriving
  * is read in its finished form, so a half-written mark does not flash.
  */
-function AgentMessage({ rowKey, paragraphs, status }: { rowKey: string; paragraphs: readonly string[]; status: ItemStatus }) {
+function AgentMessage({ rowKey, paragraphs, status, agent }: { rowKey: string; paragraphs: readonly string[]; status: ItemStatus; agent: ChatAgent }) {
   const reduced = useContext(ReducedMotionContext)
   const known = useContext(KnownRowsContext)
+  const actions = useContext(ChatActionsContext)
   const target = (status === 'running' ? streamingParagraphs(paragraphs) : paragraphs).join('\n\n')
   const typed = useRevealedText(target, !reduced, known !== null && !known.has(rowKey))
   // Revealed once: drawn again, this row shows whole.
   useEffect(() => { known?.add(rowKey) }, [known, rowKey])
   const { lead, rest } = splitLead(typed === target ? (status === 'running' ? streamingParagraphs(paragraphs) : paragraphs) : paragraphsOf(typed))
   const empty = target.trim() === ''
+  // Questions asked in plain words are offered a Reply only once the message is whole: never while it is written or typed in.
+  const whole = status !== 'running' && typed === target && actions !== null && actions.canReply
+  const restText = rest.join('\n\n')
+  const leadAsked = useMemo(() => (whole ? askablesOf(lead).map((one): Askable => ({ ...one, key: `lead.${one.key}` })) : []), [whole, lead])
+  const restAsked = useMemo(() => (whole ? askablesOf(restText) : []), [whole, restText])
+  const asked = useMemo(() => [...leadAsked, ...restAsked], [leadAsked, restAsked])
+  const who = agentName(agent)
+  const reply = (focus: string | null) => { actions?.reply(rowKey, who, asked, focus) }
+  const leadOne = leadAsked[0]
   return (
     <div className="mx-msg-agent">
-      {lead !== '' && <p className="mx-msg-lead"><InlineMarkdown text={lead} /></p>}
-      {rest.length > 0 && <Markdown text={rest.join('\n\n')} className="mx-msg-rest" />}
+      {lead !== '' && (leadOne === undefined
+        ? <p className="mx-msg-lead"><InlineMarkdown text={lead} /></p>
+        : <p className="mx-msg-lead has-reply"><InlineMarkdown text={lead} /><ReplyAction label={leadOne.label} onReply={() => { reply(leadOne.key) }} /></p>)}
+      {rest.length > 0 && <Markdown text={restText} className="mx-msg-rest" {...(restAsked.length === 0 ? {} : { asked: restAsked, onReply: (one: Askable) => { reply(one.key) } })} />}
       {empty && <p className="mx-msg-empty">{status === 'running' ? 'Writing…' : 'The agent finished without writing a reply.'}</p>}
+      {asked.length > 1 && (
+        <p className="mx-ask-foot">
+          <button type="button" className="mx-ask-all" onClick={() => { reply(null) }}>{asked.length} questions<span aria-hidden="true"> · </span><span className="mx-ask-all-do">Reply to each</span></button>
+        </p>
+      )}
+      {whole && !empty && (
+        <button type="button" className="mx-msg-quote" aria-label="Quote this message" title="Quote this message in your reply" onClick={() => { actions.quote(who, quoteTextOf(paragraphs)) }}><QuoteIcon size={13} aria-hidden="true" /></button>
+      )}
     </div>
   )
+}
+
+/** What quoting a whole message takes: its paragraphs, in order. The strip and the message cut it to fit. */
+function quoteTextOf(paragraphs: readonly string[]): string {
+  return paragraphs.join('\n\n')
+}
+
+/** A quiet Reply at the right edge of a question. Its room is always kept, so showing it moves nothing. */
+export function ReplyAction({ label, onReply }: { label: string; onReply: () => void }) {
+  return <button type="button" className="mx-ask-reply" aria-label={label === '' ? 'Reply to this question' : `Reply to question ${label}`} onClick={onReply}>Reply</button>
+}
+
+/** Quotes what the person said in the next message: hidden until the message is hovered or the button has the keys, its room always kept. */
+function QuoteOwn({ text }: { text: string }) {
+  const actions = useContext(ChatActionsContext)
+  const said = wordsSaid(text)
+  if (actions === null || said === '') return null
+  return <button type="button" className="mx-msg-quote is-own" aria-label="Quote this message" title="Quote this message in your reply" onClick={() => { actions.quote('You', said) }}><QuoteIcon size={13} aria-hidden="true" /></button>
+}
+
+/** What a sent message says in its own words: without its attached files, the quotes it carried, or the notes for the agent. */
+function wordsSaid(raw: string): string {
+  const text = withoutPasteTags(stripRestoreNote(raw)).trim()
+  const words = parseAttachmentMessage(text)?.text ?? text
+  const segments = parseQuoteMessage(words)
+  return (segments === null ? words : segments.flatMap((segment) => (segment.kind === 'words' ? [segment.text] : [])).join('\n\n')).trim()
 }
 
 /**
  * What the person said: its text, and its attached files as chips. A message on its way is drawn the
  * same as one the history holds, so the files never show as the paths that carry them.
  */
-function SaidText({ text: sent }: { text: string }) {
+function SaidText({ text: sent, rowKey }: { text: string; rowKey: string }) {
   // The note a restore put in front is for the agent; the person sees what they wrote. Blank lines around it (Claude
   // Code stores a pasted message with two in front) would only draw an empty band in the bubble.
   const text = withoutPasteTags(stripRestoreNote(sent)).replace(/^\s*\n/, '').trimEnd()
   const attached = parseAttachmentMessage(text)
-  if (attached === null) return <p className="mx-bubble">{text}</p>
+  const words = attached === null ? text : attached.text.trim()
+  const segments = parseQuoteMessage(words)
+  const bubble = segments === null
+    ? (words === '' ? null : <p className="mx-bubble">{words}</p>)
+    : (
+      // What it quotes sits above each part of what was said, in one bubble.
+      <div className="mx-bubble has-quotes">
+        {segments.map((segment, index) => (segment.kind === 'quote'
+          ? <QuoteStub key={index} quote={segment} from={rowKey} />
+          : <p key={index} className="mx-said-words">{segment.text}</p>))}
+      </div>
+    )
   // Attachments sit above the bubble, as they were added before the text was sent.
   return (
     <>
-      <SentAttachments files={attached.files} />
-      {attached.text.trim() !== '' && <p className="mx-bubble">{attached.text.trim()}</p>}
+      {attached !== null && <SentAttachments files={attached.files} />}
+      {bubble}
     </>
   )
 }
 
 /** One row of the list. Memoised: a streamed update re-renders only the rows whose events changed. */
 export const ChatItem = memo(function ChatItem({ row, agent, workingSince, approval, root, openDiff, goToStep, waitingStep, editFromHere = null }: RowProps) {
+  const canQuote = useContext(ChatActionsContext) !== null
   switch (row.kind) {
     case 'user': {
       // Only the daemon's own time: when the window first saw a message is not when it was sent.
@@ -157,10 +221,11 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
       return (
         <Frame>
           <div className="mx-msg-user">
-            <SaidText text={row.event.text} />
-            {(sentAt !== null || editFromHere !== null) && (
+            <SaidText text={row.event.text} rowKey={row.key} />
+            {(sentAt !== null || editFromHere !== null || canQuote) && (
               <div className="mx-msg-meta">
                 {sentAt !== null && <time className="mx-msg-time" dateTime={new Date(sentAt).toISOString()}>{clock(sentAt)}</time>}
+                {canQuote && <QuoteOwn text={row.event.text} />}
                 {editFromHere !== null && <MessageMenu message={row.event} editFromHere={editFromHere} />}
               </div>
             )}
@@ -177,13 +242,13 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
       return (
         <Frame>
           <div className="mx-msg-user is-echo" aria-label="Sending">
-            <SaidText text={row.text} />
+            <SaidText text={row.text} rowKey={row.key} />
             <div className="mx-msg-meta"><WorkingMark agent={agent} />Sending…</div>
           </div>
         </Frame>
       )
     case 'agent':
-      return <Frame><AgentMessage rowKey={row.key} paragraphs={row.paragraphs} status={row.status} /></Frame>
+      return <Frame><AgentMessage rowKey={row.key} paragraphs={row.paragraphs} status={row.status} agent={agent} /></Frame>
     case 'step':
       return <Frame>{row.event.kind === 'todo' ? <PlanCard event={row.event} /> : <StepView event={row.event} root={root} openDiff={openDiff} alone waiting={isWaitingStep(waitingStep, row.event.id)} />}</Frame>
     case 'thought':
@@ -191,7 +256,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     case 'summary':
       return <Frame><ContextSummary text={row.event.text} /></Frame>
     case 'work':
-      return <Frame><WorkCard steps={row.events} root={root} openDiff={openDiff} waitingStep={waitingStep} /></Frame>
+      return <Frame><WorkCard steps={row.events} root={root} openDiff={openDiff} waitingStep={waitingStep} rowKey={row.key} /></Frame>
     case 'agents':
       return <Frame><AgentsCard agents={row.events} rowKey={row.key} /></Frame>
     case 'approval':

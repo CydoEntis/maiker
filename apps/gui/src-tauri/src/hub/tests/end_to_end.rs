@@ -99,6 +99,7 @@ impl Host {
                 }
                 Reaction::Folders { machine, tag, listing } => self.folders.push((machine.0, tag, listing)),
                 Reaction::Cloned { machine, tag, outcome } => self.cloned.push((machine.0, tag, outcome)),
+                Reaction::FolderCreated { .. } => {}
             }
         }
     }

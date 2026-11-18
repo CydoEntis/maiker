@@ -78,6 +78,12 @@ async function lastPopup() {
   return last
 }
 
+/** Opens the agent dropdown, picks the agent in its list and closes it with Esc. */
+async function chooseAgent(name: string) {
+  await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+  await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name }))
+  await userEvent.keyboard('{Escape}')
+}
 const box = () => screen.getByRole('textbox', { name: 'First message' })
 const startButton = () => screen.getByRole('button', { name: 'Start' })
 const worktree = () => screen.getByRole('switch', { name: 'Own worktree' })
@@ -296,19 +302,75 @@ describe('the New session dialog', () => {
     expect(screen.queryByRole('button', { name: /permission mode/i })).not.toBeInTheDocument()
   })
 
+  it('has one dropdown for the agent, its model and its effort, in one line', async () => {
+    dialog()
+    const button = screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · .* · Medium/ })
+    expect(button).toHaveTextContent(/^Claude · .*Medium$/)
+    expect(screen.queryByRole('radiogroup', { name: 'Agent' })).not.toBeInTheDocument()
+    await userEvent.click(button)
+    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['Claude', 'Codex', 'Gemini'])
+    expect(screen.getByRole('radiogroup', { name: 'Model' })).toBeInTheDocument()
+    expect(within(screen.getByRole('radiogroup', { name: 'Effort' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['Low', 'Medium', 'High', 'Max'])
+  })
+
+  it('stays open while the agent, model and effort are changed, jumps to an agent by typing, and closes on Enter', async () => {
+    dialog()
+    await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    const agents = () => within(screen.getByRole('radiogroup', { name: 'Agent' }))
+    agents().getByRole('radio', { name: 'Claude' }).focus()
+    await userEvent.keyboard('cod')
+    expect(agents().getByRole('radio', { name: 'Codex' })).toBeChecked()
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Effort' })).getByRole('radio', { name: 'High' }))
+    expect(screen.getByRole('radiogroup', { name: 'Agent' })).toBeInTheDocument()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.queryByRole('radiogroup', { name: 'Agent' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Codex · .* · High/ })).toBeInTheDocument()
+  })
+
+  it('gives each agent back the model and effort it was left at', async () => {
+    dialog()
+    await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Effort' })).getByRole('radio', { name: 'Max' }))
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Codex' }))
+    expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Codex · .* · Medium/ })).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' }))
+    expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · .* · Max/ })).toBeInTheDocument()
+  })
+
+  it('has no effort part in the menu of an agent without an effort setting', async () => {
+    dialog(undefined, { defaultAgent: 'gemini' })
+    await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning: Gemini/ }))
+    expect(screen.queryByRole('radiogroup', { name: 'Effort' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/no effort setting to pick/)).not.toBeInTheDocument()
+  })
+
+  it('keeps every control where it is in Terminal: the body, the notes and the foot stay, and the controls that do not apply are out of reach', async () => {
+    dialog(undefined, { onNewShell: vi.fn() })
+    await ready()
+    expect(screen.getByRole('switch', { name: 'Own worktree' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('radio', { name: 'Terminal' }))
+    const dialogBox = screen.getByRole('dialog')
+    expect(dialogBox.querySelector('.mx-nsd-text')).not.toBeNull()
+    expect(dialogBox.querySelector('.mx-nsd-notes')).not.toBeNull()
+    expect(dialogBox.querySelector('.mx-nsd-agent')).toHaveAttribute('aria-hidden', 'true')
+    expect(dialogBox.querySelector('.mx-nsd-worktree')).toHaveAttribute('aria-hidden', 'true')
+  })
+
   it('starts on medium effort and says so on the model and effort button', async () => {
     dialog()
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · .* · Medium/ })).toHaveTextContent('Medium')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-    expect(screen.getByRole('radio', { name: 'Medium' })).toBeChecked()
+    expect(within(screen.getByRole('radiogroup', { name: 'Effort' })).getByRole('radio', { name: 'Medium' })).toBeChecked()
   })
 
   it('switches the agent with the toggle, and sends one that is not installed to its setup page', async () => {
     host.installed = ['claude']
     dialog()
     await pickedProject('growth')
-    expect(screen.getByRole('radio', { name: 'Claude' })).toBeChecked()
-    await userEvent.click(screen.getByRole('radio', { name: 'Codex' }))
+    await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' })).toBeChecked()
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Codex' }))
+    await userEvent.keyboard('{Escape}')
     expect(await screen.findByText(/Codex is not installed on this computer/)).toBeInTheDocument()
     await userEvent.type(box(), 'hello')
     expect(startButton()).toBeDisabled()
@@ -395,14 +457,14 @@ describe('starting a session and going on writing', () => {
     const onStart = vi.fn<Start>().mockResolvedValue(undefined)
     dialog(onStart)
     await ready()
-    await userEvent.click(screen.getByRole('radio', { name: 'Codex' }))
+    await chooseAgent('Codex')
     await userEvent.type(box(), 'first task')
     await userEvent.keyboard('{Control>}{Shift>}{Enter}{/Shift}{/Control}')
 
     expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ folder: '/dev/growth', message: 'first task', agent: 'codex' }), { background: true })
     expect(box()).toHaveValue('')
     await pickedProject('growth')
-    expect(screen.getByRole('radio', { name: 'Codex' })).toBeChecked()
+    expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Codex/ })).toBeInTheDocument()
   })
 
   it('starts a second while the first is still starting, each in a worktree of its own', async () => {
@@ -482,8 +544,8 @@ describe('the New session dialog on another machine', () => {
     remote(onStart)
     await pickedProject('app')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, / }))
-    await userEvent.click(screen.getByRole('radio', { name: /Opus/ }))
-    await userEvent.click(screen.getByRole('radio', { name: 'High' }))
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Model' })).getByRole('radio', { name: /Opus/ }))
+    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Effort' })).getByRole('radio', { name: 'High' }))
     await userEvent.keyboard('{Escape}')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())

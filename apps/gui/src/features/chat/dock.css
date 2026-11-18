@@ -121,8 +121,8 @@
 :root[data-corners="folded"] .mx-app :is(.mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-head, .mx-agents-head, .mx-qd-clear, .mx-dock-marker):is(button) { border-radius: 0 !important; }
 
 /* ---- Focus: the accent underline ---- */
-:is(.mx-dock-line, .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-top, .mx-qd-head, .mx-qd-clear, .mx-agents-head, .mx-dock-marker):focus-visible { outline: none; box-shadow: inset 0 -2px 0 var(--accent); }
-.mx-dock-action:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--line2), inset 0 -2px 0 var(--accent); }
+:is(.mx-dock-line, .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-top, .mx-qd-head, .mx-qd-clear, .mx-agents-head, .mx-dock-marker):focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-dock-action:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
 
 /* ---- Motion off ---- */
 :root[data-reduced-motion="true"] :is(.mx-dock-helpers, .mx-dock-list, .mx-dock-queue, .mx-dock-now-act, .mx-dock-detail, .mx-dock-block, .mx-dock-chevron, .mx-qd-chevron) { animation: none; transition: none; }

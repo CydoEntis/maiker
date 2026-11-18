@@ -254,6 +254,7 @@ fn listing(path: &str, names: &[(&str, bool)]) -> FolderListing {
             .map(|(name, git)| FolderEntry { name: (*name).into(), git: git.then(|| "main".to_string()), has_children: true })
             .collect(),
         truncated: false,
+        can_create: false,
     }
 }
 

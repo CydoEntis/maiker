@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState, type KeyboardEvent } from 'react'
 import { RadioGroup, RadioGroupItem, Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { Check } from 'lucide-react'
 import { Popover } from 'radix-ui'
@@ -40,6 +40,39 @@ function AgentSelect({ agent, onAgent }: { agent: ChatAgent; onAgent: (agent: Ch
   )
 }
 
+/** How long typed letters keep adding to one search of the agent list. */
+const TYPE_AHEAD_MS = 700
+
+/**
+ * The agent as a list in the New session dialog's menu: each agent's flat mark and name, the current one ticked. Typing
+ * letters jumps to the agent that starts with them; arrows and Space work as on any radio list.
+ */
+function AgentList({ agent, onAgent }: { agent: ChatAgent; onAgent: (agent: ChatAgent) => void }) {
+  const typed = useRef({ text: '', at: 0 })
+  const refs = useRef(new Map<ChatAgent, HTMLButtonElement>())
+  const typeAhead = (event: KeyboardEvent) => {
+    if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey || event.key === ' ') return
+    const now = event.timeStamp
+    typed.current = { text: (now - typed.current.at > TYPE_AHEAD_MS ? '' : typed.current.text) + event.key.toLowerCase(), at: now }
+    const found = CHAT_AGENTS.find((name) => AGENT_LABEL[name].toLowerCase().startsWith(typed.current.text))
+    if (found === undefined) return
+    onAgent(found)
+    refs.current.get(found)?.focus()
+  }
+  return (
+    <RadioGroup aria-label="Agent" value={agent} onValueChange={(value) => { const next = CHAT_AGENTS.find((name) => name === value); if (next !== undefined) onAgent(next) }} onKeyDown={typeAhead} className="mx-mm-models mx-mm-agent-list">
+      {CHAT_AGENTS.map((name) => (
+        <RadioGroupItem key={name} ref={(node: HTMLButtonElement | null) => { if (node === null) refs.current.delete(name); else refs.current.set(name, node) }} value={name} className="mx-mm-model">
+          <AppIcon process={name} size={14} />
+          <span>{AGENT_LABEL[name]}</span>
+          <span className="mx-spacer" />
+          {name === agent && <Check aria-hidden="true" className="mx-mm-check" />}
+        </RadioGroupItem>
+      ))}
+    </RadioGroup>
+  )
+}
+
 type PickerProps = {
   agent: ChatAgent
   choice: AgentChoice
@@ -59,7 +92,10 @@ type PickerProps = {
    * agent, so for a chat on another machine they may not exist there.
    */
   fixedModels?: boolean
-  /** The New session dialog's button: the model and a dim effort only (the agent is already chosen beside it), with no agent mark or strength meter. */
+  /**
+   * The New session dialog's one dropdown: the agent's mark, name, model and effort in one line of fixed width, and a menu with
+   * the agent list, the models and the efforts as a segmented control (none when the agent has no effort setting). Enter closes it.
+   */
   compact?: boolean
 }
 
@@ -91,7 +127,14 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
   const summary = `${AGENT_LABEL[agent]} · ${model?.label ?? ''} · ${inUseWord ?? (takesEffort ? REASONING_LABEL[choice.reasoning] : 'no effort setting')}`
   // A chat's button names the agent too; the dialog's, beside the agent switch, only the model (the agent's own name when none was picked).
   const fullName = modelName(agent, choice.model === DEFAULT_PICK && currentModel !== null ? undefined : model, currentModel)
-  const shownName = compact ? fullName.slice(AGENT_LABEL[agent].length).trim() || AGENT_LABEL[agent] : fullName
+  // The dialog's line already starts with the agent's name, so it carries only what follows it: the model, or "Default" while none is known.
+  const shownName = compact ? fullName.slice(AGENT_LABEL[agent].length).trim() || (model?.label ?? '') : fullName
+  // Enter in the dialog's menu closes it, the way it does on a list; a button that opens more models keeps its own Enter.
+  const closeOnEnter = (event: KeyboardEvent) => {
+    if (event.key !== 'Enter' || (event.target instanceof HTMLElement && event.target.closest('.mx-mm-more') !== null)) return
+    event.preventDefault()
+    setOpen(false)
+  }
   const pickModel = (option: ModelOption) => {
     onChange({ model: choiceFor(option) })
     live?.(`/model ${choiceFor(option)}`)
@@ -106,18 +149,22 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
     <Popover.Root open={open && locked === undefined} onOpenChange={(next) => { if (locked === undefined) setOpen(next) }}>
       <Popover.Trigger asChild>
         <button type="button" aria-label={`Agent, model and reasoning: ${summary}`} title={locked ?? 'Model and effort'} aria-disabled={locked !== undefined} className={`mx-model-button${locked === undefined ? '' : ' is-locked'}`}>
-          {!compact && <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>}
-          <span className="mx-model-name">{/* With nothing picked, what the agent says it runs is the better name than the row that stands for it. */}
-            {shownName}</span>
-          {inUseWord !== null && <span className={compact ? 'mx-model-effort' : 'mx-model-level'}>{compact ? `· ${inUseWord}` : inUseWord}</span>}
-          {!compact && <MiniMeter level={inUse ?? DEFAULT_PICK} />}
+          <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>
+          {compact ? (
+            <span className="mx-model-line"><span className="mx-model-name">{AGENT_LABEL[agent]}</span><span className="mx-model-effort">{[shownName, inUseWord ?? ''].filter((part) => part !== '').map((part) => ` · ${part}`).join('')}</span></span>
+          ) : (
+            <>
+              <span className="mx-model-name">{/* With nothing picked, what the agent says it runs is the better name than the row that stands for it. */}
+                {shownName}</span>
+              {inUseWord !== null && <span className="mx-model-level">{inUseWord}</span>}
+              <MiniMeter level={inUse ?? DEFAULT_PICK} />
+            </>
+          )}
           <Icon name="chevronDown" />
         </button>
       </Popover.Trigger>
-      <PopupContent side="top" align="end" aria-label="Model and effort" className="mx-mm">
-        {onAgent !== undefined && (
-          <AgentSelect agent={agent} onAgent={onAgent} />
-        )}
+      <PopupContent side="top" align={compact ? 'start' : 'end'} aria-label="Model and effort" className="mx-mm" onKeyDown={compact ? closeOnEnter : undefined}>
+        {onAgent !== undefined && (compact ? <><p className="mx-mm-head">Agent</p><AgentList agent={agent} onAgent={onAgent} /><p className="mx-mm-head">Model</p></> : <AgentSelect agent={agent} onAgent={onAgent} />)}
         <RadioGroup aria-label="Model" value={modelId} onValueChange={(value) => { const option = rows.find((row) => row.id === value); if (option) pickModel(option) }} className="mx-mm-models">
           {shown.map((option) => (
             <RadioGroupItem key={option.id} value={option.id} title={option.blurb === '' ? undefined : option.blurb} className="mx-mm-model">
@@ -135,7 +182,18 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
             <Icon name="chevronDown" />
           </button>
         )}
-        {takesEffort ? (
+        {compact ? (takesEffort && (
+          <div className="mx-mm-reasoning">
+            <p className="mx-mm-head">Reasoning</p>
+            <Segmented aria-label="Effort" full value={choice.reasoning === DEFAULT_PICK ? '' : choice.reasoning} onValueChange={(value) => { pickLevel(value as Reasoning) }}>
+              {REASONING_LEVELS.map((level) => (
+                <SegmentedItem key={level} value={level} disabled={!effortAllowed(agent, model, level)} aria-label={REASONING_LABEL[level]} title={effortAllowed(agent, model, level) ? REASONING_LABEL[level] : `${REASONING_LABEL[level]}: not on this model`}
+                  // A second press on the picked level lets go of it: the chat keeps the agent's own again.
+                  onClick={() => { if (level === choice.reasoning) pickLevel(DEFAULT_PICK) }}>{REASONING_LABEL[level]}</SegmentedItem>
+              ))}
+            </Segmented>
+          </div>
+        )) : takesEffort ? (
           <div className="mx-mm-effort">
             <span className="mx-mm-effort-word">Effort</span>
             <RadioGroup aria-label="Effort" orientation="horizontal" value={choice.reasoning === DEFAULT_PICK ? '' : choice.reasoning} onValueChange={(value) => { pickLevel(value as Reasoning) }} className="mx-mm-bars">

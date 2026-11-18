@@ -27,7 +27,7 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'chat', codex: 'chat', gemini: 'chat' }, hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -53,6 +53,16 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().restartWhenIdle).toBe(true)
     localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartWhenIdle: false }))
     expect(readSettingsPreferences().restartWhenIdle).toBe(false)
+  })
+
+  it('restarts an older service by itself only when asked, and reads an old store without the key as off', () => {
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartWhenIdle: true }))
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: true }))
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(true)
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: 'yes' }))
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
   })
 
   it('uses the defaults until preferences are saved', () => {

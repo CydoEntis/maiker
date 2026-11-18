@@ -1427,6 +1427,31 @@ pub async fn write_project_file(
     .await
 }
 
+/// Save an editor's text over an existing file of the checkout `term` is in, when the file is still
+/// the `version` the editor read (`None`: overwrite). The answer is `{"Saved": {"version"}}` or
+/// `"ChangedOnDisk"`, as the daemon gave it; this computer's daemon from before saving is refused in words (a
+/// machine's is never older than this app: the window turns that away when it connects).
+pub async fn save_project_file(term: u32, path: String, contents: String, version: Option<String>, daemon: impl Into<Daemon>) -> Result<Value> {
+    let message = ClientMsg::Command(Command::SaveFile {
+        term,
+        tag: 0,
+        path,
+        contents,
+        version,
+    });
+    let reply = match daemon.into() {
+        Daemon::Local(_) => ask_running_daemon_if_it_reads(&message).await?,
+        daemon => request(message, daemon).await?,
+    };
+    match reply {
+        Reply::Repo {
+            reply: reply @ (maitty_shared::repo::RepoReply::Saved { .. } | maitty_shared::repo::RepoReply::ChangedOnDisk),
+            ..
+        } => Ok(serde_json::to_value(reply)?),
+        _ => bail!("daemon returned an unexpected save reply"),
+    }
+}
+
 /// End a terminal session: its process stops, as when it is closed in the terminal app.
 pub async fn close_terminal_session(term: u32, daemon_executable: PathBuf) -> Result<Value> {
     let reply = request(PaneCommand::Close.message(term), daemon_executable).await?;
@@ -2473,6 +2498,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         Query::Git { .. }
         | Query::GitIdentityRule { .. }
         | Query::CloneRepo { .. }
+        | Query::CreateFolder { .. }
         | Query::Extensions { .. }
         | Query::SideAnswer { .. } => false,
         Query::Settings

@@ -20,7 +20,7 @@ import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maitty%20Night&corners=folded`.
- * `show` is new, new-long, picker, picker-empty, picker-loading, palette, recent or resume. The page shows nothing but the dialog.
+ * `show` is new, new-long, new-terminal, new-fail (a start that fails with a long reason), picker, picker-empty, picker-loading, palette, recent or resume. The page shows nothing but the dialog.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -31,7 +31,6 @@ const PROJECTS = [
 const LONG_PROJECTS = [PROJECTS[1] ?? { folder: '', name: '', color: '' }, ...PROJECTS.slice(0, 1)]
 const MS_PER_SECOND = 1000
 const NOW_SECONDS = Math.floor(Date.now() / MS_PER_SECOND)
-const FOUR_MINUTES = 240
 const HOUR = 3600
 const DAY = 86_400
 const COLUMN_WIDTH = 760
@@ -39,8 +38,7 @@ const IN_THREE_HOURS = HOUR + HOUR + HOUR
 const IN_THREE_DAYS = DAY + DAY + DAY
 const NOTHING = (): Promise<void> => Promise.resolve()
 const NEVER = <T,>(): Promise<T> => new Promise<T>(() => undefined)
-const LISTING = { path: '/home/dev', exists: true, truncated: false, entries: [{ name: 'acme-store', git: 'main', has_children: true }, { name: 'AeVoxPlatformWebApplication', git: 'feat/api-key-rotation-for-the-billing-service', has_children: true }, { name: 'notes', git: null, has_children: false }] }
-const REPOS = { indexedAt: NOW_SECONDS - FOUR_MINUTES, repos: [{ path: '/home/dev/acme-store', branch: 'main', lastUsed: NOW_SECONDS - HOUR }, { path: '/home/dev/AeVoxPlatformWebApplication', branch: 'feat/api-key-rotation-for-the-billing-service', lastUsed: null }] }
+const LISTING = { path: '/home/dev', exists: true, truncated: false, can_create: true, entries: [{ name: 'acme-store', git: 'main', has_children: true }, { name: 'AeVoxPlatformWebApplication', git: 'feat/api-key-rotation-for-the-billing-service', has_children: true }, { name: 'notes', git: null, has_children: false }] }
 const ITEMS: PaletteItem[] = [
   { id: 'a1', label: 'New session', kind: 'Action', shortcut: 'Ctrl N', run: () => undefined },
   { id: 'a2', label: 'Open settings', kind: 'Action', shortcut: 'Ctrl ,', run: () => undefined },
@@ -59,7 +57,7 @@ const QUEUE = [{ id: 1, text: 'Once the build is green, bump the version to 3.0.
 const SAME = (): void => undefined
 const fakeComposer = (draft: string, queue: typeof QUEUE): ChatComposer => ({
   draft, setDraft: SAME, attachments: [], attach: { pick: SAME, addPaths: SAME, addImage: SAME, remove: SAME }, readOnly: false, queue, removeQueued: SAME, editQueued: SAME, moveQueuedUp: SAME, clearQueued: SAME,
-  submit: SAME, stop: SAME, running: false, sending: false, disabledReason: null, draftable: true, ready: true, error: null, sendText: () => Promise.resolve(true), echo: null,
+  submit: SAME, stop: SAME, running: false, sending: false, disabledReason: null, draftable: true, ready: true, error: null, sendText: () => Promise.resolve(true), sendReply: () => Promise.resolve(true), echo: null,
 })
 const FACTS = { mode: 'default', modeDanger: false, model: 'claude-sonnet-5-5', usage: { context: 18, limits: [{ name: '5h', used: 82, resetsAt: NOW_SECONDS + IN_THREE_HOURS }, { name: 'week', used: 41, resetsAt: NOW_SECONDS + IN_THREE_DAYS }] } }
 
@@ -79,7 +77,7 @@ function DockBox({ what }: { what: string }) {
   )
 }
 
-const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
+const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
 const CLIENT = new QueryClient()
 const SETTINGS_MACHINES = { known: true, list: [], onRetry: SAME, onRemove: SAME, onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve(null), onCopyCommand: SAME, add: { windows: false, loadHosts: () => Promise.resolve([]), onAdd: SAME, onCancel: SAME } }
 
@@ -93,15 +91,70 @@ function Settings({ section }: { section: DesktopSettingsSection }) {
   )
 }
 
+/** How long the scripted picker waits for the dialog to read its folder, and then for the field to open. */
+const PICKER_READ_MS = 400
+const FIELD_OPEN_MS = 150
+
+/** Sets the value of a React-controlled input the way typing does. */
+function typeInto(input: HTMLInputElement, text: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, text)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+/** For the new-folder states: opens the field, and types a bad name or a good one, once the dialog has read its folder. */
+function ScriptedPicker({ what, children }: { what: string; children: ReactNode }) {
+  useEffect(() => {
+    if (!what.startsWith('picker-new') && what !== 'picker-denied') return undefined
+    const timer = window.setTimeout(() => {
+      document.querySelector<HTMLButtonElement>('.mx-fp-new-button')?.click()
+      window.setTimeout(() => {
+        const field = document.querySelector<HTMLInputElement>('.mx-fp-new input')
+        if (field === null) return
+        if (what === 'picker-new-bad') { typeInto(field, 'my/folder'); field.form?.requestSubmit() }
+        if (what === 'picker-new-exists') { typeInto(field, 'NOTES'); field.form?.requestSubmit() }
+        if (what === 'picker-denied') { typeInto(field, 'fresh'); field.form?.requestSubmit() }
+        if (what === 'picker-new-typed') typeInto(field, 'my-new-project')
+      }, FIELD_OPEN_MS)
+    }, PICKER_READ_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [what])
+  return children
+}
+
+const FAILED_START = 'The agent could not be started in that worktree: the branch name is already taken by another worktree on this computer, so nothing was created and your checkout was left as it was.'
+const STATE_READ_MS = 500
+
+/** For the New session states: Terminal picked, or a message typed and a start that fails, once the dialog has read its folder. */
+function ScriptedNew({ what, children }: { what: string; children: ReactNode }) {
+  useEffect(() => {
+    if (what !== 'new-terminal' && what !== 'new-fail') return undefined
+    const timer = window.setTimeout(() => {
+      if (what === 'new-terminal') {
+        document.querySelector<HTMLElement>('[role="radio"][value="terminal"]')?.click()
+        return
+      }
+      const box = document.querySelector<HTMLTextAreaElement>('.mx-nsd-input')
+      if (box === null) return
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(box, 'Fix the failing test')
+      box.dispatchEvent(new Event('input', { bubbles: true }))
+      window.setTimeout(() => { document.querySelector<HTMLButtonElement>('.mx-nsd-start')?.click() }, FIELD_OPEN_MS)
+    }, STATE_READ_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [what])
+  return children
+}
+
 function Show({ what }: { what: string }): ReactNode {
   const long = what === 'new-long'
-  if (what === 'new' || long) {
-    return <NewSessionDialog machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={NOTHING} onOtherMachine={() => undefined} onNewShell={() => undefined} onCancel={() => undefined} />
+  if (what === 'new' || what.startsWith('new-')) {
+    const start = what === 'new-fail' ? () => Promise.reject(new Error(FAILED_START)) : NOTHING
+    return <ScriptedNew what={what}><NewSessionDialog machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onNewShell={() => undefined} onCancel={() => undefined} /></ScriptedNew>
   }
   if (what.startsWith('picker')) {
-    const list = what === 'picker-loading' ? () => NEVER<typeof LISTING>() : () => Promise.resolve(what === 'picker-empty' ? { ...LISTING, entries: [] } : LISTING)
-    const repositories = { list: () => (what === 'picker-loading' ? NEVER<typeof REPOS>() : Promise.resolve(what === 'picker-empty' ? { ...REPOS, repos: [] } : REPOS)), rescan: () => Promise.resolve(REPOS) }
-    return <PickFolderDialog machines={[{ machine: 0, label: 'this computer', ready: true, word: null }, { machine: 1, label: 'devbox', ready: true, word: null }, { machine: 2, label: 'build-01', ready: false, word: 'asleep' }]} machine={1} list={list} repositories={repositories} onPick={() => undefined} onCancel={() => undefined} />
+    const listing = what === 'picker-old' ? { ...LISTING, can_create: false } : what === 'picker-empty' ? { ...LISTING, entries: [] } : LISTING
+    const list = what === 'picker-loading' ? () => NEVER<typeof LISTING>() : () => Promise.resolve(listing)
+    const create = what === 'picker-denied' ? () => Promise.resolve({ kind: 'failed' as const, reason: 'You do not have permission to make a folder here.' }) : () => Promise.resolve({ kind: 'created' as const, path: '/home/dev/new' })
+    return <ScriptedPicker what={what}><PickFolderDialog machines={[{ machine: 0, label: 'this computer', ready: true, word: null }, { machine: 1, label: 'devbox', ready: true, word: null }, { machine: 2, label: 'build-01', ready: false, word: 'asleep' }]} machine={1} list={list} create={create} onPick={() => undefined} onCancel={() => undefined} /></ScriptedPicker>
   }
   if (what.startsWith('dock') || what.startsWith('box')) return <DockBox what={what} />
   if (what.startsWith('settings')) return <Settings section={(what.split('-')[1] ?? 'appearance') as DesktopSettingsSection} />

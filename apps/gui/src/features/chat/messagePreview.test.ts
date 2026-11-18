@@ -34,6 +34,12 @@ describe('messagePreview', () => {
   })
 })
 
+describe('messagePreview of a message with quotes', () => {
+  it('shows each quote as its first words, then what was said', () => {
+    expect(messagePreview('> Quote from Claude:\n> 1. Which branch should this target?\n\nmain')).toBe('“1. Which branch should this target?” main')
+  })
+})
+
 describe('withoutPasteTags', () => {
   it('removes opening and closing tags, with or without an id', () => {
     expect(withoutPasteTags('<pasted_content id="1">a</pasted_content id="1"> <pasted_content>b</pasted_content>')).toBe('a b')

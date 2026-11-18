@@ -183,6 +183,20 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
                 listing: sanitize_listing(listing),
             })
         }
+        // Another machine's words about the folder it made: a path and a line of why, each one clean line.
+        ServerMsg::Reply(Reply::FolderCreated { tag, outcome }) => {
+            use maitty_shared::protocol::FolderCreated;
+            let line = |text: String| sanitize(&cut_bytes(text, NAME_MAX), false);
+            ServerMsg::Reply(Reply::FolderCreated {
+                tag,
+                outcome: match outcome {
+                    FolderCreated::Created { path } => FolderCreated::Created { path: sanitize(&cut_bytes(path, PATH_MAX), false) },
+                    FolderCreated::Exists => FolderCreated::Exists,
+                    FolderCreated::NotAllowed { reason } => FolderCreated::NotAllowed { reason: line(reason) },
+                    FolderCreated::Failed { reason } => FolderCreated::Failed { reason: line(reason) },
+                },
+            })
+        }
         ServerMsg::Reply(Reply::ClosedSessions(sessions)) => {
             ServerMsg::Reply(Reply::ClosedSessions(sanitize_closed(sessions)))
         }
@@ -407,6 +421,7 @@ mod tests {
             exists: true,
             entries,
             truncated: false,
+            can_create: false,
         };
 
         let Some(ServerMsg::Reply(Reply::Folders { tag, listing })) = vet(
@@ -428,6 +443,24 @@ mod tests {
         }
         assert_eq!(listing.entries[0].name, "fine");
         assert!(listing.entries.iter().all(|entry| entry.name != "a/b"));
+    }
+
+    #[test]
+    fn a_made_folder_from_another_machine_is_one_clean_line() {
+        use maitty_shared::protocol::FolderCreated;
+        let sent = |outcome| ServerMsg::Reply(Reply::FolderCreated { tag: 5, outcome });
+        let Some(ServerMsg::Reply(Reply::FolderCreated { tag: 5, outcome: FolderCreated::Created { path } })) =
+            vet(&nothing_on(), true, "box", sent(FolderCreated::Created { path: "/srv/\x1b[2Jnew".into() }))
+        else {
+            panic!("an answer that was asked for is passed on");
+        };
+        assert!(!path.contains('\x1b'), "{path:?}");
+        let Some(ServerMsg::Reply(Reply::FolderCreated { outcome: FolderCreated::Failed { reason }, .. })) =
+            vet(&nothing_on(), true, "box", sent(FolderCreated::Failed { reason: "no\x07\nway".into() }))
+        else {
+            panic!("a failure is passed on");
+        };
+        assert!(!reason.contains(['\x07', '\n']), "{reason:?}");
     }
 
     #[test]

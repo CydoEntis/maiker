@@ -54,6 +54,8 @@ const SESSION_ATTENTION_EVENT: &str = "session-attention";
 const CONVERSATION_CHANGED_EVENT: &str = "conversation-changed";
 const MACHINE_ERROR_EVENT: &str = "machine-error";
 const FOLDER_LISTING_EVENT: &str = "folder-listing";
+/// How a machine's making of a folder ended: `{machine, tag, outcome}`.
+const FOLDER_CREATED_EVENT: &str = "folder-created";
 /// How a clone a window asked for ended.
 const REPOSITORY_CLONED_EVENT: &str = "repository-cloned";
 /// Who a machine says is signed in to GitHub there: `{machine, tag, report}`.
@@ -286,8 +288,8 @@ impl Wire {
 
     /// Where a question about a pane's repository goes. This computer's daemon answers any of
     /// them; another machine's is asked only what `remote_repo::may_ask` allows (what changed and
-    /// its diff), and any other question is refused here in the words the window uses for a
-    /// feature that needs the files.
+    /// its diff, a folder's listing, a markdown document), and any other question is refused here
+    /// in the words the window uses for a feature that needs the files.
     pub fn repo_daemon(
         &self,
         machine: Option<u16>,
@@ -297,7 +299,23 @@ impl Wire {
         if routing::is_remote(machine) && !maitty_machines::remote_repo::may_ask(question) {
             self.require_local(machine, "Inspect")?;
         }
-        self.daemon_vetting(machine, local, maitty_machines::remote_repo::vet_repo_reply)
+        let asked = question.clone();
+        self.daemon_vetting(machine, local, move |reply| maitty_machines::remote_repo::vet_repo_reply(&asked, reply))
+    }
+
+    /// Where saving a markdown document goes: this computer's daemon, or another machine's, which
+    /// answers with the new version or that the file changed, and nothing else. Any other kind of
+    /// file on another machine is refused here in the window's words for a feature that needs the files.
+    pub fn save_daemon(
+        &self,
+        machine: Option<u16>,
+        path: &str,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        if routing::is_remote(machine) && !maitty_machines::remote_repo::may_save(path) {
+            self.require_local(machine, "Editing a file other than a markdown document")?;
+        }
+        self.daemon_vetting(machine, local, maitty_machines::remote_repo::vet_save_reply)
     }
 
     /// Where `request` for a pane's checkout on another machine is asked: that machine's daemon,
@@ -460,6 +478,22 @@ impl Wire {
         )
     }
 
+    /// Ask a machine's daemon (this computer's when none is named) to make the folder `name` directly inside
+    /// `parent`. The daemon decides what a good name and parent are; only what could not be a request is refused
+    /// here. The answer comes back as a `folder-created` event carrying `tag`.
+    pub fn create_folder(&self, machine: Option<u16>, parent: &str, name: &str, tag: u64) -> Result<(), String> {
+        if parent.is_empty() || parent.len() > MOST_FOLDER_BYTES || parent.chars().any(char::is_control) {
+            return Err("Choose the folder to make it in first".to_string());
+        }
+        if name.is_empty() || name.len() > MOST_FOLDER_BYTES || name.chars().any(char::is_control) {
+            return Err("That name cannot be sent".to_string());
+        }
+        self.send(
+            machine_of(machine),
+            ClientMsg::Query(Query::CreateFolder { parent: parent.to_string(), name: name.to_string(), tag }),
+        )
+    }
+
     /// Ask a machine's daemon (this computer's when none is named) to clone the repository at
     /// `address` into a new folder inside `parent`. The daemon decides whether the address is one it
     /// will clone; only what could not be a request at all is refused here. The answer comes back
@@ -611,6 +645,19 @@ pub fn list_folders(
     tag: u64,
 ) -> Result<(), String> {
     wire.list_folders(machine, &path, tag)
+}
+
+/// Makes the folder `name` directly inside `parent` on a machine (this computer when `machine` is left out). Nothing
+/// is returned here: the answer arrives as a `folder-created` event with the same `tag`.
+#[tauri::command]
+pub fn create_folder(
+    wire: tauri::State<'_, Wire>,
+    machine: Option<u16>,
+    parent: String,
+    name: String,
+    tag: u64,
+) -> Result<(), String> {
+    wire.create_folder(machine, &parent, &name, tag)
 }
 
 /// Asks this computer's daemon about the extensions of Claude Code and Codex. The answer arrives as an `extensions`
@@ -893,6 +940,12 @@ pub enum Reaction {
         tag: u64,
         listing: FolderListing,
     },
+    /// How a machine's making of a folder ended, for the window that asked.
+    FolderCreated {
+        machine: MachineId,
+        tag: u64,
+        outcome: maitty_shared::protocol::FolderCreated,
+    },
     /// How a machine's clone ended, for the window that asked.
     Cloned {
         machine: MachineId,
@@ -1026,6 +1079,7 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
                 Some(Reaction::ConversationChanged { conversation, generation })
             }
             Out::Folders { machine, tag, listing } => Some(Reaction::Folders { machine, tag, listing }),
+            Out::FolderCreated { machine, tag, outcome } => Some(Reaction::FolderCreated { machine, tag, outcome }),
             Out::Cloned { machine, tag, outcome } => Some(Reaction::Cloned { machine, tag, outcome }),
             Out::AgentSignIn { tag, agent, state } => Some(Reaction::AgentSignIn { tag, agent, state }),
             Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
@@ -1082,6 +1136,13 @@ struct FolderAnswer {
     machine: u16,
     tag: u64,
     listing: FolderListing,
+}
+
+#[derive(Clone, Serialize)]
+struct CreatedAnswer {
+    machine: u16,
+    tag: u64,
+    outcome: maitty_shared::protocol::FolderCreated,
 }
 
 /// One of `folder` and `refused` is set: where the clone is, or why there is none.
@@ -1238,6 +1299,9 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
                         listing,
                     },
                 );
+            }
+            Reaction::FolderCreated { machine, tag, outcome } => {
+                let _ = app.emit(FOLDER_CREATED_EVENT, CreatedAnswer { machine: machine.0, tag, outcome });
             }
             Reaction::Cloned { machine, tag, outcome } => {
                 let (folder, refused) = match outcome {

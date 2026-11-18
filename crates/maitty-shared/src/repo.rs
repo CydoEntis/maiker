@@ -19,6 +19,8 @@ pub enum RepoRequest {
     Tree { path: Option<String> },
     /// One text file's contents.
     File { path: String },
+    /// One text file's contents and its version, for an editor that saves it back (`Command::SaveFile`).
+    FileStamped { path: String },
     /// Where a path seen in the pane's output is in this repository: absolute, or relative to
     /// the pane's folder. Refused when it is not a file inside the repository.
     Locate { path: String },
@@ -52,6 +54,12 @@ pub enum RepoReply {
     Status(RepoStatus),
     Tree(Vec<ConversationFileEntry>),
     File(String),
+    /// A file's text and its version: opaque, equal only for the same bytes.
+    FileStamped { text: String, version: String },
+    /// A `SaveFile` was written; the file's new version.
+    Saved { version: String },
+    /// A `SaveFile` was refused: the file is no longer the version the editor read. Nothing was written.
+    ChangedOnDisk,
     /// The repository-relative path (with `/`) that `Locate` found.
     Located(String),
     Diff(ConversationDiff),

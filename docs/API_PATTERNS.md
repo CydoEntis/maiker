@@ -230,6 +230,13 @@ restart, a wake, a reload, a move) adds them as `--model` and `--effort` (`Daemo
 Claude and only when they pass `TurnChoice::validate`: Claude starts a resumed session on the account's default model, which a
 `/model` in any other session changes, and an effort set for the session only is gone.
 
+`TermInfo.began_as_agent` says the pane was started as an agent (its command is one), not as a shell an agent was typed
+into. The daemon sets it once at start, saves it with the pane and keeps it across restarts; a pane saved before it
+existed reads from its command. It is a `#[serde(default)]` field, so it needed no new `PROTOCOL_VERSION` and
+`COMPATIBLE_SINCE` stays (a test decodes the old shape, which reads as a terminal, never ended on an agent's account). A
+pane with it whose agent ended, said by its hook or lost by several process scans in a row, is ended by the daemon unless
+an agent is back, a program runs in it or someone typed since (`close_ended_agents`).
+
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
 into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
 (`Term::own_turn_over`, sent as `TermInfo.own_turn_over`, a defaulted field an older daemon leaves false), even while
@@ -840,6 +847,26 @@ The commit must be one of the checkout's snapshots. The desktop app asks it befo
 (`snapshot_restore_count`, this computer's panes only). The request has its own `introduced_in` arm
 (`RESTORE_COUNT_SINCE`), so an older daemon is not asked and the app says to restart it; `COMPATIBLE_SINCE` stays 78.
 
+Protocol 116 adds saving a document from the desktop app's viewer with a conflict check: `RepoRequest::FileStamped { path }`
+answers `RepoReply::FileStamped { text, version }` (the text and the file's *version*, its length and an FNV-1a hash of
+its bytes as one opaque word: equal only for the same bytes, so a touch that changes none is not a change), and
+`Command::SaveFile { term, tag, path, contents, version }` answers `RepoReply::Saved { version }`, or
+`RepoReply::ChangedOnDisk` with nothing written when `version` is `Some` and the file on disk no longer has it (`None`
+is the person's explicit Overwrite after that answer). The path rules, the 256 KiB cap, the refusal of links and
+`.git`, "an existing file only" and the temporary-file-and-rename write are those of `WriteFile`; the version is
+checked again just before the rename, and the permissions of the old file are kept. A save that cannot be written is an
+error with the system's reason, never a quiet success. Only a human client can send it. Both are new messages: an
+older peer is never sent them (`ClientMsg::introduced_in` answers `FILE_EDIT_SINCE`, 116), so `COMPATIBLE_SINCE` stays
+115, and the window offers Edit only to a daemon that answers the stamped read; against an older one it shows Drawn and
+Source. The pinned bytes of `Saved` and `ChangedOnDisk` are in `a_file_write_is_asked_only_of_a_daemon_that_knows_it`.
+For a pane on another machine the window sends `Tree`, `FileStamped` (markdown names only) and `SaveFile` (markdown only) to
+that machine's daemon on a request line (ADR 0014), each answer vetted to the kind that was asked
+(`remote_repo::vet_repo_reply(&request, reply)`, `vet_save_reply`); no message is added or changed, so `PROTOCOL_VERSION`
+stays 117 here and `COMPATIBLE_SINCE` as it is. The window dials machines newest-only, so an older daemon is turned away
+at connect time and offered its update rather than asked. An empty `version` in a vetted `FileStamped` means the text was
+cleaned and must not be saved.
+Line endings are the window's business (`documents/lineEndings.ts`): the daemon stores and compares the bytes it is given.
+
 Protocol 89 adds `RepoRequest::FindFiles { query, limit }` and `RepoReply::Files { paths, truncated }`: the files
 under the pane's checkout (the repository top, or the pane's folder when it is not a repository, as for `Tree` and
 `File`) whose path holds `query`, case-insensitive. The walk honours `.gitignore` inside a git repository (a folder
@@ -1022,6 +1049,17 @@ that is offline (a daemon older than the window is one that needs its update, AD
 and shown in the picker; nothing falls back to this computer's list. Names and lines from another machine are cleaned and capped again
 (`remote_policy::vet`, `maitty_shared::agent_commands`).
 
+Protocol 117 (`FOLDER_CREATE_SINCE`; `COMPATIBLE_SINCE` stays at 115: the question is new and has its own
+`introduced_in` arm) adds `Query::CreateFolder { parent, name, tag }` with `Reply::FolderCreated { tag, outcome }`,
+where `outcome` is `FolderCreated::Created { path }` (absolute, `/` separators), `Exists`, `NotAllowed { reason }` (the
+name or the parent is not accepted) or `Failed { reason }` (the disk refused). `FolderListing` gains
+`can_create: bool` (`#[serde(default)]`: a daemon from before it reads as false), which is how a window knows a machine
+can make folders without asking it in vain: an older daemon passes over an unknown question and never answers. The rules
+are in [SECURITY](SECURITY.md#project-specific-auth-and-permissions). The desktop host sends it through
+`create_folder(machine, parent, name, tag)` and raises a `folder-created` event `{ machine, tag, outcome }`
+(`apps/gui/src/api/folders.ts` `createFolder` waits 10 seconds on it); a daemon's reply is not safe to ask twice
+(`safe_to_ask_twice`).
+
 Protocol 114 (`REPOSITORIES_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
 `introduced_in` arm) adds `Query::Repositories { rescan, tag }` with `Reply::Repositories { tag, found }`, where
 `found` is `RepositoryIndex { repos, indexed_at, more }` and each repo is `IndexedRepository { path, branch,
@@ -1037,7 +1075,7 @@ search yet waits for it; with `rescan` a search starts (one at a time; a questio
 waiting question is answered when it ends. The list is cut at 300, most recently used first, and `more` says it was cut
 or a search ran out of time. Human clients only. The desktop host asks through `repositories(machine, rescan, tag)`
 (this computer when `machine` is left out) and raises a `repositories` event `{ machine, tag, answer }`; the window
-(`apps/gui/src/api/repositories.ts`: `listRepositories`, `rescanRepositories`) waits 50 seconds, the host expects the
+(no longer asked by the desktop window, whose folder picker only browses; the host command remains) would wait 50 seconds, the host expects the
 answer for the search limit plus the clone margin (`routing::REPOSITORIES_ANSWER_WINDOW`). Another machine's list is
 cleaned and capped again (`remote_policy::vet`, `RepositoryIndex::cleaned`). A daemon from before 114 never answers, so
 the window's wait ends with its own words.

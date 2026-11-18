@@ -1,7 +1,7 @@
 import { Fragment, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
+import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectGroups, projectSections, rowTitle, sectionOf, sortedBy, splitPutAway, splitTerminals, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
 import { AppIcon, Icon } from './glyphs'
@@ -164,6 +164,7 @@ function flipKey(props: SidebarProps, sessions: readonly SessionView[], sort: Si
 }
 
 const PUT_AWAY_SECTION = 'put-away'
+const TERMINALS_SECTION = 'terminals'
 
 /** Which headings are folded and which machines are grouped by project. */
 function useMachineViews() {
@@ -199,7 +200,10 @@ function Expanded(props: SidebarProps) {
   const projects = projectChoices(props.sessions)
   // A project whose last session closed is no longer a choice, so the list goes back to all of them.
   const project = projects.some((choice) => choice.name === pickedProject) ? pickedProject : null
-  const { listed: sessions, putAway } = splitPutAway(inProject(props.sessions, project))
+  const { listed, putAway } = splitPutAway(inProject(props.sessions, project))
+  // Terminals have a section of their own, stuck at the bottom, whatever the grouping.
+  const { terminals: unsorted, others: sessions } = splitTerminals(listed)
+  const terminals = sortedBy(unsorted, sort)
   // The session on screen keeps the status section it was picked in until another is picked (`statusSections`).
   const [hold, setHold] = useState<{ for: string | null; row: HeldRow | null }>({ for: null, row: null })
   if (hold.for !== props.focusedId) {
@@ -343,6 +347,11 @@ function Expanded(props: SidebarProps) {
           </section>
         )}
       </div>
+      {terminals.length > 0 && (
+        <TerminalsSection count={terminals.length} open={views.isOpen(TERMINALS_SECTION)} canStart={props.canStart} onToggle={() => { views.toggle(TERMINALS_SECTION) }} onNew={() => { props.onNewShell(localMachine) }} newTip={tip('New terminal', 'new-terminal')}>
+          {terminals.map((session) => renderRow(session, true, true))}
+        </TerminalsSection>
+      )}
       <div className="mx-sidebar-foot">
         {props.online
           ? <span className="mx-foot-slot">{props.updateSlot}</span>
@@ -352,6 +361,30 @@ function Expanded(props: SidebarProps) {
       <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
+  )
+}
+
+/**
+ * The Terminals section: stuck over the foot, never scrolled away with the list, and at most a third of the sidebar's height
+ * (past that its rows scroll inside it). Its heading folds it and holds the New terminal button, so a new terminal's row
+ * appears right where the button is. Each row keeps its × to close it.
+ */
+function TerminalsSection({ count, open, canStart, onToggle, onNew, newTip, children }: { count: number; open: boolean; canStart: boolean; onToggle: () => void; onNew: () => void; newTip: string; children: ReactNode }) {
+  return (
+    <section aria-label="Terminals" className="mx-terminals" data-section={TERMINALS_SECTION}>
+      <div className="mx-terminals-head">
+        <button type="button" className="mx-section-head is-terminals" aria-expanded={open} onClick={onToggle}>
+          <span className={`mx-caret-wrap${open ? ' is-open' : ''}`}><Icon name="caret" /></span>
+          <span className="mx-section-name">Terminals</span>
+          <span className="mx-section-count mono">{count}</span>
+          <span className="mx-spacer" />
+        </button>
+        <button type="button" className="mx-machine-add" aria-label="New terminal" title={newTip} disabled={!canStart} onClick={onNew}><Icon name="plus" size={13} /></button>
+      </div>
+      <Collapse open={open}>
+        <div className="mx-terminals-rows mx-rows" role="list" aria-label="Terminals">{children}</div>
+      </Collapse>
+    </section>
   )
 }
 
@@ -535,7 +568,11 @@ function Rail(props: SidebarProps) {
   const endHover = () => { hover.leave() }
   const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
   const [menu, setMenu] = useState<OpenMenu | null>(null)
-  const sections = statusSections(splitPutAway(props.sessions).listed, null, DEFAULT_SIDEBAR_SORT)
+  const { terminals, others } = splitTerminals(splitPutAway(props.sessions).listed)
+  const sections = statusSections(others, null, DEFAULT_SIDEBAR_SORT)
+  // One glyph for all of them: each press opens the next terminal after the one on screen.
+  const nextTerminal = terminals.length === 0 ? undefined : terminals[(terminals.findIndex((session) => session.id === props.focusedId) + 1) % terminals.length]
+  const terminalOpen = terminals.some((session) => session.id === props.focusedId)
   return (
     <div className="mx-rail">
       <div className="mx-rail-top">
@@ -571,6 +608,14 @@ function Rail(props: SidebarProps) {
           </Fragment>
         ))}
       </div>
+      {nextTerminal !== undefined && (
+        <div className={`mx-rail-terminals${terminalOpen ? ' is-selected' : ''}`}>
+          <button type="button" className="mx-rail-session" aria-label={`Terminals · ${String(terminals.length)}`} title={`Terminals · ${String(terminals.length)}`} aria-current={terminalOpen ? 'page' : undefined} onClick={() => { endHover(); props.onShowSession(nextTerminal.id) }}>
+            <Icon name="terminal" size={15} />
+            <span className="mx-rail-count mono" aria-hidden="true">{terminals.length}</span>
+          </button>
+        </div>
+      )}
       <div className="mx-rail-bottom">
         {props.railUpdateSlot}
         <button type="button" className="mx-head-button is-rail" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></button>

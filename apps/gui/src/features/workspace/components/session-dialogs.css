@@ -24,7 +24,7 @@
 .mx-nsd-scrim { align-items: center; }
 .mx-fp-scrim { align-items: flex-start; padding-top: max(48px, 14vh); }
 .mx-ns-dialog, .mx-fp { position: relative; display: flex; flex-direction: column; box-sizing: border-box; background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-dialog); color: var(--fg); animation: mx-dialog-in .16s ease-out; }
-.mx-ns-dialog { width: min(620px, calc(100vw - 48px)); max-height: calc(100vh - 48px); }
+.mx-ns-dialog { width: min(720px, calc(100vw - 48px)); max-height: calc(100vh - 48px); }
 .mx-fp { width: min(580px, calc(100vw - 48px)); max-height: calc(100vh - 96px); }
 .mx-ns-dialog:focus-visible, .mx-fp:focus-visible { outline: none; }
 .mx-nsd-grow { flex: 1; min-width: 6px; }
@@ -33,10 +33,11 @@
 
 /* The header band: machine / project / branch, the Own worktree switch, close. */
 .mx-nsd-head { position: relative; flex: none; display: flex; align-items: center; gap: 2px; min-width: 0; height: 44px; padding: 0 6px 0 9px; border-bottom: 1px solid var(--line); background: var(--m-well); }
-.mx-nsd-token { flex: 0 1 auto; min-width: 0; height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 7px; font-size: 13px; color: var(--fg); white-space: nowrap; }
+.mx-nsd-token { flex: 0 1 auto; min-width: 44px; height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 7px; font-size: 13px; color: var(--fg); white-space: nowrap; }
 .mx-nsd-token.is-machine { flex-shrink: 0; max-width: 156px; color: var(--fg2); }
-/* A branch name is the longest of the three and the one read last, so it gives up room first and the project keeps most of its name. */
-.mx-nsd-token.is-branch { flex-shrink: 3; }
+/* A branch name is the longest of the three and the one read last, so it gives up room first and the project keeps most of its name. Its width is its own and not its text's: the name changes with Own worktree, and nothing in the header may move for that. */
+.mx-nsd-token.is-branch { flex: 0 3 var(--nsd-branch-w); }
+.mx-ns-dialog { --nsd-branch-w: 148px; }
 .mx-nsd-token > svg { flex: none; }
 .mx-nsd-token:hover { background: var(--m-hover); color: var(--fg); }
 .mx-nsd-token[data-state="open"] { background: var(--m-sel); color: var(--fg); }
@@ -45,30 +46,64 @@
 .mx-nsd-sep { flex: none; color: var(--line2); }
 .mx-nsd-worktree { flex: none; height: 28px; display: inline-flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 12.5px; color: var(--fg2); white-space: nowrap; cursor: default; }
 .mx-nsd-worktree:hover { background: var(--m-hover); color: var(--fg); }
+/* Where it does not apply it keeps its place and goes unseen and out of reach (visibility also takes it out of Tab and the reader). */
+.mx-nsd-worktree.is-away { visibility: hidden; }
 .mx-nsd-close { flex: none; width: 28px; height: 28px; margin-left: 2px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
 .mx-nsd-close:hover { background: var(--m-hover); color: var(--fg); }
 
-/* The first message. */
-.mx-nsd-text { position: relative; flex: none; }
-.mx-nsd-input { display: block; width: 100%; box-sizing: border-box; min-height: 104px; resize: none; margin: 0; padding: 12px 16px; border: 0; outline: none; background: transparent; font: 400 14px/1.5 var(--ui); color: var(--fg); }
+/* The first message. Its box is one size in Chat and in Terminal, so the dialog never changes height: a long message scrolls inside it. */
+.mx-nsd-text { position: relative; flex: none; height: var(--nsd-body-h); }
+.mx-nsd-text:focus-within { box-shadow: var(--focus-underline); }
+.mx-nsd-input { display: block; width: 100%; box-sizing: border-box; height: 100%; resize: none; margin: 0; padding: 12px 16px; border: 0; outline: none; background: transparent; font: 400 14px/1.5 var(--ui); color: var(--fg); }
 .mx-ns-dialog .mx-nsd-input:focus-visible { box-shadow: none; }
 .mx-nsd-input::placeholder { color: var(--dim); }
-.mx-nsd-terminal { margin: 0; padding: 22px 16px 18px; min-height: 64px; box-sizing: border-box; font-size: 13.5px; line-height: 1.55; color: var(--fg2); }
+.mx-nsd-terminal { margin: 0; height: 100%; padding: 12px 16px; box-sizing: border-box; font: 400 14px/1.5 var(--ui); color: var(--dim); }
+.mx-ns-dialog { --nsd-body-h: 168px; --nsd-notes-h: 48px; }
+/* The notes under the message have a line of their own, empty or not: a worktree line, an error or a missing agent never moves what is below. More than fits scrolls here. */
+.mx-nsd-notes { flex: none; height: var(--nsd-notes-h); box-sizing: border-box; overflow-y: auto; padding-top: 2px; }
 .mx-nsd-note { margin: 0; padding: 0 16px 8px; font-size: 12px; line-height: 1.45; color: var(--dim); }
 .mx-nsd-note.is-error { color: var(--danger); }
 .mx-nsd-note .mx-text-button { height: 22px; padding: 0 8px; }
 
 /* The foot: agent, model and effort, how it opens, Start. */
-.mx-nsd-foot { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; padding: 0 10px 12px 12px; }
+.mx-nsd-foot { flex: none; display: grid; grid-template-columns: var(--nsd-agent-w) minmax(0, 1fr) auto auto; align-items: center; gap: 8px; min-width: 0; padding: 0 10px 12px 12px; }
+.mx-ns-dialog { --nsd-agent-w: 300px; --nsd-start-w: 172px; }
+.mx-nsd-agent { grid-column: 1; min-width: 0; display: flex; }
+.mx-nsd-agent.is-away { visibility: hidden; }
+.mx-nsd-view { grid-column: 3; }
+.mx-nsd-start { grid-column: 4; }
+/* Narrow windows: two rows, the same in Chat and in Terminal. The agent has the first, the view switch and Start share the second. */
+@media (max-width: 767px) {
+  .mx-ns-dialog { --nsd-notes-h: 76px; --nsd-start-w: 120px; }
+  /* The row is too short for the key hint beside Open terminal, so it is left out in both modes. */
+  .mx-nsd-start-key { display: none; }
+  /* The header has no room for the switch's words: the switch alone stays, and its title says what it is. */
+  .mx-nsd-worktree-word { display: none; }
+  .mx-nsd-token.is-machine { flex-shrink: 1; }
+  .mx-nsd-foot { grid-template-columns: minmax(0, 1fr) auto; }
+  .mx-nsd-agent { grid-column: 1 / -1; }
+  .mx-nsd-view { grid-column: 1; justify-self: start; }
+  .mx-nsd-start { grid-column: 2; }
+}
 /* An agent's mark here is the mark alone, in its own colour (Claude's orange, the others in the text colour): no tile, no ground behind it. */
 :is(.mx-ns-dialog, .mx-rename) .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; color: var(--fg2); }
 .mx-rename .mx-app-icon.size-20 { width: 16px; height: 16px; }
 :is(.mx-ns-dialog, .mx-rename) .mx-app-icon svg { width: 100%; height: 100%; }
 :is(.mx-ns-dialog, .mx-rename) .mx-app-icon.is-claude { color: #D97757; }
 /* The model and effort button, in the design's terms: a bordered 28px button with the model, a dim effort and a chevron. */
-.mx-ns-dialog .mx-model-button { height: 28px; padding: 0 8px; border: 1px solid var(--line); font-size: 12.5px; }
+.mx-ns-dialog .mx-model-button { flex: 1; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--line); font-size: 12.5px; }
+.mx-ns-dialog .mx-model-button > svg { margin-left: auto; flex: none; }
+.mx-model-line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+/* The dropdown's menu: a small head over each of its three parts, an agent's mark flat beside its name, the efforts as the one segmented control. */
+.mx-mm-head { margin: 0; padding: 8px 14px 4px; font-size: 11.5px; color: var(--dim); }
+.mx-mm-agent-list { padding-bottom: 2px; }
+.mx-mm-agent-list .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; color: var(--fg2); }
+.mx-mm-agent-list .mx-app-icon.is-claude { color: var(--agent-claude); }
+.mx-mm-agent-list .mx-app-icon svg { width: 100%; height: 100%; }
+.mx-mm-reasoning { padding: 0 8px 8px; border-top: 1px solid var(--line); }
+.mx-mm-reasoning .mx-mm-head { padding-left: 6px; }
 .mx-ns-dialog .mx-model-button[data-state="open"] { background: var(--m-sel); }
-.mx-nsd-start { flex: none; height: 28px; margin-left: 4px; display: inline-flex; align-items: center; gap: 8px; padding: 0 13px; border: 1px solid var(--fg); background: var(--fg); font-size: 12.5px; font-weight: 600; color: var(--bg); white-space: nowrap; }
+.mx-nsd-start { height: 28px; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: var(--nsd-start-w); padding: 0 13px; border: 1px solid var(--fg); background: var(--fg); font-size: 12.5px; font-weight: 600; color: var(--bg); white-space: nowrap; }
 .mx-nsd-start:not(:disabled):hover { background: color-mix(in srgb, var(--fg) 90%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 90%, var(--bg)); }
 .mx-nsd-start:disabled { opacity: .45; }
 .mx-nsd-start-key { font: 400 11px var(--mono); opacity: .7; }
@@ -80,7 +115,7 @@
 .mx-token-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--dim); }
 .mx-token-head > span:first-child { font-weight: 600; color: var(--fg2); }
 .mx-chip-menu.is-token .mx-chip-search { flex: none; margin: 8px 8px 4px; height: 32px; padding: 0 9px; background: var(--m-well); box-shadow: none; border: 1px solid var(--line2); font-size: 12.5px; }
-.mx-chip-menu.is-token .mx-chip-search:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-chip-menu.is-token .mx-chip-search:focus-within { box-shadow: var(--focus-underline); }
 .mx-chip-menu.is-token .mx-chip-search input { font-size: 12.5px; }
 .mx-chip-menu.is-token .mx-chip-list { flex: 1; min-height: 0; gap: 0; padding: 2px 4px 6px; }
 .mx-chip-menu.is-token .mx-chip-row { min-height: 32px; padding: 4px 8px; gap: 9px; font-size: 13px; }
@@ -111,14 +146,9 @@
 .mx-fp-machine-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-fp-machine-word { flex: none; font-size: 11.5px; color: var(--dim); }
 .mx-fp-machine-word.is-asleep { color: var(--warn); }
-.mx-fp-tabs { flex: none; display: flex; gap: 18px; padding: 0 14px; border-bottom: 1px solid var(--line); }
-.mx-fp-tab { height: 32px; display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
-.mx-fp-tab span { font: 400 11px var(--mono); color: var(--dim); }
-.mx-fp-tab:hover { color: var(--fg); }
-.mx-fp-tab[aria-selected="true"] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--fg); }
 .mx-fp-find { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 6px; }
 .mx-fp-field { display: flex; align-items: center; height: 34px; padding: 0 0 0 10px; gap: 8px; background: var(--m-well); box-shadow: inset 0 -1px 0 var(--line2); color: var(--dim); }
-.mx-fp-field:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-fp-field:focus-within { box-shadow: var(--focus-underline); }
 .mx-fp-field input { flex: 1; min-width: 0; height: 100%; padding: 0 10px 0 0; border: 0; outline: none; background: transparent; font: 400 13px var(--mono); color: var(--fg); }
 .mx-fp-path { display: flex; align-items: center; gap: 2px; min-width: 0; height: 24px; }
 .mx-fp-up { flex: none; width: 24px; height: 24px; margin-right: 2px; display: flex; align-items: center; justify-content: center; color: var(--fg2); }
@@ -130,27 +160,31 @@
 .mx-fp-crumb { flex: 0 1 auto; min-width: 0; height: 22px; padding: 0 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-fp-crumb[aria-current="page"] { color: var(--fg); }
 .mx-fp-crumb:hover { background: var(--m-hover); color: var(--fg); }
+/* New folder: a quiet text button at the end of the path, and a field at the top of the list; hover and focus only change colour and the underline, never size. */
+.mx-fp-path .mx-fp-crumbs { flex: 1 1 auto; }
+.mx-fp-new-button { flex: none; height: 24px; margin-left: auto; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg2); white-space: nowrap; }
+.mx-fp-new-button:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
+.mx-fp-new-button:disabled { opacity: .45; }
+.mx-fp-new { margin: 0 0 4px; background: var(--m-well); box-shadow: inset 0 -1px 0 var(--line2); color: var(--dim); }
+.mx-fp-new:focus-within { box-shadow: var(--focus-underline); }
+.mx-fp-new-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 0 8px; }
+.mx-fp-new input { min-width: 0; height: 34px; padding: 0; border: 0; outline: none; background: transparent; font: 400 13px var(--mono); color: var(--fg); }
+.mx-fp-new input:disabled { opacity: .6; }
+.mx-fp-new-hint { font-size: 11px; color: var(--dim); white-space: nowrap; }
+.mx-fp-new-why { grid-column: 1 / -1; margin: 0; padding: 0 0 7px 24px; font-size: 11.5px; line-height: 1.4; color: var(--danger); }
+@media (max-width: 420px) { .mx-fp-new-hint { display: none; } }
 .mx-fp-list { position: relative; flex: none; height: 300px; overflow-y: auto; padding: 0 6px 6px; }
 .mx-fp-loading { position: absolute; inset: 0; }
-.mx-fp-group { padding: 8px 8px 4px; font-size: 11px; font-weight: 600; color: var(--dim); }
 .mx-fp-row { height: 30px; display: flex; align-items: center; gap: 10px; padding: 0 2px 0 8px; cursor: default; color: var(--fg2); }
-.mx-fp-row.is-repo { height: auto; min-height: 40px; padding: 5px 6px 5px 8px; }
 .mx-fp-row > svg { flex: none; color: var(--dim); }
 .mx-fp-row:hover { background: var(--m-hover); }
 .mx-fp-row.is-selected { background: var(--m-sel); color: var(--fg); }
 .mx-fp-row.is-selected > svg { color: var(--fg2); }
 .mx-fp-row.is-hidden:not(.is-selected) { color: var(--muted); }
 .mx-fp-row-name { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-fp-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mx-fp-row-text .mx-fp-row-name { flex: none; }
-.mx-fp-row-sub { font: 400 11px var(--mono); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-fp-row-side { flex: 0 1 auto; min-width: 0; max-width: 46%; display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
-.mx-fp-branch { flex: 0 1 auto; min-width: 0; max-width: 46%; display: inline-flex; align-items: center; gap: 4px; font: 400 11px var(--mono); color: var(--muted); }
-.mx-fp-row-side .mx-fp-branch { max-width: 100%; }
+.mx-fp-branch { flex: 0 1 auto; min-width: 0; max-width: 46%; display: inline-flex; align-items: center; gap: 4px; font: 400 11px var(--mono); color: var(--dim); }
 .mx-fp-branch > svg { flex: none; }
 .mx-fp-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-fp-row:not(.is-repo) .mx-fp-branch { color: var(--dim); }
-.mx-fp-when { font-size: 11px; color: var(--dim); }
 .mx-fp-enter { flex: none; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
 .mx-fp-enter:hover { background: var(--m-hover); color: var(--fg); }
 .mx-fp-go { width: 100%; min-height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 8px; text-align: left; background: var(--m-sel); font-size: 12.5px; color: var(--fg2); }
@@ -159,10 +193,6 @@
 .mx-fp-none { margin: 0; padding: 32px 16px; text-align: center; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
 .mx-fp-note { flex: none; margin: 0; padding: 0 14px 6px; font-size: 11.5px; color: var(--dim); }
 .mx-fp-foot { flex: none; display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 0 10px 0 8px; border-top: 1px solid var(--line); }
-.mx-fp-index { flex: none; padding-left: 6px; font-size: 11.5px; color: var(--dim); white-space: nowrap; }
-.mx-fp-link { flex: none; height: 24px; padding: 0 6px; font-size: 11.5px; color: var(--fg2); }
-.mx-fp-link:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
-.mx-fp-link:disabled { opacity: .45; }
 .mx-fp-cancel { flex: none; height: 30px; padding: 0 12px; font-size: 12.5px; color: var(--fg2); }
 .mx-fp-cancel:hover { background: var(--m-hover); color: var(--fg); }
 .mx-nsd-start.mx-fp-use { height: 30px; max-width: 240px; margin-left: 0; padding: 0 13px; }
@@ -174,8 +204,8 @@
 :root[data-corners="folded"] .mx-app .mx-palette-row { border-radius: 5px 0 5px 0 !important; }
 
 /* Focus is an underline: 2px in the accent, on the buttons and fields of these dialogs. The message box has none: the design draws no focus on it. */
-:is(.mx-ns-dialog, .mx-fp, .mx-fp-machines, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: inset 0 -2px 0 var(--accent); }
-.mx-nsd-start:focus-visible { box-shadow: inset 0 -2px 0 var(--accent); }
+:is(.mx-ns-dialog, .mx-fp, .mx-fp-machines, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-nsd-start:focus-visible { box-shadow: var(--focus-underline); }
 @media (prefers-reduced-motion: reduce) {
   .mx-ns-dialog, .mx-fp, .mx-nsd-scrim, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename, .mx-service-card { animation: none; }
 }

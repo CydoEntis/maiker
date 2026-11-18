@@ -1191,8 +1191,6 @@ export async function loadAgentModels(agent: 'claude' | 'codex'): Promise<z.infe
 }
 
 export { loadAgentCommands } from './agentCommands'
-export { listRepositories, rescanRepositories } from './repositories'
-export type { IndexedRepository, RepositoryList } from './repositories'
 
 const AgentAuthSchema = z.object({ installed: z.boolean(), signedIn: z.boolean().nullable(), account: z.string(), plan: z.string() })
 export type AgentAuth = z.infer<typeof AgentAuthSchema>

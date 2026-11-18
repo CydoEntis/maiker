@@ -172,6 +172,11 @@ pub struct Term {
     pub last_input: Instant,
     /// The command the pane was started with (None for a plain shell).
     pub cmd: Option<String>,
+    /// The pane was started as an agent (its command is an agent's), not as a shell that an agent
+    /// was typed into later. Set once at start and kept across restarts: it is what lets the
+    /// daemon end the shell an ended agent leaves behind, and lets a window tell that shell from
+    /// a terminal the person opened (`Daemon::close_ended_agents`).
+    pub began_as_agent: bool,
     /// Agent session id from hooks, for resuming after a restart.
     pub session: Option<String>,
     /// The effort the agent's own files say it runs at (`usage::poll_effort`); not kept across a restart.
@@ -1012,6 +1017,7 @@ impl Term {
             hooked: false,
             last_output: now,
             last_input: now,
+            began_as_agent: false,
             cmd: spec
                 .cmd
                 .filter(|c| !c.trim().is_empty())

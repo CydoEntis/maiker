@@ -881,6 +881,30 @@ impl Daemon {
                 });
                 return Ok(false);
             }
+            Command::SaveFile {
+                term,
+                tag,
+                path,
+                contents,
+                version,
+            } => {
+                let dir = self
+                    .terms
+                    .get(&term)
+                    .ok_or_else(|| anyhow::anyhow!("no pane {term}"))?
+                    .cwd
+                    .clone();
+                let tx = self.tx.clone();
+                tokio::task::spawn_blocking(move || {
+                    let result = repo::save_file(&dir, &path, &contents, version.as_deref()).map_err(|e| format!("{e:#}"));
+                    let _ = tx.blocking_send(Ev::RepoReady {
+                        client,
+                        tag,
+                        result,
+                    });
+                });
+                return Ok(false);
+            }
             Command::MovePane { term, to, name } => {
                 let (from_ws, _) = self
                     .locate(term)

@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { errorMessage } from '@/lib/error-message'
-import { DEFAULT_PICK, modelsFor, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
+import { DEFAULT_PICK, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { BYPASS_MODE, CODEX_FULL_MODE, START_MODE } from '@/features/chat/chatMeta'
 import { AgentPicker } from '@/features/chat/components/AgentPicker'
@@ -12,12 +12,12 @@ import { MAX_SHOWN, SlashPicker } from '@/features/chat/components/SlashPicker'
 import { commandText, matchCommands, slashQuery, useSlashCommands, type SlashCommand } from '@/features/chat/slashCommands'
 import { openAgentDocs } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { CHAT_AGENTS, chatAgentOf, DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '../model/chatView'
+import { chatAgentOf, DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '../model/chatView'
 import { abilitiesOf } from '../model/agentAbilities'
 import { useFolderBranches, useInstalledAgents } from '../model/newChatHost'
 import type { BusyBranches, NewSessionProject } from '../model/newSession'
 import { suggestBranchName } from '../model/worktreeName'
-import { AppIcon, Icon } from './glyphs'
+import { Icon } from './glyphs'
 import { ChipMenu, type ChipItem } from './NewChatMenus'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import { isMacPlatform } from '../model/shortcuts'
@@ -85,6 +85,7 @@ const BRANCH_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
 /** The width of a token's list, as the design draws it. */
 const TOKEN_LIST_WIDTH = 320
 const NO_BUSY: BusyBranches = new Map()
+const FIRST_CHOICE: AgentChoice = { model: DEFAULT_PICK, reasoning: START_REASONING }
 
 /** Where the chat works: in the checkout, a worktree of its own, or `auto`: a worktree only when another chat is on that branch here. */
 type WorkIn = 'auto' | 'folder' | 'tree'
@@ -111,7 +112,10 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
   // Full access in new chats starts Claude in Bypass permissions (only where Yolo mode allows it) and Codex in Full access.
   const firstMode = (next: ChatAgent): string => (!fullAccess ? START_MODE[next] : next === 'codex' ? CODEX_FULL_MODE : next === 'claude' && bypassAllowed ? BYPASS_MODE : START_MODE[next])
   const [mode, setMode] = useState(() => firstMode(defaultAgent))
-  const [choice, setChoice] = useState<AgentChoice>({ model: DEFAULT_PICK, reasoning: START_REASONING })
+  // Each agent keeps its own model and effort while the dialog is open, so going back to one finds what it was left at.
+  const [choices, setChoices] = useState<Partial<Record<ChatAgent, AgentChoice>>>({})
+  const choice = choices[agent] ?? FIRST_CHOICE
+  const changeChoice = (change: Partial<AgentChoice>) => { setChoices((was) => ({ ...was, [agent]: { ...(was[agent] ?? FIRST_CHOICE), ...change } })) }
   const [picked, setPicked] = useState<Picked | null>(seed === null ? null : { machine, folder: seed.folder })
   const [extra, setExtra] = useState<(NewSessionProject & { machine: number }) | null>(seed === null ? null : { machine, folder: seed.folder, name: lastPart(seed.folder), color: 'var(--dim)' })
   const [message, setMessage] = useState(seed?.message ?? '')
@@ -165,8 +169,6 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
     setAgent(next)
     // A mode is the agent's own too.
     setMode(firstMode(next))
-    // A model is the agent's own; the other agent's name means nothing to it.
-    if (!modelsFor(next).some((option) => option.id === choice.model)) setChoice((now) => ({ ...now, model: DEFAULT_PICK }))
   }
   const modes = abilitiesOf(agent).permissionModes?.modes ?? []
   // The Yolo setting already starts Codex with full access, and its flag cannot be combined with a mode's.
@@ -355,38 +357,34 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
             </>
           )}
           <span className="mx-nsd-grow" />
-          {showWorktree && !terminal && (
-            <label className="mx-nsd-worktree" title={worktreeTip}>
-              <Switch aria-label="Own worktree" checked={treeMode} onCheckedChange={(on) => { setWorkIn(on ? 'tree' : 'folder') }} />
-              Own worktree
-            </label>
-          )}
+          {/* Hidden, not removed, where it does not apply (a terminal, a folder not read yet): the header keeps its shape. */}
+          <label className={`mx-nsd-worktree${showWorktree && !terminal ? '' : ' is-away'}`} title={worktreeTip} aria-hidden={showWorktree && !terminal ? undefined : true}>
+            <Switch aria-label="Own worktree" checked={treeMode} disabled={!showWorktree || terminal} onCheckedChange={(on) => { setWorkIn(on ? 'tree' : 'folder') }} />
+            <span className="mx-nsd-worktree-word">Own worktree</span>
+          </label>
           <button type="button" className="mx-nsd-close" aria-label="Close" title="Close (Esc)" onClick={onCancel}><Icon name="close" size={13} /></button>
         </div>
-        {terminal ? (
-          <p className="mx-nsd-terminal">A plain terminal on {targetLabel}. Go to any folder and run claude, codex or any command.</p>
-        ) : (
-          <div className="mx-nsd-text">
-            {slashing && <SlashPicker agent={AGENT_LABEL[agent]} typed={message.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={complete} onHover={(index) => { setCursor({ query, index }) }} />}
-            <textarea ref={text} onKeyDown={onTextKey} aria-label="First message" rows={4} value={message} placeholder="What should it work on?" className="mx-nsd-input" onChange={(event) => { setMessage(event.target.value) }}
-              {...(slashing && matches.length > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-slash-list', 'aria-activedescendant': `mx-slash-${String(active)}` } : {})} />
-          </div>
-        )}
-        <StartNotes error={error} treeLine={terminal ? null : treeLine} background={background} onPutBack={putBack} agentMissing={agentMissing && !terminal ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(errorMessage(failure, 'Could not open the setup page')) }) }} />
-        <div className="mx-nsd-foot">
-          {!terminal && (
+        <div className="mx-nsd-text">
+          {terminal ? (
+            <p className="mx-nsd-terminal">A plain terminal on {targetLabel}. Go to any folder and run claude, codex or any command.</p>
+          ) : (
             <>
-              <Segmented aria-label="Agent" value={agent} onValueChange={(next) => { const chosen = chatAgentOf(next); if (chosen !== null) pickAgent(chosen) }}>
-                {CHAT_AGENTS.map((name) => (
-                  <SegmentedItem key={name} value={name} icon={<AppIcon process={name} size={14} />} compact title={AGENT_LABEL[name]}>{AGENT_LABEL[name]}</SegmentedItem>
-                ))}
-              </Segmented>
-              <AgentPicker compact fixedModels={remote} agent={agent} choice={choice} onChange={(change) => { setChoice((was) => ({ ...was, ...change })) }} />
+              {slashing && <SlashPicker agent={AGENT_LABEL[agent]} typed={message.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={complete} onHover={(index) => { setCursor({ query, index }) }} />}
+              <textarea ref={text} onKeyDown={onTextKey} aria-label="First message" rows={4} value={message} placeholder="What should it work on?" className="mx-nsd-input" onChange={(event) => { setMessage(event.target.value) }}
+              {...(slashing && matches.length > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-slash-list', 'aria-activedescendant': `mx-slash-${String(active)}` } : {})} />
             </>
           )}
-          <span className="mx-nsd-grow" />
+        </div>
+        <div className="mx-nsd-notes">
+          <StartNotes error={error} treeLine={terminal ? null : treeLine} background={background} onPutBack={putBack} agentMissing={agentMissing && !terminal ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(errorMessage(failure, 'Could not open the setup page')) }) }} />
+        </div>
+        <div className="mx-nsd-foot">
+          {/* The agent means nothing to a plain shell, so in Terminal the dropdown keeps its place and goes unseen and out of reach. */}
+          <div className={`mx-nsd-agent${terminal ? ' is-away' : ''}`} aria-hidden={terminal ? true : undefined}>
+            <AgentPicker compact fixedModels={remote} agent={agent} choice={choice} onChange={changeChoice} onAgent={pickAgent} />
+          </div>
           {onNewShell !== undefined && (
-            <Segmented aria-label="Opens as" value={kind} onValueChange={(next) => { if (next === 'chat' || next === 'terminal') setKind(next) }}>
+            <Segmented aria-label="Opens as" className="mx-nsd-view" value={kind} onValueChange={(next) => { if (next === 'chat' || next === 'terminal') setKind(next) }}>
               <SegmentedItem value="chat" icon={<Icon name="chat" size={13} />}>Chat</SegmentedItem>
               <SegmentedItem value="terminal" icon={<Icon name="terminal" size={13} />}>Terminal</SegmentedItem>
             </Segmented>

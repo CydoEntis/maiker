@@ -5,7 +5,7 @@ import { ChecksTab } from './ChecksTab'
 import { checksNeedingYou, type Check } from './checks'
 import type { ChangeActions } from './CommitBar'
 import type { PatchComments } from './PatchView'
-import { FilesTab, type LookAt } from './FilesTab'
+import { FilesTab, type DocumentLauncher, type LookAt } from './FilesTab'
 import { HistoryTab } from './HistoryTab'
 import { ReferencesTab } from './ReferencesTab'
 import { TimelineTab } from './TimelineTab'
@@ -74,6 +74,8 @@ type Props = {
   /** What the pane's agent and shell reported lately, for History's status log. */
   timeline: TerminalDetails['timeline']
   lookAt: LookAt | null
+  /** Opens a markdown file beside the chat (the Files tab offers it), and names the checkout. */
+  documents?: DocumentLauncher
   /** The agent a comment on a diff line goes to; absent for a shell, which has nobody to tell. */
   comments?: Omit<PatchComments, 'path' | 'sent' | 'onSent'>
   /** The Changes view's commit area: Commit, the remote button and Create PR, run where the checkout is. */
@@ -103,10 +105,11 @@ function HistoryView({ term, agentWorking, elsewhere, machineName, timeline, onN
   )
 }
 
-function FilesView({ term, machine, machineName, lookAt }: { term: number; machine: number; machineName: string | null; lookAt: LookAt | null }) {
+function FilesView({ term, machine, machineName, lookAt, documents }: { term: number; machine: number; machineName: string | null; lookAt: LookAt | null; documents?: DocumentLauncher | undefined }) {
   const [references, setReferences] = useState(false)
-  if (machine !== LOCAL_MACHINE) return <p className="mx-inspect-note">{localOnlyMessage('files', machineName)}</p>
-  if (!references) return <FilesTab term={term} machine={machine} lookAt={lookAt} onReferences={() => { setReferences(true) }} />
+  // Another machine's files list and open as Markdown documents only (ADR 0014); its references stay there.
+  if (machine !== LOCAL_MACHINE) return <FilesTab term={term} machine={machine} machineName={machineName} lookAt={lookAt} documents={documents} />
+  if (!references) return <FilesTab term={term} machine={machine} lookAt={lookAt} documents={documents} onReferences={() => { setReferences(true) }} />
   return (
     <div className="mx-inspect-body">
       <nav className="mx-inspect-crumbs" aria-label="Where you are">
@@ -123,7 +126,7 @@ function FilesView({ term, machine, machineName, lookAt }: { term: number; machi
  * The side panel (layout 2h): docked beside the chat, which narrows to make room, with no scrim. It slides in from the
  * window's edge; its header names the view the tools bar picked, with that view's count, and a close button.
  */
-export function InspectPanel({ term, changedFiles, branch, view, agentWorking, timeline, checks = [], machine = 0, machineName = null, lookAt, comments, changeActions, turnScope, leaving = false, onClose, onNotice }: Props) {
+export function InspectPanel({ term, changedFiles, branch, view, agentWorking, timeline, checks = [], machine = 0, machineName = null, lookAt, documents, comments, changeActions, turnScope, leaving = false, onClose, onNotice }: Props) {
   const [dragged, setDragged] = useState(readWidth)
   const width = dragged ?? DEFAULT_WIDTH_PX
   const save = useCallback((next: number | null) => {
@@ -175,7 +178,7 @@ export function InspectPanel({ term, changedFiles, branch, view, agentWorking, t
       </header>
       {term !== null && (
         <div className="mx-inspect-scroll">
-          {view === 'files' && <FilesView term={term} machine={machine} machineName={machineName} lookAt={lookAt} />}
+          {view === 'files' && <FilesView term={term} machine={machine} machineName={machineName} lookAt={lookAt} documents={documents} />}
           {view === 'changes' && <ChangesTab term={term} machine={machine} {...(branch !== undefined ? { branch } : {})} {...(comments ? { comments } : {})} {...(changeActions ? { actions: changeActions } : {})} {...(turnScope ? { scope: turnScope } : {})} onNotice={onNotice} />}
           {view === 'checks' && <ChecksTab term={term} machine={machine} checks={checks} onNotice={onNotice} />}
           {view === 'history' && <HistoryView term={term} agentWorking={agentWorking} elsewhere={machine !== LOCAL_MACHINE} machineName={machineName} timeline={timeline} onNotice={onNotice} />}

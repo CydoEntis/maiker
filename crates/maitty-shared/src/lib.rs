@@ -3,6 +3,7 @@ pub mod brand;
 pub mod clock;
 pub mod conversation;
 pub mod extensions;
+pub mod folder_name;
 pub mod github;
 pub mod handoff;
 pub mod hidden;

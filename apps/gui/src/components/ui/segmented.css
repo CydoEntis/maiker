@@ -7,7 +7,6 @@
 .mx-segmented.is-full > button { flex: 1; min-width: 0; }
 .mx-segmented > button:hover { color: var(--fg); }
 .mx-segmented > button[aria-checked="true"] { color: var(--fg); background: var(--m-sel); }
-.mx-segmented > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .mx-segmented > button[data-icon-only] { width: 26px; padding: 0; }
 /* A choice that is not picked shows its mark alone, each saying its name on hover. */
 .mx-segmented > button[data-compact][aria-checked="false"] .mx-seg-word { display: none; }

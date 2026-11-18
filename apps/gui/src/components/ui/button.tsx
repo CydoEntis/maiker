@@ -14,7 +14,7 @@ import { Slot } from "radix-ui"
  *   link     an inline text link
  */
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center gap-2 rounded-(--r-control) border whitespace-nowrap font-(family-name:--ui) outline-none select-none transition-[background-color,color,border-color] duration-(--t-fast) ease-(--ease) focus-visible:shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--focus)] disabled:cursor-not-allowed disabled:opacity-42 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+  "group/button inline-flex shrink-0 items-center justify-center gap-2 rounded-(--r-control) border whitespace-nowrap font-(family-name:--ui) outline-none select-none transition-[background-color,color,border-color] duration-(--t-fast) ease-(--ease) disabled:cursor-not-allowed disabled:opacity-42 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
   {
     variants: {
       variant: {

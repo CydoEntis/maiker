@@ -1,6 +1,6 @@
 # 0007. Multiple machines: one connection per machine, held by the client
 
-- **Status:** Accepted
+- **Status:** Accepted; the rule that nothing which reads a disk works on another machine is amended for markdown documents by [0014](0014-markdown-documents-on-other-machines.md)
 - **Date:** 2026-11-06
 
 ## Context
@@ -46,7 +46,7 @@ People run agents on more than one computer and want one window over all of them
   attach only). Nothing changes on the remote side and `PROTOCOL_VERSION` does not move. What the
   remote supplies is data: cleaned before display, links confirmed, nothing fetched on its own, and
   the remote daemon alone decides its status (0003). Anything that reads a disk (Changes, Files,
-  Find, opening a path) stays local-only. One change is asked of that machine: a new chat may start in a new
+  Find, opening a path) stays local-only, except what [0014](0014-markdown-documents-on-other-machines.md) allows: a folder's listing and markdown documents. One change is asked of that machine: a new chat may start in a new
   worktree, which its own daemon makes in its checkout (`Command::BranchWorktree`, the same checks as for a local
   one), answering only the new folder. Its checkout's branch is never switched from here. See [the spec](../features/remote-chat/spec.md).
 - A Windows client may reach Linux and macOS remotes. A Windows remote is out.

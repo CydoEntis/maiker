@@ -177,6 +177,16 @@ home folder, never follows a link, never enters a hidden folder or another compu
 and time, and only reads `.git` files. It tells a window folder names and branches, which the window already reads through
 `ListFolders`; another machine's names are cleaned again in `remote_policy` and a path with control characters is dropped.
 
+Making a folder (`Query::CreateFolder { parent, name, tag }`, `daemon/folders.rs::create`) is the one place a window
+makes a directory. The daemon is the judge: the name is checked again with `maitty_shared::folder_name::problem` and must
+parse as one plain path component (so `..`, a separator or a drive prefix make nothing); `parent` follows the rules of
+`ListFolders` (absolute or `~`, at most 4,096 bytes) and must already be a folder, and nothing above it is made
+(`create_dir`, never `create_dir_all`). A link with the new name is never followed or replaced: `create_dir` fails on
+anything already called that, and the answer is `Exists`. The answers are typed (`Created`, `Exists`, `NotAllowed`,
+`Failed`), a disk refusal is reported in words and never swallowed, human clients only, and another machine's answer
+is cleaned to one line again in `remote_policy`. The host sends it once and never retries on a kept line, because a
+second ask would read as `Exists`.
+
 `agent_commands` (`maitty-agent-ask`, started by the host for this computer and by a daemon for its own machine on `Query::AgentCommands`; another machine's answer is cleaned again in `remote_policy`) asks the same way for the slash commands Claude Code takes, for
 the chat's command picker. It differs in one input: the webview names the folder the program is
 started in, so the project's own commands and skills are listed. The host starts it only in a full
@@ -738,6 +748,17 @@ fingerprint (the first 8 bytes of SHA-256 over the tool's name and input, as 16 
 which cannot be turned back into the input and is never logged. The name and input stay in the
 agent.
 
+## Project-specific: leftover ticket files
+
+The removed Tickets feature (ADR 0013) kept Plane and Linear keys as plain files in
+`<data dir>/ticket-keys/` on machines with no system keychain. The daemon removes that folder and
+`<data dir>/ticket-links.json` on start (`daemon/leftover_tickets.rs`, off the startup path), and only
+those two names, directly inside the data folder it already resolves (`config::data_dir()`, which
+honours the data-folder override); no path comes from input. It looks with `symlink_metadata` and
+never follows a link: a link, or something of the wrong kind, is left in place and logged. A failure is
+logged once with the path and the error, never a file's contents, and never stops the daemon. The
+system keychain is never touched.
+
 ## Project-specific: closed sessions
 
 The closed-sessions list (`closed-sessions-<socket>.json`, DATABASE "closed sessions") holds each
@@ -1004,3 +1025,26 @@ is what the panes show, so the rules are those of a credential:
   channel takes over.
 - **One window.** A new connection replaces the old one.
 - **CSP.** `connect-src` allows `ws://127.0.0.1:*` and no other socket.
+
+## Project-specific: editing a project file (markdown viewer)
+
+- **The text is untrusted.** A markdown file is drawn only by the chat's reader (`features/chat/markdown.ts`), which builds
+  elements and never HTML: raw HTML is shown as text, a link is kept only when it is an `http(s)` address, an image is not
+  loaded. A link to another `.md` file is handed to the reader as an address on `document.invalid` (a name that cannot be
+  reached) and caught by the viewer before the reader's own handler; the target is resolved against the document and refused
+  unless it stays inside the project and names a markdown file (`documents/documentPaths.ts`). Nothing is fetched for it.
+- **The write path.** Saving is `Command::SaveFile`, through the daemon of the session's own pane (rule 1): the window
+  never touches a disk. The daemon applies the read path's jail (relative, no `..`, no links at any step, not under
+  `.git`), writes only a file that already exists and is a plain file, refuses text over 256 KiB, writes a temporary file
+  beside it and renames it, keeps its permissions, and refuses with `ChangedOnDisk` when the bytes on disk are no longer the
+  version that was read. An agent's client cannot send it. For a session on another machine the same request goes to that
+  machine's own daemon over the request line (ADR 0014), for markdown files only (`remote_repo::may_save`, checked again
+  by that daemon): nothing crosses between disks, the window carries text and a version word. What that untrusted daemon
+  answers is vetted by kind (`vet_repo_reply`, `vet_save_reply`): a document keeps its tabs and line breaks and loses
+  every other control or invisible character (and then carries the empty, read-only version, so the cleaned text is never
+  saved back); a listing's names are one clean line each; a save's answer is a plausible version or `ChangedOnDisk`, no
+  echoed path or text. Paths with a backslash, drive letter, stream colon, leading slash or `..` are refused before a
+  line is opened. Other kinds of file stay local-only.
+- **No silent overwrite.** The window sends no version only after the person pressed Overwrite on a `ChangedOnDisk` answer.
+- Not covered: a change made in the instant between the daemon's last version check and the rename is not caught (no lock is
+  held on files an agent edits).

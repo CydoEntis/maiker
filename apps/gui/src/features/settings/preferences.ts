@@ -129,6 +129,8 @@ export type SettingsPreferences = {
   /** Restart into a downloaded update when no session is working or waiting on you. */
   /** Install a downloaded update while the app is idle. Kept under its old key so a stored choice carries over. */
   restartWhenIdle: boolean
+  /** Restart an older service by itself once no agent is working, waiting on you or starting. Off by default: the restart stops running shells. */
+  restartServiceWhenIdle: boolean
   /** Monthly spend in US dollars the Usage page's ring measures against; null is no budget (the default). Kept here because the daemon serves none. */
   monthlyBudget: number | null
 }
@@ -214,6 +216,7 @@ function defaults(): SettingsPreferences {
     cursorBlink: false,
     autoDownloadUpdates: true,
     restartWhenIdle: true,
+    restartServiceWhenIdle: false,
     monthlyBudget: null,
   }
 }
@@ -300,6 +303,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
       autoDownloadUpdates: bool(preferences.autoDownloadUpdates, fallback.autoDownloadUpdates),
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),
+      restartServiceWhenIdle: bool(preferences.restartServiceWhenIdle, fallback.restartServiceWhenIdle),
       monthlyBudget: validBudget(preferences.monthlyBudget),
       iconColor: preferences.iconColor === 'color' || preferences.iconColor === 'grayscale' ? preferences.iconColor : fallback.iconColor,
       keyOverrides: readKeyOverrides(preferences.keyOverrides),

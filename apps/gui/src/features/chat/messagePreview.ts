@@ -1,4 +1,5 @@
 import { ATTACHMENT_HEADER, parseAttachmentMessage } from './attachmentMessage'
+import { excerptOf, parseQuoteMessage } from './quoteMessage'
 
 /**
  * A sent message as one plain line for places that have no room for the whole of it (a row's hover card).
@@ -36,11 +37,21 @@ function filesNote(files: readonly { kind: string }[] | number): string {
   return files.length === 1 ? '1 file' : `${String(files.length)} files`
 }
 
+/** How much of a quote a one-line preview keeps. */
+const QUOTE_PREVIEW = 60
+
+/** A message's quotes and words as one line: each quote as its first words in curly quotes, then what was said. */
+function withQuotesShort(text: string): string {
+  const segments = parseQuoteMessage(text)
+  if (segments === null) return text
+  return segments.map((segment) => (segment.kind === 'quote' ? `“${excerptOf(segment.text, QUOTE_PREVIEW)}”` : segment.text)).join(' ')
+}
+
 export function messagePreview(raw: string): string {
   const message = raw.replace(/\r\n/g, '\n')
   const parsed = parseAttachmentMessage(message)
   const split = parsed === null ? splitClippedBlock(message) : { words: parsed.text, files: 0 }
-  const words = withoutPasteTags(split.words).replace(/\s+/g, ' ').trim()
+  const words = withQuotesShort(withoutPasteTags(split.words)).replace(/\s+/g, ' ').trim()
   const note = parsed === null ? filesNote(split.files) : filesNote(parsed.files)
   return [words, note === '' ? '' : `[${note}]`].filter((part) => part !== '').join(' ')
 }

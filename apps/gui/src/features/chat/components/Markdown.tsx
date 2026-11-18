@@ -1,4 +1,4 @@
-import { memo, useContext, useState, type ReactNode } from 'react'
+import { memo, useContext, useId, useState, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Fold } from '@/components/ui/fold'
@@ -7,13 +7,14 @@ import { HighlightedLine } from '@/components/HighlightedLine'
 import { fileTag } from '@/features/inspect/fileTag'
 import { extensionForLanguage } from '@/lib/highlight'
 import { followLink } from '../followLink'
-import { parseMarkdown, parseInline, safeHref, type Block, type Inline, type TableAlign } from '../markdown'
+import { listBullets, parseMarkdown, parseInline, safeHref, type Block, type Inline, type TableAlign } from '../markdown'
 import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBlock'
 import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
 import { copyBlock, saveBlock } from '../saveBlock'
 import { TypeTag } from '@/components/ui/tag'
 import { Block as BlockBox, BlockHead } from './Block'
+import type { Askable } from '../plainQuestions'
 import { FileBadge } from './cardParts'
 
 /**
@@ -191,26 +192,60 @@ function sameParsed(a: unknown, b: unknown): boolean {
  * differs each time: comparing a block's parse is far cheaper than rendering it again, so the ones above stay as
  * they are.
  */
-const BlockView = memo(function BlockView({ block }: { block: Block }) {
+type Replying = { readonly asked: readonly Askable[]; readonly onReply: (asked: Askable) => void }
+
+/** A quiet Reply at the right edge of a question; its room is kept whether it shows or not. */
+function ReplyButton({ asked, onReply }: { asked: Askable; onReply: (asked: Askable) => void }) {
+  return <button type="button" className="mx-ask-reply" aria-label={asked.label === '' ? 'Reply to this question' : `Reply to question ${asked.label}`} onClick={() => { onReply(asked) }}>Reply</button>
+}
+
+/** How far a nested list entry is indented for each level, in pixels. */
+const TASK_INDENT_PX = 18
+
+/** A task entry's box: read-only, a tick when done. Its text names it for assistive tech. */
+function TaskBox({ checked, labelledBy }: { checked: boolean; labelledBy: string }) {
+  return (
+    <span role="checkbox" aria-checked={checked} aria-readonly="true" aria-labelledby={labelledBy} className="mx-task-box" data-checked={checked ? '' : undefined}>
+      <svg viewBox="0 0 12 12" aria-hidden="true" className="mx-task-tick"><path d="M2.5 6.4 5 8.8 9.6 3.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    </span>
+  )
+}
+
+function ListView({ block, replying }: { block: Extract<Block, { kind: 'list' }>; replying?: Replying | undefined }) {
+  const List = block.ordered ? 'ol' : 'ul'
+  const base = useId()
+  const bullets = listBullets(block)
+  return (
+    <List className="mx-md-list" role="list">
+      {block.items.map((item, index) => {
+        const mark = block.marks?.[index]
+        const checked = mark?.checked ?? null
+        const textId = `${base}-${String(index)}`
+        return (
+          <li key={index} data-bullet={checked === null ? (bullets[index] ?? '') : ''} data-task={checked === null ? undefined : ''} style={mark !== undefined && mark.level > 0 ? { marginInlineStart: `${String(mark.level * TASK_INDENT_PX)}px` } : undefined} className={replying?.asked.some((one) => one.item === index) === true ? 'has-reply' : undefined}>
+            {checked !== null && <TaskBox checked={checked} labelledBy={textId} />}
+            <span id={textId} className="mx-md-item"><Inlines nodes={item} /></span>
+            {replying?.asked.filter((one) => one.item === index).map((one) => <ReplyButton key={one.key} asked={one} onReply={replying.onReply} />)}
+          </li>
+        )
+      })}
+    </List>
+  )
+}
+
+const BlockView = memo(function BlockView({ block, replying }: { block: Block; replying?: Replying | undefined }) {
   switch (block.kind) {
-    case 'paragraph':
-      return <p className="m-0 whitespace-pre-wrap"><Inlines nodes={block.inlines} /></p>
+    case 'paragraph': {
+      const asked = replying?.asked[0]
+      if (replying === undefined || asked === undefined) return <p className="m-0 whitespace-pre-wrap"><Inlines nodes={block.inlines} /></p>
+      return <p className="m-0 whitespace-pre-wrap has-reply"><Inlines nodes={block.inlines} /><ReplyButton asked={asked} onReply={replying.onReply} /></p>
+    }
     case 'heading':
       return <p role="heading" aria-level={block.level} className={`mb-0 ${HEADING_SIZE[block.level - 1] ?? HEADING_SIZE[3]}`}><Inlines nodes={block.inlines} /></p>
     case 'code':
       return <CodeBlock language={block.language} text={block.text} />
-    case 'list': {
-      const List = block.ordered ? 'ol' : 'ul'
-      return (
-        <List className="mx-md-list" role="list">
-          {block.items.map((item, index) => (
-            <li key={index} data-bullet={block.ordered ? `${String((block.start ?? 1) + index)}.` : '•'}>
-              <span className="mx-md-item"><Inlines nodes={item} /></span>
-            </li>
-          ))}
-        </List>
-      )
-    }
+    case 'list':
+      return <ListView block={block} replying={replying} />
     case 'quote': {
       // A note (design: Note): a well with a coloured left edge; text bold at its start is the lead beside the rest.
       const [first, ...rest] = block.inlines
@@ -227,13 +262,16 @@ const BlockView = memo(function BlockView({ block }: { block: Block }) {
     case 'table':
       return <TableCard block={block} />
   }
-}, (before, after) => sameParsed(before.block, after.block))
+}, (before, after) => sameParsed(before.block, after.block) && sameParsed(before.replying?.asked, after.replying?.asked) && before.replying?.onReply === after.replying?.onReply)
 
 /** A message's text as markdown blocks, spaced like paragraphs. */
-export const Markdown = memo(function Markdown({ text, className = '' }: { text: string; className?: string }) {
+export const Markdown = memo(function Markdown({ text, className = '', asked, onReply }: { text: string; className?: string; /** The questions the message asks, each given a Reply (`plainQuestions.ts`). */ asked?: readonly Askable[]; onReply?: (asked: Askable) => void }) {
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
-      {parseMarkdown(text).map((block, index) => <BlockView key={index} block={block} />)}
+      {parseMarkdown(text).map((block, index) => {
+        const here = asked?.filter((one) => one.block === index) ?? []
+        return <BlockView key={index} block={block} replying={here.length === 0 || onReply === undefined ? undefined : { asked: here, onReply }} />
+      })}
     </div>
   )
 })

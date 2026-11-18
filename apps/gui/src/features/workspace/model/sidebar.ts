@@ -121,6 +121,19 @@ export function isTerminal(session: Pick<SessionView, 'conversation' | 'status'>
   return !session.conversation.agent && session.status !== 'needs'
 }
 
+/**
+ * A row of the Terminals section: a terminal that is not a chat. It sits in that one section under every grouping, so a shell
+ * an agent left behind (or one the person opened) never mixes in with the agents' rows.
+ */
+export function inTerminals(session: Pick<SessionView, 'conversation' | 'status'>): boolean {
+  return isTerminal(session) && !isChatSession(session.conversation)
+}
+
+/** The terminals in creation order (a new one lands last, so nothing moves), and the sessions the grouping lists. */
+export function splitTerminals(sessions: readonly SessionView[]): { terminals: SessionView[]; others: SessionView[] } {
+  return { terminals: inCreationOrder(sessions.filter(inTerminals)), others: sessions.filter((session) => !inTerminals(session)) }
+}
+
 export function isSidebarGrouping(value: unknown): value is SidebarGrouping {
   return SIDEBAR_GROUPINGS.some(([grouping]) => grouping === value)
 }

@@ -458,6 +458,9 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
         <Row label="Install updates when idle" detail="Never while an agent is working.">
           <Switch aria-label="Install updates when idle" checked={preferences.restartWhenIdle} onCheckedChange={(value) => { update('restartWhenIdle', value) }} />
         </Row>
+        <Row label="Restart the service when idle" detail="After an update, an older service restarts by itself once no agent is working, waiting on you or starting. Sessions come back.">
+          <Switch aria-label="Restart the service when idle" checked={preferences.restartServiceWhenIdle} onCheckedChange={(value) => { update('restartServiceWhenIdle', value) }} />
+        </Row>
       </Card>
       <Card title="Sessions">
         <Row label="Reopen layout on launch" detail="Restore the panes and splits you had last time.">

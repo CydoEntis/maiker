@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { agoOf, baseName, crumbsOf, groupRepositories, isPathQuery, isRoot, joinPath, niceOf, parentOf, visibleFolders } from './folderPick'
+import { baseName, crumbsOf, isPathQuery, isRoot, joinPath, niceOf, parentOf, visibleFolders } from './folderPick'
 
 describe('paths in the folder picker', () => {
   it('joins, goes up and names folders with either separator', () => {
@@ -44,26 +44,5 @@ describe('the rows of the folder picker', () => {
     expect(visibleFolders(entries, '', false).map((entry) => entry.name)).toEqual(['alpha', 'zeta'])
     expect(visibleFolders(entries, '', true).map((entry) => entry.name)).toEqual(['alpha', '.cache', '.config', 'zeta'])
     expect(visibleFolders(entries, '.ca', false).map((entry) => entry.name)).toEqual(['.cache'])
-  })
-
-  it('puts the repositories used from here first, newest first, then the others by name', () => {
-    const repos = [
-      { path: '/c/zed', branch: null, lastUsed: null },
-      { path: '/c/old', branch: 'main', lastUsed: 100 },
-      { path: '/c/new', branch: 'main', lastUsed: 900 },
-      { path: '/c/abc', branch: null, lastUsed: null },
-    ]
-    const grouped = groupRepositories(repos, '')
-    expect(grouped.recent.map((repo) => baseName(repo.path))).toEqual(['new', 'old'])
-    expect(grouped.rest.map((repo) => baseName(repo.path))).toEqual(['abc', 'zed'])
-    expect(groupRepositories(repos, 'ol').recent).toHaveLength(1)
-  })
-
-  it('says how long ago in the words the rows use', () => {
-    expect(agoOf(1000, 1030)).toBe('just now')
-    expect(agoOf(1000, 1000 + 240)).toBe('4m ago')
-    expect(agoOf(1000, 1000 + 7200)).toBe('2h ago')
-    expect(agoOf(1000, 1000 + 86400)).toBe('yesterday')
-    expect(agoOf(1000, 1000 + 5 * 86400)).toBe('5d ago')
   })
 })

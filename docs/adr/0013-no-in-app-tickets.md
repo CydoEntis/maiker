@@ -44,9 +44,12 @@ the next message added inside a window.
 
 **Old data is ignored, not migrated.** A saved binding to the `tickets` action loads and does
 nothing; the terminal app's saved state with `ticket_links` or `ticket_me` still loads and the
-fields are not written back. Files the daemon wrote before (`ticket-keys/`, `ticket-links.json` in
-the data folder) and keys in the system keychain under the service "<app> ticket keys" are no longer
-read and are not deleted.
+fields are not written back. Keys in the system keychain under the service "<app> ticket keys" are no
+longer read and are never deleted by Maitty; the user removes them in the keychain. The two files the
+daemon wrote on machines with no keychain (`ticket-keys/`, `ticket-links.json` in the data folder) are
+removed by the daemon once, on start (`daemon/leftover_tickets.rs`): see
+[SECURITY](../SECURITY.md#project-specific-leftover-ticket-files) and
+[DATABASE](../DATABASE.md#project-specific-leftover-ticket-files).
 
 ## Alternatives considered
 
@@ -55,15 +58,18 @@ read and are not deleted.
 - **Keep the window open (`COMPATIBLE_SINCE` 78) and leave the removed messages on the wire**: 0011
   did this for `TicketWrite`. It keeps old windows connected, but the wire keeps messages nobody
   answers, and 0002 asks for a bump when a message goes.
-- **Delete the stored keys and files on start**: it would delete secrets without the user's say.
-  Proposed instead: say so in the release notes and let the user remove them.
+- **Delete the keychain keys too**: Maitty does not own the keychain's entries to that degree, and a
+  failed or surprising keychain prompt on start is worse than an unused entry. Not done.
+- **Leave the plain key files**: first proposed, then reversed. The files are Maitty's own, in its own
+  data folder, and a plain-text key left on disk for a feature that no longer exists is only a risk, so
+  the daemon removes those two names and nothing else.
 
 ## Consequences
 
 - Fewer messages, views, dependencies and docs to keep in step on three platforms.
 - A running daemon from before this version and an updated window refuse each other until the
   daemon restarts (the cost 0011 declined to pay for a smaller change).
-- Plane and Linear keys already in the keychain, and plain key files on machines with no keychain,
-  stay on disk unused.
+- Plane and Linear keys already in the keychain stay there unused; plain key files on machines with no
+  keychain are removed on the first start of this version.
 - Bringing tickets back is a new decision; it would need its own place that does not pull Maitty
   away from its mission.

@@ -66,6 +66,7 @@
 .mx-machine-group { width: 22px; height: 20px; flex: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
 .mx-machine-group:hover { color: var(--fg); }
 .mx-machine-group.is-on { color: var(--fg); background: var(--m-raise); box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-machine-group.is-on:focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
 .mx-machine-dot { width: 5px; height: 5px; flex: none; border-radius: 50%; opacity: .8; background: var(--ok); }
 .mx-machine-dot.is-offline { background: transparent; border: 1.5px dashed var(--dim); }
 .mx-machine-add { width: 20px; height: 20px; flex: none; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: .75; }
@@ -137,6 +138,7 @@
 .mx-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: calc(40px * var(--pad, 1)); padding: 4px 6px 4px 10px; border-radius: 8px; text-align: left; transition: background-color var(--t-fast) var(--ease); }
 .mx-row:hover { background: rgba(var(--hl), calc(.045 * var(--hk))); }
 .mx-row.is-selected, .mx-row.is-selected:hover { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); }
+.mx-row.is-selected:focus-visible { box-shadow: var(--focus-underline); }
 /* The status icon sits level with the name, not centred on the two lines. */
 .mx-row { align-items: flex-start; }
 /* The tint a row shows for a moment after its status changed (`useStatusFlash`): a layer that fades by opacity. */
@@ -154,7 +156,7 @@
 .mx-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mx-row-name { height: calc(18px * var(--sidebar-text, 1)); font-size: calc(13px * var(--sidebar-text, 1)); line-height: calc(18px * var(--sidebar-text, 1)); font-weight: 400; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-row.is-selected .mx-row-name { color: var(--fg); }
-.mx-row .mx-inline-name { height: 20px; flex: none; width: 100%; margin-left: -5px; padding: 0 5px; border-radius: 5px; font-size: 13px; font-weight: 600; background: var(--m-well); border: 1px solid var(--accent-line); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.mx-row .mx-inline-name { height: 20px; flex: none; width: 100%; margin-left: -5px; padding: 0 5px; border-radius: 0; font-size: 13px; font-weight: 600; background: transparent; border: 0; outline: none; box-shadow: var(--focus-underline); }
 .mx-row-sub { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: calc(10.5px * var(--sidebar-text, 1)); line-height: calc(14px * var(--sidebar-text, 1)); color: var(--dim); white-space: nowrap; overflow: hidden; }
 .mx-row-project { display: inline-flex; align-items: center; gap: 5px; flex: 0 .2 auto; min-width: 7ch; }
 .mx-row-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
@@ -177,6 +179,16 @@
 
 
 /* The Terminals section: pinned over the foot, with a share of the height at most, past which it scrolls on its own. */
+.mx-terminals { flex: none; display: flex; flex-direction: column; max-height: 33%; min-height: 0; padding: 4px 8px 6px; border-top: 1px solid var(--pane-line); }
+.mx-terminals-head { flex: none; display: flex; align-items: center; gap: 4px; }
+.mx-terminals-head .mx-section-head { flex: 1; min-width: 0; }
+.mx-terminals > .mx-collapse-grid { flex: 1 1 auto; min-height: 0; }
+.mx-terminals > .mx-collapse-grid > .mx-collapse-inner { overflow-y: auto; overflow-x: hidden; }
+/* The rail's one terminal glyph: the count sits at its corner, in the space the 30px tile already has. */
+.mx-rail-terminals { flex: none; position: relative; width: 100%; padding: 4px 0; border-top: 1px solid var(--line); color: var(--muted); }
+.mx-rail-terminals .mx-rail-session { position: relative; }
+.mx-rail-terminals.is-selected .mx-rail-session { background: var(--m-sel); color: var(--fg); }
+.mx-rail-count { position: absolute; right: 6px; bottom: 2px; font-size: 9.5px; line-height: 12px; font-variant-numeric: tabular-nums; color: var(--dim); }
 .mx-sidebar-foot { flex: none; padding: 10px 12px 12px; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--pane-line); }
 
 /* The rail of a narrow window: the starters, then a tile per session. */
@@ -228,7 +240,7 @@
 .mx-grp-label { flex: none; width: 44px; font-size: 12px; color: var(--muted); }
 .mx-grp-search { display: flex; align-items: center; gap: 8px; height: 34px; margin-top: 6px; padding: 0 10px; border-top: 1px solid var(--line); box-shadow: inset 0 -1px 0 var(--line); color: var(--dim); }
 .mx-grp-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font-size: 12.5px; color: var(--fg); }
-.mx-grp-search:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+.mx-grp-search:focus-within { box-shadow: var(--focus-underline); }
 .mx-grp-projects { max-height: 188px; overflow-y: auto; padding: 4px; }
 .mx-grp-project { width: 100%; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 12.5px; text-align: left; color: var(--fg2); }
 .mx-grp-project:hover { background: var(--m-hover); color: var(--fg); }

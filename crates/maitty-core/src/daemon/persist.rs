@@ -98,6 +98,10 @@ pub struct SavedPane {
     /// The pane that started it, by its id when this was saved (a key of some tab's `panes`).
     #[serde(default)]
     pub started_by: Option<TermId>,
+    /// It was started as an agent (`Term::began_as_agent`); panes saved before this was recorded
+    /// read as not, and their command says when it was one.
+    #[serde(default)]
+    pub began_as_agent: bool,
     /// The app that started it: only that app may use it after a restart (ADR 0004).
     #[serde(default)]
     pub owner: crate::protocol::Surface,

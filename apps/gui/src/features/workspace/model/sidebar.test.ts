@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { toSessionView, type SessionView } from './session'
-import { byUrgency, canPutAway, canSnooze, inProject, machineGroups, projectChoices, projectColor, projectGroups, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
+import { byUrgency, canPutAway, canSnooze, inProject, machineGroups, projectChoices, projectColor, projectGroups, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, splitTerminals, statusSections } from './sidebar'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(1)) }))
 
@@ -144,6 +144,19 @@ describe('shells', () => {
     const all = [session(3, { process: 'pnpm' }), session(1), session(2, { agent: 'claude' }), session(4, { details: exited })]
     expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['idle', ['t2']], ['terminals', ['t1', 't3', 't4']]])
     expect(projectSections(all, [LOCAL_HEAD]).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t1', 't2', 't3', 't4'])
+  })
+
+  it('are split out of what the grouping lists, in creation order, whatever else the daemon says of them', () => {
+    const chat = session(5, { kind: 'claude', execution: 'Structured', chat: { conversation: 5, generation: 0 }, agent: 'claude' } as unknown as Partial<Conversation>)
+    const all = [session(3, { process: 'pnpm' }), session(1), session(2, { agent: 'claude' }), session(4, { details: exited }), chat]
+    const { terminals, others } = splitTerminals(all)
+    expect(terminals.map((item) => item.id)).toEqual(['t1', 't3', 't4'])
+    expect(others.map((item) => item.id)).toEqual(['t2', 't5'])
+  })
+
+  it('stay out of the Terminals section while they ask, so what needs you is never folded away', () => {
+    const { terminals, others } = splitTerminals([session(1, { status: 'needs-you' }), session(2)])
+    expect([terminals.map((item) => item.id), others.map((item) => item.id)]).toEqual([['t2'], ['t1']])
   })
 
   it('sit with what needs you while they ask', () => {

@@ -8,6 +8,8 @@ import { daemonConnectionError } from '@/lib/daemon-connection'
 import { errorMessage } from '@/lib/error-message'
 import { appBehindStep } from '@/features/updates/appBehind'
 import { useUpdater } from '@/features/updates/useUpdater'
+import { serviceRestartStep } from '@/features/updates/serviceRestart'
+import { useIdleServiceRestart } from '@/features/updates/useIdleServiceRestart'
 import type { AppBehindOffer, RestartOffer } from './components/states'
 
 /**
@@ -24,7 +26,7 @@ function olderServiceNote(status: { canRestart: boolean; sessionCount: number; a
 }
 
 /** What the window offers when it and the service speak different protocols: restart the older service, or update the older app. */
-export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, online, failures, sessionsQuery }: {
+export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, online, failures, sessionsQuery, restartServiceWhenIdle, starting }: {
   mismatch: { daemonProtocol: number; guiProtocol: number } | null
   serviceNewer: boolean
   restartStatusQuery: UseQueryResult<{ daemonProtocol: number; guiProtocol: number; canRestart: boolean; sessionCount: number; activeTurnCount: number | null }>
@@ -34,6 +36,10 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
   online: boolean
   failures: number
   sessionsQuery: UseQueryResult<Conversation[]>
+  /** Settings › General › Restart the service when idle. */
+  restartServiceWhenIdle: boolean
+  /** A session is being started from this window. */
+  starting: boolean
 }) {
   const [restartPending, setRestartPending] = useState(false)
   const restartOffer: RestartOffer | null = mismatch && !serviceNewer
@@ -45,18 +51,27 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
         to: mismatch.guiProtocol,
         sessions: restartStatusQuery.data?.sessionCount ?? 0,
         working: restartStatusQuery.data?.activeTurnCount ?? 0,
-        onRestart: () => {
+        onRestart: (automatic = false) => {
           setRestartPending(true)
           void restartMismatchedDaemon(mismatch.daemonProtocol)
             .then(async () => {
               await refetchSessions()
-              toast.success(`Service restarted · ${String(restartStatusQuery.data?.sessionCount ?? 0)} sessions back`)
+              toast.success(`Service restarted · ${String(restartStatusQuery.data?.sessionCount ?? 0)} sessions back`, automatic ? { description: 'It restarted by itself because no agent was working or waiting.' } : undefined)
             })
             .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not restart the Maitty service')) })
             .finally(() => { setRestartPending(false) })
         },
       }
     : null
+  // The same button flow, run for you at a quiet moment. The window cannot read sessions from a service on another
+  // protocol, so the service's own count of working and waiting agents is the guard here.
+  const refetchRestartStatus = restartStatusQuery.refetch
+  useIdleServiceRestart({
+    step: serviceRestartStep({ enabled: restartServiceWhenIdle, restarting: restartPending, starting, service: restartStatusQuery.data, sessionStatuses: null }),
+    key: restartOffer && restartOffer.canRestart ? `protocol-${String(restartOffer.from)}` : null,
+    restart: () => { restartOffer?.onRestart(true) },
+    recheck: () => { void refetchRestartStatus() },
+  })
   const appBehindAction = appBehindStep(updater.state)
   const appBehindOffer: AppBehindOffer | null = mismatch && serviceNewer
     ? {

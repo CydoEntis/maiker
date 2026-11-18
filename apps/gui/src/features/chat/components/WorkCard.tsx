@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useRevealOpen } from '../chatActions'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { isWaitingStep } from '../stepInfo'
@@ -14,6 +15,8 @@ type WorkCardProps = {
   openDiff: ((file: string) => void) | null
   /** The id of the step a request is waiting on, when it is one of these. */
   waitingStep: string | null
+  /** The row this is, so a jump to words inside it can open it. */
+  rowKey?: string | undefined
 }
 
 /**
@@ -22,11 +25,12 @@ type WorkCardProps = {
  * A failed run stays folded too (its row wears a red edge and the word "failed", and the step itself shows a red ×); only a run with a step a request waits on starts open, so
  * that step is never folded away.
  */
-export function WorkCard({ steps, root, openDiff, waitingStep }: WorkCardProps) {
+export function WorkCard({ steps, root, openDiff, waitingStep, rowKey }: WorkCardProps) {
   const status = workStatus(steps)
   const waiting = steps.some((step) => isWaitingStep(waitingStep, step.id))
   const [chosen, setChosen] = useState<boolean | null>(null)
   const open = chosen ?? waiting
+  useRevealOpen(rowKey, () => { setChosen(true) })
   const [openStep, setOpenStep] = useState<string | null>(null)
   const failed = status === 'failed'
   return (

@@ -162,6 +162,7 @@ mod design_tests {
             exit: None,
             ask: None,
             timeline: Vec::new(),
+            began_as_agent: false,
         }
     }
 

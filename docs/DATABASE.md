@@ -154,6 +154,13 @@ does not parse, or whose `version` is newer than the build reads, is renamed to 
 the store starts empty with a logged warning; it never stops the daemon. Unknown fields are
 ignored and missing ones default, so a field can be added without a version bump.
 
+## Project-specific: leftover ticket files
+
+`ticket-keys/` and `ticket-links.json` in the data folder belonged to the removed Tickets feature
+([ADR 0013](adr/0013-no-in-app-tickets.md)). Nothing reads them. The daemon deletes exactly those two
+names on start (`daemon/leftover_tickets.rs`); not finding them is success, so the removal is
+idempotent and needs no marker. Nothing else in the data folder is removed by it.
+
 ## Project-specific: closed sessions
 
 `daemon/closed_sessions.rs` keeps the agent sessions that closed for good or whose agent exited

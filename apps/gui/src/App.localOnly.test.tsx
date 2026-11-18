@@ -108,7 +108,7 @@ describe('a pane of another machine and the features that need its files', () =>
     for (const name of ['Changes', 'Files', 'History', 'Checks']) expect(await screen.findByRole('menuitem', { name: new RegExp(`^${name}`) })).toBeInTheDocument()
   })
 
-  it('opens the side panel on the machine\'s changes, and its views that read files say they are local-only', async () => {
+  it('opens the side panel on the machine\'s changes, lists its files for markdown (ADR 0014), and says its history is local-only', async () => {
     const user = await openRemotePane()
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
     await user.click(await screen.findByRole('menuitem', { name: /^Changes/ }))
@@ -116,7 +116,9 @@ describe('a pane of another machine and the features that need its files', () =>
     expect(panel.getByRole('heading', { name: 'Changes' })).toBeInTheDocument()
     expect(screen.queryByText(REFUSAL('Inspect'))).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Files' }))
-    expect(await panel.findByText(REFUSAL('Files'))).toBeInTheDocument()
+    // Files is no longer refused: it lists the machine's folders and opens its markdown documents.
+    expect(await panel.findByRole('navigation', { name: 'Files' })).toBeInTheDocument()
+    expect(panel.queryByText(REFUSAL('Files'))).toBeNull()
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
     await user.click(await screen.findByRole('menuitem', { name: /^History/ }))
     await user.click(panel.getByRole('radio', { name: 'Snapshots' }))

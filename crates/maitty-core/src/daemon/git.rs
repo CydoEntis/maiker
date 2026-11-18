@@ -546,9 +546,52 @@ pub fn conversation_file(root: &Path, relative: &str) -> Result<String> {
     String::from_utf8(content).context("The selected file is not UTF-8 text")
 }
 
+/// A file's version: its length and an FNV-1a hash of its bytes, as one opaque word. A save names
+/// the version it read, so a file an agent changed since is noticed (a touch that changes no byte is not).
+pub fn file_version(bytes: &[u8]) -> String {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0100_0000_01b3;
+    let hash = bytes.iter().fold(OFFSET, |hash, byte| (hash ^ u64::from(*byte)).wrapping_mul(PRIME));
+    format!("{}-{hash:016x}", bytes.len())
+}
+
+/// A project file's text with the version of the bytes it was read from.
+pub fn conversation_file_stamped(root: &Path, relative: &str) -> Result<(String, String)> {
+    let path = resolve_conversation_path(root, relative)?
+        .canonicalize()
+        .context("resolving project file")?;
+    let metadata = std::fs::metadata(&path).context("reading project file metadata")?;
+    if !metadata.is_file() {
+        bail!("The selected project path is not a file");
+    }
+    if metadata.len() > MAX_FILE_BROWSER_BYTES {
+        bail!("This file is too large to preview");
+    }
+    let bytes = std::fs::read(path).context("reading project file")?;
+    let version = file_version(&bytes);
+    let text = String::from_utf8(bytes).context("The selected file is not UTF-8 text")?;
+    Ok((text, version))
+}
+
+/// How a save ended when it did not fail: written (with the new version), or refused because the
+/// file is no longer what the editor read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Saved {
+    Written(String),
+    ChangedOnDisk,
+}
+
 /// Replaces an existing project file's text (see `repo::write_file`). Nothing is created: a path that is
 /// not already a regular file is refused, so a typo cannot make a new file.
 pub fn conversation_write(root: &Path, relative: &str, contents: &str) -> Result<()> {
+    conversation_save(root, relative, contents, None).map(|_| ())
+}
+
+/// `conversation_write`, but with `expect` set the file must still have that version: the bytes on
+/// disk are compared just before the swap, and a different version is `ChangedOnDisk`, nothing written.
+/// (A change in the instant between that check and the swap is not caught: no lock is held on files an
+/// agent edits.)
+pub fn conversation_save(root: &Path, relative: &str, contents: &str, expect: Option<&str>) -> Result<Saved> {
     use std::io::Write;
     use std::path::Component;
 
@@ -568,18 +611,34 @@ pub fn conversation_write(root: &Path, relative: &str, contents: &str) -> Result
         .map(|n| n.to_string_lossy().into_owned())
         .context("The project path is invalid")?;
     let staged = path.with_file_name(format!(".{name}.{}.saving", std::process::id()));
-    let written = (|| -> std::io::Result<()> {
+    let unchanged = || -> std::io::Result<bool> {
+        match expect {
+            None => Ok(true),
+            Some(version) => Ok(file_version(&std::fs::read(&path)?) == version),
+        }
+    };
+    let written = (|| -> std::io::Result<bool> {
         let mut file = std::fs::File::create(&staged)?;
         file.write_all(contents.as_bytes())?;
         file.sync_all()?;
         std::fs::set_permissions(&staged, metadata.permissions())?;
-        std::fs::rename(&staged, &path)
+        if !unchanged()? {
+            return Ok(false);
+        }
+        std::fs::rename(&staged, &path)?;
+        Ok(true)
     })();
-    if let Err(error) = written {
-        let _ = std::fs::remove_file(&staged);
-        return Err(error).context("saving the file");
+    match written {
+        Ok(true) => Ok(Saved::Written(file_version(contents.as_bytes()))),
+        Ok(false) => {
+            let _ = std::fs::remove_file(&staged);
+            Ok(Saved::ChangedOnDisk)
+        }
+        Err(error) => {
+            let _ = std::fs::remove_file(&staged);
+            Err(error).context("saving the file")
+        }
     }
-    Ok(())
 }
 
 pub(super) fn resolve_conversation_path(root: &Path, relative: &str) -> Result<PathBuf> {

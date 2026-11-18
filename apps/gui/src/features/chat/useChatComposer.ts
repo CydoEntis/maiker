@@ -6,10 +6,11 @@ import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
 import { abilitiesOf, runsMidTurn } from '@/features/workspace/model/agentAbilities'
 import { hasPendingApproval, type ChatFeed } from './chatFeed'
 import { buildAttachmentMessage, parseAttachmentMessage } from './attachmentMessage'
+import { buildQuoteMessage, MAX_QUOTES, parseQuoteMessage, sameQuote, type MessageSegment } from './quoteMessage'
 import { announceOutsideSend, onOutsideSend } from './outsideSends'
 import { selectChatEvents } from './projection'
 import { countUserMessages } from './workPhase'
-import { peekComposer, updateComposer, useComposerSlice, type ComposerState, type DraftAttachment } from './composerStore'
+import { newQuoteId, peekComposer, updateComposer, useComposerSlice, type ComposerState, type DraftAttachment } from './composerStore'
 
 import { newId, revokePreviews, useAttachmentIntake, type AttachmentIntake } from './useAttachmentIntake'
 import { wireChoice } from './agentChoice'
@@ -190,6 +191,8 @@ export type ChatComposer = {
   error: string | null
   /** Sends this text now, as `submit` would send the draft; true when it went. For a message held while the agent started. */
   sendText: (text: string) => Promise<boolean>
+  /** Sends a message built elsewhere through the box's own send path, leaving the box's text and files alone; true when it went or was queued. */
+  sendReply: (message: string) => Promise<boolean>
   /** The message just sent, until the history shows it; null otherwise. */
   echo: SentEcho | null
 }
@@ -200,12 +203,17 @@ export type ChatComposer = {
  */
 export function messageIntoDraft(text: string): (state: ComposerState) => ComposerState {
   const parsed = parseAttachmentMessage(text)
-  const words = parsed?.text ?? text
+  const said = parsed?.text ?? text
+  // Its quotes come back to the strip, and what was said to the box.
+  const segments = parseQuoteMessage(said)
+  const words = segments === null ? said : segments.flatMap((segment) => (segment.kind === 'words' ? [segment.text] : [])).join('\n\n')
+  const quotes = (segments ?? []).flatMap((segment) => (segment.kind === 'quote' ? [{ who: segment.who, text: segment.text, id: newQuoteId() }] : []))
   const files = (parsed?.files ?? []).map((file) => ({ id: newId(), path: file.path, name: file.name, size: null, kind: file.kind, preview: null }))
   return (state) => ({
     ...state,
     draft: state.draft.trim() === '' ? words : words === '' ? state.draft : `${words}\n\n${state.draft}`,
     attachments: [...files, ...state.attachments],
+    quotes: [...quotes, ...state.quotes.filter((held) => !quotes.some((back) => sameQuote(back, held)))].slice(0, MAX_QUOTES),
   })
 }
 
@@ -336,31 +344,13 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     }
   }, [conversation, link.generation, agent, feed, refresh, typeText, running, eventsNow, restingNow, showEcho])
 
-  const submit = useCallback(() => {
-    const { draft, attachments, note: boxNote } = peekComposer(conversation)
-    const text = draft.trim()
-    // A message may be only attachments; the block naming them is then the whole text.
-    if ((text === '' && attachments.length === 0) || disabledReason !== null || sending) return
-    const files = attachments
-    // The agent's own command is not a message to it, so the note waits for the next one that is.
-    const note = isSlashLine(text) || isBangLine(text) ? null : boxNote
-    updateComposer(conversation, (state) => ({ ...state, draft: '', attachments: [] }))
-    if (note === null && boxNote !== null) updateComposer(conversation, (state) => ({ ...state, note: boxNote }))
-    const settle = (delivered: boolean) => {
-      if (delivered) {
-        revokePreviews(files)
-        return
-      }
-      // A message that did not go is given back, ahead of anything typed or attached meanwhile.
-      updateComposer(conversation, (state) => ({
-        ...state,
-        draft: state.draft.trim() === '' ? text : text === '' ? state.draft : `${text}\n\n${state.draft}`,
-        attachments: [...files, ...state.attachments],
-        note: note ?? state.note,
-      }))
-    }
+  /**
+   * Sends a finished message by the one path every send takes: queued with the pane's daemon while it is not ready, typed
+   * into the agent, or sent to the conversation. `settle` hears whether it went.
+   */
+  const dispatch = useCallback((text: string, files: readonly DraftAttachment[], note: string | null, typedAsCommand: boolean, settle: (delivered: boolean) => void) => {
     // An agent's own command that runs beside a working turn is typed in now; with files attached the message is a paste, not a command.
-    const typedNow = busy && files.length === 0 && runsMidTurn(agent, text)
+    const typedNow = typedAsCommand && busy && files.length === 0 && runsMidTurn(agent, text)
     if (holding && !typedNow) {
       // Left with the pane's daemon until the agent is ready for a message; shown in the queue meanwhile.
       setError(null)
@@ -378,7 +368,45 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
       return
     }
     void send(withRestoreNote(note, buildAttachmentMessage(text, files))).then(settle)
-  }, [disabledReason, sending, conversation, send, holding, paneQueue, agent, busy])
+  }, [send, holding, paneQueue, agent, busy])
+
+  const submit = useCallback(() => {
+    const { draft, attachments, quotes, note: boxNote } = peekComposer(conversation)
+    const words = draft.trim()
+    // A message may be only attachments; the block naming them is then the whole text. Quotes alone are not a message.
+    if ((words === '' && attachments.length === 0) || disabledReason !== null || sending) return
+    const files = attachments
+    // Quotes make it a message to the agent, never one of its commands.
+    const text = quotes.length === 0 ? words : buildQuoteMessage([...quotes.map((quote): MessageSegment => ({ kind: 'quote', who: quote.who, text: quote.text })), { kind: 'words', text: words }])
+    const command = quotes.length === 0 && (isSlashLine(words) || isBangLine(words))
+    // The agent's own command is not a message to it, so the note waits for the next one that is.
+    const note = command ? null : boxNote
+    updateComposer(conversation, (state) => ({ ...state, draft: '', attachments: [], quotes: [] }))
+    if (note === null && boxNote !== null) updateComposer(conversation, (state) => ({ ...state, note: boxNote }))
+    dispatch(text, files, note, quotes.length === 0, (delivered) => {
+      if (delivered) {
+        revokePreviews(files)
+        return
+      }
+      // A message that did not go is given back, ahead of anything typed or attached meanwhile.
+      updateComposer(conversation, (state) => ({
+        ...state,
+        draft: state.draft.trim() === '' ? words : words === '' ? state.draft : `${words}\n\n${state.draft}`,
+        attachments: [...files, ...state.attachments],
+        quotes: [...quotes, ...state.quotes.filter((held) => !quotes.some((back) => sameQuote(back, held)))].slice(0, MAX_QUOTES),
+        note: note ?? state.note,
+      }))
+    })
+  }, [disabledReason, sending, conversation, dispatch])
+
+  /**
+   * Sends a message built elsewhere (a quick reply to several questions) by the same path as the box: queued behind a
+   * running turn, held for a starting agent, retried the same way. The box's own text and files are left as they are.
+   */
+  const sendReply = useCallback((message: string): Promise<boolean> => {
+    if (disabledReason !== null || sending || message.trim() === '') return Promise.resolve(false)
+    return new Promise((resolve) => { dispatch(message.trim(), [], null, false, resolve) })
+  }, [disabledReason, sending, dispatch])
 
   // The ones this box took back, so their leaving the queue is not read as the daemon having sent them.
   const taken = useRef<string[]>([])
@@ -566,5 +594,5 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
     // Offline, the message cannot go but the person can still write it: a reconnect a few seconds later should not
     // cost them what they were typing, nor the box its focus.
     draftable: disabledReason === null || disabledReason === OFFLINE_NOTE,
-    ready: disabledReason === null && !holding, error, sendText: send, echo }
+    ready: disabledReason === null && !holding, error, sendText: send, sendReply, echo }
 }

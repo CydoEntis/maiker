@@ -1118,6 +1118,25 @@ async fn write_project_file(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// Saves an editor's text over an existing file of the checkout `term` is in, when it is still the `version`
+/// the editor read. The daemon makes the same checks as `write_project_file`. A pane of another machine saves
+/// only a markdown document, through that machine's own daemon (ADR 0014).
+#[tauri::command]
+async fn save_project_file(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    term: u32,
+    path: String,
+    contents: String,
+    version: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let daemon = wire.save_daemon(machine, &path, || daemon_executable(&app))?;
+    maitty_desktop_client::save_project_file(term, path, contents, version, daemon)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// The person's answer to an agent's request for a secret: the value, or none to decline (ADR 0006). This
 /// computer's daemon only; the value is passed on and not kept or logged.
 #[tauri::command]
@@ -1727,6 +1746,7 @@ pub fn run() {
             terminal_stream::terminal_history,
             terminal_stream::watch_terminal_output,
             terminal_stream::list_folders,
+            terminal_stream::create_folder,
             terminal_stream::ask_machine_list,
             terminal_stream::clone_repository,
             terminal_stream::agent_sign_in,
@@ -1772,6 +1792,7 @@ pub fn run() {
             handoff_brief,
             worktree_overlaps,
             write_project_file,
+            save_project_file,
             check_output,
             pin_terminal_session,
             archive_terminal_session,

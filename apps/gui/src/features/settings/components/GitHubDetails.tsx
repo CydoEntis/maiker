@@ -6,7 +6,6 @@ import { changeGitRule, loadGitIdentities, type GitIdentity, type GitIdentityRep
 import { LOCAL_MACHINE } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
 import { useFolderPick } from '@/features/workspace/components/useFolderPick'
-import { REPOSITORY_SOURCE } from '@/features/workspace/repositorySource'
 import { GitRuleDialog } from './GitRuleDialog'
 
 type Loaded = { status: 'loading' } | { status: 'ready'; report: GitIdentityReport } | { status: 'failed'; message: string }
@@ -103,7 +102,7 @@ export function GitHubDetails({ machine, label, accounts, asked, onAddAccount }:
   const [editing, setEditing] = useState<Editing>(null)
   const [removing, setRemoving] = useState<Removing>(null)
   const [failure, setFailure] = useState<string | null>(null)
-  const remotePick = useFolderPick(useMemo(() => [{ machine, label, ready: true, word: null }], [machine, label]), REPOSITORY_SOURCE)
+  const remotePick = useFolderPick(useMemo(() => [{ machine, label, ready: true, word: null }], [machine, label]))
   useEffect(() => {
     let current = true
     loadGitIdentities(machine).then(

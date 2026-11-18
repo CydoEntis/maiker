@@ -1,16 +1,29 @@
 import { describe, expect, it } from 'vitest'
-import { draftWithQuote, quoteOf } from './selectionActions'
+import { pickedText } from './selectionActions'
+import type { MouseEvent } from 'react'
 
-describe('quoting selected text', () => {
-  it('puts each line behind a quote mark and drops the blank lines at its ends', () => {
-    expect(quoteOf('\n  \nfirst line  \n\nsecond line\n\n')).toBe('> first line\n>\n> second line')
+function mouseUpIn(html: string): { event: MouseEvent<HTMLElement>; text: Node } {
+  const chat = document.createElement('div')
+  chat.innerHTML = html
+  document.body.append(chat)
+  const text = chat.querySelector('span') as HTMLElement
+  const range = document.createRange()
+  range.selectNodeContents(text)
+  window.getSelection()?.removeAllRanges()
+  window.getSelection()?.addRange(range)
+  return { event: { target: text, currentTarget: chat, clientX: 0, clientY: 0 } as unknown as MouseEvent<HTMLElement>, text }
+}
+
+describe('what a mouse release picked', () => {
+  it('says whose message the selection began in', () => {
+    expect(pickedText(mouseUpIn('<div class="mx-msg-user"><p><span>mine</span></p></div>').event)).toMatchObject({ text: 'mine', speaker: 'user' })
+    expect(pickedText(mouseUpIn('<div class="mx-msg-agent"><p><span>theirs</span></p></div>').event)).toMatchObject({ text: 'theirs', speaker: 'agent' })
+    expect(pickedText(mouseUpIn('<div class="mx-step"><span>a step</span></div>').event)).toMatchObject({ text: 'a step', speaker: null })
   })
 
-  it('starts the draft with the quote and leaves a line to reply on', () => {
-    expect(draftWithQuote('', 'the plan')).toBe('> the plan\n\n')
-  })
-
-  it('adds the quote under what was already written', () => {
-    expect(draftWithQuote('I disagree:\n', 'the plan')).toBe('I disagree:\n\n> the plan\n\n')
+  it('picks nothing from a collapsed selection', () => {
+    window.getSelection()?.removeAllRanges()
+    const chat = document.createElement('div')
+    expect(pickedText({ target: chat, currentTarget: chat, clientX: 0, clientY: 0 } as unknown as MouseEvent<HTMLElement>)).toBeNull()
   })
 })

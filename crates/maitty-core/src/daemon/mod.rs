@@ -27,6 +27,7 @@ mod github;
 mod helpers;
 mod identity;
 mod last_lines;
+mod leftover_tickets;
 mod pane_terminal;
 mod permission_ask;
 mod persist;
@@ -660,6 +661,8 @@ pub fn run(on_start: impl FnOnce()) -> Result<()> {
             tokio::task::spawn_blocking(move || drop_spare_dir(&p));
             save_spare(None);
         }
+        // Files the removed Tickets feature left (ADR 0013); off the startup path, and a failure only logs.
+        tokio::task::spawn_blocking(|| leftover_tickets::run_and_log(&crate::config::data_dir()));
         crate::login_path::resolve_at_start().await;
         let (cfg, err) = Config::load_or_default();
         if let Some(e) = err {
@@ -1148,10 +1151,10 @@ impl Daemon {
                 self.may(client, Grant::Write, Some(*term))
             }
             // An agent edits its own files itself; a file the person edits in the window is theirs.
-            Command::WriteFile { .. } if self.client_is_agent(client) => {
+            Command::WriteFile { .. } | Command::SaveFile { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("editing a file is yours to do, not a pane's")
             }
-            Command::WriteFile { term, .. } => {
+            Command::WriteFile { term, .. } | Command::SaveFile { term, .. } => {
                 self.may_use_terminal(client, *term)?;
                 self.may(client, Grant::Write, Some(*term))
             }
@@ -2199,6 +2202,19 @@ impl Daemon {
                             t.session = None;
                             t.summary.clear();
                             self.last_loss = Some(Instant::now());
+                            // An agent that left without saying so (killed, crashed, a resume that
+                            // found nothing) leaves the same bare shell as one that said it: the
+                            // pane it was started as ends with it, unless an agent is back or
+                            // someone types (`Daemon::close_ended_agents`).
+                            if t.agent.is_some()
+                                && t.conversation_id.is_none()
+                                && t.owner == Surface::Desktop
+                                && t.began_as_agent
+                                && !t.popup
+                                && !t.spare
+                            {
+                                t.agent_ended.get_or_insert(Instant::now());
+                            }
                         }
                         // Follow-ups were queued for the agent that went: never for the next.
                         if t.agent.is_some() && !t.queue.is_empty() {
@@ -3073,6 +3089,30 @@ impl Daemon {
                         });
                         return;
                     }
+                    Query::CreateFolder { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can make a folder".into())
+                    }
+                    Query::CreateFolder { parent, name, tag } => {
+                        if parent.len() > folders::PATH_MAX_BYTES {
+                            let outcome = crate::protocol::FolderCreated::NotAllowed {
+                                reason: "That path is too long.".into(),
+                            };
+                            ServerMsg::Reply(Reply::FolderCreated { tag, outcome })
+                        } else {
+                            let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+                            let tx = self.tx.clone();
+                            tokio::task::spawn_blocking(move || {
+                                let outcome = folders::create(&parent, &name, home.as_deref());
+                                let reply = Reply::FolderCreated { tag, outcome };
+                                let _ = tx.blocking_send(Ev::Answered { client, reply });
+                            });
+                            return;
+                        }
+                    }
                     Query::HelperRead { .. } if self.client_is_agent(client) => {
                         ServerMsg::Error("Only a human client can read a helper's record".into())
                     }
@@ -3674,6 +3714,7 @@ impl Daemon {
                         interrupted: t.interrupted.clone().filter(|_| t.agent.is_none()),
                         ask: t.ask_now(),
                         exit: t.exit,
+                        began_as_agent: t.began_as_agent,
                         timeline: t.timeline.iter().cloned().collect(),
                         subagents: t.subagents.iter().map(|(_, k)| k.clone()).collect(),
                         started_by: t.started_by,
@@ -3897,6 +3938,7 @@ impl Daemon {
             self.tx.clone(),
         )?;
         t.account = account;
+        t.began_as_agent = self.agent_in_cmd(inner).is_some();
         self.terms.insert(id, t);
         self.had_terms = true;
         // Its worktree is looked at for a repo checks file with the git poll.
