@@ -73,7 +73,7 @@
   [role="option"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"],
   .mx-step-row, .mx-waiting-step, .mx-slash-row, .mx-pm-mode, .mx-agents-head, .mx-changes-row,
   .mx-chip, .mx-chip-row, .mx-section-head, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-nsd-worktree, .mx-fp-row, .mx-fp-machine-row,
-  .mx-machine-group, .mx-grp-project, .mx-svc-text, .mx-settings-update-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
+  .mx-machine-group, .mx-grp-project, .mx-settings-update-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
   .mx-mach-local, .mx-mach-tile, .mx-mach-hostrow, .mx-mach-radio, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
   .mx-pane-name, .mx-crumb, .mx-rail-bar, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-mm-model, .mx-dialog-close
 ) {
@@ -154,11 +154,6 @@
 
 .mx-empty-note { padding: 6px 10px; font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
 
-.mx-daemon-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
-.mx-daemon-dot.is-offline { background: var(--danger); }
-.mx-daemon-text { flex: 1; min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-daemon-text.is-offline { color: var(--muted); }
-
 /* Rail: the collapsed sidebar (Sidebar.tsx, Rail), the design's 52px strip: three 32px buttons, then a 30px row per chat holding only
    its status icon, in the full list's order, a 20px divider between groups, update and Settings at the foot. */
 .mx-rail { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; animation: v7fade .18s ease-out; }
@@ -236,68 +231,7 @@
 .mx-inline-name { all: unset; box-sizing: border-box; flex: 1; min-width: 0; height: 22px; padding: 0 6px; border-radius: 0; background: transparent; box-shadow: var(--focus-underline); font: inherit; color: var(--fg); }
 .mx-inline-name::placeholder { color: var(--dim); }
 
-/* Offline banner */
-.mx-offline { flex: none; display: flex; align-items: center; gap: 10px; padding: 9px 16px; background: var(--danger-soft); border-bottom: 1px solid var(--danger-line); font-size: 12.5px; animation: v7fade .26s ease-out; }
-.mx-offline-dot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px dashed var(--danger); flex: none; }
-.mx-offline-text { flex: 1; min-width: 0; color: var(--fg2); }
-.mx-offline-text strong { color: var(--fg); font-weight: 500; }
-.mx-offline-button { height: 26px; padding: 0 10px; display: flex; align-items: center; border-radius: 7px; background: var(--m-raise); border: 1px solid var(--line2); font-size: 12px; flex: none; white-space: nowrap; }
-.mx-offline-button:not(:disabled):hover { background: var(--m-sel); }
-.mx-offline-button:disabled { opacity: .55; }
-.mx-offline-count { flex: none; font-size: 11.5px; color: var(--muted); white-space: nowrap; }
-/* Layout 2h banners: the service stopped, or an update is ready. A strip at the top of the chat column, in the flow,
-   so the chat under it stays readable; its tone tints the ground and the icon. */
-.mx-banner { flex: none; margin: 8px 8px 0; border-radius: var(--r-panel); border: 1px solid var(--tone-line); background: var(--tone-soft); font-size: 12.5px; animation: mx-banner-in .18s var(--ease-out); }
-.mx-banner.is-danger { --tone: var(--danger); --tone-soft: var(--danger-soft); --tone-line: var(--danger-line); }
-.mx-banner.is-accent { --tone: var(--accent); --tone-soft: var(--accent-soft); --tone-line: var(--accent-line); }
-.mx-banner-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px 8px 12px; }
-.mx-banner-icon { flex: none; display: grid; place-items: center; color: var(--tone); }
-.mx-banner-icon svg { width: 16px; height: 16px; }
-.mx-banner-text { flex: 1; min-width: 0; margin: 0; color: var(--muted); line-height: 1.45; }
-.mx-banner-text strong { color: var(--fg); font-weight: 600; }
-.mx-banner-primary { flex: none; height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); white-space: nowrap; }
-.mx-banner.is-danger .mx-banner-primary { color: var(--on-danger); background: var(--danger); }
-.mx-banner-primary:hover { background: color-mix(in srgb, var(--accent) 90%, #fff); }
-.mx-banner.is-danger .mx-banner-primary:hover { background: color-mix(in srgb, var(--danger) 90%, #fff); }
-.mx-banner-ghost { flex: none; height: 28px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); white-space: nowrap; }
-.mx-banner-ghost:hover { background: var(--m-hover); color: var(--fg); }
-.mx-banner-details { display: flex; align-items: center; gap: 8px; padding: 8px 10px 8px 38px; border-top: 1px solid var(--tone-line); font-size: 11.5px; color: var(--muted); }
-@keyframes mx-banner-in { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-.mx-app[data-motion="reduced"] .mx-banner { animation: none; }
-/* Service down and needs restart: a veil over the main card (the chat stays faintly visible, unusable) and one glass card. */
-.mx-service-veil { position: absolute; inset: 0; z-index: 34; background: color-mix(in srgb, var(--main) 55%, transparent); }
-.mx-service-layer { position: absolute; inset: 0; z-index: 35; display: flex; align-items: center; justify-content: center; padding: 24px; pointer-events: none; }
-.mx-service-card { pointer-events: auto; width: 420px; max-width: 100%; padding: 20px; border-radius: 14px; background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-dialog); display: flex; flex-direction: column; gap: 16px; color: var(--fg2); animation: mx-dialog-in .16s ease-out; }
-.mx-service-head { display: flex; gap: 14px; align-items: flex-start; }
-.mx-service-tile { width: 40px; height: 40px; flex: none; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--tone); background: color-mix(in srgb, var(--tone) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 30%, transparent), inset 0 1px 0 rgba(var(--hl), calc(.08 * var(--hk))); }
-.mx-service-tile.is-danger { --tone: var(--danger); }
-.mx-service-tile.is-accent { --tone: var(--accent); }
-.mx-service-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding-top: 1px; }
-.mx-service-copy h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); text-wrap: pretty; }
-.mx-service-copy p { margin: 0; font-size: 13px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
-.mx-service-details { font-size: 12.5px; color: var(--muted); }
-.mx-service-details summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; color: var(--dim); }
-.mx-service-details summary::-webkit-details-marker { display: none; }
-.mx-service-details[open] summary svg { transform: rotate(90deg); }
-.mx-service-detail { margin-top: 8px; padding: 9px 11px; border-radius: 9px; background: rgba(var(--sd), calc(.2 * var(--sk))); box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.06 * var(--hk))); font-size: 11.5px; line-height: 1.6; color: var(--fg2); overflow-wrap: anywhere; }
-.mx-service-facts { margin: 0; padding: 10px 12px; list-style: none; display: flex; flex-direction: column; gap: 7px; border-radius: 10px; background: rgba(var(--sd), calc(.18 * var(--sk))); box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.06 * var(--hk))); }
-.mx-service-facts li { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; line-height: 1.45; color: var(--fg2); }
-.mx-service-dot { width: 6px; height: 6px; margin-top: 6px; flex: none; border-radius: 50%; background: var(--dim); }
-.mx-service-dot.is-ok { background: var(--ok); }
-.mx-service-dot.is-warn { background: var(--warn); }
-.mx-service-actions { display: flex; gap: 8px; align-items: center; }
-.mx-service-versions { margin-left: auto; font-size: 11.5px; color: var(--dim); }
-.mx-svc-primary, .mx-svc-secondary { height: 32px; padding: 0 14px; display: flex; align-items: center; border-radius: 9px; font-size: 13px; white-space: nowrap; }
-.mx-svc-primary { font-weight: 600; color: var(--on-accent); background: var(--accent); box-shadow: 0 2px 12px -3px color-mix(in srgb, var(--accent) 60%, transparent); }
-/* Open log: a quiet text button pushed to the right of the card's actions. */
-.mx-svc-text { height: 32px; margin-left: auto; padding: 0 4px; font-size: 12.5px; color: var(--dim); }
-.mx-svc-text:hover { color: var(--fg); }
-.mx-svc-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 90%, #fff); }
-.mx-svc-primary:disabled { opacity: .5; }
-.mx-svc-secondary { font-weight: 500; color: var(--fg2); background: rgba(var(--hl), calc(.05 * var(--hk))); box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.1 * var(--hk))), inset 0 1px 0 rgba(var(--hl), calc(.05 * var(--hk))); }
-.mx-svc-secondary:hover { background: rgba(var(--hl), calc(.09 * var(--hk))); color: var(--fg); }
 .mx-text-button.is-armed { color: var(--warn); }
-.mx-offline-button.is-armed { color: var(--warn); border-color: var(--warn-line); }
 
 /* Empty state */
 .mx-empty { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 32px; }
@@ -317,14 +251,10 @@
 .mx-quiet:hover { color: var(--fg); background: rgba(var(--hl), calc(.06 * var(--hk))); }
 .mx-empty-note-small { font-size: 12px; color: var(--dim); }
 
-
 /* xterm's own stylesheet paints the scroll viewport black. It is taller than the rows by the part of a
    row that does not fit, so on the opaque renderers that remainder showed as a black bar along the pane's bottom edge. */
 /* With the WebGL renderer the terminal is see-through and the card shows behind the text. The DOM
    renderer keeps the theme's opaque terminal ground, so a row repaint never blends through the card. */
-
-/* Toast */
-.mx-toast { position: absolute; left: 50%; top: 58px; transform: translateX(-50%); z-index: 45; white-space: nowrap; animation: v7fade .22s ease-out; }
 
 /* Settings */
 .mx-settings-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(3, 5, 8, .62); display: flex; align-items: center; justify-content: center; padding: 24px; animation: v7scrim .2s ease-out; }
@@ -569,11 +499,6 @@
 .mx-palette-foot > span { display: flex; align-items: center; gap: 5px; }
 .mx-palette-foot kbd, .mx-palette-input kbd { height: 20px; min-width: 0; padding: 0 6px; border-radius: 0; border-bottom-width: 1px; font: 500 11px var(--mono); color: var(--fg2); background: var(--m-well); border: 1px solid var(--line2); }
 
-.mx-restore { flex: none; display: flex; flex-direction: column; gap: 6px; margin: 0 0 8px; padding: 8px 12px; border-radius: 12px; background: var(--main); box-shadow: inset 0 0 0 1px var(--warn-line), inset 3px 0 0 var(--warn); }
-.mx-restore-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 12.5px; color: var(--fg2); }
-.mx-restore-text { flex: 1; min-width: 220px; }
-.mx-restore-command { font-family: var(--mono); font-size: 11.5px; padding: 2px 6px; border-radius: 6px; background: var(--m-well); color: var(--fg); }
-
 /* Focus mode */
 .mx-focus-pill { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 45; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px 0 14px; border-radius: 999px; background: var(--m-raise); border: 1px solid var(--line2); box-shadow: 0 12px 40px rgba(0, 0, 0, .45); font-size: 12.5px; color: var(--fg2); white-space: nowrap; animation: v8pane .26s var(--ease-out); }
 .mx-focus-tag { font-weight: 600; color: var(--accent-text); }
@@ -640,41 +565,6 @@
 /* Keyboard shortcut overlay. */
 .mx-shortcuts-grid .mx-menu-caps { padding: 0 0 6px; }
 
-/* The one notification card (NotificationCard): an agent icon, a title with a close, what it wants, the buttons, and when.
-   It is a float, so it takes the material roles from material.css and sets no colours of its own beyond the tone. */
-.mx-notice { --notice: var(--ok); --notice-ink: var(--on-accent); --state: var(--ok); position: relative; width: 340px; max-width: calc(100vw - 32px); display: flex; gap: 9px; padding: 12px 12px 12px 14px; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); border-top: 2px solid var(--state); box-shadow: var(--pop-sh-menu); color: var(--fg); overflow: hidden; animation: mx-notice-pop .18s ease-out; transform-origin: right bottom; }
-@keyframes mx-notice-pop { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
-.mx-app[data-motion="reduced"] .mx-notice { animation: none; }
-.mx-notice.is-needs { --notice: var(--accent); --notice-ink: var(--on-accent); --state: var(--warn); }
-.mx-notice.is-error { --notice: var(--danger); --notice-ink: var(--on-accent); --state: var(--danger); }
-.mx-notice.is-info { --notice: var(--accent); --notice-ink: var(--on-accent); --state: var(--accent); }
-.mx-notice-icon { flex: none; display: flex; align-items: flex-start; }
-.mx-notice-app { position: relative; display: block; width: 26px; height: 26px; }
-.mx-notice-app .mx-badge { right: -3px; bottom: -3px; width: 11px; height: 11px; border-radius: calc(3.5px * var(--rk)); font-size: 8px; font-weight: 800; line-height: 1; }
-.mx-notice-app .mx-badge.is-working { background: var(--bg); overflow: hidden; color: var(--working); font-family: var(--mono); }
-.mx-notice-app .mx-badge.is-working .mx-spin { font-size: 8px; line-height: 1; }
-.mx-notice-app .mx-badge.is-unknown { background: var(--bg); border: 1.5px dashed var(--dim); box-shadow: none; }
-.mx-notice-mark { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: 7px; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); }
-.mx-notice-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.mx-notice-head { display: flex; align-items: flex-start; gap: 6px; }
-.mx-notice-title { min-width: 0; font-size: 13px; line-height: 20px; font-weight: 600; overflow-wrap: anywhere; }
-.mx-notice-state { flex: 1; min-width: 0; font-size: 12px; line-height: 20px; font-weight: 500; color: var(--state); }
-.mx-notice-title:has(+ .mx-notice-close) { flex: 1; }
-.mx-notice-close { flex: none; width: 22px; height: 22px; margin: -2px -2px 0 0; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: var(--dim); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-notice-close:hover { background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg); }
-.mx-notice-body { font-size: 12.5px; line-height: 1.45; color: var(--fg2); overflow-wrap: anywhere; text-wrap: pretty; }
-.mx-notice-project { display: block; color: var(--dim); }
-.mx-notice-body code { font-family: var(--mono); font-size: 12px; color: var(--fg); }
-.mx-notice-foot { display: flex; align-items: center; gap: 6px; margin-top: 7px; }
-.mx-notice-foot button { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg); background: transparent; box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-notice-foot button:hover { background: var(--m-hover); }
-.mx-notice-foot button.is-primary { font-weight: 600; color: var(--notice-ink); background: var(--notice); box-shadow: none; }
-.mx-notice-foot button.is-primary:hover { background: color-mix(in srgb, var(--notice) 90%, #fff); }
-.mx-notice-time { font: 400 11px var(--mono); color: var(--dim); }
-.mx-notice-countdown { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; background: var(--notice); transform-origin: left; animation: mx-notice-count linear forwards; }
-@keyframes v9toast { from { opacity: 0; transform: translateY(-8px) scale(.97); } to { opacity: 1; transform: none; } }
-@keyframes mx-notice-count { to { transform: scaleX(0); } }
-
 /* Hover tooltip for anything with a title. */
 .mx-tip { z-index: 90; max-width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 5px 9px; border-radius: 8px; background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); line-height: 1.4; color: var(--fg); pointer-events: none; animation: mx-tip-in .16s ease-out; }
 .mx-tip-line { display: flex; align-items: center; gap: 8px; }
@@ -709,7 +599,7 @@
 :root[data-gpu="software"] { --pop-sh: 0 0 0 1px var(--line2); --pop-sh-dialog: 0 0 0 1px var(--line2); --pop-sh-menu: 0 0 0 1px var(--line2); }
 :root[data-gpu="software"] :is(.mx-dialog-scrim, .mx-drawer-scrim, .mx-nsd-scrim, .mx-fp-scrim, .mx-settings-scrim, .mx-palette-scrim, .mx-wel-scrim, .mx-restarting) { animation: none; }
 /* A dialog fades in without its scale (a scale repaints the whole dialog at every size), and the palette keeps its centring transform. */
-:root[data-gpu="software"] :is(.mx-ns-dialog, .mx-fp, .mx-service-card, .mx-rename) { animation-name: v7scrim; }
+:root[data-gpu="software"] :is(.mx-ns-dialog, .mx-fp, .mx-rename) { animation-name: v7scrim; }
 :root[data-gpu="software"] .mx-palette { animation-name: v7scrim; }
 :root[data-gpu="software"] .mx-app[data-theme-kind="light"] { --pop-sh: 0 0 0 1px rgba(17, 22, 27, .14); --pop-sh-dialog: var(--pop-sh); --pop-sh-menu: var(--pop-sh); }
 
@@ -799,7 +689,6 @@
 .mx-folder-row { display: flex; align-items: center; gap: 8px; }
 .mx-folder-row .mx-folder-field { flex: 1; min-width: 0; }
 
-
 /* The activity bar (v19 §9): a 48px card on the side opposite the sessions sidebar. The window's row-reverse
    for a right-hand sidebar puts it on the far left without a rule of its own. */
 .mx-activity { flex: none; align-self: stretch; width: 48px; margin: var(--sbm-activity, var(--pg) var(--pg) var(--pg) 0); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; border-radius: var(--r14); background: var(--card, var(--m-pane)); border: 1px solid var(--pane-line); box-shadow: var(--sh); }
@@ -807,7 +696,6 @@
 
 /* What a stopped agent asks, above the message box: a question with its choices as rows, or a permission with its buttons. */
 @media (prefers-reduced-motion: reduce) { .mx-ask-choice { transition: none; } }
-
 
 /* Flat sidebar: one list of two-line rows, a filter field, and a 60px rail. Status is the badge and nothing else
    moves a row, so none of these animates. */
@@ -839,7 +727,6 @@
 .mx-specialist-file { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .mx-specialist-file code { overflow-wrap: anywhere; }
 .mx-specialist-file pre { margin: 0; padding: 10px; border-radius: 8px; background: var(--m-well); overflow: auto; max-height: 50vh; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; font-family: var(--mono); }
-
 
 /* Settings › Remote machines: this computer, the toolbar, the grid of other machines and the add flow. */
 .mx-mach { display: flex; flex-direction: column; gap: 12px; }
@@ -940,7 +827,6 @@
 .mx-hotkey-row:hover .mx-hotkey-actions .mx-text-button, .mx-hotkey-row:focus-within .mx-hotkey-actions .mx-text-button { opacity: 1; }
 .mx-mach-hostlist { display: flex; flex-direction: column; gap: 4px; }
 .mx-resume-pick { display: flex; align-items: center; gap: 8px; }
-
 
 /* A pane whose view failed to draw (`PaneErrorBoundary`): said in the pane, on its own ground, with the way out. */
 .mx-pane-fault { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; color: var(--fg2); }

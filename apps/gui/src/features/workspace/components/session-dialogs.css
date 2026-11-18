@@ -62,6 +62,7 @@
 /* The notes under the message have a line of their own, empty or not: a worktree line, an error or a missing agent never moves what is below. More than fits scrolls here. */
 .mx-nsd-notes { flex: none; height: var(--nsd-notes-h); box-sizing: border-box; overflow-y: auto; padding-top: 2px; }
 .mx-nsd-note { margin: 0; padding: 0 16px 8px; font-size: 12px; line-height: 1.45; color: var(--dim); }
+.mx-nsd-note:has(> .mx-note) { padding-top: 2px; }
 .mx-nsd-note.is-error { color: var(--danger); }
 .mx-nsd-note .mx-text-button { height: 22px; padding: 0 8px; }
 
@@ -171,7 +172,8 @@
 .mx-fp-new input { min-width: 0; height: 34px; padding: 0; border: 0; outline: none; background: transparent; font: 400 13px var(--mono); color: var(--fg); }
 .mx-fp-new input:disabled { opacity: .6; }
 .mx-fp-new-hint { font-size: 11px; color: var(--dim); white-space: nowrap; }
-.mx-fp-new-why { grid-column: 1 / -1; margin: 0; padding: 0 0 7px 24px; font-size: 11.5px; line-height: 1.4; color: var(--danger); }
+.mx-fp-new-why { grid-column: 1 / -1; padding: 0 0 7px 24px; }
+.mx-fp-new-why .mx-field-error { margin: 0; }
 @media (max-width: 420px) { .mx-fp-new-hint { display: none; } }
 .mx-fp-list { position: relative; flex: none; height: 300px; overflow-y: auto; padding: 0 6px 6px; }
 .mx-fp-loading { position: absolute; inset: 0; }
@@ -207,6 +209,6 @@
 :is(.mx-ns-dialog, .mx-fp, .mx-fp-machines, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-underline); }
 .mx-nsd-start:focus-visible { box-shadow: var(--focus-underline); }
 @media (prefers-reduced-motion: reduce) {
-  .mx-ns-dialog, .mx-fp, .mx-nsd-scrim, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename, .mx-service-card { animation: none; }
+  .mx-ns-dialog, .mx-fp, .mx-nsd-scrim, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename { animation: none; }
 }
-:root[data-reduced-motion="true"] :is(.mx-ns-dialog, .mx-fp, .mx-nsd-scrim, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename, .mx-service-card) { animation: none; }
+:root[data-reduced-motion="true"] :is(.mx-ns-dialog, .mx-fp, .mx-nsd-scrim, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename) { animation: none; }

@@ -6,7 +6,7 @@ import { registerDraft } from '@/features/documents/draftGuard'
 import { activeArrangement, documentPaneReplaced, openArrangement, openDocumentBeside, type Layout } from './model/layout'
 import { useDocuments } from './useDocuments'
 
-vi.mock('@/lib/toast', () => ({ toast: Object.assign(vi.fn(), { message: vi.fn(), error: vi.fn() }) }))
+vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 vi.mock('@/features/inspect/api', () => ({ repoTree: vi.fn() }))
 
 const ids = () => { let next = 0; return (prefix: string) => `${prefix}${String(next++)}` }

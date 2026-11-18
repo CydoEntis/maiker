@@ -1,7 +1,6 @@
 import { useId, useState, type KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
-import { errorMessage } from '@/lib/error-message'
 import type { AskedQuestion, PermissionAsk } from '@/data/preview'
 import type { ApprovalDecision, ApprovalEvent } from '../chatEvents'
 import { ANSWER_KEY, formQuestions, ownAnswerText, type AskChoice, type FormAnswer } from '../permissionAsk'
@@ -48,7 +47,7 @@ function AnswerButton({ decision, busy, onAnswer }: { decision: Answer; busy: bo
 const RUN = (send: () => Promise<void>, setBusy: (busy: boolean) => void) => {
   setBusy(true)
   send()
-    .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not send your answer')) })
+    .catch((error: unknown) => { toast.failed('Could not send your answer', error) })
     .finally(() => { setBusy(false) })
 }
 

@@ -7,7 +7,6 @@ import { Fold } from './fold'
 import { Progress } from './progress'
 import { StatusMark, type MarkState } from './status-mark'
 import { FileBadge, Tag, typeTone } from './tag'
-import { ToastCard } from './toast-card'
 
 describe('Button', () => {
   it('draws its kind and size, and shows the key that also presses it', () => {
@@ -128,9 +127,4 @@ describe('Fold, Progress and Toast', () => {
     expect(bar).toHaveAttribute('aria-valuemax', '5')
   })
 
-  it('announces a toast politely with its actions beside it', () => {
-    render(<ToastCard actions={<Button size="sm" variant="soft">Open</Button>}>Ship partial refunds needs you</ToastCard>)
-    expect(screen.getByRole('status')).toHaveTextContent('Ship partial refunds needs you')
-    expect(screen.getByRole('button', { name: 'Open' })).toBeInTheDocument()
-  })
 })

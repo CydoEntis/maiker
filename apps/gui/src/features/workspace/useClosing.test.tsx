@@ -12,7 +12,7 @@ import type { SessionView } from './model/session'
 import { useClosing } from './useClosing'
 
 vi.mock('@/api/daemon', () => ({ closeSessionWithUndo: vi.fn(), undoCloseSession: vi.fn() }))
-vi.mock('@/lib/toast', () => ({ toast: Object.assign(vi.fn(() => 'toast'), { error: vi.fn() }) }))
+vi.mock('@/lib/toast', () => { const toast = { info: vi.fn(() => 'toast'), error: vi.fn() }; return { toast: Object.assign(toast, { failed: vi.fn((what: string, error: unknown, options?: object) => { const said = typeof error === 'string' ? error : error instanceof Error ? error.message : what; if (options === undefined) toast.error(said); else toast.error(said, options) }) }) } })
 
 const session = (id: string) => ({ id, name: id, title: id, process: 'shell', conversation: { id }, ended: false }) as unknown as SessionView
 

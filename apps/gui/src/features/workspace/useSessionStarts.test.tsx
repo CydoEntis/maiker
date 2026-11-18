@@ -24,7 +24,7 @@ const startSessionOnMachine = vi.hoisted(() => vi.fn<(machine: number, folder: s
 }))
 vi.mock('@/api/machines', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/machines')>()), startSessionOnMachine }))
 vi.mock('@/api/daemon', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/daemon')>()), ...daemon, loadConversations: () => Promise.resolve([...listed.sessions]) }))
-const toast = vi.hoisted(() => ({ error: vi.fn(), message: vi.fn() }))
+const toast = vi.hoisted(() => ({ failed: vi.fn(), error: vi.fn(), info: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast }))
 vi.mock('./model/agentHooks', () => ({ connectAgentOnce: () => Promise.resolve() }))
 

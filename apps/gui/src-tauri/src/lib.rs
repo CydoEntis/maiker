@@ -1831,8 +1831,19 @@ pub fn run() {
             restart_stale_daemon,
             performance::performance_sample
         ])
-        .run(tauri::generate_context!())
-        .expect("Maitty desktop host failed");
+        .build(tauri::generate_context!())
+        .expect("Maitty desktop host failed")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested {
+                code: Some(code),
+                api,
+                ..
+            } = event
+                && tray::close_instead_of_exit(app, code)
+            {
+                api.prevent_exit();
+            }
+        });
 }
 
 #[cfg(test)]

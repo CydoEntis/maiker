@@ -8,7 +8,7 @@ const DEFAULTS: SettingsPreferences = {
   reduceMotion: false,
   animateSidebarActivity: true,
   compactSidebar: false,
-  toastPosition: 'top-right',
+ 
   notifyNeedsYou: true,
   notifyFinished: true,
   notifyError: true,
@@ -70,7 +70,7 @@ describe('settings preferences', () => {
   })
 
   it('restores every saved choice', () => {
-    const saved: SettingsPreferences = { ...DEFAULTS, accent: 'violet', spinner: 'snake', restoreLayout: false, reduceMotion: true, toastPosition: 'top-left', notifyNeedsYou: false, notificationSound: true, terminalFontSize: 15, themeMode: 'dark', darkTheme: 'Tokyo Night', cursorStyle: 'underline', scrollback: 50000, }
+    const saved: SettingsPreferences = { ...DEFAULTS, accent: 'violet', spinner: 'snake', restoreLayout: false, reduceMotion: true, notifyNeedsYou: false, notificationSound: true, terminalFontSize: 15, themeMode: 'dark', darkTheme: 'Tokyo Night', cursorStyle: 'underline', scrollback: 50000, }
     writeSettingsPreferences(saved)
 
     expect(readSettingsPreferences()).toEqual(saved)
@@ -101,9 +101,9 @@ describe('settings preferences', () => {
   })
 
   it('reads preferences saved before the terminal settings existed', () => {
-    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
+    localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
 
-    expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, accent: 'blue', spinner: 'bars', compactSidebar: true, toastPosition: 'bottom-right', notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
+    expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, accent: 'blue', spinner: 'bars', compactSidebar: true, notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
   })
 
   it('reads the layout choice saved as restoreTabs before fleets, and prefers the new name', () => {

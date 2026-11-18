@@ -10,7 +10,6 @@ import { startGitHubSignIn } from '@/api/githubAccounts'
 import { useSessionsEnded } from './useSessionsEnded'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
-import { errorMessage } from '@/lib/error-message'
 import { newWorktreeSession } from '@/features/worktrees/api'
 import { rememberConversationPermissions } from '@/data/conversationPermissions'
 import { reserveOperation } from '@/features/chat/sendOperation'
@@ -179,7 +178,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       })
       .catch((error: unknown) => {
         if (background) throw error
-        toast.error(errorMessage(error, 'Could not start a shell'))
+        toast.failed('Could not start a shell', error)
         return false
       })
       .finally(() => { endStart(mode) })
@@ -252,7 +251,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   const startChatHere = useCallback((from: SessionView, agent: ChatAgent, fullAccess: boolean) => {
     const refusal = remoteStartRefusal(from.machine !== LOCAL_MACHINE, from.machineName, 'A chat session')
     if (refusal) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     if (!online || starting) return
@@ -263,7 +262,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!beginStart('alone')) return
     startChat(from.cwd, agent, fullAccess)
-      .catch((error: unknown) => { toast.error(errorMessage(error, `Could not start a ${agent} chat`)) })
+      .catch((error: unknown) => { toast.failed(`Could not start a ${agent} chat`, error) })
       .finally(() => { endStart('alone') })
   }, [online, starting, beginStart, endStart, startChat, startAgentSession])
 
@@ -271,14 +270,14 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   const handoffSession = useCallback(async (from: SessionView, to: ChatAgent) => {
     const refusal = remoteStartRefusal(from.machine !== LOCAL_MACHINE, from.machineName, 'A handoff')
     if (refusal) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     if (!online || starting) return
     try {
       await startAgentSession(() => Promise.resolve(from.cwd), to, preferences.chatViewDefault[to], await handoffBrief(from))
     } catch (error: unknown) {
-      toast.error(errorMessage(error, `Could not hand off to ${to}`))
+      toast.failed(`Could not hand off to ${to}`, error)
     }
   }, [online, starting, startAgentSession, preferences.chatViewDefault])
 
@@ -388,7 +387,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     if (machine !== LOCAL_MACHINE) {
       void startOnMachine({ machine, name }, REMOTE_HOME, () => startGitHubSignIn(machine)).then(
         (id) => { if (id !== null) started(id) },
-        (error: unknown) => { toast.error(errorMessage(error, `Could not start the sign-in on ${name}`)) },
+        (error: unknown) => { toast.failed(`Could not start the sign-in on ${name}`, error) },
       )
       return
     }

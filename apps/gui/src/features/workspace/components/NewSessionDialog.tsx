@@ -22,6 +22,8 @@ import { ChipMenu, type ChipItem } from './NewChatMenus'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import { isMacPlatform } from '../model/shortcuts'
 import type { PickedFolder } from '../model/folderPick'
+import { CopyDetails, FeedbackButton, InlineNote } from '@/components/ui/feedback'
+import { copyText } from '@/lib/clipboard'
 
 /** The branch a chat starts on when it is not the folder's current one: switch to it, or work in a new worktree of it. */
 export type BranchChoice = { name: string; create: boolean; worktree: boolean }
@@ -403,18 +405,21 @@ function StartNotes({ error, treeLine, background, onPutBack, agentMissing, onSe
   return (
     <>
       {treeLine !== null && <p className="mx-nsd-note">{treeLine}</p>}
-      {error !== null && <p role="alert" className="mx-nsd-note is-error">{error}</p>}
+      {error !== null && <div className="mx-nsd-note"><InlineNote title="Could not start the chat" reason={error} actions={<CopyDetails text={error} copy={copyText} />} /></div>}
       {background.failed.map((failed) => (
-        <p key={failed.key} role="alert" className="mx-nsd-note is-error">
-          {`Could not start ${failedStartLabel(failed)}: ${failed.reason} `}
-          {failed.draft !== null && (
-            <>
-              <button type="button" className="mx-text-button" aria-label={`Put back ${failedStartLabel(failed)}`} onClick={() => { onPutBack(failed.key) }}>Put back</button>
-              {' · '}
-            </>
-          )}
-          <button type="button" className="mx-text-button" aria-label={`Dismiss ${failedStartLabel(failed)}`} onClick={() => { background.dismiss(failed.key) }}>Dismiss</button>
-        </p>
+        <div key={failed.key} className="mx-nsd-note">
+          <InlineNote
+            title={`Could not start ${failedStartLabel(failed)}`}
+            reason={failed.reason}
+            actions={(
+              <>
+                {failed.draft !== null && <FeedbackButton kind="primary" aria-label={`Put back ${failedStartLabel(failed)}`} onClick={() => { onPutBack(failed.key) }}>Put back</FeedbackButton>}
+                <FeedbackButton kind="text" aria-label={`Dismiss ${failedStartLabel(failed)}`} onClick={() => { background.dismiss(failed.key) }}>Dismiss</FeedbackButton>
+                <CopyDetails text={failed.reason} copy={copyText} />
+              </>
+            )}
+          />
+        </div>
       ))}
       {agentMissing !== null && (
         <p role="alert" className="mx-nsd-note is-error">

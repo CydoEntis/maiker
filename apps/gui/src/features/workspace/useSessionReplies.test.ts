@@ -4,7 +4,7 @@ import type { SessionView } from './model/session'
 
 const sendTerminalInput = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<void>>())
 vi.mock('@/api/daemon', () => ({ sendTerminalInput }))
-vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), error: vi.fn() } }))
 
 import { useSessionReplies } from './useSessionReplies'
 

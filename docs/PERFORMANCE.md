@@ -671,6 +671,6 @@ removed blurred shadow. Not done, and why:
 
 - The folded cut's `clip-path` on nearly every control (`material.css`) is unchanged beyond the float bleed: a plain panel polygon or corner pseudo-elements risk the border and stripe results the shell fixed, and the gain is unmeasured.
 - The chat's jump-to-latest glide still sets the scroll position through React each frame (`VirtualList.tsx`): the rows in view are chosen from it, and throttling it would leave blank rows.
-- `HelpersDock`, `ProblemBanner` and `useRevealedText` keep their own timers.
+- `HelpersDock`, `useChatProblem` and `useRevealedText` keep their own timers.
 - The sidebar's width transition is kept (the look is the same); only the terminal's fits are throttled.
 - The `:is()` lists and the universal `border-radius: 0 !important` in `material.css` are unchanged.

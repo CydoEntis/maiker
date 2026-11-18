@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
-import { errorMessage } from '@/lib/error-message'
 import { KEY_DOWN, KEY_ENTER, KEY_ESCAPE, KEY_LEFT, KEY_RIGHT, KEY_UP, isSelected, partsOfPrompt, promptOfScreen } from '../terminalKeys'
 
 /** How often the question is read again while the tray shows, so a menu that moves or changes is followed. */
@@ -86,7 +85,7 @@ export function TerminalPrompt({ readScreen, sendKeys }: Props) {
     setBusy(true)
     sendKeys(keys)
       .then(() => { window.setTimeout(read, REDRAW_MS) })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not send the key')) })
+      .catch((error: unknown) => { toast.failed('Could not send the key', error) })
       .finally(() => { setBusy(false) })
   }
 

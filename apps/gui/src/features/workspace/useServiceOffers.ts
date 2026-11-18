@@ -3,9 +3,7 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { restartMismatchedDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
-import { serviceStateOf } from './model/serviceState'
 import { daemonConnectionError } from '@/lib/daemon-connection'
-import { errorMessage } from '@/lib/error-message'
 import { appBehindStep } from '@/features/updates/appBehind'
 import { useUpdater } from '@/features/updates/useUpdater'
 import { serviceRestartStep } from '@/features/updates/serviceRestart'
@@ -26,15 +24,13 @@ function olderServiceNote(status: { canRestart: boolean; sessionCount: number; a
 }
 
 /** What the window offers when it and the service speak different protocols: restart the older service, or update the older app. */
-export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, online, failures, sessionsQuery, restartServiceWhenIdle, starting }: {
+export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, sessionsQuery, restartServiceWhenIdle, starting }: {
   mismatch: { daemonProtocol: number; guiProtocol: number } | null
   serviceNewer: boolean
   restartStatusQuery: UseQueryResult<{ daemonProtocol: number; guiProtocol: number; canRestart: boolean; sessionCount: number; activeTurnCount: number | null }>
   refetchSessions: () => Promise<unknown>
   updater: ReturnType<typeof useUpdater>
   restartNow: () => void
-  online: boolean
-  failures: number
   sessionsQuery: UseQueryResult<Conversation[]>
   /** Settings › General › Restart the service when idle. */
   restartServiceWhenIdle: boolean
@@ -58,7 +54,7 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
               await refetchSessions()
               toast.success(`Service restarted · ${String(restartStatusQuery.data?.sessionCount ?? 0)} sessions back`, automatic ? { description: 'It restarted by itself because no agent was working or waiting.' } : undefined)
             })
-            .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not restart the Maitty service')) })
+            .catch((error: unknown) => { toast.failed('Could not restart the Maitty service', error) })
             .finally(() => { setRestartPending(false) })
         },
       }
@@ -86,8 +82,6 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
         appProtocol: mismatch.guiProtocol,
       }
     : null
-  const serviceState = serviceStateOf({ online, failures, mismatch: Boolean(mismatch) })
-  const serviceFooterText = serviceState === 'down' ? 'Service stopped' : serviceState === 'update' ? 'Restart needed' : undefined
   const offlineDetail = mismatch && !serviceNewer ? `${daemonConnectionError(sessionsQuery.error)}${olderServiceNote(restartStatusQuery.data)}` : null
-  return { serviceFooterText, offlineDetail, restartOffer, appBehindOffer }
+  return { offlineDetail, restartOffer, appBehindOffer }
 }

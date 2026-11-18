@@ -62,7 +62,7 @@ describe('adding a folder rule', () => {
     const { onWritten } = open()
     await fill(user)
     await user.click(screen.getByRole('button', { name: 'Show the lines' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('a folder with * cannot have a rule')
+    expect((await screen.findByRole('alert')).querySelector('.mx-note-reason')?.textContent).toBe('a folder with * cannot have a rule')
     expect(screen.queryByRole('button', { name: 'Write these lines' })).toBeNull()
     expect(onWritten).not.toHaveBeenCalled()
   })

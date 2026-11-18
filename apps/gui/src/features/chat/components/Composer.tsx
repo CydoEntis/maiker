@@ -95,6 +95,8 @@ type Props = {
     /** Answers the commands the window runs itself (`windowCommands.ts`) with the route and the text as typed. Without it they go to the agent. */
     readonly inWindow?: ((route: WindowRoute, typed: string) => void) | undefined
   } | undefined
+  /** The chat's one problem line (`ProblemLine`): above everything else in the dock. Null when the chat has none. */
+  problem?: ReactNode
   /** The question tray: what the agent asks, slid up from behind the box. Null when it asks nothing. */
   question?: ReactNode
   facts: ComposerFacts
@@ -133,7 +135,7 @@ const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
  * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
  * offline the box still takes typing but does not send.
  */
-export function Composer({ agent, composer, conversation, commandsFrom, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null }: Props) {
+export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null }: Props) {
   const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
@@ -246,7 +248,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
       return
     }
     if (route.kind === 'confirm' && running) {
-      toast.message(`${agent} is working. Run ${typed} when it finishes.`)
+      toast.info(`${agent} is working. Run ${typed} when it finishes.`)
       return
     }
     setDraft('')
@@ -267,7 +269,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
     if (command.terminal === true && inTerminal !== undefined) {
       // Its menu is the terminal's to show, and its keys would land in a running turn.
       if (running) {
-        toast.message(`${agent} is working. Run /${command.name} when it finishes.`)
+        toast.info(`${agent} is working. Run /${command.name} when it finishes.`)
         return
       }
       setDraft('')
@@ -298,7 +300,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
       return
     }
     if (running && !runsMidTurn(commandsFrom?.agent, typed)) {
-      toast.message(`${agent} is working. Run /${command.name} when it finishes.`)
+      toast.info(`${agent} is working. Run /${command.name} when it finishes.`)
       return
     }
     setDraft('')
@@ -358,6 +360,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, question
   return (
     <div ref={box} className="mx-composer">
       <div className="mx-composer-column">
+        {problem}
         <div ref={tray} className="mx-question-slot">{question}</div>
         {helpers}
         <QueuedMessages

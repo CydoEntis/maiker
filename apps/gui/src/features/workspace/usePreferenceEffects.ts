@@ -1,7 +1,6 @@
 import { useEffect } from 'react'
 import { toast } from '@/lib/toast'
 import { type SettingsPreferences, writeSettingsPreferences } from '@/features/settings/preferences'
-import { errorMessage } from '@/lib/error-message'
 import { markGpu } from '@/lib/gpu'
 import { isWindowShown, subscribeWindowActivity } from '@/lib/window-activity'
 import { setSpinnerStyle } from '@/lib/spinner-clock'
@@ -15,7 +14,7 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
     try {
       writeSettingsPreferences(preferences)
     } catch (error) {
-      toast.error(errorMessage(error, 'Could not save settings'))
+      toast.failed('Could not save settings', error)
     }
     setSpinnerStyle(preferences.spinner)
   }, [preferences])

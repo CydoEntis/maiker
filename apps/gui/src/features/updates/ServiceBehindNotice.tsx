@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from '@/lib/toast'
+import { errorMessage } from '@/lib/error-message'
+import { APP_NAME } from '@/brand'
+import { InlineNote } from '@/components/ui/feedback'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadDaemonUpdateStatus, restartStaleDaemon } from '@/api/daemon'
@@ -37,6 +40,8 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pending, setPending] = useState(false)
   const [autoFailed, setAutoFailed] = useState(false)
+  // A restart asked for in the dialog that failed: said in the dialog, which stays open so you can try again.
+  const [failure, setFailure] = useState<string | null>(null)
   const statusQuery = useQuery({
     queryKey: STATUS_KEY,
     queryFn: loadDaemonUpdateStatus,
@@ -75,7 +80,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
           toast.success('Service restarted', { description: sessionCount === 0 ? 'It restarted by itself to finish the update.' : `It restarted by itself to finish the update. ${plural(sessionCount, 'session')} came back.` })
         },
         (error: unknown) => {
-          console.warn('Could not restart the older Maitty service', error)
+          console.warn(`Could not restart the older ${APP_NAME} service`, error)
           setAutoFailed(true)
         },
       ).finally(() => { setRestartingNow(false) })
@@ -85,12 +90,12 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
 
   useEffect(() => {
     if (!version || (unasked && !autoFailed)) return
-    toast.warning(`The Maitty service is still on ${version}`, {
+    toast.warning(`The ${APP_NAME} service is still on ${version}`, {
       id: TOAST_ID,
       duration: Infinity,
       description: canRestart
         ? 'This app is newer. Restart the service to finish updating.'
-        : 'This app is newer, but its sessions are not saved, so Maitty is leaving it running.',
+        : `This app is newer, but its sessions are not saved, so ${APP_NAME} is leaving it running.`,
       action: canRestart ? { label: 'Restart…', onClick: () => { setDialogOpen(true) } } : undefined,
     })
     return () => {
@@ -111,14 +116,17 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
     <Dialog
       open={dialogOpen}
       onOpenChange={(open) => {
-        if (!pending) setDialogOpen(open)
+        if (pending) return
+        setDialogOpen(open)
+        setFailure(null)
       }}
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Restart the Maitty service?</DialogTitle>
+          <DialogTitle>{`Restart the ${APP_NAME} service?`}</DialogTitle>
           <DialogDescription>{`It is on ${version}, and this app is newer. ${description}`}</DialogDescription>
         </DialogHeader>
+        {failure !== null && <InlineNote title="Could not restart the service" reason={failure} />}
         <DialogFooter>
           <Button
             variant="soft"
@@ -133,6 +141,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
             disabled={!canRestart || pending}
             onClick={() => {
               setPending(true)
+              setFailure(null)
               void restartStaleDaemon(version)
                 .then(async () => {
                   setDialogOpen(false)
@@ -141,7 +150,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
                   await queryClient.invalidateQueries({ queryKey: STATUS_KEY })
                 })
                 .catch((error: unknown) => {
-                  toast.error(error instanceof Error ? error.message : typeof error === 'string' ? error : 'Could not restart the Maitty service')
+                  setFailure(errorMessage(error, 'The service did not say why.'))
                   void queryClient.invalidateQueries({ queryKey: STATUS_KEY })
                 })
                 .finally(() => {

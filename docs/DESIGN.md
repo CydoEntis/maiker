@@ -144,16 +144,54 @@ See UI › *UI conventions*, *Menus* and *check modals and settings*.
 
 ## Toasts
 
-One component for every notice: bottom right, above the agent's input area, a small floating
-pane: a box on the plain ground (no fill of its own) in the notice's colour (`err`, `blocked` for needs you, `done`, else the
-accent) with a kind chip carrying the notice's mark on the top border (`▲ Needs you`,
-`✕ Error`, `✓ Done`, `i Hint`, `✓ Notice`) and the modals' red × chip at its right, then a bold
-title, a detail and an optional preview in italics. Every text row wraps at the toast's width
-instead of being cut: the title and the detail onto up to three lines, the preview (an excerpt) onto
-up to two, the last line ending in `…` only past that; the box grows with the lines. A question waiting on you also has its
-two answers as buttons on the bottom border: a green `Answer` that goes to the session and a
-red `Later esc` that dismisses it. Always round corners. It slides in and fades out
-with motion on. See UI › *the frame* (Toast).
+The TUI's notices: one small floating pane, bottom right, above the agent's input area, a box on the plain ground in the
+notice's colour (`err`, `blocked` for needs you, `done`, else the accent) with a kind chip on the top border (`▲ Needs you`,
+`✕ Error`, `✓ Done`, `i Hint`, `✓ Notice`) and the red × chip at its right, then a bold title, a detail and an optional
+preview in italics. Every text row wraps at the toast's width: the title and detail onto up to three lines, the preview
+onto up to two, the last line ending in `…` only past that. A question waiting on you also has its two answers as buttons
+on the bottom border: a green `Answer` and a red `Later esc`. It slides in and fades out with motion on. See UI › *the
+frame* (Toast). The desktop app's toasts are under *Errors*.
+
+## Errors
+
+The desktop app's error states (built 2026-11-18; `components/ui/feedback.tsx`, `feedback.css`, `lib/toast.ts`,
+`components/ui/toaster.tsx`). The rule: **say it where it happened, only as loud as what it blocks, and never twice.**
+There are no banners. Every surface is the Folded float (a `--line2` hairline, the fold, the dialog shadow) with a 3px
+**status edge** on its left in its tone: `--err` failed, `--caution` (`--m-mid`) a warning, `--blocked` needs you,
+`--ok` back or done, `--working` running, the accent a note. The mark before the title is the tone's glyph (`×`, `▲`,
+`!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
+its line, then outlined ones, then text ones (Copy details); Copy details says Copied in the same width for 2 s.
+
+- **Toasts** (`toast.*`). Bottom right, 16px in, 360px wide, newest on top, at most 3. Title 13px 600, the reason 12.5px
+  `--fg2` up to three lines, the actions on their own row, a ✕ at the top right. Errors, warnings, needs-you and progress
+  stay until dismissed or replaced; success and notes go after 4 s and wait while the pointer or focus is on the stack.
+  The same failure again is one toast with `×2`. A needs-you toast names the session ("Parser fix needs you"), says what it
+  asks, and offers **Allow** (only when the window can answer) and **Open session**. A progress toast (a file being sent)
+  has no ✕, only **Cancel**, and becomes its outcome in place. They slide in 8px and fade; reduced motion only fades.
+  Settings › Notifications and the desktop settings each have a **Show a test** row.
+- **Field errors** (`FieldError`). Under the field, 12px `--fg2` after a red `×`, one sentence that says what to type
+  ("Branch names can’t contain spaces. Try feat-new-login."). The field keeps its value and its underline turns red. It
+  shows once the field is left or the form sent, never while typing.
+- **Inline notes** (`InlineNote`). A failure on the page you came to read (a start that failed in New session, a clone, a
+  git rule): the edge, a title, the reason in full, and text actions (Put back, Dismiss, Copy details).
+- **Chat problem** (`ScopedAlert` scope `chat`, `ChatProblem.tsx`). A problem that stops a chat dims only the chat column
+  (a flat veil of `--bg` at 72%, nothing blurs) under one 480px dialog: "devbox stopped answering" / the reason / **Try
+  again** (or **Restart**), **Not now**, and **Copy details** at the right. Not now leaves the **problem line** at the top
+  of the dock: the edge, the title in bold and the reason on one line, the fix and Copy details at its right. A context at
+  95% or more is a caution line there instead ("Context almost full", **New chat with summary**, **Compact**), never a
+  dialog. The chat dialog does not trap focus, as the sidebar and other panes still work.
+- **Service offline** (`ServiceStatus.tsx`). A blip (under 3 s) is a title-bar chip, **Reconnecting…** with the running
+  mark. Then the whole window dims (`--bg` at 78%) under one dialog that traps focus: "Maitty can’t reach its background
+  service", **Start service** (then "Starting…"), **Not now**, **Copy details**, and "Trying again in Ns" in mono at its
+  right. Not now leaves a red **× Offline** chip that opens it again. Back after an outage, the dialog turns green
+  ("Reconnecting…", "Found the service. Picking your chats back up.") for 1.2 s, then a **Back online** toast, yellow with
+  **Restart both/all** when chats were interrupted. The sidebar foot has no service dot.
+- **Service update** (same dialog, caution): **Restart Maitty to finish updating** with what a restart keeps (`✓` green),
+  warns about (`▲` caution) and stops (`–` dim), a restart that asks for a second click, **Later** and `protocol a → b`;
+  Later leaves a caution **Restart needed** chip. A downloaded app update is a note toast that stays, "Maitty X is ready",
+  with **Restart now** and **Later**; after the relaunch a success toast "Updated to X" offers **What’s new**.
+- **Light and dark.** The tones are the theme's own, so the same rules draw both; on the light theme a filled fix is the
+  tone at its soft ground with a darker line. Folded, Rounded and Square corners all apply through the float material.
 
 ## Status bar
 
@@ -207,11 +245,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   program that paints with black leaves no box. On a web view without WebGL 2 (`data-gpu="software"`) the same rules
   use cheaper values: a 1px ring for the popover shadow ([PERFORMANCE](PERFORMANCE.md)). The window ground is opaque
   on every platform (no Mica), and nothing blurs.
-- **The notification card (`features/notifications/NotificationCard.tsx`).** 340px wide, radius 14, padding
-  12/12/12/14. A 26px app icon with its 11px status badge, the session's name (13px, 600) with what happened beside it
-  ("needs you" amber, "finished" green, "failed" red; 12px, 500), a 22px close, the body (12.5px, `--fg2`, code in 12px
-  mono), then 28px buttons (the answer filled in the card's colour) and "just now" (11.5px, `--dim`). Toasts sit 96px
-  below the top edge and 36px in from the side, clear of the title bar's controls.
+- **The toast (`components/ui/toaster.tsx`).** 360px wide, 16px from the bottom and right edges; see *Errors*.
 - **One material, three roles (`apps/gui/src/material.css`).** Every surface is a *panel* (sidebar, main card,
   inspector), a *float* (menus, popovers, dialogs, the palette, find, toasts) or a *field* (the message box and its
   tray), and takes its fill, hairline and shadow from that role's rule in `material.css`: a panel is `--main` with a
@@ -366,12 +400,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   terminal (agents) or Clear and Copy folder path (shells); then Close pane, only when there are several. **Close pane** on one pane of several closes only the pane when its
   session has work in it (an agent, a chat, a shell running a program): the session keeps running and stays in the
   sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session as before, with Undo.
-- **No status bar.** The window has none: the daemon's state is the sidebar foot ("Service stopped" or "Restart
-  needed" beside a red dot) and, once every reconnect try failed, the **Service stopped** banner at the top of the chat
-  column ("Maitty service stopped." / "Chats are paused and nothing is lost. Restart to pick up where they left off.",
-  **Restart service** and **Details** with the tries, Try again and Open log; `ServiceStatus.tsx`). A downloaded update
-  shows the **Update ready** banner there too ("Maitty X is ready." / "Restart to update. Running chats keep going in
-  the service.", **Restart now**, **Later**). Banners sit in the flow on their tone's soft ground, not over the chat.
+- **No status bar.** The window has none: the service's state is the title bar's chip and, once it has been out of reach for 3 seconds, one dialog over the whole window (see *Errors*). A downloaded update is a toast that stays, "Maitty X is ready.", with **Restart now** and **Later**.
   The the theme and corners are in Settings › Appearance, the terminal
   text size is Ctrl+= and Ctrl+− (and Settings › Terminal), and the shortcuts open with their own key.
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; the whole-app mock). Agents only: no fleets, ships
@@ -462,9 +491,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   by drag was reported to take the window down in 0.72.0), the change just happens. Picking a session to show (the sidebar, the palette, a
   notice) is not a move: it shows at once, since it is the most frequent thing done in the window and a cross-fade on
   each pick made switching feel slow.
-- **Toasts are cards.** The notification card is the one design; a plain toast (Sonner) is laid out the same way: icon tile,
-  title and detail, the close at the top right and the action on its own row under the text, 96px below the top edge and 36px
-  in from the side.
+- **Toasts are one design** (see *Errors*): bottom right, 360px, a status edge, the title and reason, the actions on their own row.
 - **A remote machine that needs the app** has no row of its own: its dot turns amber and an amber **↑ Update** (or Install)
   text button sits in its header before the folder button. While it updates, a mono percentage replaces the button and a
   2px accent line runs under the header (indented 26px left, 10px right); both go when it ends. The percentage is the stage
@@ -850,11 +877,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Drag a session into a pane.** Any sidebar row drags onto a pane: in the same layout it
   swaps, in another layout it moves here, otherwise it replaces the pane's session. The session that
   leaves keeps running.
-- **Files dropped on a pane of another machine.** One sonner toast on the theme tokens (`bg-muted` track,
-  `bg-primary` fill, `text-muted-foreground` percentage): the title `Sending <file> to <machine>`, with
-  `(2 of 3)` for a drop of several, a thin `role="progressbar"` named `Sending <file>`, and sonner's own
-  action button **Cancel**. It has no close mark while it runs. It is then replaced by a success, error or
-  plain toast. See UI › *features that need a pane's files*.
+- **Files dropped on a pane of another machine.** One progress toast (see *Errors*): the title `Sending <file> to <machine>`, with
+  `(2 of 3)` for a drop of several, a thin `role="progressbar"` named `Sending <file>`, and the action
+  **Cancel**. It has no close mark while it runs. It is then replaced in place by a success, error or
+  note toast. See UI › *features that need a pane's files*.
 - **A pasted image.** The same toast, titled `Sending the image to <machine>` (a progress bar named
   `Sending image`, **Cancel**), ending as `Sent the image to <machine>`. For a pane of this computer there is
   no progress: a short `Saving the image…` toast becomes `Pasted the image`.
@@ -1016,8 +1042,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   **Restart now**, or by itself when the app is idle, so sessions keep running either way. Settings › General › Updates shows the state with
   one fitting button and three switches: download automatically (on), **Install updates when idle** (on, helper
   "Never while an agent is working") and **Restart the service when idle** (off; helper "After an update, an older service restarts by itself once no agent is working, waiting on you or starting. Sessions come back."). Idle means no agent working or waiting on an answer, no keyboard input
-  for 5 minutes, and the window unfocused or minimized. After the relaunch a pill toast at bottom centre reads
-  "Updated to X · What's new" for 9 s (dismissable), and What's new opens a 460 px dialog with the release's
+  for 5 minutes, and the window unfocused or minimized. After the relaunch
+  a success toast "Updated to X" with **What’s new** for 4 s (dismissable), and What's new opens a 460 px dialog with the release's
   notes and "No session was interrupted."
 - **Sidebar position.** Settings › Appearance › Sidebar position, or the palette, puts the sidebar
   on the left or right. On the right the window mirrors: the resize edge is on its left, the narrow-window
@@ -1027,12 +1053,11 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   background, or it is not the focused pane) sends a system notification, once per change. It names
   the session and where it is and never what the agent asked. Clicking it brings the window forward
   and shows that session. Opening the app, a session you are in, and a reconnect after the daemon
-  was unreachable send nothing. The in-window notification card follows the state: green for done, amber
-  for needs you, red for an error. Its position (any of the six corners and edges) is set in Settings ›
-  Notifications, which can show a test card.
-- **Interrupted agents.** When the daemon restarted while an agent was mid-turn,
-  a banner above the panes says which agent and shows the command that brings it back
-  (`codex resume --last`). **Resume** types it into that session; **Dismiss** hides the banner. Nothing
+  was unreachable send nothing. The in-window toast follows the state: green for done, amber
+  for needs you, red for an error. It always sits bottom right; Settings › Notifications can show a test.
+- **Interrupted agents.** When the daemon restarted while an agent was mid-turn, its chat asks
+  about it (see *Errors*, chat problem): which agent and the command that brings it back
+  (`codex resume --last`). **Restart** types it into that session; **Dismiss** on the dock line puts it away. Nothing
   resumes on its own.
 - **Usage and cost (⌘⇧U / Ctrl+Shift+U).** Settings › Workspace › **Usage & cost** (key U), above Notifications,
   drawn as one Settings card; the shortcut and the palette open Settings on that page, and Esc closes Settings.
@@ -1078,7 +1103,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   holds while the window is in the background.
 - **Working loader.** A wait of a second or more shows the **M loader** (`MLoader`): the three strokes of the M icon traced in turn over 2.4 s, in the text colour, with a word beside it ("Reading <machine>…"); a list shows it only after 160 ms. Reduce motion draws the M still. There is no spinner setting. The working badge on a tile and row keeps its own small mark.
 - **Desktop dialogs.** The New session dialog, the folder picker, the command palette, Recent sessions, Resume a saved chat and the service card share one float: the page colour, a hairline, 14px (Folded: the cut corner and flaps), the shared dialog shadow, a 160ms scale from .96 in, and the 2px accent underline for focus. Lists opened from a token or the machine name grow from their anchor (160ms, `cubic-bezier(.2,.8,.2,1)`, from .9). Reduce motion turns the movement off. The **switch** is 26x14 with a 1px `--line2` border (`--fg2` when on), an 8px knob, and a faint fill when on; it is the one control for an on/off setting (a per-file tick that selects what to commit stays a checkbox).
-- **Notices** (the toasts and banners): flat cards in the same colours. A safety signal keeps its colour and words: "Service stopped" and the offline bar stay red, a needs-you notice keeps its amber state line, a restore notice its amber stripe; only the glass, gradients and loud shadows are gone.
+- **Notices** (toasts, dialogs and lines; see *Errors*): flat floats in the same colours. A safety signal keeps its colour and words: the offline dialog and chip stay red, a needs-you toast keeps its amber edge.
 - **Process icons** are generic tiles, never a product's mark: `>_` shell, `✻` codex, `rs` cargo.
 - **Themes**: fifty-four in the desktop app (the terminal app also ships Maitty Night), twenty-eight dark and twenty-six light (`crates/maitty-settings/themes.json` lists them; a TUI test holds its ground and text equal to it). Eleven are Maitty's own. Nine are the chat handoff's, each with a `palette` that the desktop draws exactly as written (every surface, text, accent, status, meter and shading role; `paletteTheme` in `theme/themes.ts`): **Maitty Night** and **Maitty Day** (sea-glass and brass, the defaults), **Maitty Dark** and **Maitty Light** (a standard black and white ground, same accents), and **Abyss**, **Ember**, **Moss**, **Dusk** (dark) and **Paper** (light), each with its own accent and its own needs-you colour (`--warn`). The TUI still builds Night, Day, Dark and Light from `crates/maitty-settings/maitty-tokens.json`, so those four differ slightly between the two apps until it reads the palettes too. **Maitty Retro Dark** and **Maitty Retro Light** (navy ground, mint text and a lime accent by night; white, ink and a darker green by day) are generated like the families below. In Maitty's first four, brass is the accent (`--accent` as a fill, `--accent-text` as text, darker by day), teal is only ever `--working`, coral is only ever needs-you (`--warn`). The other forty-four are twenty-two families, each with a dark and a light (GitHub, One, Catppuccin, Solarized, Gruvbox, Tokyo Night, Dracula, Nord, Ayu, Everforest, Rosé Pine, Kanagawa, Nightfox, Flexoki, Gruvbox Material, One Half, PaperColor, Tomorrow, Melange, Cyberdream, Doom One, Zenbones), generated from six inputs (`bg fg accent mag blue green` and a light flag) by Oklab mixing. A saved theme that is gone, or Maitty Night saved by the terminal app, falls back to Maitty Dark or Maitty Day (the TUI maps each removed id to its nearest survivor). The theme is stored as its id (`night`, `github-dark`, ...) in the shared settings. Every theme's `--pane` is its opaque
   `--main`. The foreground, terminal text (`--fg2`), muted and dim text keep 4.5:1 on both `--term` and the
@@ -1112,9 +1137,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   confirmed **Remove**) and an **Add a machine** card (a field, then the `~/.ssh/config` hosts as rows); its
   states are loading, empty, error and checking, and it works with the keyboard alone.
 
-### Notification cards
+### Notification toasts
 
-Every toast is drawn by one component, `NotificationCard` (`apps/gui/src/features/notifications/`; layout 2h): a flat 340px card on `--main` with a `--line2` hairline and a small shadow, its top edge 2px in its tone (`needs` amber, `done` green, `error` red, `info` accent); the agent's icon with its status badge on the left, a bold title with a close button, a muted line saying what it wants (a command in mono), "just now" in dim mono, then the buttons on their own row (the primary filled in the tone). `SessionNotice` (terminal sessions) and `NoticeToast` (conversation views) only map their data onto it; plain Sonner toasts (messages, errors) wear the same float material without the icon and buttons. Allow appears only when the session is stopped on a choice the GUI can answer.
+A session that needs you, finished or failed while you look elsewhere is a toast (`features/notifications/notify.ts`, `noticeForSession.ts`): its title names the session and what happened, the reason says what it asks (a command in mono), and its actions are **Allow** (only when the session is stopped on a choice the GUI can answer) and **Open session**. It is keyed by its session, so the daemon's alert for the same event replaces it.
 
 - **Working badge.** The spinner in `--working` on a 9px square at the tile's corner, ringed in `--card`; it is the same badge on the sidebar row and the pane header. The chat's scroll area fades to transparent over its top 36px.
 

@@ -147,7 +147,7 @@ describe('the chat history', () => {
     warn.mockRestore()
   })
 
-  it('says it is reconnecting when reads keep failing, keeps what it showed, and resumes without duplicates', async () => {
+  it('says in the dock that it is reconnecting when reads keep failing, keeps what it showed, and resumes without duplicates', async () => {
     const daemon = conversation(2)
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
@@ -156,7 +156,7 @@ describe('the chat history', () => {
     daemon.failure = new Error(`${DAEMON_NAME} is not running`)
     await settle(IDLE_POLL_MS)
     await settle(RETRY_READ_MS)
-    expect(screen.getByText(/Reconnecting to the daemon/)).toBeInTheDocument()
+    expect(screen.getByText(/Reconnecting to this chat…/)).toBeInTheDocument()
     // The reason is on screen, so a window that cannot read its chat says why instead of only waiting.
     expect(screen.getByText(new RegExp(`${DAEMON_NAME} is not running`))).toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
@@ -165,7 +165,7 @@ describe('the chat history', () => {
     daemon.upsert(daemon.message('t1', 'm2', 'User', 'sent while it was down'))
     await settle(IDLE_POLL_MS)
 
-    expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Reconnecting to this chat…/)).not.toBeInTheDocument()
     expect(screen.queryByText(new RegExp(`${DAEMON_NAME} is not running`))).not.toBeInTheDocument()
     expect(screen.getAllByText('message 0')).toHaveLength(1)
     expect(screen.getAllByText('sent while it was down')).toHaveLength(1)

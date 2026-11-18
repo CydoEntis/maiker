@@ -24,7 +24,6 @@ import { machineProjects } from '../model/newSession'
 import { resolveStartFolder } from '../model/startFolder'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { withNickname, writeMachineNicknames } from '@/data/machineNicknames'
-import { Toast } from './states'
 import type { SessionView } from '../model/session'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { folderExists } from '../model/startFolder'
@@ -32,7 +31,7 @@ import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting } = useWorkspace()
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
@@ -148,7 +147,6 @@ export function WorkspaceDialogs() {
                 onClose={() => { setPreviewTheme(null); setSettingsSection(null) }}
               />
             )}
-            {toastMessage && <Toast key={toastMessage.key} message={toastMessage.text} />}
             {/* Not while the service still runs the older version: the update is not finished, and its card says so. */}
             {updatedTo && !mismatch && <UpdatedNotice update={updatedTo} onDone={() => { setUpdatedTo(null) }} />}
             {preferences.perfOverlay && <PerfOverlay />}

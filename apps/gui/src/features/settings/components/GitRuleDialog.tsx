@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { changeGitRule, type GitConfigWrite, type GitIdentity } from '@/api/gitIdentities'
 import { errorMessage } from '@/lib/error-message'
+import { InlineNote } from '@/components/ui/feedback'
 
 /** Longest folder, name and email the daemon accepts. */
 const MOST_PATH_CHARS = 4096
@@ -111,7 +112,7 @@ export function GitRuleDialog({ machine, where, logins, rule, chooseFolder, onWr
           <input aria-label="Commit email" placeholder="Email on commits" type="email" value={email} maxLength={MOST_TEXT_CHARS} spellCheck={false} disabled={busy} onChange={(event) => { edit(setEmail)(event.target.value) }} />
           {(step.at === 'previewed' || step.at === 'writing') && <Preview writes={step.writes} />}
           {step.at === 'asking' && <p role="status">Asking {where} what it would write…</p>}
-          {failure !== null && <p role="alert">{failure}</p>}
+          {failure !== null && <InlineNote title={`${where} did not change the rule`} reason={failure} />}
           <div className="mx-rename-actions">
             <button type="button" className="mx-text-button" disabled={busy} onClick={onCancel}>Cancel</button>
             {step.at === 'previewed' || step.at === 'writing'

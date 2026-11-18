@@ -6,7 +6,6 @@ import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/fe
 import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
 import { DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '@/features/workspace/model/chatView'
 
-export type ToastPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
 export type CursorStyle = 'block' | 'bar' | 'underline'
 /** How much room the sidebar's rows, the tabs and the panes get. */
 export type Density = 'compact' | 'comfortable' | 'spacious'
@@ -59,7 +58,6 @@ export type SettingsPreferences = {
   animateSidebarActivity: boolean
   /** The desktop sidebar is collapsed to its rail. */
   compactSidebar: boolean
-  toastPosition: ToastPosition
   notifyNeedsYou: boolean
   notifyFinished: boolean
   /** A session's program exited with an error (a native notification, while the window is in the background). */
@@ -170,7 +168,6 @@ function defaults(): SettingsPreferences {
     reduceMotion: false,
     animateSidebarActivity: true,
     compactSidebar: false,
-    toastPosition: 'top-right',
     notifyNeedsYou: true,
     notifyFinished: true,
     notifyError: true,
@@ -262,7 +259,6 @@ export function readSettingsPreferences(): SettingsPreferences {
       reduceMotion: bool(preferences.reduceMotion, fallback.reduceMotion),
       animateSidebarActivity: bool(preferences.animateSidebarActivity, fallback.animateSidebarActivity),
       compactSidebar: bool(preferences.compactSidebar, fallback.compactSidebar),
-      toastPosition: isToastPosition(preferences.toastPosition) ? preferences.toastPosition : fallback.toastPosition,
       notifyNeedsYou: bool(preferences.notifyNeedsYou, fallback.notifyNeedsYou),
       notifyFinished: bool(preferences.notifyFinished, fallback.notifyFinished),
       notifyError: bool(preferences.notifyError, fallback.notifyError),
@@ -318,9 +314,6 @@ export function writeSettingsPreferences(preferences: SettingsPreferences): void
   localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...preferences, [CORNERS_ERA_KEY]: CORNERS_ERA }))
 }
 
-function isToastPosition(value: unknown): value is ToastPosition {
-  return value === 'top-left' || value === 'top-center' || value === 'top-right' || value === 'bottom-left' || value === 'bottom-center' || value === 'bottom-right'
-}
 
 // Sizes saved outside the 11–16 range are kept as the nearest size in it.
 function terminalFontSize(value: unknown, fallback: number): number {

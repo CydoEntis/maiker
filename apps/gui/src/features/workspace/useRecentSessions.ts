@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import type { ClosedSession } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import type { NewChatRequest } from './components/NewSessionDialog'
 import { LOCAL_MACHINE } from '@/api/machines'
@@ -17,11 +16,11 @@ export function useRecentSessions(startNewChat: (request: NewChatRequest) => Pro
   const begin = useCallback((request: NewChatRequest, close: () => void) => {
     // A start already under way would drop this one without a word, so the list stays and says why.
     if (starting) {
-      toast.message('A session is already starting')
+      toast.info('A session is already starting')
       return
     }
     close()
-    startNewChat(request).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not reopen the session')) })
+    startNewChat(request).catch((error: unknown) => { toast.failed('Could not reopen the session', error) })
   }, [startNewChat, starting])
   const reopenSession = useCallback((closed: ClosedSession) => {
     const request = reopenRequest(closed)

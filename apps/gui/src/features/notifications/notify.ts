@@ -1,38 +1,58 @@
-import { createElement } from 'react'
-import { toast } from '@/lib/toast'
-import { NoticeToast, type NoticeProps } from './NoticeToast'
-import { SessionNotice, type SessionNoticeProps } from './SessionNotice'
+import type { ReactNode } from 'react'
+import { toast, type ToastAction, type ToastOptions } from '@/lib/toast'
 
-/** Show a notification card. Sticky ones stay until answered or dismissed. */
-export function showNotice(
-  notice: NoticeProps,
-  options: { sticky?: boolean } = {},
-): string | number {
-  const duration = options.sticky ? Infinity : notice.countdownMs
-  return toast.custom(
-    (id) =>
-      createElement(NoticeToast, {
-        ...notice,
-        onDismiss: () => {
-          toast.dismiss(id)
-        },
-      }),
-    duration === undefined ? {} : { duration },
-  )
+export type NoticeAction = {
+  label: string
+  onClick: () => void
+  /** The one button that answers the notice, in its status colour. */
+  primary?: boolean
 }
 
-/** Takes a session's card away, e.g. once the session is no longer waiting on you. */
+/** What a toast about something you are not looking at says: who it is about, what happened, and what you can do. */
+export type Notice = {
+  /** needs: waits on you (stays); done: finished (hides after 4s); error: failed (stays); info: a plain note. */
+  kind: 'needs' | 'done' | 'error' | 'info'
+  /** Who it is about: a session's name. */
+  title: string
+  /** What happened to it, in words, after the name ("needs you", "finished", "failed"). */
+  state?: string
+  body?: ReactNode
+  actions?: readonly NoticeAction[]
+}
+
+const asAction = (action: NoticeAction): ToastAction => ({ label: action.label, onClick: () => { action.onClick() } })
+
+function optionsOf(notice: Notice, id?: string): ToastOptions {
+  const actions = notice.actions ?? []
+  const primary = actions.find((action) => action.primary === true) ?? actions[0]
+  const secondary = actions.find((action) => action !== primary)
+  return {
+    ...(id === undefined ? {} : { id }),
+    ...(notice.body === undefined ? {} : { description: notice.body }),
+    ...(primary === undefined ? {} : { action: asAction(primary) }),
+    ...(secondary === undefined ? {} : { secondary: asAction(secondary) }),
+  }
+}
+
+const SHOW = { needs: toast.needs, done: toast.success, error: toast.error, info: toast.info } as const
+
+/** Shows a notice as a toast in its status colour. */
+export function showNotice(notice: Notice, id?: string): string {
+  const title = notice.state === undefined || notice.state === '' ? notice.title : `${notice.title} ${notice.state}`
+  return SHOW[notice.kind](title, optionsOf(notice, id))
+}
+
+const sessionToastId = (sessionId: string) => `session-${sessionId}`
+
+/** Takes a session's toast away, e.g. once the session is no longer waiting on you. */
 export function dismissSessionNotice(sessionId: string): void {
-  toast.dismiss(`session-${sessionId}`)
+  toast.dismiss(sessionToastId(sessionId))
 }
 
 /**
- * A card for a terminal session. A newer one for the same session replaces the older, so a session never
- * stacks cards; one that needs you stays until you answer it, the others go by themselves.
+ * A toast for a session you are not looking at. A newer one for the same session replaces the older, so a session never
+ * stacks toasts; one that needs you or failed stays until you act, a finished one goes by itself.
  */
-export function showSessionNotice(sessionId: string, notice: SessionNoticeProps): string | number {
-  return toast.custom(
-    (id) => createElement(SessionNotice, { ...notice, onDismiss: () => { toast.dismiss(id) } }),
-    { id: `session-${sessionId}`, duration: notice.countdownMs ?? Infinity },
-  )
+export function showSessionNotice(sessionId: string, notice: Notice): string {
+  return showNotice(notice, sessionToastId(sessionId))
 }

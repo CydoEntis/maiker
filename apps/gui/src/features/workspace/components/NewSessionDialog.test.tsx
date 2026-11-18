@@ -494,7 +494,7 @@ describe('starting a session and going on writing', () => {
     await userEvent.type(box(), 'a new draft')
     fail(new Error('The worktree could not be made'))
 
-    expect(await screen.findByText(/Could not start “fix the login”: The worktree could not be made/)).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Could not start “fix the login”\s*The worktree could not be made/)
     expect(box()).toHaveValue('a new draft')
     await userEvent.click(screen.getByRole('button', { name: 'Put back “fix the login”' }))
     expect(box()).toHaveValue('a new draft\n\nfix the login')

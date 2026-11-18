@@ -16,11 +16,12 @@ import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDi
 import type { PaletteItem } from '@/features/workspace/model/palette'
 import { withLook, type Corners } from '@/features/workspace/theme/corners'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
+import { ErrorsGallery } from './ErrorsGallery'
 import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maitty%20Night&corners=folded`.
- * `show` is new, new-long, new-terminal, new-fail (a start that fails with a long reason), picker, picker-empty, picker-loading, palette, recent or resume. The page shows nothing but the dialog.
+ * `show` is new, new-long, new-terminal, new-fail (a start that fails with a long reason), picker, picker-empty, picker-loading, palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -77,7 +78,7 @@ function DockBox({ what }: { what: string }) {
   )
 }
 
-const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, toastPosition: 'bottom-right', notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
+const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
 const CLIENT = new QueryClient()
 const SETTINGS_MACHINES = { known: true, list: [], onRetry: SAME, onRemove: SAME, onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve(null), onCopyCommand: SAME, add: { windows: false, loadHosts: () => Promise.resolve([]), onAdd: SAME, onCancel: SAME } }
 
@@ -145,6 +146,7 @@ function ScriptedNew({ what, children }: { what: string; children: ReactNode }) 
 }
 
 function Show({ what }: { what: string }): ReactNode {
+  if (what.startsWith('err-')) return <ErrorsGallery what={what} />
   const long = what === 'new-long'
   if (what === 'new' || what.startsWith('new-')) {
     const start = what === 'new-fail' ? () => Promise.reject(new Error(FAILED_START)) : NOTHING

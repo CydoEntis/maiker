@@ -5,6 +5,7 @@ import { markRestarting, skippedUpdate, takeRestarted } from '@/features/updates
 import { useIdleUpdate } from '@/features/updates/useIdleUpdate'
 import { useUpdater } from '@/features/updates/useUpdater'
 import type { SessionView } from './model/session'
+import { guardDrafts, hasDrafts } from '@/features/documents/draftGuard'
 
 /** How long "Restarting Maitty" shows before the window relaunches. */
 const RESTART_SCREEN_MS = 1200
@@ -33,8 +34,9 @@ export function useAppUpdate({ updater, serviceNewer, preferences, sessions, onl
     // If the install fails, the screen must not stay up: it goes, and so does the "kept running" note for the next launch.
     window.setTimeout(() => { updater.restart(() => { setRestarting(false); takeRestarted() }) }, RESTART_SCREEN_MS)
   }, [updater, runningVersion])
-  const restartNow = useCallback(() => { restartInto(false) }, [restartInto])
-  const installWhenIdle = useCallback(() => { restartInto(true) }, [restartInto])
+  // A restart closes the window, so an unsaved document draft is asked about first; an idle restart waits for a day with none.
+  const restartNow = useCallback(() => { guardDrafts(() => true, () => { restartInto(false) }) }, [restartInto])
+  const installWhenIdle = useCallback(() => { if (!hasDrafts()) restartInto(true) }, [restartInto])
 
   // The app launched before the release that matches the service may have been published, so look again.
   const checkForUpdateRef = useRef(updater.check)

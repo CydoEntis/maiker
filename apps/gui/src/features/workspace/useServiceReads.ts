@@ -2,26 +2,20 @@ import type { Dispatch, SetStateAction } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { defaultSessionFolder, loadConversations, loadDaemonRestartStatus } from '@/api/daemon'
 import { daemonProtocolMismatch } from '@/lib/daemon-connection'
+import { retryDelayAfter } from './model/serviceState'
 
 /** The daemon pushes every change (`sessions-changed`); this slow poll only catches a stream that went quiet. */
 const SESSION_REFRESH_MS = 15_000
 
-const SECOND_MS = 1000
-
-const MAX_RETRY_EXPONENT = 3
-
 /** Failed reads in a row before the window says the service is unreachable. */
 const OFFLINE_AFTER_FAILURES = 2
-
-const BACKOFF_BASE = 2
 
 /** Reads the sessions and the home folder from the service, and says whether it answers and speaks this version. */
 export function useServiceReads({ failures, setFailures }: {
   failures: number
   setFailures: Dispatch<SetStateAction<number>>
 }) {
-  // While the daemon is unreachable, try again after 1, 2, 4, then every 8 seconds.
-  const retryDelay = BACKOFF_BASE ** Math.min(MAX_RETRY_EXPONENT, Math.max(0, failures - 1)) * SECOND_MS
+  const retryDelay = retryDelayAfter(failures)
   const sessionsQuery = useQuery({
     queryKey: ['conversations'],
     queryFn: async () => {

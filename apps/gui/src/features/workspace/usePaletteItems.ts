@@ -88,7 +88,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
       action('split-down', 'Split down', () => { split(null, 'down') }, keys('split-down')),
       action('usage', 'Open usage and cost', () => { setSettingsSection('usage') }, keys('usage')),
       action('jump-needs', 'Jump to the next session that needs you', () => { runShortcut('jump-needs') }, keys('jump-needs')),
-      action('inspect', 'Inspect the repository', () => { if (inspectRefusal !== null) toast.message(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
+      action('inspect', 'Inspect the repository', () => { if (inspectRefusal !== null) toast.info(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
       ...(focusedSession && !isChatSession(focusedSession.conversation) ? [action('new-worktree', 'New worktree', () => { runShortcut('new-worktree') }, keys('new-worktree'))] : []),
       action('find', 'Find in the pane or every session', () => { setFindOpen(true) }, keys('find')),
       action('broadcast', showing?.broadcast ? 'Stop broadcasting' : 'Broadcast typing to this tab', () => { runShortcut('broadcast') }, keys('broadcast')),

@@ -4,7 +4,6 @@ import { type Dispatch, type SetStateAction, useCallback, useState } from 'react
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { closeSessionWithUndo, undoCloseSession } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { useLatest } from '@/lib/useLatest'
 import { guardDrafts, inPane, ofSessions } from '@/features/documents/draftGuard'
 import { runsProgram } from './components/runsProgram'
@@ -49,7 +48,7 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         setLayout((current) => (current === closed.after ? closed.before : closed.sessions.reduce((layoutNow, session) => showSession(layoutNow, session.id, makeId), current)))
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not bring the session back')) })
+      .catch((error: unknown) => { toast.failed('Could not bring the session back', error) })
   }, [lastClose, setLayout, queryClient])
   // The toast's button outlives the render that made it, so it calls whichever undo is current.
   const undoNow = useLatest(undoLastClose)
@@ -77,7 +76,7 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         if (failed.length > 0) {
           unmarkClosed(failed.map((session) => session.id))
           const reason: unknown = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')?.reason
-          toast.error(errorMessage(reason, failed.length === 1 && failed[0] ? `Could not end ${displayName(failed[0])}` : `Could not end ${String(failed.length)} sessions`))
+          toast.failed(failed.length === 1 && failed[0] ? `Could not end ${displayName(failed[0])}` : `Could not end ${String(failed.length)} sessions`, reason)
         }
         if (terminals.length === 0) return
         const closed = new Set(terminals.map((session) => session.id))
@@ -89,12 +88,12 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         // Named for what was asked to close: an agent's terminals went with it, they are not further sessions.
         const named = terminals.filter((session) => asked.has(session.id))
         const label = named.length === 1 && named[0] ? displayName(named[0]) : `${String(named.length)} sessions`
-        const toastId = toast(`Closed ${label}`, { duration: UNDO_CLOSE_MS, action: { label: 'Undo', onClick: undoNow } })
+        const toastId = toast.info(`Closed ${label}`, { duration: UNDO_CLOSE_MS, action: { label: 'Undo', onClick: undoNow } })
         setLastClose({ toastId, sessions: terminals, before, after })
         window.setTimeout(() => { setLastClose((current) => (current?.toastId === toastId ? null : current)) }, UNDO_CLOSE_MS)
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not end the session')) })
+      .catch((error: unknown) => { toast.failed('Could not end the session', error) })
   }, [sessions, setLayout, layoutNow, queryClient, undoNow, agentTerminals])
 
   // A session's documents go with it: a draft in one is asked about first, whoever started the close.

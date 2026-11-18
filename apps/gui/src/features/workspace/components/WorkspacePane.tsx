@@ -7,7 +7,6 @@ import { useWorkspace } from '../workspaceContext'
 import { chatAvailability, type PaneView } from '../model/chatView'
 import { toast } from '@/lib/toast'
 import { answerHelpers, dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { isChatSession } from '../model/chatSession'
 import { carryDraftToTerminal } from '../model/draftCarry'
 import { PaneCard } from './PaneCard'
@@ -46,7 +45,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, inspectView, diffStat, terminalShown, canDock, toggleTerminal } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, inspectView, diffStat, terminalShown, canDock, toggleTerminal } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -68,18 +67,22 @@ export function WorkspacePane({ shown, pane, kept }: {
   }
   const showTerminal = () => {
     paneViews.choose(session.id, 'terminal')
-    void carryDraftToTerminal(session).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not move your message to the terminal')) })
+    void carryDraftToTerminal(session).catch((error: unknown) => { toast.failed('Could not move your message to the terminal', error) })
   }
   const head = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
   const fullPercent = contextFull({ context: session.usage.context, limits: [] })
-  // One problem at a time, the one that matters most: a lost machine, then a stopped agent, then a full context.
+  const interrupted = session.interrupted !== null && !dismissedRestores.has(session.id) ? session.interrupted : null
+  // One problem at a time, the one that matters most: a lost machine, then a stopped agent, then a turn a service restart
+  // cut, then a full context. Each is what the daemon reports about the session; none is guessed here.
   const problem: ChatProblem | null = head?.down === true && head.name !== null
-    ? { kind: 'offline', machine: head.label, since: head.downSince, onRetry: () => { retryNamed(head.name ?? '') } }
+    ? { kind: 'machine', machine: head.label, since: head.downSince, onRetry: () => { retryNamed(head.name ?? '') } }
     : session.status === 'error' && !session.ended && !isShell(session)
-      ? { kind: 'crashed', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onViewLog: () => { showTerminal() }, onRestart: chatOnly ? null : () => { restartPane(pane.id) } }
-      : fullPercent !== null && typeInto !== undefined
-        ? { kind: 'context', agent: session.process, percent: fullPercent, onNewWithSummary: (summary) => { newChatWithSummary(session, summary) }, onCompact: () => { void typeInto('/compact').then(() => new Promise((resolve) => { window.setTimeout(resolve, COMMAND_SUBMIT_GAP_MS) })).then(() => typeInto('\r')).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not compact')) }) } }
-        : null
+      ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onViewLog: () => { showTerminal() }, onRestart: chatOnly ? null : () => { restartPane(pane.id) } }
+      : interrupted !== null
+        ? { kind: 'interrupted', agent: interrupted.agent, resume: interrupted.resume, onRestart: () => { resumeInterrupted(session) }, onDismiss: () => { setDismissedRestores((current) => new Set(current).add(session.id)) } }
+        : fullPercent !== null && typeInto !== undefined
+          ? { kind: 'context', agent: session.process, percent: fullPercent, onNewWithSummary: (summary) => { newChatWithSummary(session, summary) }, onCompact: () => { void typeInto('/compact').then(() => new Promise((resolve) => { window.setTimeout(resolve, COMMAND_SUBMIT_GAP_MS) })).then(() => typeInto('\r')).catch((error: unknown) => { toast.failed('Could not compact', error) }) } }
+          : null
   const terminals = ownsTerminals(session)
   // Restoring reads and writes the checkout, so it is this computer's only, like Inspect.
   const rewindTerm = repoPaneOf(session)
@@ -142,7 +145,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           onBackToTerminal={showTerminal}
           onStartAgent={(agent) => {
             paneViews.choose(session.id, 'terminal')
-            void sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, `${agent}\r`).catch((error: unknown) => { toast.error(errorMessage(error, `Could not start ${agent}`)) })
+            void sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, `${agent}\r`).catch((error: unknown) => { toast.failed(`Could not start ${agent}`, error) })
           }}
           hideSuccessfulTools={preferences.hideSuccessfulTools}
           onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
@@ -188,14 +191,14 @@ export function WorkspacePane({ shown, pane, kept }: {
       }}
       onToggleMaximize={(paneId) => { movePanes(() => { setLayout((current) => toggleMaximize(current, paneId)) }) }}
       onClose={closePaneById}
-      onClear={() => { void sendTo(session, CLEAR_SCREEN).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not clear the screen')) }) }}
+      onClear={() => { void sendTo(session, CLEAR_SCREEN).catch((error: unknown) => { toast.failed('Could not clear the screen', error) }) }}
       onCopyPath={() => { copyPathOf(session.id) }}
       onRename={() => { setRenameId(session.id) }}
       onSaveName={(name) => { saveName(session.id, name) }}
       branchMenu={branchMenu}
       onHandoff={(agent) => { void handoffSession(session, agent) }}
       onRestart={restartPane}
-      onAnswerHelpers={(choice) => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not answer the helper request')) }) }}
+      onAnswerHelpers={(choice) => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.failed('Could not answer the helper request', error) }) }}
     />
   )
 }

@@ -383,21 +383,17 @@ export function usePreviewState() {
               queryKey: ['conversation-history', selected.id],
             }),
           ])
-          toast.message(
+          toast.info(
             `Cancellation requested. Waiting for ${selected.provider} to stop.`,
           )
         })
         .catch((error: unknown) => {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : 'Could not cancel the turn',
-          )
+          toast.failed('Could not cancel the turn', error)
         })
       return
     }
     setStatus(selected.id, 'idle')
-    toast.message('Preview turn stopped')
+    toast.info('Preview turn stopped')
   }, [daemonDisconnected, desktop, queryClient, selected, setStatus])
   const toggleTerminal = useCallback(() => {
     if (!selected) return

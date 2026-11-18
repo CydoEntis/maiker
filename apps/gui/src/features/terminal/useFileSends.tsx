@@ -2,9 +2,8 @@ import { useCallback, useEffect, useRef } from 'react'
 import { toast } from '@/lib/toast'
 import { listenFileSends, newTransferId, sendFilesToMachine, type SendEvent } from '@/api/fileSends'
 import { sendImageToMachine } from '@/api/imagePaste'
-import { errorMessage } from '@/lib/error-message'
 import { remotePathText } from './dropRoute'
-import { PLAIN_TOAST, showSendProgress } from './sendToast'
+import { showSendProgress } from './sendToast'
 
 /** What the window knows of a send it started. */
 type Send = {
@@ -49,7 +48,7 @@ export function useFileSends({ typeInto }: Options) {
     showProgress(transfer, send, 0, null)
     start(transfer).catch((error: unknown) => {
       sends.current.delete(transfer)
-      toast.error(errorMessage(error, `Could not send to ${machine}`), { ...PLAIN_TOAST, id: transfer })
+      toast.failed(`Could not send to ${machine}`, error, { id: transfer })
     })
   }, [showProgress])
 
@@ -77,25 +76,24 @@ export function useFileSends({ typeInto }: Options) {
         case 'done':
           sends.current.delete(event.transfer)
           toast.success(send.image ? `Sent the image to ${send.machine}` : `Sent ${String(event.count)} ${noun(event.count)} to ${send.machine}`, {
-            ...PLAIN_TOAST,
             id: event.transfer,
             description: send.untyped.length > 0 ? `Not typed into the pane: ${send.untyped.join(', ')}` : undefined,
           })
           return
         case 'failed':
           sends.current.delete(event.transfer)
-          toast.error(event.unsent > 1 ? `${event.message} (${String(event.unsent - 1)} more not sent)` : event.message, { ...PLAIN_TOAST, id: event.transfer })
+          toast.error(event.unsent > 1 ? `${event.message} (${String(event.unsent - 1)} more not sent)` : event.message, { id: event.transfer })
           return
         case 'cancelled':
           sends.current.delete(event.transfer)
-          toast.message(`Stopped sending to ${send.machine}${event.sent > 0 ? `; ${String(event.sent)} of ${String(send.count)} were sent` : ''}`, { ...PLAIN_TOAST, id: event.transfer })
+          toast.info(`Stopped sending to ${send.machine}${event.sent > 0 ? `; ${String(event.sent)} of ${String(send.count)} were sent` : ''}`, { id: event.transfer })
           return
       }
     }
     listenFileSends(onEvent).then((unlisten) => {
       if (gone) unlisten()
       else stop = unlisten
-    }, (error: unknown) => { toast.error(errorMessage(error, 'Could not follow file sends')) })
+    }, (error: unknown) => { toast.failed('Could not follow file sends', error) })
     return () => {
       gone = true
       stop?.()

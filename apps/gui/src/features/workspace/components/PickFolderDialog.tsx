@@ -11,6 +11,9 @@ import { errorMessage } from '@/lib/error-message'
 import { folderNameProblem } from '../model/folderName'
 import { baseName, crumbsOf, isPathQuery, isRoot, joinPath, niceOf, parentOf, visibleFolders, type PickedFolder } from '../model/folderPick'
 import { Icon } from './glyphs'
+import { FieldError, fieldErrorProps } from '@/components/ui/feedback'
+
+const NAME_ERROR_ID = 'mx-fp-new-why'
 
 /** Longest path the host accepts. */
 const MOST_PATH_CHARS = 4096
@@ -282,11 +285,11 @@ export function PickFolderDialog({ machines, machine: first, list, create, onPic
             <form className="mx-fp-new" onSubmit={(event) => { void submitName(event) }}>
               <label className="mx-fp-new-row">
                 <Icon name="folder" size={14} />
-                <input ref={nameInput} aria-label="New folder name" aria-invalid={nameError !== null} aria-describedby={nameError === null ? undefined : 'mx-fp-new-why'} autoFocus value={naming} disabled={making} spellCheck={false} autoComplete="off" maxLength={300} placeholder="New folder name"
+                <input ref={nameInput} aria-label="New folder name" {...fieldErrorProps(NAME_ERROR_ID, nameError)} autoFocus value={naming} disabled={making} spellCheck={false} autoComplete="off" maxLength={300} placeholder="New folder name"
                   onChange={(event) => { setNaming(event.target.value); setNameWhy(null) }} onKeyDown={onNameKeyDown} />
                 <span className="mx-fp-new-hint" aria-hidden="true">{making ? 'Making…' : '↵ Create · Esc'}</span>
               </label>
-              {nameError !== null && <p id="mx-fp-new-why" role="alert" className="mx-fp-new-why">{nameError}</p>}
+              {nameError !== null && <div className="mx-fp-new-why"><FieldError id={NAME_ERROR_ID}>{nameError}</FieldError></div>}
             </form>
           )}
           {!waiting && (

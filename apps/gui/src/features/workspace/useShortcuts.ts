@@ -9,7 +9,6 @@ import type { SettingsPreferences } from '@/features/settings/preferences'
 import { guardLocal } from '@/lib/localOnly'
 import { isChatSession } from './model/chatSession'
 import { carryDraftToTerminal } from './model/draftCarry'
-import { errorMessage } from '@/lib/error-message'
 import { usePaneViews } from './usePaneViews'
 import { activeArrangement, cycleFocus, type Layout, type SplitDirection, toggleBroadcast } from './model/layout'
 import type { SessionView } from './model/session'
@@ -194,7 +193,7 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
         if (!focusedSession || isChatSession(focusedSession.conversation)) return
         const next: PaneView = chatOf(focusedSession).view === 'chat' ? 'terminal' : 'chat'
         paneViews.choose(focusedSession.id, next)
-        if (next === 'terminal') void carryDraftToTerminal(focusedSession).catch((error: unknown) => { toast.error(errorMessage(error, 'Could not move your message to the terminal')) })
+        if (next === 'terminal') void carryDraftToTerminal(focusedSession).catch((error: unknown) => { toast.failed('Could not move your message to the terminal', error) })
         return
       }
       case 'focus-mode':
@@ -220,9 +219,9 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
         return
       case 'new-worktree': {
         const refusal = guardLocal(focusedSession, 'worktrees')
-        if (refusal !== null) toast.message(refusal)
+        if (refusal !== null) toast.info(refusal)
         // A new worktree session branches off a terminal pane, which a chat has none of: it moves through its branch menu.
-        else if (focusedSession && isChatSession(focusedSession.conversation)) toast.message('A chat moves to a worktree from its branch menu.')
+        else if (focusedSession && isChatSession(focusedSession.conversation)) toast.info('A chat moves to a worktree from its branch menu.')
         else if (focusedSession && online) setWorktreeFrom(focusedSession)
         return
       }

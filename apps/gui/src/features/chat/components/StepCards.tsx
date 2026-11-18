@@ -119,7 +119,7 @@ type CommandStepProps = {
 
 function copyCommand(command: string): void {
   writeClipboard(command).then(
-    () => { toast.message('Copied') },
+    () => { toast.info('Copied') },
     () => { toast.error('Could not copy the command') },
   )
 }

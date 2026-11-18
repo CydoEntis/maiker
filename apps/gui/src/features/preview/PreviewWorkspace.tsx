@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { TitleBar } from '@/components/TitleBar'
 import { TerminalPanes } from '@/features/terminal/TerminalPanes'
 import { WorkingSinceContext } from '@/lib/working-since'
-import { Toaster } from '@/components/ui/sonner'
+import { Toaster } from '@/components/ui/toaster'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -24,7 +24,7 @@ import { DAEMON_NAME } from '@/brand'
 
 /** The screen with a conversation open: the sidebar, its tabs, the feed, the composer and each dialog. */
 export function PreviewWorkspace() {
-  const { workingSince, statusAnnouncement, shownPanel, isCompactSidebar, sidebarDrawerOpen, setSidebarDrawerOpen, filteredConversations, selected, filter, sidebarPreferences, sidebarCollapsed, daemonDisconnected, setFilter, openNewSession, togglePin, setArchived, renameConversation, requestEndSession, selectInCurrentView, setSidebarCollapsed, setNewProject, startingSessions, desktop, conversations, setSettingsDialogOpen, primaryModifier, openTabs, closeConversation, showTerminal, setActivePanel, toggleTerminal, activeConversations, terminalSwitchNotice, sessionsQuery, daemonRestartAction, settingsPreferences, pendingApproval, recoveryPendingId, resumeSelectedConversation, messages, approvalCollapsed, setApprovalCollapsed, resolveApproval, answerInput, draft, historyQuery, deliveryNotice, checkSubmissionDelivery, sendMessage, setDrafts, clearSendFailure, updateDraft, handleComposerKeyDown, denyDecision, denyQueuedFor, denyAndSend, cancelTurn, newDialogOpen, newProject, newProvider, setNewProvider, newKind, setNewKind, newPermissions, setNewPermissions, claudeExecutableQuery, chooseFolder, isChoosingFolder, setNewDialogOpen, createConversation, conversationCreationPending, commandDialogOpen, setCommandDialogOpen, selectConversation, setKeyboardDialogOpen, openConversationInTerminal, keyboardDialogOpen, settingsDialog, endTarget, setEndTarget, confirmEndSession, daemonRestartDialog, theme } = usePreview()
+  const { workingSince, statusAnnouncement, shownPanel, isCompactSidebar, sidebarDrawerOpen, setSidebarDrawerOpen, filteredConversations, selected, filter, sidebarPreferences, sidebarCollapsed, daemonDisconnected, setFilter, openNewSession, togglePin, setArchived, renameConversation, requestEndSession, selectInCurrentView, setSidebarCollapsed, setNewProject, startingSessions, desktop, conversations, setSettingsDialogOpen, primaryModifier, openTabs, closeConversation, showTerminal, setActivePanel, toggleTerminal, activeConversations, terminalSwitchNotice, sessionsQuery, daemonRestartAction, settingsPreferences, pendingApproval, recoveryPendingId, resumeSelectedConversation, messages, approvalCollapsed, setApprovalCollapsed, resolveApproval, answerInput, draft, historyQuery, deliveryNotice, checkSubmissionDelivery, sendMessage, setDrafts, clearSendFailure, updateDraft, handleComposerKeyDown, denyDecision, denyQueuedFor, denyAndSend, cancelTurn, newDialogOpen, newProject, newProvider, setNewProvider, newKind, setNewKind, newPermissions, setNewPermissions, claudeExecutableQuery, chooseFolder, isChoosingFolder, setNewDialogOpen, createConversation, conversationCreationPending, commandDialogOpen, setCommandDialogOpen, selectConversation, setKeyboardDialogOpen, openConversationInTerminal, keyboardDialogOpen, settingsDialog, endTarget, setEndTarget, confirmEndSession, daemonRestartDialog } = usePreview()
   if (!selected) return null
   return (
     <WorkingSinceContext.Provider value={workingSince}>
@@ -453,10 +453,7 @@ export function PreviewWorkspace() {
           </DialogContent>
         </Dialog>
         {daemonRestartDialog}
-        <Toaster
-          position={settingsPreferences.toastPosition}
-          theme={theme === 'day' ? 'light' : 'dark'}
-        />
+        <Toaster />
       </TooltipProvider>
     </WorkingSinceContext.Provider>
   )

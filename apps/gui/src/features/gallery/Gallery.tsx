@@ -5,10 +5,9 @@ import { Fold } from '@/components/ui/fold'
 import { Counter, Divider, Progress } from '@/components/ui/progress'
 import { StatusMark, type MarkState } from '@/components/ui/status-mark'
 import { CodeChip, FileBadge, Tag, TextLink } from '@/components/ui/tag'
-import { ToastCard } from '@/components/ui/toast-card'
 import { CORNERS, withLook, type Corners } from '@/features/workspace/theme/corners'
 import { findTheme, themeStyle, THEMES } from '@/features/workspace/theme/themes'
-import { Copy, X } from 'lucide-react'
+import { Copy } from 'lucide-react'
 import { ChatFeed, ChatParity, SubagentsBars, WaitingCards } from './ChatFeed'
 import { RepliesGallery } from './RepliesGallery'
 import { DocumentsGallery } from './DocumentsGallery'
@@ -124,11 +123,6 @@ function Primitives() {
           <span className="w-[140px]"><Progress value={2} max={5} label="Progress" /></span>
           <Counter>2 of 5</Counter>
           <Divider />
-        </Sample>
-        <Sample label="Toast">
-          <ToastCard mark={<StatusMark state="needs" />} actions={<><Button size="sm" variant="soft">Open</Button><IconButton label="Dismiss"><X /></IconButton></>}>
-            <b className="font-semibold">Ship partial refunds</b> needs you
-          </ToastCard>
         </Sample>
       </div>
     </div>

@@ -1,12 +1,7 @@
 import { Fragment, useState } from 'react'
-import { toast } from '@/lib/toast'
-import { openDaemonLog } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { daemonConnectionError } from '@/lib/daemon-connection'
-import { errorMessage } from '@/lib/error-message'
 import { SplitHandle } from './SplitHandle'
 import { FindBar } from '@/features/find/FindBar'
-import { RestoreBanner } from './RestoreBanner'
 import { chatFindOf } from '@/features/chat/chatSearch'
 import { chooseProjectFolder } from '@/api/folderPicker'
 import { useCloneRepo } from './useCloneRepo'
@@ -14,7 +9,7 @@ import { busyBranchesOf, machineProjects } from '../model/newSession'
 import { NewSessionDialog } from './NewSessionDialog'
 import { useFolderPick } from './useFolderPick'
 import { EmptyState } from './states'
-import { ServiceStatus, UpdateReadyBanner } from './ServiceStatus'
+import { useUpdateReadyToast } from './useUpdateReadyToast'
 import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
 import { displayName } from '../model/session'
 import { rowTitle } from '../model/sidebar'
@@ -28,9 +23,8 @@ import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
 /** The middle of the window: the New session dialog, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, newTerminal } = useWorkspace()
-  // The version whose Update ready banner Later put away; the sidebar's chip still offers the restart.
-  const [updateLater, setUpdateLater] = useState<string | null>(null)
+  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, newTerminal } = useWorkspace()
+  useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
   const reduced = useReducedMotion()
   const terminal = usePresence(terminalShown, TERMINAL_DOCK_EXIT_MS, reduced)
   // The dock shows the focused session's terminals; while it slides out it keeps the session it was showing.
@@ -95,16 +89,6 @@ export function WorkspaceMain() {
                     onClose={() => { setFindOpen(false); if (focusedId) terminalHandles.current.get(focusedId)?.focus() }}
                   />
                 )}
-                <RestoreBanner
-                  sessions={sessions.filter((item) => item.interrupted !== null && !dismissedRestores.has(item.id))}
-                  online={online}
-                  onResume={resumeInterrupted}
-                  onDismiss={(id) => { setDismissedRestores((current) => new Set(current).add(id)) }}
-                />
-                {updater.state.status === 'ready' && updater.state.version !== updateLater && (
-                  <UpdateReadyBanner version={updater.state.version} onRestart={restartNow} onLater={() => { if (updater.state.status === 'ready') setUpdateLater(updater.state.version) }} />
-                )}
-                <ServiceStatus online={online} failures={failures} mismatch={Boolean(mismatch)} retryAt={retryAt} detail={offlineDetail ?? (sessionsQuery.isError ? daemonConnectionError(sessionsQuery.error) : null)} restart={restartOffer} appBehind={appBehindOffer} sessions={sessions.length} onRetry={() => { void refetchSessions() }} onOpenLog={() => { openDaemonLog().catch((error: unknown) => { toast.error(errorMessage(error, 'Could not open the log')) }) }} />
                 {tab ? (
                   <div className="mx-pane-stack">
                   {mountedTabs.map((tab) => {

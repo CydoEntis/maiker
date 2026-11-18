@@ -2,7 +2,6 @@ import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, u
 import { toast } from '@/lib/toast'
 import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen } from '@/api/daemon'
 import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/machines'
-import { errorMessage } from '@/lib/error-message'
 import { readConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
@@ -49,7 +48,8 @@ import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
 import { CommandMenuTray } from './CommandMenuTray'
-import { ProblemBanner } from './ProblemBanner'
+import { useChatProblem } from './ChatProblem'
+import { ProblemLine } from '@/components/ui/feedback'
 import { summaryOf } from '../summary'
 import type { ChatProblem } from '../problem'
 import { SubagentBar, SubagentChat } from './SubagentChat'
@@ -267,7 +267,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           const typed = commandChain.current.then(() => typeMessage(typeInto, agent, '/model')).then(refresh)
           commandChain.current = typed.catch((error: unknown) => {
             setMenuOpen(false)
-            toast.error(errorMessage(error, 'Could not open the model menu'))
+            toast.failed('Could not open the model menu', error)
           })
         },
         modelMenuLocked: pickerLocked ?? chipsLocked,
@@ -296,7 +296,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           }
           void step().catch((error: unknown) => {
             setLiveMode(before === null ? null : { base: metaMode, value: before })
-            toast.error(errorMessage(error, 'Could not change the permission mode'))
+            toast.failed('Could not change the permission mode', error)
           })
         },
       }
@@ -319,7 +319,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         commandChain.current = typed.catch((error: unknown) => {
           if (model !== undefined) setLiveModel(null)
           if (level !== undefined) setLiveEffort(null)
-          toast.error(errorMessage(error, 'Could not type the command'))
+          toast.failed('Could not type the command', error)
         })
       },
       ...(remote ? {} : { onPickMode: (target: string) => {
@@ -346,7 +346,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         }
         void step().catch((error: unknown) => {
           setLiveMode(before === null ? null : { base: metaMode, value: before })
-          toast.error(errorMessage(error, 'Could not change the permission mode'))
+          toast.failed('Could not change the permission mode', error)
         })
       } }),
     }
@@ -355,8 +355,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
-    toast.message(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so it opened in the terminal.`)
-    void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.error(errorMessage(error, `Could not run ${command}`)) })
+    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so it opened in the terminal.`)
+    void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.failed(`Could not run ${command}`, error) })
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
@@ -400,20 +400,20 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         return
       case 'copy': {
         const reply = lastReply(bareRows)
-        if (reply === null) toast.message(`${agent} has not said anything yet.`)
+        if (reply === null) toast.info(`${agent} has not said anything yet.`)
         else copyBlock(reply, 'Could not copy the reply')
         return
       }
       case 'export': {
         const text = transcriptMarkdown(bareRows, agent)
-        if (text === null) toast.message('There is nothing to export yet.')
+        if (text === null) toast.info('There is nothing to export yet.')
         else saveBlock('conversation', 'md', text)
         return
       }
       case 'plan':
         if (shownMode === PLAN_MODE) aside.show('Plan mode', `${agent} is already in plan mode. It reads and plans, and changes nothing until you approve the plan.`)
         else if (pickMode === undefined) aside.show('Plan mode', 'This chat cannot change its permission mode from here.')
-        else if (chipsLocked !== null) toast.message(chipsLocked)
+        else if (chipsLocked !== null) toast.info(chipsLocked)
         else setConfirming({ ask: { title: 'Switch to plan mode?', body: `${agent} will read and plan and change nothing until you approve the plan. You can pick another mode with the shield button.`, confirmLabel: 'Plan mode' }, typed, then: () => { pickMode(PLAN_MODE) } })
         return
       case 'commands':
@@ -480,7 +480,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // Words go to the strip above the message box, and the box takes the keys so the reply is typed under them.
   const quote = useCallback((who: string, text: string) => {
     const added = addQuote(link.conversation, { who, text })
-    if (added === 'full') toast.message(`A message can carry ${String(MAX_QUOTES)} quotes. Send it, or remove one.`)
+    if (added === 'full') toast.info(`A message can carry ${String(MAX_QUOTES)} quotes. Send it, or remove one.`)
     else setQuoteNote(added === 'added' ? 'Quote added' : 'Already quoted')
     window.getSelection()?.removeAllRanges()
     window.requestAnimationFrame(() => {
@@ -540,7 +540,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     approveRequest({ id: String(link.conversation), generation: link.generation }, requestId, decision)
       .then(() => { recordAnswer(requestId, decision); refresh() })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not send your answer')) })
+      .catch((error: unknown) => { toast.failed('Could not send your answer', error) })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, recordAnswer, refresh])
   // "Always in this project": this one is allowed now, and the daemon allows the same command in this project from then on.
@@ -548,7 +548,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     allowAlways({ id: String(link.conversation), generation: link.generation }, requestId)
       .then(() => { recordAnswer(requestId, 'Accept'); refresh() })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not remember your answer')) })
+      .catch((error: unknown) => { toast.failed('Could not remember your answer', error) })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, recordAnswer, refresh])
   // A user-input answer is relayed once and recorded nowhere: it can be a secret.
@@ -556,7 +556,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     answerUserInput({ id: String(link.conversation), generation: link.generation }, requestId, answers)
       .then(refresh)
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not send your answer')) })
+      .catch((error: unknown) => { toast.failed('Could not send your answer', error) })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, refresh])
   // A chat that follows a terminal pane is answered in that terminal (ADR 0003), so it offers no buttons.
@@ -586,7 +586,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const jump = useCallback((text: string, from: string) => {
     const key = quoteSourceRow(rowsLatest(), text, from)
     if (key === null) {
-      toast.message('The message this quotes is no longer in the chat.')
+      toast.info('The message this quotes is no longer in the chat.')
       return
     }
     setReveal((current) => ({ key, nonce: current.nonce + 1 }))
@@ -733,11 +733,13 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           onClose={() => { setReplying(null) }}
         />
       )
-      : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
-  const notices = [
-    offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
-    feed.error,
-  ].filter((notice): notice is string => notice !== null)
+      : null
+  const problemView = useChatProblem(problem, () => summaryOf(bareRows))
+  // The chat's own read: while it reconnects, or when it failed, one line in the dock says so, under any real problem.
+  const readLine = offline
+    ? <ProblemLine tone="working" running title="Reconnecting to this chat…" reason={`What is shown may be out of date.${readError !== null ? ` ${truncateError(readError)}` : ''}`} />
+    : feed.error !== null ? <ProblemLine tone="error" title="Could not read this chat" reason={feed.error} /> : null
+  const dockProblem = problemView.line ?? readLine
 
   return (
     <FilesHereContext.Provider value={sessionId === undefined || machineNameOf(sessionId) === null}>
@@ -745,10 +747,9 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={composer.draftable ? quotePicked : undefined} />}
-      {(notices.length > 0 || fullAccess) && (
-        <div className="mx-chat-notices" role={offline ? 'status' : undefined}>
-          {notices.map((notice) => <span key={notice}>{notice}</span>)}
-          {fullAccess && <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Full access</span>}
+      {fullAccess && (
+        <div className="mx-chat-notices">
+          <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Full access</span>
         </div>
       )}
       {/* Politely announces a change of state only; the log itself is not a live region, so streaming text never floods a screen reader. */}
@@ -785,6 +786,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         conversation={link.conversation}
         // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet.
         {...(abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
+        problem={dockProblem}
         question={question}
         helpers={dockedHelpers.length > 0 ? <HelpersDock helpers={dockedHelpers} open={dock.open === 'helpers'} onOpenChange={(open) => { setDockOpen(open ? 'helpers' : null) }} /> : null}
         dock={dock}
@@ -794,6 +796,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedWithYolo(sessionId), ...agentControls }}
         sent={sentMessages}
       />
+      {problemView.alert}
     </div>
     </FilesHereContext.Provider>
   )

@@ -1,6 +1,3 @@
-import { ToastCard } from '@/components/ui/toast-card'
-import { useState } from 'react'
-import { useNow } from '@/lib/clock'
 import { useAppearsAfter } from '@/lib/useAppearsAfter'
 import { useShortcutText } from '@/features/shortcuts/platform'
 import { Icon } from './glyphs'
@@ -79,43 +76,4 @@ export type AppBehindOffer = {
   appProtocol: number
 }
 
-const SECOND_MS = 1000
 
-/** Under the tabs while the daemon is unreachable: the last known screen stays, input waits. */
-export function OfflineBanner({ retryAt, detail, restart, appBehind = false, onRetry }: { retryAt: number | null; detail: string | null; restart: RestartOffer | null; appBehind?: boolean; onRetry: () => void }) {
-  const now = useNow()
-  const [armed, setArmed] = useState(false)
-  const seconds = retryAt === null ? null : Math.max(1, Math.ceil((retryAt - now) / SECOND_MS))
-  return (
-    <div className="mx-offline" role="status">
-      <span className="mx-offline-dot" aria-hidden="true" />
-      <span className="mx-offline-text">
-        {appBehind ? <><strong>Update needed.</strong> This app is older than the service; your sessions keep running.</> : <><strong>Restart needed.</strong> The service is on an older version; your sessions keep running.</>}{seconds !== null && ` Retrying in ${String(seconds)}s.`}
-        {detail && <> {detail}</>}
-      </span>
-      {restart && !appBehind && (
-        <button
-          type="button"
-          className={`mx-offline-button${armed ? ' is-armed' : ''}`}
-          disabled={!restart.canRestart || restart.pending}
-          onClick={() => {
-            if (!armed) {
-              setArmed(true)
-              return
-            }
-            setArmed(false)
-            restart.onRestart()
-          }}
-        >
-          {armed ? 'Click again to restart' : restart.label}
-        </button>
-      )}
-      <button type="button" className="mx-offline-button" onClick={onRetry}>Retry now</button>
-    </div>
-  )
-}
-
-/** A short notice over the workspace (`Toast`), centred under the title bar. */
-export function Toast({ message }: { message: string }) {
-  return <div className="mx-toast"><ToastCard>{message}</ToastCard></div>
-}

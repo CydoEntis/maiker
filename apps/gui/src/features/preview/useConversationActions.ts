@@ -5,7 +5,6 @@ import { toast } from '@/lib/toast'
 import { archiveConversationOnDaemon, endConversation as endDaemonConversation, renameConversationOnDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
 import type { SettingsPreferences } from '@/features/settings/preferences'
-import { errorMessage } from '@/lib/error-message'
 
 /** What the sidebar does to a conversation: pin, rename, close, end. The daemon keeps each change; only the browser preview keeps it itself. */
 export function useConversationActions({ setSidebarPreferences, settingsPreferences, setSidebarCollapsed, setSettingsPreferences, desktop, queryClient, conversations, openTabIds, closeConversation, setEndTarget, endTarget }: {
@@ -55,11 +54,7 @@ export function useConversationActions({ setSidebarPreferences, settingsPreferen
       ids.map((id) => archiveConversationOnDaemon({ id }, archived)),
     )
       .catch((error: unknown) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : 'Could not change this session',
-        )
+        toast.failed('Could not change this session', error)
       })
       .finally(() => {
         void queryClient.invalidateQueries({ queryKey: ['conversations'] })
@@ -80,7 +75,7 @@ export function useConversationActions({ setSidebarPreferences, settingsPreferen
     putAway([conversationId], true)
     if (openTabIds.includes(conversationId) && openTabIds.length > 1)
       closeConversation(conversationId)
-    toast.message('Terminal session closed', {
+    toast.info('Terminal session closed', {
       description:
         'Its program was stopped, as when it is closed in the terminal app.',
     })
@@ -110,13 +105,13 @@ export function useConversationActions({ setSidebarPreferences, settingsPreferen
         if (openTabIds.includes(target.id) && openTabIds.length > 1)
           closeConversation(target.id)
         void queryClient.invalidateQueries({ queryKey: ['conversations'] })
-        toast.message('Session ended', {
+        toast.info('Session ended', {
           description:
             'The agent is stopped. Its history stays under Archived. Start a new session to continue with different permissions.',
         })
       })
       .catch((error: unknown) => {
-        toast.error(errorMessage(error, 'Could not end this session'))
+        toast.failed('Could not end this session', error)
       })
   }
 
@@ -129,9 +124,7 @@ export function useConversationActions({ setSidebarPreferences, settingsPreferen
     if (desktop) {
       void renameConversationOnDaemon({ id: conversationId }, cleanTitle)
         .catch((error: unknown) => {
-          toast.error(
-            error instanceof Error ? error.message : 'Could not rename it',
-          )
+          toast.failed('Could not rename it', error)
         })
         .finally(() => {
           void queryClient.invalidateQueries({ queryKey: ['conversations'] })

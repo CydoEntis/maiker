@@ -1,3 +1,4 @@
+import { APP_NAME } from '@/brand'
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, type UseQueryResult } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
@@ -14,6 +15,7 @@ vi.mock('@/api/daemon', () => daemon)
 const toasts = vi.hoisted(() => ({
   warning: vi.fn<(title: string, options?: { action?: { label: string; onClick: () => void } }) => void>(),
   error: vi.fn(),
+  failed: vi.fn(),
   success: vi.fn(),
   dismiss: vi.fn(),
 }))
@@ -115,7 +117,7 @@ describe('the notice that the service is a release behind', () => {
     renderNotice()
 
     await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
-    expect(toasts.warning.mock.calls[0]?.[0]).toBe('The Maitty service is still on 0.71.0')
+    expect(toasts.warning.mock.calls[0]?.[0]).toBe(`The ${APP_NAME} service is still on 0.71.0`)
     expect(toasts.warning.mock.calls[0]?.[1]?.action?.label).toBe('Restart…')
   })
 
@@ -156,7 +158,9 @@ describe('the notice that the service is a release behind', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Restart service' }))
 
-    await waitFor(() => { expect(toasts.error).toHaveBeenCalledWith('the local Maitty service changed since the restart prompt opened') })
+    // The dialog stays open and says why in its own body, not in a toast.
+    expect(await screen.findByRole('alert')).toHaveTextContent('the local Maitty service changed since the restart prompt opened')
+    expect(toasts.error).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Restart service' })).toBeTruthy()
   })
 })

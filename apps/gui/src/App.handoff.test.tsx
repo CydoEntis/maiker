@@ -5,9 +5,9 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { Root } from './Root'
-import { toast } from 'sonner'
 import { hotkeyRows } from './features/workspace/model/shortcuts'
-import { DAEMON_NAME } from '@/brand'
+import { APP_NAME, DAEMON_NAME } from '@/brand'
+import { FOUND_FOR_MS, OFFLINE_AFTER_MS } from './features/workspace/model/serviceState'
 
 const daemon = vi.hoisted(() => ({
   connectAgent: vi.fn(() => Promise.resolve()),
@@ -120,7 +120,6 @@ const inRepo = (pane: number, root: string, cwd: string, extra: Partial<Conversa
 describe('desktop terminal multiplexer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    toast.dismiss()
     window.localStorage.clear()
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadConversations.mockResolvedValue([])
@@ -831,14 +830,14 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
-    expect(screen.queryByText(`Reconnecting to ${DAEMON_NAME}`)).not.toBeInTheDocument()
+    expect(screen.queryByText('Reconnecting…')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'codex, codex, working' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).not.toHaveAttribute('data-input-disabled', 'true')
     await waitFor(() => { expect(daemon.loadConversations).toHaveBeenCalledTimes(3) }, { timeout: 3000 })
-    expect(screen.queryByText(`Reconnecting to ${DAEMON_NAME}`)).not.toBeInTheDocument()
+    expect(screen.queryByText('Reconnecting…')).not.toBeInTheDocument()
   })
 
-  it('shows the disconnected banner, marks every status Unknown and holds input', async () => {
+  it('says Reconnecting… in the title bar through a blip, marks every status Unknown and holds input', async () => {
     daemon.loadConversations.mockResolvedValueOnce([term(2, `${HOME}/a`, { status: 'working', agent: 'codex' })]).mockRejectedValue(new Error('connection refused'))
     const { client } = renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
@@ -846,55 +845,65 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
-    expect(await screen.findByText(`Reconnecting to ${DAEMON_NAME}`)).toBeInTheDocument()
-    expect(screen.getByText(/Try 2 of 5 · next in 2s/)).toBeInTheDocument()
+    // A blip is the title bar's chip only: nothing dims and no dialog asks yet.
+    expect(await screen.findByText('Reconnecting…')).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
     // The row says only that it is unknown; "last seen working" now lives in its tooltip and hover card.
     expect(screen.getByRole('button', { name: 'codex, codex, unknown' })).toBeInTheDocument()
-    expect(screen.getAllByText(`Reconnecting to ${DAEMON_NAME}…`)).toHaveLength(1)
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).toHaveAttribute('data-input-disabled', 'true')
     expect(screen.getByRole('button', { name: 'New chat' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'codex, codex, unknown' })).not.toHaveClass('mx-fx-working')
+    // The sidebar's foot never says it a second time.
+    expect(screen.queryByText(`Reconnecting to ${DAEMON_NAME}…`)).toBeNull()
 
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Retry now' }))
-    await waitFor(() => { expect(screen.queryByText(`Reconnecting to ${DAEMON_NAME}`)).not.toBeInTheDocument() })
+    await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
+    await waitFor(() => { expect(screen.queryByText('Reconnecting…')).not.toBeInTheDocument() })
+    // Back after a blip: no toast to say so.
+    expect(screen.queryByText('Back online')).toBeNull()
   })
 
-  it('calls the service stopped after five failed tries, and Restart service tries again', async () => {
+  it('dims the window under one dialog once the service has not answered for three seconds, and Start service brings it back', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValueOnce([term(2, `${HOME}/a`)]).mockRejectedValue(new Error('connection refused'))
     const { client } = renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
-    for (let attempt = 0; attempt < 5; attempt += 1) await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
+    await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
+    await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
-    const card = await screen.findByRole('region', { name: 'Maitty service stopped' })
-    expect(card).toHaveTextContent('Chats are paused and nothing is lost. Restart to pick up where they left off.')
-    await user.click(within(card).getByRole('button', { name: 'Details' }))
-    expect(screen.queryByText(`Reconnecting to ${DAEMON_NAME}`)).not.toBeInTheDocument()
+    const title = `${APP_NAME} can’t reach its background service`
+    const dialog = await screen.findByRole('alertdialog', { name: title }, { timeout: OFFLINE_AFTER_MS + 1000 })
+    expect(dialog).toHaveTextContent('your chats are safe and will reconnect on their own')
+    expect(document.querySelector('[data-veil="window"]')).not.toBeNull()
 
-    daemon.openDaemonLog.mockResolvedValue(undefined)
-    await user.click(within(card).getByRole('button', { name: 'Open log' }))
-    expect(daemon.openDaemonLog).toHaveBeenCalledOnce()
+    // Not now leaves a red Offline chip in the title bar, which opens the dialog again.
+    await user.click(within(dialog).getByRole('button', { name: 'Not now' }))
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    await user.click(screen.getByRole('button', { name: /^Offline/ }))
+    const again = screen.getByRole('alertdialog', { name: title })
 
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    await user.click(within(card).getByRole('button', { name: 'Restart service' }))
-    await waitFor(() => { expect(screen.queryByRole('region', { name: 'Maitty service stopped' })).not.toBeInTheDocument() })
-  })
+    await user.click(within(again).getByRole('button', { name: 'Start service' }))
+    expect(await screen.findByRole('alertdialog', { name: 'Reconnecting…' })).toHaveTextContent('Found the service.')
+    expect(await screen.findByText('Back online', undefined, { timeout: FOUND_FOR_MS + 1000 })).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  }, 10_000)
 
-  it('asks to restart an older service, and Later leaves a slim bar', async () => {
+  it('asks to restart an older service, and Later leaves a chip that asks again', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maitty service uses protocol v49, while this GUI needs v62')
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 62, canRestart: true, sessionCount: 2, activeTurnCount: 0 })
     renderDesktopApp()
 
-    const card = await screen.findByRole('region', { name: 'Restart Maitty to finish updating' })
+    const card = await screen.findByRole('alertdialog', { name: `Restart ${APP_NAME} to finish updating` })
     expect(within(card).getByText('The app updated, but the service behind it is still the older one.')).toBeInTheDocument()
     expect(within(card).getByText('protocol 49 → 62')).toBeInTheDocument()
-    // The card is the one message: nothing says it is reconnecting.
+    // The dialog is the one message: nothing says it is reconnecting.
     expect(screen.queryByText(/Reconnecting/)).toBeNull()
     await user.click(within(card).getByRole('button', { name: 'Later' }))
-    expect(screen.queryByRole('region', { name: 'Restart Maitty to finish updating' })).not.toBeInTheDocument()
-    expect(screen.getByText('Restart needed.')).toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    // Later leaves a chip in the title bar that asks again.
+    await user.click(screen.getByRole('button', { name: 'Restart needed' }))
     expect(await screen.findByRole('button', { name: 'Restart and restore 2 sessions' })).toBeInTheDocument()
   })
 
@@ -912,11 +921,11 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maitty service uses protocol v77, while this GUI needs v76')
     renderDesktopApp()
 
-    const card = await screen.findByRole('region', { name: 'Update Maitty to reconnect' })
+    const card = await screen.findByRole('alertdialog', { name: `Update ${APP_NAME} to reconnect` })
     expect(within(card).getByText(/The service behind this app is newer than the app\./)).toBeInTheDocument()
     expect(within(card).getByText('protocol 76 → 77')).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: 'Check again' })).toBeEnabled()
-    expect(screen.queryByRole('region', { name: 'Restart Maitty to finish updating' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('alertdialog', { name: `Restart ${APP_NAME} to finish updating` })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Service in use' })).not.toBeInTheDocument()
     expect(daemon.restartMismatchedDaemon).not.toHaveBeenCalled()
   })
@@ -983,7 +992,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await screen.findByRole('region', { name: 'Shell in ~/a' })
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
-    await screen.findByText(`Reconnecting to ${DAEMON_NAME}`)
+    await screen.findByText('Reconnecting…')
     document.elementFromPoint = vi.fn(() => null)
 
     act(() => { terminal.drop.current?.([`${HOME}/b.png`], { x: 1, y: 1 }) })
@@ -1157,13 +1166,12 @@ describe('desktop overlays and pane tools', () => {
       await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
       // The window sees the status change and raises the card itself; the daemon's own alert for the same event replaces it, never stacks.
-      const card = (await screen.findByText(/needs you$/)).closest('.mx-notice')
+      const card = (await screen.findByText(/needs you$/)).closest('.mx-toast')
       expect(card).not.toBeNull()
       act(() => { alerts.emit?.({ machine: LOCAL_MACHINE, term: 3, status: 'blocked' }) })
       expect(screen.getAllByText(/needs you$/)).toHaveLength(1)
       expect(card).toHaveTextContent('$ git push origin main')
-      expect(card).toHaveTextContent('just now')
-      expect(within(card as HTMLElement).getAllByRole('button').map((button) => button.textContent)).toEqual(['', 'Allow', 'Open session'])
+      expect(within(card as HTMLElement).getAllByRole('button').map((button) => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['Allow', 'Open session', 'Dismiss'])
 
       await user.click(within(card as HTMLElement).getByRole('button', { name: 'Allow' }))
       expect(daemon.sendTerminalInput).toHaveBeenCalledWith(expect.objectContaining({ id: 't3' }), 'y')
@@ -1182,7 +1190,7 @@ describe('desktop overlays and pane tools', () => {
       daemon.loadConversations.mockResolvedValue([at(2), at(3, { status: 'needs-you', agent: 'claude', details: { asking: '', ask: { tool: 'Bash', detail: 'git push origin main', answerable: true }, interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } } })])
       await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
-      const card = (await screen.findByText(/needs you$/)).closest('.mx-notice')
+      const card = (await screen.findByText(/needs you$/)).closest('.mx-toast')
       expect(card).not.toBeNull()
       expect(card).toHaveTextContent('Bash · git push origin main')
       await user.click(within(card as HTMLElement).getByRole('button', { name: 'Allow' }))
@@ -1323,7 +1331,8 @@ describe('desktop overlays and pane tools', () => {
     fireEvent.pointerUp(pane, { clientX: 300, clientY: 200 })
 
     expect(await screen.findByRole('region', { name: 'Shell in ~/b' })).toBeInTheDocument()
-    expect(screen.queryByText('Session moved into this pane')).toBeInTheDocument()
+    // The pane showing it is the news; no toast repeats it.
+    expect(screen.queryByText('Session moved into this pane')).toBeNull()
     expect(daemon.archiveConversationOnDaemon).not.toHaveBeenCalled()
   })
 

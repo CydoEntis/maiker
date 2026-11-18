@@ -49,14 +49,14 @@ export function useInspectActions({ focusedSession, setInspectOpen, setInspectVi
 }) {
   const inspectRefusal = panelRefusal(focusedSession)
   const toggleInspect = useCallback(() => {
-    if (inspectRefusal !== null) toast.message(inspectRefusal)
+    if (inspectRefusal !== null) toast.info(inspectRefusal)
     else setInspectOpen((open) => !open)
   }, [inspectRefusal, setInspectOpen])
   // The session's repository changes beside it, once `bringForward` has put it in front; a turn's own when one is given.
   const openChanges = useCallback((sessionId: string, bringForward: () => void, turn?: TurnSpan | null) => {
     const refusal = panelRefusal(sessionMap.get(sessionId))
     if (refusal !== null) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     bringForward()
@@ -74,7 +74,7 @@ export function useInspectActions({ focusedSession, setInspectOpen, setInspectVi
   const showPanel = useCallback((paneId: string, sessionId: string, view: InspectView | undefined, open: (showing: boolean) => boolean) => {
     const refusal = panelRefusal(sessionMap.get(sessionId))
     if (refusal !== null) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     const showing = inspectOpen && focusedId === sessionId && (view === undefined || inspectView === view)

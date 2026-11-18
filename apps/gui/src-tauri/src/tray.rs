@@ -138,6 +138,26 @@ fn show_window(app: &AppHandle) {
     }
 }
 
+/// A quit asked for while the window is open (the tray's Quit, the system's) closes the window instead, so the window
+/// can first ask about an unsaved document draft; closing the last window then quits. A restart is never held up: the
+/// window asks before it restarts for an update.
+pub fn close_instead_of_exit(app: &AppHandle, code: i32) -> bool {
+    if code == tauri::RESTART_EXIT_CODE {
+        return false;
+    }
+    let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
+        return false;
+    };
+    show_window(app);
+    match window.close() {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!("closing the window before quitting: {error}");
+            false
+        }
+    }
+}
+
 /// Puts the item in the tray, empty until the window says what to list.
 pub fn start(app: &AppHandle) -> tauri::Result<()> {
     let mut tray = TrayIconBuilder::with_id(TRAY_ID)

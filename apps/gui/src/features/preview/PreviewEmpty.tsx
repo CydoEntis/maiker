@@ -1,7 +1,7 @@
 import { FolderOpen, LoaderCircle, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TitleBar } from '@/components/TitleBar'
-import { Toaster } from '@/components/ui/sonner'
+import { Toaster } from '@/components/ui/toaster'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { daemonConnectionError } from '@/lib/daemon-connection'
 import { focusMainContent } from './shared'
@@ -12,7 +12,7 @@ import { DAEMON_NAME } from '@/brand'
 
 /** The screen with no conversation open: the sidebar and what to start. */
 export function PreviewEmpty() {
-  const { statusAnnouncement, filter, sidebarPreferences, isCompactSidebar, sidebarCollapsed, daemonDisconnected, sidebarDrawerOpen, setFilter, openNewSession, togglePin, setArchived, renameConversation, requestEndSession, selectConversation, setSidebarDrawerOpen, setSidebarCollapsed, startingSessions, sessionsQuery, setSettingsDialogOpen, primaryModifier, codexExecutableQuery, desktop, claudeExecutableQuery, daemonRestartAction, mismatch, daemonRestartStatus, newDialogOpen, newProject, setNewProject, newProvider, setNewProvider, newKind, setNewKind, newPermissions, setNewPermissions, chooseFolder, isChoosingFolder, setNewDialogOpen, createConversation, conversationCreationPending, settingsDialog, daemonRestartDialog, settingsPreferences, theme } = usePreview()
+  const { statusAnnouncement, filter, sidebarPreferences, isCompactSidebar, sidebarCollapsed, daemonDisconnected, sidebarDrawerOpen, setFilter, openNewSession, togglePin, setArchived, renameConversation, requestEndSession, selectConversation, setSidebarDrawerOpen, setSidebarCollapsed, startingSessions, sessionsQuery, setSettingsDialogOpen, primaryModifier, codexExecutableQuery, desktop, claudeExecutableQuery, daemonRestartAction, mismatch, daemonRestartStatus, newDialogOpen, newProject, setNewProject, newProvider, setNewProvider, newKind, setNewKind, newPermissions, setNewPermissions, chooseFolder, isChoosingFolder, setNewDialogOpen, createConversation, conversationCreationPending, settingsDialog, daemonRestartDialog } = usePreview()
   return (
     <TooltipProvider>
         <div className="app-shell">
@@ -209,10 +209,7 @@ export function PreviewEmpty() {
           />
           {settingsDialog}
             {daemonRestartDialog}
-          <Toaster
-            position={settingsPreferences.toastPosition}
-            theme={theme === 'day' ? 'light' : 'dark'}
-          />
+          <Toaster />
         </div>
       </TooltipProvider>
   )

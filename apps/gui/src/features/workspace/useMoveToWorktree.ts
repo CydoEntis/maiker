@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { addWorktree, folderBranches } from '@/api/daemon'
-import { errorMessage } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import { typeMessage } from '@/features/chat/useChatComposer'
 import { EXIT_POLL_MS, EXIT_WAIT_MS, moveRefusal, resumeLine, worktreeBranch } from './model/moveToWorktree'
@@ -45,7 +44,7 @@ export function useMoveToWorktree({ sessionMap, sendTo }: {
       await sendTo(session, `${line}\r`)
       toast.success('Moved to a new worktree. Edits not yet committed stayed in the old folder.')
     } catch (error: unknown) {
-      toast.error(errorMessage(error, 'Could not move the chat to a worktree'))
+      toast.failed('Could not move the chat to a worktree', error)
     }
   }, [sendTo])
 }

@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { LoaderCircle } from 'lucide-react'
 import { toast } from '@/lib/toast'
+import { APP_NAME } from '@/brand'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadDaemonRestartStatus, restartMismatchedDaemon } from '@/api/daemon'
@@ -71,13 +72,7 @@ export function ServiceRestartDialog({ daemonRestartDialogOpen, daemonRestartPen
                   await sessionsQuery.refetch()
                 })
                 .catch((error: unknown) => {
-                  toast.error(
-                    error instanceof Error
-                      ? error.message
-                      : typeof error === 'string'
-                        ? error
-                        : 'Could not restart the Maitty service',
-                  )
+                  toast.failed(`Could not restart the ${APP_NAME} service`, error)
                   void daemonRestartStatusQuery.refetch()
                 })
                 .finally(() => {

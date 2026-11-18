@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { updateMachine } from '@/api/machines'
 import { runMachineUpdate } from './machineUpdate'
 
-const toasts = vi.hoisted(() => ({ loading: vi.fn(() => 'toast-1'), success: vi.fn(), error: vi.fn() }))
+const toasts = vi.hoisted(() => ({ failed: vi.fn(), progress: vi.fn(() => 'toast-1'), success: vi.fn(), error: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 vi.mock('@/api/machines', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/machines')>(), updateMachine: vi.fn() }))
 
@@ -14,7 +14,7 @@ describe('installing or updating a machine', () => {
     const onDone = vi.fn()
     await runMachineUpdate('box', 'install', false, onDone)
     expect(updateMachine).toHaveBeenCalledWith('box', true, false)
-    expect(toasts.loading).toHaveBeenCalledWith('Installing Maitty on box…')
+    expect(toasts.progress).toHaveBeenCalledWith('Installing Maitty on box…')
     expect(toasts.success).toHaveBeenCalledWith('box: maitty 0.67.0 installed to ~/.local/bin/maitty', { id: 'toast-1' })
     expect(onDone).toHaveBeenCalledTimes(1)
   })

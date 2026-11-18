@@ -17,7 +17,6 @@ import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { SubagentRows } from './SubagentRows'
 import { RowHoverHost } from './RowHoverHost'
 import { useHoverController } from './useHoverController'
-import { DAEMON_NAME } from '@/brand'
 
 
 export type SidebarProps = {
@@ -90,8 +89,6 @@ export type SidebarProps = {
   railUpdateSlot: ReactNode
   /** How far an install or update of each remote machine has got, by machine name, 0 to 100; absent when none runs. */
   updateProgress?: Readonly<Record<string, number>> | undefined
-  /** What the footer says while the service is not connected; a red dot and this, in muted grey, never a banner. */
-  serviceText?: string | undefined
   /** A chat that is being written but has no first message yet: listed on its machine so it is not lost. */
   draft?: DraftChat | null | undefined
 }
@@ -353,9 +350,8 @@ function Expanded(props: SidebarProps) {
         </TerminalsSection>
       )}
       <div className="mx-sidebar-foot">
-        {props.online
-          ? <span className="mx-foot-slot">{props.updateSlot}</span>
-          : <><span className="mx-daemon-dot is-offline" aria-hidden="true" /><span className="mx-daemon-text is-offline" role="status">{props.serviceText ?? `Reconnecting to ${DAEMON_NAME}…`}</span></>}
+        {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
+        <span className="mx-foot-slot">{props.updateSlot}</span>
         <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={15} /></button>
       </div>
       <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />

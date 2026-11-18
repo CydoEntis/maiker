@@ -479,7 +479,6 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
 
 const CHAT_VIEW_OPTIONS = [['terminal', 'Terminal'], ['chat', 'Chat']] as const
 const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as const
-const TOAST_POSITIONS = [['top-left', 'Top left'], ['top-center', 'Top center'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-center', 'Bottom center'], ['bottom-right', 'Bottom right']] as const
 const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creation', 'Creation'], ['priority', 'Priority']]
 const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
 const DOCK_OPTIONS = [['bottom', 'Bottom'], ['right', 'Right'], ['full', 'Full']] as const
@@ -649,7 +648,7 @@ function ChatSection({ preferences, update }: { preferences: SettingsPreferences
           <Row key={key} label={label} detail={detail}>
             <Switch aria-label={`Yolo mode for ${label}`} checked={preferences[key]} onCheckedChange={(value) => {
               update(key, value)
-              if (value) toast.message(`Yolo mode for ${label} is on for new sessions only`, { description: `Sessions already running keep how they started. Restart one, or start a new session, to get it.` })
+              if (value) toast.info(`Yolo mode for ${label} is on for new sessions only`, { description: `Sessions already running keep how they started. Restart one, or start a new session, to get it.` })
             }} />
           </Row>
         ))}
@@ -698,7 +697,7 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
   const signOut = (agent: AccountAgent, label: string) => {
     signOutAgent(agent).then(
       () => { toast.success(`${label} signed out`, { description: 'Sessions already running keep their sign-in until they are restarted.' }); again() },
-      (error: unknown) => { toast.error(errorMessage(error, `Could not sign ${label} out`)) },
+      (error: unknown) => { toast.failed(`Could not sign ${label} out`, error) },
     )
   }
   return (
@@ -861,14 +860,11 @@ function NotificationsSection({ preferences, update, onTestNotice }: { preferenc
       <Row label="Error" detail="A session's program exited with an error.">
         <Switch aria-label="Notify when a session errors" checked={preferences.notifyError} onCheckedChange={(value) => { update('notifyError', value) }} />
       </Row>
-      <Row label="Position" detail="Where notification cards appear in the window. Done is green, needs you amber and an error red.">
-        <div className="mx-pos-grid" role="group" aria-label="Notification position">
-          {TOAST_POSITIONS.map(([id, label]) => (
-            <button key={id} type="button" className={`mx-pos-cell${preferences.toastPosition === id ? ' is-on' : ''}`} aria-label={label} aria-pressed={preferences.toastPosition === id} title={label} onClick={() => { update('toastPosition', id) }} />
-          ))}
-        </div>
-        {onTestNotice && <button type="button" className="mx-text-button mx-pos-test" onClick={onTestNotice}>Show a test</button>}
-      </Row>
+      {onTestNotice && (
+        <Row label="Try it" detail="Shows a toast like the ones above, at the bottom right. Done is green, needs you amber and an error red.">
+          <button type="button" className="mx-text-button mx-pos-test" onClick={onTestNotice}>Show a test</button>
+        </Row>
+      )}
     </Card>
   )
 }

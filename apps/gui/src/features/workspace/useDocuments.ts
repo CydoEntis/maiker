@@ -1,6 +1,5 @@
 import { type Dispatch, type SetStateAction, useCallback } from 'react'
 import { toast } from '@/lib/toast'
-import { errorMessage } from '@/lib/error-message'
 import { useLatest } from '@/lib/useLatest'
 import { guardDrafts, inPane } from '@/features/documents/draftGuard'
 import { repoTree } from '@/features/inspect/api'
@@ -35,7 +34,7 @@ export function useDocuments({ layout, setLayout, focusedSession, repoPaneOf, sh
     const open = () => {
       const next = openDocumentBeside(layoutNow(), sessionId, path, makeId)
       if (next === null) {
-        toast.message(`A window holds ${String(MAX_PANES)} panes at most. Close one to open this beside the chat.`)
+        toast.info(`A window holds ${String(MAX_PANES)} panes at most. Close one to open this beside the chat.`)
         return
       }
       movePanes(() => { setLayout(next) })
@@ -50,20 +49,20 @@ export function useDocuments({ layout, setLayout, focusedSession, repoPaneOf, sh
     const session = focusedSession
     const term = session === undefined ? null : repoPaneOf(session)
     if (session === undefined || term === null) {
-      toast.message('Open a session first.')
+      toast.info('Open a session first.')
       return
     }
     void repoTree(term, null, session.machine)
       .then((entries) => {
         const name = readmeOf(entries.filter((entry) => !entry.is_directory).map((entry) => entry.name))
-        if (name === null) { toast.message('This project has no README.md.'); return }
+        if (name === null) { toast.info('This project has no README.md.'); return }
         if (place === 'beside') { openDocument(session.id, name); return }
         showSessionById(session.id)
         setLookAt({ path: name, key: Date.now() })
         setInspectView('files')
         setInspectOpen(true)
       })
-      .catch((error: unknown) => { toast.error(errorMessage(error, 'Could not look for the README')) })
+      .catch((error: unknown) => { toast.failed('Could not look for the README', error) })
   }, [focusedSession, repoPaneOf, openDocument, showSessionById, setLookAt, setInspectView, setInspectOpen])
 
   return { openDocument, openReadme }
