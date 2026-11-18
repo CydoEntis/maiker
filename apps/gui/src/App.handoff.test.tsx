@@ -137,7 +137,7 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
 
     const page = await screen.findByRole('region', { name: 'New session' })
-    expect(within(page).getByRole('heading', { name: 'What should we work on?' })).toBeInTheDocument()
+    expect(within(page).getByRole('heading', { name: 'What should we build?' })).toBeInTheDocument()
     await waitFor(() => { expect(within(page).getByRole('textbox', { name: 'What should we work on?' })).toHaveFocus() })
     expect(within(page).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
