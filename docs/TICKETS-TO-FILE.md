@@ -930,7 +930,7 @@ out (the output reaching xterm). Read so far without finding it: the host loop i
 `TerminalView.tsx`.
 
 **What**
-1. Reproduce outside the owner's window: a dev build on a nested socket (`MAIKER_SOCKET=<name>`).
+1. Reproduce outside the owner's window: a dev build on a nested socket (`AGENT_SOCKET=<name>`).
 2. Time one key at each hop: xterm `onData`, the `terminal_input` command, the daemon's `Output`,
    `Streams::flush`, the channel message in the window, `emulator.write`. The hop where the time
    goes is the bug.
@@ -972,7 +972,7 @@ through `onData` as input to whatever is in the pane now. In a menu those are ke
 ## 36. Agent hooks point into the AppImage's temporary mount (bug, `agents`, `client`)
 
 The desktop app's daemon installs the Claude Code hooks and status line with its own path, which
-for an AppImage is `/tmp/.mount_Maitty<random>/usr/bin/maiker-gui-daemon`. The folder changes on
+for an AppImage is `/tmp/.mount_Maitty<random>/usr/bin/maikerd`. The folder changes on
 every launch and is gone when the app exits. `~/.claude/settings.json` is global, so every Claude
 session on the machine runs those hooks, in the terminal app too.
 
@@ -981,7 +981,7 @@ session on the machine runs those hooks, in the terminal app too.
   endpoint is not connected`, the same on `UserPromptSubmit`, `Stop` and `SessionEnd`.
 - Old entries are never replaced: `runs_our_hook` (`crates/adapters/maitty-provider-claude/src/hooks.rs`)
   takes the program's file stem and looks for `maiker`, and the bundled daemon's is
-  `maiker-gui-daemon`. The groups in the file carry no `_maitty` tag either.
+  `maikerd`. The groups in the file carry no `_maitty` tag either.
 - Once the window closes, no hook path is left that works, and no session can report its state.
 
 **What (owner to confirm the first point)**
@@ -999,7 +999,7 @@ session on the machine runs those hooks, in the terminal app too.
 ## 37. Restart and restore cannot stop a daemon the desktop app started (bug, `client`)
 
 On Linux `is_app_daemon` (`crates/maitty-desktop-client/src/lib.rs`) accepted only a program whose
-name ends in `maiker`; the bundled daemon is `maiker-gui-daemon`, so the button answered "couldn't
+name ends in `maiker`; the bundled daemon is `maikerd`, so the button answered "couldn't
 identify the local Maiker (maiker) daemon process". Windows and macOS skip the check.
 
 **State.** Fixed in one commit on the branch `fix/desktop-upgrade-path` (not on `dev`):
@@ -1496,10 +1496,10 @@ bundled daemon, is only found by hand: the package checks of 2026-10-29 recorded
 
 **What**
 - `scripts/smoke-desktop-linux.sh <deb>` unpacks the `.deb` with `dpkg-deb -x` (nothing is
-  installed), starts the app under `xvfb-run` and `dbus-run-session` with `MAIKER_DATA_DIR`,
-  `MAIKER_CONFIG`, `MAIKER_SOCKET` and `XDG_RUNTIME_DIR` set to fresh temporary values, and waits
+  installed), starts the app under `xvfb-run` and `dbus-run-session` with `AGENT_DATA_DIR`,
+  `AGENT_CONFIG`, `AGENT_SOCKET` and `XDG_RUNTIME_DIR` set to fresh temporary values, and waits
   15 s. It passes when the app is still running and `<data folder>/<socket id>.pid` names a live
-  process started as `maiker-gui-daemon… daemon`. Pass or fail, it stops both and removes the
+  process started as `maikerd… daemon`. Pass or fail, it stops both and removes the
   temporary folders; on a failure it prints `daemon.log`.
 - The `desktop package (Linux)` job runs it after the build, in a step with `timeout-minutes: 3`.
 

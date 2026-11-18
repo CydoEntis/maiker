@@ -20,7 +20,7 @@ import { nameFromMessage } from './model/newSession'
 import { usePaneViews } from './usePaneViews'
 import type { ChatAgent, PaneView, StructuredAgent } from './model/chatView'
 import { rememberShellStart } from './model/shellStarts'
-import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
+import type { NewChatRequest, NewChatStartOptions } from './components/NewSessionDialog'
 import type { WireChoice } from '@/features/chat/agentChoice'
 import { rememberBypassSession } from '@/features/chat/bypassSessions'
 import { bypasses } from '@/features/settings/preferences'
@@ -132,8 +132,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }).then(() => { flash(`${agent} chat started`) }), [openStartedChat, flash])
 
 
-  // What the new chat page asks for: a structured chat in the folder, with the model and effort picked, and its first message.
-  // Choosing another session (the sidebar, a shortcut) leaves the new chat page for it.
+  // What the New session dialog asks for: a structured chat in the folder, with the model and effort picked, and its first message.
+  // Choosing another session (the sidebar, a shortcut) leaves the New session dialog for it.
   const focusedSessionKey = focusedSession?.id
   const [seenFocusKey, setSeenFocusKey] = useState(focusedSessionKey)
   if (seenFocusKey !== focusedSessionKey) {
@@ -141,7 +141,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     setNewChatOpen(false)
   }
 
-  // The starts in flight. Starts from the new chat page (`alongside`, `background`) may run together; any other start runs
+  // The starts in flight. Starts from the New session dialog (`alongside`, `background`) may run together; any other start runs
   // alone, as it always has: refused while something is starting, and nothing else starts until it ends. Only a start
   // that opens a pane (`opening`) keeps the sessions it did not know about off the sidebar until its pane is there.
   const inFlight = useRef({ count: 0, alone: false, opening: 0 })
@@ -179,7 +179,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       })
       .catch((error: unknown) => {
         if (background) throw error
-        toast.failure(error, 'Could not start a shell')
+        toast.failed('Could not start a shell', error)
         return false
       })
       .finally(() => { endStart(mode) })
@@ -231,7 +231,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
       if (placed.background) setStartedFrom((current) => (current === null ? null : new Set([...current, id])))
       else movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
-      // The view asked for wins over the agent's default (the new chat page's Open as).
+      // The view asked for wins over the agent's default (the New session dialog's Open as).
       paneViews.choose(id, view)
       // In the same update as the new session opens, so the window never shows the page between the two.
       placed.afterPlace?.(id)
@@ -253,7 +253,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   const startChatHere = useCallback((from: SessionView, agent: ChatAgent, fullAccess: boolean) => {
     const refusal = remoteStartRefusal(from.machine !== LOCAL_MACHINE, from.machineName, 'A chat session')
     if (refusal) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     if (!online || starting) return
@@ -264,7 +264,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!beginStart('alone')) return
     startChat(from.cwd, agent, fullAccess)
-      .catch((error: unknown) => { toast.failure(error, `Could not start a ${agent} chat`) })
+      .catch((error: unknown) => { toast.failed(`Could not start a ${agent} chat`, error) })
       .finally(() => { endStart('alone') })
   }, [online, starting, beginStart, endStart, startChat, startAgentSession])
 
@@ -272,14 +272,14 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   const handoffSession = useCallback(async (from: SessionView, to: ChatAgent) => {
     const refusal = remoteStartRefusal(from.machine !== LOCAL_MACHINE, from.machineName, 'A handoff')
     if (refusal) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     if (!online || starting) return
     try {
       await startAgentSession(() => Promise.resolve(from.cwd), to, preferences.chatViewDefault[to], await handoffBrief(from))
     } catch (error: unknown) {
-      toast.failure(error, `Could not hand off to ${to}`)
+      toast.failed(`Could not hand off to ${to}`, error)
     }
   }, [online, starting, startAgentSession, preferences.chatViewDefault])
 
@@ -351,7 +351,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     } })
   }, [online, setNewChatOpen, startAgentSession, startRemoteChat, bypassOff])
 
-  // New session (the shortcut, the palette, the sidebar's chat button): the new chat page, on the machine asked for or the
+  // New session (the shortcut, the palette, the sidebar's chat button): the New session dialog, on the machine asked for or the
   // focused session's.
   const newSession = useCallback((machine?: number) => {
     setSettingsSection(null)
@@ -360,7 +360,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     setNewChatOpen(true)
   }, [focusedSession, setNewChatOpen, setNewChatMachine, setNewChatSeed, setSettingsSection])
 
-  // "New chat with summary" on a chat whose context is nearly full: the new chat page, on the same machine and folder, with
+  // "New chat with summary" on a chat whose context is nearly full: the New session dialog, on the same machine and folder, with
   // the summary as its first message to read and edit before it is sent.
   const newChatWithSummary = useCallback((from: SessionView, summary: string) => {
     setSettingsSection(null)
@@ -391,7 +391,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     if (machine !== LOCAL_MACHINE) {
       void startOnMachine({ machine, name }, REMOTE_HOME, () => startGitHubSignIn(machine)).then(
         (id) => { if (id !== null) started(id) },
-        (error: unknown) => { toast.failure(error, `Could not start the sign-in on ${name}`) },
+        (error: unknown) => { toast.failed(`Could not start the sign-in on ${name}`, error) },
       )
       return
     }

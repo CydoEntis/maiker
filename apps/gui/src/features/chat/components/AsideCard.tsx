@@ -15,7 +15,7 @@ export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Asid
   const { state, question } = aside
   const copy = (text: string) => {
     copyText(text).then(
-      () => { toast.message('Copied') },
+      () => { toast.info('Copied') },
       () => { toast.error('Could not copy the answer') },
     )
   }

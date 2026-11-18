@@ -172,6 +172,21 @@ Daemon › Service log). The webview supplies nothing: the log, the folder and t
 host's, and an existing file is never replaced (`export::save_in`). The log names folders,
 repositories and sessions, so the setting says to look before sharing it.
 
+The repository index (`daemon::repo_index`, `Query::Repositories`) takes no input beyond a flag: its search starts at the
+home folder, never follows a link, never enters a hidden folder or another computer's mount, is bounded in depth, folders
+and time, and only reads `.git` files. It tells a window folder names and branches, which the window already reads through
+`ListFolders`; another machine's names are cleaned again in `remote_policy` and a path with control characters is dropped.
+
+Making a folder (`Query::CreateFolder { parent, name, tag }`, `daemon/folders.rs::create`) is the one place a window
+makes a directory. The daemon is the judge: the name is checked again with `maitty_shared::folder_name::problem` and must
+parse as one plain path component (so `..`, a separator or a drive prefix make nothing); `parent` follows the rules of
+`ListFolders` (absolute or `~`, at most 4,096 bytes) and must already be a folder, and nothing above it is made
+(`create_dir`, never `create_dir_all`). A link with the new name is never followed or replaced: `create_dir` fails on
+anything already called that, and the answer is `Exists`. The answers are typed (`Created`, `Exists`, `NotAllowed`,
+`Failed`), a disk refusal is reported in words and never swallowed, human clients only, and another machine's answer
+is cleaned to one line again in `remote_policy`. The host sends it once and never retries on a kept line, because a
+second ask would read as `Exists`.
+
 `agent_commands` (`maitty-agent-ask`, started by the host for this computer and by a daemon for its own machine on `Query::AgentCommands`; another machine's answer is cleaned again in `remote_policy`) asks the same way for the slash commands Claude Code takes, for
 the chat's command picker. It differs in one input: the webview names the folder the program is
 started in, so the project's own commands and skills are listed. The host starts it only in a full
@@ -217,7 +232,7 @@ The agent launchers (`crates/maitty-core/src/shim.rs`) sit first on `PATH` in ev
 files in maiker's own data folder, written by the daemon as the user; a process that can write
 there can already run as the user through the shell startup files maiker writes beside them.
 A launcher asks for a worktree with `maiker agent-dir`, which sends the pane's own
-`MAIKER_TERM_ID` and `MAIKER_PANE_TOKEN` and nothing from its arguments; a wrong or missing token
+`AGENT_TERM_ID` and `AGENT_PANE_TOKEN` and nothing from its arguments; a wrong or missing token
 makes the caller "from a pane" but not that pane, and the daemon answers with nothing (worktrees,
 like status reports, are trusted only from the pane itself). A launcher passes the agent's
 arguments on as an argument vector, never through a shell, and the paths it embeds are
@@ -228,7 +243,7 @@ The daemon runs the user's own `$SHELL -ilc` once at start to learn the login PA
 startup files already are, and bounded further: the shell is started by path as an argument
 vector, never through a shell, and only when `$SHELL` is an absolute path to an existing file
 (else `/bin/sh`); it has no terminal (its own session) and null stdin, its error output is
-discarded, and the `MAIKER_*` variables (pane id and token, socket, routing) are removed from its
+discarded, and the `AGENT_*` variables (pane id and token, socket, routing) are removed from its
 environment; a timeout kills its whole process group; its output is read only between two
 marker words, capped in size, and used as PATH entries, never executed or logged. It runs in
 the daemon, on the machine the daemon serves, never on a client.
@@ -236,7 +251,7 @@ the daemon, on the machine the daemon serves, never on a client.
 A project's check is a command the daemon runs as the user when an agent's turn ends. It
 comes from the user's own `config.toml` (`[[check]]`) or, for a project with none there, from
 the repo's `.maiker/checks.toml` under the approval rules below. It runs through the user's shell in the
-session's worktree with no stdin and without `MAIKER_PANE_TOKEN`, so it cannot report status
+session's worktree with no stdin and without `AGENT_PANE_TOKEN`, so it cannot report status
 as the pane. On timeout its whole process tree is killed (process group on unix, job object
 on Windows). If the daemon dies, a check dies with it on Windows (the job closes) and on
 Linux (a parent-death signal kills the shell; a descendant the shell already started is
@@ -258,7 +273,7 @@ anything. A group whose leader's start time differs from the recorded one is lef
 that has been given to another process is never signalled; ids 0 and 1 and negatives never are.
 
 An agent can start helpers only if you say so. Who is asking is proven the way status reports are
-(the pane's `MAIKER_PANE_TOKEN` on the connection); the answer is `AnswerHelpers`, which the daemon
+(the pane's `AGENT_PANE_TOKEN` on the connection); the answer is `AnswerHelpers`, which the daemon
 refuses from any pane and accepts only for a request it holds. The desktop app sends it through its own command (`answer_helpers`), which takes one of three words (`allow`, `always`, `no`) and refuses anything else. "Always in this project" is kept in
 `helper-projects.json` in Maiker's data folder, never in the repo, so an agent that can write the
 repo cannot grant itself helpers. A helper's own permission prompts still come to you.
@@ -316,7 +331,7 @@ editing `.maiker/checks.toml`, cannot make Maiker run anything. The rules:
 
 Residual risk: a process running as the same OS user can edit `check-approvals.json`, which
 counts after the next daemon restart, and a process that hides its pane identity (no
-`MAIKER_TERM_ID`) is treated as you, as for grants. Both need code already running as you.
+`AGENT_TERM_ID`) is treated as you, as for grants. Both need code already running as you.
 
 Overriding a failed check is a recorded, visible action: the time and the reason stay on the
 result and its `Overridden` state shows wherever the check does. It needs the write grant on
@@ -367,8 +382,8 @@ the config load. The remote command is one string for the remote user's login sh
 word is POSIX single-quoted whatever the client runs (a Windows client to a Linux remote
 included); `remote_cmd` is one program path, a control character or newline in it is refused,
 and only a leading `~/` stays unquoted. A remote machine is untrusted, so the pane id and token
-a command carries (`Hello.from`) are sent only to this computer's daemon, and `MAIKER_REMOTE`,
-`MAIKER_SSH` and `MAIKER_REMOTE_CMD` are removed from every pane's environment. The table is
+a command carries (`Hello.from`) are sent only to this computer's daemon, and `AGENT_REMOTE`,
+`AGENT_SSH` and `AGENT_REMOTE_CMD` are removed from every pane's environment. The table is
 read only from `config.local.toml` and refused in the synced
 `config.toml`, so a shared config cannot point this computer at a host.
 
@@ -618,56 +633,6 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   is passed on only when its name is `owner/name` in GitHub's own characters, and the address to clone
   is built from that name (`clone_address`), so text from `gh` or from another machine never becomes an
   address by itself. Only a person's client may ask.
-- **Reading tickets** (`Query::Tickets`, `daemon/tickets_github.rs`, `maitty_shared::tickets`) reads a
-  repository's milestones, issues and issue comments through the machine's own `gh`, and writes
-  nothing: there is no request that comments, labels, closes or edits. The repository must be
-  `owner/name` (`is_repo`); an assignee must be a login; a label and a search are checked, and each is
-  joined to its flag (`--label=…`) so it can never be read as a flag of its own; a milestone or an
-  issue must belong to that repository. Everything is an argument list, never a shell line, and `gh`'s
-  prompts are off. No token is asked for, kept, logged or sent. **What comes back is other people's
-  writing and is not trusted**: control and hidden characters are dropped (`hidden::sanitize`), every
-  string is cut, lists and comments are capped, a number that is not a whole number is refused, an
-  address is built from the checked repository and number (a pull request link must be exactly a
-  GitHub pull request's address), and `gh`'s output is read only up to 4 MiB. No ticket text is
-  logged, and a failure is one of a few fixed lines, never `gh`'s own words (which may echo a token).
-  A ticket's text that looks like an instruction is still only text; it reaches an agent only framed
-  as the ticket's words (MAITTY-394). The same cleaning is applied again to an answer from another
-  machine (`remote_policy::vet`), and only a person's client may ask.
-- **A ticket provider's key** (Plane, Linear; `Query::TicketKeys`, `daemon/ticket_keys.rs`) is held by the
-  daemon of the computer that reads the tickets, in the system's keychain (`daemon/keychain.rs`:
-  Windows Credential Manager, the macOS login Keychain, the Secret Service on Linux), so it is not a
-  file an agent running as the same user can read by opening it. A machine with no keychain (no Secret
-  Service, a server reached over ssh) keeps it in one small file per provider in Maiker's data folder
-  (`ticket-keys/plane.json`, `ticket-keys/linear.json`: the folder `0700`, the file `0600` on unix; on
-  Windows the user's own app data, which only they and administrators can read), and the client says
-  so ("Key kept in a file: no keychain on this machine"). A key moves from the file to the keychain only
-  once the keychain gives it back unchanged (DATABASE). A keychain error is never logged as it came,
-  since one kind of it holds the stored bytes; only "unavailable" or "failed" is kept. The keychain
-  crates (`keyring-core` and one native store per platform; the Secret Service one over pure-Rust D-Bus
-  with Rust crypto) run no build script and log no secret. The key is never
-  in `config.toml` (which is synced), a repository, a log line, a snapshot, an agent's environment or
-  a reply to a client. A person's client sets or removes a key; a pane and a structured runtime are
-  refused before the request is read ([ADR 0006](adr/0006-secrets-never-enter-chat.md): a secret is
-  never typed into a conversation). The only thing a client can read back is whether a key is set, where
-  it is kept (`stored_in`: keychain or file), and Plane's server address and workspace, which are not
-  secret. In the daemon the key is a `Secret`: it
-  prints as `Secret(..)`, and on the wire it is a `SecretText`, which prints as `<hidden>`. A key is
-  checked on the way in (printable ASCII, 8 to 200 characters); Plane's address must pass the same
-  `check_base_url` that every request does, so a key cannot be saved for an address it could not be
-  sent to; Linear's server is fixed and a key for it takes no address.
-- **A repository's ticket file** (`.maitty/tickets.toml`, `daemon/ticket_repo_file.rs`) is the repository's
-  text, so it is untrusted. It is read only when it and its `.maitty` folder are plain (a link is refused), at
-  most 16 KB, as TOML with no unknown keys; every part is checked (GitHub `owner/name`, Plane's address through
-  `check_base_url` and its workspace and project as plain ids, a Linear team id). It only fills a source not
-  linked here, and it never decides where a key goes: a Plane entry is used only when its address and workspace
-  are the ones your saved key is for, and otherwise it is shown as a note and not used. It is never written.
-- **An agent's ticket setup** (`Command::OpenTicketSetup`, `daemon/ticket_setup.rs`, `<app>_tickets_setup`) only
-  opens the setup in the person's windows. The agent never sends or receives a key (the MCP tool refuses
-  anything but an http(s) link, and the reply says only what is linked and whether a key is saved), it cannot
-  save a link, and only the pane itself may ask, for its own project, once per project every 5 seconds. The
-  suggested link is drawn as text and never opened or saved on its own. An ask from another machine is ignored.
-- **Tickets are never written** (ADR 0011). No request changes a ticket; a retired `Query::TicketWrite` from an
-  older window is answered with a refusal before any key is read or any command runs.
 - **Extensions** (`Query::Extensions`, `daemon/extensions/`, `maitty_shared::extensions`) install code that runs with
   the person's access: a plugin ships hooks and servers, an MCP server is a command (or a remote address that hears
   the person's prompts), and neither agent asks first (`plugin install --json` simply does it). So the daemon asks.
@@ -689,39 +654,13 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   the page says to use the agent's own terminal. What an agent says is shown as one cleaned line with words that
   look like a key (`key=…`, a bearer, a 32-character token) hidden; a typed error is the contract, not stderr.
   *Not run on Windows or against a live plugin from the internet.*
-- **Reading Plane and Linear** (`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`, over
-  `daemon/ticket_http.rs`) sends a stored key to a server, so what goes where is fixed. *Sent:* the key
-  in one header (`X-API-Key` for Plane, `Authorization` for Linear), the request path, and for Linear a
-  GraphQL query; a person's search words, label and name go to Linear as query *variables*, never into
-  the query text, and to Plane not at all (it is filtered here). *Sent to:* Plane's address from the key
-  file, which must pass `check_base_url` on every call (https anywhere; http only to loopback, a private
-  or link-local address, a name with no dots or ending `.local`/`.lan`), with its workspace and every id
-  restricted to letters, digits and dashes before it enters a path; Linear's one server,
-  `https://api.linear.app/graphql`, a constant that the key file cannot change. Every request in these
-  two files is a read: Plane's calls are all `GET`, Linear's are all `query`. *How:*
-  the system `curl` (no new dependency), with the key on its standard input as a config, never on the
-  command line where `ps` shows it; `--disable` so a user's `.curlrc` cannot change it; no redirect is
-  followed, so a key is never forwarded; Plane may be spoken to over http or https, Linear over https
-  only; 20 seconds and 4 MiB at most (the reader stops at the cap even when the server does not say how
-  long its answer is). *Refused:* a control character in a request, a header name that is not plain, an
-  address that fails `check_base_url`. *What comes back is other people's writing and is not trusted:*
-  cleaned and capped as GitHub's is, an id that is not plain characters is dropped, a ticket's address
-  is built here (Plane) or kept only when it is `https://linear.app/…` (Linear), a pull request link
-  must be exactly a GitHub pull request's address, HTML in a Plane description is reduced to text.
-  *Never in any message, log or `Debug`:* the key, a ticket's text, and the server's own words: a
-  failure is one of a few fixed lines (key refused, not found, rate limited, "the server had an error",
-  "could not be reached", "larger than can be read"), and a refused key is `SignedOut`. Linear's cost is
-  capped (at most 50 nodes a connection, 8 pages a list, small fixed nested lists) so a query cannot be
-  refused as too complex or used up a rate limit. A ticket's text that looks like an instruction is
-  still only text. Not yet checked against a live Plane or Linear server; the shapes follow their public
-  APIs.
 
 No user accounts. Access to the daemon is access to its local socket: a named
 pipe on Windows, a Unix socket in the temp directory elsewhere, named per user
 (`maitty-<user>-<label>.sock`). Socket access must stay limited to the user who
 started the daemon. Status reports (`maiker hook`) are accepted only from a
 process inside the pane (traced through its process tree) or carrying that
-pane's `MAIKER_PANE_TOKEN`, a random secret set only in that pane's environment.
+pane's `AGENT_PANE_TOKEN`, a random secret set only in that pane's environment.
 Listing specialist agents (`Query::Specialists`, ADR 0010) reads only the fixed agent folders of the
 pane's repository and the user's home, never a path a client names; it is for human clients with read
 access to the pane, writes nothing, and bounds the count and size of what it returns. Names,
@@ -734,7 +673,7 @@ control characters and hidden characters (`hidden::sanitize`), and a failure to 
 one cleaned line with its fix (`link_failure::classify`). `read` prints another machine's screen
 without escape sequences or other control characters (newlines stay); `read --raw` prints it exactly
 as sent, which is the person's choice to make and can move the cursor or retitle the terminal. The
-pane a command runs in belongs to this computer's daemon, so `$MAIKER_TERM_ID` is never the default
+pane a command runs in belongs to this computer's daemon, so `$AGENT_TERM_ID` is never the default
 pane on another machine and the Hello to it carries no pane id or token. `kill-server --on` stops all
 of that machine's sessions and needs `--yes`.
 
@@ -792,7 +731,7 @@ edits the config of every agent installed on the machine: Claude Code's `setting
 `settings.json`, Kimi's `config.toml`, Mastra Code's `hooks.json`, and adapter files for OpenCode,
 Pi, OMP and Kilo. Only Maiker's own entries change; a changed config file is first copied to
 `<file>.maitty-bak` (once). Agents that aren't installed get no folder or file. A failure
-warns and leaves the install in place. `MAIKER_NO_INTEGRATE=1` skips the step.
+warns and leaves the install in place. `AGENT_NO_INTEGRATE=1` skips the step.
 
 `cargo audit` (install with `cargo install cargo-audit`) before releases; GitHub
 push protection for secrets. Not yet in CI (there is no CI yet).
@@ -808,6 +747,17 @@ A hook report never carries what a tool was asked to do. A tool-start report car
 fingerprint (the first 8 bytes of SHA-256 over the tool's name and input, as 16 hex characters),
 which cannot be turned back into the input and is never logged. The name and input stay in the
 agent.
+
+## Project-specific: leftover ticket files
+
+The removed Tickets feature (ADR 0013) kept Plane and Linear keys as plain files in
+`<data dir>/ticket-keys/` on machines with no system keychain. The daemon removes that folder and
+`<data dir>/ticket-links.json` on start (`daemon/leftover_tickets.rs`, off the startup path), and only
+those two names, directly inside the data folder it already resolves (`config::data_dir()`, which
+honours the data-folder override); no path comes from input. It looks with `symlink_metadata` and
+never follows a link: a link, or something of the wrong kind, is left in place and logged. A failure is
+logged once with the path and the error, never a file's contents, and never stops the daemon. The
+system keychain is never touched.
 
 ## Project-specific: closed sessions
 
@@ -893,7 +843,7 @@ The agent runs with the user's permissions, so the window's start path is narrow
 
 ## Project-specific: cloning a repository from the desktop
 
-The new chat page's Clone from GitHub runs `git clone` in the desktop host (`git_clone`, `src-tauri/src/clone.rs`),
+The New session dialog's Clone from GitHub runs `git clone` in the desktop host (`git_clone`, `src-tauri/src/clone.rs`),
 off the UI thread, with the user's permissions. What was pasted never reaches git as typed:
 
 - It is read as a GitHub owner and repository name (owner/repo, a github.com page or HTTPS address, or
@@ -1080,3 +1030,26 @@ is what the panes show, so the rules are those of a credential:
   channel takes over.
 - **One window.** A new connection replaces the old one.
 - **CSP.** `connect-src` allows `ws://127.0.0.1:*` and no other socket.
+
+## Project-specific: editing a project file (markdown viewer)
+
+- **The text is untrusted.** A markdown file is drawn only by the chat's reader (`features/chat/markdown.ts`), which builds
+  elements and never HTML: raw HTML is shown as text, a link is kept only when it is an `http(s)` address, an image is not
+  loaded. A link to another `.md` file is handed to the reader as an address on `document.invalid` (a name that cannot be
+  reached) and caught by the viewer before the reader's own handler; the target is resolved against the document and refused
+  unless it stays inside the project and names a markdown file (`documents/documentPaths.ts`). Nothing is fetched for it.
+- **The write path.** Saving is `Command::SaveFile`, through the daemon of the session's own pane (rule 1): the window
+  never touches a disk. The daemon applies the read path's jail (relative, no `..`, no links at any step, not under
+  `.git`), writes only a file that already exists and is a plain file, refuses text over 256 KiB, writes a temporary file
+  beside it and renames it, keeps its permissions, and refuses with `ChangedOnDisk` when the bytes on disk are no longer the
+  version that was read. An agent's client cannot send it. For a session on another machine the same request goes to that
+  machine's own daemon over the request line (ADR 0014), for markdown files only (`remote_repo::may_save`, checked again
+  by that daemon): nothing crosses between disks, the window carries text and a version word. What that untrusted daemon
+  answers is vetted by kind (`vet_repo_reply`, `vet_save_reply`): a document keeps its tabs and line breaks and loses
+  every other control or invisible character (and then carries the empty, read-only version, so the cleaned text is never
+  saved back); a listing's names are one clean line each; a save's answer is a plausible version or `ChangedOnDisk`, no
+  echoed path or text. Paths with a backslash, drive letter, stream colon, leading slash or `..` are refused before a
+  line is opened. Other kinds of file stay local-only.
+- **No silent overwrite.** The window sends no version only after the person pressed Overwrite on a `ChangedOnDisk` answer.
+- Not covered: a change made in the instant between the daemon's last version check and the rename is not caught (no lock is
+  held on files an agent edits).

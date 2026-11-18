@@ -4,13 +4,13 @@ import { test } from "node:test";
 import { promisify } from "node:util";
 import { SourceTextModule, SyntheticModule, createContext } from "node:vm";
 
-async function adapter(name, inside = true, argv = ["node", "opencode", "run"], extraEnv = {}) {
+async function adapter(name, inside = true, argv = ["node", "opencode", "run"], extraEnv = {}, paneEnv = { TESTAPP_TERM_ID: "7" }) {
   const reports = [];
   let fail = false;
   const polls = new Set();
   const timers = new Map();
   const context = createContext({
-    process: { env: inside ? { TESTAPP_TERM_ID: "7", ...extraEnv } : {}, argv }, console,
+    process: { env: inside ? { ...paneEnv, ...extraEnv } : {}, argv }, console,
     setTimeout: name === "omp" ? (callback, delay) => { const timer = { unref() {} }; timers.set(timer, { callback, delay }); return timer; } : setTimeout,
     clearTimeout: name === "omp" ? (timer) => timers.delete(timer) : clearTimeout,
     setInterval: (callback) => { polls.add(callback); return callback; },
@@ -32,7 +32,7 @@ async function adapter(name, inside = true, argv = ["node", "opencode", "run"], 
   const util = new SyntheticModule(["promisify"], function () { this.setExport("promisify", promisify); }, { context });
   const source = (await readFile(new URL(`${name}.js`, import.meta.url), "utf8"))
     .replaceAll("__APP_EXE__", JSON.stringify("C:\\Program Files\\testapp\\testapp.exe"))
-    .replaceAll("__APP_ENV__", "TESTAPP").replaceAll("__APP_NAME__", "TestApp").replaceAll("__APP_COMMAND__", "testapp");
+    .replaceAll("__APP_ENV_PREVIOUS__", "OLDAPP").replaceAll("__APP_ENV__", "TESTAPP").replaceAll("__APP_NAME__", "TestApp").replaceAll("__APP_COMMAND__", "testapp");
   const module = new SourceTextModule(source, { context });
   await module.link((id) => {
     if (id === "node:child_process") return child;
@@ -45,6 +45,19 @@ async function adapter(name, inside = true, argv = ["node", "opencode", "run"], 
     fireTimers(ms) { for (const [timer, item] of timers) if (item.delay <= ms) { timers.delete(timer); item.callback(); } },
     setFail(value) { fail = value; } };
 }
+
+test("a pane started before the prefix changed still reports through its old variable", async () => {
+  const { api, reports } = await adapter("pi", true, undefined, {}, { OLDAPP_TERM_ID: "7" });
+  const handlers = new Map();
+  api.default({ on: (event, handler) => handlers.set(event, handler) });
+  await handlers.get("agent_start")({}, { cwd: "/project", hasUI: false });
+  assert.ok(reports.length > 0, "the adapter was inert for an old-prefix pane");
+  const outside = await adapter("pi", false);
+  const quiet = new Map();
+  outside.api.default({ on: (event, handler) => quiet.set(event, handler) });
+  await quiet.get("agent_start")?.({}, { cwd: "/project", hasUI: false });
+  assert.equal(outside.reports.length, 0, "outside a pane it stays inert");
+});
 
 test("Pi follows native lifecycle, nested dialogs, settlement and recovery without model assumptions", async () => {
   const { api, reports, setFail } = await adapter("pi");

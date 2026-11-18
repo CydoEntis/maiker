@@ -316,14 +316,73 @@ async fn the_changes_of_a_pane_on_a_machine_are_read_from_that_machines_daemon_a
     let paths: Vec<&str> = status["Status"]["files"].as_array().unwrap().iter().filter_map(|file| file["path"].as_str()).collect();
     assert_eq!(paths, ["new.txt"]);
 
-    for question in [RepoRequest::Tree { path: None }, RepoRequest::File { path: "new.txt".into() }, RepoRequest::Branches] {
-        let refused = wire.repo_daemon(Some(BOX.0), &question, not_here).err().expect("only the changes are asked of a machine");
+    for question in [RepoRequest::File { path: "new.txt".into() }, RepoRequest::FileStamped { path: "new.txt".into() }, RepoRequest::Branches] {
+        let refused = wire.repo_daemon(Some(BOX.0), &question, not_here).err().expect("only the changes, listings and markdown are asked of a machine");
         assert_eq!(refused, "Inspect is local-only in v1: the files are on box, not on this computer.", "{question:?}");
     }
     assert!(matches!(
         wire.repo_daemon(None, &RepoRequest::Branches, || Ok(std::path::PathBuf::from("maiker"))),
         Ok(maitty_desktop_client::Daemon::Local(_))
     ));
+}
+
+#[tokio::test]
+async fn a_markdown_document_on_a_machine_is_read_and_saved_by_that_machines_daemon_inside_its_checkout() {
+    use maitty_shared::repo::{RepoReply, RepoRequest};
+    let mut sandbox = Sandbox::new();
+    sandbox.start_daemon();
+    let repository = sandbox.dir.join("checkout");
+    std::fs::create_dir_all(repository.join("docs")).unwrap();
+    std::fs::write(repository.join("README.md"), "# Title\n- [ ] task\n").unwrap();
+    std::fs::write(repository.join("docs/guide.md"), "guide\n").unwrap();
+    std::fs::write(repository.join("main.rs"), "fn main() {}\n").unwrap();
+    std::fs::write(sandbox.dir.join("outside.md"), "outside\n").unwrap();
+    std::os::unix::fs::symlink(sandbox.dir.join("outside.md"), repository.join("link.md")).unwrap();
+
+    let mut watch = Watch::new(&[machine("box", &sandbox, "proxy")], &sandbox, quick(WAIT));
+    let wire = Wire::reaching(watch.hub.handle());
+    watch.until("connected and a snapshot", |w| w.is(BOX, "connected") && w.snapshots(BOX) > 0).await;
+    let start = ClientMsg::Command(Command::NewWorkspace { cwd: Some(repository.clone()), name: None, cmd: None });
+    watch.hub.handle().send(Outgoing { machine: BOX, msg: start }).expect("the line is up");
+    watch.until("a pane on the machine", |w| w.any_pane(BOX).is_some()).await;
+    let term = watch.any_pane(BOX).unwrap();
+    let not_here = || Err("this computer's daemon is not asked".to_string());
+
+    // A folder listing and a document come back from that machine, the document with its version.
+    let listing = wire.repo_daemon(Some(BOX.0), &RepoRequest::Tree { path: None }, not_here).expect("a listing may be asked");
+    let names = maitty_desktop_client::repo_query(term, RepoRequest::Tree { path: None }, listing).await.expect("the listing comes back");
+    assert!(names["Tree"].as_array().unwrap().iter().any(|entry| entry["name"] == "README.md"), "{names}");
+    let read = RepoRequest::FileStamped { path: "README.md".into() };
+    let daemon = wire.repo_daemon(Some(BOX.0), &read, not_here).expect("a markdown document may be asked");
+    let stamped = maitty_desktop_client::repo_query(term, read.clone(), daemon).await.expect("the document comes back");
+    assert_eq!(stamped["FileStamped"]["text"], "# Title\n- [ ] task\n");
+    let version = stamped["FileStamped"]["version"].as_str().unwrap().to_string();
+    assert!(!version.is_empty());
+
+    // Saving with that version writes through that machine's daemon; saving with it again finds the file changed.
+    let save = |text: &str, version: Option<String>| {
+        let daemon = wire.save_daemon(Some(BOX.0), "README.md", not_here).expect("a markdown document may be saved");
+        maitty_desktop_client::save_project_file(term, "README.md".into(), text.into(), version, daemon)
+    };
+    let saved = save("# Title\n- [x] task\n", Some(version.clone())).await.expect("the save is answered");
+    assert!(saved["Saved"]["version"].as_str().is_some_and(|new| new != version), "{saved}");
+    assert_eq!(std::fs::read_to_string(repository.join("README.md")).unwrap(), "# Title\n- [x] task\n");
+    let changed = save("lost\n", Some(version)).await.expect("the refusal is answered");
+    assert_eq!(changed, serde_json::json!("ChangedOnDisk"));
+    assert_eq!(std::fs::read_to_string(repository.join("README.md")).unwrap(), "# Title\n- [x] task\n", "a refused save writes nothing");
+
+    // Anything that is not a markdown document is refused here; a link out of the checkout is refused by that machine's daemon.
+    let refused = wire.save_daemon(Some(BOX.0), "main.rs", not_here).err().expect("only markdown is saved on a machine");
+    assert!(refused.contains("local-only"), "{refused}");
+    let escape = RepoRequest::FileStamped { path: "link.md".into() };
+    let daemon = wire.repo_daemon(Some(BOX.0), &escape, not_here).unwrap();
+    let outside = maitty_desktop_client::repo_query(term, escape, daemon).await;
+    assert!(outside.is_err(), "a link out of the checkout is not read: {outside:?}");
+    let daemon = wire.save_daemon(Some(BOX.0), "link.md", not_here).unwrap();
+    let outside = maitty_desktop_client::save_project_file(term, "link.md".into(), "x".into(), None, daemon).await;
+    assert!(outside.is_err(), "a link out of the checkout is not written: {outside:?}");
+    assert_eq!(std::fs::read_to_string(sandbox.dir.join("outside.md")).unwrap(), "outside\n");
+    let _ = RepoReply::Written;
 }
 
 #[tokio::test]

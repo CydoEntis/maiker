@@ -71,11 +71,7 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
     try {
       writeSidebarPreferences(sidebarPreferences)
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? `Could not save sidebar preferences: ${error.message}`
-          : 'Could not save sidebar preferences',
-      )
+      toast.failed('Could not save sidebar preferences', error)
     }
   }, [sidebarPreferences])
 
@@ -83,11 +79,7 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
     try {
       writeConversationDrafts(drafts)
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? `Could not save conversation drafts: ${error.message}`
-          : 'Could not save conversation drafts',
-      )
+      toast.failed('Could not save conversation drafts', error)
     }
   }, [drafts])
 
@@ -96,11 +88,7 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
     try {
       writeSelectedConversation(selectedConversationId)
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? `Could not save selected conversation: ${error.message}`
-          : 'Could not save selected conversation',
-      )
+      toast.failed('Could not save selected conversation', error)
     }
   }, [selectedConversationId])
 
@@ -108,11 +96,7 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
     try {
       writeOpenConversationTabs(openTabIds)
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? `Could not save open conversation tabs: ${error.message}`
-          : 'Could not save open conversation tabs',
-      )
+      toast.failed('Could not save open conversation tabs', error)
     }
   }, [openTabIds])
 
@@ -194,11 +178,7 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
     try {
       writeSettingsPreferences(settingsPreferences)
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? `Could not save notification preferences: ${error.message}`
-          : 'Could not save notification preferences',
-      )
+      toast.failed('Could not save notification preferences', error)
     }
   }, [settingsPreferences])
 
@@ -208,11 +188,7 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
     try {
       writeThemePreference(theme)
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? `Could not save theme preference: ${error.message}`
-          : 'Could not save theme preference',
-      )
+      toast.failed('Could not save theme preference', error)
     }
   }, [theme])
 

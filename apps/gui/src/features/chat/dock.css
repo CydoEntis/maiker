@@ -1,0 +1,131 @@
+/* The dock between the chat and the message box (docs/DESIGN.md, "The dock"): the helpers line and its list, the queue,
+   and the record block a finished helpers line becomes in the chat. Colours are tokens; corners follow the root's
+   `data-corners` (Square is zeroed by material.css, Folded cuts every `data-fold` and `data-float` box there), so the
+   only corner rule here is Rounded's. Focus is an accent underline, as everywhere. */
+
+@keyframes mxDockGrow { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
+@keyframes mxDockFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes mxDockBreath { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+:root[data-window="inactive"] .mx-dock-block.is-working { animation-play-state: paused; }
+
+.mx-dock-glyph { flex: none; display: block; }
+
+/* ---- the helpers line ---- */
+.mx-dock-helpers { position: relative; z-index: 3; width: 100%; margin-bottom: 8px; animation: mxRise .2s cubic-bezier(.2, .8, .2, 1); }
+.mx-dock-line { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; text-align: left; background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel); }
+.mx-dock-line:hover { border-color: var(--fg2); }
+.mx-dock-now { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
+.mx-dock-now-name { flex: none; font-size: 13px; font-weight: 500; color: var(--fg); }
+.mx-dock-now-act { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; color: var(--muted); animation: mxDockFade .3s ease-out; }
+.mx-dock-failed { flex: none; font-size: 12px; font-weight: 500; color: var(--danger); }
+.mx-dock-strip { flex: none; display: flex; gap: 2px; }
+.mx-dock-block { width: 5px; height: 10px; background: var(--dim); }
+.mx-dock-block.is-working { background: var(--working); animation: mxDockBreath 1.6s ease-in-out infinite; }
+.mx-dock-block.is-done { background: var(--ok); opacity: .55; }
+.mx-dock-block.is-failed { background: var(--danger); }
+.mx-dock-of { flex: none; font: 400 11px var(--mono); color: var(--dim); }
+.mx-dock-chevron { flex: none; display: flex; color: var(--dim); transition: transform var(--t-fast) var(--ease); }
+.mx-dock-chevron.is-open { transform: rotate(180deg); }
+/* The record's chevron points down when open and right when folded. */
+.mx-dock-chevron.is-down { transform: rotate(90deg); }
+.mx-dock-chevron.is-down.is-open { transform: rotate(180deg); }
+
+/* The full list opens upward over the chat, growing from the line. */
+.mx-dock-list { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 4; max-height: min(420px, 50vh); overflow-y: auto; background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel); box-shadow: var(--pop-sh); transform-origin: bottom center; animation: mxDockGrow .16s cubic-bezier(.2, .8, .2, 1); }
+.mx-dock-list-head { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px 0 12px; border-bottom: 1px solid var(--line); }
+.mx-dock-list-title { font-size: 12.5px; font-weight: 600; color: var(--fg); }
+.mx-dock-counts { flex: 1; min-width: 0; display: flex; gap: 10px; overflow: hidden; font-size: 12px; white-space: nowrap; }
+.mx-dock-counts .is-working { color: var(--working); }
+.mx-dock-counts .is-done { color: var(--muted); }
+.mx-dock-counts .is-failed { color: var(--danger); }
+.mx-dock-rows { margin: 0; padding: 4px 0; list-style: none; display: flex; flex-direction: column; }
+.mx-dock-rows > li.is-unfolded { background: var(--m-sel); }
+.mx-dock-row { width: 100%; display: flex; align-items: flex-start; gap: 10px; padding: 7px 10px 7px 12px; text-align: left; }
+.mx-dock-row:hover { background: var(--m-hover); }
+.mx-dock-row-mark { flex: none; margin-top: 2px; display: inline-flex; }
+.mx-dock-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mx-dock-row-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; color: var(--fg); }
+.mx-dock-row-name.is-done { color: var(--fg2); }
+.mx-dock-row-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.mx-dock-row-line.is-whole { white-space: normal; }
+.mx-dock-row-line.is-working { color: var(--fg2); }
+.mx-dock-row-line.is-done { color: var(--muted); }
+.mx-dock-row-line.is-failed { color: var(--danger); }
+.mx-dock-row-kind { flex: none; padding-top: 2px; font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; }
+.mx-dock-detail { display: flex; flex-direction: column; gap: 8px; padding: 0 12px 10px 36px; animation: mxDockFade .15s ease-out; }
+.mx-dock-field { display: flex; flex-direction: column; gap: 2px; }
+.mx-dock-label { font-size: 11px; font-weight: 600; color: var(--dim); }
+.mx-dock-text { font-size: 12.5px; line-height: 1.5; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mx-dock-text.is-failed { color: var(--danger); }
+.mx-dock-ran { font: 400 12px var(--mono); color: var(--fg2); overflow-wrap: anywhere; }
+.mx-dock-ran > span { color: var(--dim); }
+
+/* ---- the marker in the chat, and the record it becomes ---- */
+.mx-dock-marker { align-self: flex-start; height: 28px; display: inline-flex; align-items: center; gap: 8px; padding: 0 10px 0 8px; font-size: 12.5px; color: var(--muted); box-shadow: inset 2px 0 0 var(--line2); }
+.mx-dock-marker:hover { color: var(--fg); background: var(--m-hover); }
+.mx-dock-marker-glyph { display: inline-flex; }
+.mx-dock-marker-tail { color: var(--dim); }
+.mx-agents-record { background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; }
+.mx-agents-head { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 10px 0 12px; text-align: left; border-bottom: 1px solid transparent; }
+.mx-agents-head.is-open { border-bottom-color: var(--line); }
+.mx-agents-head:hover { background: var(--m-hover); }
+.mx-agents-title { flex: none; font-size: 13px; font-weight: 600; color: var(--fg); }
+.mx-agents-record .mx-dock-block { width: 6px; }
+
+/* ---- the queue ---- */
+.mx-dock-queue { position: relative; z-index: 1; align-self: stretch; margin-bottom: 8px; animation: mxRise .2s cubic-bezier(.2, .8, .2, 1); }
+.mx-qd-card { position: relative; z-index: 2; display: flex; flex-direction: column; background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel); overflow: hidden; }
+.mx-qd-single, .mx-qd-item { width: 100%; display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; text-align: left; }
+.mx-qd-single:hover, .mx-qd-item:hover, .mx-qd-head:hover { background: var(--m-hover); }
+.mx-qd-tag { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.mx-qd-single .mx-qd-tag { padding-top: 1px; }
+.mx-qd-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.45; color: var(--fg2); }
+.mx-qd-text.is-strong { color: var(--fg); }
+/* A message that is open is read whole, as typed, up to a height that scrolls. */
+.mx-qd-text.is-read { white-space: pre-wrap; max-height: 260px; overflow-y: auto; overflow-wrap: anywhere; text-overflow: clip; }
+.mx-qd-chevron { flex: none; margin-top: 4px; display: flex; color: var(--dim); transform: rotate(180deg); transition: transform var(--t-fast) var(--ease); }
+.mx-qd-chevron.is-read { transform: none; }
+.mx-qd-open { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 8px; }
+.mx-qd-open.is-listed { padding-left: 34px; }
+.mx-qd-actions { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.mx-dock-action { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; font-size: 12px; color: var(--fg2); box-shadow: inset 0 0 0 1px var(--line2); border-radius: var(--r-control); }
+.mx-dock-action:hover { background: var(--m-hover); color: var(--fg); }
+.mx-dock-action:disabled { opacity: .5; cursor: default; }
+.mx-dock-action.is-remove { color: var(--muted); }
+.mx-dock-action.is-remove:hover { color: var(--danger); }
+
+/* Two or more, folded: the first message on top of two sheets of paper. */
+.mx-qd-stack { position: relative; padding-bottom: 8px; }
+.mx-qd-paper { position: absolute; height: 12px; border-radius: var(--r-panel); }
+.mx-qd-paper.is-far { left: 14px; right: 14px; bottom: 0; background: color-mix(in srgb, var(--fg) 3%, var(--main)); border: 1px solid var(--line); }
+.mx-qd-paper.is-near { left: 7px; right: 7px; bottom: 4px; background: color-mix(in srgb, var(--fg) 2%, var(--main)); border: 1px solid var(--line2); }
+.mx-qd-top { position: relative; z-index: 2; width: 100%; display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 10px; text-align: left; background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel); color: var(--dim); }
+.mx-qd-top:hover { border-color: var(--fg2); }
+.mx-qd-first { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--fg2); }
+.mx-qd-more { flex: none; font: 500 11px var(--mono); color: var(--dim); }
+
+/* Opened: a numbered list. */
+.mx-qd-head { width: 100%; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; text-align: left; border-bottom: 1px solid var(--line); }
+.mx-qd-hint { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--dim); }
+.mx-qd-head .mx-qd-chevron { margin-top: 0; }
+.mx-qd-list { margin: 0; padding: 2px 0; list-style: none; display: flex; flex-direction: column; max-height: min(460px, 52vh); overflow-y: auto; }
+.mx-qd-list > li.is-read { background: var(--m-sel); }
+.mx-qd-n { flex: none; width: 14px; padding-top: 1px; font: 500 11px var(--mono); color: var(--dim); }
+.mx-qd-n.is-next { color: var(--fg2); }
+.mx-qd-foot { display: flex; justify-content: flex-end; padding: 2px 4px 4px; border-top: 1px solid var(--line); }
+.mx-qd-clear { height: 26px; padding: 0 9px; font-size: 12px; color: var(--muted); }
+.mx-qd-clear:hover { background: var(--m-hover); color: var(--fg); }
+.mx-dock-note { margin: 6px 4px 0; font-size: 12px; color: var(--dim); }
+
+/* ---- Folded: a row inside a cut card is square, so the hover does not show a second cut inside the first ---- */
+:root[data-corners="folded"] .mx-app :is(.mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-head, .mx-agents-head, .mx-qd-clear, .mx-dock-marker):is(button) { border-radius: 0 !important; }
+
+/* ---- Focus: the accent underline ---- */
+:is(.mx-dock-line, .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-top, .mx-qd-head, .mx-qd-clear, .mx-agents-head, .mx-dock-marker):focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-dock-action:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
+
+/* ---- Motion off ---- */
+:root[data-reduced-motion="true"] :is(.mx-dock-helpers, .mx-dock-list, .mx-dock-queue, .mx-dock-now-act, .mx-dock-detail, .mx-dock-block, .mx-dock-chevron, .mx-qd-chevron) { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.mx-dock-helpers, .mx-dock-list, .mx-dock-queue, .mx-dock-now-act, .mx-dock-detail, .mx-dock-block, .mx-dock-chevron, .mx-qd-chevron) { animation: none; transition: none; }
+}

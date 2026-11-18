@@ -90,11 +90,8 @@ impl Host {
                 | Reaction::GitHubRepos { .. }
                 | Reaction::GitHubOwners { .. }
                 | Reaction::AgentCommands { .. }
-                | Reaction::Tickets { .. }
-                | Reaction::TicketKeys { .. }
-                | Reaction::TicketLinks { .. }
+                | Reaction::Repositories { .. }
                 | Reaction::Extensions { .. }
-                | Reaction::TicketSetup(_)
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),
                 Reaction::Sessions { machine, snapshot } => {
@@ -102,6 +99,7 @@ impl Host {
                 }
                 Reaction::Folders { machine, tag, listing } => self.folders.push((machine.0, tag, listing)),
                 Reaction::Cloned { machine, tag, outcome } => self.cloned.push((machine.0, tag, outcome)),
+                Reaction::FolderCreated { .. } => {}
             }
         }
     }

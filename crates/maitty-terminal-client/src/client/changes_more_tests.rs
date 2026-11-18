@@ -1,5 +1,5 @@
 //! Changes for a pane on another machine (its daemon reads and commits), ticked commits, and
-//! comments on diff lines. `MAIKER_SHOW=1 cargo test changes_more -- --nocapture` prints the frames.
+//! comments on diff lines. `AGENT_SHOW=1 cargo test changes_more -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::{MachineId, Remote};
@@ -72,7 +72,7 @@ fn type_text(app: &mut App, text: &str) {
 
 fn frame(app: &mut App, title: &str) -> String {
     let text = raw_text(app, Layout::Floating, 140, 34, "unicode");
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title}\n{text}");
     }
     text

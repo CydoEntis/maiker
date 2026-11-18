@@ -97,7 +97,7 @@ function FileBadge({ path, tag, line = null, onOpen, className }: FileBadgeProps
   const base = "inline-flex min-w-0 max-w-full items-center gap-[7px] text-(--fg)"
   return onOpen === undefined
     ? <span data-slot="file-badge" className={cn(base, className)} title={path}>{body}</span>
-    : <button type="button" data-slot="file-badge" className={cn(base, "rounded-(--r-badge) outline-none hover:[&_[data-slot=file-name]]:underline focus-visible:shadow-[0_0_0_2px_var(--focus)]", className)} title={path} onClick={onOpen}>{body}</button>
+    : <button type="button" data-slot="file-badge" className={cn(base, "rounded-(--r-badge) outline-none hover:[&_[data-slot=file-name]]:underline", className)} title={path} onClick={onOpen}>{body}</button>
 }
 
 /** Inline code in running text. */
@@ -107,7 +107,7 @@ function CodeChip({ className, ...props }: React.ComponentProps<"code">) {
 
 /** A link in running text: the link colour with a soft underline. */
 function TextLink({ className, ...props }: React.ComponentProps<"a">) {
-  return <a data-slot="text-link" className={cn("text-(--link) underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-2 hover:decoration-(--link) focus-visible:outline-2 focus-visible:outline-(--focus)", className)} {...props} />
+  return <a data-slot="text-link" className={cn("text-(--link) underline decoration-[color-mix(in_oklab,var(--link)_45%,transparent)] underline-offset-2 hover:decoration-(--link)", className)} {...props} />
 }
 
 export { Tag, tagVariants, TypeTag, typeTone, FileBadge, splitPath, CodeChip, TextLink }

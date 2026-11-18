@@ -186,7 +186,8 @@
   button, input, textarea { font: inherit; }
   button { cursor: pointer; }
   ::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: var(--foreground); }
-  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  /* Focus is a 2px underline in the accent, as in the desktop window (design rule 10). */
+  :focus-visible { outline: none; box-shadow: var(--focus-underline, inset 0 -2px 0 var(--ring)); }
 }
 
 * { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }

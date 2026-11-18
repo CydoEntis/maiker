@@ -214,11 +214,15 @@ describe('approvals in the chat', () => {
       await settle()
       await settle()
 
+      // jsdom has no layout, so the list's scroll position is a plain number the test can read.
+      const region = screen.getByRole('region', { name: /Conversation/ })
+      let top = 0
+      Object.defineProperty(region, 'scrollTop', { configurable: true, get: () => top, set: (value: number) => { top = value } })
       fireEvent.click(screen.getByRole('button', { name: /Go to the step this is about: ls/ }))
       await settle()
 
-      // Following the newest row stops, so the jump-to-latest button appears.
-      expect(screen.getByRole('button', { name: 'Jump to the latest message' })).toBeInTheDocument()
+      // The view moved to the step's row, not to the end of the chat.
+      expect(top).toBeGreaterThan(0)
     } finally {
       shortWindow.mockRestore()
     }

@@ -467,7 +467,7 @@ mod tests {
 
     fn frame(app: &mut App, title: &str) -> String {
         let text = raw_text(app, Layout::Floating, 120, 30, "unicode");
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             println!("---- {title}\n{text}");
         }
         text

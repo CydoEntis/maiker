@@ -15,8 +15,8 @@ const api = vi.hoisted(() => ({
 vi.mock('@/api/extensions', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/extensions')>()), ...api }))
 
 const item = (over: Partial<Extension>): Extension => ({ agent: 'Claude', kind: 'Plugin', scope: 'User', id: 'hello@local-mk', name: 'hello', detail: 'version 1.0.0', enabled: true, ...over })
-const PROJECT = { name: 'shop', linkKey: ':/work/shop', folder: '/work/shop', machine: 0, machineName: null }
-const REMOTE = { name: 'blog', linkKey: 'kingdom:/srv/blog', folder: '/srv/blog', machine: 1, machineName: 'kingdom' }
+const PROJECT = { name: 'shop', linkKey: ':/work/shop', folder: '/work/shop', machineName: null }
+const REMOTE = { name: 'blog', linkKey: 'kingdom:/srv/blog', folder: '/srv/blog', machineName: 'kingdom' }
 const PREVIEW: AddPreview = { token: 'tok123', agent: 'Claude', kind: 'McpServer', name: 'docs', scope: 'User', source: 'Typed in this window', runs: ['npx -y srv', 'It starts whenever the agent starts, as you.'], hosts: [] }
 
 function show() {

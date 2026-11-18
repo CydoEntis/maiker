@@ -1,4 +1,5 @@
 import { LOCAL_MACHINE } from '@/api/machines'
+import { machineLabel } from '@/data/machineNicknames'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { HighlightedLine } from '@/components/HighlightedLine'
@@ -12,12 +13,18 @@ import { PatchView } from './PatchView'
 import { joinPath } from './format'
 import { RepoError } from './RepoError'
 import { messageOf, useRepoQuery } from './useRepoQuery'
+import { DocumentView } from '@/features/documents/DocumentView'
+import { isMarkdownPath, readmeOf } from '@/features/documents/documentPaths'
+import { guardDrafts, inPane } from '@/features/documents/draftGuard'
 
 /** The file shown before one is picked: the README when the top folder has one, else its first file. */
 function startingFile(entries: ReadonlyArray<{ name: string; is_directory: boolean }> | undefined): string | null {
   const files = (entries ?? []).filter((entry) => !entry.is_directory)
   return (files.find((entry) => /^readme(\.|$)/i.test(entry.name)) ?? files[0])?.name ?? null
 }
+
+/** What the Files tab needs to open a markdown file beside the chat: the checkout's name (for remembering how each file is shown) and the opener. */
+export type DocumentLauncher = { root: string; /** The session whose checkout this is, so ending it asks about an unsaved draft. */ sessionId: string; onOpenBeside: (path: string) => void }
 
 export type LookAt = { path: string; line?: number; key: number }
 
@@ -34,6 +41,8 @@ function FileName({ name }: { name: string }) {
 }
 
 /** A tree row's left padding: a base, then one step in for each folder level. */
+/** What the Files panel's own viewer answers to in the draft guard; there is one at a time. */
+const FILES_VIEWER = 'files-panel'
 const ROW_PAD_PX = 8
 const LEVEL_PAD_PX = 14
 
@@ -65,8 +74,9 @@ function ancestorsOf(path: string): string[] {
  * The repository's files, read-only: the changed ones listed first, then the tree (folders open in place, each read when
  * first opened), and the chosen file beside them. A changed file opens as its diff, with the whole file a click away.
  */
-export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: number; /** The machine the session is on; a file is edited on this computer (0) only. */ machine?: number; lookAt: LookAt | null; /** Opens the project's references, the first entry of the tree. */ onReferences?: () => void }) {
+export function FilesTab({ term, machine = 0, machineName = null, lookAt, documents, onReferences }: { term: number; /** The machine's name when the session is on another machine: only its markdown documents open here. */ machineName?: string | null; /** Set where a markdown file can open in a pane beside the chat. */ documents?: DocumentLauncher | undefined; /** The machine the session is on; a file is edited on this computer (0) only. */ machine?: number; lookAt: LookAt | null; /** Opens the project's references, the first entry of the tree. */ onReferences?: () => void }) {
   const client = useQueryClient()
+  const machineKey = machine === LOCAL_MACHINE ? [] : [machine]
   // The text being edited, and what the file said when the edit began (so a change made meanwhile is noticed).
   const [edit, setEdit] = useState<{ file: string; original: string; draft: string } | null>(null)
   const [saving, setSaving] = useState(false)
@@ -77,7 +87,8 @@ export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: nu
   const [seen, setSeen] = useState<number | null>(null)
   // A changed file shows its diff until the whole file is asked for; a link to a line asks for it.
   const [whole, setWhole] = useState(false)
-  const pick = (path: string) => { setFile(path); setWhole(false) }
+  // Another file takes this viewer's place: an unsaved draft in it is asked about first.
+  const pick = (path: string) => { guardDrafts(inPane(FILES_VIEWER), () => { setFile(path); setWhole(false) }) }
 
   // A link clicked in the terminal opens its file and the folders above it: adjusting state while rendering, not in an effect.
   if (lookAt && lookAt.key !== seen) {
@@ -88,7 +99,7 @@ export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: nu
   }
 
   // The top folder is read by the tree too, under the same key, so this costs no second read.
-  const top = useRepoQuery(term, ['tree', ''], () => repoTree(term, null))
+  const top = useRepoQuery(term, ['tree', '', ...machineKey], () => repoTree(term, null, machine))
   // The same query the Changes tab keeps, so the two never disagree and it is read once.
   const diff = useRepoQuery(term, ['diff', ...(machine === LOCAL_MACHINE ? [] : [machine])], () => repoDiff(term, null, machine), CHANGES_REFRESH_MS)
   const changed = new Map<string, Changed>((diff.data?.files ?? []).map((entry) => [entry.path, { kind: changeKind(entry.patch), patch: entry.patch, binary: entry.binary }]))
@@ -96,7 +107,9 @@ export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: nu
   const file = picked ?? [...changed.keys()][0] ?? startingFile(top.data)
   const change = file === null ? undefined : changed.get(file)
   const asDiff = change !== undefined && !change.binary && !whole
-  const preview = useRepoQuery(term, ['file', file], () => repoFile(term, file ?? ''), false, file !== null && !asDiff && change?.kind.letter !== 'D')
+  // Another machine's files are not read whole from here; its markdown documents open through their own viewer.
+  const readable = machine === LOCAL_MACHINE
+  const preview = useRepoQuery(term, ['file', file], () => repoFile(term, file ?? ''), false, readable && file !== null && !asDiff && change?.kind.letter !== 'D')
 
   // Best effort: a failed or empty answer leaves the built-in per-line colouring in place.
   const text = preview.data
@@ -139,6 +152,9 @@ export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: nu
       setSaving(false)
     }
   }
+  // A markdown file that is not being read as a diff opens as a document: drawn, source or edited.
+  const isDocument = file !== null && isMarkdownPath(file) && !asDiff && change?.kind.letter !== 'D'
+  const readme = readmeOf((top.data ?? []).filter((entry) => !entry.is_directory).map((entry) => entry.name))
   const toggle = (folder: string) => {
     setOpen((current) => {
       const next = new Set(current)
@@ -173,11 +189,29 @@ export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: nu
             <p className="mx-files-heading">All files</p>
           </>
         )}
-        <Folder term={term} folder="" depth={0} open={open} file={file} changed={changed} marked={marked} onToggle={toggle} onPick={pick} />
+        {readme !== null && (
+          <button type="button" className="mx-files-refs" onClick={() => { pick(readme) }}>
+            <Icon name="references" size={13} />
+            <span>README</span>
+            <Icon name="chevron" />
+          </button>
+        )}
+        <Folder term={term} machine={machine} folder="" depth={0} open={open} file={file} changed={changed} marked={marked} onToggle={toggle} onPick={pick} />
       </nav>
       <section className="mx-files-view" aria-label={file === null ? 'File' : `Preview of ${file}`}>
         {file === null ? (
           <p className="mx-inspect-note">Pick a file to read it.</p>
+        ) : isDocument ? (
+          <DocumentView
+            key={file}
+            term={term}
+            machine={machine}
+            path={file}
+            root={documents?.root ?? `term ${String(term)}`}
+            owner={{ paneId: FILES_VIEWER, sessionId: documents?.sessionId ?? null }}
+            onOpenPath={(path) => { setOpen((current) => new Set([...current, ...ancestorsOf(path)])); pick(path) }}
+            onOpenBeside={documents === undefined ? undefined : () => { documents.onOpenBeside(file) }}
+          />
         ) : (
           <>
             <header className="mx-files-bar">
@@ -197,8 +231,9 @@ export function FilesTab({ term, machine = 0, lookAt, onReferences }: { term: nu
               )}
             </header>
             {asDiff && <PatchView key={file} patch={change.patch} />}
+            {!asDiff && !readable && <p className="mx-inspect-note">Only Markdown documents open from {machineLabel(machineName) ?? 'another machine'}; its other files stay there.</p>}
             {!asDiff && change?.kind.letter === 'D' && <p className="mx-inspect-note">This file was deleted.</p>}
-            {!asDiff && change?.kind.letter !== 'D' && preview.isPending && <Bars label="Reading the file" count={PREVIEW_BARS} className="mx-files-wait is-preview" />}
+            {!asDiff && readable && change?.kind.letter !== 'D' && preview.isPending && <Bars label="Reading the file" count={PREVIEW_BARS} className="mx-files-wait is-preview" />}
             {preview.isError && <p className="mx-inspect-note is-error" role="alert">{messageOf(preview.error)}</p>}
             {clash && edit?.file === file && (
               <p className="mx-inspect-note is-error" role="alert">
@@ -243,11 +278,11 @@ function Spans({ spans }: { spans: NonNullable<HighlightedLines>[number] }) {
   )
 }
 
-type FolderProps = { term: number; folder: string; depth: number; open: ReadonlySet<string>; file: string | null; changed: ReadonlyMap<string, Changed>; marked: ReadonlySet<string>; onToggle: (folder: string) => void; onPick: (path: string) => void }
+type FolderProps = { term: number; machine: number; folder: string; depth: number; open: ReadonlySet<string>; file: string | null; changed: ReadonlyMap<string, Changed>; marked: ReadonlySet<string>; onToggle: (folder: string) => void; onPick: (path: string) => void }
 
 /** One folder's entries; a folder inside it that is open reads and shows its own. */
-function Folder({ term, folder, depth, open, file, changed, marked, onToggle, onPick }: FolderProps) {
-  const tree = useRepoQuery(term, ['tree', folder], () => repoTree(term, folder || null))
+function Folder({ term, machine, folder, depth, open, file, changed, marked, onToggle, onPick }: FolderProps) {
+  const tree = useRepoQuery(term, ['tree', folder, ...(machine === LOCAL_MACHINE ? [] : [machine])], () => repoTree(term, folder || null, machine))
   if (tree.isPending) return depth === 0 ? <Bars label="Reading the files" count={TREE_BARS} className="mx-files-wait" /> : null
   if (tree.isError) return <RepoError error={tree.error} tab="files" onRetry={() => { void tree.refetch() }} retrying={tree.isFetching} />
   return (
@@ -274,7 +309,7 @@ function Folder({ term, folder, depth, open, file, changed, marked, onToggle, on
               <span className="mx-files-name">{entry.name}</span>
               {marked.has(path) && <span className="mx-files-dot" role="img" aria-label="Holds changed files" />}
             </button>
-            {isOpen && <Folder term={term} folder={path} depth={depth + 1} open={open} file={file} changed={changed} marked={marked} onToggle={onToggle} onPick={onPick} />}
+            {isOpen && <Folder term={term} machine={machine} folder={path} depth={depth + 1} open={open} file={file} changed={changed} marked={marked} onToggle={onToggle} onPick={onPick} />}
           </li>
         )
       })}

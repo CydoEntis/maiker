@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 serde_json = "1"
+maitty-shared = { path = "../maitty-shared" }
 
 [dev-dependencies]
 toml = "0.9"

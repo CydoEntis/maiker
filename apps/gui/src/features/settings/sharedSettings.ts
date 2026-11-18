@@ -91,7 +91,7 @@ export function useSharedSettings(preferences: SettingsPreferences, update: Upda
       if (stopped) unlisten()
       else stop = unlisten
       return requestSharedSettings()
-    }).catch((error: unknown) => { toast.failure(error, 'Could not read the shared settings') })
+    }).catch((error: unknown) => { toast.failed('Could not read the shared settings', error) })
     return () => {
       stopped = true
       stop?.()
@@ -106,7 +106,7 @@ export function useSharedSettings(preferences: SettingsPreferences, update: Upda
     if (shared === null) return
     for (const [key, value] of changesToSend(was, preferences, shared)) {
       // The daemon's answer lands in `known`, so each change is sent once.
-      void setSharedSetting(key, value).catch((error: unknown) => { toast.failure(error, 'Could not save a shared setting') })
+      void setSharedSetting(key, value).catch((error: unknown) => { toast.failed('Could not save a shared setting', error) })
     }
   }, [preferences])
 }

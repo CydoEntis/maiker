@@ -133,3 +133,85 @@ fn names_the_app_had_before_stay_in_carry_over_code() {
         hits.join("\n")
     );
 }
+
+/// Rust files of every crate and app, relative to the repository.
+fn workspace_sources() -> Vec<(String, String)> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut files = Vec::new();
+    for top in ["crates", "apps/tui", "apps/gui/src-tauri"] {
+        let mut found = Vec::new();
+        sources(&root.join(top), &mut found);
+        files.extend(found);
+    }
+    files
+        .into_iter()
+        .filter(|path| path.extension().is_some_and(|e| e == "rs"))
+        .filter(|path| !path.components().any(|c| c.as_os_str() == "target"))
+        .filter_map(|path| {
+            let text = std::fs::read_to_string(&path).ok()?;
+            let rel = path
+                .strip_prefix(&root)
+                .ok()?
+                .to_string_lossy()
+                .replace('\\', "/");
+            Some((rel, text))
+        })
+        .collect()
+}
+
+/// The daemon's name and the variables' prefixes are set in `Cargo.toml` and read through
+/// `maitty_shared::brand` (ADR 0012): a rename or a prefix change is that file, not a hunt.
+#[test]
+fn the_daemon_name_and_the_env_prefixes_are_never_written_out() {
+    let daemon = env!("APP_DAEMON");
+    let prefixes: Vec<String> = std::iter::once(env!("APP_ENV"))
+        .chain(env!("APP_ENV_PREVIOUS").split(',').filter(|p| !p.is_empty()))
+        .map(|prefix| format!("{prefix}_"))
+        .collect();
+    let mut hits = Vec::new();
+    for (rel, text) in workspace_sources() {
+        // The module that owns the names, and its tests, say them.
+        if rel == "crates/maitty-shared/src/brand.rs" {
+            continue;
+        }
+        for (n, line) in text.lines().enumerate() {
+            let code = line.trim_start();
+            if code.starts_with("//") {
+                continue;
+            }
+            let spelled = line.contains(daemon)
+                || prefixes
+                    .iter()
+                    .any(|prefix| line.contains(&format!("\"{prefix}")) || line.contains(&format!("'{prefix}")));
+            if spelled {
+                hits.push(format!("{rel}:{}: {}", n + 1, code));
+            }
+        }
+    }
+    assert!(
+        hits.is_empty(),
+        "read the daemon's name and the env prefixes from maitty_shared::brand, do not write them:\n{}",
+        hits.join("\n")
+    );
+}
+
+/// The installers run on their own, so each names the environment prefix (and the one before it)
+/// once; both must be what `Cargo.toml` sets (ADR 0012).
+#[test]
+fn the_installers_read_the_environment_prefix_cargo_toml_sets() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let old = env!("APP_ENV_PREVIOUS").split(',').next().unwrap_or_default();
+    for (file, current, previous) in [
+        ("install.sh", "ENV_PREFIX=", "OLD_ENV_PREFIX="),
+        ("install.ps1", "$envPrefix = ", "$oldEnvPrefix = "),
+    ] {
+        let text = std::fs::read_to_string(root.join(file)).expect("installer readable");
+        let named = |prefix: &str| {
+            text.lines()
+                .find_map(|l| l.strip_prefix(prefix))
+                .map(|v| v.trim().trim_matches(['"', '\'']).to_string())
+        };
+        assert_eq!(named(current).as_deref(), Some(env!("APP_ENV")), "{file}");
+        assert_eq!(named(previous).as_deref(), Some(old), "{file}");
+    }
+}

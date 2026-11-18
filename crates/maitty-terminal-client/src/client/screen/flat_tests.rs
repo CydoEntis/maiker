@@ -1,5 +1,5 @@
 //! The sidebar (each machine with its sessions), the status glyphs, the tab row and the workspace
-//! frames, held to the TUI redesign. `MAIKER_SHOW=1 cargo test <name> -- --nocapture` prints the frames.
+//! frames, held to the TUI redesign. `AGENT_SHOW=1 cargo test <name> -- --nocapture` prints the frames.
 use super::status_mark::State;
 use super::*;
 use crate::client::reference_fixture::{self, Stage};
@@ -34,7 +34,7 @@ fn text(app: &mut App, w: u16, h: u16) -> Vec<String> {
 }
 
 fn show(rows: &[String], title: &str) {
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title}");
         for row in rows {
             println!("{row}");

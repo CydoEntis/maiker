@@ -25,7 +25,7 @@ export function CommandMenuTray({ agent, topic, readScreen, sendKeys, onClose }:
   const close = () => {
     setBusy(true)
     sendKeys(KEY_ESCAPE)
-      .catch((error: unknown) => { toast.failure(error, 'Could not close the menu') })
+      .catch((error: unknown) => { toast.failed('Could not close the menu', error) })
       .finally(() => { setBusy(false); onClose() })
   }
   return (

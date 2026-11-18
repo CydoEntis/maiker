@@ -36,8 +36,11 @@ export type ChatRow =
   | { readonly kind: 'report'; readonly key: string; readonly text: string }
   /** Where the agent summarised the earlier conversation to make room: one line that opens to the summary. */
   | { readonly kind: 'summary'; readonly key: string; readonly event: SummaryEvent }
-  /** The line under the last item while a turn runs, with what the agent is doing (`describeWork`). */
-  | { readonly kind: 'working'; readonly key: string; readonly phrase: string }
+  /**
+   * The line under the last item while a turn runs, with what the agent is doing (`describeWork`). `placeholder` is true
+   * while the turn has drawn nothing yet, so a skeleton holds the place its first row will take.
+   */
+  | { readonly kind: 'working'; readonly key: string; readonly phrase: string; readonly placeholder: boolean }
 
 /** The tool step an approval is about: the row to scroll to and the words that name it. */
 export type StepRef = { readonly key: string; readonly label: string }
@@ -158,7 +161,11 @@ export function buildRows(events: readonly ChatEvent[], working: boolean, root: 
   const shown = hideSuccessfulTools ? withoutQuietRuns(rows) : rows
   // A message just sent is drawn at once, and the agent is taken to be at work on it, until the history says so itself.
   if (echoText !== null) shown.push({ kind: 'echo', key: ECHO_ROW_KEY, text: echoText })
-  if (working || (echoText !== null && echoThinking)) shown.push({ kind: 'working', key: WORKING_ROW_KEY, phrase: workingPhrase ?? describeWork(events, root) })
+  // The turn's own rows are drawn as they arrive, above the working line; until the first one comes, a skeleton holds its place.
+  if (working || (echoText !== null && echoThinking)) {
+    const last = shown.at(-1)
+    shown.push({ kind: 'working', key: WORKING_ROW_KEY, phrase: workingPhrase ?? describeWork(events, root), placeholder: last === undefined || last.kind === 'user' || last.kind === 'echo' })
+  }
   return linkApprovals(shown, events, root)
 }
 

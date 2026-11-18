@@ -24,8 +24,8 @@ The product has been renamed twice, and a name copied into many files made each 
 - A rename is a change to one place plus the release assets. The old command goes first in
   `previous`, and the first run under the new name carries an install over (`config::migrate_old_names`):
   a service still running under the old name is asked to stop, so it saves its sessions, then its config
-  and data are copied and the new service restores them with their agents resumed; `<OLD>_*` environment
-  variables count until the new name's are set (`brand::adopt_previous_env`); hooks, themes, per-repo files
+  and data are copied and the new service restores them with their agents resumed; the environment
+  prefix does not follow the name, and an older prefix's variables still count ([0012](0012-brand-names-live-in-one-place-and-env-has-a-generic-prefix.md)); hooks, themes, per-repo files
   and references under the old name are still read. The desktop app keeps the old command's shared file
   current too, so hooks and MCP entries that call it run the new app, and a machine update treats the app
   under its old name as an older version to replace. The desktop app's bundle identifier

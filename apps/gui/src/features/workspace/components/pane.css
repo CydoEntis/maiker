@@ -1,5 +1,5 @@
 /* The workspace card and its panes (README: Workspace and panes). One pane is no card of its own; two or
-   more each get a faint card, and the focused one a teal ring drawn above its content. */
+   more each get a faint card, and the focused one a 2px accent line along its top edge, drawn above its content. */
 
 /* The chat column keeps room to be used: the side panel beside it gives way first (inspect.css). */
 .mx-main-wrap { flex: 1; min-width: min(var(--chat-min, 400px), 100%); display: flex; padding: 12px; }
@@ -8,7 +8,7 @@
   background: var(--main);
   border: 1px solid rgba(var(--hl), calc(.09 * var(--hk)));
   border-radius: var(--r14);
-  transition: border-color .2s ease;
+  transition: border-color var(--t-base) var(--ease);
 }
 
 /* The tab showing, over the tabs kept mounted behind it. A kept tab has the same box as the one showing, so its
@@ -31,56 +31,53 @@
 /* While a pane is dragged it dims, and the pane under the pointer says what letting go does. */
 .mx-pane.is-dragging { opacity: .6; }
 .mx-pane-drop { position: absolute; inset: 6px; z-index: 29; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; color: var(--accent-text); pointer-events: none; animation: v7scrim .12s ease-out; }
-.mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 0 0 1.5px transparent; transition: box-shadow .15s; }
-.mx-pane.is-focused .mx-pane-ring { box-shadow: inset 0 0 0 1.5px var(--accent-line), 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 2px 0 var(--focus-line); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.mx-pane.is-focused .mx-pane-ring { opacity: 1; }
 
-/* The pane header (desktop frame, section 4): the agent's tile and badge, the title, then the view tabs and controls. */
-.mx-pane-head { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); cursor: default; }
+/* The session header (52px, two lines): the status icon and the name, and under the name where the chat works (folder,
+   project / branch, machine). Right: the Chat | Terminal toggle, Changes, Files and the ⋯ menu. */
+.mx-pane-head { flex: none; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); cursor: default; container: pane-head / inline-size; }
 .mx-pane-head.is-draggable { cursor: grab; }
 .mx-pane-show-sidebar { flex: none; width: 28px; height: 28px; margin-left: -4px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
 .mx-pane-show-sidebar:hover { background: var(--m-hover); color: var(--fg); }
-.mx-pane-show-sidebar:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
-.mx-pane-icon { position: relative; width: 20px; height: 20px; flex: none; }
-.mx-pane-head { container: pane-head / inline-size; }
-.mx-pane-title { flex: 1; min-width: 64px; display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; }
-.mx-pane-title .mx-inline-name { flex: 0 1 220px; min-width: 60px; height: 28px; padding: 0 6px; margin-left: -6px; font: 600 14px var(--ui); color: var(--fg); background: var(--m-well); border: 1px solid var(--accent); outline: none; }
+.mx-pane-id { flex: 0 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 10px; row-gap: 1px; align-items: center; }
+.mx-pane-id.is-shell { align-items: center; }
+.mx-pane-icon { flex: none; display: inline-flex; width: 14px; height: 14px; }
+.mx-pane-title { min-width: 0; display: flex; }
+.mx-pane-title .mx-inline-name { flex: 0 1 auto; min-width: 120px; height: 22px; padding: 0 6px; margin-left: -6px; border-radius: 0; font: 600 14px var(--ui); color: var(--fg); background: transparent; border: 0; outline: none; box-shadow: var(--focus-underline); }
+.mx-pane-name { flex: 0 1 auto; min-width: 0; height: 22px; display: flex; align-items: center; padding: 0 4px; margin-left: -4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; letter-spacing: -.005em; color: var(--fg); }
+.mx-pane-name.is-editable { cursor: text; }
+.mx-pane-name.is-editable:hover { background: var(--m-hover); }
 
-/* Where the chat works, after its name (layout 2h): the project, locked, then the branch. The project goes first as the
-   pane narrows, then the branch's name, leaving its mark. */
-.mx-crumbs { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
-.mx-crumb-sep { flex: none; color: var(--line2); }
-.mx-crumb-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
-.mx-crumb-project svg { flex: none; color: var(--dim); }
-.mx-crumb-square { flex: none; width: 7px; height: 7px; }
+/* Line two: the folder, the project, the branch, the machine. The project goes first as the pane narrows, then the
+   branch's name, leaving its mark. */
+.mx-crumbs { grid-column: 2; flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.mx-crumb-folder { flex: none; display: inline-flex; color: var(--muted); }
+.mx-crumb-sep, .mx-crumb-dot { flex: none; color: var(--line2); }
+.mx-crumb-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; }
 .mx-crumb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mx-crumb { flex: 0 1 auto; min-width: 0; height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; border-radius: var(--r-control); white-space: nowrap; outline: none; }
-.mx-crumb:not(.is-static):hover, .mx-crumb[data-state="open"] { background: var(--m-hover); }
-.mx-crumb:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent-line); }
+.mx-crumb-machine { flex: none; color: var(--muted); }
+.mx-crumb { flex: 0 2 auto; min-width: 0; height: 20px; display: inline-flex; align-items: center; gap: 5px; padding: 0 4px; margin-left: -4px; border-radius: var(--r-control); white-space: nowrap; outline: none; color: var(--branch); }
+.mx-crumb:not(.is-static):hover, .mx-crumb[data-state="open"] { background: var(--m-hover); color: var(--fg); }
 .mx-crumb > svg:last-child { flex: none; color: var(--dim); }
-.mx-crumb-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); color: var(--branch); }
-.mx-crumb-branch-icon { flex: none; display: inline-flex; color: var(--branch); }
+.mx-crumb-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); color: inherit; }
+.mx-crumb-branch-icon { flex: none; display: inline-flex; color: inherit; }
 .mx-crumb-branch-icon svg { stroke: currentColor; }
-.mx-crumb-branch.is-worktree, .mx-crumb-branch-icon.is-worktree { color: var(--ansi-blue); }
-@container pane-head (max-width: 700px) { .mx-crumb-project, .mx-crumb-sep.is-project { display: none; } }
-@container pane-head (max-width: 560px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child { display: none; } }
-.mx-pane-name { font-size: 14px; line-height: 18px; font-weight: 600; letter-spacing: -.01em; color: var(--fg); overflow: hidden; text-overflow: ellipsis; }
-.mx-pane-pr { flex: none; font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
-.mx-pane-pr.is-bad { color: var(--danger); }
-.mx-pane-pr.is-good { color: var(--ok); }
-.mx-pane-pr.is-waiting { color: var(--working); }
-.mx-pane-controls { display: flex; align-items: center; gap: 2px; margin-left: auto; height: 100%; }
-.mx-pane-control { width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--dim); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+@container pane-head (max-width: 700px) { .mx-crumb-project, .mx-crumb-folder + .mx-crumb-project + .mx-crumb-sep { display: none; } }
+@container pane-head (max-width: 560px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child, .mx-crumb-dot, .mx-crumb-machine { display: none; } }
+.mx-pane-controls { flex: none; display: flex; align-items: center; gap: 4px; margin-left: auto; height: 100%; }
+.mx-pane-control { position: relative; width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--dim); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-pane-control:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
-.mx-pane-control.is-close:not(:disabled):hover { background: var(--danger-soft); color: var(--danger); }
+.mx-pane-control.is-on { background: var(--m-sel); color: var(--fg); }
+.mx-pane-more { color: var(--muted); }
+.mx-pane-control.is-close:not(:disabled):hover { background: color-mix(in srgb, var(--danger) 12%, transparent); color: var(--danger); }
 .mx-pane-control:disabled { opacity: .3; }
+/* The Changes button's count of changed files. */
+.mx-pane-count { position: absolute; top: 1px; right: 0; min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 9px/1 var(--mono); color: var(--bg); background: var(--fg2); }
 
-/* The view tabs: plain words the height of the header, the chosen one underlined in the accent. */
-.mx-view-switch { display: flex; align-items: stretch; gap: 16px; height: 100%; margin-right: 10px; flex: none; }
-.mx-view-option { display: flex; align-items: center; padding: 0 1px; font-size: 12.5px; font-weight: 500; color: var(--dim); transition: color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
-.mx-view-option:hover { color: var(--fg); }
-.mx-view-option[aria-checked="true"] { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
-.mx-view-option:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.mx-view-option { gap: 5px; }
+/* The Chat | Terminal toggle: the shared segmented frame (folded under Folded corners), 13px mark and word in each choice. */
+.mx-view-switch { margin-right: 6px; }
+.mx-tdock-docks { margin: 0 2px; }
 .mx-view-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
 .mx-view-needs { width: 7px; height: 7px; border-radius: 2px; background: var(--needs); }
 
@@ -140,17 +137,20 @@
 .mx-tdock {
   position: relative; flex: none; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
   background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel);
+  /* The terminal's inset from the dock's edge, inside its own opaque ground: the ground itself runs edge to edge. */
+  --tdock-pad: 8px 12px;
   container: tdock / inline-size;
 }
 .mx-tdock[data-dock="bottom"] { height: var(--tdock-h, clamp(120px, calc(100vh - 480px), 260px)); animation: mx-dock-from-bottom var(--panel-in); }
-.mx-tdock[data-dock="right"] { width: var(--tdock-w, min(440px, 45%)); animation: mx-panel-from-right var(--panel-in); }
+.mx-tdock[data-dock="right"] { width: var(--tdock-w, min(440px, 45%)); animation: mx-dock-from-right var(--panel-in); }
 .mx-tdock[data-dock="full"] { flex: 1; animation: mx-dock-fade .2s ease-out; }
 .mx-tdock[data-leaving] { pointer-events: none; animation: mx-dock-to-bottom var(--panel-out) forwards; }
 .mx-tdock[data-dock="right"][data-leaving] { animation-name: mx-panel-to-right; }
 .mx-tdock.is-resizing { user-select: none; }
-@keyframes mx-dock-from-bottom { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
-@keyframes mx-dock-to-bottom { to { opacity: 0; transform: translateY(24px); } }
-@keyframes mx-panel-to-right { to { opacity: 0; transform: translateX(28px); } }
+@keyframes mx-dock-from-bottom { from { opacity: 0; transform: translateY(24px); height: 0; } to { opacity: 1; transform: none; } }
+@keyframes mx-dock-to-bottom { to { opacity: 0; transform: translateY(24px); height: 0; min-height: 0; margin-top: 0; border-width: 0; } }
+@keyframes mx-dock-from-right { from { opacity: 0; transform: translateX(28px); width: 0; min-width: 0; } to { opacity: 1; transform: none; } }
+@keyframes mx-panel-to-right { to { opacity: 0; transform: translateX(28px); width: 0; min-width: 0; margin-left: 0; margin-right: 0; border-width: 0; } }
 @keyframes mx-dock-fade { from { opacity: 0; } to { opacity: 1; } }
 
 .mx-tdock-grip { position: absolute; z-index: 2; }
@@ -162,12 +162,13 @@
 .mx-tdock-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
 .mx-tdock-tab { position: relative; flex: none; height: 26px; display: flex; align-items: center; color: var(--muted); }
 .mx-tdock-tab:hover { color: var(--fg); }
-.mx-tdock-tab.is-on { color: var(--fg); background: var(--m-hover); box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-tdock-pick { height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 10px; font: 500 12px var(--mono); color: inherit; white-space: nowrap; }
+.mx-tdock-tab.is-on { color: var(--fg); background: var(--m-hover); box-shadow: inset 0 0 0 1px var(--line2); --fold-line: var(--line2); }
+.mx-tdock-pick { height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; font: 500 12px var(--mono); color: inherit; white-space: nowrap; }
 .mx-tdock-prompt { color: var(--accent-text); }
-/* Closing a tab ends its shells, so its × waits for the pointer instead of sitting on every tab. */
-.mx-tdock-tab-close { width: 0; height: 18px; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: 0; transition: opacity .12s ease; }
-.mx-tdock-tab:hover .mx-tdock-tab-close, .mx-tdock-tab-close:focus-visible { width: 18px; margin-right: 4px; opacity: 1; }
+/* The × owns its slot in every tab at all times, so a tab never changes width when it is picked, hovered or focused; only
+   its opacity does. It stays focusable while hidden, and focus shows it. */
+.mx-tdock-tab-close { width: 18px; height: 18px; margin-right: 4px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.mx-tdock-tab.is-on .mx-tdock-tab-close, .mx-tdock-tab:hover .mx-tdock-tab-close, .mx-tdock-tab:focus-within .mx-tdock-tab-close { opacity: 1; }
 .mx-tdock-tab-close:not(:disabled):hover { color: var(--fg); background: var(--m-hover); }
 .mx-tdock-tool { width: 26px; height: 26px; flex: none; display: flex; align-items: center; justify-content: center; color: var(--dim); }
 .mx-tdock-tool.is-menu { width: auto; height: 28px; gap: 4px; padding: 0 6px; color: var(--muted); }
@@ -178,21 +179,24 @@
 .mx-tdock-rule { flex: none; width: 1px; height: 16px; margin: 0 4px; background: var(--line2); }
 .mx-tdock-inline { display: contents; }
 .mx-tdock-menu { display: none; }
-.mx-tdock .mx-tdock-docks { flex: none; height: 28px; display: flex; align-items: center; gap: 2px; padding: 2px; margin: 0 2px; background: var(--m-well); border: 1px solid var(--line); box-shadow: none; border-radius: var(--r-control); }
-.mx-tdock-docks .mx-tdock-dock { width: 26px; height: 22px; padding: 0; justify-content: center; }
-.mx-tdock-dock svg, .mx-tdock-menu-list svg { width: 14px; height: 14px; }
+.mx-tdock-menu-list svg { width: 14px; height: 14px; }
 .mx-tdock-menu-list { min-width: 200px; }
 /* A narrow dock drops its path first, then folds its split and dock buttons into one menu. */
 @container tdock (max-width: 600px) { .mx-tdock-path { display: none; } }
 @container tdock (max-width: 380px) { .mx-tdock-inline { display: none; } .mx-tdock-menu { display: block; } }
 
-.mx-tdock-body { flex: 1; min-height: 0; display: flex; gap: 6px; padding: 0 6px 6px; }
-.mx-tdock-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
-.mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: 9px 12px; font-family: var(--mono); line-height: 1.6; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); cursor: text; transition: box-shadow .15s ease; }
-.mx-tdock-split.is-focus { box-shadow: inset 0 0 0 1px var(--line2); }
+/* The terminal fills the dock edge to edge on one opaque ground (--term; a see-through ground costs a blend per repaint,
+   docs/PERFORMANCE.md). A split is told from its neighbour by one hairline, never by a frame of its own. */
+.mx-tdock-body { flex: 1; min-height: 0; display: flex; background: var(--term); border-top: 1px solid var(--line); }
+.mx-tdock-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.mx-tdock-column + .mx-tdock-column { border-left: 1px solid var(--line); }
+.mx-tdock-column > .mx-tdock-split + .mx-tdock-split { border-top: 1px solid var(--line); }
+.mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: var(--tdock-pad); font-family: var(--mono); line-height: 1.6; background: var(--term); cursor: text; }
+/* The focused split of several: a 2px accent line along its top edge, drawn inside it so nothing moves. */
+.mx-tdock-split.is-focus { box-shadow: inset 0 2px 0 var(--focus-line); }
 .mx-tdock-split > :first-child { flex: 1; min-width: 0; min-height: 0; }
 .mx-tdock-split .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
-.mx-tdock-split .terminal-screen { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; padding: 0; }
+.mx-tdock-split .terminal-screen, .mx-tdock-split .terminal-screen:focus-within { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; }
 .mx-tdock-split-close { position: absolute; top: 5px; right: 5px; z-index: 1; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
 .mx-tdock-split-close:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
 .mx-tdock-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 24px; font-size: 12.5px; line-height: 1.5; color: var(--dim); text-align: center; }
@@ -200,3 +204,7 @@
 .mx-tdock-start { margin-top: 8px; height: 30px; padding: 0 14px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
 .mx-tdock-start:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 88%, var(--fg)); }
 .mx-tdock-start:disabled { opacity: .5; }
+
+/* Reduced motion (the OS or Settings): the dock and the glide between panes appear and go at once. */
+:root[data-motion="reduced"] .mx-tdock, .mx-app[data-motion="reduced"] .mx-tdock { animation: none; }
+@media (prefers-reduced-motion: reduce) { .mx-tdock, .mx-tdock[data-leaving] { animation: none; } }

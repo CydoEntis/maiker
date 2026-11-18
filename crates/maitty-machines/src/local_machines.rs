@@ -2,7 +2,7 @@
 //! the terminal app's loader reads them. Both apps use it, so there is one list (ADR 0007).
 //! Hand edits apply when the app starts.
 
-use crate::brand::{APP_COMMAND, APP_ENV};
+use crate::brand::APP_COMMAND;
 use crate::def::{MachineDef, validate_machines};
 use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
@@ -19,7 +19,7 @@ pub struct MachineList {
 /// the config loader uses on this platform.
 pub fn config_path() -> PathBuf {
     config_path_in(
-        std::env::var_os(format!("{APP_ENV}_CONFIG")),
+        maitty_shared::brand::env_var_os("CONFIG"),
         std::env::var_os("XDG_CONFIG_HOME"),
         cfg!(windows),
     )
@@ -47,7 +47,7 @@ fn config_path_in(
 /// This computer's machine list. As in the terminal app, a config file named by the
 /// environment stands alone: the local file beside it is not read, so there are no machines.
 pub fn local_machines() -> MachineList {
-    if std::env::var_os(format!("{APP_ENV}_CONFIG")).is_some() {
+    if maitty_shared::brand::env_var_os("CONFIG").is_some() {
         return MachineList::default();
     }
     machines_beside(&config_path())

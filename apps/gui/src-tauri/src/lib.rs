@@ -56,13 +56,14 @@ fn bundled_daemon(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let suffix = if cfg!(windows) { ".exe" } else { "" };
     let (file_name, development_path) = if cfg!(debug_assertions) {
         let file_name = format!(
-            "binaries/maiker-gui-daemon-{}{suffix}",
-            env!("MAITTY_TARGET_TRIPLE")
+            "binaries/{}-{}{suffix}",
+            maitty_shared::brand::DAEMON_NAME,
+            env!("APP_TARGET_TRIPLE")
         );
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(&file_name);
         (file_name, Some(path))
     } else {
-        (format!("maiker-gui-daemon{suffix}"), None)
+        (format!("{}{suffix}", maitty_shared::brand::DAEMON_NAME), None)
     };
     if let Some(path) = development_path {
         return path
@@ -82,10 +83,11 @@ fn bundled_daemon(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         && let Some(directory) = gui_executable.parent()
     {
         candidates.push(directory.join(format!(
-            "maiker-gui-daemon-{}{suffix}",
-            env!("MAITTY_TARGET_TRIPLE")
+            "{}-{}{suffix}",
+            maitty_shared::brand::DAEMON_NAME,
+            env!("APP_TARGET_TRIPLE")
         )));
-        candidates.push(directory.join(format!("maiker-gui-daemon{suffix}")));
+        candidates.push(directory.join(format!("{}{suffix}", maitty_shared::brand::DAEMON_NAME)));
     }
     first_existing_daemon(&candidates)
         .ok_or_else(|| "the bundled daemon executable is missing".into())
@@ -1151,6 +1153,25 @@ async fn write_project_file(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// Saves an editor's text over an existing file of the checkout `term` is in, when it is still the `version`
+/// the editor read. The daemon makes the same checks as `write_project_file`. A pane of another machine saves
+/// only a markdown document, through that machine's own daemon (ADR 0014).
+#[tauri::command]
+async fn save_project_file(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    term: u32,
+    path: String,
+    contents: String,
+    version: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let daemon = wire.save_daemon(machine, &path, || daemon_executable(&app))?;
+    maitty_desktop_client::save_project_file(term, path, contents, version, daemon)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// The person's answer to an agent's request for a secret: the value, or none to decline (ADR 0006). This
 /// computer's daemon only; the value is passed on and not kept or logged.
 #[tauri::command]
@@ -1165,14 +1186,6 @@ async fn answer_secret(
     maitty_desktop_client::answer_secret(id, value, daemon_executable(&app)?)
         .await
         .map_err(|error| format!("{error:#}"))
-}
-
-/// The GitHub repository a folder's `origin` points at (`owner/name`), or none. This computer's folders only: the
-/// Tickets view links a project to its repository with it.
-#[tauri::command]
-async fn github_repo_of(wire: tauri::State<'_, terminal_stream::Wire>, machine: Option<u16>, folder: String) -> Result<Option<String>, String> {
-    wire.require_local(machine, "Reading a folder's GitHub repository")?;
-    maitty_desktop_client::github_repo_of(PathBuf::from(folder)).await.map_err(|error| format!("{error:#}"))
 }
 
 /// The files more than one of a project's checkouts changed (name, folder per checkout). This computer's only.
@@ -1768,6 +1781,7 @@ pub fn run() {
             terminal_stream::terminal_history,
             terminal_stream::watch_terminal_output,
             terminal_stream::list_folders,
+            terminal_stream::create_folder,
             terminal_stream::ask_machine_list,
             terminal_stream::clone_repository,
             terminal_stream::agent_sign_in,
@@ -1775,11 +1789,8 @@ pub fn run() {
             terminal_stream::github_repos,
             terminal_stream::github_owners,
             terminal_stream::agent_commands_on,
-            terminal_stream::tickets,
-            github_repo_of,
-            terminal_stream::ticket_keys,
+            terminal_stream::repositories,
             terminal_stream::extensions,
-            terminal_stream::ticket_links,
             terminal_stream::get_shared_settings,
             terminal_stream::set_shared_setting,
             output_socket::open_terminal_socket,
@@ -1816,6 +1827,7 @@ pub fn run() {
             handoff_brief,
             worktree_overlaps,
             write_project_file,
+            save_project_file,
             check_output,
             pin_terminal_session,
             archive_terminal_session,
@@ -1854,8 +1866,19 @@ pub fn run() {
             restart_stale_daemon,
             performance::performance_sample
         ])
-        .run(tauri::generate_context!())
-        .expect("Maiker desktop host failed");
+        .build(tauri::generate_context!())
+        .expect("Maiker desktop host failed")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested {
+                code: Some(code),
+                api,
+                ..
+            } = event
+                && tray::close_instead_of_exit(app, code)
+            {
+                api.prevent_exit();
+            }
+        });
 }
 
 #[cfg(test)]
@@ -1990,14 +2013,16 @@ mod tests {
     #[test]
     fn daemon_lookup_uses_the_first_existing_packaged_or_adjacent_binary() {
         let directory = std::env::temp_dir().join(format!(
-            "maiker-gui-daemon-path-{}-{}",
+            "{}-path-{}-{}",
+            maitty_shared::brand::DAEMON_NAME,
             std::process::id(),
             NEXT_TEMP_DIRECTORY.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir(&directory).unwrap();
 
         let missing_resource = directory.join("resources").join("maiker.exe");
-        let adjacent_sidecar = directory.join("maiker-gui-daemon-x86_64-pc-windows-msvc.exe");
+        let sidecar_name = format!("{}-x86_64-pc-windows-msvc.exe", maitty_shared::brand::DAEMON_NAME);
+        let adjacent_sidecar = directory.join(&sidecar_name);
         let adjacent_daemon = directory.join("maiker.exe");
         std::fs::write(&adjacent_sidecar, []).unwrap();
         std::fs::write(&adjacent_daemon, []).unwrap();
@@ -2014,13 +2039,13 @@ mod tests {
         assert_eq!(
             first_existing_daemon(&[
                 packaged_daemon.clone(),
-                directory.join("maiker-gui-daemon-x86_64-pc-windows-msvc.exe"),
+                directory.join(&sidecar_name),
                 directory.join("maiker.exe"),
             ]),
             Some(packaged_daemon.clone())
         );
 
-        std::fs::remove_file(directory.join("maiker-gui-daemon-x86_64-pc-windows-msvc.exe"))
+        std::fs::remove_file(directory.join(&sidecar_name))
             .unwrap();
         std::fs::remove_file(directory.join("maiker.exe")).unwrap();
         std::fs::remove_file(packaged_daemon).unwrap();

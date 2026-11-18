@@ -1,17 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
 import { restartMismatchedDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
-import { serviceStateOf } from './model/serviceState'
 import { daemonConnectionError } from '@/lib/daemon-connection'
 import { appBehindStep } from '@/features/updates/appBehind'
 import { useUpdater } from '@/features/updates/useUpdater'
+import { serviceRestartStep } from '@/features/updates/serviceRestart'
+import { useIdleServiceRestart } from '@/features/updates/useIdleServiceRestart'
 import type { AppBehindOffer, RestartOffer } from './components/states'
-import { serviceStep } from '@/features/updates/finishUpdate'
 
 /**
- * The desktop app: a terminal multiplexer window over sessions maikerd owns. Tabs and
+ * The desktop app: a terminal multiplexer window over sessions the daemon owns. Tabs and
  * splits are this window's arrangement; closing them only detaches.
  */
 /** What restarting an older service does to the sessions it owns, in words. */
@@ -24,32 +24,22 @@ function olderServiceNote(status: { canRestart: boolean; sessionCount: number; a
 }
 
 /** What the window offers when it and the service speak different protocols: restart the older service, or update the older app. */
-export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, online, failures, sessionsQuery, afterAppUpdate = false }: {
+export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, sessionsQuery, restartServiceWhenIdle, starting, afterAppUpdate = false }: {
   mismatch: { daemonProtocol: number; guiProtocol: number } | null
   serviceNewer: boolean
   restartStatusQuery: UseQueryResult<{ daemonProtocol: number; guiProtocol: number; canRestart: boolean; sessionCount: number; activeTurnCount: number | null }>
   refetchSessions: () => Promise<unknown>
   updater: ReturnType<typeof useUpdater>
   restartNow: () => void
-  online: boolean
-  failures: number
   sessionsQuery: UseQueryResult<Conversation[]>
+  /** Settings › General › Restart the service when idle. */
+  restartServiceWhenIdle: boolean
+  /** A session is being started from this window. */
+  starting: boolean
   /** This launch is the app restarted into an update: an older service is restarted as part of it, once no agent works. */
   afterAppUpdate?: boolean
 }) {
   const [restartPending, setRestartPending] = useState(false)
-  const status = restartStatusQuery.data
-  const unasked = mismatch !== null && !serviceNewer && afterAppUpdate && status !== undefined
-    && serviceStep({ afterAppUpdate, restartWhenIdle: false, canRestart: status.canRestart, activeTurnCount: status.activeTurnCount }) === 'restart'
-  // Tried once for each older service: a restart that failed leaves the card and its button.
-  const tried = useRef<number | null>(null)
-  useEffect(() => {
-    if (!unasked || tried.current === mismatch.daemonProtocol) return
-    tried.current = mismatch.daemonProtocol
-    void restartMismatchedDaemon(mismatch.daemonProtocol)
-      .then(() => refetchSessions())
-      .catch((error: unknown) => { toast.failure(error, 'Could not finish updating the Maiker service') })
-  }, [unasked, mismatch, refetchSessions])
   const restartOffer: RestartOffer | null = mismatch && !serviceNewer
     ? {
         label: restartStatusQuery.isPending ? 'Checking service…' : restartStatusQuery.isError ? 'Restart check failed' : restartStatusQuery.data.canRestart ? (restartStatusQuery.data.sessionCount > 0 ? `Restart and restore ${String(restartStatusQuery.data.sessionCount)} session${restartStatusQuery.data.sessionCount === 1 ? '' : 's'}` : 'Restart service') : 'Service in use',
@@ -59,18 +49,28 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
         to: mismatch.guiProtocol,
         sessions: restartStatusQuery.data?.sessionCount ?? 0,
         working: restartStatusQuery.data?.activeTurnCount ?? 0,
-        onRestart: () => {
+        onRestart: (automatic = false) => {
           setRestartPending(true)
           void restartMismatchedDaemon(mismatch.daemonProtocol)
             .then(async () => {
               await refetchSessions()
-              toast.success(`Service restarted · ${String(restartStatusQuery.data?.sessionCount ?? 0)} sessions back`)
+              toast.success(`Service restarted · ${String(restartStatusQuery.data?.sessionCount ?? 0)} sessions back`, automatic ? { description: 'It restarted by itself because no agent was working or waiting.' } : undefined)
             })
-            .catch((error: unknown) => { toast.failure(error, 'Could not restart the Maiker service') })
+            .catch((error: unknown) => { toast.failed('Could not restart the Maiker service', error) })
             .finally(() => { setRestartPending(false) })
         },
       }
     : null
+  // The same button flow, run for you at a quiet moment: under Restart the service when idle, or right after an app
+  // update, whose service restart is part of it. The window cannot read sessions from a service on another protocol,
+  // so the service's own count of working and waiting agents is the guard here.
+  const refetchRestartStatus = restartStatusQuery.refetch
+  useIdleServiceRestart({
+    step: serviceRestartStep({ enabled: restartServiceWhenIdle || afterAppUpdate, restarting: restartPending, starting, service: restartStatusQuery.data, sessionStatuses: null }),
+    key: restartOffer && restartOffer.canRestart ? `protocol-${String(restartOffer.from)}` : null,
+    restart: () => { restartOffer?.onRestart(true) },
+    recheck: () => { void refetchRestartStatus() },
+  })
   const appBehindAction = appBehindStep(updater.state)
   const appBehindOffer: AppBehindOffer | null = mismatch && serviceNewer
     ? {
@@ -85,8 +85,6 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
         appProtocol: mismatch.guiProtocol,
       }
     : null
-  const serviceState = serviceStateOf({ online, failures, mismatch: Boolean(mismatch) })
-  const serviceFooterText = serviceState === 'down' ? 'Service stopped' : serviceState === 'update' ? 'Restart needed' : undefined
   const offlineDetail = mismatch && !serviceNewer ? `${daemonConnectionError(sessionsQuery.error)}${olderServiceNote(restartStatusQuery.data)}` : null
-  return { serviceFooterText, offlineDetail, restartOffer, appBehindOffer }
+  return { offlineDetail, restartOffer, appBehindOffer }
 }

@@ -1,5 +1,5 @@
 //! Put away and Bring back: the row action, the lists that leave a put-away session out, and the
-//! Put away list. `MAIKER_SHOW=1 cargo test put_away_tests -- --nocapture` prints the frames.
+//! Put away list. `AGENT_SHOW=1 cargo test put_away_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::ids::Outgoing;
@@ -33,7 +33,7 @@ fn archived_sent(rx: &mut mpsc::UnboundedReceiver<Outgoing>) -> Vec<(TermId, boo
 
 fn frame(app: &mut App, title: &str) -> String {
     let text = raw_text(app, Layout::Floating, 120, 30, "unicode");
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("---- {title}\n{text}");
     }
     text

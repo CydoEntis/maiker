@@ -19,15 +19,20 @@ const ASKED_MAX: usize = 64;
 /// takes to cross the line.
 const CLONE_ANSWER_MARGIN: Duration = Duration::from_secs(30);
 
-/// The longest one ticket read can take in the daemon: `gh` run twice, 30 seconds each (a Plane rate limit is
-/// waited out for less).
-const TICKET_READ_LIMIT: Duration = Duration::from_secs(2 * 30);
-/// How long a ticket read's answer is waited for: the daemon's limit, then the time the answer takes to cross.
-const TICKETS_ANSWER_WINDOW: Duration = TICKET_READ_LIMIT.saturating_add(CLONE_ANSWER_MARGIN);
+/// The longest an extension request takes in the daemon: it may run Claude Code's or Codex's own command twice, 30
+/// seconds each.
+const EXTENSION_REQUEST_LIMIT: Duration = Duration::from_secs(2 * 30);
+/// How long an extension request's answer is waited for: the daemon's limit, then the time the answer takes to cross.
+const EXTENSIONS_ANSWER_WINDOW: Duration = EXTENSION_REQUEST_LIMIT.saturating_add(CLONE_ANSWER_MARGIN);
 
 /// How long a list of GitHub repositories or owners is waited for. The daemon gives `gh` 15 seconds
 /// to say who is signed in, then `GITHUB_LIST_LIMIT_SECS` to list, and the answer has to cross.
 const GITHUB_LIST_ANSWER_WINDOW: Duration = Duration::from_secs(15 + maitty_shared::protocol::GITHUB_LIST_LIMIT_SECS + 30);
+
+/// How long a repository list is waited for: a search the daemon runs for its own limit, then the
+/// time the answer takes to cross.
+const REPOSITORIES_ANSWER_WINDOW: Duration =
+    Duration::from_secs(maitty_shared::repositories::REPOSITORY_SEARCH_LIMIT_SECS).saturating_add(CLONE_ANSWER_MARGIN);
 
 /// The requests one machine has not answered yet, each as the moment its answer stops being expected.
 #[derive(Debug, Default)]
@@ -78,13 +83,8 @@ pub fn answer_window(msg: &ClientMsg) -> Option<Duration> {
         ClientMsg::Query(
             maitty_shared::protocol::Query::GitHubRepos { .. } | maitty_shared::protocol::Query::GitHubOwners { .. },
         ) => Some(GITHUB_LIST_ANSWER_WINDOW),
-        ClientMsg::Query(
-            maitty_shared::protocol::Query::Tickets { .. }
-            | maitty_shared::protocol::Query::TicketWrite { .. }
-            | maitty_shared::protocol::Query::Extensions { .. },
-        ) => {
-            Some(TICKETS_ANSWER_WINDOW)
-        }
+        ClientMsg::Query(maitty_shared::protocol::Query::Repositories { .. }) => Some(REPOSITORIES_ANSWER_WINDOW),
+        ClientMsg::Query(maitty_shared::protocol::Query::Extensions { .. }) => Some(EXTENSIONS_ANSWER_WINDOW),
         ClientMsg::Command(_) | ClientMsg::Query(_) => Some(ANSWER_WINDOW),
         _ => None,
     }
@@ -174,6 +174,14 @@ mod tests {
             let window = answer_window(&msg).expect("a list is answered");
             assert!(window > Duration::from_secs(GITHUB_LIST_LIMIT_SECS) && window > ANSWER_WINDOW);
         }
+    }
+
+    #[test]
+    fn a_repository_search_is_waited_for_longer_than_the_daemon_is_given_to_make_it() {
+        use maitty_shared::protocol::Query;
+        let asked = ClientMsg::Query(Query::Repositories { rescan: true, tag: 1 });
+        let window = answer_window(&asked).expect("a list is answered");
+        assert!(window > Duration::from_secs(maitty_shared::repositories::REPOSITORY_SEARCH_LIMIT_SECS) && window > ANSWER_WINDOW);
     }
 
     #[test]

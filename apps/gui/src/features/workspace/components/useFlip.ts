@@ -54,8 +54,10 @@ function places(root: HTMLElement): Map<string, number> {
  * in where it will stay. A list that changes again mid-glide carries on from where each thing is drawn, not from
  * where it started. Things are found by `data-flip`; nothing moves when motion is reduced. While a section folds
  * nothing glides (the fold is the movement), and where things are when it ends is where the next glide starts from.
+ * The list is measured only when `layoutKey` changes (the caller names what can move rows: their order, sections and
+ * heights), not on every draw, so a hover or a poll that changes nothing costs no layout reads.
  */
-export function useFlip(container: RefObject<HTMLElement | null>, reduced: boolean): void {
+export function useFlip(container: RefObject<HTMLElement | null>, reduced: boolean, layoutKey: string): void {
   const previous = useRef(new Map<string, number>())
   const glides = useRef(new WeakMap<HTMLElement, Animation>())
   useLayoutEffect(() => {
@@ -80,7 +82,8 @@ export function useFlip(container: RefObject<HTMLElement | null>, reduced: boole
       }
     }
     previous.current = now
-  })
+    // `layoutKey` is the trigger: it stands for what the effect reads from the page.
+  }, [container, reduced, layoutKey])
   // A fold that ends leaves everything where it now belongs, with no draw of the list to notice it.
   useEffect(() => {
     const root = container.current

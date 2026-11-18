@@ -387,7 +387,7 @@ pub fn integrate_agents(exe: &Path) -> Result<(), String> {
 }
 
 pub(crate) fn integrate_opted_out() -> bool {
-    std::env::var(concat!(env!("APP_ENV"), "_NO_INTEGRATE")).is_ok_and(|v| v == "1")
+    maitty_shared::brand::env_var("NO_INTEGRATE").is_ok_and(|v| v == "1")
 }
 
 /// The sha256 `sha256sums.txt` lists for `asset`, lowercase.

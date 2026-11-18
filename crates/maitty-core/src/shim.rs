@@ -13,7 +13,26 @@ use std::path::{Path, PathBuf};
 
 /// Set for the one command a shell function has already asked about, so the launcher the
 /// function then reaches through PATH does not ask again.
-pub const DONE_VAR: &str = concat!(env!("APP_ENV"), "_AGENT_DIR_DONE");
+pub const DONE_VAR: &str = concat!(env!("APP_ENV"), "_DIR_DONE");
+
+/// `DONE_VAR` under every prefix the app has had. A shell that was already open when the app
+/// was updated still sets the old one, and the launcher must not ask a second time (ADR 0012).
+pub fn done_vars() -> Vec<String> {
+    // Before the prefix was generic the variable was `<prefix>_<name of the current one>`.
+    let before = maitty_shared::brand::previous_env_prefixes()
+        .map(|prefix| format!("{prefix}_{DONE_VAR}"));
+    maitty_shared::brand::env_names("DIR_DONE")
+        .into_iter()
+        .chain(before)
+        .collect()
+}
+
+/// Whether the command in hand was already asked about.
+pub fn is_done() -> bool {
+    done_vars()
+        .iter()
+        .any(|name| std::env::var_os(name).is_some())
+}
 
 /// First lines of every launcher the app writes: how `install` knows a file is its own to
 /// replace or remove.
@@ -32,6 +51,13 @@ fn sh_quote(s: &str) -> String {
 /// launchers live in (taken off PATH before the real agent is looked for, so it can never
 /// run itself).
 pub fn unix_script(agent: &str, exe: &str, dir: &str) -> String {
+    let done = done_vars();
+    let done_test = done
+        .iter()
+        .map(|name| format!("[ -z \"${{{name}:-}}\" ]"))
+        .collect::<Vec<_>>()
+        .join(" && ");
+    let done_unset = done.join(" ");
     format!(
         r#"#!/bin/sh
 # {MARKER}: written by {APP_COMMAND}. Asks {APP_COMMAND} where {agent} should start (a new worktree, in a repo's
@@ -59,13 +85,13 @@ if [ -z "$real" ]; then
   printf '%s: command not found\n' "$agent" >&2
   exit 127
 fi
-if [ -z "${{{DONE_VAR}:-}}" ]; then
+if {done_test}; then
   d=$("${APP_COMMAND}" agent-dir "$agent" "$@" </dev/null) || d=
   if [ -n "$d" ]; then
     cd -- "$d" || printf '{APP_COMMAND}: could not enter %s; starting here\n' "$d" >&2
   fi
 fi
-unset {DONE_VAR}
+unset {done_unset}
 PATH=$clean
 export PATH
 exec "$real" "$@"
@@ -679,7 +705,7 @@ mod tests {
                 concat!(
                     "echo \"path:$PATH\"\necho \"done:${",
                     env!("APP_ENV"),
-                    "_AGENT_DIR_DONE-unset}\""
+                    "_DIR_DONE-unset}\""
                 ),
             );
             let out = stdout(&rig.bash("", "", "claude", &[(DONE_VAR, "1")]));

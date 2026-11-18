@@ -70,7 +70,7 @@ export function useEditFromHere({ place, conversation, events, agent, busy }: In
         updateComposer(conversation, (state) => ({ ...messageIntoDraft(stripRestoreNote(ask.text))(state), note: restoreNote(ask.text) }))
         toast.success(changed === 0 ? 'The files already matched; the message is back in the box' : `Restored ${changed === 1 ? '1 file' : `${String(changed)} files`}; the message is back in the box`)
       },
-      (failure: unknown) => { toast.failure(failure, 'Could not restore the files') },
+      (failure: unknown) => { toast.failed('Could not restore the files', failure) },
     )
   }, [ask, term, disabledNow, conversation])
   const cancel = useCallback(() => { setAsk(null) }, [])

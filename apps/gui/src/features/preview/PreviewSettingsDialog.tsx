@@ -3,6 +3,7 @@ import type { UseQueryResult } from '@tanstack/react-query'
 import type { ThemePreference } from '@/data/themePreference'
 import { toast } from '@/lib/toast'
 import { showNotice } from '@/features/notifications/notify'
+import { APP_NAME } from '@/brand'
 import type { Conversation } from '@/data/preview'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { SettingsDialog } from '@/features/settings/components/SettingsDialog'
@@ -42,7 +43,7 @@ export function PreviewSettingsDialog({ settingsDialogOpen, setSettingsDialogOpe
         showNotice({
           kind: 'info',
           title: 'Test notification',
-          body: 'Maiker notifications are working.',
+          body: `${APP_NAME} notifications are working.`,
         })
         if (settingsPreferences.notificationSound) playNotificationSound()
       }}

@@ -6,7 +6,6 @@ import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/fe
 import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
 import { DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '@/features/workspace/model/chatView'
 
-export type ToastPosition = 'top-left' | 'top-center' | 'top-right' | 'bottom-left' | 'bottom-center' | 'bottom-right'
 export type CursorStyle = 'block' | 'bar' | 'underline'
 /** How much room the sidebar's rows, the tabs and the panes get. */
 export type Density = 'compact' | 'comfortable' | 'spacious'
@@ -59,7 +58,6 @@ export type SettingsPreferences = {
   animateSidebarActivity: boolean
   /** The desktop sidebar is collapsed to its rail. */
   compactSidebar: boolean
-  toastPosition: ToastPosition
   notifyNeedsYou: boolean
   notifyFinished: boolean
   /** A session's program exited with an error (a native notification, while the window is in the background). */
@@ -81,7 +79,7 @@ export type SettingsPreferences = {
   darkTheme: string
   lightTheme: string
   cursorStyle: CursorStyle
-  /** Lines each pane keeps; maikerd keeps the full history. */
+  /** Lines each pane keeps; the daemon keeps the full history. */
   scrollback: ScrollbackLines
   scrollSpeed: ScrollSpeed
   /** Mirror the terminal's text into the page for screen readers. It makes every pane much heavier to draw. */
@@ -112,8 +110,6 @@ export type SettingsPreferences = {
   defaultAgent: ChatAgent
   /** The chat leaves out runs of reads and searches that succeeded (`isQuietRun`). Off until you turn it on. */
   hideSuccessfulTools: boolean
-  /** The tools bar also has Files and History, beside Changes and Checks. Off: the bar keeps to reviewing what agents did. */
-  morePanelTools: boolean
   /**
    * The agents switched off in Settings › Permissions › Bypass Permissions. Every other agent starts without permission
    * prompts (its own flag; a chat with its skip-permissions mode). Shared with the terminal app (`[permissions.bypass]`).
@@ -132,6 +128,8 @@ export type SettingsPreferences = {
   /** Restart into a downloaded update when no session is working or waiting on you. */
   /** Install a downloaded update while the app is idle. Kept under its old key so a stored choice carries over. */
   restartWhenIdle: boolean
+  /** Restart an older service by itself once no agent is working, waiting on you or starting. Off by default: the restart stops running shells. */
+  restartServiceWhenIdle: boolean
   /** Monthly spend in US dollars the Usage page's ring measures against; null is no budget (the default). Kept here because the daemon serves none. */
   monthlyBudget: number | null
 }
@@ -171,7 +169,6 @@ function defaults(): SettingsPreferences {
     reduceMotion: false,
     animateSidebarActivity: true,
     compactSidebar: false,
-    toastPosition: 'top-right',
     notifyNeedsYou: true,
     notifyFinished: true,
     notifyError: true,
@@ -207,7 +204,6 @@ function defaults(): SettingsPreferences {
     chatViewDefault: DEFAULT_CHAT_VIEWS,
     defaultAgent: 'claude',
     hideSuccessfulTools: false,
-    morePanelTools: false,
     bypassOff: [],
     updateMachines: true,
     perfOverlay: false,
@@ -216,6 +212,7 @@ function defaults(): SettingsPreferences {
     cursorBlink: false,
     autoDownloadUpdates: true,
     restartWhenIdle: true,
+    restartServiceWhenIdle: false,
     monthlyBudget: null,
   }
 }
@@ -235,6 +232,14 @@ function readStored(): string | null {
     return null
   }
 }
+
+/**
+ * The redesign made Folded corners and the Chat view the defaults, after Square and Terminal had been saved as plain
+ * defaults. A blob saved before that has no era marker, so those two are old defaults, not choices: they read as the new
+ * defaults. From the marker on, a saved choice wins.
+ */
+const CORNERS_ERA_KEY = 'cornersEra'
+const CORNERS_ERA = 2
 
 /** The agents a Bypass Permissions switch can name. */
 export const BYPASS_AGENTS: readonly ChatAgent[] = ['claude', 'codex', 'gemini']
@@ -267,7 +272,6 @@ export function readSettingsPreferences(): SettingsPreferences {
       reduceMotion: bool(preferences.reduceMotion, fallback.reduceMotion),
       animateSidebarActivity: bool(preferences.animateSidebarActivity, fallback.animateSidebarActivity),
       compactSidebar: bool(preferences.compactSidebar, fallback.compactSidebar),
-      toastPosition: isToastPosition(preferences.toastPosition) ? preferences.toastPosition : fallback.toastPosition,
       notifyNeedsYou: bool(preferences.notifyNeedsYou, fallback.notifyNeedsYou),
       notifyFinished: bool(preferences.notifyFinished, fallback.notifyFinished),
       notifyError: bool(preferences.notifyError, fallback.notifyError),
@@ -293,13 +297,12 @@ export function readSettingsPreferences(): SettingsPreferences {
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       iconSize: preferences.iconSize === 'small' || preferences.iconSize === 'medium' || preferences.iconSize === 'large' ? preferences.iconSize : fallback.iconSize,
       // Before the corner switch a window style was saved under `style`; its corners carry over.
-      corners: (isCorners(preferences.corners) ? preferences.corners : null) ?? cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
+      corners: ((value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA && isCorners(preferences.corners) ? preferences.corners : null) ?? cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,
-      chatViewDefault: chatViewDefault(preferences.chatViewDefault, fallback.chatViewDefault),
+      chatViewDefault: (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? chatViewDefault(preferences.chatViewDefault, fallback.chatViewDefault) : fallback.chatViewDefault,
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
-      morePanelTools: bool(preferences.morePanelTools, fallback.morePanelTools),
       // The old Yolo and Full access switches are not read: they were off by default, not a choice to keep.
       bypassOff: bypassOffOf(preferences.bypassOff) ?? fallback.bypassOff,
       updateMachines: bool(preferences.updateMachines, fallback.updateMachines),
@@ -308,6 +311,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
       autoDownloadUpdates: bool(preferences.autoDownloadUpdates, fallback.autoDownloadUpdates),
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),
+      restartServiceWhenIdle: bool(preferences.restartServiceWhenIdle, fallback.restartServiceWhenIdle),
       monthlyBudget: validBudget(preferences.monthlyBudget),
       iconColor: preferences.iconColor === 'color' || preferences.iconColor === 'grayscale' ? preferences.iconColor : fallback.iconColor,
       keyOverrides: readKeyOverrides(preferences.keyOverrides),
@@ -319,12 +323,9 @@ export function readSettingsPreferences(): SettingsPreferences {
 }
 
 export function writeSettingsPreferences(preferences: SettingsPreferences): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...preferences, [CORNERS_ERA_KEY]: CORNERS_ERA }))
 }
 
-function isToastPosition(value: unknown): value is ToastPosition {
-  return value === 'top-left' || value === 'top-center' || value === 'top-right' || value === 'bottom-left' || value === 'bottom-center' || value === 'bottom-right'
-}
 
 // Sizes saved outside the 11–16 range are kept as the nearest size in it.
 function terminalFontSize(value: unknown, fallback: number): number {

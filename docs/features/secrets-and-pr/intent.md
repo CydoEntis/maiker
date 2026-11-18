@@ -31,7 +31,7 @@ protocol, the client prompt, the status line and sidebar, and the `maiker` CLI.
 
 ## Constraints
 
-- Builds on the existing MCP server and `MAIKER_PANE_TOKEN` trust; there is no new server
+- Builds on the existing MCP server and `AGENT_PANE_TOKEN` trust; there is no new server
   (AGENTS.md non-negotiable 5).
 - Only the user can answer a secret prompt. Like `AnswerHelpers`, the answer is refused from
   inside a pane.

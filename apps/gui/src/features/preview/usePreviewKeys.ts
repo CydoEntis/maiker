@@ -195,7 +195,7 @@ export function usePreviewKeys({ setCommandDialogOpen, openTabIds, selected, sel
             conversation.status === 'recovery',
         )
         if (blocked.length === 0) {
-          toast.message('No conversations need your attention')
+          toast.info('No conversations need your attention')
           return
         }
         const firstBlocked = blocked[0]

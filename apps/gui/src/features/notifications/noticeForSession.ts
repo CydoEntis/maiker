@@ -1,9 +1,6 @@
 import { displayName, truncatePrompt, type SessionView } from '@/features/workspace/model/session'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
-import type { SessionNoticeProps } from './SessionNotice'
-
-/** Finished and failed cards go by themselves, with a thin line showing how long is left; one that needs you waits. */
-export const SELF_DISMISS_MS = 7000
+import type { Notice } from './notify'
 
 type Project = { name: string } | undefined
 type Handlers = {
@@ -14,8 +11,11 @@ type Handlers = {
 
 const HEADLINE = { needs: 'needs you', done: 'finished', error: 'failed' } as const
 
-/** The in-window card for a session that just needed you, finished or failed. The card may show what it is asking: it is in your own window, unlike a system notification. */
-export function sessionNoticeFor(session: SessionView, _project: Project, handlers: Handlers): SessionNoticeProps | null {
+/**
+ * The in-window toast for a session that just needed you, finished or failed. It may show what it is asking: it is in your
+ * own window, unlike a system notification. A finished one goes by itself; one that needs you or failed waits.
+ */
+export function sessionNoticeFor(session: SessionView, _project: Project, handlers: Handlers): Notice | null {
   const kind = session.status
   if (kind !== 'needs' && kind !== 'done' && kind !== 'error') return null
   const name = displayName(session)
@@ -32,12 +32,9 @@ export function sessionNoticeFor(session: SessionView, _project: Project, handle
   const allow = kind === 'needs' && answerable ? handlers.allow : null
   return {
     kind,
-    process: session.process,
-    status: kind,
     title: name,
     state: HEADLINE[kind],
     body,
     actions: [...(allow ? [{ label: 'Allow', primary: true, onClick: allow }] : []), { label: 'Open session', onClick: handlers.open }],
-    ...(kind === 'needs' ? {} : { countdownMs: SELF_DISMISS_MS }),
   }
 }

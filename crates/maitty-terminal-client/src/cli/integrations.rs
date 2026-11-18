@@ -8,10 +8,18 @@ mod opencode_config;
 const OWNED_HEADER: &str = concat!("// Written by `", env!("APP_COMMAND"), " integrate");
 
 /// An adapter template with the app's name and its program's path filled in: the templates say
-/// `__APP_NAME__`, `__APP_COMMAND__`, `__APP_ENV__` and `__APP_EXE__` (ADR 0008).
+/// `__APP_NAME__`, `__APP_COMMAND__`, `__APP_ENV__`, `__APP_ENV_PREVIOUS__` (the prefix before
+/// the current one, so an agent started before an update still reports) and `__APP_EXE__`
+/// (ADR 0008, 0012).
 fn fill(template: &str, exe: &str) -> Result<String> {
     Ok(template
         .replace("__APP_EXE__", &serde_json::to_string(exe)?)
+        .replace(
+            "__APP_ENV_PREVIOUS__",
+            crate::brand::previous_env_prefixes()
+                .next()
+                .unwrap_or(crate::brand::APP_ENV),
+        )
         .replace("__APP_ENV__", crate::brand::APP_ENV)
         .replace("__APP_NAME__", crate::brand::APP_NAME)
         .replace("__APP_COMMAND__", crate::brand::APP_COMMAND))

@@ -2,6 +2,7 @@ import { markClosed } from './closedSessions'
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
 import type { AgentTerminals } from '@/data/agentTerminals'
 import { LOCAL_MACHINE } from '@/api/machines'
+import { guardDrafts, ofSessions } from '@/features/documents/draftGuard'
 import { movePanes } from './components/paneTransition'
 import { type Layout, removeSessions } from './model/layout'
 import type { SessionView } from './model/session'
@@ -47,6 +48,7 @@ export function useAgentExits({ sessions, listed, setLayout, agentTerminals, end
     // With terminals to end, the close takes the agents' panes out as well, in the one layout change it makes when
     // the daemon has answered: a change made here first would be undone by it.
     if (theirs.length > 0) endSessions([...gone, ...theirs])
-    else movePanes(() => { setLayout((current) => removeSessions(current, new Set(gone))) })
+    // A document with a draft in it is asked about; if the person keeps editing, the pane stays beside the ended one.
+    else guardDrafts(ofSessions(new Set(gone)), () => { movePanes(() => { setLayout((current) => removeSessions(current, new Set(gone))) }) })
   }, [sessions, listed, setLayout, agentTerminals, endSessions])
 }

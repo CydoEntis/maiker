@@ -7,6 +7,7 @@ import { environmentOf, useProcessSample } from '../performance-sample'
 import { Card, Row } from './DesktopSettings'
 import { Switch } from '@/components/ui/switch'
 import { copyText } from '@/lib/clipboard'
+import { DAEMON_NAME } from '@/brand'
 
 type Update = <K extends keyof SettingsPreferences>(key: K, value: SettingsPreferences[K]) => void
 
@@ -75,7 +76,7 @@ export function PerformanceSection({ preferences, update, appVersion }: Performa
         <Row label="Web view" detail="Draws everything you see. This is where lag usually lives.">
           <Value>{loads ? (loads.webview.length === 0 ? 'not measurable here' : loadText(loads.webview)) : PENDING}</Value>
         </Row>
-        <Row label="Daemons" detail="Every maikerd on this machine. More than one usually means a stale one is still running.">
+        <Row label="Daemons" detail={`Every ${DAEMON_NAME} on this machine. More than one usually means a stale one is still running.`}>
           <Value>{loads ? `${String(loads.daemons.length)} · ${loadText(loads.daemons)}` : PENDING}</Value>
         </Row>
         {loads?.daemons.map((daemon) => (

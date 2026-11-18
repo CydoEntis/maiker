@@ -1,3 +1,4 @@
+import { Switch } from '@/components/ui/switch'
 import { useState } from 'react'
 import { Check, CheckCheck, ChevronDown, CircleHelp, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -213,11 +214,10 @@ function UserInputRequest({
           <p>{question.question}</p>
           {question.options.map((option) => (
             <label className="user-input-option" key={option.label}>
-              <input
-                type="checkbox"
+              <Switch
                 checked={(selected[question.id] ?? []).includes(option.label)}
-                onChange={(event) => {
-                  toggle(question.id, option.label, event.target.checked)
+                onCheckedChange={(value) => {
+                  toggle(question.id, option.label, value)
                 }}
                 disabled={disabled}
               />

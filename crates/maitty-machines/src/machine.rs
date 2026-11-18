@@ -168,14 +168,14 @@ impl Machine {
     /// The machine `--remote host` (or `<APP>_REMOTE`) names, else this one. The flag's
     /// only reader: everything else is handed a `Machine`.
     pub fn current() -> Machine {
-        let Some(host) = std::env::var(concat!(env!("APP_ENV"), "_REMOTE"))
+        let Some(host) = maitty_shared::brand::env_var("REMOTE")
             .ok()
             .filter(|s| !s.trim().is_empty())
         else {
             return Machine::local();
         };
-        let ssh = std::env::var(concat!(env!("APP_ENV"), "_SSH")).ok();
-        let remote_cmd = std::env::var(concat!(env!("APP_ENV"), "_REMOTE_CMD")).ok();
+        let ssh = maitty_shared::brand::env_var("SSH").ok();
+        let remote_cmd = maitty_shared::brand::env_var("REMOTE_CMD").ok();
         Machine::adhoc(&host, ssh.as_deref(), remote_cmd)
     }
 
@@ -790,6 +790,20 @@ mod tests {
         }
     }
 
+    /// The window dials newest-only, so a machine whose daemon predates documents (`FILE_EDIT_SINCE`) is turned away
+    /// at connect time and offered its update: a document is never asked of one that would not answer it.
+    #[test]
+    fn a_daemon_older_than_saving_documents_is_not_used_by_the_window_but_the_newest_is() {
+        use maitty_ipc_transport::Welcomed;
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, FILE_EDIT_SINCE, PROTOCOL_VERSION};
+        let daemon = |version| Welcomed { version, compatible_since: COMPATIBLE_SINCE };
+        assert!(!super::accepts(true, daemon(FILE_EDIT_SINCE - 1)));
+        assert!(!super::accepts(true, daemon(PROTOCOL_VERSION - 1)));
+        assert!(super::accepts(true, daemon(PROTOCOL_VERSION)));
+        // A line that is not the window's (the terminal app) may still use an older daemon the two can talk to.
+        assert!(super::accepts(false, daemon(FILE_EDIT_SINCE - 1)));
+    }
+
     #[test]
     fn a_configured_machine_runs_ssh_with_its_args_and_the_default_command() {
         let m = super::Machine::from_def(&configured("box"), "ssh");
@@ -1121,18 +1135,6 @@ mod tests {
         assert!(structured(&configured_machine()).is_none());
         assert!(structured(&through(&["relay", "{command}"])).is_none());
         assert!(structured(&super::Machine::ssh("box", vec!["ssh".into()], "maiker")).is_none());
-    }
-
-    #[test]
-    fn a_link_that_wants_the_newest_refuses_an_older_daemon_it_could_still_talk_to() {
-        use super::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION};
-        const { assert!(COMPATIBLE_SINCE < PROTOCOL_VERSION) };
-        let welcomed = |version| maitty_ipc_transport::Welcomed { version, compatible_since: COMPATIBLE_SINCE };
-        let older = welcomed(PROTOCOL_VERSION - 1);
-        assert!(super::accepts(false, older));
-        assert!(!super::accepts(true, older));
-        assert!(super::accepts(true, welcomed(PROTOCOL_VERSION)));
-        assert!(!super::accepts(false, welcomed(COMPATIBLE_SINCE - 1)));
     }
 
     #[test]

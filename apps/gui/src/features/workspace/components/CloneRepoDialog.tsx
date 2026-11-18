@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { errorMessage } from '@/lib/error-message'
 import { GitHubRepoPicker, type GitHubRepoSource } from './GitHubRepoPicker'
+import { InlineNote } from '@/components/ui/feedback'
 
 /** Longest address and path the host accepts. */
 const MOST_ADDRESS_CHARS = 2048
@@ -88,7 +89,7 @@ export function CloneRepoDialog({ where, startIn, chooseFolder, clone, github, a
           </div>
           {account !== null && <p>Will use {account}</p>}
           {cloning && <p role="status">Cloning… A large repository can take a few minutes.</p>}
-          {failure !== null && <p role="alert">{failure}</p>}
+          {failure !== null && <InlineNote title="Could not clone the repository" reason={failure} />}
           <div className="mx-rename-actions">
             <button type="button" className="mx-text-button" disabled={cloning} onClick={onCancel}>Cancel</button>
             <button type="submit" className="mx-text-button is-primary" disabled={!ready}>{cloning ? 'Cloning…' : 'Clone'}</button>

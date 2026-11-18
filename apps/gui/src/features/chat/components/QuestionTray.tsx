@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useState, type KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
 import type { AskedQuestion, PermissionAsk } from '@/data/preview'
@@ -12,10 +12,14 @@ import { keysToPick, type ScreenMenu } from '../screenMenu'
 import type { TrustPrompt } from '../trustPrompt'
 import type { ApprovalActions } from './ApprovalCard'
 import { FileBadge } from './cardParts'
+import { agentName } from '../commandCards'
 import { Markdown } from './Markdown'
 import { UserInputForm } from './UserInputForm'
 import { TerminalPrompt } from './TerminalPrompt'
 import { WaitingCard } from './WaitingCard'
+
+/** The number keys that pick a choice: 1 to 9. */
+const MAX_DIGIT_KEYS = 9
 
 /** The tool Claude asks a multiple-choice question with; it is a question to the person, not a request to act. */
 const QUESTION_TOOL = 'AskUserQuestion'
@@ -43,7 +47,7 @@ function AnswerButton({ decision, busy, onAnswer }: { decision: Answer; busy: bo
 const RUN = (send: () => Promise<void>, setBusy: (busy: boolean) => void) => {
   setBusy(true)
   send()
-    .catch((error: unknown) => { toast.failure(error, 'Could not send your answer') })
+    .catch((error: unknown) => { toast.failed('Could not send your answer', error) })
     .finally(() => { setBusy(false) })
 }
 
@@ -170,22 +174,22 @@ type PromptProps = {
 }
 
 /**
- * One choice of a question: a box with its number key, lit in the needs colour once picked. In a form it is a radio
+ * One choice of a question: its number key, its words and a tick once picked, with no box around it. In a form it is a radio
  * button named `group`, or a checkbox when its question takes several answers (`several`).
  */
-function Choice({ label, index, picked, busy, onPick, group, several = false }: { label: string; index: number; picked: boolean; busy: boolean; onPick: () => void; group?: string; several?: boolean }) {
+function Choice({ label, index, picked, busy, onPick, group, several = false, active = false, onHover }: { label: string; index: number; picked: boolean; busy: boolean; onPick: () => void; group?: string; several?: boolean; active?: boolean; onHover?: () => void }) {
   const body = (
     <>
-      <span className="mx-option-mark" aria-hidden="true" />
+      <span className="mx-option-key" aria-hidden="true">{index + 1}</span>
       <span className="mx-option-text">{label}</span>
-      <kbd className="mx-option-key" aria-hidden="true">{index + 1}</kbd>
+      <span className="mx-option-tick" aria-hidden="true">{picked ? '✓' : ''}</span>
     </>
   )
   if (group === undefined) {
     return <button type="button" className="mx-option" aria-keyshortcuts={String(index + 1)} disabled={busy} onClick={onPick}>{body}</button>
   }
   return (
-    <label className={`mx-option${picked ? ' is-picked' : ''}${several ? ' is-check' : ''}`}>
+    <label className={`mx-option${picked ? ' is-picked' : ''}${active ? ' is-active' : ''}${several ? ' is-check' : ''}`} onMouseEnter={onHover}>
       <input type={several ? 'checkbox' : 'radio'} className="sr-only" name={group} checked={picked} disabled={busy} onChange={onPick} />
       {body}
     </label>
@@ -199,11 +203,11 @@ function Choice({ label, index, picked, busy, onPick, group, several = false }: 
 function OwnAnswer({ index, value, picked, busy, onChange, onSend, label = 'Your own answer' }: { index: number; value: string; picked: boolean; busy: boolean; onChange: (text: string) => void; onSend?: () => void; label?: string }) {
   return (
     <div className={`mx-option is-own${picked ? ' is-picked' : ''}`}>
-      <span className="mx-option-mark" aria-hidden="true" />
+      <span className="mx-option-key" aria-hidden="true">{index + 1}</span>
       <input
         className="mx-option-input"
         aria-label={label}
-        placeholder="Type your own answer"
+        placeholder="Or type your own answer"
         value={value}
         disabled={busy}
         onChange={(event) => { onChange(event.target.value) }}
@@ -215,19 +219,20 @@ function OwnAnswer({ index, value, picked, busy, onChange, onSend, label = 'Your
       />
       {onSend !== undefined
         ? <Button type="button" variant="needs" size="sm" disabled={busy || ownAnswerText(value) === ''} onClick={onSend}>Send</Button>
-        : <kbd className="mx-option-key" aria-hidden="true">{index + 1}</kbd>}
+        : null}
     </div>
   )
 }
 
 const answered = (answer: FormAnswer | undefined) => answer !== undefined && (answer.picked.length > 0 || ownAnswerText(answer.own) !== '')
 
-/** What the foot of a form says while answers are missing. */
-function formNote(questions: readonly AskedQuestion[], left: number): string {
-  if (left === 0) return 'Ready to send.'
-  if (questions.length === 1) return 'Pick at least one.'
-  return `${String(left)} more to answer`
+/** The keys a question card answers to, said in its foot. */
+function keysHint(choices: number): string {
+  return `1–${String(choices)} pick · ↑↓ move · ←→ question`
 }
+
+/** Whether a key press is typing into a field, where a digit or an arrow is text and not an answer. */
+const inField = (target: EventTarget) => target instanceof Element && target.closest('input, textarea') !== null
 
 /**
  * A form of questions, shown one at a time (layout 2h): a tab per question at the top, marked ✓ once answered, then
@@ -240,6 +245,8 @@ function QuestionsForm({ questions, busy, onSend }: { questions: readonly AskedQ
   const [answers, setAnswers] = useState<readonly FormAnswer[]>(() => questions.map(() => ({ picked: [], own: '' })))
   const left = answers.filter((answer) => !answered(answer)).length
   const [step, setStep] = useState(0)
+  // The choice the arrow keys are on.
+  const [hi, setHi] = useState(0)
   const at = Math.min(step, questions.length - 1)
   const asked = questions[at]
   const last = at === questions.length - 1
@@ -255,9 +262,39 @@ function QuestionsForm({ questions, busy, onSend }: { questions: readonly AskedQ
   const write = (at: number, own: string, several: boolean) => {
     setAnswers((now) => now.map((was, place) => (place !== at ? was : { picked: several ? was.picked : [], own })))
   }
+  const go = (to: number) => {
+    if (to < 0 || to >= questions.length) return
+    setStep(to)
+    setHi(0)
+  }
+  // 1 to 9 pick, up and down move, left and right change question, Enter goes on: when the keys are not typing into a field.
+  const onKeyDown = (event: KeyboardEvent<HTMLFormElement>) => {
+    if (busy || inField(event.target) || event.ctrlKey || event.metaKey || event.altKey || asked === undefined) return
+    const several = asked.multi === true
+    const count = asked.choices.length
+    const digit = Number(event.key)
+    if (Number.isInteger(digit) && digit >= 1 && digit <= Math.min(count, MAX_DIGIT_KEYS)) {
+      event.preventDefault()
+      choose(at, digit - 1, several)
+      setHi(digit - 1)
+      if (!several && !last) go(at + 1)
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      setHi((now) => Math.min(count - 1, Math.max(0, now + (event.key === 'ArrowDown' ? 1 : -1))))
+    } else if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+      event.preventDefault()
+      go(at + (event.key === 'ArrowRight' ? 1 : -1))
+    } else if (event.key === 'Enter' && event.target === event.currentTarget) {
+      event.preventDefault()
+      if (!last) go(at + 1)
+      else if (left === 0) onSend(answers)
+    }
+  }
   return (
     <form
       className="mx-waiting-form"
+      tabIndex={-1}
+      onKeyDown={onKeyDown}
       onSubmit={(event) => {
         event.preventDefault()
         if (left === 0 && !busy) onSend(answers)
@@ -268,7 +305,7 @@ function QuestionsForm({ questions, busy, onSend }: { questions: readonly AskedQ
           {questions.map((each, place) => {
             const done = answered(answers[place])
             return (
-              <button key={`${String(place)}-${each.question}`} type="button" role="tab" aria-selected={place === at} title={each.question} className={`mx-waiting-step${place === at ? ' is-on' : ''}${done ? ' is-done' : ''}`} onClick={() => { setStep(place) }}>
+              <button key={`${String(place)}-${each.question}`} type="button" role="tab" aria-selected={place === at} title={each.question} className={`mx-waiting-step${place === at ? ' is-on' : ''}${done ? ' is-done' : ''}`} onClick={() => { go(place) }}>
                 <span className="mx-waiting-step-mark" aria-hidden="true">{done ? '✓' : place + 1}</span>
                 <span className="mx-waiting-step-text">{each.question}</span>
               </button>
@@ -280,22 +317,26 @@ function QuestionsForm({ questions, busy, onSend }: { questions: readonly AskedQ
         <fieldset key={`${String(at)}-${asked.question}`} className="mx-waiting-question">
           <legend>{asked.question}{asked.multi === true && <>{' '}<span className="mx-waiting-any">Pick any</span></>}</legend>
           {asked.choices.map((choice, index) => (
-            <Choice key={`${String(index)}-${choice}`} label={choice} index={index} picked={answers[at]?.picked.includes(index) === true} busy={busy} group={`${name}-${String(at)}`} several={asked.multi === true} onPick={() => { choose(at, index, asked.multi === true) }} />
+            <Choice key={`${String(index)}-${choice}`} label={choice} index={index} picked={answers[at]?.picked.includes(index) === true} busy={busy} group={`${name}-${String(at)}`} several={asked.multi === true} active={hi === index} onHover={() => { setHi(index) }} onPick={() => { choose(at, index, asked.multi === true); setHi(index) }} />
           ))}
           <OwnAnswer index={asked.choices.length} value={answers[at]?.own ?? ''} picked={ownAnswerText(answers[at]?.own ?? '') !== ''} busy={busy} onChange={(text) => { write(at, text, asked.multi === true) }} />
         </fieldset>
       )}
       <div className="mx-waiting-foot is-form">
-        <span className="mx-waiting-note">{formNote(questions, left)}</span>
+        <span className="mx-waiting-note">{keysHint(asked?.choices.length ?? 0)}</span>
         <span className="mx-spacer" />
-        {at > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => { setStep(at - 1) }}>Back</Button>}
+        {at > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => { go(at - 1) }}>Back</Button>}
+        {!last && <Button type="button" variant="ghost" size="sm" onClick={() => { go(at + 1) }}>Skip</Button>}
         {last
-          ? <Button type="submit" variant="needs" keyHint="⏎" disabled={busy || left > 0}>{busy ? 'Sending…' : questions.length === 1 ? 'Send answer' : 'Send answers'}</Button>
-          : <Button type="button" variant="needs" onClick={() => { setStep(at + 1) }}>Next</Button>}
+          ? <Button type="submit" variant="needs" keyHint="⏎" disabled={busy || left > 0}>{busy ? 'Sending…' : `${questions.length === 1 ? 'Send answer' : 'Send answers'}${left > 0 && questions.length > 1 ? ` (${String(left)} left)` : ''}`}</Button>
+          : <Button type="button" variant="needs" keyHint="⏎" onClick={() => { go(at + 1) }}>Next</Button>}
       </div>
     </form>
   )
 }
+
+/** The head's quiet words: how many questions are still to answer. */
+const sendAllAside = (questions: readonly AskedQuestion[]) => `${String(questions.length)} to answer`
 
 /** Claude's plan, formatted as a reply would be, for the person to approve or send back. */
 function PlanBody({ plan }: { plan: AskedPlan | null }) {
@@ -363,7 +404,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
 
   if (sendAll !== undefined) {
     return (
-      <WaitingCard label={label} title={`${agent} needs your input`} aside={questions.length === 1 ? '1 question' : `${String(questions.length)} questions`}>
+      <WaitingCard label={label} title={questions.length === 1 ? `${agentName(agent)} has a question` : `${agentName(agent)} has ${String(questions.length)} questions`} aside={sendAllAside(questions)} flush>
         <QuestionsForm questions={questions} busy={busy} onSend={(picked) => { run(() => sendAll(picked)) }} />
       </WaitingCard>
     )
@@ -371,7 +412,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
 
   if (picker !== undefined) {
     return (
-      <WaitingCard label={label} title={isQuestion ? `${agent} has a question for you` : `${agent} is asking`}>
+      <WaitingCard label={label} title={isQuestion ? `${agentName(agent)} has a question for you` : `${agentName(agent)} is asking`}>
         {ask !== null && ask.detail !== '' && <p className="mx-waiting-question-text">{ask.detail}</p>}
         <div className="mx-waiting-options">
           {choices.map((choice, index) => <Choice key={`${String(index)}-${choice}`} label={choice} index={index} picked={false} busy={busy} onPick={() => { run(() => picker(index)) }} />)}
@@ -383,7 +424,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
     )
   }
 
-  const title = ask === null ? `${agent} is waiting for you` : isQuestion ? `${agent} has a question for you` : ask.tool === 'Bash' ? 'Wants to run a command' : `Wants to use ${ask.tool}`
+  const title = ask === null ? `${agentName(agent)} is waiting for you` : isQuestion ? `${agentName(agent)} has a question for you` : ask.tool === 'Bash' ? 'Wants to run a command' : `Wants to use ${ask.tool}`
   const detail = ask !== null && ask.detail !== '' ? ask.detail : null
   const shownDetail = detail === null ? null : isQuestion ? <p className="mx-waiting-text">{detail}</p> : <pre className="mx-waiting-command">{detail}</pre>
 

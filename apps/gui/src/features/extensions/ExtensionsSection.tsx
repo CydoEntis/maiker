@@ -3,11 +3,11 @@ import { useState } from 'react'
 import { AGENT_LABELS, confirmAdd, loadExtensions, removeExtension, setPluginEnabled, type AddPreview, type ExtensionFailure, type ExtensionResult, type ExtTarget, type Extension } from '@/api/extensions'
 import { Switch } from '@/components/ui/switch'
 import { Card, Row } from '@/features/settings/components/DesktopSettings'
-import type { TicketsProject } from '@/features/tickets/model/ticketProjects'
 import { errorMessage } from '@/lib/error-message'
 import { AddCards, FailureLine } from './AddCards'
 import { AddDialog } from './AddDialog'
 import { ConfirmDialog } from './ConfirmDialog'
+import type { ExtensionProject } from './projects'
 import { AGENTS, detailLine, itemKey, itemsOf, KIND_ONE, KIND_ORDER, KIND_TITLE, NEXT_CHAT, SCOPE_WORDS, TERMINAL_ONLY } from './model'
 
 const QUERY = ['extensions'] as const
@@ -54,7 +54,7 @@ function ItemRow({ item, busy, onToggle, onRemove }: { item: Extension; busy: bo
  * project, so none of them needs a terminal. Listing reads files and starts nothing. Turning a plugin on or off and
  * removing ask the agent's own command; an add shows what it will run first and asks (`AddDialog`).
  */
-export function ExtensionsSection({ projects }: { projects: readonly TicketsProject[] }) {
+export function ExtensionsSection({ projects }: { projects: readonly ExtensionProject[] }) {
   const client = useQueryClient()
   // Only this computer's projects: the daemon changes its own computer's agents.
   const here = projects.filter((project) => project.machineName === null)

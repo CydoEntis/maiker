@@ -277,7 +277,7 @@ export function DiffView({
           variant="soft"
           className="open-editor-button"
           onClick={() =>
-            toast.message('Open in editor is not connected in preview')
+            toast.info('Open in editor is not connected in preview')
           }
         >
           <ArrowUpRight size={14} />

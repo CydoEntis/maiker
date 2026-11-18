@@ -6,8 +6,10 @@
  */
 export const MAX_PANES = 4
 
-/** `h` is the pane's relative height in its column; absent means an equal share. */
-export type PaneSlot = { id: string; sessionId: string; col: number; h?: number }
+/** A markdown file shown in a pane instead of a terminal or chat: `path` is relative to the checkout of `sessionId`'s pane, which the pane sits beside. */
+export type PaneDocument = { path: string }
+/** `h` is the pane's relative height in its column; absent means an equal share. `doc` makes it a document pane (`sessionId` is the session it belongs to, not one it shows). */
+export type PaneSlot = { id: string; sessionId: string; col: number; h?: number; doc?: PaneDocument }
 /** `widths` are the columns' relative widths (by column index); absent means equal. `broadcast` sends a typed line to every idle pane. */
 export type Arrangement = { id: string; panes: PaneSlot[]; focus: string; max: string | null; widths?: number[]; broadcast?: boolean }
 export type Layout = { arrangements: Arrangement[]; activeId: string | null }
@@ -90,6 +92,36 @@ export function splitPane(layout: Layout, paneId: string | null, direction: Spli
   return replaceArrangement(layout, { ...next, widths: split })
 }
 
+/**
+ * Shows a markdown file of `sessionId`'s checkout in a pane beside the pane that shows that session: a new column to
+ * its right, which takes the focus. The arrangement's own document pane is pointed at the file instead when it already
+ * has one, and a full arrangement (`MAX_PANES`) is left as it is: `null` then, so the caller can say why.
+ */
+export function openDocumentBeside(layout: Layout, sessionId: string, path: string, makeId: MakeId): Layout | null {
+  const tab = layout.arrangements.find((candidate) => candidate.panes.some((pane) => pane.sessionId === sessionId && !pane.doc))
+  const source = tab?.panes.find((pane) => pane.sessionId === sessionId && !pane.doc)
+  if (!tab || !source) return null
+  const existing = tab.panes.find((pane) => pane.doc && pane.sessionId === sessionId)
+  if (existing) {
+    const panes = tab.panes.map((pane) => (pane.id === existing.id ? { ...pane, doc: { path } } : pane))
+    return { ...replaceArrangement(layout, { ...tab, panes, focus: existing.id, max: tab.max === null ? null : existing.id }), activeId: tab.id }
+  }
+  if (tab.panes.length >= MAX_PANES) return null
+  const shown = { ...layout, activeId: tab.id }
+  const next = splitPane({ ...shown, arrangements: shown.arrangements }, source.id, 'right', sessionId, makeId)
+  const after = activeArrangement(next)
+  if (!after || next === shown) return null
+  const panes = after.panes.map((pane) => (pane.id === after.focus ? { ...pane, doc: { path } } : pane))
+  return replaceArrangement(next, { ...after, panes })
+}
+
+/** The document pane `openDocumentBeside` would point at another file, if there is one: what it shows now is replaced. */
+export function documentPaneReplaced(layout: Layout, sessionId: string, path: string): PaneSlot | null {
+  const tab = layout.arrangements.find((candidate) => candidate.panes.some((pane) => pane.sessionId === sessionId && !pane.doc))
+  const existing = tab?.panes.find((pane) => pane.doc && pane.sessionId === sessionId)
+  return existing !== undefined && existing.doc?.path !== path ? existing : null
+}
+
 /** Gives the panes of one column their relative heights, top to bottom; `null` goes back to equal. */
 export function setPaneHeights(layout: Layout, tabId: string, col: number, heights: number[] | null): Layout {
   const tab = layout.arrangements.find((candidate) => candidate.id === tabId)
@@ -99,7 +131,7 @@ export function setPaneHeights(layout: Layout, tabId: string, col: number, heigh
     if (pane.col !== col) return pane
     const h = heights?.[row]
     row += 1
-    const base: PaneSlot = { id: pane.id, sessionId: pane.sessionId, col: pane.col }
+    const base: PaneSlot = { id: pane.id, sessionId: pane.sessionId, col: pane.col, ...(pane.doc ? { doc: pane.doc } : {}) }
     return h === undefined ? base : { ...base, h }
   })
   return replaceArrangement(layout, { ...tab, panes })
@@ -134,8 +166,9 @@ export function cycleFocus(layout: Layout, step: 1 | -1): Layout {
  */
 export function showSession(layout: Layout, sessionId: string, makeId: MakeId): Layout {
   const current = activeArrangement(layout)
-  const holder = (current?.panes.some((pane) => pane.sessionId === sessionId) ? current : undefined) ?? layout.arrangements.find((tab) => tab.panes.some((pane) => pane.sessionId === sessionId))
-  const shown = holder?.panes.find((pane) => pane.sessionId === sessionId)
+  const holds = (pane: PaneSlot) => pane.sessionId === sessionId && !pane.doc
+  const holder = (current?.panes.some(holds) ? current : undefined) ?? layout.arrangements.find((tab) => tab.panes.some(holds))
+  const shown = holder?.panes.find(holds)
   if (holder && shown) return { ...replaceArrangement(layout, { ...holder, focus: shown.id, max: holder.max === null ? null : shown.id }), activeId: holder.id }
   return openArrangement(layout, sessionId, makeId)
 }
@@ -145,7 +178,8 @@ export function swapSessions(layout: Layout, fromPaneId: string, toPaneId: strin
   const tab = layout.arrangements.find((candidate) => candidate.panes.some((pane) => pane.id === fromPaneId))
   const from = tab?.panes.find((pane) => pane.id === fromPaneId)
   const to = tab?.panes.find((pane) => pane.id === toPaneId)
-  if (!tab || !from || !to || from === to) return layout
+  // A document pane belongs to its session and never trades places with another pane.
+  if (!tab || !from || !to || from === to || from.doc || to.doc) return layout
   const panes = tab.panes.map((pane) => (pane.id === from.id ? { ...pane, sessionId: to.sessionId } : pane.id === to.id ? { ...pane, sessionId: from.sessionId } : pane))
   return replaceArrangement(layout, { ...tab, panes, focus: to.id })
 }
@@ -231,10 +265,12 @@ export function parseLayout(value: unknown): Layout {
     if (typeof tab.id !== 'string' || !Array.isArray(tab.panes)) return []
     const panes = tab.panes.flatMap((pane: unknown): PaneSlot[] => {
       if (typeof pane !== 'object' || pane === null) return []
-      const slot = pane as { id?: unknown; sessionId?: unknown; col?: unknown; h?: unknown }
+      const slot = pane as { id?: unknown; sessionId?: unknown; col?: unknown; h?: unknown; doc?: unknown }
       if (typeof slot.id !== 'string' || typeof slot.sessionId !== 'string' || typeof slot.col !== 'number' || !Number.isInteger(slot.col) || slot.col < 0) return []
       const height = typeof slot.h === 'number' && Number.isFinite(slot.h) && slot.h > 0 ? { h: slot.h } : {}
-      return [{ id: slot.id, sessionId: slot.sessionId, col: slot.col, ...height }]
+      const path = typeof slot.doc === 'object' && slot.doc !== null ? (slot.doc as { path?: unknown }).path : undefined
+      const doc = typeof path === 'string' && path !== '' ? { doc: { path } } : {}
+      return [{ id: slot.id, sessionId: slot.sessionId, col: slot.col, ...height, ...doc }]
     }).slice(0, MAX_PANES)
     const first = panes[0]
     if (!first) return []
@@ -272,13 +308,13 @@ export function toggleBroadcast(layout: Layout, tabId: string): Layout {
 export function dropSession(layout: Layout, paneId: string, sessionId: string): Layout {
   const tab = layout.arrangements.find((candidate) => candidate.panes.some((pane) => pane.id === paneId))
   const target = tab?.panes.find((pane) => pane.id === paneId)
-  if (!tab || !target || target.sessionId === sessionId) return layout
-  const here = tab.panes.find((pane) => pane.sessionId === sessionId)
+  if (!tab || !target || target.doc || target.sessionId === sessionId) return layout
+  const here = tab.panes.find((pane) => pane.sessionId === sessionId && !pane.doc)
   if (here) return swapSessions(layout, here.id, target.id)
   const arrangements = layout.arrangements.map((candidate) => {
     if (candidate.id === tab.id) return { ...candidate, panes: candidate.panes.map((pane) => (pane.id === paneId ? { ...pane, sessionId } : pane)), focus: paneId }
     // The session is moving here, so the pane it left takes this pane's old session.
-    return { ...candidate, panes: candidate.panes.map((pane) => (pane.sessionId === sessionId ? { ...pane, sessionId: target.sessionId } : pane)) }
+    return { ...candidate, panes: candidate.panes.map((pane) => (pane.sessionId === sessionId && !pane.doc ? { ...pane, sessionId: target.sessionId } : pane)) }
   })
   return { ...layout, arrangements, activeId: tab.id }
 }

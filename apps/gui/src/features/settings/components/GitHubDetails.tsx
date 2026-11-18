@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { chooseProjectFolder } from '@/api/folderPicker'
 import type { GitHubAccount } from '@/api/githubAccounts'
 import { changeGitRule, loadGitIdentities, type GitIdentity, type GitIdentityReport, type GitIdentityRule } from '@/api/gitIdentities'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
-import { useRemoteFolderPick } from '@/features/workspace/components/useRemoteFolderPick'
+import { useFolderPick } from '@/features/workspace/components/useFolderPick'
 import { GitRuleDialog } from './GitRuleDialog'
 
 type Loaded = { status: 'loading' } | { status: 'ready'; report: GitIdentityReport } | { status: 'failed'; message: string }
@@ -102,7 +102,7 @@ export function GitHubDetails({ machine, label, accounts, asked, onAddAccount }:
   const [editing, setEditing] = useState<Editing>(null)
   const [removing, setRemoving] = useState<Removing>(null)
   const [failure, setFailure] = useState<string | null>(null)
-  const remotePick = useRemoteFolderPick(machine, label)
+  const remotePick = useFolderPick(useMemo(() => [{ machine, label, ready: true, word: null }], [machine, label]))
   useEffect(() => {
     let current = true
     loadGitIdentities(machine).then(
@@ -153,7 +153,7 @@ export function GitHubDetails({ machine, label, accounts, asked, onAddAccount }:
           where={label}
           logins={accounts.map((account) => account.login)}
           rule={editing.rule}
-          chooseFolder={machine === LOCAL_MACHINE ? chooseProjectFolder : remotePick.browse}
+          chooseFolder={machine === LOCAL_MACHINE ? chooseProjectFolder : () => remotePick.pick(machine).then((picked) => picked?.folder ?? null)}
           onWritten={() => { setEditing(null); reread() }}
           onCancel={() => { setEditing(null) }}
         />

@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react'
-import { toast } from '@/lib/toast'
+import { currentToasts, toast } from '@/lib/toast'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { forgetComposers, peekComposer } from './composerStore'
 import { keptPicture } from './keptPictures'
@@ -107,12 +107,11 @@ describe('attaching in a chat on another machine', () => {
   })
 
   it('adds nothing when the host refuses the send (a folder, too big, not connected)', async () => {
-    const failure = vi.spyOn(toast, 'failure')
     sends.sendFilesToMachine.mockRejectedValue('docs is not a file; only files can be sent')
     const { result } = intake()
     result.current.addPaths(['/a/docs'])
     await settle()
-    expect(failure).toHaveBeenCalledWith('docs is not a file; only files can be sent', 'Could not send to build-box', expect.anything())
+    expect(currentToasts().items[0]).toMatchObject({ kind: 'error', description: 'Docs is not a file; only files can be sent.', details: 'docs is not a file; only files can be sent' })
     expect(peekComposer(7).attachments).toEqual([])
   })
 

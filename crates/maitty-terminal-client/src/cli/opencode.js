@@ -68,7 +68,7 @@ export const AppStatus = async ({ directory, client }) => {
   };
   return {
     event: async ({ event }) => {
-      if (!process.env.__APP_ENV___TERM_ID || !relevant.has(event.type)) return;
+      if (!(process.env.__APP_ENV___TERM_ID || process.env.__APP_ENV_PREVIOUS___TERM_ID) || !relevant.has(event.type)) return;
       // Preserve event order even when the host dispatches several callbacks together.
       queue = queue.then(() => send(event)).catch(async () => {
         if (!warned) {

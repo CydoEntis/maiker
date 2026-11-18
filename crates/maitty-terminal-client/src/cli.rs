@@ -114,7 +114,7 @@ fn resolve_pane(t: &Target, pane: Option<TermId>) -> Result<TermId> {
     if !t.owns_env_pane() {
         return Err(t.needs_pane().into());
     }
-    if let Some(p) = std::env::var(concat!(env!("APP_ENV"), "_TERM_ID"))
+    if let Some(p) = maitty_shared::brand::env_var("TERM_ID")
         .ok()
         .and_then(|s| s.parse().ok())
     {
@@ -282,7 +282,7 @@ pub fn agent_dir(cmd: &[String]) {
 /// asking and what for.
 fn agent_worktree(cmd: &[String]) -> Option<PathBuf> {
     let agent = cmd.first().map(String::as_str).unwrap_or_default();
-    if std::env::var_os(concat!(env!("APP_ENV"), "_TERM_ID")).is_none()
+    if maitty_shared::brand::env_var_os("TERM_ID").is_none()
         || !starts_new_work(agent, cmd.get(1..).unwrap_or_default())
     {
         return None;
@@ -323,9 +323,11 @@ pub fn agent_launch(cmd: &[String]) -> i32 {
     };
     let mut run = std::process::Command::new(real);
     run.args(&cmd[1..])
-        .env("PATH", crate::shim::path_without(&shim, &path))
-        .env_remove(crate::shim::DONE_VAR);
-    if std::env::var_os(crate::shim::DONE_VAR).is_none()
+        .env("PATH", crate::shim::path_without(&shim, &path));
+    for name in crate::shim::done_vars() {
+        run.env_remove(name);
+    }
+    if !crate::shim::is_done()
         && let Some(dir) = agent_worktree(cmd)
     {
         run.current_dir(dir);
@@ -1347,7 +1349,7 @@ fn server_pid() -> Option<u32> {
     #[cfg(target_os = "linux")]
     {
         let label =
-            std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into());
+            maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
         let me = std::process::id();
         for entry in std::fs::read_dir("/proc").ok()?.flatten() {
             let Some(pid) = entry
@@ -1371,11 +1373,19 @@ fn server_pid() -> Option<u32> {
             if !is_daemon {
                 continue;
             }
-            // Its socket: <APP>_SOCKET in its environment, else the default one.
+            // Its socket: `SOCKET` in its environment under the current name or an old one (a
+            // daemon started before a prefix change), else the default one.
             let env = std::fs::read(entry.path().join("environ")).unwrap_or_default();
-            let theirs = env
-                .split(|b| *b == 0)
-                .find_map(|kv| kv.strip_prefix(concat!(env!("APP_ENV"), "_SOCKET=").as_bytes()))
+            let names: Vec<String> = maitty_shared::brand::env_names("SOCKET")
+                .into_iter()
+                .map(|name| format!("{name}="))
+                .collect();
+            let theirs = names
+                .iter()
+                .find_map(|name| {
+                    env.split(|b| *b == 0)
+                        .find_map(|kv| kv.strip_prefix(name.as_bytes()))
+                })
                 .map(|v| String::from_utf8_lossy(v).into_owned())
                 .unwrap_or_else(|| "default".into());
             if theirs == label {
@@ -1386,7 +1396,7 @@ fn server_pid() -> Option<u32> {
     // Elsewhere a server's socket can't be read off its process: only when there's exactly
     // one, and it's the default server you mean.
     #[cfg(not(target_os = "linux"))]
-    if std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).is_err() {
+    if maitty_shared::brand::env_var("SOCKET").is_err() {
         let list = if cfg!(windows) {
             crate::proc::run(std::process::Command::new("powershell").args([
                 "-NoProfile",
@@ -1419,7 +1429,7 @@ fn resolve_ws(ws: Option<WsId>) -> Result<WsId> {
         return Ok(ws);
     }
     let snap = snapshot()?;
-    let here = std::env::var(concat!(env!("APP_ENV"), "_TERM_ID"))
+    let here = maitty_shared::brand::env_var("TERM_ID")
         .ok()
         .and_then(|s| s.parse().ok());
     here.and_then(|t| snap.locate(t).map(|(w, _)| w.id))
@@ -1965,7 +1975,7 @@ pub fn doctor() -> Result<()> {
 
 /// Run by an agent inside a pane: make a worktree and move this agent into it.
 pub fn move_to_worktree(branch: String) -> Result<()> {
-    let term: TermId = std::env::var(concat!(env!("APP_ENV"), "_TERM_ID"))
+    let term: TermId = maitty_shared::brand::env_var("TERM_ID")
         .ok()
         .and_then(|s| s.parse().ok())
         .ok_or_else(|| {
@@ -2120,7 +2130,7 @@ fn parse_status(s: &str) -> Option<HookStatus> {
 
 pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<()> {
     // Inert outside the app, so global hooks don't bother other terminals.
-    let Some(term) = std::env::var(concat!(env!("APP_ENV"), "_TERM_ID"))
+    let Some(term) = maitty_shared::brand::env_var("TERM_ID")
         .ok()
         .and_then(|s| s.parse::<TermId>().ok())
     else {
@@ -2157,7 +2167,7 @@ pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<
             .map(|p| p.as_u32())
             .unwrap_or(0)
     };
-    let token = std::env::var(concat!(env!("APP_ENV"), "_PANE_TOKEN")).unwrap_or_default();
+    let token = maitty_shared::brand::env_var("PANE_TOKEN").unwrap_or_default();
     let message = hook_message(
         HookOrigin {
             term,
@@ -2626,6 +2636,7 @@ fn is_ours(group: &Value) -> bool {
 fn app_hook_names() -> Vec<&'static str> {
     [crate::brand::APP_COMMAND, BUNDLED_DAEMON]
         .into_iter()
+        .chain(crate::brand::previous_daemon_names())
         .chain(crate::brand::previous())
         .collect()
 }
@@ -2800,7 +2811,7 @@ fn read_hook_payload(mut input: impl std::io::Read, max: usize) -> Result<Value>
 }
 
 /// The daemon the desktop app bundles: the same program under another name.
-const BUNDLED_DAEMON: &str = concat!(env!("APP_COMMAND"), "-gui-daemon");
+const BUNDLED_DAEMON: &str = crate::brand::DAEMON_NAME;
 
 /// This the app, as hook commands name it. The desktop app's daemon can run from a folder that
 /// does not outlive it (an AppImage's temporary mount), and Claude Code's settings are global, so
@@ -2819,8 +2830,12 @@ fn this_exe() -> Result<String> {
 /// Whether `exe` is the daemon the desktop app bundles, including its development name with the
 /// target triple after it.
 fn is_bundled_daemon(exe: &std::path::Path) -> bool {
-    exe.file_stem()
-        .is_some_and(|stem| stem.to_string_lossy().starts_with(BUNDLED_DAEMON))
+    exe.file_stem().is_some_and(|stem| {
+        let stem = stem.to_string_lossy();
+        std::iter::once(BUNDLED_DAEMON)
+            .chain(crate::brand::previous_daemon_names())
+            .any(|name| stem.starts_with(name))
+    })
 }
 
 /// `running` copied into `folder` under the bundled daemon's plain name, unless the copy there is
@@ -2959,10 +2974,10 @@ pub fn statusline() {
     use std::io::Write;
     let mut input = String::new();
     let _ = std::io::stdin().read_to_string(&mut input);
-    let term = std::env::var(concat!(env!("APP_ENV"), "_TERM_ID"))
+    let term = maitty_shared::brand::env_var("TERM_ID")
         .ok()
         .and_then(|s| s.parse::<TermId>().ok());
-    if let (Some(term), Ok(token)) = (term, std::env::var(concat!(env!("APP_ENV"), "_PANE_TOKEN")))
+    if let (Some(term), Ok(token)) = (term, maitty_shared::brand::env_var("PANE_TOKEN"))
     {
         let (usage, limits) = statusline_facts(&input);
         let msg = ClientMsg::Usage {
@@ -3222,7 +3237,7 @@ fn needs_statusline() -> bool {
 /// False for a side server (<APP>_SOCKET) or a build in a source checkout: neither may take
 /// your hooks from the copy of the app you use.
 pub fn hooks_belong_to_this_build() -> bool {
-    let side = std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).is_ok_and(|s| s != "default");
+    let side = maitty_shared::brand::env_var("SOCKET").is_ok_and(|s| s != "default");
     let dev_build = std::env::current_exe().is_ok_and(|exe| {
         let exe = exe.to_string_lossy().replace('\\', "/");
         exe.contains("/target/debug/") || exe.contains("/target/release/")
@@ -3745,6 +3760,11 @@ mod bundled_daemon_tests {
     #[test]
     fn an_old_hook_naming_the_bundled_daemon_is_one_of_ours() {
         assert!(app_hook_names().contains(&BUNDLED_DAEMON));
+        // A hook written before the rename names the old bundled copy, still ours to replace.
+        for old in crate::brand::previous_daemon_names() {
+            let hook = format!("\"/home/me/.local/share/{old}\" hook claude");
+            assert!(maitty_provider_claude::runs_our_hook(&hook, &app_hook_names()), "{hook}");
+        }
         let dead = format!("\"/tmp/.mount_Gone/usr/bin/{BUNDLED_DAEMON}\" hook claude");
         assert!(maitty_provider_claude::runs_our_hook(&dead, &app_hook_names()));
     }

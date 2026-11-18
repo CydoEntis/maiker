@@ -4,21 +4,18 @@ import type { UpdaterState } from '@/features/updates/useUpdater'
 import type { Transfer } from '@/features/updates/downloadEta'
 import { Fragment, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { GroupShowsAll, matchesQuery, SettingsSearch } from '../settingsSearch'
-import { THEMES } from '@/features/workspace/theme/themes'
 import { ThemePicker } from './ThemePicker'
 import { CORNERS, CORNER_NAMES } from '@/features/workspace/theme/corners'
 import { Panel } from '@/components/ui/panel'
 import { PickerSelect, type PickerGroup, type PickerItem } from './PickerSelect'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
-import { SpinnerPicker } from './SpinnerPicker'
 import { PerformanceSection } from './PerformanceSection'
 import type { GitHubSignIn } from './GitHubSection'
 import { MachinesPage } from './MachinesPage'
 import { UpdateBox } from './UpdateBox'
-import { TicketsSection } from '@/features/tickets/TicketsSettings'
 import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
-import type { TicketsProject } from '@/features/tickets/model/ticketProjects'
+import type { ExtensionProject } from '@/features/extensions/projects'
 import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
 import { CHAT_AGENTS, type ChatAgent } from '@/features/workspace/model/chatView'
 import { AGENT_LABEL } from '@/features/chat/modelName'
@@ -34,8 +31,9 @@ import type { MachineHead, UpdateAction } from '@/features/workspace/model/machi
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
 import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
+import { DAEMON_NAME } from '@/brand'
 
-export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'tickets' | 'usage' | 'performance'
+export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'usage' | 'performance'
 
 /** The other machines, for the Machines page: what the window knows of each, and what it can ask of the host. */
 export type MachinesInfo = {
@@ -75,7 +73,7 @@ export type MachinesInfo = {
 export type DaemonInfo = {
   online: boolean
   sessionCount: number
-  /** Reported by maikerd; rows are left out until it does. */
+  /** Reported by the daemon; rows are left out until it does. */
   version?: string
   socket?: string
 }
@@ -125,15 +123,12 @@ type DesktopSettingsProps = {
   onSignInAgent?: (agent: 'claude' | 'codex') => void
   /** Starts GitHub's own sign-in in a terminal on a machine, and how many of those have ended; without it the GitHub page offers no sign-in. */
   github?: GitHubSignIn
-  /** The projects the open sessions work in, for Settings › Tickets to link. */
-  ticketProjects?: readonly TicketsProject[]
+  /** The projects the open sessions work in, for Settings › Extensions to look at one. */
+  extensionProjects?: readonly ExtensionProject[]
   onClose: () => void
 }
 
-/** The ticket of the title bar's Tickets toggle. */
-const TICKET_PATH = 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6zM10 5v14'
-
-type NavItem = { id: DesktopSettingsSection; label: string; key: string; tint: string; path: string }
+type NavItem = { id: DesktopSettingsSection; label: string; key: string; path: string }
 
 /** The nav (the whole-app mock): what the window does, how agents run, and which computers. Usage & cost and Performance
     have no item: they open from their own keys, the palette and the usage meters, and leave the nav with none current. */
@@ -141,33 +136,32 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'APP',
     items: [
-      { id: 'general', label: 'General', key: 'G', tint: 'var(--accent)', path: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4' },
-      { id: 'appearance', label: 'Appearance', key: 'A', tint: 'var(--ansi-mag)', path: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-.9-.8-1.3-.8-2.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.4-4-7.6-9-7.6zM7.5 11.5h.01M10.5 7.5h.01M15.5 8.5h.01' },
-      { id: 'notifications', label: 'Notifications', key: 'N', tint: 'var(--warn)', path: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' },
-      { id: 'keys', label: 'Hotkeys', key: '?', tint: 'var(--ansi-blue)', path: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8' },
+      { id: 'general', label: 'General', key: 'G', path: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4' },
+      { id: 'appearance', label: 'Appearance', key: 'A', path: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-.9-.8-1.3-.8-2.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.4-4-7.6-9-7.6zM7.5 11.5h.01M10.5 7.5h.01M15.5 8.5h.01' },
+      { id: 'notifications', label: 'Notifications', key: 'N', path: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' },
+      { id: 'keys', label: 'Hotkeys', key: '?', path: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8' },
     ],
   },
   {
     label: 'AGENTS',
     items: [
-      { id: 'chat', label: 'Chat', key: 'C', tint: 'var(--ok)', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
-      { id: 'permissions', label: 'Permissions', key: 'E', tint: 'var(--ansi-mag)', path: 'M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z' },
-      { id: 'terminal', label: 'Terminal', key: 'T', tint: 'var(--ansi-blue)', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
-      { id: 'extensions', label: 'Extensions', key: 'X', tint: 'var(--warn)', path: 'M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3M7 6h10v12H7z' },
+      { id: 'chat', label: 'Chat', key: 'C', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
+      { id: 'permissions', label: 'Permissions', key: 'E', path: 'M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z' },
+      { id: 'terminal', label: 'Terminal', key: 'T', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
+      { id: 'extensions', label: 'Extensions', key: 'X', path: 'M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3M7 6h10v12H7z' },
     ],
   },
   {
     label: 'MACHINES',
     items: [
-      { id: 'machines', label: 'Remote machines', key: 'M', tint: 'var(--ok)', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01M17 7h.01M17 17h.01' },
-      { id: 'tickets', label: 'Tickets', key: 'I', tint: 'var(--ansi-mag)', path: TICKET_PATH },
+      { id: 'machines', label: 'Remote machines', key: 'M', path: 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01M17 7h.01M17 17h.01' },
     ],
   },
 ]
 
 const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   general: ['General', 'Where sessions start and what happens to them.'],
-  appearance: ['Appearance', 'Colours, layout, spinner and motion for the whole window.'],
+  appearance: ['Appearance', 'Colours, layout and motion for the whole window.'],
   notifications: ['Notifications', 'When the system should tell you a session needs you.'],
   keys: ['Hotkeys', 'Everything the window handles before the shell does.'],
   chat: ['Chat', 'How a chat starts, and how wide and large it is drawn.'],
@@ -175,12 +169,11 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
   extensions: ['Extensions', 'Skills, plugins and MCP servers for Claude Code and Codex, for you and for a project.'],
   machines: ['Remote machines', 'Other computers whose sessions show up in your sidebar.'],
-  tickets: ['Tickets', 'Where Maiker reads tickets from. It only reads them.'],
   usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
   performance: ['Performance', 'What the window is spending its time on, measured live.'],
 }
 
-const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', x: 'extensions', m: 'machines', i: 'tickets' }
+const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', x: 'extensions', m: 'machines' }
 
 /** Esc ends an open theme list, or a running add-machine, first; Settings stays. A part that handles Esc itself is marked `data-owns-escape`. */
 const keepForOpenList = (event: globalThis.KeyboardEvent) => {
@@ -271,12 +264,11 @@ export function DesktopSettings(props: DesktopSettingsProps) {
       case 'chat': return <ChatSection preferences={preferences} update={update} />
       case 'permissions': return <><BypassSection preferences={preferences} update={update} /><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
       case 'terminal': return <TerminalSection preferences={preferences} update={update} />
-      case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemReducedMotion={props.systemReducedMotion} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
+      case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
       case 'usage': return <UsageSection usage={props.usage} />
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <MachinesPage daemon={props.daemon} machines={props.machines} github={props.github} appVersion={props.appVersion} />
-      case 'extensions': return <ExtensionsSection projects={props.ticketProjects ?? []} />
-      case 'tickets': return <TicketsSection projects={props.ticketProjects ?? []} signIn={props.github} />
+      case 'extensions': return <ExtensionsSection projects={props.extensionProjects ?? []} />
       case 'keys': return <HotkeysSection platform={props.platform} overrides={preferences.keyOverrides} onOverrides={(next) => { update('keyOverrides', next) }} />
       case 'performance': return <PerformanceSection preferences={preferences} update={update} appVersion={props.appVersion} />
     }
@@ -299,7 +291,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
               <span className="mx-settings-nav-label">{group.label}</span>
               {group.items.map((item) => (
                 <button key={item.id} type="button" className={`mx-settings-nav-item${!searching && section === item.id ? ' is-current' : ''}`} aria-current={!searching && section === item.id ? 'page' : undefined} onClick={() => { openPage(item.id) }}>
-                  <svg className="mx-settings-nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={item.tint} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={item.path} /></svg>
+                  <svg className="mx-settings-nav-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={item.path} /></svg>
                   <span className="mx-settings-nav-text">{item.label}</span>
                   <span className="mx-settings-nav-key" aria-hidden="true">{item.key}</span>
                 </button>
@@ -381,11 +373,10 @@ export function Row({ label, detail, children }: { label: string; detail?: strin
   )
 }
 
-function SegmentedChoice<T extends string | number>({ label, value, options, onChange, tall = false }: { label: string; value: T; options: ReadonlyArray<readonly [T, ReactNode]>; onChange: (value: T) => void; tall?: boolean }) {
+function SegmentedChoice<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: ReadonlyArray<readonly [T, ReactNode]>; onChange: (value: T) => void }) {
   return (
     <Segmented
       aria-label={label}
-      tall={tall}
       value={String(value)}
       onValueChange={(next) => {
         const picked = options.find(([option]) => String(option) === next)
@@ -485,6 +476,9 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
         <Row label="Install updates when idle" detail="Never while an agent is working.">
           <Switch aria-label="Install updates when idle" checked={preferences.restartWhenIdle} onCheckedChange={(value) => { update('restartWhenIdle', value) }} />
         </Row>
+        <Row label="Restart the service when idle" detail="After an update, an older service restarts by itself once no agent is working, waiting on you or starting. Sessions come back.">
+          <Switch aria-label="Restart the service when idle" checked={preferences.restartServiceWhenIdle} onCheckedChange={(value) => { update('restartServiceWhenIdle', value) }} />
+        </Row>
         <Row label="Update remote machines too" detail="After this computer updates, each machine follows once its agents are idle. Off: click Update on each one.">
           <Switch aria-label="Update remote machines too" checked={preferences.updateMachines} onCheckedChange={(value) => { update('updateMachines', value) }} />
         </Row>
@@ -493,7 +487,7 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
         <Row label="Reopen layout on launch" detail="Restore the panes and splits you had last time.">
           <Switch aria-label="Reopen layout on launch" checked={preferences.restoreLayout} onCheckedChange={(value) => { update('restoreLayout', value) }} />
         </Row>
-        <Row label="Closing the window" detail="Sessions are owned by maikerd and keep running.">
+        <Row label="Closing the window" detail={`Sessions are owned by ${DAEMON_NAME} and keep running.`}>
           <span style={{ fontSize: 12, color: 'var(--dim)' }}>Keeps running</span>
         </Row>
         <Row label="Welcome" detail="Replay the short intro: where sessions start and the keys to know.">
@@ -506,7 +500,6 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
 
 const CHAT_VIEW_OPTIONS = [['terminal', 'Terminal'], ['chat', 'Chat']] as const
 const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as const
-const TOAST_POSITIONS = [['top-left', 'Top left'], ['top-center', 'Top center'], ['top-right', 'Top right'], ['bottom-left', 'Bottom left'], ['bottom-center', 'Bottom center'], ['bottom-right', 'Bottom right']] as const
 const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creation', 'Creation'], ['priority', 'Priority']]
 const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
 const DOCK_OPTIONS = [['bottom', 'Bottom'], ['right', 'Right'], ['full', 'Full']] as const
@@ -578,7 +571,7 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         </Row>
       </Card>
       <Card title="Scrollback">
-        <Row label="Lines kept per pane" detail="Older output is dropped from the GUI. maikerd keeps the full history.">
+        <Row label="Lines kept per pane" detail={`Older output is dropped from the GUI. ${DAEMON_NAME} keeps the full history.`}>
           <SegmentedChoice label="Lines kept per pane" value={preferences.scrollback} options={SCROLLBACKS} onChange={(value) => { update('scrollback', value) }} />
         </Row>
         <Row label="Scroll speed" detail="Lines per wheel notch. Normal is xterm's own pace, which feels slow at this line height.">
@@ -602,12 +595,11 @@ const MODE_OPTIONS = [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']
 
 const CORNER_OPTIONS = CORNERS.map((id) => [id, CORNER_NAMES[id]] as const)
 
-function AppearanceSection({ preferences, update, systemReducedMotion, systemDark, onPreviewTheme }: { preferences: SettingsPreferences; update: Update; systemReducedMotion: boolean; systemDark: boolean; onPreviewTheme: (name: string | null) => void }) {
-  const reduced = preferences.reduceMotion || systemReducedMotion
+function AppearanceSection({ preferences, update, systemDark, onPreviewTheme }: { preferences: SettingsPreferences; update: Update; systemDark: boolean; onPreviewTheme: (name: string | null) => void }) {
   const darkInUse = preferences.themeMode === 'dark' || (preferences.themeMode === 'system' && systemDark)
   return (
     <>
-      <Card title="Look" meta={<span className="mx-scard-meta">{THEMES.length} themes installed</span>}>
+      <Card title="Look">
         <Row label="Appearance" detail="Follows your system when set to System.">
           <SegmentedChoice label="Appearance" value={preferences.themeMode} options={MODE_OPTIONS} onChange={(value) => { update('themeMode', value) }} />
         </Row>
@@ -620,16 +612,10 @@ function AppearanceSection({ preferences, update, systemReducedMotion, systemDar
         <Row label="Corners" detail="Square keeps every panel, button and field sharp. Rounded softens them.">
           <SegmentedChoice label="Corners" value={preferences.corners} options={CORNER_OPTIONS} onChange={(value) => { update('corners', value) }} />
         </Row>
-        <Row label="Working spinner" detail="Shown on tabs, pane headers and sidebar rows while something runs.">
-          <SpinnerPicker value={preferences.spinner} reduced={reduced} onPick={(spinner) => { update('spinner', spinner) }} />
-        </Row>
       </Card>
       <Card title="Surfaces">
         <Row label="Icons" detail="Agent and folder icons in their own colours, or neutral gray tiles.">
           <SegmentedChoice label="Icons" value={preferences.iconColor} options={ICON_COLOR_OPTIONS} onChange={(value) => { update('iconColor', value) }} />
-        </Row>
-        <Row label="Files and History tools" detail="Adds Files and History to the tools bar on the right, beside Changes and Checks. Opening a file from a chat, or /rewind, still shows them.">
-          <Switch aria-label="Files and History tools" checked={preferences.morePanelTools} onCheckedChange={(value) => { update('morePanelTools', value) }} />
         </Row>
       </Card>
       <Card title="Interface size">
@@ -716,7 +702,7 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
   const signOut = (agent: AccountAgent, label: string) => {
     signOutAgent(agent).then(
       () => { toast.success(`${label} signed out`, { description: 'Sessions already running keep their sign-in until they are restarted.' }); again() },
-      (error: unknown) => { toast.failure(error, `Could not sign ${label} out`) },
+      (error: unknown) => { toast.failed(`Could not sign ${label} out`, error) },
     )
   }
   return (
@@ -879,14 +865,11 @@ function NotificationsSection({ preferences, update, onTestNotice }: { preferenc
       <Row label="Error" detail="A session's program exited with an error.">
         <Switch aria-label="Notify when a session errors" checked={preferences.notifyError} onCheckedChange={(value) => { update('notifyError', value) }} />
       </Row>
-      <Row label="Position" detail="Where notification cards appear in the window. Done is green, needs you amber and an error red.">
-        <div className="mx-pos-grid" role="group" aria-label="Notification position">
-          {TOAST_POSITIONS.map(([id, label]) => (
-            <button key={id} type="button" className={`mx-pos-cell${preferences.toastPosition === id ? ' is-on' : ''}`} aria-label={label} aria-pressed={preferences.toastPosition === id} title={label} onClick={() => { update('toastPosition', id) }} />
-          ))}
-        </div>
-        {onTestNotice && <button type="button" className="mx-text-button mx-pos-test" onClick={onTestNotice}>Show a test</button>}
-      </Row>
+      {onTestNotice && (
+        <Row label="Try it" detail="Shows a toast like the ones above, at the bottom right. Done is green, needs you amber and an error red.">
+          <button type="button" className="mx-text-button mx-pos-test" onClick={onTestNotice}>Show a test</button>
+        </Row>
+      )}
     </Card>
   )
 }

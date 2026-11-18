@@ -21,7 +21,12 @@
 - An update replaces the GUI. After the restart the new GUI brings the shared daemon file up to its
   own release (ADR 0004) and leaves a running daemon alone: the old file is moved aside and goes on
   running with its sessions. A daemon that speaks another protocol is restarted only when the user
-  says so on the "Restart Maiker to finish updating" card. An update never ends an agent's turn.
+  says so on the "Restart Maiker to finish updating" card, or by itself when **Restart the service when
+  idle** is on (off by default; a separate setting from the idle install) and the moment is quiet: the
+  service counts no agent working or waiting, no visible session is working, needs the user or is
+  starting, and nothing is starting from the window (`features/updates/serviceRestart.ts`). It runs the
+  card's own restart, which restores the saved sessions, and retries every 10 seconds until quiet. An
+  update never ends an agent's turn.
 - A failed or offline check is quiet: no banner, only the line in Settings. A failed install says so
   and never claims the app is updated.
 - Enable only the operations the GUI calls in its Tauri capability.

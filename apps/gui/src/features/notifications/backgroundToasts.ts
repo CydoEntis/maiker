@@ -7,10 +7,7 @@ import {
 } from '@/api/daemon'
 import { DiffStat } from '@/components/DiffStat'
 import type { Conversation, Message } from '@/data/preview'
-import { errorMessage } from '@/lib/error-message'
 import { showNotice } from './notify'
-
-const FINISHED_COUNTDOWN_MS = 9000
 
 type ToastActions = {
   open: () => void
@@ -43,16 +40,13 @@ export async function showAttentionToast(
 ): Promise<void> {
   const open = { label: 'Open', onClick: actions.open }
   if (conversation.status === 'recovery') {
-    showNotice(
-      {
-        kind: 'recovery',
-        project: conversation.project,
-        title: conversation.title,
-        body: 'Resume it to continue. Nothing is replayed automatically.',
-        actions: [{ ...open, primary: true }],
-      },
-      { sticky: true },
-    )
+    showNotice({
+      kind: 'error',
+      title: conversation.title,
+      state: 'needs recovery',
+      body: 'Resume it to continue. Nothing is replayed automatically.',
+      actions: [{ ...open, primary: true }],
+    })
     return
   }
 
@@ -65,11 +59,10 @@ export async function showAttentionToast(
     requestId !== undefined &&
     approval.approvalChoices?.includes('Accept')
   ) {
-    showNotice(
-      {
+    showNotice({
         kind: 'needs',
-        project: conversation.project,
         title: conversation.title,
+        state: 'needs you',
         body: createElement(
           'code',
           { className: 'notice-command' },
@@ -85,30 +78,23 @@ export async function showAttentionToast(
                   actions.answered()
                 })
                 .catch((error: unknown) => {
-                  toast.error(
-                    errorMessage(error, 'Could not approve the command'),
-                  )
+                  toast.failed('Could not approve the command', error)
                 })
             },
           },
           open,
         ],
-      },
-      { sticky: true },
-    )
+      })
     return
   }
 
-  showNotice(
-    {
-      kind: 'needs',
-      project: conversation.project,
-      title: conversation.title,
-      body: 'This conversation needs your attention.',
-      actions: [{ ...open, primary: true }],
-    },
-    { sticky: true },
-  )
+  showNotice({
+    kind: 'needs',
+    title: conversation.title,
+    state: 'needs you',
+    body: 'This conversation needs your attention.',
+    actions: [{ ...open, primary: true }],
+  })
 }
 
 /** A session finished; the card says how much changed once the daemon reports it. */
@@ -119,9 +105,9 @@ export async function showFinishedToast(
   const diff = await loadConversationDiff(conversation).catch(() => null)
   const changed = diff && diff.total_files > 0 ? diff : null
   showNotice({
-    kind: 'finished',
-    project: conversation.project,
+    kind: 'done',
     title: conversation.title,
+    state: 'finished',
     body: changed
       ? createElement(
           'span',
@@ -137,6 +123,5 @@ export async function showFinishedToast(
       { label: 'Open', onClick: actions.open },
       ...(changed ? [{ label: 'View changes', onClick: actions.review }] : []),
     ],
-    countdownMs: FINISHED_COUNTDOWN_MS,
   })
 }

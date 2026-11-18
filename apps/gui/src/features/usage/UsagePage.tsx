@@ -8,6 +8,11 @@ import {
   type DayBar, type Ring, type RingTone,
 } from './model'
 import { UsageTable, type OpenSession } from './UsageTable'
+import { DAEMON_NAME } from '@/brand'
+import { FieldError, fieldErrorProps } from '@/components/ui/feedback'
+
+const BUDGET_ERROR_ID = 'usage-budget-error'
+const BUDGET_PROBLEM = 'Enter an amount in dollars, such as 50 or 12.50.'
 
 /** A modest refresh while the page is open; the daemon is also asked on open and when the period changes. */
 export const USAGE_REFRESH_MS = 60_000
@@ -180,15 +185,14 @@ function BudgetForm({ initial, onSave, onCancel }: { initial: number | null; onS
         autoFocus
         inputMode="decimal"
         value={text}
-        aria-invalid={invalid}
-        aria-describedby={invalid ? 'usage-budget-error' : undefined}
+        {...fieldErrorProps(BUDGET_ERROR_ID, invalid ? BUDGET_PROBLEM : null)}
         className="w-24 rounded-(--r-control) border border-pane-line bg-term px-2 py-1 font-mono text-fg"
         onChange={(event) => { setText(event.target.value); setInvalid(false) }}
       />
       <button type="submit" className="rounded-(--r-control) bg-[var(--accent)] px-2.5 py-1 font-medium text-[var(--on-accent)]">Save</button>
       <button type="button" className="rounded-(--r-control) px-2.5 py-1 text-dim hover:text-fg" onClick={() => { onSave(null) }}>No budget</button>
       <button type="button" className="rounded-(--r-control) px-2.5 py-1 text-dim hover:text-fg" onClick={onCancel}>Cancel</button>
-      {invalid && <span id="usage-budget-error" role="alert" className="basis-full text-[var(--danger)]">Enter an amount in dollars, such as 50 or 12.50.</span>}
+      {invalid && <div className="basis-full"><FieldError id={BUDGET_ERROR_ID}>{BUDGET_PROBLEM}</FieldError></div>}
     </form>
   )
 }
@@ -261,7 +265,7 @@ function LoadFailed({ onRetry, retrying }: { onRetry: () => void; retrying: bool
   return (
     <div role="alert" className="flex flex-1 flex-col items-center justify-center gap-3 py-12 text-center">
       <h2 className="text-[15px] font-semibold">Could not load usage</h2>
-      <p className="max-w-sm text-[12.5px] text-dim">Maiker could not read the usage figures from maikerd. Your sessions are not affected.</p>
+      <p className="max-w-sm text-[12.5px] text-dim">Maiker could not read the usage figures from {DAEMON_NAME}. Your sessions are not affected.</p>
       <button type="button" disabled={retrying} className="rounded-(--r-control) bg-raise px-3 py-1.5 text-[12.5px] font-medium hover:bg-hover" onClick={onRetry}>Retry</button>
     </div>
   )

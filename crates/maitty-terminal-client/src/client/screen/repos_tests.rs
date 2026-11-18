@@ -1,6 +1,6 @@
 //! Clone a repository, another machine's folders, specialist agents, another machine's worktrees
 //! to tidy, and a branch added as a worktree: what each asks which daemon, and what it draws.
-//! `MAIKER_SHOW=1 cargo test screen::repos_tests -- --nocapture` prints the frames.
+//! `AGENT_SHOW=1 cargo test screen::repos_tests -- --nocapture` prints the frames.
 
 use super::*;
 use crate::client::{Outgoing, WtRow};
@@ -47,7 +47,7 @@ fn frame(app: &mut App) -> String {
     let buf = term.backend().buffer().clone();
     let rows: Vec<String> =
         (0..h).map(|y| (0..w).map(|x| buf[(x, y)].symbol()).collect::<String>().trim_end().to_string()).collect();
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         rows.iter().for_each(|r| println!("{r}"));
     }
     rows.join("\n")
@@ -254,6 +254,7 @@ fn listing(path: &str, names: &[(&str, bool)]) -> FolderListing {
             .map(|(name, git)| FolderEntry { name: (*name).into(), git: git.then(|| "main".to_string()), has_children: true })
             .collect(),
         truncated: false,
+        can_create: false,
     }
 }
 

@@ -93,7 +93,7 @@ export function ApprovalCard({ event, actions, step, onGoToStep }: Props) {
       // Focusable only while it can be answered, so Tab reaches a pending request and passes an answered one.
       tabIndex={canAnswer ? 0 : undefined}
       aria-keyshortcuts={canAnswer ? 'y a n' : undefined}
-      className="rounded-[10px] border border-[var(--warn-line)] bg-[var(--warn-soft)] px-3 py-2.5 outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]"
+      className="rounded-[10px] border border-[var(--warn-line)] bg-[var(--warn-soft)] px-3 py-2.5 outline-none"
       onKeyDown={onKeyDown}
     >
       <div className="flex items-center gap-2 text-[13px] font-semibold text-fg">

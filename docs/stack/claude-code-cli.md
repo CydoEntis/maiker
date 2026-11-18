@@ -56,5 +56,18 @@ Claude Code 2.1.316 also passed a Windows GUI smoke on 2026-10-31: Maiker
 created a Claude conversation, sent a prompt, and displayed the reply in that
 conversation. This smoke does not replace the deeper 2.1.314 permission and
 resume checks.
+Claude Code 2.1.327 passed on Linux on 2026-11-18 (`--model haiku`, a scratch project), both
+through the adapter's own launch arguments and parser and through a nested daemon: initialize,
+streamed text, a Bash `can_use_tool` request approved once and denied once, an interrupt, `--resume`
+of the exact session (it recalled the first turn) and the result frames with `usage` and
+`modelUsage`. Every frame parsed; the ones the adapter does not use (`system` `hook_started`,
+`hook_response`, `status`, `thinking_tokens`, `rate_limit_event`, thinking and signature deltas)
+are ignored. Two shapes, also seen on 2.1.325: `system`/`init` arrives after the user message,
+not before the initialize answer, so the adapter checks its session during the turn too; and an
+interrupted turn ends with `is_error: true`, `subtype: "error_during_execution"`, which the adapter
+reports as `interrupted` once Claude acknowledged the interrupt. Verified versions:
+2.1.312, 2.1.314, 2.1.316 and 2.1.327 (`VERIFIED_VERSIONS` in `maitty-provider-claude`).
+A Claude chat with history is not taken up again after a daemon restart; that is the daemon's
+history rule, not a version limit.
 Native Linux/Omarchy and macOS checks, plus daemon recovery after interruption,
 remain open; keep those as release acceptance items in the roadmap.

@@ -518,7 +518,7 @@ impl Terminal {
         use std::io::IsTerminal;
         Terminal {
             interactive: std::io::stdin().is_terminal() && std::io::stderr().is_terminal(),
-            machine_readable: std::env::var(concat!(env!("APP_ENV"), "_UPDATE_PROGRESS")).as_deref() == Ok("1"),
+            machine_readable: maitty_shared::brand::env_var("UPDATE_PROGRESS").as_deref() == Ok("1"),
         }
     }
 }

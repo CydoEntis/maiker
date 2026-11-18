@@ -99,9 +99,7 @@ export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: 
   const dockChoice = (
     <Segmented aria-label="Dock terminal" className="mx-tdock-docks" value={dock} onValueChange={(value) => { const next = DOCKS.find((each) => each.id === value); if (next) setDock(next.id) }}>
       {DOCKS.map((each) => (
-        <SegmentedItem key={each.id} value={each.id} aria-label={each.label} title={each.label} className="mx-tdock-dock">
-          <Icon name={each.icon} />
-        </SegmentedItem>
+        <SegmentedItem key={each.id} value={each.id} icon={<Icon name={each.icon} />} aria-label={each.label} title={each.label} />
       ))}
     </Segmented>
   )

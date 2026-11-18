@@ -10,7 +10,7 @@ import { Markdown } from './Markdown'
 
 function copyText(text: string): void {
   writeClipboard(text).then(
-    () => { toast.message('Copied') },
+    () => { toast.info('Copied') },
     () => { toast.error('Could not copy the document') },
   )
 }

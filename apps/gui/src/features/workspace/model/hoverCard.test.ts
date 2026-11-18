@@ -1,71 +1,60 @@
 import { describe, expect, it } from 'vitest'
-import { HOVER_CARD_WIDTH_PX, placeHoverCard, statusWhyLine } from './hoverCard'
+import type { Conversation } from '@/data/preview'
+import { HOVER_CARD_WIDTH_PX, hoverCardText, placeHoverCard } from './hoverCard'
+import { toSessionView } from './session'
 
 describe('where the hover card goes', () => {
-  it('sits to the right of the row, level with it', () => {
-    expect(placeHoverCard({ left: 20, right: 280, top: 200 }, 180, 1400, 900)).toEqual({ left: 288, top: 200 })
+  it('sits to the right of the row, 4px above it, for a row in the upper half', () => {
+    expect(placeHoverCard({ left: 20, right: 280, top: 200, bottom: 240 }, 1400, 900)).toEqual({ left: 288, top: 196 })
   })
 
-  it('moves up so it never runs past the bottom of the window', () => {
-    expect(placeHoverCard({ left: 20, right: 280, top: 800 }, 180, 1400, 900).top).toBe(712)
+  it('stands on the row, growing up, for a row in the lower half, so it never runs past the window', () => {
+    expect(placeHoverCard({ left: 20, right: 280, top: 800, bottom: 840 }, 1400, 900)).toEqual({ left: 288, bottom: 56 })
+  })
+
+  it('keeps 8px from the window edge', () => {
+    expect(placeHoverCard({ left: 20, right: 280, top: 2, bottom: 40 }, 1400, 900)).toEqual({ left: 288, top: 8 })
+    expect(placeHoverCard({ left: 20, right: 280, top: 860, bottom: 899 }, 1400, 900)).toEqual({ left: 288, bottom: 8 })
   })
 
   it('goes to the left of a sidebar that is on the right', () => {
-    expect(placeHoverCard({ left: 1120, right: 1380, top: 200 }, 180, 1400, 900).left).toBe(1120 - 8 - HOVER_CARD_WIDTH_PX)
+    expect(placeHoverCard({ left: 1120, right: 1380, top: 200, bottom: 240 }, 1400, 900).left).toBe(1120 - 8 - HOVER_CARD_WIDTH_PX)
   })
 })
 
-describe('why a session has its status', () => {
-  const NOW = 1_700_000_000_000
-  const set = (statusWhy: string, agoMs: number | null) => ({ status: 'working' as const, helperAsk: [], statusWhy, statusSince: agoMs === null ? null : NOW - agoMs })
+function view(extra: Partial<Conversation> = {}) {
+  return toSessionView(
+    { id: 't1', generation: 0, kind: 'terminal', title: '', project: '', folder: '/home/me/app', cwd: '/home/me/app', repo: 'app', branch: 'feat/x', provider: 'Claude', status: 'working', updated: null, model: '', permission: '', context: null, nativePane: 1, hasDiff: false, agent: 'claude', summary: 'Upgrade React', ...extra },
+    '/home/me',
+  )
+}
 
-  it('names the hook that set it and how long ago', () => {
-    expect(statusWhyLine(set('hook: Stop', 3_000), NOW)).toBe('hook: Stop, 3 s ago')
+describe('what the hover card says', () => {
+  it('names the project, the branch, the line changes and where the agent runs', () => {
+    const text = hoverCardText({ ...view(), diffAdded: 12, diffRemoved: 3 }, 'Upgrade to React 19')
+    expect(text).toMatchObject({ title: 'Upgrade to React 19', activity: 'Upgrade React', folder: { text: 'app', mono: false, ownWorktree: false }, branch: 'feat/x', changes: { added: 12, removed: 3 }, pr: null, who: 'claude · This computer' })
   })
 
-  it('names what was matched on the screen', () => {
-    expect(statusWhyLine(set('screen: matched `esc to interrupt`', 60_000), NOW)).toBe('screen: matched `esc to interrupt`, 1 min ago')
+  it('tags a branch that has a worktree of its own', () => {
+    expect(hoverCardText({ ...view(), worktree: true }, 'x').folder.ownWorktree).toBe(true)
   })
 
-  it('names the process observation', () => {
-    expect(statusWhyLine(set('process: an agent started', 2 * 60 * 60_000), NOW)).toBe('process: an agent started, 2 h ago')
+  it('falls back to the status word when the session said nothing, and leaves the changes out when none', () => {
+    const text = hoverCardText(view({ summary: '' }), 'x')
+    expect(text.activity).toBeNull()
+    expect(text.word).toBe('Working')
+    expect(text.changes).toBeNull()
   })
 
-  it('counts days once it is that old', () => {
-    expect(statusWhyLine(set('hook: Stop', 3 * 24 * 60 * 60_000), NOW)).toBe('hook: Stop, 3 d ago')
+  it('shows a shell by its working directory and gives it no branch row', () => {
+    const text = hoverCardText(view({ agent: null, process: 'zsh' }), 'zsh')
+    expect(text.folder).toMatchObject({ text: '~/app', mono: true })
+    expect(text.branch).toBeNull()
+    expect(text.activity).toBeNull()
   })
 
-  it('says nothing when the daemon gave no reason', () => {
-    expect(statusWhyLine(set('', 3_000), NOW)).toBeNull()
-  })
-
-  it('leaves the age out when the daemon did not say when', () => {
-    expect(statusWhyLine(set('hook: Stop', null), NOW)).toBe('hook: Stop')
-  })
-
-  it('says nothing for a session whose status is not known', () => {
-    expect(statusWhyLine({ ...set('hook: Stop', 3_000), status: 'unknown' }, NOW)).toBeNull()
-  })
-})
-
-describe('when the reason is not about the status shown', () => {
-  const NOW = 1_700_000_000_000
-  const set = { status: 'needs' as const, helperAsk: [] as string[], statusWhy: 'hook: PreToolUse', statusSince: NOW - 3_000 }
-
-  it('says nothing while the session waits on you to start its helpers', () => {
-    expect(statusWhyLine({ ...set, helperAsk: ['review the diff'] }, NOW)).toBeNull()
-  })
-
-  it('says nothing for a stopped session, whose reason explains idle and not the stop', () => {
-    expect(statusWhyLine({ ...set, status: 'error', statusWhy: 'screen: quiet' }, NOW)).toBeNull()
-  })
-
-  it('says nothing for a limited session, whose reason explains the status under the limit', () => {
-    expect(statusWhyLine({ ...set, status: 'limited', statusWhy: 'hook: Stop' }, NOW)).toBeNull()
-  })
-
-  it('cuts a long screen pattern short and keeps the age', () => {
-    const statusWhy = `screen: matched \`${'a|'.repeat(200)}\``
-    expect(statusWhyLine({ ...set, statusWhy }, NOW)).toBe(`${statusWhy.slice(0, 139)}…, 3 s ago`)
+  it('names the pull request and its state in the state’s tone', () => {
+    const pr = { number: 218, url: 'u', title: 't', state: 'Open' as const, draft: false, checks: { passed: 1, pending: 0, failed: ['lint'] }, review: 'None' as const, conflicting: false, commitsAfterMerge: 0 }
+    expect(hoverCardText({ ...view(), pr }, 'x').pr).toEqual({ number: '#218', state: '1 failing', tone: 'bad' })
   })
 })

@@ -125,12 +125,12 @@ mod tests {
     use super::*;
 
     const STRUCTURED_ENV: [&str; 4] = [
-        "MAIKER_CONVERSATION_ID",
-        "MAIKER_CONVERSATION_GENERATION",
-        "MAIKER_CONVERSATION_CONNECTION",
-        "MAIKER_CONVERSATION_TOKEN",
+        "APP_CONVERSATION_ID",
+        "APP_CONVERSATION_GENERATION",
+        "APP_CONVERSATION_CONNECTION",
+        "APP_CONVERSATION_TOKEN",
     ];
-    const ROUTE_ENV: [&str; 2] = ["MAIKER_RUNTIME_ROUTE", "MAIKER_RUNTIME_SESSION"];
+    const ROUTE_ENV: [&str; 2] = ["APP_RUNTIME_ROUTE", "APP_RUNTIME_SESSION"];
 
     #[test]
     fn default_policy_and_existing_mcp_environment_are_preserved_without_secret_values() {
@@ -168,7 +168,7 @@ mod tests {
                 .is_err()
             );
         }
-        let env = json!({"MAIKER_CONVERSATION_TOKEN":"forged"});
+        let env = json!({"APP_CONVERSATION_TOKEN":"forged"});
         assert!(
             runtime_policy_overrides(
                 &json!({"config":{"mcp_servers":{"synthetic":{"command":"server","env":env}}}}),

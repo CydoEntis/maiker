@@ -81,7 +81,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     connectAgent(agent)
       .then(() => reloadAgentOnDaemon({ id: sessionId }))
       .then(() => { toast.success(`${agent} is connected and restarted to load the hooks.`) })
-      .catch((failure: unknown) => { toast.failure(failure, `Could not connect ${agent}`) })
+      .catch((failure: unknown) => { toast.failed(`Could not connect ${agent}`, failure) })
       .finally(() => { setConnecting(false) })
   }
 
@@ -96,6 +96,8 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     queue: [],
     removeQueued: () => undefined,
     editQueued: () => undefined,
+    moveQueuedUp: () => undefined,
+    clearQueued: () => undefined,
     submit: () => {
       const text = draft.trim()
       // One message is held at a time: a second would replace the first before it was ever sent.
@@ -115,6 +117,7 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     ready: false,
     error: null,
     sendText: () => Promise.resolve(false),
+    sendReply: () => Promise.resolve(false),
     echo: null,
   }), [draft, held, sessionId, attachments, attach, draftKey])
 

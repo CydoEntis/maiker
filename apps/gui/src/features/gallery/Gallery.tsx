@@ -5,11 +5,13 @@ import { Fold } from '@/components/ui/fold'
 import { Counter, Divider, Progress } from '@/components/ui/progress'
 import { StatusMark, type MarkState } from '@/components/ui/status-mark'
 import { CodeChip, FileBadge, Tag, TextLink } from '@/components/ui/tag'
-import { ToastCard } from '@/components/ui/toast-card'
 import { CORNERS, withLook, type Corners } from '@/features/workspace/theme/corners'
 import { findTheme, themeStyle, THEMES } from '@/features/workspace/theme/themes'
-import { Copy, X } from 'lucide-react'
-import { ChatFeed, SubagentsBars, WaitingCards } from './ChatFeed'
+import { Copy } from 'lucide-react'
+import { ChatFeed, ChatParity, SubagentsBars, WaitingCards } from './ChatFeed'
+import { RepliesGallery } from './RepliesGallery'
+import { LiveTurnGallery } from './LiveTurnGallery'
+import { DocumentsGallery } from './DocumentsGallery'
 import { galleryParams, galleryHash } from './galleryParams'
 
 /*
@@ -28,7 +30,7 @@ const FORCED: Record<(typeof KINDS)[number], { hover: string; pressed: string }>
   ghost: { hover: 'bg-(--hover) text-(--fg)', pressed: 'bg-(--sel)' },
   danger: { hover: 'bg-[color-mix(in_oklab,var(--err)_18%,transparent)]', pressed: 'bg-[color-mix(in_oklab,var(--err)_24%,transparent)]' },
 }
-const FOCUS_RING = 'shadow-[0_0_0_2px_var(--bg),0_0_0_4px_var(--focus)]'
+const FOCUS_RING = 'shadow-(--focus-underline)'
 
 function Sample({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -78,7 +80,7 @@ function Primitives() {
           </Card>
         </Sample>
         <Sample label="Card · hover"><Card className="border-(--line2)"><CardHead>Edge goes to line2</CardHead></Card></Sample>
-        <Sample label="Card · keyboard focus"><Card className={FOCUS_RING}><CardHead>2px focus ring outside</CardHead></Card></Sample>
+        <Sample label="Card · keyboard focus"><Card className={FOCUS_RING}><CardHead>2px focus underline inside</CardHead></Card></Sample>
         <Sample label="Card · tone=needs"><Card tone="needs"><CardHead><StatusMark state="needs" />Amber edge</CardHead></Card></Sample>
         <Sample label="Card · tone=err"><Card tone="err"><CardHead><StatusMark state="failed" />Error edge</CardHead></Card></Sample>
         <Sample label="Card · interactive (tab to it)"><Card interactive tabIndex={0}><CardHead>Hover or focus me</CardHead></Card></Sample>
@@ -89,7 +91,7 @@ function Primitives() {
         <div className="flex gap-3.5">
           <Captioned caption="default"><IconButton label="Copy"><Copy /></IconButton></Captioned>
           <Captioned caption="hover"><IconButton label="Copy" className="bg-(--hover) text-(--fg)"><Copy /></IconButton></Captioned>
-          <Captioned caption="focus"><IconButton label="Copy" className="shadow-[0_0_0_2px_var(--focus)]"><Copy /></IconButton></Captioned>
+          <Captioned caption="focus"><IconButton label="Copy" className={FOCUS_RING}><Copy /></IconButton></Captioned>
         </div>
       </Sample>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
@@ -123,17 +125,12 @@ function Primitives() {
           <Counter>2 of 5</Counter>
           <Divider />
         </Sample>
-        <Sample label="Toast">
-          <ToastCard mark={<StatusMark state="needs" />} actions={<><Button size="sm" variant="soft">Open</Button><IconButton label="Dismiss"><X /></IconButton></>}>
-            <b className="font-semibold">Ship partial refunds</b> needs you
-          </ToastCard>
-        </Sample>
       </div>
     </div>
   )
 }
 
-const QUICK_THEMES = ['Maiker Night', 'Maiker Day', 'Maiker Dark', 'Maiker Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Tokyo Night']
+const QUICK_THEMES = ['Maiker Day', 'Maiker Dark', 'Maiker Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Tokyo Night']
 
 function useHashParams() {
   const [params, setParams] = useState(() => galleryParams(window.location.hash))
@@ -174,15 +171,31 @@ export function Gallery() {
           </nav>
         </header>
         <Primitives />
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">Chat feed as the prototype draws it</h2>
+        <div className="flex flex-wrap items-start gap-6">
+          <div className="w-[780px] max-w-full" data-parity="wide"><ChatParity /></div>
+          <div className="w-[360px] max-w-full" data-parity="narrow"><ChatParity /></div>
+        </div>
         <h2 className="m-0 mt-4 text-[18px] font-[650]">Chat feed</h2>
         <div className="flex flex-wrap items-start gap-6">
           <div className="w-[800px] max-w-full"><ChatFeed /></div>
           <div className="w-[400px] max-w-full"><ChatFeed /></div>
         </div>
-        <h2 className="m-0 mt-4 text-[18px] font-[650]">Running subagents</h2>
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">A turn as it streams</h2>
+        <div className="flex flex-wrap items-start gap-6">
+          <LiveTurnGallery width={780} />
+          <LiveTurnGallery width={360} />
+        </div>
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">Replies and quotes</h2>
+        <div className="flex flex-wrap items-start gap-6">
+          <RepliesGallery width={780} />
+          <RepliesGallery width={360} />
+        </div>
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">Documents</h2>
+        <DocumentsGallery />
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">The dock: helpers, queue, record</h2>
         <div className="flex flex-wrap items-start gap-6">
           <div className="w-[800px] max-w-full"><SubagentsBars /></div>
-          <div className="w-[400px] max-w-full"><SubagentsBars /></div>
         </div>
         <h2 className="m-0 mt-4 text-[18px] font-[650]">Waiting cards</h2>
         <div className="flex flex-wrap items-start gap-6">

@@ -20,7 +20,7 @@ function lines(text: string): { title: string; description?: string } {
  */
 export async function runMachineUpdate(name: string, action: UpdateAction, whenIdle: boolean, onDone: () => void): Promise<void> {
   const words = UPDATE_WORDS[action]
-  const id = toast.loading(words.running(name))
+  const id = toast.progress(words.running(name))
   try {
     const result = lines(await updateMachine(name, action === 'install', whenIdle))
     toast.success(result.title, { id, ...(result.description === undefined ? {} : { description: result.description }) })

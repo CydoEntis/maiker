@@ -1,4 +1,5 @@
 import { useRef } from 'react'
+import { windowRoot } from './windowRoot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import type { ClosedSession } from '@/api/daemon'
 import { agentName } from '../model/agentMessage'
@@ -73,7 +74,7 @@ export function RecentSessionsDialog({ home, onPick, onReopened, onCancel }: Pro
   const dialog = useRef<HTMLDivElement>(null)
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel() }}>
-      <DialogContent unstyled asChild aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); dialog.current?.focus() }}>
+      <DialogContent unstyled asChild container={windowRoot()} aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); dialog.current?.focus() }}>
         <div
           ref={dialog}
           tabIndex={-1}

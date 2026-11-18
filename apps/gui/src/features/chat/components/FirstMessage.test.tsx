@@ -168,7 +168,7 @@ describe('a chat whose agent has not said what it is doing yet', () => {
     // The window types nothing itself: the daemon holds the message, so it goes whether or not the window stays open.
     expect(typeInto).not.toHaveBeenCalled()
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('start on the parser')
-    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('start on the parser')
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toHaveTextContent('start on the parser')
     expect(box).toHaveValue('')
   })
 
@@ -224,6 +224,7 @@ describe('a message written while a terminal agent works', () => {
     expect(typeInto).not.toHaveBeenCalled()
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('stop, use the other branch')
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await settle(10)
 
@@ -231,7 +232,7 @@ describe('a message written while a terminal agent works', () => {
     expect(typeInto).toHaveBeenCalledTimes(2)
     expect(typeInto).toHaveBeenNthCalledWith(1, `${PASTE_START}stop, use the other branch${PASTE_END}`)
     expect(typeInto).toHaveBeenNthCalledWith(2, '\r')
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
 
     // The daemon no longer holds it, so the turn ending sends nothing more.
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('')
@@ -246,7 +247,7 @@ describe('a message written while a terminal agent works', () => {
 
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/btw which file is that?', '\r'])
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('')
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
   it('queues /btw while the agent has not said what it is doing yet, and any other command while it works', async () => {
@@ -290,6 +291,7 @@ describe('a message written while a terminal agent works', () => {
     await settle(1)
     typeInto.mockRejectedValueOnce(new Error('terminal closed'))
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await settle(PASTE_SUBMIT_GAP_MS + 10)
 
@@ -306,13 +308,13 @@ describe('a message written while a terminal agent works', () => {
     await settle(1)
     expect(typeInto).not.toHaveBeenCalled()
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('and then add tests')
-    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('and then add tests')
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toHaveTextContent('and then add tests')
 
     // The turn ends and the daemon types it in: it leaves the queue and shows in the chat at once.
     await user.click(screen.getByRole('button', { name: 'The turn ends' }))
     await settle(1)
     expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Sending')).toHaveTextContent('and then add tests')
   })
 
@@ -396,11 +398,12 @@ describe('a message written while a terminal agent works', () => {
     await user.type(box, 'and then add tests{Enter}')
     await settle(1)
 
-    await user.click(within(screen.getByRole('list', { name: 'Queued messages' })).getByRole('button', { name: /^Edit/ }))
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
+    await user.click(within(screen.getByRole('region', { name: 'Queued messages' })).getByRole('button', { name: /^Edit/ }))
     await settle(1)
 
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('')
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
     expect(box).toHaveValue('and then add tests')
     expect(screen.queryByLabelText('Sending')).not.toBeInTheDocument()
   })

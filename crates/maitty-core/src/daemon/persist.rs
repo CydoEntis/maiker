@@ -98,6 +98,10 @@ pub struct SavedPane {
     /// The pane that started it, by its id when this was saved (a key of some tab's `panes`).
     #[serde(default)]
     pub started_by: Option<TermId>,
+    /// It was started as an agent (`Term::began_as_agent`); panes saved before this was recorded
+    /// read as not, and their command says when it was one.
+    #[serde(default)]
+    pub began_as_agent: bool,
     /// The app that started it: only that app may use it after a restart (ADR 0004).
     #[serde(default)]
     pub owner: crate::protocol::Surface,
@@ -139,7 +143,7 @@ pub struct SavedPane {
 
 pub fn path() -> PathBuf {
     let label =
-        std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into());
+        maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
     crate::config::data_dir().join(format!("session-{label}.json"))
 }
 
@@ -386,7 +390,7 @@ pub fn output_dir() -> PathBuf {
         ));
     }
     let label =
-        std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into());
+        maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
     crate::config::data_dir().join(format!("output-{label}"))
 }
 
@@ -420,7 +424,7 @@ pub fn check_output_dir() -> PathBuf {
         ));
     }
     let label =
-        std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into());
+        maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
     crate::config::data_dir().join(format!("check-output-{label}"))
 }
 

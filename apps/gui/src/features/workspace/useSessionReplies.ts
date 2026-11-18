@@ -37,7 +37,7 @@ export function useSessionReplies({ sessionMap, flash, showSessionById, setDismi
     }
     void sendTo(target, keys)
       .then(() => { flash(`Sent “${answer}” to ${displayName(target)}`) })
-      .catch((error: unknown) => { toast.failure(error, 'Could not answer the session') })
+      .catch((error: unknown) => { toast.failed('Could not answer the session', error) })
   }, [sessionMap, sendTo, flash])
 
 
@@ -49,7 +49,7 @@ export function useSessionReplies({ sessionMap, flash, showSessionById, setDismi
     void sendTo(target, `${command}
 `)
       .then(() => { setDismissedRestores((current) => new Set(current).add(target.id)) })
-      .catch((error: unknown) => { toast.failure(error, 'Could not resume the agent') })
+      .catch((error: unknown) => { toast.failed('Could not resume the agent', error) })
   }, [sendTo, setDismissedRestores, showSessionById])
 
   return { answerSession, sendTo, resumeInterrupted }

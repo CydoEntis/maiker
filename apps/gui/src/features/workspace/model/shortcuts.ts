@@ -19,7 +19,7 @@ export function isMacPlatform(userAgent: string): boolean {
 }
 
 /**
- * The shortcuts that still work on the new chat page. It is a page, not a dialog: the window's own keys and the ones
+ * The shortcuts that still work on the New session dialog. It is a page, not a dialog: the window's own keys and the ones
  * that leave for another session work from it. The ones that act on the pane it covers do not.
  */
 export const NEW_CHAT_PAGE_ACTIONS: ReadonlySet<ShortcutAction> = new Set<ShortcutAction>([
