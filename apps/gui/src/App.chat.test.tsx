@@ -178,7 +178,7 @@ describe('the Terminal | Chat view of a pane', () => {
     await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
     expect(within(pane).getByRole('heading', { name: 'Chat view is for agent sessions' })).toBeInTheDocument()
 
-    await user.click(within(pane).getByRole('button', { name: 'Start claude here' }))
+    await user.click(within(pane).getByRole('button', { name: 'Start Claude here' }))
     expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude --dangerously-skip-permissions\r')
     expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
 
@@ -195,7 +195,7 @@ describe('the Terminal | Chat view of a pane', () => {
 
     await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
     expect(within(pane).getByText(/opencode has no event stream/)).toBeInTheDocument()
-    expect(within(pane).queryByRole('button', { name: /Start claude here/ })).not.toBeInTheDocument()
+    expect(within(pane).queryByRole('button', { name: /Start Claude here/ })).not.toBeInTheDocument()
   })
 
   it('opens a Claude session in the chat when Settings says so, and never opens a shell there', async () => {
@@ -245,7 +245,7 @@ describe('the Terminal | Chat view of a pane', () => {
     daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
 
     await user.click(within(pane).getByRole('radio', { name: /^Chat view/ }))
-    const box = await within(pane).findByRole('textbox', { name: 'Message claude' })
+    const box = await within(pane).findByRole('textbox', { name: 'Message Claude' })
     await waitFor(() => { expect(box).toBeDisabled() })
     expect(box).toHaveAttribute('placeholder', 'Answer the request above first')
 
@@ -270,7 +270,7 @@ describe('the Terminal | Chat view of a pane', () => {
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
     daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
     await user.click(within(pane).getByRole('radio', { name: /^Chat view/ }))
-    const box = await within(pane).findByRole('textbox', { name: 'Message claude' })
+    const box = await within(pane).findByRole('textbox', { name: 'Message Claude' })
 
     // jsdom has no hit testing: the pointer is over the text box.
     const hit = vi.fn(() => box)

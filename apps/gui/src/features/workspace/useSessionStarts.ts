@@ -32,12 +32,13 @@ import { resolveStartFolder } from './model/startFolder'
 import { resumeWords } from './model/moveToWorktree'
 import { hasAbility } from './model/agentAbilities'
 import { makeId } from './makeId'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** How a start runs beside others: `alone` (refused while anything starts, and holds off the rest), `alongside` (a new chat
  * page start that opens its pane), `background` (one that opens nothing and rejects with the reason it failed). */
 type StartMode = 'alone' | 'alongside' | 'background'
 const ANOTHER_START_RUNNING = 'Another start is running. Try again in a moment.'
-const NOT_LISTED = 'The daemon did not list the new session'
+const NOT_LISTED = 'The Maiker service did not list the new session'
 
 /** How long a new session on another machine is waited for, and how often its list is looked at. */
 const REMOTE_START_WAIT_MS = 8000
@@ -129,7 +130,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     startChatSession(path, agent, null, fullAccess).then((started) => {
       if (fullAccess) rememberConversationPermissions(String(started.id), 'full-access')
       return openStartedChat(started, '')
-    }).then(() => { flash(`${agent} chat started`) }), [openStartedChat, flash])
+    }).then(() => { flash(`${agentLabel(agent)} chat started`) }), [openStartedChat, flash])
 
 
   // What the new chat page asks for: a structured chat in the folder, with the model and effort picked, and its first message.
@@ -165,7 +166,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // the `background` rejects instead, with the reason, for the page that asked to say.
   const runStart = useCallback((folder: () => Promise<string>, place: (sessionId: string) => void, launch?: (folder: string) => Promise<void>, mode: StartMode = 'alone'): Promise<boolean> => {
     const background = mode === 'background'
-    if (!online) return background ? Promise.reject(new Error('The daemon is not reachable')) : Promise.resolve(false)
+    if (!online) return background ? Promise.reject(new Error('The Maiker service is not reachable')) : Promise.resolve(false)
     if (!beginStart(mode)) return background ? Promise.reject(new Error(ANOTHER_START_RUNNING)) : Promise.resolve(false)
     return folder()
       .then((path) => startShell(path, launch))
@@ -264,7 +265,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!beginStart('alone')) return
     startChat(from.cwd, agent, fullAccess)
-      .catch((error: unknown) => { toast.failure(error, `Could not start a ${agent} chat`) })
+      .catch((error: unknown) => { toast.failure(error, `Could not start a ${agentLabel(agent)} chat`) })
       .finally(() => { endStart('alone') })
   }, [online, starting, beginStart, endStart, startChat, startAgentSession])
 
@@ -331,7 +332,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // switches to the terminal at any time (ADR 0003), the same for every agent. Starts from the page run alongside each
   // other; one in the `background` is not opened and leaves the page open for the next.
   const startNewChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
-    if (!online) throw new Error('The daemon is not reachable')
+    if (!online) throw new Error('The Maiker service is not reachable')
     if (request.machine !== LOCAL_MACHINE) return startRemoteChat(request, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     const resume = request.resume === null ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
     if (resume === null) throw new Error('This saved conversation cannot be resumed from here')

@@ -195,7 +195,7 @@ describe('a chat session in the desktop window', () => {
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
     await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
 
-    await user.click(within(pane).getByRole('button', { name: 'Start claude here' }))
+    await user.click(within(pane).getByRole('button', { name: 'Start Claude here' }))
     expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude --dangerously-skip-permissions\r')
     expect(daemon.startChatSession).not.toHaveBeenCalled()
   })

@@ -224,7 +224,7 @@ function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSi
       >
         {daemon.version && <ValueRow label="Version" detail="Shared by the GUI and the Maiker TUI.">{daemon.version}</ValueRow>}
         {daemon.socket && <ValueRow label="Socket" detail="Where clients connect.">{daemon.socket}</ValueRow>}
-        <ValueRow label="Sessions" detail="Owned by the daemon. The GUI only attaches.">{daemon.sessionCount}</ValueRow>
+        <ValueRow label="Sessions" detail="Owned by the Maiker service. The GUI only attaches.">{daemon.sessionCount}</ValueRow>
         <Row label="Service log" detail="What the service did lately, for working out a problem. Save a copy puts it in your Downloads folder as maitty-log.txt. It names your folders and repositories, so look before you share it.">
           <span className="mx-mach-buttons">
             <button type="button" className="mx-scard-button" onClick={saveLog}>Save a copy</button>
@@ -245,8 +245,8 @@ function MachineDetail({ head, sessions, machines, github, onRemoved }: { head: 
   return (
     <>
       <Card title="Connection">
-        {health === 'ok' && <ValueRow label="Link" detail="Over ssh, through its own maikerd.">connected</ValueRow>}
-        {health === 'quiet' && <ValueRow label="Link" detail="Over ssh, through its own maikerd.">{head.chip?.word ?? 'connecting'}</ValueRow>}
+        {health === 'ok' && <ValueRow label="Link" detail="Over ssh, through its own Maiker service.">connected</ValueRow>}
+        {health === 'quiet' && <ValueRow label="Link" detail="Over ssh, through its own Maiker service.">{head.chip?.word ?? 'connecting'}</ValueRow>}
         {down && (
           <Row label={capitalised(head.chip?.word ?? 'unreachable')} detail={head.why ?? 'Maiker keeps trying to reach it.'}>
             <span className="mx-mach-buttons">

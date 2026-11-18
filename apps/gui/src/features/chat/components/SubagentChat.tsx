@@ -8,6 +8,7 @@ import { InlineMarkdown, Markdown } from './Markdown'
 import { ChatItem } from './ChatItems'
 import { useHelperRecord } from '../useHelperRecord'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
+import { agentLabel } from '@/features/workspace/model/session'
 
 const SECOND_MS = 1000
 
@@ -81,7 +82,7 @@ export function SubagentChat({ subagent, agent, term = null, root = null }: Chat
         {subagent.status === 'working' && (
           <div className="mx-working">
             <WorkingMark agent={agent} />
-            <span>{subagent.latest ?? `${agent} is working`}</span>
+            <span>{subagent.latest ?? `${agentLabel(agent)} is working`}</span>
           </div>
         )}
         <SubagentNote subagent={subagent} />

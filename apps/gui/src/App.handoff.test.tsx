@@ -825,11 +825,11 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
-    expect(screen.queryByText('Reconnecting to maikerd')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reconnecting to the Maiker service')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'codex, codex, working' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).not.toHaveAttribute('data-input-disabled', 'true')
     await waitFor(() => { expect(daemon.loadConversations).toHaveBeenCalledTimes(3) }, { timeout: 3000 })
-    expect(screen.queryByText('Reconnecting to maikerd')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reconnecting to the Maiker service')).not.toBeInTheDocument()
   })
 
   it('shows the disconnected banner, marks every status Unknown and holds input', async () => {
@@ -840,18 +840,18 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
-    expect(await screen.findByText('Reconnecting to maikerd')).toBeInTheDocument()
+    expect(await screen.findByText('Reconnecting to the Maiker service')).toBeInTheDocument()
     expect(screen.getByText(/Try 2 of 5 · next in 2s/)).toBeInTheDocument()
     // The row says only that it is unknown; "last seen working" now lives in its tooltip and hover card.
-    expect(screen.getByRole('button', { name: 'codex, codex, unknown' })).toBeInTheDocument()
-    expect(screen.getAllByText('Reconnecting to maikerd…')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'codex, codex, offline' })).toBeInTheDocument()
+    expect(screen.getAllByText('Reconnecting to the Maiker service…')).toHaveLength(1)
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).toHaveAttribute('data-input-disabled', 'true')
     expect(screen.getByRole('button', { name: 'New chat' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'codex, codex, unknown' })).not.toHaveClass('mx-fx-working')
+    expect(screen.getByRole('button', { name: 'codex, codex, offline' })).not.toHaveClass('mx-fx-working')
 
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
     await userEvent.setup().click(screen.getByRole('button', { name: 'Retry now' }))
-    await waitFor(() => { expect(screen.queryByText('Reconnecting to maikerd')).not.toBeInTheDocument() })
+    await waitFor(() => { expect(screen.queryByText('Reconnecting to the Maiker service')).not.toBeInTheDocument() })
   })
 
   it('calls the service stopped after five failed tries, and Restart service tries again', async () => {
@@ -864,7 +864,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     const card = await screen.findByRole('region', { name: 'Maiker service stopped' })
     expect(card).toHaveTextContent('Chats are paused and nothing is lost. Restart to pick up where they left off.')
     await user.click(within(card).getByRole('button', { name: 'Details' }))
-    expect(screen.queryByText('Reconnecting to maikerd')).not.toBeInTheDocument()
+    expect(screen.queryByText('Reconnecting to the Maiker service')).not.toBeInTheDocument()
 
     daemon.openDaemonLog.mockResolvedValue(undefined)
     await user.click(within(card).getByRole('button', { name: 'Open log' }))
@@ -977,7 +977,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await screen.findByRole('region', { name: 'Shell in ~/a' })
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
-    await screen.findByText('Reconnecting to maikerd')
+    await screen.findByText('Reconnecting to the Maiker service')
     document.elementFromPoint = vi.fn(() => null)
 
     act(() => { terminal.drop.current?.([`${HOME}/b.png`], { x: 1, y: 1 }) })
@@ -1156,7 +1156,6 @@ describe('desktop overlays and pane tools', () => {
       act(() => { alerts.emit?.({ machine: LOCAL_MACHINE, term: 3, status: 'blocked' }) })
       expect(screen.getAllByText(/needs you$/)).toHaveLength(1)
       expect(card).toHaveTextContent('$ git push origin main')
-      expect(card).toHaveTextContent('just now')
       expect(within(card as HTMLElement).getAllByRole('button').map((button) => button.textContent)).toEqual(['', 'Allow', 'Open session'])
 
       await user.click(within(card as HTMLElement).getByRole('button', { name: 'Allow' }))
@@ -1178,7 +1177,7 @@ describe('desktop overlays and pane tools', () => {
 
       const card = (await screen.findByText(/needs you$/)).closest('.mx-notice')
       expect(card).not.toBeNull()
-      expect(card).toHaveTextContent('Bash · git push origin main')
+      expect(card).toHaveTextContent('Wants to run git push origin main')
       await user.click(within(card as HTMLElement).getByRole('button', { name: 'Allow' }))
       expect(daemon.sendTerminalInput).toHaveBeenCalledWith(expect.objectContaining({ id: 't3' }), '1')
     } finally {

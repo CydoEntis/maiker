@@ -12,7 +12,7 @@ export type SessionNoticeProps = {
   title: string
   /** What happened to it: "needs you", "finished", "failed". */
   state: string
-  body: string
+  body?: string
   actions: readonly NotificationAction[]
   /** When set, a thin line along the bottom shrinks over this many milliseconds. */
   countdownMs?: number
@@ -26,9 +26,8 @@ export function SessionNotice({ kind, process, status, title, state, body, actio
       icon={<span className="mx-notice-app"><AppIcon process={process} size={26} /><StatusBadge status={status} /></span>}
       title={title}
       state={state}
-      body={body}
+      {...(body === undefined ? {} : { body })}
       actions={actions}
-      time="just now"
       onClose={onDismiss}
       {...(countdownMs === undefined ? {} : { countdownMs })}
     />

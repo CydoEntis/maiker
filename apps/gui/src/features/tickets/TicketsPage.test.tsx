@@ -24,7 +24,7 @@ vi.mock('@/api/ticketLinks', async (importOriginal) => {
   return { ...real, ...fake.links.api }
 })
 function links() {
-  if (fake.links === null) throw new Error('the daemon fake is made when the module is mocked')
+  if (fake.links === null) throw new Error('the Maiker service fake is made when the module is mocked')
   return fake.links
 }
 

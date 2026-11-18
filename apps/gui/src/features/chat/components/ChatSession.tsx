@@ -60,6 +60,7 @@ import { AsideCard } from './AsideCard'
 import type { RewindPlace } from '../editFromHere'
 import type { FileSearchPlace } from '../fileMention'
 import { useEditFromHere } from '../useEditFromHere'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** When a turn ends the status changes at once, but the agent's last words may not be read yet: read now and again soon, instead of waiting for the idle poll. */
 const END_OF_TURN_READ_MS = 600
@@ -80,9 +81,9 @@ const ESTIMATED_ROW_PX = 72
 
 /** What a screen reader hears when the conversation changes state: one short line per change, never the text. */
 function announcement(feed: ChatFeed, agent: ChatAgent, working: boolean): string {
-  if (hasPendingApproval(feed) || feed.status === 'Blocked') return `${agent} is waiting for your answer`
-  if (working) return `${agent} is working`
-  if (feed.status === 'Done') return `${agent} finished`
+  if (hasPendingApproval(feed) || feed.status === 'Blocked') return `${agentLabel(agent)} is waiting for your answer`
+  if (working) return `${agentLabel(agent)} is working`
+  if (feed.status === 'Done') return `${agentLabel(agent)} finished`
   return ''
 }
 
@@ -234,8 +235,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const commandsMachine = sessionId !== undefined && remote ? (parseSessionId(sessionId)?.machine ?? null) : LOCAL_MACHINE
   const canPickCodexMode = typeInto !== undefined && abilities.permissionModes?.switchBy === 'command' && link.readOnly === true && !remote
   // The chips stay drawn while their keys would land in a turn or nowhere; they are only greyed out, so the box does not rearrange.
-  const pickerLocked = !online ? 'The daemon is offline' : stoppedOnPrompt ? `${agent} is asking something. Answer it first.` : null
-  const chipsLocked = !online ? 'The daemon is offline' : working ? `${agent} is working. Change this when it finishes.` : null
+  const pickerLocked = !online ? 'The Maiker service is offline' : stoppedOnPrompt ? `${agentLabel(agent)} is asking something. Answer it first.` : null
+  const chipsLocked = !online ? 'The Maiker service is offline' : working ? `${agentLabel(agent)} is working. Change this when it finishes.` : null
   // Picked commands are typed one after another: each waits for its Enter, so a model and an effort picked together do not interleave.
   const commandChain = useRef<Promise<void>>(Promise.resolve())
   // A mode picked while the agent works, typed in once the turn ends; numbered, so each is typed once.
@@ -347,7 +348,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     }
     setHeldMode((was) => ({ mode: target, pick: (was?.pick ?? 0) + 1 }))
     setLiveMode({ base: metaMode, value: target })
-    toast.message(`${modeLabel(target) ?? target} from the next turn`, { description: `${agent} is working, so the mode changes once this turn ends.` })
+    toast.message(`${modeLabel(target) ?? target} from the next turn`, { description: `${agentLabel(agent)} is working, so the mode changes once this turn ends.` })
   }, [applyNow, pickerLocked, working, metaMode, agent])
   const pickMode = applyNow === undefined ? undefined : pickHeld
   useEffect(() => {
@@ -403,7 +404,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         return
       case 'copy': {
         const reply = lastReply(bareRows)
-        if (reply === null) toast.message(`${agent} has not said anything yet.`)
+        if (reply === null) toast.message(`${agentLabel(agent)} has not said anything yet.`)
         else copyBlock(reply, 'Could not copy the reply')
         return
       }
@@ -414,9 +415,9 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         return
       }
       case 'plan':
-        if (shownMode === PLAN_MODE) aside.show('Plan mode', `${agent} is already in plan mode. It reads and plans, and changes nothing until you approve the plan.`)
+        if (shownMode === PLAN_MODE) aside.show('Plan mode', `${agentLabel(agent)} is already in plan mode. It reads and plans, and changes nothing until you approve the plan.`)
         else if (pickMode === undefined) aside.show('Plan mode', 'This chat cannot change its permission mode from here.')
-        else setConfirming({ ask: { title: 'Switch to plan mode?', body: `${agent} will read and plan and change nothing until you approve the plan. You can pick another mode with the shield button.`, confirmLabel: 'Plan mode' }, typed, then: () => { pickMode(PLAN_MODE) } })
+        else setConfirming({ ask: { title: 'Switch to plan mode?', body: `${agentLabel(agent)} will read and plan and change nothing until you approve the plan. You can pick another mode with the shield button.`, confirmLabel: 'Plan mode' }, typed, then: () => { pickMode(PLAN_MODE) } })
         return
       case 'commands':
       case 'complete': return
@@ -581,7 +582,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const waitingStep = pending?.stepId ?? null
   const plan = useMemo(() => (ask?.tool === PLAN_TOOL ? askedPlan(events) : null), [ask?.tool, events])
   // The daemon refuses a restore while the agent works too: its files would be rolled back under it.
-  const rewindBusy = !online ? 'The daemon is offline' : working ? `${agent} is working. Edit from here when it finishes.` : null
+  const rewindBusy = !online ? 'The Maiker service is offline' : working ? `${agentLabel(agent)} is working. Edit from here when it finishes.` : null
   const editFromHere = useEditFromHere({ place: rewind ?? null, conversation: link.conversation, events, agent, busy: rewindBusy })
   const editAction = editFromHere.action
   const renderRow = useCallback(
@@ -641,10 +642,17 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     ? <ApprovalTray key={pending.requestId} event={pending} actions={approval} agent={agent} />
     : menuOpen && sendKeys !== undefined && online ? <CommandMenuTray agent="Codex" topic="model" readScreen={readScreen} sendKeys={sendKeys} onClose={() => { setMenuOpen(false) }} />
     : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
+  // Losing the service is the window's news, said once by its bar (lib/toast.ts); the chat speaks only of a read that
+  // failed while the service is up.
+  const readFailing = offline && online
   const notices = [
-    offline ? `Reconnecting to the daemon. What is shown may be out of date.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
+    readFailing ? `Could not load the latest messages. Trying again.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
     feed.error,
   ].filter((notice): notice is string => notice !== null)
+  const shieldDanger = shownMode !== null && DANGER_MODES.includes(shownMode)
+  // A bypassed chat always shows it (ADR 0005). The message box's red shield says it where it shows the mode; the tag
+  // is for a chat whose shield does not, so the same thing is not flagged twice on nearly every chat.
+  const bypassTag = fullAccess && !shieldDanger
 
   return (
     <FilesHereContext.Provider value={sessionId === undefined || machineNameOf(sessionId) === null}>
@@ -652,10 +660,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={() => { if (chat.current !== null) quotePicked(chat.current) }} />}
-      {(notices.length > 0 || fullAccess) && (
-        <div className="mx-chat-notices" role={offline ? 'status' : undefined}>
+      {(notices.length > 0 || bypassTag) && (
+        <div className="mx-chat-notices" role={readFailing ? 'status' : undefined}>
           {notices.map((notice) => <span key={notice}>{notice}</span>)}
-          {fullAccess && <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Bypass permissions</span>}
+          {bypassTag && <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Bypass permissions</span>}
         </div>
       )}
       {/* Politely announces a change of state only; the log itself is not a live region, so streaming text never floods a screen reader. */}
@@ -671,7 +679,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
         <KnownRowsContext.Provider value={known}>
           <OpenFileContext.Provider value={openFile}>
-          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={queuedCount} pinNewest={sentCount} isPinTarget={isSentRow} />
+          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agentLabel(agent)}`} scrollTarget={scrollTarget} toLatest={queuedCount} pinNewest={sentCount} isPinTarget={isSentRow} />
           </OpenFileContext.Provider>
         </KnownRowsContext.Provider>
       ) : (
@@ -688,7 +696,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         question={question}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
       />
     </div>

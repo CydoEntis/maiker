@@ -7,6 +7,7 @@ import { forgetMachines, registerMachine } from '@/api/machines'
 import { forgetSlashCommands } from '../slashCommands'
 import { forgetChatFeeds } from '../useChatFeed'
 import { ChatSession } from './ChatSession'
+import { agentLabel } from '@/features/workspace/model/session'
 
 const fake = vi.hoisted(() => ({
   current: null as null | { read: (cursor: never) => Promise<unknown> },
@@ -59,10 +60,10 @@ async function open(props: Partial<Parameters<typeof ChatSession>[0]> = {}) {
   const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
   render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1 }} agent="claude" online root={ROOT} {...props} />)
   await settle()
-  return { user, box: screen.getByRole('textbox', { name: `Message ${props.agent ?? 'claude'}` }) }
+  return { user, box: screen.getByRole('textbox', { name: `Message ${agentLabel(props.agent ?? 'claude')}` }) }
 }
 
-const offered = (agent = 'claude') => within(screen.getByRole('listbox', { name: `${agent} commands` })).getAllByRole('option').map((option) => option.textContent)
+const offered = (agent = 'claude') => within(screen.getByRole('listbox', { name: `${agentLabel(agent)} commands` })).getAllByRole('option').map((option) => option.textContent)
 
 describe('the agent\'s commands in the message box', () => {
   it('asks the agent for its commands in the session\'s folder as the chat opens, and lists them when a slash is typed', async () => {
@@ -243,7 +244,7 @@ describe('the agent\'s commands in the message box', () => {
     await user.type(box, '/c')
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(screen.getByText("Could not list claude's commands: kingdom is not connected")).toBeInTheDocument()
+    expect(screen.getByText("Could not list Claude's commands: kingdom is not connected")).toBeInTheDocument()
   })
 
   it('asks nothing of a machine this window has not been told of', async () => {

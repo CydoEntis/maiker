@@ -101,6 +101,28 @@ export function machinePrefix(machineName: string | null | undefined): string {
   return machineName ? `${machineLabel(machineName)} · ` : ''
 }
 
+/** The agents a person knows by name, as they write them; the process name is how the system writes them. */
+const AGENT_NAMES: Readonly<Record<string, string>> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', opencode: 'OpenCode' }
+
+/** An agent's name as a person writes it ("Claude", not the process's "claude"); another program keeps its own. */
+export function agentLabel(process: string): string {
+  return AGENT_NAMES[process.toLowerCase()] ?? process
+}
+
+/** What each of the agent's own tools does, as the plain verb a permission ask is said with. */
+const ASK_VERB: Readonly<Record<string, string>> = { Bash: 'run', Edit: 'edit', MultiEdit: 'edit', Write: 'write', NotebookEdit: 'edit', Read: 'read', WebFetch: 'open' }
+
+/**
+ * A permission ask in plain words: "Wants to run npm test", "Wants to edit src/a.ts". A tool with no plain verb is named,
+ * as the agent names it, so nothing is hidden.
+ */
+export function askWords(ask: Pick<PermissionAsk, 'tool' | 'detail'>): string {
+  const verb = ASK_VERB[ask.tool]
+  const detail = ask.detail.trim()
+  if (verb !== undefined) return detail === '' ? `Wants to ${verb} something` : `Wants to ${verb} ${detail}`
+  return detail === '' ? `Wants to use ${ask.tool}` : `Wants to use ${ask.tool}: ${detail}`
+}
+
 /** What a row calls a session: the name you gave it, else where it is, led by its machine when it is not this computer. */
 export function displayName(session: Pick<SessionView, 'name' | 'title'> & { machineName?: string | null }): string {
   return `${machinePrefix(session.machineName)}${session.name ?? session.title}`
@@ -187,14 +209,19 @@ export function nextResumeAt(sessions: readonly Pick<SessionView, 'resumeAt'>[])
   return times.length === 0 ? null : Math.min(...times)
 }
 
+/**
+ * The one word for each status, wherever a session's status is said: its row, its hover card, its notice and what a
+ * screen reader hears. `unknown` is a session whose machine or service is out of reach, so its last status is not known
+ * to be true.
+ */
 export const STATUS_WORD: Record<SessionStatus, string> = {
   working: 'working',
   needs: 'needs you',
   limited: 'limited',
-  done: 'done',
-  error: 'exited',
+  done: 'finished',
+  error: 'stopped',
   idle: 'idle',
-  unknown: 'unknown',
+  unknown: 'offline',
 }
 
 const CLOCK_DIGITS = 2

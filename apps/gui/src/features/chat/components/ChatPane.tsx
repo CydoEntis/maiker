@@ -16,6 +16,7 @@ import type { ChatProblem } from '../problem'
 import { StartingChat } from './StartingChat'
 import type { RewindPlace } from '../editFromHere'
 import type { FileSearchPlace } from '../fileMention'
+import { agentLabel } from '@/features/workspace/model/session'
 
 export type ChatPaneProps = {
   availability: ChatAvailability
@@ -133,11 +134,11 @@ function NoChat({ availability, process, online, onBackToTerminal, onStartAgent,
         <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
           {availability.kind === 'shell' && CHAT_AGENTS.map((agent) => (
             <Button key={agent} type="button" variant="soft" size="sm" disabled={!online} onClick={() => { onStartAgent(agent) }}>
-              Start {agent} here
+              Start {agentLabel(agent)} here
             </Button>
           ))}
           {availability.kind === 'shell' && onStartChat !== undefined && CHAT_AGENTS.map((agent) => (
-            <Button key={`chat-${agent}`} type="button" variant="soft" size="sm" disabled={!online} onClick={() => { onStartChat(agent, fullAccess) }}>
+            <Button key={`chat-${agentLabel(agent)}`} type="button" variant="soft" size="sm" disabled={!online} onClick={() => { onStartChat(agent, fullAccess) }}>
               Start a {AGENT_LABEL[agent]} chat
             </Button>
           ))}

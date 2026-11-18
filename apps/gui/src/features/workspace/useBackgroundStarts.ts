@@ -7,6 +7,7 @@ import { toast } from '@/lib/toast'
 import { useLatest } from '@/lib/useLatest'
 import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import { nameFromMessage } from './model/newSession'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** What a start in the background took out of the message box, given back as it was when the start fails. */
 export type StartDraft = { text: string; attachments: readonly DraftAttachment[] }
@@ -20,7 +21,7 @@ export type FailedStart = { key: number; group: number; name: string; agent: str
 
 /** How a failed start is named: by the words its session would have been named with, and its agent when one prompt went to several. */
 export const failedStartLabel = ({ name, agent }: Pick<FailedStart, 'name' | 'agent'>): string =>
-  `${name === '' ? 'the empty chat' : `“${name}”`}${agent === null ? '' : ` with ${agent}`}`
+  `${name === '' ? 'the empty chat' : `“${name}”`}${agent === null ? '' : ` with ${agentLabel(agent)}`}`
 
 /**
  * The new chat page's starts in the background: each runs on its own while the page is written in again. `pending`

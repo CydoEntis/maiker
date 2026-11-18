@@ -163,7 +163,7 @@ const NEW_LINE_KEYS = '\x1b\r'
 
 export function TerminalView({ conversation, desktop, fontSize, look = {}, label, inputDisabled = false, ended = false, focused = false, paused = false, onInput, onOpenPath, onHandle, onPasteImage }: TerminalViewProps) {
   if (!desktop) return null
-  if (!isDesktop()) return <div className="panel-empty"><TerminalSquare size={18} /><h2>Native terminal is not available</h2><p>Open Maiker Desktop to use the daemon-owned terminal.</p></div>
+  if (!isDesktop()) return <div className="panel-empty"><TerminalSquare size={18} /><h2>Native terminal is not available</h2><p>Open Maiker Desktop to use the terminals the Maiker service keeps.</p></div>
   if (!hasNativeTerminal(conversation)) return <NativeHandoffView conversation={conversation} />
 
   return <ConnectedTerminalView conversation={conversation} fontSize={fontSize} look={look} label={label ?? `Native ${conversation.provider} terminal`} inputDisabled={inputDisabled || ended} ended={ended} focused={focused} paused={paused} onInput={onInput} onOpenPath={onOpenPath} onHandle={onHandle} onPasteImage={onPasteImage} />
@@ -174,7 +174,7 @@ function NativeHandoffView({ conversation }: { conversation: Conversation }) {
     return <div className="panel-empty" role="status">
       <CircleAlert size={18} />
       <h2>Native terminal needs recovery</h2>
-      <p>The daemon no longer has the native {conversation.provider} terminal attached. Reopen it from the terminal app.</p>
+      <p>The Maiker service no longer has the native {conversation.provider} terminal attached. Reopen it from the terminal app.</p>
     </div>
   }
 
@@ -460,7 +460,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
               resizePending = false
               if (!isMounted) return
               lastFailedSize = size
-              setResizeError('Terminal size could not be updated. Check the daemon connection and retry.')
+              setResizeError('Terminal size could not be updated. Check the Maiker service connection and retry.')
             })
             .finally(() => {
               resizeInFlight = false
@@ -725,9 +725,9 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
 
   return <div className="terminal-view">
     {connecting && slowAttach && !loadError && <SkeletonLines className="terminal-attaching" label={`Opening ${label}`} lines={ATTACH_SKELETON_LINES} />}
-    {loadError && <div className="terminal-input-error" role="status"><p>Could not load the terminal. Check the daemon connection and reopen this session.</p></div>}
+    {loadError && <div className="terminal-input-error" role="status"><p>Could not load the terminal. Check the Maiker service connection and reopen this session.</p></div>}
     <div className={`terminal-screen${connecting && !loadError ? ' is-attaching' : ''}`} ref={terminalHost} role="region" aria-label={label} />
-    {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the daemon could not be reached.</p><Button variant="soft" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
+    {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the Maiker service could not be reached.</p><Button variant="soft" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
     {resizeError && <div className="terminal-input-error" role="status"><p>{resizeError}</p><Button variant="soft" size="sm" onClick={() => { refitTerminal.current?.() }}>Retry resize</Button></div>}
   </div>
 }

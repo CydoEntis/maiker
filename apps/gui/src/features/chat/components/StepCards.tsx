@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { ArrowUpRight, Copy, Lock } from 'lucide-react'
+import { ArrowUpRight, Check, Copy, Lock } from 'lucide-react'
 import { HighlightedLine } from '@/components/HighlightedLine'
 import { Icon, Spinner } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
@@ -14,8 +14,7 @@ import { IconButton } from '@/components/ui/button'
 import { Card, CardHead } from '@/components/ui/card'
 import { Fold } from '@/components/ui/fold'
 import { Tag } from '@/components/ui/tag'
-import { copyText as writeClipboard } from '@/lib/clipboard'
-import { toast } from '@/lib/toast'
+import { useCopied } from '@/lib/useCopied'
 import { ChangePill, FileBadge, StepGlyph, StepRow, type MetaTone } from './cardParts'
 import { diffRows, type DiffRow } from './diffRows'
 import { DocumentCard } from './DocumentCard'
@@ -50,7 +49,7 @@ function ToolTarget({ facts }: { facts: ToolFacts }) {
   switch (facts.kind) {
     case 'file':
     case 'folder':
-      return <FileBadge path={facts.kind === 'folder' && !facts.path.endsWith('/') ? `${facts.path}/` : facts.path} />
+      return <FileBadge bare path={facts.kind === 'folder' && !facts.path.endsWith('/') ? `${facts.path}/` : facts.path} />
     case 'pattern':
       return <><code className="mx-code-chip">{facts.pattern}</code>{facts.where !== null && <span className="mx-step-where">in {facts.where}</span>}</>
     case 'address':
@@ -60,7 +59,7 @@ function ToolTarget({ facts }: { facts: ToolFacts }) {
     case 'extension':
     case 'other':
       if (facts.target === null) return null
-      return looksLikeFile(facts.target) ? <FileBadge path={facts.target} /> : <span className="mx-step-plain">{facts.target}</span>
+      return looksLikeFile(facts.target) ? <FileBadge bare path={facts.target} /> : <span className="mx-step-plain">{facts.target}</span>
   }
 }
 
@@ -77,6 +76,8 @@ export function ToolStep({ event, root = null, waiting = false }: ToolStepProps)
   const facts = toolFacts(event, root)
   const meta = event.status === 'failed' ? FAILED_WORD : event.status === 'interrupted' ? STOPPED_WORD : facts.kind === 'file' ? facts.lines : null
   const result = event.detail.trim()
+  // A step the history kept nothing of has nothing to open to, so its row does not open.
+  const empty = event.input === null && result === ''
   return (
     <div className="mx-step">
       <StepRow
@@ -86,19 +87,17 @@ export function ToolStep({ event, root = null, waiting = false }: ToolStepProps)
         target={<ToolTarget facts={facts} />}
         meta={meta}
         metaTone={event.status === 'failed' ? 'danger' : 'dim'}
-        open={open}
+        open={empty ? null : open}
         onToggle={toggle}
         waiting={waiting}
       />
-      {open && (
+      {open && !empty && (
         <div className="mx-step-body">
-          {event.input === null && result === '' ? <p className="mx-step-absent">The conversation history kept no detail for this step.</p> : (
-            <dl className="mx-step-io">
-              {event.input !== null && <><dt>input</dt><dd>{event.input}</dd></>}
-              <dt>result</dt>
-              <dd className={result === '' ? 'is-absent' : undefined}>{result === '' ? 'It returned nothing, or the history did not keep it.' : event.detail}</dd>
-            </dl>
-          )}
+          <dl className="mx-step-io">
+            {event.input !== null && <><dt>Asked</dt><dd>{event.input}</dd></>}
+            <dt>Returned</dt>
+            <dd className={result === '' ? 'is-absent' : undefined}>{result === '' ? 'Nothing' : event.detail}</dd>
+          </dl>
           <RedactionNote texts={[event.input, event.detail]} />
         </div>
       )}
@@ -113,11 +112,10 @@ type CommandStepProps = {
   waiting?: boolean
 }
 
-function copyCommand(command: string): void {
-  writeClipboard(command).then(
-    () => { toast.message('Copied') },
-    () => { toast.error('Could not copy the command') },
-  )
+/** Copy command, whose icon turns to a check for a moment once it copied. */
+function CopyCommand({ command }: { command: string }) {
+  const { copied, copy } = useCopied('Could not copy the command')
+  return <IconButton label={copied ? 'Copied' : 'Copy command'} onClick={() => { copy(command) }}>{copied ? <Check className="size-3.5" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}</IconButton>
 }
 
 /** The command's output: its last lines in a well, all of them on request, and what the daemon hid. */
@@ -154,6 +152,7 @@ export function CommandStep({ event, alone = false, waiting = false }: CommandSt
   const meta = running ? <ElapsedSince since={event.timing.startedAtMs ?? event.observed.firstSeenAtMs} /> : commandMeta(event)
   const metaTone = running ? 'working' : failed ? 'danger' : 'dim'
   const took = commandTook(event)
+  const ended = commandEnded(event)
   const short = event.command === '' ? 'A command' : typed.length > 1 ? `${first} …` : first
   if (alone) {
     return (
@@ -165,9 +164,9 @@ export function CommandStep({ event, alone = false, waiting = false }: CommandSt
             {open ? <span className="mx-step-command">{event.command}</span> : <code className="mx-step-command is-short">{short}</code>}
             <span className="sr-only">{failed ? FAILED_WORD : status === 'interrupted' ? STOPPED_WORD : running ? 'Running' : 'Done'}</span>
           </button>
-          {!running && <Tag tone={failed ? 'err' : event.exitCode === 0 ? 'done' : 'neutral'}>{commandEnded(event)}</Tag>}
+          {!running && ended !== null && <Tag tone={failed ? 'err' : 'neutral'}>{ended}</Tag>}
           {waiting ? <span className="mx-step-meta is-warn">waiting for you ↓</span> : (running || took !== null) && <span className={`mx-step-meta is-${metaTone}`}>{running ? meta : took}</span>}
-          {event.command !== '' && <IconButton label="Copy command" onClick={() => { copyCommand(event.command) }}><Copy className="size-3.5" aria-hidden="true" /></IconButton>}
+          {event.command !== '' && <CopyCommand command={event.command} />}
         </CardHead>
         {open && <div className="mx-step-cardbody"><CommandOutput event={event} /></div>}
       </Card>
@@ -275,7 +274,8 @@ export function EditStep({ event, root, onOpen, alone = false, waiting = false }
   const document = documentOf(event)
   if (document !== null && file !== null) return <DocumentCard path={file} document={document} />
 
-  const target = <>{file === null ? <span className="mx-step-plain">a file</span> : <FileBadge path={file} />}<ChangePill change={event.change} /></>
+  // A row says its verb, so the file needs no type tag and an edit no "Modified"; a card on its own shows no verb, so it keeps both.
+  const target = (inRow: boolean) => <>{file === null ? <span className="mx-step-plain">a file</span> : <FileBadge bare={inRow} path={file} />}<ChangePill change={event.change} edited={inRow && verb === 'Edit'} /></>
   const metaTone = EDIT_TONE[event.status] ?? 'dim'
   if (alone) {
     const failed = event.status === 'failed'
@@ -285,7 +285,7 @@ export function EditStep({ event, root, onOpen, alone = false, waiting = false }
           <button type="button" className="mx-step-cardtoggle" aria-expanded={open} title={open ? 'Hide the diff' : 'Show the diff'} onClick={toggle}>
             <StepGlyph status={event.status} waiting={waiting} />
             <span className="sr-only">{verb}</span>
-            {target}
+            {target(false)}
           </button>
           {waiting ? <span className="mx-step-meta is-warn">waiting for you ↓</span> : <span className={`mx-step-meta is-${metaTone}`}><EditMeta event={event} /></span>}
           {openFile !== null && <IconButton label="Open in side panel" onClick={openFile}><Icon name="openSide" size={15} /></IconButton>}
@@ -298,7 +298,7 @@ export function EditStep({ event, root, onOpen, alone = false, waiting = false }
   const hasDiff = event.diff.status === 'available' && !event.diff.truncated && event.status !== 'running'
   return (
     <div role="group" aria-label={`${verb} ${name}`} className="mx-step">
-      <StepRow status={event.status} verb={verb} tool="edit" target={target} meta={<EditMeta event={event} />} metaTone={metaTone} open={open} onToggle={toggle} waiting={waiting} />
+      <StepRow status={event.status} verb={verb} tool="edit" target={target(true)} meta={<EditMeta event={event} />} metaTone={metaTone} open={open} onToggle={toggle} waiting={waiting} />
       {open && (
         <div className="mx-step-body">
           {hasDiff ? (

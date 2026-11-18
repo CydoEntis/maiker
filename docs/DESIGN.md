@@ -213,8 +213,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   on every platform (no Mica), and nothing blurs.
 - **The notification card (`features/notifications/NotificationCard.tsx`).** 340px wide, radius 14, padding
   12/12/12/14. A 26px app icon with its 11px status badge, the session's name (13px, 600) with what happened beside it
-  ("needs you" amber, "finished" green, "failed" red; 12px, 500), a 22px close, the body (12.5px, `--fg2`, code in 12px
-  mono), then 28px buttons (the answer filled in the card's colour) and "just now" (11.5px, `--dim`). Toasts sit 96px
+  ("needs you" amber, "finished" green, "stopped" red; 12px, 500, the status words of `STATUS_WORD`), a 22px close, the body (12.5px, `--fg2`, code in 12px
+  mono), then 28px buttons (the answer filled in the card's colour). There is no time on a card: a toast is always new, so a
+  "just now" would say nothing. A finished or stopped card has no body; its state word says it. A needs-you body says the
+  ask in plain words ("Wants to run npm test", `askWords`). Toasts sit 96px
   below the top edge and 36px in from the side, clear of the title bar's controls.
 - **One material, three roles (`apps/gui/src/material.css`).** Every surface is a *panel* (sidebar, main card,
   inspector), a *float* (menus, popovers, dialogs, the palette, find, toasts) or a *field* (the message box and its
@@ -402,10 +404,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   square for unknown; none while idle), the name with how long it has been in its state at the right, and the project
   (and another machine) under it; the branch is in the hover card.
   A pointer resting on a row for 450ms shows a **hover card** beside it (`RowHoverCard`, 290px, level with the row and
-  kept inside the window): the name, project and branch, what it is doing in the daemon's own words, its agent,
-  changes, what set its status and how long ago (**Set by**: `hook: Stop, 3 s ago`, the daemon's `TermInfo.status_why`; no row
-  when it gave no reason, the status is not known, the session stopped, it is limited or it waits on you to start helpers; a long reason is
-  cut like the line above) and last activity. It takes no pointer input and goes on leave, click, scroll or a menu.
+  kept inside the window): the name, project and branch, what it is doing (an ask in plain words, `askWords`),
+  changes and last activity. The status's headline is its `STATUS_WORD`; the agent and what set the status are not shown (the
+  icon says the agent, and the daemon's reason is for debugging, not for a person). It takes no pointer input and goes on leave, click, scroll or a menu.
   The name is 13px, 600 and `--fg` for an agent that is doing anything. A stopped agent says `stopped` and an exited shell `exited` at the right, in `--danger`, instead of a
   badge. An agent the daemon holds until its plan limit resets is **limited**: its row says `limited until 14:05` there in
   `--muted` (the daemon's `TermInfo.resume_at`, in this computer's time; `limited until Thu 14:05` when that is not today), and it goes back to the daemon's status when that
@@ -560,13 +561,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   mode is on (`PLAN MODE` in mono blue, then what it means), and a bottom row: the model picker, the permission mode
   as a shield and a chevron (`ModeControl`; the mode's name is in its tooltip, and the shield is `--danger` in a mode
   that asks about nothing), a spacer, the usage meters and send. The focus ring is the accent. The meters
-  (`UsageMeters`, `usageStrip.ts`) are the context, then each plan limit, each a short name (`Ctx`, `5h`, `Wk`, which
+  (`UsageMeters`, `usageStrip.ts`) are the context, then each plan limit, each a short name (`Context`, `5h`, `Week`, which
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
-  under 50%, `--m-or` under 75%, `--m-hi` from there). They always show, and each opens Settings › Usage & cost. When
-  a limit starts over is in its tooltip. For Claude and Codex the context always shows, at 0% before the first turn
-  has reported one (a chat that has run nothing has used none of it). A plan limit shows only once the agent has
-  reported it, in the order context, 5-hour, weekly, then any other: a plan without a 5-hour window (an API key, some
+  under 50%, `--m-or` under 75%, `--m-hi` from there). A meter shows once it is at least half used
+  (`METER_SHOWN_FROM`), when it is worth a look; below that Settings › Usage & cost has it. Each opens that page. When
+  a limit starts over is in its tooltip. A plan limit shows only once the agent has reported it, in the order context, 5-hour, weekly, then any other: a plan without a 5-hour window (an API key, some
   Codex plans) never reports one, and a meter that only ever said "–" was noise. Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
   list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from the Codex CLI
@@ -735,10 +735,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   block is a card (language, **Copy**, **Save**; numbered lines in a 36px gutter on `--well`, folded past 24 lines). A
   table is a card (**Table**, "N rows", **Copy**, **Save as** Markdown / CSV / HTML; cells never wrap, numbers right-aligned, a wide table scrolls sideways).
   **A step** is a 30px row, gap 9: its **StatusMark** (14px), a verb at 13/600, what it acted on in mono 12.5 (cut at
-  the end), how it ended in mono 11.5 `--dim` at the right, and a caret; it opens to its detail. The step a pending
+  the end), how it ended in mono 11.5 `--dim` at the right (only a failure, a stop or "no matches", then the time: a success or an
+  unreported end shows just the time), and a caret; it opens to its detail. The step a pending
   request is about is the only one in amber: a 9% `--needs` tint, a 2px left edge and "waiting for you ↓". A file is a
-  badge (type tag, folder in `--dim`, name in `--fg`, cut from the front so the name stays). A **command on its own**
-  is a card: its mark, `$` and the command, an exit tag ("exit 0" in `--done`, "exit 1" in `--err`), the time and
+  badge (folder in `--dim`, name in `--fg`, cut from the front so the name stays; no type tag in a step row, where the verb and
+  the name already say what it is). A **command on its own**
+  is a card: its mark, `$` and the command, an exit tag only when it did not simply succeed ("exit 1" in `--err`, "stopped", "no matches"), the time and
   **Copy command** in the head, and the last 6 lines of output on `--well` with "Show all N lines"; a failed one has the
   `--err` edge. An **edit on its own** is a card: its mark, the file badge, the change tag, +A −R and
   **Open in side panel** in the head, and the diff below when opened (line numbers in a 36px gutter, a sign column, added lines

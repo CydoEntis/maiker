@@ -355,7 +355,7 @@ function Expanded(props: SidebarProps) {
       <div className="mx-sidebar-foot">
         {props.online
           ? <span className="mx-foot-slot">{props.updateSlot}</span>
-          : <><span className="mx-daemon-dot is-offline" aria-hidden="true" /><span className="mx-daemon-text is-offline" role="status">{props.serviceText ?? 'Reconnecting to maikerd…'}</span></>}
+          : <><span className="mx-daemon-dot is-offline" aria-hidden="true" /><span className="mx-daemon-text is-offline" role="status">{props.serviceText ?? 'Reconnecting to the Maiker service…'}</span></>}
         <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={15} /></button>
       </div>
       {hovered && hover && <RowHoverCard session={hovered} row={hover.row} portalContainer={props.portalContainer} />}
@@ -535,7 +535,7 @@ function ProjectSection({ name, color, needs, sessions, renderRow }: { name: str
 /** The 60px rail of a narrow window: the starters, then one tile per session with its status badge. */
 function Rail(props: SidebarProps) {
   const tip = useTipWithKeys()
-  const label = props.online ? `maikerd · ${String(props.sessions.length)} sessions` : 'Reconnecting to maikerd…'
+  const label = props.online ? `maikerd · ${String(props.sessions.length)} sessions` : 'Reconnecting to the Maiker service…'
   return (
     <div className="mx-rail">
       <div className="mx-rail-top">

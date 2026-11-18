@@ -364,7 +364,7 @@ describe('terminal view', () => {
   })
 
   it('asks the daemon for a fresh replay itself when the host has no stream to ask over', async () => {
-    loadTerminalHistory.mockRejectedValue(new Error('The terminal is not connected to the daemon'))
+    loadTerminalHistory.mockRejectedValue(new Error('The terminal is not connected to the Maiker service'))
     renderTerminal()
 
     await waitFor(() => { expect(loadTerminalReplay).toHaveBeenCalledWith(binding) })
@@ -430,7 +430,7 @@ describe('terminal view', () => {
     resizeTerminal.mockRejectedValue(new Error('Native pane is no longer attached'))
     renderTerminal()
 
-    expect(await screen.findByText('Terminal size could not be updated. Check the daemon connection and retry.')).toBeInTheDocument()
+    expect(await screen.findByText('Terminal size could not be updated. Check the Maiker service connection and retry.')).toBeInTheDocument()
     terminalState.onResize?.()
     terminalState.onResize?.()
     await Promise.resolve()
@@ -440,13 +440,13 @@ describe('terminal view', () => {
   })
 
   it('stops typing and offers to try again when the daemon cannot be reached', async () => {
-    sendTerminalInput.mockRejectedValueOnce(new Error('The terminal is not connected to the daemon'))
+    sendTerminalInput.mockRejectedValueOnce(new Error('The terminal is not connected to the Maiker service'))
     renderTerminal()
     await waitFor(() => { expect(terminalState.onData).toBeDefined() })
 
     terminalState.onData?.('a')
 
-    expect(await screen.findByText('Input stopped because the daemon could not be reached.')).toBeInTheDocument()
+    expect(await screen.findByText('Input stopped because the Maiker service could not be reached.')).toBeInTheDocument()
     terminalState.onData?.('b')
     expect(sendTerminalInput).toHaveBeenCalledTimes(1)
   })

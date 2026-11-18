@@ -12,7 +12,7 @@ describe('session notice card', () => {
     expect(screen.getByText('Review EmptyState')).toBeInTheDocument()
     expect(screen.getByText('needs you')).toBeInTheDocument()
     expect(screen.getByText('Wants to run $ git push')).toBeInTheDocument()
-    expect(screen.getByText('just now')).toBeInTheDocument()
+    expect(screen.queryByText('just now')).toBeNull()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Allow' }))
     expect(onClick).toHaveBeenCalledOnce()
     expect(onDismiss).toHaveBeenCalledOnce()

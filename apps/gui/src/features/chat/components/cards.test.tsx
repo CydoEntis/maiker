@@ -44,27 +44,37 @@ describe('command step', () => {
     expect(group).toHaveTextContent('three four five')
   })
 
-  it.each([
-    ['exit 0 with the provider duration', finished({ exitCode: 0, durationMs: 1_400 }), '1s', 'exit 0'],
-    ['a non-zero exit', finished({ exitCode: 2, durationMs: 2_000, status: 'failed' }), '2s', 'exit 2'],
-  ])('shows %s', (_name, event, took, exit) => {
-    render(<CommandStep event={event} />)
+  it('shows only the time of a command that succeeded', () => {
+    render(<CommandStep event={finished({ exitCode: 0, durationMs: 1_400 })} />)
 
-    expect(screen.getByText(`${exit} · ${took}`)).toBeInTheDocument()
+    expect(screen.getByText('1s')).toBeInTheDocument()
+    expect(screen.queryByText(/exit/)).toBeNull()
   })
 
-  it('says a command reported no exit code, without claiming it passed', () => {
+  it('shows the exit code of a command that failed, with its time', () => {
+    render(<CommandStep event={finished({ exitCode: 2, durationMs: 2_000, status: 'failed' })} />)
+
+    expect(screen.getByText('exit 2 · 2s')).toBeInTheDocument()
+  })
+
+  it('says nothing of an exit code the agent did not report, and never claims it passed', () => {
     render(<CommandStep event={{ ...finished(), timing: { startedAtMs: 1_000, completedAtMs: 4_000 } }} />)
 
-    expect(screen.getByText('exit code not reported · 3s')).toBeInTheDocument()
-    expect(screen.queryByText(/^exit [0-9]/)).toBeNull()
+    expect(screen.getByText('3s')).toBeInTheDocument()
+    expect(screen.queryByText(/exit|not reported/)).toBeNull()
   })
 
-  it('says nothing of the time when the history kept none', () => {
+  it('draws a file in a step row with no type tag, its name still in full', () => {
+    render(<ToolStep event={toolEvent('t', { name: 'Read', target: 'src/plane.py' })} />)
+
+    expect(screen.getByText('plane.py')).toBeInTheDocument()
+    expect(screen.queryByText('PY')).toBeNull()
+  })
+
+  it('says nothing at all of a success whose time the history did not keep', () => {
     render(<CommandStep event={finished({ exitCode: 0 })} />)
 
-    expect(screen.getByText('exit 0')).toBeInTheDocument()
-    expect(screen.queryByText(/unavailable/)).toBeNull()
+    expect(screen.queryByText(/exit|unavailable/)).toBeNull()
   })
 
   it('shows a live clock while it runs, and no exit code', () => {
@@ -116,7 +126,6 @@ describe('command step', () => {
     await userEvent.click(screen.getByRole('button', { expanded: false }))
     expect(screen.getByText('token is [redacted]')).toBeInTheDocument()
     expect(screen.getByText(/looked like a secret/)).toBeInTheDocument()
-    expect(screen.getByText('exit 0')).toBeInTheDocument()
   })
 
   it('says a secret file was read instead of showing the marker as output', async () => {
@@ -216,15 +225,15 @@ describe('tool step', () => {
     const chip = screen.getByRole('button', { name: /Read.*a[.]ts/ })
     expect(chip).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(chip)
-    expect(screen.getByText('input')).toBeInTheDocument()
+    expect(screen.getByText('Asked')).toBeInTheDocument()
     expect(screen.getByText('file text')).toBeInTheDocument()
   })
 
-  it('says so when the history kept nothing for the step', async () => {
+  it('does not open a step the history kept nothing of', () => {
     render(<ToolStep event={toolEvent('t', { name: 'Glob' })} />)
 
-    await userEvent.click(screen.getByRole('button', { name: /Find files/ }))
-    expect(screen.getByText('The conversation history kept no detail for this step.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Find files/ })).toBeNull()
+    expect(screen.getByText(/Find files/)).toBeInTheDocument()
   })
 })
 

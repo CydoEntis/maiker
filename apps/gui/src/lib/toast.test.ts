@@ -9,7 +9,7 @@ describe('toast.error', () => {
   beforeEach(() => { custom.mockClear() })
 
   it('stays quiet when the only news is that the window has no line to the service', () => {
-    toast.error('The terminal is not connected to the daemon')
+    toast.error('The terminal is not connected to the Maiker service')
 
     expect(custom).not.toHaveBeenCalled()
   })
@@ -45,7 +45,7 @@ describe('toast.failure', () => {
   })
 
   it('stays quiet when the failure is only that the window has no line to the service', () => {
-    toast.failure('The terminal is not connected to the daemon', 'Could not send')
+    toast.failure('The terminal is not connected to the Maiker service', 'Could not send')
 
     expect(custom).not.toHaveBeenCalled()
   })

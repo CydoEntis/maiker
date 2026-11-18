@@ -20,6 +20,7 @@ import { ScreenMenuTray, TrustFolderTray } from './QuestionTray'
 import { parseScreenMenu } from '../screenMenu'
 import { parseTrustPrompt } from '../trustPrompt'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
+import { agentLabel } from '@/features/workspace/model/session'
 
 type StartingChatProps = {
   agent: ChatAgent
@@ -80,8 +81,8 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
     setConnecting(true)
     connectAgent(agent)
       .then(() => reloadAgentOnDaemon({ id: sessionId }))
-      .then(() => { toast.success(`${agent} is connected and restarted to load the hooks.`) })
-      .catch((failure: unknown) => { toast.failure(failure, `Could not connect ${agent}`) })
+      .then(() => { toast.success(`${agentLabel(agent)} is connected and restarted to load the hooks.`) })
+      .catch((failure: unknown) => { toast.failure(failure, `Could not connect ${agentLabel(agent)}`) })
       .finally(() => { setConnecting(false) })
   }
 
@@ -129,16 +130,16 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, a
           <span role="note" className="is-warn">{waiting ? waitingInTerminalHint(agent) : noEventsHint(agent)}</span>
           <span className="mx-spacer" />
           <button type="button" className="mx-sub-back" onClick={onBackToTerminal}>Open terminal</button>
-          {!waiting && <button type="button" className="mx-sub-back" disabled={connecting} onClick={connect}>{connecting ? 'Connecting…' : `Connect ${agent}`}</button>}
+          {!waiting && <button type="button" className="mx-sub-back" disabled={connecting} onClick={connect}>{connecting ? 'Connecting…' : `Connect ${agentLabel(agent)}`}</button>}
         </div>
       )}
       {held === null ? (
-        <p className="mx-chat-empty">Type below: it is sent as soon as {agent} is ready.</p>
+        <p className="mx-chat-empty">Type below: it is sent as soon as {agentLabel(agent)} is ready.</p>
       ) : (
         // The same list the real chat uses, so the message and the line under it are already where they will stay.
         <div className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto">
           <div className="mx-chat-row"><div className="mx-msg-user is-echo" aria-label="Sending">{echoed(held)}</div></div>
-          <div className="mx-chat-row"><div className="mx-working"><WorkingMark agent={agent} /><span>{agent} is starting…</span></div></div>
+          <div className="mx-chat-row"><div className="mx-working"><WorkingMark agent={agent} /><span>{agentLabel(agent)} is starting…</span></div></div>
         </div>
       )}
       <Composer

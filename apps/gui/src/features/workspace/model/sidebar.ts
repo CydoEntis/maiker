@@ -1,6 +1,6 @@
 import { isChatSession } from './chatSession'
 import type { MachineHead } from './machines'
-import { folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView } from './session'
+import { folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView, STATUS_WORD } from './session'
 
 /**
  * The most urgent first: what needs you, an agent that stopped, one held by its plan limit, what is
@@ -72,9 +72,10 @@ export function rowWord(session: SessionView, now: number = Date.now()): string 
   if (session.snoozedUntil !== null) return untilWord(session.snoozedUntil, now)
   if (session.status === 'limited') return limitedWord(session.resumeAt, now)
   // Its machine or the daemon is out of reach, or the list just missed it: the last status is not known to be true.
-  if (session.status === 'unknown') return 'offline'
+  if (session.status === 'unknown') return STATUS_WORD.unknown
   if (session.status !== 'error') return ''
-  return isShell(session) ? 'exited' : 'stopped'
+  // A shell that ended did not stop on a failure, so it says it exited.
+  return isShell(session) ? 'exited' : STATUS_WORD.error
 }
 
 export type ProjectGroup = { name: string; color: string; sessions: SessionView[]; needs: number }

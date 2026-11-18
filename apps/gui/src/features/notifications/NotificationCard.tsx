@@ -21,8 +21,6 @@ export type NotificationCardProps = {
   state?: string
   body?: ReactNode
   actions?: readonly NotificationAction[]
-  /** How long ago, in words ("just now"). */
-  time: string
   onClose: () => void
   /** When set, a thin line along the bottom shrinks over this many milliseconds. */
   countdownMs?: number
@@ -35,7 +33,7 @@ export type NotificationCardProps = {
  * whose top edge carries its tone. Every toast in the app (a session that needs you, one that finished, a failure, a
  * plain message) is drawn with it, so they cannot drift apart.
  */
-export function NotificationCard({ tone, icon, title, state, body, actions = [], time, onClose, countdownMs, closable = true }: NotificationCardProps) {
+export function NotificationCard({ tone, icon, title, state, body, actions = [], onClose, countdownMs, closable = true }: NotificationCardProps) {
   return (
     <div className={`mx-notice is-${tone}`} role="status">
       {icon !== undefined && <span className="mx-notice-icon">{icon}</span>}
@@ -50,7 +48,6 @@ export function NotificationCard({ tone, icon, title, state, body, actions = [],
           )}
         </div>
         {body !== undefined && <div className="mx-notice-body">{body}</div>}
-        <span className="mx-notice-time">{time}</span>
         {actions.length > 0 && (
           <div className="mx-notice-foot">
             {actions.map((action) => (

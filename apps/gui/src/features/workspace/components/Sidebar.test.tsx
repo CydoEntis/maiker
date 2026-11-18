@@ -37,7 +37,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   return { ...view, again: (next: Partial<SidebarProps>) => { view.rerender(<Sidebar {...props} {...next} />) } }
 }
 
-const rows = () => screen.getAllByRole('button', { name: /, (idle|working|needs you|done|exited|unknown)$/ })
+const rows = () => screen.getAllByRole('button', { name: /, (idle|working|needs you|finished|stopped|offline)$/ })
 const names = () => rows().map((row) => row.getAttribute('aria-label')?.split(',')[0])
 
 describe('the sidebar', () => {
@@ -269,7 +269,7 @@ describe('a session row', () => {
     expect(head).toHaveTextContent('2')
     await userEvent.click(head)
     const list = screen.getByRole('list', { name: 'Put away' })
-    expect(within(list).getAllByRole('button', { name: /, (idle|done)$/ }).map((row) => row.getAttribute('aria-label')?.split(',')[0])).toEqual(['Away agent', 'Away shell'])
+    expect(within(list).getAllByRole('button', { name: /, (idle|finished)$/ }).map((row) => row.getAttribute('aria-label')?.split(',')[0])).toEqual(['Away agent', 'Away shell'])
     expect(screen.queryByRole('list', { name: 'Terminals' })).toBeNull()
     await userEvent.click(within(list).getByRole('button', { name: 'Bring back Away shell' }))
     expect(onBringBack).toHaveBeenCalledWith('t2')

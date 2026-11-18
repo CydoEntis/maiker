@@ -624,7 +624,6 @@
 .mx-notice-foot button:hover { background: var(--m-hover); }
 .mx-notice-foot button.is-primary { font-weight: 600; color: var(--notice-ink); background: var(--notice); box-shadow: none; }
 .mx-notice-foot button.is-primary:hover { background: var(--notice); filter: brightness(1.08); }
-.mx-notice-time { font: 400 11px var(--mono); color: var(--dim); }
 .mx-notice-countdown { position: absolute; left: 0; bottom: 0; width: 100%; height: 2px; background: var(--notice); transform-origin: left; animation: mx-notice-count linear forwards; }
 @keyframes v9toast { from { opacity: 0; transform: translateY(-8px) scale(.97); } to { opacity: 1; transform: none; } }
 @keyframes mx-notice-count { to { transform: scaleX(0); } }

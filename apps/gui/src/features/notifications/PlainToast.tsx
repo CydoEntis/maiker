@@ -32,7 +32,6 @@ export function PlainToast({ id, kind, title, options }: { id: string | number; 
       title={title}
       {...(description === undefined || description === null ? {} : { body: description })}
       actions={action === undefined ? [] : [{ label: action.label, primary: true, onClick: () => { action.onClick({ preventDefault: () => { kept = true } }) }, keepOpen: () => kept }]}
-      time="just now"
       closable={closeButton !== false && dismissible !== false}
       onClose={() => { sonner.dismiss(id) }}
       {...(Number.isFinite(duration) ? { countdownMs: duration } : {})}

@@ -14,7 +14,8 @@ import { parseMarkdown, parseInline, safeHref, type Block, type Inline, type Tab
 import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBlock'
 import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
-import { copyBlock, saveBlock } from '../saveBlock'
+import { saveBlock } from '../saveBlock'
+import { useCopied } from '@/lib/useCopied'
 import { FileBadge } from './cardParts'
 
 /**
@@ -102,7 +103,7 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
       <CardHead>
         <span className="mx-code-lang">{language === '' ? 'code' : language}</span>
         <span className="mx-spacer" />
-        <Button variant="ghost" size="sm" onClick={() => { copyBlock(text, 'Could not copy the code') }}>Copy</Button>
+        <CopyButton text={text} failed="Could not copy the code" />
         <Button variant="ghost" size="sm" title="Save as a file in your export folder" onClick={() => { saveBlock(language === '' ? 'code' : language, codeExtension(language), text) }}>Save</Button>
       </CardHead>
       <pre className="mx-code-body" aria-label={language === '' ? 'Code' : `Code, ${language}`}>
@@ -111,6 +112,12 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
       {folds && <Fold open={all} onToggle={() => { setAll((current) => !current) }} more={`Show ${String(lines.length - CODE_FOLD_LINES)} more lines`} less="Show less" />}
     </Card>
   )
+}
+
+/** Copy, which says Copied for a moment where it was pressed. */
+function CopyButton({ text, failed }: { text: string; failed: string }) {
+  const { copied, copy } = useCopied(failed)
+  return <Button variant="ghost" size="sm" onClick={() => { copy(text) }}>{copied ? 'Copied' : 'Copy'}</Button>
 }
 
 type TableBlock = Extract<Block, { kind: 'table' }>
@@ -128,7 +135,7 @@ function TableCard({ block }: { block: TableBlock }) {
         <span className="mx-md-tabletitle">Table</span>
         <Counter>{rows} {rows === 1 ? 'row' : 'rows'}</Counter>
         <span className="mx-spacer" />
-        <Button variant="ghost" size="sm" onClick={() => { copyBlock(tableMarkdown(block), 'Could not copy the table') }}>Copy</Button>
+        <CopyButton text={tableMarkdown(block)} failed="Could not copy the table" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm">Save as<ChevronDown aria-hidden="true" /></Button>

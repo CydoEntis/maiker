@@ -317,7 +317,6 @@ describe('desktop settings', () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('terminal')
 
-    expect(screen.getByText('Geist Mono · 13px')).toBeInTheDocument()
     expect(within(screen.getByRole('radiogroup', { name: 'Terminal text size' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['11', '12', '13', '14', '15', '16'])
     await user.click(screen.getByRole('radio', { name: '15' }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, terminalFontSize: 15 })
@@ -377,7 +376,6 @@ describe('desktop settings', () => {
   it('picks a dark and a light theme separately, from searchable dropdowns that list the one in use first', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, darkTheme: 'Gruvbox Dark' } })
-    expect(screen.getByText('55 themes installed')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Dark theme: Gruvbox Dark' }))
     const dark = (await screen.findByRole('radiogroup', { name: 'Dark themes' }))

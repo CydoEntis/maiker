@@ -3,6 +3,7 @@ import { Icon } from '@/features/workspace/components/glyphs'
 import { parseAttachmentMessage } from '../attachmentMessage'
 import type { QueuedItem } from '../useChatComposer'
 import { SentAttachments } from './Attachments'
+import { agentLabel } from '@/features/workspace/model/session'
 
 type Props = {
   agent: string
@@ -36,7 +37,7 @@ export function QueuedMessages({ agent, queue, onRemove, onEdit, onSendNow, send
   const stacked = many && !spread
   if (queue.length === 0) return null
   // The agent's daemon holds every one of them, so they go in whether or not this window stays open.
-  const sentWhen = `Sent when ${agent} finishes this turn, even if you close the window`
+  const sentWhen = `Sent when ${agentLabel(agent)} finishes this turn, even if you close the window`
   const messages = queue.map((message) => {
     const parsed = parseAttachmentMessage(message.text)
     const files = parsed?.files ?? []
@@ -54,7 +55,7 @@ export function QueuedMessages({ agent, queue, onRemove, onEdit, onSendNow, send
                 <span className="mx-queued-place" title={sentWhen}>Queued{many && <span className="mx-queue-place">{`${String(index + 1)} of ${String(queue.length)}`}</span>}</span>
                 <span className="mx-spacer" />
                 {onSendNow !== undefined && (
-                  <button type="button" className="mx-queued-tool is-send" aria-label="Send now" disabled={sendingNow?.has(message.id) === true} title={`Send it to ${agent} now, without waiting for the turn to end`} onClick={() => { onSendNow(message.id) }}><Icon name="arrowUp" size={12} /></button>
+                  <button type="button" className="mx-queued-tool is-send" aria-label="Send now" disabled={sendingNow?.has(message.id) === true} title={`Send it to ${agentLabel(agent)} now, without waiting for the turn to end`} onClick={() => { onSendNow(message.id) }}><Icon name="arrowUp" size={12} /></button>
                 )}
                 <button type="button" className="mx-queued-tool" aria-label="Edit" title="Take it back into the message box to change it" onClick={() => { onEdit(message.id) }}><Icon name="pencil" size={11} /></button>
                 <button type="button" className="mx-queued-tool" aria-label="Remove queued message" title="Remove" onClick={() => { onRemove(message.id) }}><Icon name="close" size={10} /></button>

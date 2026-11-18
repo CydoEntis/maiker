@@ -26,6 +26,7 @@ import { ThoughtRow } from './ThoughtRow'
 import { WorkCard } from './WorkCard'
 import { MessageMenu } from './MessageMenu'
 import { stripRestoreNote, type EditFromHere } from '../editFromHere'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /**
  * The rows of the chat (v18 C.1). Every fact the daemon's history carries is shown, and one it does
@@ -223,7 +224,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
         <Frame>
           <div className="mx-working">
             <WorkingMark agent={agent} />
-            <span className="mx-working-text">{agent} is {row.phrase}</span>
+            <span className="mx-working-text">{agentLabel(agent)} is {row.phrase}</span>
             {workingSince !== null && <span className="mx-working-time"><ElapsedSince since={workingSince} /></span>}
           </div>
         </Frame>

@@ -6,6 +6,7 @@ import { forgetComposers } from '../composerStore'
 import { forgetSlashCommands } from '../slashCommands'
 import { forgetChatFeeds } from '../useChatFeed'
 import { ChatSession, type WindowActions } from './ChatSession'
+import { agentLabel } from '@/features/workspace/model/session'
 
 const fake = vi.hoisted(() => ({
   copyText: vi.fn<(text: string) => Promise<void>>(),
@@ -67,10 +68,10 @@ async function open(props: Partial<Parameters<typeof ChatSession>[0]> = {}, hist
   const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
   render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1 }} agent="claude" online root={ROOT} {...props} />)
   await settle()
-  return { user, box: screen.getByRole('textbox', { name: `Message ${props.agent ?? 'claude'}` }) }
+  return { user, box: screen.getByRole('textbox', { name: `Message ${agentLabel(props.agent ?? 'claude')}` }) }
 }
 
-const offered = (agent = 'claude') => within(screen.getByRole('listbox', { name: `${agent} commands` })).getAllByRole('option').map((option) => option.textContent)
+const offered = (agent = 'claude') => within(screen.getByRole('listbox', { name: `${agentLabel(agent)} commands` })).getAllByRole('option').map((option) => option.textContent)
 
 function windowActions() {
   return { openSettings: vi.fn<WindowActions['openSettings']>(), openPanel: vi.fn<WindowActions['openPanel']>(), openRecent: vi.fn<WindowActions['openRecent']>(), renameSession: vi.fn<WindowActions['renameSession']>() }
@@ -121,7 +122,7 @@ describe('the commands the window answers itself', () => {
     await user.type(box, '/help{Escape}{Enter}')
 
     expect(box).toHaveValue('/')
-    expect(screen.getByRole('listbox', { name: 'claude commands' })).toBeInTheDocument()
+    expect(screen.getByRole('listbox', { name: 'Claude commands' })).toBeInTheDocument()
     expect(fake.submitMessage).not.toHaveBeenCalled()
   })
 

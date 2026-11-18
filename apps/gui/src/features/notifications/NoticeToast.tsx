@@ -35,7 +35,6 @@ export function NoticeToast({ kind, project, title, body, actions = [], countdow
       state={verb}
       {...(project || body ? { body: <>{project && <span className="mx-notice-project">{project}</span>}{body}</> } : {})}
       actions={actions}
-      time="just now"
       onClose={onDismiss}
       {...(countdownMs === undefined ? {} : { countdownMs })}
     />

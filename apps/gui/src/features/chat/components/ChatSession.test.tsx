@@ -73,7 +73,7 @@ describe('the chat history', () => {
     await settle()
     await settle()
 
-    const list = screen.getByRole('region', { name: 'Conversation with claude' })
+    const list = screen.getByRole('region', { name: 'Conversation with Claude' })
     // 1,500 items are in the conversation; only a screenful and its overscan are in the page.
     expect(list.querySelectorAll('[data-key]').length).toBeLessThan(40)
     expect(within(list).getByText('message 1499')).toBeInTheDocument()
@@ -126,7 +126,7 @@ describe('the chat history', () => {
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
 
-    expect(screen.getAllByText(/claude is working/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Claude is working/).length).toBeGreaterThan(0)
   })
 
   it('tries a failed read again at once, and says nothing when that one works', async () => {
@@ -137,16 +137,31 @@ describe('the chat history', () => {
 
     daemon.failure = new Error('the kept line went stale')
     await settle(IDLE_POLL_MS)
-    expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Could not load the latest messages/)).not.toBeInTheDocument()
     daemon.failure = null
     await settle(RETRY_READ_MS)
 
-    expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Could not load the latest messages/)).not.toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
     warn.mockRestore()
   })
 
-  it('says it is reconnecting when reads keep failing, keeps what it showed, and resumes without duplicates', async () => {
+  it('leaves a lost service to the window to say, not the chat as well', async () => {
+    const daemon = conversation(2)
+    render(<ChatSession link={link()} agent="claude" online={false} />)
+    await settle()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    daemon.failure = new Error('maikerd is not running')
+    await settle(IDLE_POLL_MS)
+    await settle(RETRY_READ_MS)
+
+    expect(screen.queryByText(/Could not load the latest messages/)).not.toBeInTheDocument()
+    expect(screen.getByText('message 1')).toBeInTheDocument()
+    warn.mockRestore()
+  })
+
+  it('says it cannot load when reads keep failing, keeps what it showed, and resumes without duplicates', async () => {
     const daemon = conversation(2)
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
@@ -155,7 +170,7 @@ describe('the chat history', () => {
     daemon.failure = new Error('maikerd is not running')
     await settle(IDLE_POLL_MS)
     await settle(RETRY_READ_MS)
-    expect(screen.getByText(/Reconnecting to the daemon/)).toBeInTheDocument()
+    expect(screen.getByText(/Could not load the latest messages/)).toBeInTheDocument()
     // The reason is on screen, so a window that cannot read its chat says why instead of only waiting.
     expect(screen.getByText(/maikerd is not running/)).toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
@@ -164,7 +179,7 @@ describe('the chat history', () => {
     daemon.upsert(daemon.message('t1', 'm2', 'User', 'sent while it was down'))
     await settle(IDLE_POLL_MS)
 
-    expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Could not load the latest messages/)).not.toBeInTheDocument()
     expect(screen.queryByText(/maikerd is not running/)).not.toBeInTheDocument()
     expect(screen.getAllByText('message 0')).toHaveLength(1)
     expect(screen.getAllByText('sent while it was down')).toHaveLength(1)
@@ -207,8 +222,8 @@ describe('the chat history', () => {
     await settle()
 
     const announcer = screen.getAllByRole('status').find((node) => node.getAttribute('aria-live') === 'polite')
-    expect(announcer).toHaveTextContent('codex is working')
-    expect(screen.getByRole('region', { name: 'Conversation with codex' })).not.toHaveAttribute('aria-live')
+    expect(announcer).toHaveTextContent('Codex is working')
+    expect(screen.getByRole('region', { name: 'Conversation with Codex' })).not.toHaveAttribute('aria-live')
   })
 
   it('shows an item the history cannot describe as unavailable, not as an invented diff', async () => {
@@ -240,7 +255,7 @@ describe('a subagent’s own chat', () => {
     const log = screen.getByRole('log', { name: 'Subagent Write drafts tests' })
     expect(within(log).getByText('Write drafts tests for the routes.')).toBeInTheDocument()
     expect(within(log).getByText('Wrote 12 tests.')).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Conversation with claude' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Conversation with Claude' })).not.toBeInTheDocument()
   })
 
   it('goes back to the main session from its bar', async () => {

@@ -26,7 +26,7 @@ function ReconnectingBar({ failures, retryAt, onRetry }: { failures: number; ret
     <div className="mx-offline" role="status">
       <span className="mx-offline-dot" aria-hidden="true" />
       <span className="mx-offline-text">
-        <strong>Reconnecting to maikerd</strong> · your sessions are still running
+        <strong>Reconnecting to the Maiker service</strong> · your sessions are still running
       </span>
       <span className="mx-offline-count mono">
         Try {tryNumber(failures)} of {RECONNECT_TRIES}{seconds !== null && ` · next in ${String(seconds)}s`}

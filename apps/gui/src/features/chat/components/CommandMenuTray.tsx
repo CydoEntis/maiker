@@ -4,6 +4,7 @@ import { toast } from '@/lib/toast'
 import { KEY_ESCAPE } from '../terminalKeys'
 import { TerminalPrompt } from './TerminalPrompt'
 import { WaitingCard } from './WaitingCard'
+import { agentLabel } from '@/features/workspace/model/session'
 
 type Props = {
   /** The agent's name, and so the card's. */
@@ -30,8 +31,8 @@ export function CommandMenuTray({ agent, topic, readScreen, sendKeys, onClose }:
   }
   return (
     <WaitingCard
-      label={`${agent} ${topic} menu`}
-      title={`${agent}'s ${topic} menu`}
+      label={`${agentLabel(agent)} ${topic} menu`}
+      title={`${agentLabel(agent)}'s ${topic} menu`}
       aside="From its terminal"
       flush
       foot={<Button variant="soft" disabled={busy} title="Esc in the terminal: leaves the menu" onClick={close}>Close</Button>}

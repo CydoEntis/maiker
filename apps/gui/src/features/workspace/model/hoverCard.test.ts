@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { HOVER_CARD_WIDTH_PX, placeHoverCard, statusWhyLine } from './hoverCard'
+import { HOVER_CARD_WIDTH_PX, placeHoverCard } from './hoverCard'
+import { agentLabel, askWords } from './session'
 
 describe('where the hover card goes', () => {
   it('sits to the right of the row, level with it', () => {
@@ -15,57 +16,20 @@ describe('where the hover card goes', () => {
   })
 })
 
-describe('why a session has its status', () => {
-  const NOW = 1_700_000_000_000
-  const set = (statusWhy: string, agoMs: number | null) => ({ status: 'working' as const, helperAsk: [], statusWhy, statusSince: agoMs === null ? null : NOW - agoMs })
-
-  it('names the hook that set it and how long ago', () => {
-    expect(statusWhyLine(set('hook: Stop', 3_000), NOW)).toBe('hook: Stop, 3 s ago')
+describe('what a session asks, in plain words', () => {
+  it('says what a known tool wants to do with its target', () => {
+    expect(askWords({ tool: 'Bash', detail: 'npm test' })).toBe('Wants to run npm test')
+    expect(askWords({ tool: 'Edit', detail: 'src/a.ts' })).toBe('Wants to edit src/a.ts')
   })
 
-  it('names what was matched on the screen', () => {
-    expect(statusWhyLine(set('screen: matched `esc to interrupt`', 60_000), NOW)).toBe('screen: matched `esc to interrupt`, 1 min ago')
+  it('names a tool it has no plain verb for, so nothing is hidden', () => {
+    expect(askWords({ tool: 'mcp__github__merge', detail: '#12' })).toBe('Wants to use mcp__github__merge: #12')
+    expect(askWords({ tool: 'Task', detail: '' })).toBe('Wants to use Task')
   })
 
-  it('names the process observation', () => {
-    expect(statusWhyLine(set('process: an agent started', 2 * 60 * 60_000), NOW)).toBe('process: an agent started, 2 h ago')
-  })
-
-  it('counts days once it is that old', () => {
-    expect(statusWhyLine(set('hook: Stop', 3 * 24 * 60 * 60_000), NOW)).toBe('hook: Stop, 3 d ago')
-  })
-
-  it('says nothing when the daemon gave no reason', () => {
-    expect(statusWhyLine(set('', 3_000), NOW)).toBeNull()
-  })
-
-  it('leaves the age out when the daemon did not say when', () => {
-    expect(statusWhyLine(set('hook: Stop', null), NOW)).toBe('hook: Stop')
-  })
-
-  it('says nothing for a session whose status is not known', () => {
-    expect(statusWhyLine({ ...set('hook: Stop', 3_000), status: 'unknown' }, NOW)).toBeNull()
-  })
-})
-
-describe('when the reason is not about the status shown', () => {
-  const NOW = 1_700_000_000_000
-  const set = { status: 'needs' as const, helperAsk: [] as string[], statusWhy: 'hook: PreToolUse', statusSince: NOW - 3_000 }
-
-  it('says nothing while the session waits on you to start its helpers', () => {
-    expect(statusWhyLine({ ...set, helperAsk: ['review the diff'] }, NOW)).toBeNull()
-  })
-
-  it('says nothing for a stopped session, whose reason explains idle and not the stop', () => {
-    expect(statusWhyLine({ ...set, status: 'error', statusWhy: 'screen: quiet' }, NOW)).toBeNull()
-  })
-
-  it('says nothing for a limited session, whose reason explains the status under the limit', () => {
-    expect(statusWhyLine({ ...set, status: 'limited', statusWhy: 'hook: Stop' }, NOW)).toBeNull()
-  })
-
-  it('cuts a long screen pattern short and keeps the age', () => {
-    const statusWhy = `screen: matched \`${'a|'.repeat(200)}\``
-    expect(statusWhyLine({ ...set, statusWhy }, NOW)).toBe(`${statusWhy.slice(0, 139)}…, 3 s ago`)
+  it('writes an agent the way a person does, and keeps another program as it is', () => {
+    expect(agentLabel('claude')).toBe('Claude')
+    expect(agentLabel('opencode')).toBe('OpenCode')
+    expect(agentLabel('aider')).toBe('aider')
   })
 })

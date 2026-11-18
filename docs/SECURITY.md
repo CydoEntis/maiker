@@ -869,7 +869,8 @@ The agent runs with the user's permissions, so the window's start path is narrow
   sends the choice explicitly: a labelled checkbox with a warning, ticked at first because **Bypass Permissions** is on
   by default (Settings › Permissions, one switch per agent, `[permissions.bypass]`), and unticked for one chat or for
   good by turning the agent's switch off. It is fixed for the session: Maiker never widens a running session, and a
-  chat started with it shows a visible Bypass permissions tag. The same switch adds the agent's own flag
+  chat started with it always shows that it is: the message box's shield turns red in a mode that asks about nothing,
+  and a chat whose shield does not show its mode carries a visible Bypass permissions tag instead. The same switch adds the agent's own flag
   (`AgentDef.bypass_flag`) to every agent the daemon or either app starts in a terminal: new sessions, branch agents,
   MCP `maiker_start`, CLI handoff and resume. A resume adds it only when the session started with it and the switch
   is still on (`restore::keeping_bypass`); a flag that is not a plain `-`option is ignored. Typing an agent's name in

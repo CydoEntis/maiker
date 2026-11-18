@@ -72,19 +72,24 @@ type FileBadgeProps = {
   line?: number | null
   /** Opens the file; without it the badge is text, as inside a row that is itself a button. */
   onOpen?: (() => void) | undefined
+  /** No type tag: in a step row the verb and the file's own name already say what it is, and a tag there is noise. */
+  bare?: boolean
 }
 
 /** A file in the chat (`FileBadge`): its type tag, or a folder icon for a folder, then its path shortened from the front. */
-export function FileBadge({ path, line = null, onOpen }: FileBadgeProps) {
+export function FileBadge({ path, line = null, onOpen, bare = false }: FileBadgeProps) {
   const name = path.replace(/\\/g, '/').replace(/\/$/, '').split('/').pop() ?? path
-  const tag = path.endsWith('/') ? <span className="flex w-[22px] flex-none justify-center text-(--dim)"><Icon name="files" size={FOLDER_ICON_SIZE} /></span> : fileTag(name) ?? undefined
+  const tag = bare ? undefined : path.endsWith('/') ? <span className="flex w-[22px] flex-none justify-center text-(--dim)"><Icon name="files" size={FOLDER_ICON_SIZE} /></span> : fileTag(name) ?? undefined
   return <UiFileBadge path={path} tag={tag} line={line} onOpen={onOpen} />
 }
 
 const CHANGE_TAG = { add: { word: 'Added', tone: 'done' }, update: { word: 'Modified', tone: 'neutral' }, delete: { word: 'Deleted', tone: 'err' } } as const
 
-/** What happened to a file, where the history says: a Write does not say whether the file was new. */
-export function ChangePill({ change }: { change: FileChangeKind }) {
-  if (change === 'unknown') return null
+/**
+ * What happened to a file, where the history says: a Write does not say whether the file was new. After the verb Edit,
+ * "Modified" only repeats it, so `edited` leaves it out and only Added or Deleted shows.
+ */
+export function ChangePill({ change, edited = false }: { change: FileChangeKind; edited?: boolean }) {
+  if (change === 'unknown' || (edited && change === 'update')) return null
   return <Tag tone={CHANGE_TAG[change].tone}>{CHANGE_TAG[change].word}</Tag>
 }

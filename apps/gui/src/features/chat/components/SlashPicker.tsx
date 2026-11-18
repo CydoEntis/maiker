@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import { commandLabel, type SlashCommand } from '../slashCommands'
 import { ASKS_FIRST } from '../windowCommands'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** The most rows drawn: past this a name is typed further, not scrolled to. */
 export const MAX_SHOWN = 50
@@ -34,9 +35,9 @@ export function SlashPicker({ agent, typed, matches, active, loading, error, onP
   const shown = matches.slice(0, MAX_SHOWN)
   const none = matches.length === 0 && !loading && error === null
   // A list that could not be asked for says why even beside the commands that are known without asking.
-  const note = loading ? (matches.length > 0 ? null : `Asking ${agent} for its commands…`)
+  const note = loading ? (matches.length > 0 ? null : `Asking ${agentLabel(agent)} for its commands…`)
     : error === null ? null
-    : `Could not list ${agent}'s commands: ${error}`
+    : `Could not list ${agentLabel(agent)}'s commands: ${error}`
   return (
     <div className="mx-slash" role="presentation" onMouseDown={(event) => { event.preventDefault() }}>
       <p className="mx-slash-head"><span>Commands</span><span className="mx-spacer" /><span className="mx-slash-count">{matches.length}</span></p>
@@ -48,7 +49,7 @@ export function SlashPicker({ agent, typed, matches, active, loading, error, onP
         </div>
       )}
       {shown.length > 0 && (
-        <ResultsList ref={list} id="mx-slash-list" className="mx-slash-list" aria-label={`${agent} commands`}>
+        <ResultsList ref={list} id="mx-slash-list" className="mx-slash-list" aria-label={`${agentLabel(agent)} commands`}>
           {shown.map((command, index) => (
             <ResultsOption
               key={commandLabel(command)}
