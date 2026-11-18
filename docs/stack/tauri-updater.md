@@ -46,14 +46,16 @@ publishes the signed bundles and `latest.json` beside the installers:
 | Platform | Update bundle |
 | --- | --- |
 | Windows x64 | `Maiker_<version>_x64-setup.exe` |
-| macOS Apple Silicon | `Maiker_<version>_aarch64.app.tar.gz` |
 | Linux x64 | `Maiker_<version>_amd64.AppImage` |
 
 An install made with the `.msi`, `.deb` or `.rpm` installer asks `latest.json` for its own kind first
 (`windows-x86_64-msi`, `linux-x86_64-deb`, `linux-x86_64-rpm`) and updates with that installer. The
 release adds each of those entries when the build signed that installer, and says so in its log when
-one is missing; an install of that kind then has to be reinstalled to update. A `.dmg` install is the
-same app as the macOS update bundle and updates like it.
+one is missing; an install of that kind then has to be reinstalled to update.
+
+The desktop app is not released for macOS (the terminal app still is): nobody used or tested it there,
+and its build runner often never started, which held whole releases back. An older macOS desktop
+install gets no further updates.
 
 While `apps/gui/RELEASE-HOLD` exists, a release leaves the desktop app out. The release workflow
 builds no installers or update bundles and attaches the newest release's `latest.json` to the new
