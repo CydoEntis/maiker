@@ -3,7 +3,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -20,13 +20,17 @@ const STDERR_CHUNK_BYTES: usize = 8192;
 const PROCESS_EXIT_TIMEOUT: Duration = Duration::from_secs(2);
 const INITIALIZE_TIMEOUT: Duration = Duration::from_secs(30);
 const INITIALIZE_REQUEST_ID: &str = "claude-initialize";
+/// How long a process started for the next message waits for it before it is stopped: long
+/// enough to read a reply and write the next message, short enough that idle chats do not each
+/// hold a Claude Code process.
+const WARM_IDLE_LIMIT: Duration = Duration::from_secs(10 * 60);
 
 struct Client {
     process: super::process::OwnedChild,
-    input: FramedWrite<tokio::process::ChildStdin, LinesCodec>,
+    /// `None` once closed.
+    input: Option<FramedWrite<tokio::process::ChildStdin, LinesCodec>>,
     output: FramedRead<tokio::process::ChildStdout, LinesCodec>,
     stderr_task: Option<tokio::task::JoinHandle<std::io::Result<()>>>,
-    input_closed: bool,
 }
 
 impl Client {
@@ -72,15 +76,19 @@ impl Client {
         let stderr_task = tokio::spawn(discard_stderr(stderr));
         Ok(Self {
             process,
-            input: FramedWrite::new(stdin, LinesCodec::new_with_max_length(MAX_FRAME_BYTES)),
+            input: Some(FramedWrite::new(
+                stdin,
+                LinesCodec::new_with_max_length(MAX_FRAME_BYTES),
+            )),
             output: FramedRead::new(stdout, LinesCodec::new_with_max_length(MAX_FRAME_BYTES)),
             stderr_task: Some(stderr_task),
-            input_closed: false,
         })
     }
 
     async fn write(&mut self, value: &Value) -> Result<()> {
         self.input
+            .as_mut()
+            .context("Claude Code input is already closed")?
             .send(serde_json::to_string(value)?)
             .await
             .context("Write Claude Code stream input")
@@ -98,12 +106,20 @@ impl Client {
     }
 
     async fn initialize(&mut self, expected_session: &str) -> Result<()> {
+        self.request_initialize().await?;
+        self.initialized(expected_session).await
+    }
+
+    async fn request_initialize(&mut self) -> Result<()> {
         self.write(&serde_json::json!({
             "type":"control_request",
             "request_id":INITIALIZE_REQUEST_ID,
             "request":{"subtype":"initialize","hooks":null}
         }))
-        .await?;
+        .await
+    }
+
+    async fn initialized(&mut self, expected_session: &str) -> Result<()> {
         tokio::time::timeout(INITIALIZE_TIMEOUT, async {
             loop {
                 match self.next().await? {
@@ -134,11 +150,13 @@ impl Client {
     }
 
     async fn stop(&mut self) -> Result<()> {
-        if !self.input_closed {
-            SinkExt::<String>::close(&mut self.input)
+        if let Some(mut input) = self.input.take() {
+            SinkExt::<String>::close(&mut input)
                 .await
                 .context("Close Claude Code input")?;
-            self.input_closed = true;
+            // Shutting a child's stdin down does not close it (a no-op on Unix); only dropping the
+            // pipe ends Claude Code's input, so it exits on its own instead of being killed.
+            drop(input);
         }
         let _ = tokio::time::timeout(PROCESS_EXIT_TIMEOUT, self.process.child.wait()).await;
         self.process
@@ -159,6 +177,147 @@ async fn discard_stderr(mut stderr: impl AsyncRead + Unpin) -> std::io::Result<(
     let mut chunk = [0; STDERR_CHUNK_BYTES];
     while stderr.read(&mut chunk).await? != 0 {}
     Ok(())
+}
+
+/// A `claude` process started for the conversation's next message once a turn has ended, so the
+/// message does not wait on Claude Code's start-up (node, settings, MCP servers, the transcript).
+/// It has been asked to initialize and sent nothing of the conversation, so stopping it loses
+/// nothing. Its output is read only once a message is handed to it, so until then it cannot
+/// change status.
+struct Warm {
+    client: Client,
+    /// The exact arguments it was started with; a message that needs others gets a new process.
+    arguments: Vec<OsString>,
+    /// Claude Code reads the transcript once, at start-up, and only touches its time while it
+    /// waits. A transcript that has grown since (the session resumed elsewhere) means this
+    /// process would answer without those turns.
+    transcript: PathBuf,
+    transcript_length: u64,
+    /// When it is stopped to free its memory if no message has come.
+    expires: tokio::time::Instant,
+}
+
+/// Where Claude Code keeps this session's transcript. `None` for a session id that is not a plain
+/// file name, so no path outside the folder is ever looked at.
+fn transcript_path(config_root: &Path, cwd: &Path, session: &str) -> Option<PathBuf> {
+    (!session.is_empty() && session.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')).then(
+        || {
+            config_root
+                .join("projects")
+                .join(super::saved::claude_folder_name(cwd))
+                .join(format!("{session}.jsonl"))
+        },
+    )
+}
+
+async fn transcript_length(transcript: &Path) -> std::io::Result<u64> {
+    let transcript = transcript.to_path_buf();
+    tokio::task::spawn_blocking(move || std::fs::metadata(transcript).map(|metadata| metadata.len()))
+        .await
+        .map_err(std::io::Error::other)?
+}
+
+/// Starts the process for the next message. Without a transcript to check it against, none is
+/// started: the message then starts its own, as before.
+async fn prewarm(
+    launch: &super::transport::Launch,
+    settings: &crate::conversation::LaunchSettings,
+    transcript: Option<&Path>,
+    arguments: Vec<OsString>,
+) -> Option<Warm> {
+    let transcript = transcript?.to_path_buf();
+    let transcript_length = match transcript_length(&transcript).await {
+        Ok(length) => length,
+        Err(error) => {
+            tracing::debug!(%error, "Claude transcript cannot be checked; the next message starts its own process");
+            return None;
+        }
+    };
+    let (_, executable, cwd) = launch.paths();
+    let mut client = match Client::spawn(
+        executable,
+        cwd,
+        &settings.config_root,
+        &launch.environment,
+        &arguments,
+    )
+    .await
+    {
+        Ok(client) => client,
+        Err(failure) => {
+            // A process left behind is dropped here, and its guard ends its tree.
+            tracing::warn!(error = %failure.error, "Claude process for the next message failed to start; the message starts its own");
+            return None;
+        }
+    };
+    if let Err(error) = client.request_initialize().await {
+        retire(client, &format!("it refused initialization: {error:#}")).await;
+        return None;
+    }
+    Some(Warm {
+        client,
+        arguments,
+        transcript,
+        transcript_length,
+        expires: tokio::time::Instant::now() + WARM_IDLE_LIMIT,
+    })
+}
+
+/// Hands over the waiting process when it can take this message: started with exactly these
+/// arguments, not idle too long, the transcript unchanged, initialized and still running. Any
+/// other is stopped, and the caller starts a new one.
+async fn take_warm(
+    warm: &mut Option<Warm>,
+    arguments: &[OsString],
+    session: &str,
+) -> Option<Client> {
+    let mut warm = warm.take()?;
+    let unusable = if warm.arguments != arguments {
+        "the message needs other launch arguments".to_owned()
+    } else if tokio::time::Instant::now() >= warm.expires {
+        "it waited too long for a message".to_owned()
+    } else {
+        match transcript_length(&warm.transcript).await {
+            Ok(length) if length != warm.transcript_length => {
+                "the transcript changed since it started".to_owned()
+            }
+            Err(error) => format!("the transcript cannot be checked: {error}"),
+            Ok(_) => match warm.client.initialized(session).await {
+                Err(error) => format!("it did not initialize: {error:#}"),
+                // Its answers can still be buffered after it died; a dead one is never handed on.
+                Ok(()) => match warm.client.process.child.try_wait() {
+                    Ok(None) => return Some(warm.client),
+                    Ok(Some(status)) => format!("it exited ({status})"),
+                    Err(error) => format!("its state cannot be read: {error}"),
+                },
+            },
+        }
+    };
+    retire(warm.client, &unusable).await;
+    None
+}
+
+/// Resolves when the waiting process has to go: its idle time is up, or it exited.
+async fn expired(warm: &mut Option<Warm>) -> String {
+    let Some(warm) = warm else {
+        return std::future::pending().await;
+    };
+    tokio::select! {
+        () = tokio::time::sleep_until(warm.expires) => "it waited too long for a message".to_owned(),
+        status = warm.client.process.child.wait() => match status {
+            Ok(status) => format!("it exited ({status})"),
+            Err(error) => format!("its exit cannot be read: {error}"),
+        },
+    }
+}
+
+/// Stops a waiting process that will not be used.
+async fn retire(mut client: Client, reason: &str) {
+    tracing::debug!(reason, "Stopping the Claude process started for the next message");
+    if let Err(error) = client.stop().await {
+        // The client is dropped next, and its guard ends the process tree.
+        tracing::warn!(error = %format!("{error:#}"), "Claude process started for the next message did not stop cleanly");
+    }
 }
 
 pub(super) async fn run(
@@ -231,15 +390,28 @@ pub(super) async fn run(
         return;
     }
 
+    let transcript = transcript_path(&settings.config_root, launch.paths().2, &session);
+    let mut warm: Option<Warm> = None;
     loop {
         tokio::select! {
             biased;
             _ = stop.recv() => {
-                let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Terminated { failure: None, reaped: true }).await;
+                let cleanup = match warm.take() {
+                    Some(mut warm) => warm.client.stop().await,
+                    None => Ok(()),
+                };
+                let (failure, reaped) = match cleanup {
+                    Ok(()) => (None, true),
+                    Err(error) => (Some(format!("Claude process cleanup failed: {error:#}")), false),
+                };
+                let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Terminated { failure, reaped }).await;
                 return;
             }
             command = requests.recv() => {
                 let Some(command) = command else {
+                    if let Some(warm) = warm.take() {
+                        retire(warm.client, "the conversation's commands ended").await;
+                    }
                     let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Terminated { failure: Some("Claude command channel closed".into()), reaped: true }).await;
                     return;
                 };
@@ -267,16 +439,21 @@ pub(super) async fn run(
                                 events: &events,
                                 requests: &mut requests,
                                 stop: &mut stop,
+                                warm: &mut warm,
                             },
                             command.token,
                             params,
                         ).await {
-                            Ok(mut client) => {
+                            Ok((mut client, choice)) => {
                                 awaiting_first_message = false;
                                 if let Err(error) = client.stop().await {
                                     let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Terminated { failure: Some(format!("Claude process cleanup failed: {error:#}")), reaped: false }).await;
                                     return;
                                 }
+                                // Started only after the last process exited, so it loads the
+                                // whole transcript; it bets the next message keeps this model and effort.
+                                let arguments = command_arguments_for_turn(&session, true, &settings, &choice);
+                                warm = prewarm(&launch, &settings, transcript.as_deref(), arguments).await;
                             }
                             Err(TurnFailure::BeforeStart { token, error }) => {
                                 let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
@@ -312,6 +489,11 @@ pub(super) async fn run(
                             result: Err(super::transport::RpcError::adapter_failure(-32001)),
                         }).await;
                     }
+                }
+            }
+            reason = expired(&mut warm) => {
+                if let Some(warm) = warm.take() {
+                    retire(warm.client, &reason).await;
                 }
             }
         }
@@ -387,6 +569,8 @@ struct TurnContext<'a> {
     events: &'a tokio::sync::mpsc::Sender<crate::daemon::Ev>,
     requests: &'a mut tokio::sync::mpsc::Receiver<super::runtime::Command>,
     stop: &'a mut tokio::sync::mpsc::Receiver<()>,
+    /// Taken only once the message is known to be sendable, so a refused one leaves it waiting.
+    warm: &'a mut Option<Warm>,
 }
 
 /// The model and effort the user picked for this message, read back from its start parameters.
@@ -405,7 +589,7 @@ async fn run_turn(
     context: TurnContext<'_>,
     token: u64,
     params: Value,
-) -> std::result::Result<Client, TurnFailure> {
+) -> std::result::Result<(Client, TurnChoice), TurnFailure> {
     let TurnContext {
         launch,
         settings,
@@ -415,6 +599,7 @@ async fn run_turn(
         events,
         requests,
         stop,
+        warm,
     } = context;
     if params.get("threadId").and_then(Value::as_str) != Some(session) {
         return Err(TurnFailure::BeforeStart {
@@ -436,21 +621,27 @@ async fn run_turn(
     let choice = turn_choice(&params)
         .map_err(|error| TurnFailure::BeforeStart { token, error })?;
     let args = command_arguments_for_turn(session, !awaiting_first_message, settings, &choice);
-    let mut client = Client::spawn(
-        executable,
-        cwd,
-        &settings.config_root,
-        &launch.environment,
-        &args,
-    )
-    .await
-    .map_err(|failure| TurnFailure::Startup { token, failure })?;
-    if let Err(error) = client.initialize(session).await {
-        return Err(TurnFailure::Active {
-            token: Some(token),
-            error,
-        });
-    }
+    let mut client = match take_warm(warm, &args, session).await {
+        Some(client) => client,
+        None => {
+            let mut client = Client::spawn(
+                executable,
+                cwd,
+                &settings.config_root,
+                &launch.environment,
+                &args,
+            )
+            .await
+            .map_err(|failure| TurnFailure::Startup { token, failure })?;
+            if let Err(error) = client.initialize(session).await {
+                return Err(TurnFailure::Active {
+                    token: Some(token),
+                    error,
+                });
+            }
+            client
+        }
+    };
     let turn_id = session_id().map_err(|error| TurnFailure::Active {
         token: Some(token),
         error,
@@ -589,7 +780,7 @@ async fn run_turn(
                         ProjectedEvent::ControlRequest { .. } => unreachable!("control requests are mapped before turn projection"),
                     }
                 }
-                if finished { return Ok(client); }
+                if finished { return Ok((client, choice)); }
             }
         }
     }

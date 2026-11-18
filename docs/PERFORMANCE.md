@@ -678,3 +678,42 @@ removed blurred shadow. Not done, and why:
 - `HelpersDock` and `useChatProblem` keep their own timers.
 - The sidebar's width transition is kept (the look is the same); only the terminal's fits are throttled.
 - The `:is()` lists and the universal `border-radius: 0 !important` in `material.css` are unchanged.
+
+## A Claude chat's next message (2026-11-18)
+
+A structured Claude chat runs one `claude -p --input-format stream-json …` process per message, so
+every message waited on Claude Code's whole start-up (node, settings, MCP servers, the resumed
+transcript) before the model was even asked. Now, once a turn has ended and its process has exited,
+the daemon starts the next message's process ahead (`claude.rs`, `Warm`): the same arguments with
+`--resume=<session>` and the last message's model and effort, asked to initialize and then left
+waiting on its input. The next message is handed to it. It is not used, and a fresh one is started
+as before, when:
+
+- the message needs other arguments (another model or effort; permission changes restart the runtime);
+- it exited, or did not answer its initialization;
+- the session's transcript (`<CLAUDE_CONFIG_DIR>/projects/<folder>/<session>.jsonl`) grew since it
+  started: Claude Code reads it once at start-up (checked against 2.1.327: a turn added by another
+  process while one waited was not seen), and while it waits it only touches the file's time;
+- no transcript is found to check, so none is started;
+- it has waited `WARM_IDLE_LIMIT` (10 minutes), so idle chats do not each keep a Claude Code process.
+
+Its output is read only after a message is handed to it, so a waiting or discarded process never
+reaches status (ADR 0003). One that will not be used is stopped like any other Claude process:
+its input is closed, then its tree is ended. Stopping the conversation stops it too.
+
+Closing a process's input used to do nothing: shutting down a child's stdin through tokio is a no-op
+on Unix, so a finished turn's `claude` kept waiting for input until `PROCESS_EXIT_TIMEOUT` (2 s) ran
+out and its group was killed, and the conversation's next (queued) message waited those 2 s too.
+`Client::stop` now drops the pipe, so Claude Code sees the end of its input and exits on its own.
+
+Measured on Linux against Claude Code 2.1.327 with a direct script (the daemon refuses that
+unverified version), `--model haiku`, a small project with no MCP servers, one run each:
+
+| Second message | Spawn to init answered | Message to first token | Total |
+| --- | --- | --- | --- |
+| Started on send (before) | 0.71 s | 1.29 s | 2.0 s |
+| Started ahead (after) | (already done) | 1.05 s | 1.05 s |
+
+About 0.95 s saved per message here; more with MCP servers, plugins or a slow disk, since that is
+the start-up being skipped. To re-measure, time from writing the user message to the first
+`text_delta` with and without a process started a few seconds earlier.

@@ -69,7 +69,7 @@ fn claude(root: &Path, folder: &Path) -> Vec<SavedConversation> {
 /// The folder Claude keeps a working folder's transcripts in: every character but an ASCII letter or
 /// digit becomes `-` (`C:\dev\app` is `C--dev-app`). Two folders can share a name, so each
 /// transcript's own `cwd` is checked too.
-fn claude_folder_name(folder: &Path) -> String {
+pub(super) fn claude_folder_name(folder: &Path) -> String {
     folder
         .to_string_lossy()
         .trim_end_matches(['/', '\\'])

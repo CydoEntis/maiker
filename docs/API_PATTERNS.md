@@ -721,8 +721,9 @@ thinking is not kept.
 `ConversationSend` carries an optional `choice` (`TurnChoice { model, effort }`, `#[serde(default)]`, no
 protocol bump; a send from before it decodes as no choice). The daemon validates it (a plain model name that
 cannot read as an option, an effort in `low | medium | high | xhigh | max`) and keeps it with a queued
-message. For Claude every message starts its own `claude` process, so the choice becomes `--model` and
-`--effort` on that process; for Codex it rides on `turn/start` as `model` and `effort`, which Codex applies
+message. For Claude every message has its own `claude` process, so the choice becomes `--model` and
+`--effort` on that process (one started ahead with the last message's choice is used only when the arguments
+match exactly; see [PERFORMANCE](PERFORMANCE.md#a-claude-chats-next-message-2026-11-18)); for Codex it rides on `turn/start` as `model` and `effort`, which Codex applies
 to that turn and the ones after. The choice never touches the permission arguments or the thread's sandbox
 (ADR 0005). The window sends the picked values with each message, so the daemon stores nothing.
 

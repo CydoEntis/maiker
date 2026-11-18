@@ -1,16 +1,25 @@
 use std::io::{BufRead, Write};
 
+/// One line in `<executable>.log`, so a test can tell which process took which message.
+fn log(line: &str) {
+    if let Ok(executable) = std::env::current_exe() {
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(executable.with_extension("log"))
+            .unwrap();
+        file.write_all(format!("{line}\n").as_bytes()).unwrap();
+    }
+}
+
 fn main() {
     if std::env::args().any(|argument| argument == "--version") {
         println!("Claude Code 2.1.312");
         return;
     }
 
-    // Lets a test see which arguments the last message was started with.
-    if let Ok(executable) = std::env::current_exe() {
-        let arguments: Vec<String> = std::env::args().skip(1).collect();
-        let _ = std::fs::write(executable.with_extension("args"), arguments.join("\n"));
-    }
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    log(&format!("start {} {}", std::process::id(), arguments.join(" ")));
 
     let stdin = std::io::stdin();
     let mut input = stdin.lock();
@@ -28,6 +37,9 @@ fn main() {
         .unwrap_or_default();
 
     input.read_line(&mut line).unwrap();
+    if line.is_empty() {
+        return;
+    }
     assert_eq!(
         line.trim_end(),
         r#"{"request":{"hooks":null,"subtype":"initialize"},"request_id":"claude-initialize","type":"control_request"}"#
@@ -55,6 +67,33 @@ fn main() {
 
     line.clear();
     input.read_line(&mut line).unwrap();
+    // A process started ahead for a message that never came is closed like Claude Code: input ends.
+    if line.is_empty() {
+        log(&format!("eof {}", std::process::id()));
+        return;
+    }
+    log(&format!("message {}", std::process::id()));
+    // Lets a test see which arguments the last message was started with.
+    if let Ok(executable) = std::env::current_exe() {
+        let _ = std::fs::write(executable.with_extension("args"), arguments.join("\n"));
+    }
+    // Claude Code keeps the message in the session's transcript, which the daemon watches.
+    if let (Some(config), Ok(cwd)) = (std::env::var_os("CLAUDE_CONFIG_DIR"), std::env::current_dir()) {
+        let folder: String = cwd
+            .to_string_lossy()
+            .trim_end_matches(['/', '\\'])
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+            .collect();
+        let folder = std::path::Path::new(&config).join("projects").join(folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        let mut transcript = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(folder.join(format!("{session_id}.jsonl")))
+            .unwrap();
+        writeln!(transcript, r#"{{"type":"user"}}"#).unwrap();
+    }
     if scenario == "interrupt-any" {
         // The messages differ between turns: keep each one so a test can see which went out.
         let text = line

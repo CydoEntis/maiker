@@ -4307,6 +4307,7 @@ mod send_now;
 mod continue_turn;
 mod branch_chat;
 mod claude_chat;
+mod claude_warm;
 mod turn_snapshot;
 mod worktree_recreate;
 

@@ -444,7 +444,11 @@ Maiker. This rule guides future provider integrations; it does not expand the
 current GUI release scope beyond Codex and Claude.
 
 See [stack/claude-code-cli.md](stack/claude-code-cli.md) for the Claude CLI
-adapter's authentication, lifecycle and platform rules.
+adapter's authentication, lifecycle and platform rules. The Claude adapter
+(`claude.rs`) runs inside the conversation's runtime actor, one `claude` process
+per message; once a turn ends it starts the next message's process ahead and
+hands it the message only if its arguments and the session's transcript are
+unchanged ([PERFORMANCE](PERFORMANCE.md#a-claude-chats-next-message-2026-11-18)).
 
 The Codex transport foundation lives in
 `crates/maitty-core/src/daemon/conversation/`: `codex.rs` checks
