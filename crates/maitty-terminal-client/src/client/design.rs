@@ -438,7 +438,7 @@ pub(super) fn draw_changes(
 ) {
     use super::views::ChangesRow;
     fill(buf, area, t.bg);
-    let (green, red, yellow) = (t.done, t.err, Color::Rgb(0xe8, 0xc5, 0x65));
+    let (green, red, yellow) = (t.done, t.err, t.warning);
     // The tab strip says "Changes" and the sheet has the ✕: this line is the summary.
     let mut left: Vec<Seg> = Vec::new();
     let right: Vec<Seg> = Vec::new();
@@ -1373,7 +1373,7 @@ fn draw_files_tree(
     v: &super::views::FilesTree,
     one_side: bool,
 ) {
-    let (green, yellow) = (t.done, Color::Rgb(0xe8, 0xc5, 0x65));
+    let (green, yellow) = (t.done, t.warning);
     let rows = v.visible();
     let list_h = body.height.saturating_sub(4) as usize;
     let start = v.sel.saturating_sub(list_h.saturating_sub(1));

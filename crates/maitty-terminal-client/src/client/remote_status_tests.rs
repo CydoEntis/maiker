@@ -268,7 +268,10 @@ fn a_remote_agents_row_is_what_its_daemon_reported_and_follows_its_next_report()
         );
         let asked = window.app.remotes[&BOX].snap.questions[0].clone();
         let drawn = frame_text(&mut window.app);
-        assert!(drawn.contains(" box 1 "), "its machine heads its sessions: {drawn}");
+        assert!(
+            drawn.contains("Needs you 1") && drawn.contains(" · box"),
+            "it sits under Needs you and its row names its machine: {drawn}"
+        );
 
         window.send(ClientMsg::Command(Command::AnswerHuman {
             id: asked.id,

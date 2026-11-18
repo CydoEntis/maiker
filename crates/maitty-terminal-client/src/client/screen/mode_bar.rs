@@ -95,12 +95,12 @@ pub(in crate::client) fn short_key(k: &KeySpec) -> String {
     }
 }
 
-/// A hint: its key bold in the accent, what it does muted.
+/// A hint: its key bold, what it does muted. Keys are not the accent: that colour only marks an update.
 fn hint(key: String, words: &str, hit: Option<ScreenHit>, t: &Theme) -> Piece {
     let base = Style::default().bg(t.bg);
     Piece {
         segs: vec![
-            seg(key, base.fg(t.accent).add_modifier(Modifier::BOLD)),
+            seg(key, base.fg(t.strong).add_modifier(Modifier::BOLD)),
             seg(format!(" {words}"), base.fg(t.muted)),
         ],
         gap: GAP,
@@ -108,11 +108,11 @@ fn hint(key: String, words: &str, hit: Option<ScreenHit>, t: &Theme) -> Piece {
     }
 }
 
-/// The mode chip: its word on its own ground, dark ink, bold.
+/// The mode chip: its word, lower case, on its own ground.
 fn mode_chip(label: &str, ground: Color, ink: Color, hit: Option<ScreenHit>) -> Piece {
     Piece {
         segs: vec![seg(
-            format!(" {label} "),
+            format!(" {} ", label.to_lowercase()),
             Style::default().fg(ink).bg(ground).add_modifier(Modifier::BOLD),
         )],
         gap: 0,
@@ -120,19 +120,32 @@ fn mode_chip(label: &str, ground: Color, ink: Color, hit: Option<ScreenHit>) -> 
     }
 }
 
-/// Typing: a key that needs the leader is shown with it in front (`^space ? help`): the bare key would be typed into the
-/// pane. The session keys are the ones that need none (`alt+↓/alt+↑`). The leader alone starts key mode (a click starts it), and `? help` lists
-/// the keys.
+/// The leader key that runs `a`, preferring a letter (`k` for search) over a named key (`space`).
+fn bound_letter(app: &App, a: &Action) -> Option<KeySpec> {
+    app.keymap
+        .prefixed_order
+        .iter()
+        .filter(|k| app.keymap.prefixed.get(k) == Some(a))
+        .find(|k| matches!(k.code, crossterm::event::KeyCode::Char(c) if c.is_alphanumeric()))
+        .copied()
+        .or_else(|| bound(app, a))
+}
+
+/// Typing: every key but the few below goes to the agent, so a key that needs the leader is shown with it in front
+/// (`^space k search`). The session keys need none (`alt+↓/alt+↑`). The leader alone starts key mode (a click
+/// starts it).
 fn pane_hints(app: &App, t: &Theme) -> Vec<Piece> {
     let lead = short_key(&app.keymap.prefix);
     let mut hints = Vec::new();
-    hints.push(hint(lead.clone(), "keys", Some(ScreenHit::ShortcutMode), t));
-    // Changing session without the leader (Alt+↓ / Alt+↑) when it has such keys, since they work from the pane; else the leader keys.
     if let (Some(next), Some(prev)) = (bound_global(app, &Action::NextSession), bound_global(app, &Action::PrevSession)) {
-        hints.push(hint(format!("{}/{}", short_key(&next), short_key(&prev)), "sessions", None, t));
-    } else if let (Some(next), Some(prev)) = (bound(app, &Action::NextSession), bound(app, &Action::PrevSession)) {
-        hints.push(hint(format!("{lead} {}/{}", short_key(&next), short_key(&prev)), "sessions", None, t));
+        hints.push(hint(format!("{}/{}", short_key(&next), short_key(&prev)), "chats", None, t));
     }
+    for (action, words) in [(Action::Palette, "search"), (Action::PickSession, "new"), (Action::FocusNext, "next pane")] {
+        if let Some(key) = bound_letter(app, &action) {
+            hints.push(hint(format!("{lead} {}", short_key(&key)), words, None, t));
+        }
+    }
+    hints.push(hint(lead.clone(), "keys", Some(ScreenHit::ShortcutMode), t));
     if let Some(help) = bound(app, &Action::Help) {
         hints.push(hint(format!("{lead} {}", short_key(&help)), "help", None, t));
     }
@@ -687,7 +700,7 @@ pub(in crate::client) fn draw_mode_bar(app: &mut App, buf: &mut Buffer, row: Rec
         }
         (tag, right, where_piece(app, t))
     } else {
-        let tag = mode_chip("PANE", t.accent, t.acc_ink, Some(ScreenHit::ShortcutMode));
+        let tag = mode_chip("pane", t.btn, t.strong, Some(ScreenHit::ShortcutMode));
         (tag, pane_hints(app, t), where_piece(app, t))
     };
     let mut releases: Vec<Piece> = if app.screen.release_in_side {

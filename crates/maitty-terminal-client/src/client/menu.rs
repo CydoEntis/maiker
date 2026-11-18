@@ -80,6 +80,8 @@ pub enum Act {
     InstallStatus(String),
     /// How the sidebar lists sessions: by folder (true) or by priority (false).
     GroupBy(bool),
+    /// Order a sidebar group: `""` newest change first, `oldest` or `az`.
+    SideSort(&'static str),
     /// Open a session's check output in the evidence sheet.
     CheckOutput(ClientTerm),
     RerunCheck(ClientTerm),
@@ -332,46 +334,25 @@ impl App {
         }));
     }
 
-    /// The release chip at the sidebar's foot: what is on offer, what runs, and the notes. It
-    /// opens upward from the chip.
-    pub(super) fn release_menu(&mut self) {
-        use crate::keys::Action;
-        let running = format!("Running v{}", crate::brand::APP_VERSION);
-        let notes = ("Release notes".to_string(), Act::Tool(Action::Updates));
-        let items = if let Some(v) = self.update_available.clone() {
-            vec![
-                (format!("Update to v{}", v.trim_start_matches('v')), Act::Tool(Action::Update)),
-                (running, Act::Tool(Action::Updates)),
-                notes,
-            ]
-        } else if self.restart_needed() {
-            vec![
-                ("Restart onto the new version".to_string(), Act::Tool(Action::Restart)),
-                (running, Act::Tool(Action::Updates)),
-                notes,
-            ]
-        } else {
-            vec![
-                (running, Act::Tool(Action::Updates)),
-                ("Check for updates".to_string(), Act::Tool(Action::CheckUpdate)),
-                notes,
-            ]
-        };
-        let side = self.screen.side_rect;
-        self.menu("maiker".into(), items, (side.x + 2, side.bottom().saturating_sub(1)));
-    }
-
     /// The sidebar foot's ` menu ` chip: the sidebar's own few things, opening upward. The full
     /// Menu is the leader's `.`.
     pub(super) fn sidebar_menu(&mut self) {
         use crate::keys::Action;
-        let mut items = self.machine_fix_items();
+        let mut items = Vec::new();
+        // The update comes first, where the dot on `menu` points.
+        if let Some(v) = self.update_available.clone() {
+            items.push((format!("Install update {}", v.trim_start_matches('v')), Act::Tool(Action::Update)));
+        } else if self.restart_needed() {
+            items.push(("Restart to finish update".to_string(), Act::Tool(Action::Restart)));
+        }
+        items.extend(self.machine_fix_items());
         items.extend([
             ("Filter sessions".to_string(), Act::Tool(Action::FilterSessions)),
             ("Add machine…".to_string(), Act::Tool(Action::Machines)),
             ("Inbox".to_string(), Act::Tool(Action::Jump)),
             ("Put away…".to_string(), Act::Tool(Action::PutAway)),
             ("Usage and cost".to_string(), Act::Tool(Action::Usage)),
+            ("Updates and release notes".to_string(), Act::Tool(Action::Updates)),
             ("Settings".to_string(), Act::Tool(Action::Settings)),
             ("Keys".to_string(), Act::Tool(Action::Help)),
         ]);
@@ -390,16 +371,20 @@ impl App {
         self.menu("new".into(), items, at);
     }
 
-    /// The sidebar's group-by chip: how sessions are listed, the current choice ticked.
+    /// The sidebar's `≡`: how sessions are grouped and ordered, the current choices ticked.
     pub(super) fn group_menu(&mut self) {
-        let by_folder = self.screen.saved.group_folders;
+        let by_machine = self.screen.saved.group_machine;
+        let sort = self.screen.saved.side_sort.clone();
         let tick = |on: bool| if on { "\u{2713} " } else { "  " };
         let items = vec![
-            (format!("{}Priority", tick(!by_folder)), Act::GroupBy(false)),
-            (format!("{}Folder", tick(by_folder)), Act::GroupBy(true)),
+            (format!("{}Group by status", tick(!by_machine)), Act::GroupBy(false)),
+            (format!("{}Group by machine", tick(by_machine)), Act::GroupBy(true)),
+            (format!("{}Newest first", tick(sort.is_empty())), Act::SideSort("")),
+            (format!("{}Oldest first", tick(sort == "oldest")), Act::SideSort("oldest")),
+            (format!("{}A\u{2013}Z", tick(sort == "az")), Act::SideSort("az")),
         ];
         let at = self.screen.group_at;
-        self.menu("group by".into(), items, at);
+        self.menu("sidebar".into(), items, at);
     }
 
     /// Right-click on a machine heading in the sidebar. A machine whose app is missing or old
@@ -987,8 +972,14 @@ impl App {
                 );
             }
             Act::Update => self.start_update(),
-            Act::GroupBy(by_folder) => {
-                self.screen.saved.group_folders = by_folder;
+            Act::SideSort(sort) => {
+                self.screen.saved.side_sort = sort.to_string();
+                self.screen.save();
+                self.screen.side_scroll = 0;
+                self.screen.follow = true;
+            }
+            Act::GroupBy(by_machine) => {
+                self.screen.saved.group_machine = by_machine;
                 self.screen.save();
                 self.screen.side_scroll = 0;
                 self.screen.follow = true;

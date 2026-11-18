@@ -827,7 +827,7 @@ mod tests {
         // SAFETY: this existing config-save test owns <APP>_CONFIG; all prior jobs have completed.
         unsafe { std::env::set_var(concat!(env!("APP_ENV"), "_CONFIG"), &file) };
         app.open_spinners();
-        app.spinner_pick(2);
+        app.spinner_pick(3);
         app.on_key(super::super::KeyEvent::new(
             super::super::KeyCode::Enter,
             super::super::KeyModifiers::NONE,

@@ -22,6 +22,12 @@ fn press(app: &mut App, code: KeyCode, mods: KeyModifiers) {
     app.on_key(KeyEvent::new(code, mods));
 }
 
+/// Search is on the leader now: ctrl+space, then k.
+fn open_search(app: &mut App) {
+    press(app, KeyCode::Char(' '), KeyModifiers::CONTROL);
+    press(app, KeyCode::Char('k'), KeyModifiers::NONE);
+}
+
 fn type_text(app: &mut App, text: &str) {
     for c in text.chars() {
         press(app, KeyCode::Char(c), KeyModifiers::NONE);
@@ -58,15 +64,15 @@ fn inside_a_pane_only_the_listed_keys_are_taken() {
     for passes in ["ctrl+c", "ctrl+d", "ctrl+z", "ctrl+l", "ctrl+r", "up", "down", "left", "right", "tab", "esc", "enter"] {
         assert!(!taken.contains(&key(passes)), "{passes} goes to the program");
     }
-    for takes in ["ctrl+t", "ctrl+k", "ctrl+j", "f2", "alt+up", "alt+down"] {
+    for takes in ["alt+up", "alt+down", "alt+j"] {
         assert!(taken.contains(&key(takes)), "{takes} is taken");
     }
 }
 
 #[test]
-fn ctrl_k_opens_search_commands_and_it_lists_commands_then_sessions() {
+fn leader_k_opens_search_commands_and_it_lists_commands_then_sessions() {
     let (mut app, _rx) = app_with_channel();
-    press(&mut app, KeyCode::Char('k'), KeyModifiers::CONTROL);
+    open_search(&mut app);
     assert!(matches!(&app.mode, Mode::KeyMap(km) if km.view == KeyView::Search));
     let shown = frame(&mut app, 140, 40);
     println!("{shown}");
@@ -82,7 +88,7 @@ fn ctrl_k_opens_search_commands_and_it_lists_commands_then_sessions() {
 #[test]
 fn typing_is_a_fuzzy_in_order_subsequence_and_the_group_reads_results() {
     let (mut app, _rx) = app_with_channel();
-    press(&mut app, KeyCode::Char('k'), KeyModifiers::CONTROL);
+    open_search(&mut app);
     type_text(&mut app, "spld");
     let shown = frame(&mut app, 140, 40);
     println!("{shown}");
@@ -94,7 +100,7 @@ fn typing_is_a_fuzzy_in_order_subsequence_and_the_group_reads_results() {
 #[test]
 fn a_session_row_shows_its_name_and_project_and_enter_goes_to_it() {
     let (mut app, mut rx) = app_with_channel();
-    press(&mut app, KeyCode::Char('k'), KeyModifiers::CONTROL);
+    open_search(&mut app);
     type_text(&mut app, "fixfoot");
     let shown = frame(&mut app, 140, 40);
     println!("{shown}");
@@ -105,7 +111,8 @@ fn a_session_row_shows_its_name_and_project_and_enter_goes_to_it() {
         press(&mut app, KeyCode::Down, KeyModifiers::NONE);
     }
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-    assert_eq!(app.mode, Mode::Normal);
+    // Opened from the leader, search hands the keys back to the leader when it closes.
+    assert!(matches!(app.mode, Mode::Prefix { .. }), "{:?}", app.mode);
     let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
     assert!(
         sent.iter().any(|o| matches!(o.msg, ClientMsg::Command(Command::FocusPane { .. }))),

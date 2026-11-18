@@ -63,8 +63,10 @@ pub(super) struct Saved {
     pub open_branches: Vec<String>,
     /// Sidebar width you dragged it to, and the split's share for the left (or top) half.
     pub side_w: Option<u16>,
-    /// The sidebar lists each machine's sessions under their folder instead of in one run.
-    pub group_folders: bool,
+    /// The sidebar groups sessions by machine instead of by status.
+    pub group_machine: bool,
+    /// How a group's sessions are ordered: `""` newest change first, `oldest`, or `az`.
+    pub side_sort: String,
     pub split: Option<f32>,
     /// A task typed into + New and not started yet.
     pub draft: String,
@@ -1467,7 +1469,6 @@ pub(super) enum ScreenHit {
     /// folds its finished subagents.
     SubagentsDone(usize),
     /// The release chip on the sidebar's foot: its menu, opening upward.
-    ReleaseMenu,
     /// The `n new session` chip in a workspace with no pane open.
     NoPaneNew,
     /// A machine or folder heading's arrow and name: fold it or open it again (its key in `Screen::fold_keys`).
@@ -1484,6 +1485,14 @@ pub(super) enum ScreenHit {
     MachineFix(MachineId),
     /// A pane's folder and branch on its bottom border: its Project menu (Files, Changes, Branches, …).
     PaneProject(ClientTerm),
+    /// The context-almost-full bar on a pane: send its agent `/compact`.
+    Compact(ClientTerm),
+    /// The sidebar's `⌕`: the search.
+    SidebarSearch,
+    /// The sidebar's `? keys`.
+    SidebarKeys,
+    /// `± changes N` on a pane's top border: focus the pane and open its Changes.
+    PaneChanges(ClientTerm),
     /// A session row of the sidebar.
     Session(ClientSession),
     /// A button on the selected Inbox item: the key it stands for (`\n` Enter, `\x1b` Esc).

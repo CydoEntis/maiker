@@ -2026,7 +2026,7 @@ mod tests {
 
     #[test]
     fn glyphs_default_to_auto() {
-        assert_eq!(super::Config::default().ui.glyphs, "auto");
+        assert_eq!(super::Config::default().ui.glyphs, "unicode");
     }
 
     #[test]

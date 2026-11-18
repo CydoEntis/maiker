@@ -229,15 +229,20 @@ fn rounded_shapes_round_cards_and_give_chips_pill_ends() {
         let mut app = world(Stage::None);
         app.cfg.ui.rounded = crate::config::Rounding::Full;
         let text = reference_fixture::raw_text(&mut app, layout, 140, 36, "unicode");
-        for chip in ["Maiker", "This computer", "Menu"] {
+        for chip in ["Maiker", "menu"] {
             assert!(
                 text.contains(chip),
                 "{chip} stays visible: {layout:?}\n{text}"
             );
         }
+        // The pane's own chips are plain text now: the caps are on the status bar's mode chip.
+        let buf = drawn_in(&mut app, "floating");
+        let bar = mode_bar_row(&app, buf.area).y;
+        let bar_row: String = (0..buf.area.width).map(|x| buf[(x, bar)].symbol()).collect();
         assert!(
-            text.contains(CAP_L) && text.contains(CAP_R),
-            "rounded gives chips pill caps: {layout:?}"
+            bar_row.contains(CAP_L) && bar_row.contains(CAP_R),
+            "rounded gives the bar's chips pill caps: {layout:?}
+{bar_row}"
         );
         app.act(Action::Menu);
         let text = reference_fixture::raw_text(&mut app, layout, 100, 30, "unicode");

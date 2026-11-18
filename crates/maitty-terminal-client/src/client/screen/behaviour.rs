@@ -1918,7 +1918,6 @@ impl App {
                     self.screen.subs_opened.insert(key);
                 }
             }
-            ScreenHit::ReleaseMenu => self.release_menu(),
             ScreenHit::NoPaneNew => self.new_ship(None),
             // A shell on that machine at once.
             ScreenHit::MachinePlus(machine) => self.new_ship_on(machine),
@@ -1941,6 +1940,13 @@ impl App {
             ScreenHit::PaneProject(term) => {
                 let at = self.hover.map_or((0, 0), |p| (p.x, p.y.saturating_sub(1)));
                 self.menu_for_project_tools(term, at);
+            }
+            ScreenHit::Compact(term) => self.send_input(term, b"/compact\r".to_vec()),
+            ScreenHit::SidebarSearch => self.act(Action::Palette),
+            ScreenHit::SidebarKeys => self.act(Action::Help),
+            ScreenHit::PaneChanges(term) => {
+                self.cmd_on(term.machine, Command::FocusPane { term: term.term });
+                self.act(Action::Changes);
             }
             ScreenHit::TidyRow(i) => self.tidy_click(i),
             ScreenHit::ClonePick(i) => self.clone_click(i),

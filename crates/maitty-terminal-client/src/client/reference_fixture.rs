@@ -120,6 +120,7 @@ pub(super) fn term(
         linked: false,
         diff_added: 0,
         diff_removed: 0,
+        diff_files: 0,
         subagents: Vec::new(),
         subagent_activity: Vec::new(),
         session: None,
