@@ -1487,6 +1487,11 @@ pub(super) enum ScreenHit {
     PaneProject(ClientTerm),
     /// The context-almost-full bar on a pane: send its agent `/compact`.
     Compact(ClientTerm),
+    /// The service box's buttons, and the red chip that brings the box back.
+    ServiceStart,
+    ServiceNotNow,
+    ServiceCopy,
+    ServiceReopen,
     /// The sidebar's `⌕`: the search.
     SidebarSearch,
     /// The sidebar's `? keys`.
@@ -1668,7 +1673,7 @@ pub(in crate::client) mod machines;
 #[cfg(test)]
 mod machines_tests;
 mod service;
-pub(in crate::client) use service::{Service, draw_service_down};
+pub(in crate::client) use service::{Service, draw_service_down, service_chip};
 mod updates;
 pub(in crate::client) use updates::draw_updates;
 mod closing;

@@ -1942,6 +1942,10 @@ impl App {
                 self.menu_for_project_tools(term, at);
             }
             ScreenHit::Compact(term) => self.send_input(term, b"/compact\r".to_vec()),
+            ScreenHit::ServiceStart => self.on_service_key(&KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)),
+            ScreenHit::ServiceNotNow => self.on_service_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            ScreenHit::ServiceCopy => self.on_service_key(&KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE)),
+            ScreenHit::ServiceReopen => self.service_reopen(),
             ScreenHit::SidebarSearch => self.act(Action::Palette),
             ScreenHit::SidebarKeys => self.act(Action::Help),
             ScreenHit::PaneChanges(term) => {

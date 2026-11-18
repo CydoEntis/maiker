@@ -713,7 +713,11 @@ pub(in crate::client) fn draw_mode_bar(app: &mut App, buf: &mut Buffer, row: Rec
     };
     let room = row.width.saturating_sub(2);
     let tag_w = width(std::slice::from_ref(&tag));
-    let mut place = place;
+    // The service's chip replaces whatever the bar says about the session while it is away or has just returned.
+    let mut place = match super::service_chip(app, t) {
+        Some((segs, hit)) => Some(Piece { segs, gap: 1, hit }),
+        None => place,
+    };
     let used = |place: &Option<Piece>, right: &[Piece], releases: &[Piece]| {
         tag_w
             + place.as_ref().map_or(0, |p| width(std::slice::from_ref(p)))

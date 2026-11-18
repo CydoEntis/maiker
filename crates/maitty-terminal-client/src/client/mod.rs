@@ -578,6 +578,8 @@ pub struct App {
     service: screen::Service,
     /// `r` asked to try now; `s` asked to start the service. Taken by the next tick.
     service_retry_now: bool,
+    /// When the service last came back: "Back online" shows on the bar for a few seconds.
+    back_online: Option<Instant>,
     service_start_now: bool,
     /// The protocol of a service that came back as a version this window cannot talk to.
     service_version: Option<u32>,
@@ -892,6 +894,7 @@ impl App {
             closing: Default::default(),
             service: Default::default(),
             service_retry_now: false,
+            back_online: None,
             service_start_now: false,
             service_version: None,
             stopped_since: None,
