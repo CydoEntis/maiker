@@ -192,7 +192,8 @@ outside a pane or a structured chat: for the chat's `/btw` and the commands that
 daemon starts it (ADR 0001); the webview and the host name only the conversation and the ask. The session id is the
 daemon's own record (the hook's for a followed pane, the binding's for a structured chat) and must be a UUID; the
 folder is the pane's or the binding's; the program is the binding's, or for a pane `claude` (`claude.exe` on Windows)
-found on the login PATH; the model is one the transcript named, kept only if it is a plain model name. The arguments
+found on the login PATH, or else in the installers' own folders under the user's home (`~/.local/bin`, then
+`~/.claude/local`), never a script wrapper; the model is one the transcript named, kept only if it is a plain model name. The arguments
 are an array, never a shell line, and the ask goes on standard input, so a question that starts with a dash is never
 read as an option. A question runs with no tools and no MCP servers (`--tools "" --strict-mcp-config`), so the copy can
 only answer; a command keeps the session's tools and servers, which it reports on, and is one of a fixed list that
