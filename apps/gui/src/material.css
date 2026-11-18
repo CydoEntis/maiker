@@ -152,19 +152,6 @@
 :root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] > button:first-of-type { border-top-left-radius: 6px !important; }
 :root[data-corners="folded"] .mx-app [role="radiogroup"][data-fold] > button:last-of-type { border-bottom-right-radius: 6px !important; }
 :root[data-corners="folded"] .mx-app .mx-badge { border-radius: 4px 0 4px 0 !important; }
-/* Fold flaps: the cut corner of a floating card shows the folded-over paper, a 14px triangle, lighter at the top left
-   (7% of the text colour over the card) and lighter still at the bottom right (12%). Only a surface that is already
-   positioned carries them. */
-:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before,
-:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
-  content: ""; position: absolute; z-index: 1; width: 14px; height: 14px; pointer-events: none;
-}
-:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before {
-  left: -1px; top: -1px; background: linear-gradient(135deg, transparent 50%, color-mix(in srgb, var(--fg) 7%, var(--main)) 50%);
-}
-:root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
-  right: -1px; bottom: -1px; background: linear-gradient(315deg, transparent 50%, color-mix(in srgb, var(--fg) 12%, var(--main)) 50%);
-}
 
 /* ---- Folded corners without `corner-shape` (WebKit) ----
    The desktop runs in WebKit on Linux and macOS, where `corner-shape: bevel` does not exist and the radius above would only
@@ -179,8 +166,7 @@
      - the shadow and the focus ring: every polygon is the box grown by `--fold-bleed` (4px, a float's 48px) with
        the two cut triangles taken out through a zero-width slit from the grown corner, so a box-shadow still shows around
        the cut and nothing outside is clipped; no wrapper and no `filter`, which keeps a web view without a GPU cheap
-       (docs/PERFORMANCE.md).
-     - the fold flaps: 16px here (14px above) so the flap's long edge lies on the cut, and the flap draws the hairline too. */
+       (docs/PERFORMANCE.md). */
 @supports not (corner-shape: bevel) {
   :root[data-corners="folded"][data-corners] .mx-app :is(.mx-badge, .mx-status-icon) { --fold: 4px; --fold-bleed: 4px; }
   :root[data-corners="folded"][data-corners] .mx-app :is(button.mx-switch) { --fold: 3px; --fold-bleed: 2px; }
@@ -233,19 +219,6 @@
     background-position: 0 0, 100% 100%;
     background-repeat: no-repeat;
     background-origin: border-box;
-  }
-  /* Settings is a dialog but not positioned by its scrim, so the flaps need it to be their box. */
-  :root[data-corners="folded"] .mx-app .mx-settings { position: relative; }
-  /* The flaps: their long edge is the cut, with the hairline on it. */
-  :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before,
-  :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
-    width: 16px; height: 16px;
-  }
-  :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::before {
-    background: linear-gradient(135deg, transparent 50%, var(--fold-line, var(--line2)) 50% calc(50% + 1px), color-mix(in srgb, var(--fg) 7%, var(--main)) calc(50% + 1px));
-  }
-  :root[data-corners="folded"] .mx-app :is([role="dialog"], [role="alertdialog"], [role="tooltip"], [data-float], .mx-palette, .mx-welcome, .mx-hover-card, .mx-subs-card)::after {
-    background: linear-gradient(315deg, transparent 50%, var(--fold-line, var(--line2)) 50% calc(50% + 1px), color-mix(in srgb, var(--fg) 12%, var(--main)) calc(50% + 1px));
   }
 }
 
