@@ -458,7 +458,7 @@ mod tests {
             .draw(|frame| super::super::render::draw(app, frame))
             .unwrap();
         let buffer = terminal.backend().buffer().clone();
-        if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+        if maitty_shared::brand::env_var("SHOW").is_ok() {
             for y in 0..height {
                 println!(
                     "{}",

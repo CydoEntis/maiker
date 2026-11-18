@@ -1,3 +1,4 @@
+import { Switch } from '@/components/ui/switch'
 import { useMemo, useState } from 'react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { useQueryClient } from '@tanstack/react-query'
@@ -60,7 +61,7 @@ export function HistoryTab({ term, agentWorking, onNotice }: Props) {
   return (
     <div className="mx-inspect-body">
       <label className="mx-inspect-toggle">
-        <input type="checkbox" checked={compare} onChange={(event) => { setCompare(event.target.checked); setPicked([]) }} />
+        <Switch checked={compare} onCheckedChange={(value) => { setCompare(value); setPicked([]) }} />
         Compare <span className="mx-inspect-meta">{compare ? `pick two (${String(picked.length)}/${String(COMPARE_LIMIT)})` : ''}</span>
       </label>
       {comparing && (

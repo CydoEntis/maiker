@@ -20,11 +20,14 @@ export type Block =
   | { readonly kind: 'paragraph'; readonly inlines: readonly Inline[] }
   | { readonly kind: 'heading'; readonly level: number; readonly inlines: readonly Inline[] }
   | { readonly kind: 'code'; readonly language: string; readonly text: string }
-  | { readonly kind: 'list'; readonly ordered: boolean; readonly start?: number; readonly items: readonly (readonly Inline[])[] }
+  | { readonly kind: 'list'; readonly ordered: boolean; readonly start?: number; readonly items: readonly (readonly Inline[])[]; readonly marks?: readonly ListMark[] }
   | { readonly kind: 'quote'; readonly inlines: readonly Inline[] }
   | { readonly kind: 'rule' }
   /** Every row has one cell per header cell; `align` is each column's, `null` when the column has none. */
   | { readonly kind: 'table'; readonly align: readonly TableAlign[]; readonly header: readonly (readonly Inline[])[]; readonly rows: readonly (readonly (readonly Inline[])[])[] }
+
+/** What sits beside one list entry: how deep it is nested and, for a `- [ ]` / `- [x]` task, whether it is ticked. */
+export type ListMark = { readonly level: number; readonly checked: boolean | null }
 
 export type TableAlign = 'left' | 'center' | 'right' | null
 
@@ -167,6 +170,11 @@ const HEADING = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/
 const BULLET = /^\s{0,3}[-*+]\s+(.*)$/
 const NUMBERED = /^\s{0,3}\d{1,9}[.)]\s+(.*)$/
 const FIRST_NUMBER = /\d+/
+// An entry indented two or more columns under another is nested in it, whichever marker it uses.
+const NESTED_ITEM = /^( {2,12})(?:[-*+]|\d{1,9}[.)])\s+(.*)$/
+// GitHub's task marker: needs a space after it and some text; `[ ]` anywhere else stays plain.
+const TASK = /^\[([ xX])\]\s+(?=\S)/
+export const MAX_LIST_DEPTH = 3
 const QUOTE = /^\s{0,3}>\s?(.*)$/
 const RULE = /^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/
 const DELIMITER_CELL = /^:?-+:?$/
@@ -270,26 +278,40 @@ export function parseMarkdown(source: string): readonly Block[] {
     if (item) {
       endParagraph()
       const items: Inline[][] = []
-      let match: RegExpExecArray | null = item
-      while (match) {
-        let text = match[1] ?? ''
-        // An indented line after a list entry continues it.
-        while (i + 1 < lines.length && /^\s{2,}\S/.test(lines[i + 1] ?? '') && !BULLET.test(lines[i + 1] ?? '') && !NUMBERED.test(lines[i + 1] ?? '')) {
+      const marks: ListMark[] = []
+      const indents: number[] = []
+      let entry: string | null = item[1] ?? ''
+      let indent = 0
+      while (entry !== null) {
+        let text = entry
+        // An indented line after a list entry continues it, unless it is itself a nested entry.
+        while (i + 1 < lines.length && /^\s{2,}\S/.test(lines[i + 1] ?? '') && !NESTED_ITEM.test(lines[i + 1] ?? '') && !BULLET.test(lines[i + 1] ?? '') && !NUMBERED.test(lines[i + 1] ?? '')) {
           i += 1
           text += `\n${(lines[i] ?? '').trim()}`
         }
-        items.push([...parseInline(text)])
+        while (indents.length > 0 && (indents[indents.length - 1] ?? 0) >= indent) indents.pop()
+        const task = TASK.exec(text)
+        indents.push(indent)
+        marks.push({ level: Math.min(indents.length - 1, MAX_LIST_DEPTH), checked: task === null ? null : task[1] !== ' ' })
+        items.push([...parseInline(task === null ? text : text.slice(task[0].length))])
         // Blank lines between entries leave it one list: split, each numbered entry would count from 1 again.
         let after = i + 1
         while (after < lines.length && (lines[after] ?? '').trim() === '') after += 1
         const next = lines[after] ?? ''
-        const following: RegExpExecArray | null = bullet ? BULLET.exec(next) : NUMBERED.exec(next)
-        if (following) i = after
-        match = following
+        const nested = NESTED_ITEM.exec(next)
+        const following: RegExpExecArray | null = nested ?? (bullet ? BULLET.exec(next) : NUMBERED.exec(next))
+        if (following) {
+          i = after
+          // A bare entry at column 0-1 is a sibling of the first, whatever indent stack came before.
+          indent = nested === null ? 0 : (nested[1]?.length ?? 0)
+          entry = nested === null ? (following[1] ?? '') : (nested[2] ?? '')
+        } else entry = null
       }
-      if (numbered === null) blocks.push({ kind: 'list', ordered: false, items })
+      const plain = marks.every((mark) => mark.level === 0 && mark.checked === null)
+      const shape = plain ? {} : { marks }
+      if (numbered === null) blocks.push({ kind: 'list', ordered: false, items, ...shape })
       // It counts from the number it was written with, so a list a code block cut in two carries on.
-      else blocks.push({ kind: 'list', ordered: true, start: Number(FIRST_NUMBER.exec(line)?.[0] ?? 1), items })
+      else blocks.push({ kind: 'list', ordered: true, start: Number(FIRST_NUMBER.exec(line)?.[0] ?? 1), items, ...shape })
       continue
     }
     const quote = QUOTE.exec(line)
@@ -401,3 +423,14 @@ export function streamingText(text: string): string {
   return head + body + apart + open.reverse().join(ZERO_WIDTH_SPACE)
 }
 
+
+/** The marker shown before each entry of a list: a bullet, or a number counted within its own nesting level. */
+export function listBullets(block: Extract<Block, { kind: 'list' }>): readonly string[] {
+  const counts: number[] = []
+  return block.items.map((_, index) => {
+    const level = block.marks?.[index]?.level ?? 0
+    counts.length = level + 1
+    counts[level] = (counts[level] ?? (level === 0 ? (block.start ?? 1) : 1) - 1) + 1
+    return block.ordered ? `${String(counts[level])}.` : '\u2022'
+  })
+}

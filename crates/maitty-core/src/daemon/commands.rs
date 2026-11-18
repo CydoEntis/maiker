@@ -881,6 +881,30 @@ impl Daemon {
                 });
                 return Ok(false);
             }
+            Command::SaveFile {
+                term,
+                tag,
+                path,
+                contents,
+                version,
+            } => {
+                let dir = self
+                    .terms
+                    .get(&term)
+                    .ok_or_else(|| anyhow::anyhow!("no pane {term}"))?
+                    .cwd
+                    .clone();
+                let tx = self.tx.clone();
+                tokio::task::spawn_blocking(move || {
+                    let result = repo::save_file(&dir, &path, &contents, version.as_deref()).map_err(|e| format!("{e:#}"));
+                    let _ = tx.blocking_send(Ev::RepoReady {
+                        client,
+                        tag,
+                        result,
+                    });
+                });
+                return Ok(false);
+            }
             Command::MovePane { term, to, name } => {
                 let (from_ws, _) = self
                     .locate(term)
@@ -1134,10 +1158,6 @@ impl Daemon {
                 return Ok(false);
             }
             Command::AnswerSecret { id, value } => self.answer_secret(id, value)?,
-            Command::OpenTicketSetup { term, folder, source, link } => {
-                self.open_ticket_setup(client, term, folder, source, link)?;
-                return Ok(false);
-            }
             Command::LinkPr { term, url } => self.link_pr(term, url.as_deref())?,
             Command::SpendSecret { reference } => {
                 self.spend_secret(client, &reference)?;

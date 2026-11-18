@@ -4,6 +4,7 @@ import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { ACTIVE_POLL_MS, forgetChatFeeds, IDLE_POLL_MS, RETRY_READ_MS } from '../useChatFeed'
 import { forgetComposers } from '../composerStore'
 import { ChatSession } from './ChatSession'
+import { DAEMON_NAME } from '@/brand'
 
 const fake = vi.hoisted(() => ({
   current: null as null | { read: (cursor: never) => Promise<unknown> },
@@ -137,11 +138,11 @@ describe('the chat history', () => {
 
     daemon.failure = new Error('the kept line went stale')
     await settle(IDLE_POLL_MS)
-    expect(screen.queryByText(/Could not load the latest messages/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
     daemon.failure = null
     await settle(RETRY_READ_MS)
 
-    expect(screen.queryByText(/Could not load the latest messages/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
     warn.mockRestore()
   })
@@ -156,35 +157,35 @@ describe('the chat history', () => {
     await settle(IDLE_POLL_MS)
     await settle(RETRY_READ_MS)
 
-    expect(screen.queryByText(/Could not load the latest messages/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Reconnecting to this chat…/)).not.toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
     warn.mockRestore()
   })
 
-  it('says it cannot load when reads keep failing, keeps what it showed, and resumes without duplicates', async () => {
+  it('says in the dock that it is reconnecting when reads keep failing, keeps what it showed, and resumes without duplicates', async () => {
     const daemon = conversation(2)
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    daemon.failure = new Error('maikerd is not running')
+    daemon.failure = new Error(`${DAEMON_NAME} is not running`)
     await settle(IDLE_POLL_MS)
     await settle(RETRY_READ_MS)
-    expect(screen.getByText(/Could not load the latest messages/)).toBeInTheDocument()
+    expect(screen.getByText(/Reconnecting to this chat…/)).toBeInTheDocument()
     // The reason is on screen, so a window that cannot read its chat says why instead of only waiting.
-    expect(screen.getByText(/maikerd is not running/)).toBeInTheDocument()
+    expect(screen.getByText(new RegExp(`${DAEMON_NAME} is not running`))).toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
 
     daemon.failure = null
     daemon.upsert(daemon.message('t1', 'm2', 'User', 'sent while it was down'))
     await settle(IDLE_POLL_MS)
 
-    expect(screen.queryByText(/Could not load the latest messages/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/maikerd is not running/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Reconnecting to this chat…/)).not.toBeInTheDocument()
+    expect(screen.queryByText(new RegExp(`${DAEMON_NAME} is not running`))).not.toBeInTheDocument()
     expect(screen.getAllByText('message 0')).toHaveLength(1)
     expect(screen.getAllByText('sent while it was down')).toHaveLength(1)
     // The warning names the failure, never the conversation's text.
-    expect(warn).toHaveBeenCalledWith('Could not read the conversation', 'maikerd is not running')
+    expect(warn).toHaveBeenCalledWith('Could not read the conversation', `${DAEMON_NAME} is not running`)
     warn.mockRestore()
   })
 

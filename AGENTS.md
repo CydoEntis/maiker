@@ -127,7 +127,7 @@ has to be right, and sessions survive the UI closing.
    daemon's sessions. Keep native agent terminal interfaces and terminal-only
    installation supported (ADR 0004).
 5. **Trust status only from the owning runtime, and let one writer decide it.** Pane reports need
-   its process tree or `MAIKER_PANE_TOKEN`; structured provider events need the daemon-owned
+   its process tree or `AGENT_PANE_TOKEN`; structured provider events need the daemon-owned
    connection and current conversation generation. Clients display status; they never derive it.
    Unverified or superseded sources cannot change status (ADR 0003).
 6. **No blocking work on the UI thread.** Git, file walks, network and process
@@ -147,8 +147,8 @@ cargo check --target aarch64-apple-darwin
 ```
 
 For UI changes, also look at the screen: tests render frames with `TestBackend`
-(`MAIKER_SHOW=1 cargo test <name> -- --nocapture` prints them), and a live check
-runs a nested server with `MAIKER_SOCKET=<name> maiker`. What to look at is the
+(`AGENT_SHOW=1 cargo test <name> -- --nocapture` prints them), and a live check
+runs a nested server with `AGENT_SOCKET=<name> maiker`. What to look at is the
 [every-surface check](docs/UI.md#project-specific-every-surface-check).
 
 ## Project-specific: workflow and tooling
@@ -156,7 +156,7 @@ runs a nested server with `MAIKER_SOCKET=<name> maiker`. What to look at is the
 - **Plan:** Plane, project `MAITTY` (see *Project-specific: planning (Plane)*). The shipped, declined and deferred feature lists are in [`docs/FEATURES.md`](docs/FEATURES.md). `docs/ROADMAP.md` is the legacy phase history, to be removed once the sessions editing it have landed; don't add new planned work to either. The current design is [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Branches:** work lands on `dev` at https://github.com/CydoEntis/maiker; one
   commit per logical change, pushed after the gate passes.
-- **Run the current worktree:** `.\scripts\dev.ps1 tui` or `gui` builds and runs this folder's code, never an old install, and stops if the build fails; the TUI runs on its own service (`MAIKER_SOCKET=dev-<folder>` unless set), apart from your installed one. The TUI's sidebar foot shows `v<version> <commit>[*] <age>` for any build that is not a clean release tag (`*` = uncommitted changes), so a stale build is visible at a glance.
+- **Run the current worktree:** `.\scripts\dev.ps1 tui` or `gui` builds and runs this folder's code, never an old install, and stops if the build fails; the TUI runs on its own service (`AGENT_SOCKET=dev-<folder>` unless set), apart from your installed one. The TUI's sidebar foot shows `v<version> <commit>[*] <age>` for any build that is not a clean release tag (`*` = uncommitted changes), so a stale build is visible at a glance.
 - **Install locally:** `cargo install --path apps/tui` (stop a running `maiker` first on
   Windows, or the binary is locked).
 - **Releases:** run `scripts/release.sh X.Y.Z` (`--dry-run` prints what it would do). It refuses

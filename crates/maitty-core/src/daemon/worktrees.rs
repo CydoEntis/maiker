@@ -23,7 +23,7 @@ pub(super) fn repo_of(dir: &std::path::Path) -> Option<PathBuf> {
 /// Where the spare worktree is noted, so one left behind by a crash is cleaned up.
 pub(super) fn spare_file() -> PathBuf {
     let label =
-        std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into());
+        maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
     crate::config::data_dir().join(format!("spare-{label}.txt"))
 }
 
@@ -408,17 +408,24 @@ impl Daemon {
                     crate::project::FILE
                 );
             }
-            let mut vars = vec![(
-                concat!(env!("APP_ENV"), "_WORKTREE"),
-                dir.display().to_string(),
-            )];
+            // A hook is the user's own script: it keeps finding the names it was written with.
+            let mut values = vec![("WORKTREE", dir.display().to_string())];
             if let Some(h) = crate::gitfs::head(&dir) {
-                vars.push((concat!(env!("APP_ENV"), "_BRANCH"), h.branch.clone()));
-                vars.push((
-                    concat!(env!("APP_ENV"), "_REPO"),
-                    h.main_root.display().to_string(),
-                ));
+                values.push(("BRANCH", h.branch.clone()));
+                values.push(("REPO", h.main_root.display().to_string()));
             }
+            let named: Vec<(String, String)> = values
+                .into_iter()
+                .flat_map(|(key, value)| {
+                    maitty_shared::brand::env_names(key)
+                        .into_iter()
+                        .map(move |name| (name, value.clone()))
+                })
+                .collect();
+            let vars: Vec<(&str, String)> = named
+                .iter()
+                .map(|(name, value)| (name.as_str(), value.clone()))
+                .collect();
             let what = if create { "on_create" } else { "on_remove" };
             match crate::project::run_hook(&shell, &dir, &cmd, &vars) {
                 Ok(()) => format!("{name}: {what} hook done ({cmd})"),

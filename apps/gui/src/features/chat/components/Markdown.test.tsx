@@ -108,3 +108,21 @@ describe('a table in a message', () => {
     expect(screen.getAllByRole('table')).toHaveLength(1)
   })
 })
+
+describe('a task list', () => {
+  it('shows read-only checkboxes named by their text, ticked where done, and nests', () => {
+    render(<Markdown text={'- [x] done\n- [ ] open\n  - [x] nested\n- plain'} />)
+    const boxes = screen.getAllByRole('checkbox')
+    expect(boxes).toHaveLength(3)
+    expect(boxes.map((box) => box.getAttribute('aria-checked'))).toEqual(['true', 'false', 'true'])
+    expect(boxes.every((box) => box.getAttribute('aria-readonly') === 'true')).toBe(true)
+    expect(screen.getByRole('checkbox', { name: 'open' })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: 'nested' })).toBeInTheDocument()
+  })
+
+  it('leaves [ ] in a sentence plain text', () => {
+    render(<Markdown text="Use [ ] to mean open." />)
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(screen.getByText('Use [ ] to mean open.')).toBeInTheDocument()
+  })
+})

@@ -1,6 +1,6 @@
 # Connect agents (status setup)
 
-Maiker works out whether an agent is working, needs you or is done by watching its process and screen. **Connect agents** installs a small hook or adapter into Claude Code, Codex, Gemini CLI, Qwen Code, OpenCode, Pi, OMP, Kilo, Kimi or Mastra Code so the agent reports that itself. These are exactly the agents `maiker integrate` sets up. The installer (and every update) runs `maiker integrate` for you unless `MAIKER_NO_INTEGRATE=1` is set.
+Maiker works out whether an agent is working, needs you or is done by watching its process and screen. **Connect agents** installs a small hook or adapter into Claude Code, Codex, Gemini CLI, Qwen Code, OpenCode, Pi, OMP, Kilo, Kimi or Mastra Code so the agent reports that itself. These are exactly the agents `maiker integrate` sets up. The installer (and every update) runs `maiker integrate` for you unless `AGENT_NO_INTEGRATE=1` is set.
 
 What each status means to you, and where its reason shows, is in the [guide](guide.md#what-a-sessions-status-means).
 

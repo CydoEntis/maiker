@@ -151,6 +151,7 @@ pub(super) fn term(
         exit: None,
         ask: None,
         timeline: Vec::new(),
+        began_as_agent: false,
     }
 }
 
@@ -628,7 +629,7 @@ pub(super) fn frame(app: &mut App, layout: Layout, w: u16, h: u16, glyphs: &str)
             row.trim_end().to_string() + "\n"
         })
         .collect();
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("===== {layout:?} | {w}x{h} | {glyphs}\n{text}");
     }
     text

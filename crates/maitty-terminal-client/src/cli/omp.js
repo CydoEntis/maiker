@@ -10,7 +10,7 @@ const RETRY_GRACE_MS = 2500;
 const retryable = /overloaded|provider.?returned.?error|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server.?error|internal.?error|network.?error|connection.?error|connection.?refused|connection.?lost|websocket.?closed|websocket.?error|other side closed|fetch failed|upstream.?connect|reset before headers|socket hang up|ended without|http2 request did not get a response|timed? out|timeout|terminated|retry delay/i;
 
 export default function (pi) {
-  if (!process.env.__APP_ENV___TERM_ID || process.env.OMPCODE === "1") return;
+  if (!(process.env.__APP_ENV___TERM_ID || process.env.__APP_ENV_PREVIOUS___TERM_ID) || process.env.OMPCODE === "1") return;
   let root = false, active = false, retrying = false, failed = false, blockers = 0;
   let idleTimer, retryTimer, last, warned = false, ctx, generation = 0;
   let queue = Promise.resolve();

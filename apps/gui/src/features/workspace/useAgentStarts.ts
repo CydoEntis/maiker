@@ -33,7 +33,7 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
     if (!agent) return
     const refusal = remoteStartRefusal(agent.machine !== LOCAL_MACHINE, agent.machineName, 'Opening a terminal here')
     if (refusal) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     void runStart(() => Promise.resolve(agent.cwd), (id) => {
@@ -48,13 +48,13 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
   const startAgent = useCallback((program: string) => {
     const refusal = remoteStartRefusal(focusedSession !== undefined && focusedSession.machine !== LOCAL_MACHINE, focusedSession?.machineName ?? null, `Starting ${program} here`)
     if (refusal) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     setSettingsSection(null)
     void runStart(async () => focusedSession?.cwd ?? resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => {
       movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
-      void sendTerminalInput({ id, generation: 0 }, `${program}\r`).catch((error: unknown) => { toast.failure(error, `Could not start ${program}`) })
+      void sendTerminalInput({ id, generation: 0 }, `${program}\r`).catch((error: unknown) => { toast.failed(`Could not start ${program}`, error) })
     })
   }, [focusedSession, setSettingsSection, runStart, preferences.startFolder, home, setLayout])
   return { addAgentTerminal, closeAgentTerminal, startAgent }

@@ -4,7 +4,7 @@ import { toast } from '@/lib/toast'
 
 function copyLink(href: string): void {
   copyText(href).then(
-    () => { toast.message('Link copied') },
+    () => { toast.info('Link copied') },
     () => { toast.error('Could not copy the link') },
   )
 }
@@ -19,7 +19,7 @@ export function followLink(href: string): void {
     return
   }
   openLink(href).then(
-    () => { toast.message('Opened in your browser', { action: { label: 'Copy link', onClick: () => { copyLink(href) } } }) },
-    (error: unknown) => { toast.failure(error, 'Could not open the link', { action: { label: 'Copy link', onClick: () => { copyLink(href) } } }) },
+    () => { toast.info('Opened in your browser', { action: { label: 'Copy link', onClick: () => { copyLink(href) } } }) },
+    (error: unknown) => { toast.failed('Could not open the link', error, { action: { label: 'Copy link', onClick: () => { copyLink(href) } } }) },
   )
 }

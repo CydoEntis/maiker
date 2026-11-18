@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react'
+import { windowRoot } from './windowRoot'
+import { AppIcon } from './glyphs'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { nowSeconds, useSavedConversations } from '../model/newChatHost'
@@ -32,7 +34,7 @@ export function ResumeSavedDialog({ projects, defaultAgent, locked, onPick, onCa
   const [now] = useState(nowSeconds)
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel() }}>
-      <DialogContent unstyled asChild aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); dialog.current?.focus() }}>
+      <DialogContent unstyled asChild container={windowRoot()} aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); dialog.current?.focus() }}>
         <div
           ref={dialog}
           tabIndex={-1}
@@ -46,9 +48,9 @@ export function ResumeSavedDialog({ projects, defaultAgent, locked, onPick, onCa
           <DialogTitle asChild><h2>Resume a saved chat</h2></DialogTitle>
           <p>The conversations an agent saved for a folder on this computer. Picking one starts the agent there with that conversation.</p>
           <div className="mx-resume-pick">
-            <Segmented aria-label="Agent" value={agent} className="mx-where-work" onValueChange={(next) => { if (next === 'claude' || next === 'codex') setAgent(next) }}>
-              <SegmentedItem value="claude" className="mx-where-work-option">Claude</SegmentedItem>
-              <SegmentedItem value="codex" className="mx-where-work-option">Codex</SegmentedItem>
+            <Segmented aria-label="Agent" value={agent} onValueChange={(next) => { if (next === 'claude' || next === 'codex') setAgent(next) }}>
+              <SegmentedItem value="claude" icon={<AppIcon process="claude" size={14} />}>Claude</SegmentedItem>
+              <SegmentedItem value="codex" icon={<AppIcon process="codex" size={14} />}>Codex</SegmentedItem>
             </Segmented>
             <ChipMenu side="bottom" title="Folder" label={project?.name ?? 'Choose a folder'} summary={project?.name ?? 'Choose a folder'}
               sections={[{ heading: 'Folder', items: projects.map((each) => ({ key: each.folder, label: each.name, sub: each.folder, checked: each.folder === folder, onPick: () => { setFolder(each.folder) } })) }]} />

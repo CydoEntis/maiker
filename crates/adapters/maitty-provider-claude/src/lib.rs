@@ -13,7 +13,7 @@ pub use hooks::{
 pub use projection::{MAX_PENDING_TOOLS, ProjectedEvent, TurnProjector};
 
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
-const VERIFIED_VERSIONS: &[&str] = &["2.1.312", "2.1.314", "2.1.316"];
+const VERIFIED_VERSIONS: &[&str] = &["2.1.312", "2.1.314", "2.1.316", "2.1.327"];
 
 #[derive(Debug, PartialEq)]
 pub enum OutputFrame {
@@ -373,7 +373,9 @@ mod tests {
         assert!(verified_version("2.1.312"));
         assert!(verified_version("2.1.314"));
         assert!(verified_version("2.1.316"));
+        assert!(verified_version("2.1.327"));
         assert!(!verified_version("2.1.313"));
+        assert!(!verified_version("2.1.326"), "only the versions run through the adapter are listed");
     }
 
     #[test]

@@ -10,6 +10,7 @@ import type { Conversation } from '@/data/preview'
 import { InlineName } from '@/features/workspace/components/InlineName'
 import { MAX_SESSION_NAME_LENGTH } from '@/features/workspace/model/session'
 import { type PanelTab, statusText } from './shared'
+import { DAEMON_NAME } from '@/brand'
 
 export function ConversationTabStrip({
   tabs,
@@ -154,7 +155,7 @@ export function ConversationTabStrip({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    Close tab · the session keeps running in maikerd
+                    Close tab · the session keeps running in {DAEMON_NAME}
                   </TooltipContent>
                 </Tooltip>
               </div>

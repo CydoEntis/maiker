@@ -20,11 +20,11 @@ describe('the running subagent an agents card names', () => {
     expect(subagentNamed(subagents, null, null)).toBeNull()
   })
 
-  it('offers Open its chat in the card while it runs, and opens it', async () => {
+  it('offers Open its chat in the record while it runs, and opens it', async () => {
     const open = vi.fn()
     render(
       <OpenSubagentContext.Provider value={(title) => (title === 'Google scopes' ? open : null)}>
-        <AgentsCard agents={[subagentEvent('s1', { title: 'Google scopes', prompt: null, report: '', status: 'running' })]} process="claude" />
+        <AgentsCard agents={[subagentEvent('s1', { title: 'Google scopes', prompt: null, report: '', status: 'running' })]} />
       </OpenSubagentContext.Provider>,
     )
 

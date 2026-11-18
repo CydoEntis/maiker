@@ -172,6 +172,11 @@ pub struct Term {
     pub last_input: Instant,
     /// The command the pane was started with (None for a plain shell).
     pub cmd: Option<String>,
+    /// The pane was started as an agent (its command is an agent's), not as a shell that an agent
+    /// was typed into later. Set once at start and kept across restarts: it is what lets the
+    /// daemon end the shell an ended agent leaves behind, and lets a window tell that shell from
+    /// a terminal the person opened (`Daemon::close_ended_agents`).
+    pub began_as_agent: bool,
     /// Agent session id from hooks, for resuming after a restart.
     pub session: Option<String>,
     /// The effort the agent's own files say it runs at (`usage::poll_effort`); not kept across a restart.
@@ -642,10 +647,17 @@ fn argv(cfg: &Config, cmd: Option<&str>, once: bool) -> Vec<String> {
     shell
 }
 
+/// Sets `key` on a pane under every name it has had (ADR 0012).
+fn set_pane_env(cmd: &mut CommandBuilder, key: &str, value: impl AsRef<std::ffi::OsStr>) {
+    for name in maitty_shared::brand::env_names(key) {
+        cmd.env(name, value.as_ref());
+    }
+}
+
 /// A pane works on this machine: `--remote` routing the daemon was started under (its host,
 /// ssh program and remote command) must not make the pane's own `maiker` reach another one.
 fn remove_remote_route(cmd: &mut CommandBuilder) {
-    for key in crate::ipc::REMOTE_ROUTE_ENV {
+    for key in crate::ipc::remote_route_env() {
         cmd.env_remove(key);
     }
 }
@@ -854,12 +866,17 @@ impl Term {
         }
         cmd.env("TERM_PROGRAM", env!("APP_COMMAND"));
         cmd.env("TERM_PROGRAM_VERSION", env!("APP_VERSION"));
+        // Under every name the variables have had: a `maitty` of an older build in the pane
+        // (an installed hook, the far end of an ssh) still finds them (ADR 0012).
         cmd.env(env!("APP_ENV"), "1");
-        cmd.env(concat!(env!("APP_ENV"), "_TERM_ID"), spec.id.to_string());
-        cmd.env(concat!(env!("APP_ENV"), "_PANE_TOKEN"), &token);
+        for prefix in maitty_shared::brand::previous_env_prefixes() {
+            cmd.env(prefix, "1");
+        }
+        set_pane_env(&mut cmd, "TERM_ID", spec.id.to_string());
+        set_pane_env(&mut cmd, "PANE_TOKEN", &token);
         remove_remote_route(&mut cmd);
-        if let Ok(sock) = std::env::var(concat!(env!("APP_ENV"), "_SOCKET")) {
-            cmd.env(concat!(env!("APP_ENV"), "_SOCKET"), sock);
+        if let Ok(sock) = maitty_shared::brand::env_var("SOCKET") {
+            set_pane_env(&mut cmd, "SOCKET", sock);
         }
         // zsh has no flag for another rc file: a plain zsh pane starts from the app's ZDOTDIR,
         // whose .zshenv hands back to yours and adds the agent functions (as bash's --rcfile).
@@ -885,7 +902,7 @@ impl Term {
             cmd.env(k, v);
         }
         if let Some(command) = &spec.direct {
-            for key in crate::ipc::STRUCTURED_ENV {
+            for key in crate::ipc::structured_env() {
                 cmd.env_remove(key);
             }
             for (key, value) in &command.environment {
@@ -997,6 +1014,7 @@ impl Term {
             hooked: false,
             last_output: now,
             last_input: now,
+            began_as_agent: false,
             cmd: spec
                 .cmd
                 .filter(|c| !c.trim().is_empty())
@@ -1533,15 +1551,30 @@ fn clean_start(buf: &[u8]) -> usize {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn a_pane_is_told_its_identity_under_the_current_and_the_old_names() {
+        let mut cmd = super::CommandBuilder::new("sh");
+        super::set_pane_env(&mut cmd, "PANE_TOKEN", "secret");
+        let names = maitty_shared::brand::env_names("PANE_TOKEN");
+        assert!(names.len() >= 2, "{names:?}");
+        for name in names {
+            assert_eq!(
+                cmd.get_env(&name).and_then(|v| v.to_str()),
+                Some("secret"),
+                "{name}"
+            );
+        }
+    }
+
+    #[test]
     fn a_pane_does_not_inherit_the_remote_routing() {
         let mut cmd = super::CommandBuilder::new("sh");
-        for key in crate::ipc::REMOTE_ROUTE_ENV {
+        for key in crate::ipc::remote_route_env() {
             cmd.env(key, "box");
         }
         cmd.env("KEEP", "1");
         super::remove_remote_route(&mut cmd);
-        for key in crate::ipc::REMOTE_ROUTE_ENV {
-            assert!(cmd.get_env(key).is_none(), "{key} reached the pane");
+        for key in crate::ipc::remote_route_env() {
+            assert!(cmd.get_env(&key).is_none(), "{key} reached the pane");
         }
         assert!(cmd.get_env("KEEP").is_some());
     }
@@ -1749,7 +1782,7 @@ mod tests {
             );
         }
         assert!(
-            text.contains(concat!(env!("APP_ENV"), "_AGENT_DIR_DONE=1 command claude")),
+            text.contains(concat!(env!("APP_ENV"), "_DIR_DONE=1 command claude")),
             "{text}"
         );
     }

@@ -155,7 +155,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     // Nothing waits for the turn to end, nothing is left in the queue, and the two commands do not interleave.
     await settle(COMMAND_SUBMIT_GAP_MS * 2)
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r', '/effort high', '\r'])
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
   it('names what the agent says it runs, whether it was picked here or typed in the terminal', async () => {

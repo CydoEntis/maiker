@@ -2,7 +2,7 @@ import { SentAttachments } from './Attachments'
 import { FilesHereContext } from '../filesHere'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { toast } from '@/lib/toast'
+import { currentToasts, toast } from '@/lib/toast'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MOST_ATTACHMENTS, type Attached } from '@/api/attachments'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
@@ -136,7 +136,6 @@ describe('the file picker', () => {
   })
 
   it('names the host\'s refusal and keeps the files that were accepted', async () => {
-    const failure = vi.spyOn(toast, 'failure')
     fake.chooseFilesToAttach.mockResolvedValue(['/x/folder', '/x/ok.txt'])
     fake.attachLocalFile.mockImplementation((path) => (path === '/x/folder' ? Promise.reject(new Error('folder is not a file; folders cannot be attached')) : Promise.resolve(kept('ok.txt'))))
     const { user } = await open()
@@ -144,7 +143,10 @@ describe('the file picker', () => {
     await user.click(paperclip())
     await settle()
 
-    expect(failure).toHaveBeenCalledWith(new Error('folder is not a file; folders cannot be attached'), 'Could not attach folder')
+    // The toast says what failed, then the host's own words.
+    // The host's own words, made one sentence; the raw text stays behind Copy details.
+    expect(currentToasts().items.map((item) => item.description)).toContain('Folder is not a file; folders cannot be attached.')
+    expect(currentToasts().items.map((item) => item.details)).toContain('folder is not a file; folders cannot be attached')
     expect(screen.getByText('ok.txt')).toBeInTheDocument()
   })
 })
@@ -239,14 +241,14 @@ describe('pasting an image', () => {
   })
 
   it('tells why when the host refuses the bytes, and adds no chip', async () => {
-    const failure = vi.spyOn(toast, 'failure')
     fake.saveImageLocally.mockRejectedValue(new Error('the clipboard holds something that is not a PNG'))
     const { box } = await open()
 
     fireEvent.paste(box, { clipboardData: clipboard('', [PNG]) })
     await settle()
 
-    expect(failure).toHaveBeenCalledWith(new Error('the clipboard holds something that is not a PNG'), 'Could not attach the image', expect.anything())
+    expect(currentToasts().items.map((item) => item.description)).toContain('The clipboard holds something that is not a PNG.')
+    expect(currentToasts().items.map((item) => item.details)).toContain('the clipboard holds something that is not a PNG')
     expect(screen.queryByRole('list', { name: 'Attached files' })).not.toBeInTheDocument()
   })
 })

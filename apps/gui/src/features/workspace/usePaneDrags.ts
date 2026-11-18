@@ -4,9 +4,8 @@ import { movePanes } from './components/paneTransition'
 import { dropSession, type Layout, swapSessions } from './model/layout'
 
 /** Dragging a pane onto another swaps them; dragging a session from the sidebar puts it in the pane. */
-export function usePaneDrags({ setLayout, flash }: {
+export function usePaneDrags({ setLayout }: {
   setLayout: Dispatch<SetStateAction<Layout>>
-  flash: (text: string) => void
 }) {
   const [dragId, setDragId] = useState<string | null>(null)
   const [dropId, setDropId] = useState<string | null>(null)
@@ -17,11 +16,10 @@ export function usePaneDrags({ setLayout, flash }: {
       if (!paneId) return
       if (source.kind === 'session') {
         movePanes(() => { setLayout((current) => dropSession(current, paneId, source.id)) })
-        flash('Session moved into this pane')
       } else if (source.id !== paneId) movePanes(() => { setLayout((current) => swapSessions(current, source.id, paneId)) })
     },
     end: () => { setDragId(null); setDropId(null) },
-  }), [flash, setLayout])
+  }), [setLayout])
   // A drag from the sidebar ends wherever it is released; the pane's highlight must not outlast it.
   useEffect(() => {
     const clear = () => { setDropId(null) }

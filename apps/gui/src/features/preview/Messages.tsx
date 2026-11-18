@@ -9,6 +9,7 @@ import type { Conversation, Message } from '@/data/preview'
 import { CODE_FENCE_MARKER, statusText } from './shared'
 import { ActivityGroup } from './Activity'
 import { ApprovalMarker } from './Approvals'
+import { DAEMON_NAME } from '@/brand'
 
 export function ConversationHeader({ conversation }: { conversation: Conversation }) {
   const since = useWorkingSince(conversation.id)
@@ -192,7 +193,7 @@ export function EmptyConversation({ conversation }: { conversation: Conversation
       <p>
         <span className="conversation-branch">{conversation.branch}</span> ·{' '}
         {conversation.permission.split(' · ')[0]}. Send a message to start. It
-        keeps running in maikerd if you close this window.
+        keeps running in {DAEMON_NAME} if you close this window.
       </p>
     </div>
   )

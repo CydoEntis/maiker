@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from '@/lib/toast'
 import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen } from '@/api/daemon'
 import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/machines'
@@ -12,6 +12,7 @@ import { buildRows, type ChatRow } from '../chatRows'
 import { findRow, registerChatFind } from '../chatSearch'
 import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
+import { MAX_QUOTES } from '../quoteMessage'
 import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } from '../useChatComposer'
 import { countUserMessages } from '../workPhase'
 import { sentTexts } from '../promptRecall'
@@ -20,8 +21,15 @@ import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
 import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
-import { draftWithQuote, pickedText, type PickedText } from '../selectionActions'
-import { peekComposer } from '../composerStore'
+import { pickedText, type PickedText } from '../selectionActions'
+import { addQuote } from '../composerStore'
+import { ChatActionsContext, RevealContext, type ChatActions, type Reveal } from '../chatActions'
+import { quoteSourceRow } from '../quoteJump'
+import type { Askable } from '../plainQuestions'
+import { forgetReplyDraft } from '../quickReply'
+import { agentName } from '../commandCards'
+import { ReplyTray } from './ReplyTray'
+import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { COPY_TOAST_ID, COPY_TOAST_MS } from '@/features/terminal/copyToast'
 import { SelectionBar } from './SelectionBar'
 import { OpenFileContext, type OpenFile } from '../openFile'
@@ -30,15 +38,17 @@ import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
 import { DEFAULT_PICK, noteAgentSaid, writeChoice } from '../agentChoice'
-import { Composer } from './Composer'
+import { Composer, type DockOpen } from './Composer'
+import { HelpersDock } from './HelpersDock'
+import { dockHelpers, HelpersLiveContext, liveAgentsRow, type HelpersLive } from '../helpersDock'
 import { ChatItem, type ChatItemContext } from './ChatItems'
-import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
 import { CommandMenuTray } from './CommandMenuTray'
-import { ProblemBanner } from './ProblemBanner'
+import { useChatProblem } from './ChatProblem'
+import { ProblemLine } from '@/components/ui/feedback'
 import { summaryOf } from '../summary'
 import type { ChatProblem } from '../problem'
 import { SubagentBar, SubagentChat } from './SubagentChat'
@@ -87,9 +97,9 @@ function announcement(feed: ChatFeed, agent: ChatAgent, working: boolean): strin
   return ''
 }
 
-/** The rows a message the person sent is drawn as: its echo, then the history's own row. */
-const isSentRow = (row: ChatRow) => row.kind === 'echo' || row.kind === 'user'
 const rowKey = (row: ChatRow) => row.key
+/** A message the person sent: the row the view stands on after a send. */
+const isSentRow = (row: ChatRow) => row.kind === 'user' || row.kind === 'echo'
 
 /** A pending request is asked in the tray over the message box, so it is not also a row of the list. */
 const isPendingApproval = (row: ChatRow) => row.kind === 'approval' && row.event.resolution.status === 'pending'
@@ -100,6 +110,10 @@ const KEY_DECISION: Readonly<Record<string, ApprovalDecision>> = Object.fromEntr
 /** Whether a key press belongs to a field, where a letter is text and not an answer. */
 const typedInField = (target: EventTarget) => target instanceof Element && target.closest('input, textarea, [contenteditable="true"]') !== null
 
+const NO_SUBAGENTS: readonly SubagentView[] = []
+/** How long a jump marks the message it lands on, and how many frames it waits for the list to draw it. */
+const FLASH_MS = 1200
+const FLASH_FRAMES_MAX = 40
 const ERROR_WORDS_MAX = 140
 const truncateError = (reason: string) => (reason.length > ERROR_WORDS_MAX ? `${reason.slice(0, ERROR_WORDS_MAX)}…` : reason)
 
@@ -135,6 +149,8 @@ type Props = {
   sessionId?: string
   /** A subagent whose own chat shows instead of the session's, and the way back. */
   subagent?: SubagentView | null
+  /** The helpers the runtime lists for this session, for what each is doing in the helpers line. */
+  subagents?: readonly SubagentView[]
   onBackToMain?: () => void
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage
@@ -164,8 +180,8 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
-  const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
+export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
+  const { feed, events, offline, readError, refresh, recordAnswer } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
   const working = !agentFree && (feed.status === 'Working' || paneWorking)
@@ -254,7 +270,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           const typed = commandChain.current.then(() => typeMessage(typeInto, agent, '/model')).then(refresh)
           commandChain.current = typed.catch((error: unknown) => {
             setMenuOpen(false)
-            toast.failure(error, 'Could not open the model menu')
+            toast.failed('Could not open the model menu', error)
           })
         },
         modelMenuLocked: pickerLocked ?? chipsLocked,
@@ -279,7 +295,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           }
           void step().catch((error: unknown) => {
             setLiveMode(before === null ? null : { base: metaMode, value: before })
-            toast.failure(error, 'Could not change the permission mode')
+            toast.failed('Could not change the permission mode', error)
           })
         },
       }
@@ -302,7 +318,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         commandChain.current = typed.catch((error: unknown) => {
           if (model !== undefined) setLiveModel(null)
           if (level !== undefined) setLiveEffort(null)
-          toast.failure(error, 'Could not type the command')
+          toast.failed('Could not type the command', error)
         })
       },
       ...(remote ? {} : { onPickMode: (target: string) => {
@@ -329,7 +345,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         }
         void step().catch((error: unknown) => {
           setLiveMode(before === null ? null : { base: metaMode, value: before })
-          toast.failure(error, 'Could not change the permission mode')
+          toast.failed('Could not change the permission mode', error)
         })
       } }),
     }
@@ -339,7 +355,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const pickHeld = useCallback((target: string) => {
     if (applyNow === undefined) return
     if (pickerLocked !== null) {
-      toast.message(pickerLocked)
+      toast.info(pickerLocked)
       return
     }
     if (!working) {
@@ -348,7 +364,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     }
     setHeldMode((was) => ({ mode: target, pick: (was?.pick ?? 0) + 1 }))
     setLiveMode({ base: metaMode, value: target })
-    toast.message(`${modeLabel(target) ?? target} from the next turn`, { description: `${agentLabel(agent)} is working, so the mode changes once this turn ends.` })
+    toast.info(`${modeLabel(target) ?? target} from the next turn`, { description: `${agentLabel(agent)} is working, so the mode changes once this turn ends.` })
   }, [applyNow, pickerLocked, working, metaMode, agent])
   const pickMode = applyNow === undefined ? undefined : pickHeld
   useEffect(() => {
@@ -360,8 +376,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
-    toast.message(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so it opened in the terminal.`)
-    void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.failure(error, `Could not run ${command}`) })
+    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so it opened in the terminal.`)
+    void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.failed(`Could not run ${command}`, error) })
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
@@ -404,13 +420,13 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         return
       case 'copy': {
         const reply = lastReply(bareRows)
-        if (reply === null) toast.message(`${agentLabel(agent)} has not said anything yet.`)
+        if (reply === null) toast.info(`${agentLabel(agent)} has not said anything yet.`)
         else copyBlock(reply, 'Could not copy the reply')
         return
       }
       case 'export': {
         const text = transcriptMarkdown(bareRows, agent)
-        if (text === null) toast.message('There is nothing to export yet.')
+        if (text === null) toast.info('There is nothing to export yet.')
         else saveBlock('conversation', 'md', text)
         return
       }
@@ -429,12 +445,24 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const holdWorking = settling && !replied
   const freePhrase = agentFree ? `free · ${String(helpersOnly)} ${helpersOnly === 1 ? 'helper' : 'helpers'} working` : null
   const allRows = useMemo(() => buildRows(events, working || holdWorking || agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase), [events, working, holdWorking, agentFree, root, echoText, echoThinking, hideSuccessfulTools, freePhrase])
+  // The turn's rows are drawn as they arrive; only a pending request stays out, since the tray over the box asks it.
   const rows = useMemo(() => allRows.filter((row) => !isPendingApproval(row)), [allRows])
+  // The dock above the box: the helpers line while helpers work (the last agents row with one running, and only while
+  // the session itself is not at rest, or a history that never recorded their end would keep the line for ever), the
+  // queue under it. One of the two lists is open at a time.
+  const [dockOpen, setDockOpen] = useState<DockOpen>(null)
+  const helpersMayRun = paneStatus === undefined || paneStatus === 'working' || paneStatus === 'needs' || helpersOnly > 0
+  const liveRow = useMemo(() => (helpersMayRun ? liveAgentsRow(rows) : null), [helpersMayRun, rows])
+  const dockedHelpers = useMemo(() => (liveRow === null ? [] : dockHelpers(liveRow.events, subagents)), [liveRow, subagents])
+  const queuedCount = composer.queue.length
+  // A list with nothing left to list folds itself, so it is closed the next time it has something.
+  if ((dockOpen === 'helpers' && liveRow === null) || (dockOpen === 'queue' && queuedCount <= 1)) setDockOpen(null)
+  const helpersLive = useMemo<HelpersLive | null>(() => (liveRow === null ? null : { key: liveRow.key, open: () => { setDockOpen('helpers') } }), [liveRow])
+  const dock = useMemo(() => ({ open: dockOpen, set: setDockOpen }), [dockOpen])
+  // A session that failed keeps what was queued; it goes when the agent runs again.
+  const queueNote = paneStatus === 'error' && queuedCount > 0 ? 'This session failed. Your queued messages are kept and go out when it runs again.' : null
   // What ↑ in the box brings back: the messages sent in this chat, each once in a row, the newest last.
   const sentMessages = useMemo(() => sentTexts(events), [events])
-  // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
-  // the chat opened (until then it shows what this window remembered, which may be behind) and one after the window was
-  // hidden. Only a reply that comes while the chat is being looked at is typed in.
   // Text selected in the chat gets a small bar where the mouse let go: Copy, and Quote into the message box. It goes
   // when the selection does (a click elsewhere), on Esc, and when the chat scrolls away from under it.
   const [picked, setPicked] = useState<PickedText | null>(null)
@@ -465,26 +493,26 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       },
     )
   }
-  const quotePicked = (box: HTMLElement) => {
-    if (picked === null) return
-    setComposerDraft(draftWithQuote(peekComposer(link.conversation).draft, picked.text))
-    setPicked(null)
+  const [quoteNote, setQuoteNote] = useState('')
+  // Words go to the strip above the message box, and the box takes the keys so the reply is typed under them.
+  const quote = useCallback((who: string, text: string) => {
+    const added = addQuote(link.conversation, { who, text })
+    if (added === 'full') toast.info(`A message can carry ${String(MAX_QUOTES)} quotes. Send it, or remove one.`)
+    else setQuoteNote(added === 'added' ? 'Quote added' : 'Already quoted')
     window.getSelection()?.removeAllRanges()
-    // The reply is typed under the quote: the box takes the keys, with the caret at its end.
-    const field = box.querySelector<HTMLTextAreaElement>('textarea.mx-box-text:not(:disabled)')
     window.requestAnimationFrame(() => {
+      const field = chat.current?.querySelector<HTMLTextAreaElement>('textarea.mx-box-text:not(:disabled)')
       field?.focus({ preventScroll: true })
       field?.setSelectionRange(field.value.length, field.value.length)
     })
-  }
-  const [known, setKnown] = useState<Set<string> | null>(null)
-  const [knownAsOf, setKnownAsOf] = useState(0)
-  if (feed.loaded && knownAsOf !== unwatchedReads) {
-    setKnownAsOf(unwatchedReads)
-    setKnown(new Set(rows.map(rowKey)))
+  }, [link.conversation])
+  const quotePicked = () => {
+    if (picked === null) return
+    quote(picked.speaker === 'user' ? 'You' : agentName(agent), picked.text)
+    setPicked(null)
   }
   const pending = useMemo(() => allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event ?? null, [allRows])
-  // The model and effort picked on the new-chat page are this conversation's choice from its first frame, so the picker shows them.
+  // The model and effort picked on the New session dialog are this conversation's choice from its first frame, so the picker shows them.
   // A chat that follows the terminal keeps no choice of its own: what its agent says it runs is the choice.
   const followsTerminal = link.readOnly === true
   useLayoutEffect(() => {
@@ -523,7 +551,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     approveRequest({ id: String(link.conversation), generation: link.generation }, requestId, decision)
       .then(() => { recordAnswer(requestId, decision); refresh() })
-      .catch((error: unknown) => { toast.failure(error, 'Could not send your answer') })
+      .catch((error: unknown) => { toast.failed('Could not send your answer', error) })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, recordAnswer, refresh])
   // "Always in this project": this one is allowed now, and the daemon allows the same command in this project from then on.
@@ -531,7 +559,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     allowAlways({ id: String(link.conversation), generation: link.generation }, requestId)
       .then(() => { recordAnswer(requestId, 'Accept'); refresh() })
-      .catch((error: unknown) => { toast.failure(error, 'Could not remember your answer') })
+      .catch((error: unknown) => { toast.failed('Could not remember your answer', error) })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, recordAnswer, refresh])
   // A user-input answer is relayed once and recorded nowhere: it can be a secret.
@@ -539,7 +567,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     setAnswering(true)
     answerUserInput({ id: String(link.conversation), generation: link.generation }, requestId, answers)
       .then(refresh)
-      .catch((error: unknown) => { toast.failure(error, 'Could not send your answer') })
+      .catch((error: unknown) => { toast.failed('Could not send your answer', error) })
       .finally(() => { setAnswering(false) })
   }, [link.conversation, link.generation, refresh])
   // A chat that follows a terminal pane is answered in that terminal (ADR 0003), so it offers no buttons.
@@ -547,20 +575,79 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   // An approval's link to its tool step scrolls the list there; the nonce makes a second click on the same link scroll again.
   const [scrollTarget, setScrollTarget] = useState<{ key: string; nonce: number } | null>(null)
-  // A message sent goes to the top of the view with the reply drawn under it; one queued behind the running turn takes
-  // the chat back to its newest row.
+  // A message sent takes the chat to it: it stands at the top of the view and the reply fills in below it. One queued
+  // behind the running turn is not in the chat yet (it shows in the dock), so the view stays where it is.
   const [sentCount, setSentCount] = useState(0)
-  const [queuedCount, setQueuedCount] = useState(0)
   // A message is its words and how often they were said before it, so the same words sent again count, and the echo
   // going quiet does not.
   const sentKey = echo === null ? null : `${echo.text}\u0000${String(echo.baseline)}`
   const [seenSend, setSeenSend] = useState({ sentKey, queued: composer.queue.length })
   if (seenSend.sentKey !== sentKey || seenSend.queued !== composer.queue.length) {
     if (sentKey !== null && sentKey !== seenSend.sentKey) setSentCount(sentCount + 1)
-    else if (composer.queue.length > seenSend.queued) setQueuedCount(queuedCount + 1)
     setSeenSend({ sentKey, queued: composer.queue.length })
   }
   const goToStep = useCallback((key: string) => { setScrollTarget((current) => ({ key, nonce: (current?.nonce ?? 0) + 1 })) }, [])
+
+  // A quote's stub goes to the message it came from: the view scrolls there, a folded block that holds it opens, and the
+  // row is outlined for a moment (not at all with reduced motion, where the scroll alone says where).
+  const reducedMotion = useContext(ReducedMotionContext)
+  const [reveal, setReveal] = useState<Reveal>({ key: null, nonce: 0 })
+  const [flash, setFlash] = useState<{ key: string; nonce: number } | null>(null)
+  const rowsLatest = useLatest(() => rows)
+  const jump = useCallback((text: string, from: string) => {
+    const key = quoteSourceRow(rowsLatest(), text, from)
+    if (key === null) {
+      toast.info('The message this quotes is no longer in the chat.')
+      return
+    }
+    setReveal((current) => ({ key, nonce: current.nonce + 1 }))
+    goToStep(key)
+    setFlash((current) => ({ key, nonce: (current?.nonce ?? 0) + 1 }))
+  }, [rowsLatest, goToStep])
+  useEffect(() => {
+    if (flash === null || reducedMotion) return undefined
+    let frames = 0
+    let frame = 0
+    let timer = 0
+    let marked: HTMLElement | null = null
+    // The row may not be drawn yet: the list draws it once the scroll gets there.
+    const mark = () => {
+      const row = Array.from(chat.current?.querySelectorAll<HTMLElement>('[data-key]') ?? []).find((element) => element.dataset.key === flash.key)
+      if (row === undefined) {
+        frames += 1
+        if (frames < FLASH_FRAMES_MAX) frame = window.requestAnimationFrame(mark)
+        return
+      }
+      marked = row
+      row.classList.add('is-flash')
+      timer = window.setTimeout(() => { row.classList.remove('is-flash') }, FLASH_MS)
+    }
+    frame = window.requestAnimationFrame(mark)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearTimeout(timer)
+      marked?.classList.remove('is-flash')
+    }
+  }, [flash, reducedMotion])
+
+  // Questions the agent asked in plain words, answered one by one in a tray over the box. What was written stays with the
+  // message when the tray closes, and goes when its reply is sent.
+  const [replying, setReplying] = useState<{ row: string; who: string; asked: readonly Askable[]; focus: string | null; nonce: number } | null>(null)
+  const reply = useCallback((row: string, who: string, asked: readonly Askable[], focus: string | null) => {
+    setReplying((current) => ({ row, who, asked, focus, nonce: (current?.nonce ?? 0) + 1 }))
+  }, [])
+  const { sendReply } = composer
+  const sendReplies = async (message: string, count: number) => {
+    const went = await sendReply(message)
+    if (went) {
+      setQuoteNote(count === 1 ? 'Reply sent' : `Reply sent, ${String(count)} answers`)
+      if (replying !== null) forgetReplyDraft(replying.row)
+    }
+    return went
+  }
+  // A message that is gone (regenerated, or the chat changed) takes its tray with it.
+  const replyRowGone = replying !== null && !rows.some((row) => row.key === replying.row)
+  if (replyRowGone) setReplying(null)
 
   // Find (the window's search bar) looks through this chat while it shows: the row that holds the text is scrolled to and marked.
   const [found, setFound] = useState<string | null>(null)
@@ -580,6 +667,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   }, [sessionId, rowsNow, foundNow, goToStep])
 
   const waitingStep = pending?.stepId ?? null
+  const draftable = composer.draftable
+  const actions = useMemo<ChatActions | null>(() => (draftable ? { quote, jump, reply, canReply: true } : null), [draftable, quote, jump, reply])
   const plan = useMemo(() => (ask?.tool === PLAN_TOOL ? askedPlan(events) : null), [ask?.tool, events])
   // The daemon refuses a restore while the agent works too: its files would be rolled back under it.
   const rewindBusy = !online ? 'The Maiker service is offline' : working ? `${agentLabel(agent)} is working. Edit from here when it finishes.` : null
@@ -641,33 +730,47 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const question = pending !== null
     ? <ApprovalTray key={pending.requestId} event={pending} actions={approval} agent={agent} />
     : menuOpen && sendKeys !== undefined && online ? <CommandMenuTray agent="Codex" topic="model" readScreen={readScreen} sendKeys={sendKeys} onClose={() => { setMenuOpen(false) }} />
-    : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} /> : problem !== null ? <ProblemBanner problem={problem} summarize={() => summaryOf(bareRows)} /> : null
-  // Losing the service is the window's news, said once by its bar (lib/toast.ts); the chat speaks only of a read that
-  // failed while the service is up.
-  const readFailing = offline && online
-  const notices = [
-    readFailing ? `Could not load the latest messages. Trying again.${readError !== null ? ` (${truncateError(readError)})` : ''}` : null,
-    feed.error,
-  ].filter((notice): notice is string => notice !== null)
+    : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} />
+    : replying !== null && !replyRowGone
+      ? (
+        <ReplyTray
+          key={`${replying.row}:${String(replying.nonce)}`}
+          who={replying.who}
+          asked={replying.asked}
+          focus={replying.focus}
+          message={replying.row}
+          blocked={composer.disabledReason}
+          onSend={sendReplies}
+          onClose={() => { setReplying(null) }}
+        />
+      )
+      : null
   const shieldDanger = shownMode !== null && DANGER_MODES.includes(shownMode)
-  // A bypassed chat always shows it (ADR 0005). The message box's red shield says it where it shows the mode; the tag
-  // is for a chat whose shield does not, so the same thing is not flagged twice on nearly every chat.
+  // A bypassed chat always shows it (ADR 0005). The message box's red shield says it where it shows the mode; the tag is
+  // for a chat whose shield does not, so the same thing is not flagged twice on nearly every chat.
   const bypassTag = fullAccess && !shieldDanger
+  const problemView = useChatProblem(problem, () => summaryOf(bareRows))
+  // The chat's own read: while it reconnects, or when it failed, one line in the dock says so, under any real problem.
+  // A lost service is the window's news, said once by its bar (lib/toast.ts), so the chat speaks only while the service is up.
+  const readLine = offline && online
+    ? <ProblemLine tone="working" running title="Reconnecting to this chat…" reason={`What is shown may be out of date.${readError !== null ? ` ${truncateError(readError)}` : ''}`} />
+    : feed.error !== null ? <ProblemLine tone="error" title="Could not read this chat" reason={feed.error} /> : null
+  const dockProblem = problemView.line ?? readLine
 
   return (
     <FilesHereContext.Provider value={sessionId === undefined || machineNameOf(sessionId) === null}>
     <div ref={chat} className="mx-chat" onKeyDown={onKeyDown} onClick={keepComposerFocus} onMouseUp={(event) => { const next = pickedText(event); if (next !== undefined) setPicked(next) }}>
       {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
-      {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={() => { if (chat.current !== null) quotePicked(chat.current) }} />}
-      {(notices.length > 0 || bypassTag) && (
-        <div className="mx-chat-notices" role={readFailing ? 'status' : undefined}>
-          {notices.map((notice) => <span key={notice}>{notice}</span>)}
-          {bypassTag && <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Bypass permissions</span>}
+      {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={composer.draftable ? quotePicked : undefined} />}
+      {bypassTag && (
+        <div className="mx-chat-notices">
+          <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Bypass permissions</span>
         </div>
       )}
       {/* Politely announces a change of state only; the log itself is not a live region, so streaming text never floods a screen reader. */}
       <div role="status" aria-live="polite" className="sr-only">{announcement(feed, agent, working)}</div>
+      <div role="status" aria-live="polite" className="sr-only">{quoteNote}</div>
       {subagent !== null ? (
         <>
           <SubagentBar subagent={subagent} onBack={() => { onBackToMain?.() }} />
@@ -677,11 +780,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         <p className="mx-chat-empty">{hasTerminal ? 'No messages yet. Send one below, or type in the terminal.' : 'No messages yet. Send one below.'}</p>
       ) : feed.loaded || rows.length > 0 ? (
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
-        <KnownRowsContext.Provider value={known}>
-          <OpenFileContext.Provider value={openFile}>
-          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agentLabel(agent)}`} scrollTarget={scrollTarget} toLatest={queuedCount} pinNewest={sentCount} isPinTarget={isSentRow} />
-          </OpenFileContext.Provider>
-        </KnownRowsContext.Provider>
+        <OpenFileContext.Provider value={openFile}>
+          <HelpersLiveContext.Provider value={helpersLive}>
+          <ChatActionsContext.Provider value={actions}>
+          <RevealContext.Provider value={reveal}>
+          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agentLabel(agent)}`} scrollTarget={scrollTarget} toLatest={sentCount} isSent={isSentRow} />
+          </RevealContext.Provider>
+          </ChatActionsContext.Provider>
+          </HelpersLiveContext.Provider>
+        </OpenFileContext.Provider>
       ) : (
         <ChatSkeleton />
       )}
@@ -693,12 +800,17 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         conversation={link.conversation}
         // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet.
         {...(abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
+        problem={dockProblem}
         question={question}
+        helpers={dockedHelpers.length > 0 ? <HelpersDock helpers={dockedHelpers} open={dock.open === 'helpers'} onOpenChange={(open) => { setDockOpen(open ? 'helpers' : null) }} /> : null}
+        dock={dock}
+        queueNote={queueNote}
         waiting={held !== null}
         files={fileSearch}
         facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
       />
+      {problemView.alert}
     </div>
     </FilesHereContext.Provider>
   )

@@ -45,7 +45,7 @@ export function useMoveToWorktree({ sessionMap, sendTo }: {
       await sendTo(session, `${line}\r`)
       toast.success('Moved to a new worktree. Edits not yet committed stayed in the old folder.')
     } catch (error: unknown) {
-      toast.failure(error, 'Could not move the chat to a worktree')
+      toast.failed('Could not move the chat to a worktree', error)
     }
   }, [sendTo])
 }

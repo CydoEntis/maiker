@@ -1,61 +1,59 @@
-import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { APP_NAME } from '@/brand'
+import { toast, useToasts } from '@/lib/toast'
 import { noteLines } from './noteLines'
 import type { RestartedUpdate } from './updateMemory'
 
-/** How long the toast stays before it goes on its own. */
-export const UPDATED_TOAST_MS = 9000
+const UPDATED_TOAST_ID = 'app-updated'
 
 type Props = {
   update: RestartedUpdate
   /** Called once the toast is gone and the dialog, if it was opened, is closed. */
   onDone: () => void
-  /** The Maiker service still runs the older release and is restarted once no agent is at work. */
+  /** The service still runs the older release and is restarted once no agent is at work. */
   serviceFinishing?: boolean
 }
 
-/** After a restart into an update: a quiet pill with a way into What's new, and that dialog. */
+/** After a restart into an update: a success toast with a way into What's new, and that dialog. */
 export function UpdatedNotice({ update, onDone, serviceFinishing = false }: Props) {
-  const [toastShown, setToastShown] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const lines = noteLines(update.notes)
+  const shown = useToasts().items.some((item) => item.id === UPDATED_TOAST_ID)
+  // Done is when the toast has been up and gone, and the dialog is not open: not before the toast first shows.
+  const seen = useRef(false)
+  const shownRef = useRef(shown)
+  useEffect(() => { shownRef.current = shown })
 
   useEffect(() => {
-    if (!toastShown) return
-    const timer = window.setTimeout(() => { setToastShown(false) }, UPDATED_TOAST_MS)
-    return () => { window.clearTimeout(timer) }
-  }, [toastShown])
+    // The service finishing is learnt after the toast first shows: it updates the toast in place, never brings back one
+    // already dismissed.
+    if (seen.current && !shownRef.current) return
+    toast.success(`Updated to ${update.version}`, {
+      id: UPDATED_TOAST_ID,
+      ...(serviceFinishing ? { description: 'The service finishes updating once no agent is working.' } : {}),
+      action: { label: 'What’s new', onClick: (event) => { event.preventDefault(); setDialogOpen(true) } },
+    })
+  }, [update.version, serviceFinishing])
+
+  // The toast goes once the dialog is open, so the two are never both gone before you have read the notes.
+  useEffect(() => { if (dialogOpen) toast.dismiss(UPDATED_TOAST_ID) }, [dialogOpen])
 
   useEffect(() => {
-    if (!toastShown && !dialogOpen) onDone()
-  }, [toastShown, dialogOpen, onDone])
+    if (shown) seen.current = true
+    else if (seen.current && !dialogOpen) onDone()
+  }, [shown, dialogOpen, onDone])
 
   return (
-    <>
-      {toastShown && (
-        <div
-          role="status"
-          className="fixed bottom-5 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full border border-[var(--line2)] bg-[var(--raise)] py-1.5 pr-1.5 pl-3.5 text-[12.5px] text-[var(--fg)] shadow-[0_12px_40px_rgba(0,0,0,.45)]"
-        >
-          <span aria-hidden="true" className="size-1.5 rounded-full bg-[var(--ok)]" />
-          <strong className="font-semibold">Updated to {update.version}</strong>
-          {serviceFinishing && <span className="text-[var(--muted)]">· the service finishes once agents are idle</span>}
-          <span aria-hidden="true" className="text-[var(--dim)]">·</span>
-          <button type="button" className="cursor-pointer rounded-full px-1.5 py-0.5 font-semibold text-[var(--accent-text)] hover:underline" onClick={() => { setDialogOpen(true); setToastShown(false) }}>What's new</button>
-          <button type="button" aria-label="Dismiss" className="grid size-6 cursor-pointer place-items-center rounded-full text-[var(--muted)] hover:text-[var(--fg)]" onClick={() => { setToastShown(false) }}><X size={13} aria-hidden="true" /></button>
-        </div>
-      )}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[460px]">
-          <DialogHeader>
-            <DialogTitle>What's new in Maiker {update.version}</DialogTitle>
-            <DialogDescription>{update.previous ? `Updated from ${update.previous}.` : 'Maiker is up to date.'}</DialogDescription>
-          </DialogHeader>
-          {lines.length > 0 && <ul className="m-0 grid list-disc gap-1.5 pl-5 text-[13px] text-[var(--fg2)]">{lines.map((line) => <li key={line}>{line}</li>)}</ul>}
-          <p className="m-0 text-[12px] text-[var(--muted)]">{update.automatic ? 'Installed while nothing was running. No session was interrupted.' : 'No session was interrupted.'}</p>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <DialogContent className="sm:max-w-[460px]">
+        <DialogHeader>
+          <DialogTitle>What’s new in {APP_NAME} {update.version}</DialogTitle>
+          <DialogDescription>{update.previous ? `Updated from ${update.previous}.` : `${APP_NAME} is up to date.`}</DialogDescription>
+        </DialogHeader>
+        {lines.length > 0 && <ul className="m-0 grid list-disc gap-1.5 pl-5 text-[13px] text-[var(--fg2)]">{lines.map((line) => <li key={line}>{line}</li>)}</ul>}
+        <p className="m-0 text-[12px] text-[var(--muted)]">{update.automatic ? 'Installed while nothing was running. No session was interrupted.' : 'No session was interrupted.'}</p>
+      </DialogContent>
+    </Dialog>
   )
 }

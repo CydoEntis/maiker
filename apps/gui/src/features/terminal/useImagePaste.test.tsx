@@ -9,7 +9,9 @@ vi.mock('@/api/imagePaste', async (importOriginal) => ({
   saveImageLocally: host.save,
 }))
 
-const toasts = vi.hoisted(() => ({ loading: vi.fn(), success: vi.fn(), error: vi.fn(), failure: vi.fn() }))
+const toasts = vi.hoisted(() => ({ progress: vi.fn(), success: vi.fn(), error: vi.fn() }))
+// A failure's toast says what failed and then the error's own words; the double reports those words as the old error toast did.
+Object.assign(toasts, { failed: vi.fn((what: string, error: unknown, options?: object) => { const said = typeof error === 'string' ? error : error instanceof Error ? error.message : what; if (options === undefined) toasts.error(said); else toasts.error(said, options) }) })
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -52,7 +54,7 @@ describe('pasting an image into a pane of this computer', () => {
     const { paste, typeInto } = setup()
     paste('t3', image)
     await flush()
-    expect(toasts.failure).toHaveBeenCalledWith(expect.anything(), 'Could not paste the image', expect.objectContaining({ id: 'image-paste' }))
+    expect(toasts.error).toHaveBeenCalledWith('the clipboard holds something that is not a PNG, JPEG, GIF or WebP image', expect.objectContaining({ id: 'image-paste' }))
     expect(typeInto).not.toHaveBeenCalled()
   })
 

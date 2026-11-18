@@ -61,7 +61,6 @@ export function ThemePicker({ kind, value, inUse, dimmed, onPick, onPreview }: P
               <span className="mx-theme-name">{current.name}</span>
               <span className="mx-theme-sub">{current.family}</span>
             </span>
-            {inUse && <span className="mx-picker-pill">in use</span>}
             <svg className="mx-picker-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
           </button>
         </Popover.Trigger>

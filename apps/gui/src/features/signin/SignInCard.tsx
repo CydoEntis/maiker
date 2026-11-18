@@ -16,11 +16,11 @@ export function SignInCard({ view, onCancel, onClose, onRetry }: { view: SignInV
   const { agent, state, problem } = view
   const label = SIGN_IN_LABELS[agent]
   const open = (link: string) => {
-    openLink(link).catch((error: unknown) => { toast.failure(error, 'Could not open the browser') })
+    openLink(link).catch((error: unknown) => { toast.failed('Could not open the browser', error) })
   }
   const copy = (code: string) => {
     copyText(code).then(
-      () => { toast.message('Code copied') },
+      () => { toast.info('Code copied') },
       () => { toast.error('Could not copy the code') },
     )
   }

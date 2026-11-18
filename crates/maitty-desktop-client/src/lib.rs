@@ -19,9 +19,8 @@ use std::time::Duration;
 pub const MAX_TERMINAL_INPUT_BYTES: usize = 16 * 1024;
 /// The longest message the daemon is asked to hold for a starting agent.
 pub const MAX_HELD_MESSAGE_BYTES: usize = 256 * 1024;
-const APP_COMMAND: &str = env!("MAITTY_APP_COMMAND");
-const APP_NAME: &str = env!("MAITTY_APP_NAME");
-const APP_ENV: &str = env!("MAITTY_APP_ENV");
+const APP_COMMAND: &str = env!("APP_COMMAND");
+const APP_NAME: &str = env!("APP_NAME");
 
 /// What the window may ask a pane's daemon to do, whichever machine the pane is on. One place
 /// makes each message, so this computer's panes and another machine's are asked the same way.
@@ -237,7 +236,7 @@ fn read_activity() -> Option<Activity> {
 
 /// Where the daemon keeps this socket's saved sessions, which the next daemon restores.
 fn session_file() -> PathBuf {
-    let label = std::env::var(format!("{APP_ENV}_SOCKET")).unwrap_or_else(|_| "default".into());
+    let label = maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
     ipc::data_dir().join(format!("session-{label}.json"))
 }
 
@@ -335,8 +334,8 @@ fn process_command(pid: u32) -> (Vec<u8>, Option<Vec<u8>>) {
 }
 
 /// Whether a process's NUL-separated command line is this product's daemon: the terminal app's
-/// program, or the copy the desktop app bundles (named with `-gui-daemon`, and with the target
-/// triple when it runs from a development build), started with `daemon`.
+/// program, or the copy the desktop app bundles (named `DAEMON_NAME` or a name it had before, and
+/// with the target triple when it runs from a development build), started with `daemon`.
 #[cfg_attr(not(any(target_os = "linux", test)), allow(dead_code))]
 fn is_daemon_command_line(command_line: &[u8]) -> bool {
     let mut args = command_line.split(|byte| *byte == 0);
@@ -358,8 +357,16 @@ pub fn is_daemon_invocation(program: &[u8], first_argument: Option<&[u8]>) -> bo
         Some(stem) if file[stem..].eq_ignore_ascii_case(EXE_SUFFIX) => &file[..stem],
         _ => file,
     };
-    let bundled = format!("{APP_COMMAND}-gui-daemon");
-    (name == APP_COMMAND.as_bytes() || name.starts_with(bundled.as_bytes()))
+    let bundled = |bundled: &str| {
+        name == bundled.as_bytes()
+            || name
+                .strip_prefix(bundled.as_bytes())
+                .is_some_and(|rest| rest.starts_with(b"-"))
+    };
+    (name == APP_COMMAND.as_bytes()
+        || std::iter::once(maitty_shared::brand::DAEMON_NAME)
+            .chain(maitty_shared::brand::previous_daemon_names())
+            .any(bundled))
         && first_argument == Some(b"daemon".as_slice())
 }
 
@@ -675,16 +682,6 @@ fn run_git(dir: &std::path::Path, args: &[&str]) -> std::result::Result<String, 
     }
 }
 
-/// The GitHub repository (`owner/name`) a folder's `origin` remote points at, or `None` when it has no such remote.
-/// Git runs off the caller's thread with fixed arguments; a folder git cannot read has none.
-pub async fn github_repo_of(folder: PathBuf) -> Result<Option<String>> {
-    tokio::task::spawn_blocking(move || {
-        run_git(&folder, &["remote", "get-url", "origin"]).ok().and_then(|address| maitty_shared::github::repo_of_remote(&address))
-    })
-    .await
-    .context("reading the folder's remote")
-}
-
 /// The files that more than one of these checkouts (name, folder) changed since their branches parted. Git runs
 /// off the caller's thread; a checkout git cannot read is left out.
 pub async fn checkout_overlaps(checkouts: Vec<(String, PathBuf)>) -> Result<Vec<maitty_shared::overlap::Overlap>> {
@@ -711,7 +708,7 @@ pub async fn handoff_brief(
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     Ok(maitty_shared::handoff::brief(
         &maitty_shared::handoff::Facts { pane: term, agent, task, last_prompt, branch, checkout, changed, screen },
-        env!("MAITTY_APP_COMMAND"),
+        env!("APP_COMMAND"),
     ))
 }
 
@@ -1428,6 +1425,31 @@ pub async fn write_project_file(
         }
     })
     .await
+}
+
+/// Save an editor's text over an existing file of the checkout `term` is in, when the file is still
+/// the `version` the editor read (`None`: overwrite). The answer is `{"Saved": {"version"}}` or
+/// `"ChangedOnDisk"`, as the daemon gave it; this computer's daemon from before saving is refused in words (a
+/// machine's is never older than this app: the window turns that away when it connects).
+pub async fn save_project_file(term: u32, path: String, contents: String, version: Option<String>, daemon: impl Into<Daemon>) -> Result<Value> {
+    let message = ClientMsg::Command(Command::SaveFile {
+        term,
+        tag: 0,
+        path,
+        contents,
+        version,
+    });
+    let reply = match daemon.into() {
+        Daemon::Local(_) => ask_running_daemon_if_it_reads(&message).await?,
+        daemon => request(message, daemon).await?,
+    };
+    match reply {
+        Reply::Repo {
+            reply: reply @ (maitty_shared::repo::RepoReply::Saved { .. } | maitty_shared::repo::RepoReply::ChangedOnDisk),
+            ..
+        } => Ok(serde_json::to_value(reply)?),
+        _ => bail!("daemon returned an unexpected save reply"),
+    }
 }
 
 /// End a terminal session: its process stops, as when it is closed in the terminal app.
@@ -2264,7 +2286,7 @@ mod tests {
     fn finds_codex_in_the_nested_windows_npm_package() {
         let root = std::env::temp_dir().join(format!(
             "{}-codex-app-server-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2288,7 +2310,7 @@ mod tests {
     fn finds_codex_under_nvm_symlink_when_node_is_not_on_path() {
         let root = std::env::temp_dir().join(format!(
             "{}-codex-nvm-path-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2313,7 +2335,7 @@ mod tests {
     fn finds_codex_under_the_standard_npm_root_when_node_is_not_on_path() {
         let root = std::env::temp_dir().join(format!(
             "{}-codex-npm-root-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2338,7 +2360,7 @@ mod tests {
     fn finds_codex_under_the_system_node_root_when_node_is_not_on_path() {
         let root = std::env::temp_dir().join(format!(
             "{}-codex-system-node-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -2476,7 +2498,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         Query::Git { .. }
         | Query::GitIdentityRule { .. }
         | Query::CloneRepo { .. }
-        | Query::TicketWrite { .. }
+        | Query::CreateFolder { .. }
         | Query::Extensions { .. }
         | Query::SideAnswer { .. } => false,
         Query::Settings
@@ -2498,9 +2520,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::GitHubRepos { .. }
         | Query::GitHubOwners { .. }
         | Query::AgentCommands { .. }
-        | Query::Tickets { .. }
-        | Query::TicketKeys { .. }
-        | Query::TicketLinks { .. }
+        | Query::Repositories { .. }
         | Query::GitIdentities { .. }
         | Query::SavedConversations { .. }
         | Query::List
@@ -2895,20 +2915,29 @@ mod restart_confirmation_tests {
 
     #[test]
     fn the_daemon_to_restart_may_be_the_terminal_apps_or_the_one_the_desktop_app_bundles() {
-        let command = env!("MAITTY_APP_COMMAND");
+        let command = env!("APP_COMMAND");
+        let daemon = maitty_shared::brand::DAEMON_NAME;
+        // A service started before the rename keeps its old name until it is restarted.
+        let old = maitty_shared::brand::previous_daemon_names()
+            .next()
+            .expect("the old bundled name is carried");
         let line = |program: &str, args: &str| format!("{program}\0{args}\0").into_bytes();
         for program in [
             format!("/home/me/.local/bin/{command}"),
             command.to_string(),
-            format!("/tmp/.mount_AppXyZ/usr/bin/{command}-gui-daemon"),
-            format!("/repo/target/debug/{command}-gui-daemon-x86_64-unknown-linux-gnu"),
+            format!("/tmp/.mount_AppXyZ/usr/bin/{daemon}"),
+            format!("/repo/target/debug/{daemon}-x86_64-unknown-linux-gnu"),
+            format!("/tmp/.mount_AppXyZ/usr/bin/{old}"),
+            format!("/repo/target/debug/{old}-x86_64-unknown-linux-gnu"),
             format!(r"C:\Users\me\AppData\Local\Maiker\{command}.exe"),
-            format!(r"C:\Program Files\Maiker\{command}-gui-daemon.EXE"),
+            format!(r"C:\Program Files\Maiker\{daemon}.EXE"),
+            format!(r"C:\Program Files\Maiker\{old}.EXE"),
         ] {
             assert!(is_daemon_command_line(&line(&program, "daemon")), "{program}");
         }
         for (program, args) in [
             (format!("/usr/bin/not{command}"), "daemon"),
+            (format!("/usr/bin/{daemon}x"), "daemon"),
             (format!("/usr/bin/{command}"), "mcp"),
             (format!("/usr/bin/{command}"), ""),
             ("/usr/bin/bash".to_string(), "daemon"),
@@ -3022,7 +3051,7 @@ mod executable_lookup_tests {
     fn preserves_a_mise_shim_name_when_resolving_codex() {
         let directory = std::env::temp_dir().join(format!(
             "{}-mise-shim-{}-{}",
-            env!("MAITTY_APP_COMMAND"),
+            env!("APP_COMMAND"),
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -3058,7 +3087,7 @@ mod windows_claude_tests {
     use super::windows_claude_from;
 
     fn folder(name: &str) -> std::path::PathBuf {
-        let root = std::env::temp_dir().join(format!("{}-{name}-{}", env!("MAITTY_APP_COMMAND"), std::process::id()));
+        let root = std::env::temp_dir().join(format!("{}-{name}-{}", env!("APP_COMMAND"), std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         root
@@ -3145,7 +3174,7 @@ mod agent_command_tests {
     #[test]
     fn a_message_queued_for_a_working_agent_is_checked_and_one_is_dropped_only_by_a_daemon_that_can() {
         use super::{ClientMsg, Command, PaneCommand, daemon_reads, queued_message};
-        use maitty_shared::protocol::{DROP_QUEUED_SINCE, PROTOCOL_VERSION};
+        use maitty_shared::protocol::PROTOCOL_VERSION;
         assert!(queued_message("  ".into(), false).is_err());
         assert!(queued_message("x".repeat(super::MAX_HELD_MESSAGE_BYTES + 1), false).is_err());
         assert!(matches!(
@@ -3162,86 +3191,34 @@ mod agent_command_tests {
             ClientMsg::Command(Command::DropQueued { term: 4, index: 1, text }) if text == "then test"
         ));
         assert!(daemon_reads(&drop, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&drop, DROP_QUEUED_SINCE - 1));
     }
 
-    #[test]
-    fn sending_a_queued_chat_message_now_is_asked_only_of_a_daemon_that_reads_it() {
-        use super::{ClientMsg, Command, daemon_reads, refuse_unless_daemon_reads};
-        use maitty_shared::conversation::ConversationId;
-        use maitty_shared::protocol::{PROTOCOL_VERSION, SEND_NOW_SINCE};
-        let now = ClientMsg::Command(Command::ConversationSendNow {
-            id: ConversationId(3),
-            generation: 2,
-            operation: 5,
-        });
-        assert!(daemon_reads(&now, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&now, SEND_NOW_SINCE - 1));
-        assert!(refuse_unless_daemon_reads(&now, SEND_NOW_SINCE - 1).is_err());
-    }
 
     #[test]
     fn a_terminal_send_carries_its_operation_only_to_a_daemon_that_honours_it() {
         use super::{ClientMsg, Command, held_message, named_send, queued_message};
-        use maitty_shared::protocol::TERMINAL_SEND_OPERATIONS_SINCE;
+        use maitty_shared::protocol::PROTOCOL_VERSION;
         // The window draws operations within a JavaScript number's exact integers; the largest arrives whole.
         const LARGEST: u64 = (1 << 53) - 1;
         assert_eq!(serde_json::from_str::<u64>("9007199254740991").unwrap(), LARGEST);
         let held = held_message("fix it".into()).unwrap().message(3);
         let queued = queued_message("next".into(), false).unwrap().message(3);
         assert!(matches!(
-            named_send(held.clone(), LARGEST, TERMINAL_SEND_OPERATIONS_SINCE),
+            named_send(held.clone(), LARGEST, PROTOCOL_VERSION),
             ClientMsg::Command(Command::SendWhenReady { term: 3, operation: Some(LARGEST), .. })
         ));
         assert!(matches!(
-            named_send(queued.clone(), 9, TERMINAL_SEND_OPERATIONS_SINCE),
+            named_send(queued.clone(), 9, PROTOCOL_VERSION),
             ClientMsg::Command(Command::QueueFollowUp { term: 3, operation: Some(9), .. })
         ));
-        assert!(matches!(
-            named_send(held, 9, TERMINAL_SEND_OPERATIONS_SINCE - 1),
-            ClientMsg::Command(Command::SendWhenReady { operation: None, .. })
-        ));
-        assert!(matches!(
-            named_send(queued, 9, TERMINAL_SEND_OPERATIONS_SINCE - 1),
-            ClientMsg::Command(Command::QueueFollowUp { operation: None, .. })
-        ));
     }
 
-    #[test]
-    fn a_repository_question_newer_than_every_daemon_is_refused_in_words_by_an_older_one() {
-        use super::{ClientMsg, Query, refuse_unless_daemon_reads, repo_question_needs_version};
-        use maitty_shared::protocol::{FIND_FILES_SINCE, PROTOCOL_VERSION};
-        use maitty_shared::repo::RepoRequest;
-        let repo = |request| ClientMsg::Query(Query::Repo { term: 3, tag: 0, request });
-        let find = repo(RepoRequest::FindFiles { query: "main".into(), limit: 50 });
 
-        assert!(repo_question_needs_version(&find));
-        let refused = refuse_unless_daemon_reads(&find, FIND_FILES_SINCE - 1).unwrap_err();
-        assert!(refused.to_string().contains("older than this app"), "{refused}");
-        assert!(refuse_unless_daemon_reads(&find, PROTOCOL_VERSION).is_ok());
-        assert!(!repo_question_needs_version(&repo(RepoRequest::Status)));
-    }
 
     #[test]
-    fn a_daemon_from_before_saved_conversations_is_not_asked_for_them() {
-        use super::{ClientMsg, Query, daemon_reads};
-        use maitty_shared::protocol::{PROTOCOL_VERSION, SAVED_CONVERSATIONS_SINCE};
-        let ask = ClientMsg::Query(Query::SavedConversations {
-            agent: "claude".into(),
-            folder: "~/app".into(),
-            tag: 0,
-        });
-        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&ask, SAVED_CONVERSATIONS_SINCE - 1));
-    }
-
-    #[test]
-    fn a_worktree_standing_reaches_the_app_with_missing_said_and_an_old_daemon_is_not_asked() {
-        use super::{ClientMsg, Query, daemon_reads, standing_shown};
-        use maitty_shared::protocol::{PROTOCOL_VERSION, WORKTREE_STANDING_SINCE, WorktreeStanding};
-        let ask = ClientMsg::Query(Query::WorktreeStanding { repo: "/code/app".into(), folder: "/code/task".into() });
-        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&ask, WORKTREE_STANDING_SINCE - 1));
+    fn a_worktree_standing_reaches_the_app_with_missing_said() {
+        use super::standing_shown;
+        use maitty_shared::protocol::WorktreeStanding;
         let stale = WorktreeStanding {
             dirty: 0,
             branch: Some("task".into()),
@@ -3257,23 +3234,7 @@ mod agent_command_tests {
         assert_eq!((gone["missing"].as_bool(), gone["inactive_days"].is_null()), (Some(true), true));
     }
 
-    #[test]
-    fn a_daemon_from_before_closed_sessions_is_not_asked_for_them() {
-        use super::{ClientMsg, Query, daemon_reads};
-        use maitty_shared::protocol::{CLOSED_SESSIONS_SINCE, PROTOCOL_VERSION};
-        let ask = ClientMsg::Query(Query::ClosedSessions);
-        assert!(daemon_reads(&ask, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&ask, CLOSED_SESSIONS_SINCE - 1));
-    }
 
-    #[test]
-    fn a_daemon_from_before_reopening_closed_sessions_is_not_asked_to() {
-        use super::{daemon_reads, reopen_closed_message};
-        use maitty_shared::protocol::{PROTOCOL_VERSION, REOPEN_CLOSED_SINCE};
-        let reopen = reopen_closed_message("claude".into(), "abc-123".into());
-        assert!(daemon_reads(&reopen, PROTOCOL_VERSION));
-        assert!(!daemon_reads(&reopen, REOPEN_CLOSED_SINCE - 1));
-    }
 
     fn closed_in(cwd: std::path::PathBuf) -> maitty_shared::protocol::ClosedSession {
         maitty_shared::protocol::ClosedSession {
@@ -3323,15 +3284,6 @@ mod agent_command_tests {
         assert_eq!(rows[2]["folder_present"], true);
     }
 
-    #[test]
-    fn a_daemon_from_before_warm_agents_is_not_asked_for_one() {
-        use super::{ClientMsg, Command, daemon_reads};
-        use maitty_shared::protocol::{PREWARM_SINCE, PROTOCOL_VERSION};
-        let drop = ClientMsg::Command(Command::DropPrewarm);
-        assert!(daemon_reads(&drop, PROTOCOL_VERSION));
-        assert!(daemon_reads(&drop, PREWARM_SINCE));
-        assert!(!daemon_reads(&drop, PREWARM_SINCE - 1));
-    }
 }
 
 #[cfg(test)]

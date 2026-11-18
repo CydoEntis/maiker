@@ -1,3 +1,5 @@
+import { APP_NAME } from '@/brand'
+
 /** The failure's own text, or `fallback` when it has none. Prefer `explainError`, which also says what was being done. */
 export function errorMessage(error: unknown, fallback: string): string {
   const message = rawText(error)
@@ -17,9 +19,9 @@ const REASON_MAX = 240
 
 /** Raw failures put in plain words, first match wins. Each says what happened and, where there is one, what to do. */
 const PLAIN_REASONS: ReadonlyArray<readonly [RegExp, string]> = [
-  [/connection refused|os error 111|os error 10061|the daemon is not reachable|not connected to the daemon/i, 'The Maiker service is not answering. It may still be starting; try again in a moment.'],
-  [/timed out|deadline has elapsed|took too long/i, 'It took too long to answer. Try again; if it keeps happening, restart the Maiker service in Settings.'],
-  [/permission denied|os error 13|access is denied|os error 5\b/i, 'Maiker is not allowed to use a file or folder it needed. Check that folder\'s permissions.'],
+  [/connection refused|os error 111|os error 10061|the daemon is not reachable|not connected to the daemon/i, `The ${APP_NAME} service is not answering. It may still be starting; try again in a moment.`],
+  [/timed out|deadline has elapsed|took too long/i, `It took too long to answer. Try again; if it keeps happening, restart the ${APP_NAME} service in Settings.`],
+  [/permission denied|os error 13|access is denied|os error 5\b/i, `${APP_NAME} is not allowed to use a file or folder it needed. Check that folder’s permissions.`],
   [/no such file or directory|os error 2\b|cannot find the (file|path)/i, 'A file or folder it needed is not there. It may have been moved or deleted.'],
   [/not a git repository/i, 'This folder is not a git repository, so there are no branches or worktrees to use.'],
   [/could not resolve host|network is unreachable|name or service not known|no route to host/i, 'The network could not be reached. Check the connection and try again.'],

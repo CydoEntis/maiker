@@ -77,7 +77,6 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 | `g` | Branches (in the side panel; its first row switches branch) |
 | `h` | History: what happened |
 | `e` | References (in the side panel) |
-| `p` | Tickets: the project's GitHub, Plane and Linear tickets (in the side panel) |
 | `o` | Find a file |
 | `l` | Worktrees: new, clean up, merge, delete (a second step) |
 | `y` | Copy mode: select text in the pane |
@@ -295,8 +294,8 @@ Search commands' **Specialist agents…**, or the pane's right-click Project… 
 
 There is no dialog. Leader `n`, leader `t`, `Alt+N`, `Ctrl+T`, the ` n new session ` chip of an empty workspace and a machine's ` + ` chip all start a shell at once where you are (a machine's chip on that machine). Start an agent by typing `claude` (or any other) in the shell.
 
-In the desktop app's New chat page, `Enter` starts the chat and opens it; `Ctrl+Enter` (`⌘Enter` on
-macOS) starts it in the background, empties the message box and keeps the page open for the next one.
+In the desktop app's New session dialog, `Enter` is a new line; `Ctrl+Enter` (`⌘Enter` on macOS) starts the chat and opens it; `Ctrl+Shift+Enter` (`⇧⌘Enter`)
+starts it in the background, empties the message box and keeps the dialog open for the next one.
 
 The desktop app's window keys are changed in its Settings › Hotkeys: **Change** on a row, then press the new keys (Esc cancels). It refuses a key the terminal uses, such as a plain Ctrl+letter on Windows and Linux or any key without ⌘ on macOS, and a key another action already has. **Reset** puts one back, and **Reset all** puts them all back.
 
@@ -326,7 +325,7 @@ over the workspace from the sidebar's side; it has a fixed width.
 | Drag its left edge | Resize it (not the Inbox) |
 | Click a pane | Type into that pane; the view stays open, unlit |
 | Click the panel | Give the view the keys again |
-| Tab, Shift+Tab | Files, Changes, Branch, References, Tickets: the next or previous tab, for the same checkout (not while Files filters or edits, or while Tickets types into a field) |
+| Tab, Shift+Tab | Files, Changes, Branch, References: the next or previous tab, for the same checkout (not while Files filters or edits) |
 | Click a tab | Switch to it |
 
 ## Inbox
@@ -505,32 +504,6 @@ In `[keys.prefix]` its action is `references`. It has the keys while open.
 | d, Delete | Remove it (asks first) |
 | y | Copy its absolute path |
 | e, Esc | Close it |
-
-## Tickets view
-
-Leader + `p` opens the tickets of the project the session in front works in. In `[keys.prefix]` its
-action is `tickets`. It has the keys while open. It only reads tickets: change one in its tracker.
-
-| Keys | Action |
-| --- | --- |
-| Up / k, Down / j, PgUp, PgDn, Home, End | Choose a ticket (the next page is read at the end) |
-| Left / h, Right / l | GitHub, Plane, Linear |
-| / | Search: type, Enter asks the provider, Esc stops typing |
-| m | Only yours (asks your name at that provider the first time) |
-| a | Show closed tickets too |
-| g | Narrow to a milestone, module or cycle |
-| r | Read again |
-| , | Sources: your accounts (keys, names) and the linked projects |
-| t | Signed out of GitHub: a shell running `gh auth login` |
-| Enter, o | Open the ticket; on a source not set up, its next setup step |
-| s | Start an agent on it (review first) |
-| Esc, p | Clear the search, then close |
-
-On a ticket: Up / Down scroll, `s` start an agent in a new worktree, `o` open its link, `y` copy its
-link, `r` read again, Esc back. The start page shows exactly what will be sent; Left / Right picks
-the agent; `y` starts. Sources: Enter changes the row, `x` turns GitHub off, removes
-a key (asks first) or unlinks another project; in the key form Tab moves between fields and Enter
-connects. Setting up from a tab, Esc goes back to the list.
 
 ## Branches and worktree cleanup
 

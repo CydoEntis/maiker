@@ -85,7 +85,7 @@ export function TerminalPrompt({ readScreen, sendKeys }: Props) {
     setBusy(true)
     sendKeys(keys)
       .then(() => { window.setTimeout(read, REDRAW_MS) })
-      .catch((error: unknown) => { toast.failure(error, 'Could not send the key') })
+      .catch((error: unknown) => { toast.failed('Could not send the key', error) })
       .finally(() => { setBusy(false) })
   }
 

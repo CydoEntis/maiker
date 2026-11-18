@@ -74,7 +74,7 @@ export type ThemeEntry = { id: string; name: string; family: string; light: bool
 /** Which theme is in use: the dark theme, the light theme, or whichever one the system's own setting asks for. */
 export type ThemeMode = 'system' | 'dark' | 'light'
 
-export const DEFAULT_THEME = 'Maiker Night'
+export const DEFAULT_THEME = 'Maiker Dark'
 export const DEFAULT_LIGHT_THEME = 'Maiker Day'
 export const MIN_TEXT_CONTRAST = 4.5
 
@@ -159,7 +159,6 @@ export function paletteTheme(palette: ThemePalette): ThemeTokens {
     meterOk: palette.mOk, meterMid: palette.mMid, meterHigh: palette.mOr, meterMax: palette.mHi,
   }
 }
-const MAIKER_NIGHT = maittyTheme(maittyTokens.night, false)
 const MAIKER_DAY = maittyTheme(maittyTokens.day, true)
 const MAIKER_DARK = maittyTheme(maittyTokens.dark, false)
 const MAIKER_LIGHT = maittyTheme(maittyTokens.light, true)
@@ -238,13 +237,19 @@ const entry = (id: string, name: string, family: string, light: boolean, tokens:
   ...(shading === undefined ? {} : { shading }),
 })
 
-const MAIKER_TOKENS = { night: MAIKER_NIGHT, day: MAIKER_DAY, dark: MAIKER_DARK, light: MAIKER_LIGHT } as const
+const MAIKER_TOKENS = { day: MAIKER_DAY, dark: MAIKER_DARK, light: MAIKER_LIGHT } as const
 
 /**
  * The themes both apps ship, in display order, from `themes.json` (the TUI reads the same list): Maiker's own nine, drawn
  * exactly from the desktop design's palettes, the Retro pair, and families with a dark and a light each, generated from six colours.
  */
-export const THEMES: readonly ThemeEntry[] = themeManifest.themes.map((theme) => {
+/**
+ * Themes the manifest ships for the terminal app that the desktop app does not offer. The terminal app still starts on
+ * Night (`theme.rs` DEFAULT), so the shared file keeps it; here a saved "Maiker Night" falls back to the default theme.
+ */
+const TERMINAL_ONLY_THEME_IDS: readonly string[] = ['night']
+
+export const THEMES: readonly ThemeEntry[] = themeManifest.themes.filter((theme) => !TERMINAL_ONLY_THEME_IDS.includes(theme.id)).map((theme) => {
   const kind = theme.light ? 'light' : 'dark'
   if ('palette' in theme) {
     const palette: ThemePalette = theme.palette
@@ -268,7 +273,7 @@ export function activeThemeName(choice: { themeMode: ThemeMode; darkTheme: strin
 }
 
 export function findTheme(name: string): ThemeEntry {
-  const found = THEMES.find((theme) => theme.name === name) ?? THEMES[0]
+  const found = THEMES.find((theme) => theme.name === name) ?? THEMES.find((theme) => theme.name === DEFAULT_THEME) ?? THEMES[0]
   if (!found) throw new Error('No themes are defined')
   return found
 }
@@ -289,7 +294,7 @@ const LIGHT_GLASS = { '--hl': '112,92,52', '--hs': '255,255,255', '--hk': '.85',
 /** A dark ground at or above this luminance (One Dark's grey) is as light as the glass's sheen can sit on without turning grey. */
 const SOFT_GROUND_LUMINANCE = 0.03
 /**
- * The frost's sheen and edge on a dark ground, in strength: full on a deep ground (Maiker Night), a third of it on a light grey one
+ * The frost's sheen and edge on a dark ground, in strength: full on a deep ground (Maiker Dark), a third of it on a light grey one
  * (One Dark), where the same white would wash the panel out.
  */
 const FROST_DEEP = { hi: 0.06, lo: 0.02, edge: 0.12 }

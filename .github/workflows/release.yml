@@ -345,7 +345,7 @@ jobs:
         shell: bash
         run: |
           app=$(sed -n 's/^name = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
-          prefix=$(echo "$app" | tr 'a-z-' 'A-Z_')
+          prefix=$(sed -n 's/^env_prefix = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
           echo "APP=$app" >> "$GITHUB_ENV"
           echo "${prefix}_FROM=$GITHUB_WORKSPACE/release-files" >> "$GITHUB_ENV"
           echo "${prefix}_NO_INTEGRATE=1" >> "$GITHUB_ENV"
@@ -407,13 +407,14 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
-      # The installers read <APP>_VERSION to pick this release.
+      # The installers read <PREFIX>_VERSION to pick this release (the prefix is env_prefix in apps/tui/Cargo.toml).
       - name: App name
         shell: bash
         run: |
           app=$(sed -n 's/^name = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
           echo "APP=$app" >> "$GITHUB_ENV"
-          echo "$(echo "$app" | tr 'a-z-' 'A-Z_')_VERSION=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_ENV"
+          prefix=$(sed -n 's/^env_prefix = "\(.*\)"/\1/p' apps/tui/Cargo.toml | head -1)
+          echo "${prefix}_VERSION=${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_ENV"
       - name: install.sh
         if: runner.os != 'Windows'
         run: |

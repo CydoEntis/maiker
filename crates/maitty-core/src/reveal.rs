@@ -11,7 +11,7 @@ const SCHEME: &str = env!("APP_COMMAND");
 
 /// This server's name (`<APP>_SOCKET`), which the link carries so the right one is reached.
 fn socket_label() -> String {
-    std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).unwrap_or_else(|_| "default".into())
+    maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into())
 }
 
 /// The link to a session on this server.

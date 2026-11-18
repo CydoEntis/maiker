@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DiffLine } from '../chatEvents'
 import { approvalEvent, commandEvent, editEvent, subagentEvent, todoEvent, toolEvent } from '../eventFixtures'
 import { AgentsCard } from './AgentsCard'
+import { HelpersLiveContext } from '../helpersDock'
 import { ApprovalCard } from './ApprovalCard'
 import { Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
@@ -32,7 +33,7 @@ describe('command step', () => {
     expect(group.querySelector('code')?.textContent).toBe("python3 - <<'EOF' …")
     expect(group).not.toHaveTextContent('five')
     await userEvent.click(within(group).getByRole('button', { expanded: false }))
-    expect(group.querySelector('.mx-step-command')?.textContent).toBe(script)
+    expect(group.querySelector('.mx-block-command')?.textContent).toBe(script)
     expect(group).toHaveTextContent('three four five')
   })
 
@@ -44,37 +45,28 @@ describe('command step', () => {
     expect(group).toHaveTextContent('three four five')
   })
 
-  it('shows only the time of a command that succeeded', () => {
-    render(<CommandStep event={finished({ exitCode: 0, durationMs: 1_400 })} />)
+  it.each([
+    ['exit 0 with the provider duration', finished({ exitCode: 0, durationMs: 1_400 }), '1s', 'exit 0'],
+    ['a non-zero exit', finished({ exitCode: 2, durationMs: 2_000, status: 'failed' }), '2s', 'exit 2'],
+  ])('shows %s', (_name, event, took, exit) => {
+    render(<CommandStep event={event} />)
 
-    expect(screen.getByText('1s')).toBeInTheDocument()
-    expect(screen.queryByText(/exit/)).toBeNull()
+    expect(screen.getByText(`${exit} · ${took}`)).toBeInTheDocument()
   })
 
-  it('shows the exit code of a command that failed, with its time', () => {
-    render(<CommandStep event={finished({ exitCode: 2, durationMs: 2_000, status: 'failed' })} />)
-
-    expect(screen.getByText('exit 2 · 2s')).toBeInTheDocument()
-  })
-
-  it('says nothing of an exit code the agent did not report, and never claims it passed', () => {
+  it('says a command reported no exit code, without claiming it passed', () => {
     render(<CommandStep event={{ ...finished(), timing: { startedAtMs: 1_000, completedAtMs: 4_000 } }} />)
 
     expect(screen.getByText('3s')).toBeInTheDocument()
-    expect(screen.queryByText(/exit|not reported/)).toBeNull()
+    expect(screen.getByText('exit code not reported')).toHaveClass('sr-only')
+    expect(screen.queryByText(/^exit [0-9]/)).toBeNull()
   })
 
-  it('draws a file in a step row with no type tag, its name still in full', () => {
-    render(<ToolStep event={toolEvent('t', { name: 'Read', target: 'src/plane.py' })} />)
-
-    expect(screen.getByText('plane.py')).toBeInTheDocument()
-    expect(screen.queryByText('PY')).toBeNull()
-  })
-
-  it('says nothing at all of a success whose time the history did not keep', () => {
+  it('says nothing of the time when the history kept none', () => {
     render(<CommandStep event={finished({ exitCode: 0 })} />)
 
-    expect(screen.queryByText(/exit|unavailable/)).toBeNull()
+    expect(screen.getByText('exit 0')).toBeInTheDocument()
+    expect(screen.queryByText(/unavailable/)).toBeNull()
   })
 
   it('shows a live clock while it runs, and no exit code', () => {
@@ -87,27 +79,23 @@ describe('command step', () => {
     vi.useRealTimers()
   })
 
-  it('shows the last 6 lines and all of them on request', async () => {
+  it('shows every line of the output once opened, scrolling inside its box', async () => {
     render(<CommandStep event={finished({ exitCode: 0, output: ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'].join('\n') })} />)
 
     const group = screen.getByRole('group', { name: 'Command pnpm test' })
     await userEvent.click(screen.getByRole('button', { expanded: false }))
-    expect(group).toHaveTextContent('three four five six seven eight')
-    expect(within(group).queryByText(/^one/)).toBeNull()
-    await userEvent.click(screen.getByRole('button', { name: 'Show all 8 lines' }))
-    expect(group).toHaveTextContent('one two three')
-    await userEvent.click(screen.getByRole('button', { name: 'Show less' }))
-    expect(within(group).queryByText(/^one/)).toBeNull()
+    expect(group).toHaveTextContent('one two three four five six seven eight')
   })
 
-  it('on its own is a card with the command, how it ended and a copy button in its head', async () => {
+  it('on its own is a block with the command and how it ended in its head, and a Copy button once open', async () => {
     render(<CommandStep event={finished({ exitCode: 2, status: 'failed' })} alone />)
 
     const group = screen.getByRole('group', { name: 'Command pnpm test' })
-    expect(within(group).getByText('exit 2')).toBeInTheDocument()
-    expect(within(group).getByRole('button', { name: 'Copy command' })).toBeInTheDocument()
+    expect(within(group).getByText(/^exit 2/)).toBeInTheDocument()
+    expect(within(group).queryByRole('button', { name: 'Copy command' })).toBeNull()
     expect(group).not.toHaveTextContent('three four five')
     await userEvent.click(within(group).getByRole('button', { expanded: false }))
+    expect(within(group).getByRole('button', { name: 'Copy command' })).toBeInTheDocument()
     expect(group).toHaveTextContent('three four five')
     await userEvent.click(within(group).getByRole('button', { expanded: true }))
     expect(group).not.toHaveTextContent('five')
@@ -126,6 +114,7 @@ describe('command step', () => {
     await userEvent.click(screen.getByRole('button', { expanded: false }))
     expect(screen.getByText('token is [redacted]')).toBeInTheDocument()
     expect(screen.getByText(/looked like a secret/)).toBeInTheDocument()
+    expect(screen.getByText('exit 0')).toBeInTheDocument()
   })
 
   it('says a secret file was read instead of showing the marker as output', async () => {
@@ -204,7 +193,7 @@ describe('edit step on its own', () => {
     await openStep()
 
     const group = screen.getByRole('group', { name: 'Edit src/a.ts' })
-    expect(group.querySelectorAll('.mx-diff-num')[1]?.textContent).toBe('1')
+    expect(group.querySelectorAll('.mx-diff-line.is-add .mx-diff-num')[1]?.textContent).toBe('1')
     expect(within(group).getByText('new')).toBeInTheDocument()
     await userEvent.click(within(group).getByRole('button', { name: 'Open in side panel' }))
     expect(onOpen).toHaveBeenCalledWith('/repo/src/a.ts')
@@ -225,15 +214,15 @@ describe('tool step', () => {
     const chip = screen.getByRole('button', { name: /Read.*a[.]ts/ })
     expect(chip).toHaveAttribute('aria-expanded', 'false')
     await userEvent.click(chip)
-    expect(screen.getByText('Asked')).toBeInTheDocument()
+    expect(screen.getByText('input')).toBeInTheDocument()
     expect(screen.getByText('file text')).toBeInTheDocument()
   })
 
-  it('does not open a step the history kept nothing of', () => {
+  it('says so when the history kept nothing for the step', async () => {
     render(<ToolStep event={toolEvent('t', { name: 'Glob' })} />)
 
-    expect(screen.queryByRole('button', { name: /Find files/ })).toBeNull()
-    expect(screen.getByText(/Find files/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Find files/ }))
+    expect(screen.getByText('The conversation history kept no detail for this step.')).toBeInTheDocument()
   })
 })
 
@@ -254,23 +243,42 @@ describe('plan card', () => {
   })
 })
 
-describe('helper agents card', () => {
-  it('summarises, shows done time, and opens the prompt and report', async () => {
-    const done = { ...subagentEvent('a', { title: 'Audit', prompt: 'Read parser.rs', report: 'Found 3 issues.' }), timing: { startedAtMs: 0, completedAtMs: 330_000 } }
-    render(<AgentsCard agents={[done, subagentEvent('b', { title: 'Search', status: 'running' })]} process="claude" />)
+describe('helper agents record', () => {
+  it('is one block with the count, how each ended and a row each, open when one failed or still works', async () => {
+    const done = subagentEvent('a', { title: 'Audit', prompt: 'Read parser.rs', report: 'Found 3 issues.' })
+    render(<AgentsCard agents={[done, subagentEvent('b', { title: 'Search', status: 'failed', prompt: 'Find it', report: 'No index.' })]} />)
 
-    expect(screen.getByRole('group', { name: '2 agents, 1 working' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Audit.*5m 30s/ })).toBeInTheDocument()
+    const block = screen.getByRole('group', { name: '2 agents, all done' })
+    expect(within(block).getByText('2 helpers')).toBeInTheDocument()
+    expect(within(block).getByText('1 done')).toBeInTheDocument()
+    expect(within(block).getByText('1 failed')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /Audit/ }))
-    // Once in the row, where a long ask is cut short, and whole in the opened detail.
-    expect(screen.getAllByText('Read parser.rs')).toHaveLength(2)
-    expect(screen.getByText('Found 3 issues.')).toBeInTheDocument()
+    expect(screen.getByText('Asked to')).toBeInTheDocument()
+    expect(screen.getByText('Read parser.rs')).toBeInTheDocument()
+    expect(screen.getByText('Answer')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Search/ }))
+    expect(screen.getByText('What went wrong')).toBeInTheDocument()
   })
 
-  it('has nothing to open for a helper with no prompt or report', () => {
-    render(<AgentsCard agents={[subagentEvent('a', { title: 'Quiet' })]} process="claude" />)
+  it('stays folded when every helper finished well, and opens on a click', async () => {
+    render(<AgentsCard agents={[subagentEvent('a', { title: 'Audit', report: 'Fine.' })]} />)
 
-    expect(screen.getByRole('button', { name: /Quiet/ })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /Audit/ })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /1 helper/ }))
+    expect(screen.getByRole('button', { name: /Audit/ })).toBeInTheDocument()
+  })
+
+  it('is one quiet line while the dock follows its helpers, and the line opens the dock', async () => {
+    const open = vi.fn()
+    render(
+      <HelpersLiveContext.Provider value={{ key: 'a', open }}>
+        <AgentsCard rowKey="a" agents={[subagentEvent('a', { title: 'Audit', status: 'running' }), subagentEvent('b', { title: 'Search', status: 'running' })]} />
+      </HelpersLiveContext.Provider>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: /Started 2 helpers/ }))
+    expect(screen.getByText('· running below')).toBeInTheDocument()
+    expect(open).toHaveBeenCalledOnce()
   })
 })
 

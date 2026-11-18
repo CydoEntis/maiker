@@ -35,7 +35,7 @@ export function pickFromClipboard(data: DataTransfer | null): ClipboardPick {
 export function pasteFromHost(onImage: (image: File) => void): void {
   readClipboardImage().then(
     (image) => { if (image !== null) onImage(image) },
-    (error: unknown) => { toast.failure(error, 'Could not read the picture on the clipboard') },
+    (error: unknown) => { toast.failed('Could not read the picture on the clipboard', error) },
   )
 }
 

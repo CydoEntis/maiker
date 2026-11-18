@@ -141,9 +141,9 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     // Nothing is typed until every question has an answer, so one can be changed first.
     await user.click(screen.getByRole('radio', { name: 'SQLite' }))
     await user.click(screen.getByRole('radio', { name: 'Postgres' }))
-    expect(screen.getByText('1 more to answer')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Next' }))
-    const send = screen.getByRole('button', { name: 'Send answers' })
+    await user.click(screen.getByRole('button', { name: /^Next/ }))
+    // The last question's button says how many are still to answer.
+    const send = screen.getByRole('button', { name: /^Send answers \(1 left\)/ })
     expect(send).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByRole('radio', { name: 'Postgres' })).toBeChecked()
@@ -165,9 +165,9 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which size? … / Which toppings? …', answerable: false, choices: [], questions: [], form })
 
     await user.click(screen.getByRole('radio', { name: 'Large' }))
-    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: /^Next/ }))
     expect(screen.getByRole('group', { name: 'Which toppings? Pick any' })).toBeInTheDocument()
-    const send = screen.getByRole('button', { name: 'Send answers' })
+    const send = screen.getByRole('button', { name: /^Send answers/ })
     await user.click(screen.getByRole('checkbox', { name: 'Fruit' }))
     await user.click(screen.getByRole('checkbox', { name: 'Nuts' }))
     await user.click(screen.getByRole('checkbox', { name: 'Cream' }))
@@ -189,11 +189,10 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     const { typeInto, user } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which size? … / Which toppings? …', answerable: false, choices: [], questions: [], form })
 
     await user.type(screen.getByRole('textbox', { name: 'Your own answer' }), 'Medium, please')
-    expect(screen.getByText('1 more to answer')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: /^Next/ }))
     await user.click(screen.getByRole('checkbox', { name: 'Cream' }))
     await user.type(screen.getByRole('textbox', { name: 'Your own answer' }), 'sprinkles')
-    await user.click(screen.getByRole('button', { name: 'Send answers' }))
+    await user.click(screen.getByRole('button', { name: /^Send answers/ }))
     await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
 
     expect(typeInto.mock.calls.map(([key]) => key)).toEqual([
@@ -218,7 +217,6 @@ describe('the chat of an agent stopped on a permission prompt', () => {
 
     const send = screen.getByRole('button', { name: 'Send answer' })
     expect(send).toBeDisabled()
-    expect(screen.getByText('Pick at least one.')).toBeInTheDocument()
     await user.click(screen.getByRole('checkbox', { name: 'Cream' }))
     await user.click(send)
     await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
@@ -254,7 +252,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(within(card).getByText('Approve this plan?')).toBeInTheDocument()
     expect(within(card).getByRole('heading', { name: 'Refunds' })).toBeInTheDocument()
     const menu = within(card).getByRole('group', { name: "Claude's plan menu" })
-    expect(within(menu).getAllByRole('button').map((button) => button.textContent)).toEqual(['Yes, and use auto mode1', 'Yes, manually approve edits2', 'Tell Claude what to change3'])
+    expect(within(menu).getAllByRole('button').map((button) => button.textContent)).toEqual(['1Yes, and use auto mode', '2Yes, manually approve edits', '3Tell Claude what to change'])
     expect(within(card).queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument()
 
     fireEvent.keyDown(card, { key: '2' })

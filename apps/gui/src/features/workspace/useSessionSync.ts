@@ -60,7 +60,7 @@ export function useSessionSync({ sessionsQuery, retryDelay, queryClient, setFail
         if (gone) unlisten()
         else stop = unlisten
       },
-      (error: unknown) => { toast.failure(error, 'Could not follow the session list') },
+      (error: unknown) => { toast.failed('Could not follow the session list', error) },
     )
     return () => {
       gone = true

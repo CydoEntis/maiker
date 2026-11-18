@@ -4,7 +4,7 @@ import type { ClosedSession } from '@/api/daemon'
 import { toast } from '@/lib/toast'
 import { useRecentSessions } from './useRecentSessions'
 
-vi.mock('@/lib/toast', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), error: vi.fn(), info: vi.fn() } }))
 
 const parser: ClosedSession = { agent: 'claude', session: 'abc-123', cwd: '/dev/app', branch: null, title: 'Fix the parser', at: 1, folder_present: true, worktree: null, repo: null }
 
@@ -27,7 +27,7 @@ describe('reopening from Recent sessions', () => {
     const { hook, startNewChat } = listOpen(true)
     act(() => { hook.result.current.reopenSession(parser) })
     expect(startNewChat).not.toHaveBeenCalled()
-    expect(toast.message).toHaveBeenCalledWith('A session is already starting')
+    expect(toast.info).toHaveBeenCalledWith('A session is already starting')
     expect(hook.result.current.recentOpen).toBe(true)
   })
 })

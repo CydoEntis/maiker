@@ -57,11 +57,17 @@ async function ask<T>(term: number, question: unknown, kind: string, payload: z.
   return payload.parse(reply[kind])
 }
 
-// What changed and its diff are the two questions another machine's daemon is asked; the rest are this computer's.
+// What changed, its diff, a folder's listing and a markdown document are what another machine's daemon is asked (ADR 0014); the rest are this computer's.
 export const repoStatus = (term: number, machine: number = LOCAL_MACHINE) => ask(term, 'Status', 'Status', StatusSchema, machine)
-export const repoTree = (term: number, path: string | null) => ask(term, { Tree: { path } }, 'Tree', z.array(EntrySchema))
+export const repoTree = (term: number, path: string | null, machine: number = LOCAL_MACHINE) => ask(term, { Tree: { path } }, 'Tree', z.array(EntrySchema), machine)
 export const repoLocate = (term: number, path: string) => ask(term, { Locate: { path } }, 'Located', z.string())
 export const repoFile = (term: number, path: string) => ask(term, { File: { path } }, 'File', z.string())
+/**
+ * A text file and its version (opaque; equal for equal bytes), which a later `saveProjectFile` names to notice a change made meanwhile.
+ * Another machine's daemon answers for a markdown document only; an empty version there means its text was changed to be shown safely, so it is not to be saved.
+ */
+export const repoFileStamped = (term: number, path: string, machine: number = LOCAL_MACHINE) =>
+  ask(term, { FileStamped: { path } }, 'FileStamped', z.object({ text: z.string(), version: z.string() }), machine)
 export const repoDiff = (term: number, path: string | null = null, machine: number = LOCAL_MACHINE) => ask(term, { Diff: { path } }, 'Diff', DiffSchema, machine)
 export const repoDiffRange = (term: number, from: string, to: string, path: string | null = null) =>
   ask(term, { DiffRange: { from, to, path } }, 'Diff', DiffSchema)
@@ -103,6 +109,22 @@ export async function writeProjectFile(term: number, machine: number, path: stri
   if (!isTauri()) throw new Error('Editing is only available in the desktop app')
   await invoke('write_project_file', { machine, term, path, contents })
 }
+
+const SavedSchema = z.union([z.literal('ChangedOnDisk'), z.object({ Saved: z.object({ version: z.string() }) })])
+export type SaveResult = { readonly kind: 'saved'; readonly version: string } | { readonly kind: 'changed' }
+
+/**
+ * Saves `contents` over an existing file when it is still `version` (null: whatever is there, only after the person
+ * chose to overwrite). A file changed meanwhile is the `changed` result, with nothing written.
+ */
+export async function saveProjectFile(term: number, machine: number, path: string, contents: string, version: string | null): Promise<SaveResult> {
+  if (!isTauri()) throw new Error('Editing is only available in the desktop app')
+  const reply = SavedSchema.parse(await invoke<unknown>('save_project_file', { machine, term, path, contents, version }))
+  return reply === 'ChangedOnDisk' ? { kind: 'changed' } : { kind: 'saved', version: reply.Saved.version }
+}
+
+/** What the daemon's refusal says when the running service is older than this app (it cannot save with a version check). */
+export const OLDER_SERVICE_WORDS = 'older than this app'
 
 /** What the remote button can do for a checkout. */
 export type SyncAction = 'fetch' | 'pull' | 'push'

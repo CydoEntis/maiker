@@ -26,12 +26,13 @@ vi.mock('@/api/fileSends', async (importOriginal) => ({
 }))
 
 const toasts = vi.hoisted(() => ({
-  failure: vi.fn(),
-  loading: vi.fn(),
+  progress: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
-  message: vi.fn(),
+  info: vi.fn(),
 }))
+// A failure's toast says what failed and then the error's own words; the double reports those words as the old error toast did.
+Object.assign(toasts, { failed: vi.fn((what: string, error: unknown, options?: object) => { const said = typeof error === 'string' ? error : error instanceof Error ? error.message : what; if (options === undefined) toasts.error(said); else toasts.error(said, options) }) })
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
@@ -58,28 +59,29 @@ describe('files sent to the machine of a pane', () => {
   it('asks the host with an id made here and shows a progress toast with Cancel at once', async () => {
     const transfer = await start(() => true)
     expect(host.send).toHaveBeenCalledWith('build', ['/home/me/a.log'], expect.stringMatching(/^send-[0-9a-f-]+$/))
-    const [title, options] = toasts.loading.mock.calls[0] as [string, { id: string; action: { label: string }; dismissible: boolean; closeButton: boolean }]
+    const [title, options] = toasts.progress.mock.calls[0] as [string, { id: string; action: { label: string }; closeButton: boolean }]
     expect(title).toBe('Sending a.log to build')
-    expect(options).toMatchObject({ id: transfer, dismissible: false, closeButton: false, action: { label: 'Cancel' } })
+    expect(options).toMatchObject({ id: transfer, closeButton: false, action: { label: 'Cancel' } })
   })
 
   it('stops the send from Cancel and keeps the toast until the host says it has stopped', async () => {
     const transfer = await start(() => true)
-    const options = toasts.loading.mock.calls[0]?.[1] as { action: { onClick: (event: { preventDefault: () => void }) => void } }
+    const options = toasts.progress.mock.calls[0]?.[1] as { action: { onClick: (event: { preventDefault: () => void }) => void } }
     const event = { preventDefault: vi.fn() }
     options.action.onClick(event)
     expect(event.preventDefault).toHaveBeenCalled()
     expect(host.cancel).toHaveBeenCalledWith(transfer)
     emit({ kind: 'cancelled', transfer, sent: 0 })
-    expect(toasts.message).toHaveBeenCalledWith('Stopped sending to build', expect.objectContaining({ id: transfer, closeButton: true }))
+    // The outcome replaces the progress toast by its id, which gives it its ✕ back and drops Cancel.
+    expect(toasts.info).toHaveBeenCalledWith('Stopped sending to build', { id: transfer })
   })
 
   it('shows the percentage as the host reports it, with the file and its place in the drop', async () => {
     const transfer = await start(() => true, ['/a/one.log', '/a/two.log'])
     emit({ kind: 'progress', transfer, file: 'two.log', index: 1, count: 2, percent: 55 })
-    const [title] = toasts.loading.mock.calls.at(-1) as [string]
+    const [title] = toasts.progress.mock.calls.at(-1) as [string]
     expect(title).toBe('Sending two.log to build (2 of 2)')
-    const options = toasts.loading.mock.calls.at(-1)?.[1] as { description: { props: { percent: number; file: string } } }
+    const options = toasts.progress.mock.calls.at(-1)?.[1] as { description: { props: { percent: number; file: string } } }
     expect(options.description.props).toEqual({ file: 'two.log', percent: 55 })
   })
 
@@ -91,7 +93,7 @@ describe('files sent to the machine of a pane', () => {
     emit({ kind: 'sent', transfer, file: 'two.log', index: 1, count: 2, remotePath: '/home/me/.cache/p-two.log', bytes: 1 })
     emit({ kind: 'done', transfer, sent: 2, count: 2 })
     expect(typed.map(([, text]) => text)).toEqual(['/home/me/.cache/p-one.log ', '/home/me/.cache/p-two.log '])
-    expect(toasts.success).toHaveBeenCalledWith('Sent 2 files to build', expect.objectContaining({ id: transfer, action: undefined, description: undefined }))
+    expect(toasts.success).toHaveBeenCalledWith('Sent 2 files to build', { id: transfer })
   })
 
   it('never types a path the machine made up', async () => {
@@ -120,7 +122,7 @@ describe('files sent to the machine of a pane', () => {
     host.send.mockRejectedValue('docs is not a file; only files can be sent')
     const transfer = await start(() => true)
     await flush()
-    expect(toasts.failure).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Could not send to /), expect.objectContaining({ id: transfer }))
+    expect(toasts.error).toHaveBeenCalledWith('docs is not a file; only files can be sent', expect.objectContaining({ id: transfer }))
   })
 
   it('ignores what it did not start', async () => {
@@ -152,9 +154,9 @@ describe('a pasted image sent to the machine of a pane', () => {
   it('hands the host the bytes and shows the same progress toast with Cancel, naming the image', async () => {
     const transfer = await startImage(() => true)
     expect(host.image).toHaveBeenCalledWith('build', new Uint8Array([1, 2, 3]), expect.stringMatching(/^send-[0-9a-f-]+$/))
-    const [title, options] = toasts.loading.mock.calls[0] as [string, { id: string; action: { label: string; onClick: (event: { preventDefault: () => void }) => void }; dismissible: boolean }]
+    const [title, options] = toasts.progress.mock.calls[0] as [string, { id: string; action: { label: string; onClick: (event: { preventDefault: () => void }) => void } }]
     expect(title).toBe('Sending the image to build')
-    expect(options).toMatchObject({ id: transfer, dismissible: false, action: { label: 'Cancel' } })
+    expect(options).toMatchObject({ id: transfer, closeButton: false, action: { label: 'Cancel' } })
     options.action.onClick({ preventDefault: vi.fn() })
     expect(host.cancel).toHaveBeenCalledWith(transfer)
   })
@@ -182,7 +184,7 @@ describe('a pasted image sent to the machine of a pane', () => {
     host.image.mockRejectedValue('sending files to fly needs ssh, and it is reached by its own command')
     const transfer = await startImage(() => true)
     await flush()
-    expect(toasts.failure).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Could not send to /), expect.objectContaining({ id: transfer }))
+    expect(toasts.error).toHaveBeenCalledWith('sending files to fly needs ssh, and it is reached by its own command', expect.objectContaining({ id: transfer }))
   })
 
   it('shows a failed send as an error toast and a cancelled one as a plain message', async () => {
@@ -192,6 +194,6 @@ describe('a pasted image sent to the machine of a pane', () => {
     host.image.mockClear()
     const cancelled = await startImage(() => true)
     emit({ kind: 'cancelled', transfer: cancelled, sent: 0 })
-    expect(toasts.message).toHaveBeenCalledWith('Stopped sending to build', expect.objectContaining({ id: cancelled }))
+    expect(toasts.info).toHaveBeenCalledWith('Stopped sending to build', expect.objectContaining({ id: cancelled }))
   })
 })

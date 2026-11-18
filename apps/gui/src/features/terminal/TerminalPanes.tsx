@@ -198,9 +198,7 @@ export function TerminalPanes({
                 <code className="terminal-pane-path">
                   {conversation.folder}
                 </code>
-                {focused && (
-                  <span className="terminal-pane-focus">Focused</span>
-                )}
+                <span className={`terminal-pane-focus${focused ? ' is-on' : ''}`} aria-hidden={focused ? undefined : true}>Focused</span>
                 <button
                   type="button"
                   className="terminal-pane-close"

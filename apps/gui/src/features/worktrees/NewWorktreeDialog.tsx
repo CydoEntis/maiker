@@ -4,6 +4,9 @@ import { repoBranches, repoWorktrees } from '@/features/inspect/api'
 import { messageOf, useRepoQuery } from '@/features/inspect/useRepoQuery'
 import { branchNameProblem } from './branchName'
 import { WorktreeManager } from './WorktreeManager'
+import { FieldError, fieldErrorProps } from '@/components/ui/feedback'
+
+const BRANCH_ERROR_ID = 'mx-worktree-branch-error'
 
 const CURRENT_COMMIT = ''
 
@@ -22,6 +25,8 @@ export function NewWorktreeDialog({ term, repoName, machine, onCreate, onCancel 
   const [branch, setBranch] = useState('')
   const [base, setBase] = useState(CURRENT_COMMIT)
   const [error, setError] = useState<string | null>(null)
+  // A name's problem shows once the field is left or the form is sent, never while you are still typing it.
+  const [checked, setChecked] = useState(false)
   const [working, setWorking] = useState(false)
   const input = useRef<HTMLInputElement>(null)
   const branches = useRepoQuery(term, ['branches'], () => repoBranches(term))
@@ -36,12 +41,13 @@ export function NewWorktreeDialog({ term, repoName, machine, onCreate, onCancel 
 
   const name = branch.trim()
   const existing = branches.data?.some((candidate) => candidate.name === name) ?? false
-  const problem = name === '' ? null : branchNameProblem(name)
+  const problem = checked ? branchNameProblem(name) : null
+  const shown = error ?? problem
 
   const submit = () => {
-    const found = branchNameProblem(name)
-    if (found) {
-      setError(found)
+    setChecked(true)
+    if (branchNameProblem(name) !== null) {
+      input.current?.focus()
       return
     }
     setWorking(true)
@@ -62,7 +68,8 @@ export function NewWorktreeDialog({ term, repoName, machine, onCreate, onCancel 
       >
         <DialogTitle asChild><h2>New worktree</h2></DialogTitle>
         <p>A branch in its own folder next to {repoName}. A session opens there, and the other sessions keep working undisturbed.</p>
-        <input ref={input} aria-label="Branch name" value={branch} placeholder="feat/my-change" onChange={(event) => { setBranch(event.target.value); setError(null) }} />
+        <input ref={input} aria-label="Branch name" value={branch} placeholder="feat/my-change" {...fieldErrorProps(BRANCH_ERROR_ID, shown)} onBlur={() => { if (name !== '') setChecked(true) }} onChange={(event) => { setBranch(event.target.value); setError(null) }} />
+        {shown !== null && <FieldError id={BRANCH_ERROR_ID}>{shown}</FieldError>}
         {existing
           ? <p className="mx-worktree-note">That branch exists; the worktree checks it out.</p>
           : (
@@ -74,13 +81,12 @@ export function NewWorktreeDialog({ term, repoName, machine, onCreate, onCancel 
               </select>
             </label>
           )}
-        {(error ?? problem) && <p className="mx-worktree-error" role="alert">{error ?? problem}</p>}
         {worktrees.data && worktrees.data.length > 1 && (
           <WorktreeManager worktrees={worktrees.data} machine={machine} repoName={repoName} onChanged={() => { void worktrees.refetch() }} />
         )}
         <div className="mx-rename-actions">
           <button type="button" className="mx-text-button" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="mx-text-button is-primary" disabled={working || name === '' || problem !== null}>{working ? 'Creating…' : 'Create worktree'}</button>
+          <button type="submit" className="mx-text-button is-primary" disabled={working}>{working ? 'Creating…' : 'Create worktree'}</button>
         </div>
       </form>
       </DialogContent>

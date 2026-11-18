@@ -3,6 +3,7 @@ import { afterFailure, createFeed, looksTheSame, syncFeed } from './chatFeed'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from './fakeDaemonHistory'
 import { selectChatEvents } from './projection'
 import { conversationKey } from '@/api/conversationKey'
+import { DAEMON_NAME } from '@/brand'
 
 const NOW = 1_700_000_000_000
 const now = () => NOW
@@ -210,8 +211,8 @@ describe('losing and regaining the daemon', () => {
     const first = await syncFeed(newFeed(), daemon.read, now)
     const shown = kinds(first)
 
-    daemon.failure = new Error('maikerd is not running')
-    await expect(syncFeed(first, daemon.read, now)).rejects.toThrow('maikerd is not running')
+    daemon.failure = new Error(`${DAEMON_NAME} is not running`)
+    await expect(syncFeed(first, daemon.read, now)).rejects.toThrow(`${DAEMON_NAME} is not running`)
     // The feed given in is untouched by a failed read.
     expect(kinds(first)).toEqual(shown)
 

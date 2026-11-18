@@ -50,7 +50,8 @@ describe('removing a queued message', () => {
     open(oneQueued(() => new Promise(() => undefined)))
     await act(async () => { await vi.advanceTimersByTimeAsync(IDLE_POLL_MS) })
 
-    await user.click(screen.getByRole('button', { name: 'Remove queued message' }))
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
 
     expect(screen.queryByText('still waiting')).not.toBeInTheDocument()
   })
@@ -60,7 +61,8 @@ describe('removing a queued message', () => {
     open(oneQueued(() => Promise.reject(new Error(reason))))
     await act(async () => { await vi.advanceTimersByTimeAsync(IDLE_POLL_MS) })
 
-    await user.click(screen.getByRole('button', { name: 'Remove queued message' }))
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
     await act(async () => { await vi.advanceTimersByTimeAsync(IDLE_POLL_MS) })
 
     // Still listed: the daemon has not let go of it, so it may yet be sent.

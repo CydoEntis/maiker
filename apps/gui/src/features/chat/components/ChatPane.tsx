@@ -1,3 +1,4 @@
+import { Switch } from '@/components/ui/switch'
 import { useState } from 'react'
 import { MessageSquare } from 'lucide-react'
 import { CHAT_AGENTS, noChatReason, type ChatAgent, type ChatAvailability } from '@/features/workspace/model/chatView'
@@ -57,6 +58,8 @@ export type ChatPaneProps = {
   fullAccessDefault?: boolean
   /** A subagent whose own chat shows instead of the session's, and the way back. */
   subagent?: SubagentView | null
+  /** What the runtime lists the session's helpers as doing, for the helpers line above the message box. */
+  subagents?: readonly SubagentView[]
   onBackToMain?: () => void
   /** What is wrong with the chat, for the banner over its message box. */
   problem?: ChatProblem | null
@@ -96,6 +99,7 @@ export function ChatPane(props: ChatPaneProps) {
             ask={props.ask ?? null}
             asking={props.asking ?? ''}
             subagent={props.subagent ?? null}
+            {...(props.subagents === undefined ? {} : { subagents: props.subagents })}
             {...(props.usage === undefined ? {} : { usage: props.usage })}
             {...(props.hasTerminal === false ? {} : { onShowTerminal: props.onBackToTerminal })}
             {...(props.onBackToMain === undefined ? {} : { onBackToMain: props.onBackToMain })}
@@ -147,7 +151,7 @@ function NoChat({ availability, process, online, onBackToTerminal, onStartAgent,
         {availability.kind === 'shell' && onStartChat !== undefined && (
           <div className="grid gap-1 text-[12px]">
             <label className="flex cursor-pointer items-center justify-center gap-2 text-fg2">
-              <input type="checkbox" checked={fullAccess} onChange={(event) => { setFullAccess(event.target.checked) }} />
+              <Switch checked={fullAccess} onCheckedChange={setFullAccess} />
               {FULL_ACCESS_LABEL}
             </label>
             {fullAccess && <span role="note" className="text-[var(--danger)]">{FULL_ACCESS_WARNING}</span>}

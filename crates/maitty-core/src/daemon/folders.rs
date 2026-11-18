@@ -2,7 +2,10 @@
 //! (the TUI's New Session popup, the desktop app's folder dialog). Only folder names, never file
 //! names or contents.
 
-use crate::protocol::{FolderEntry, FolderListing, FOLDERS_MAX};
+use crate::protocol::{FolderCreated, FolderEntry, FolderListing, FOLDERS_MAX};
+use maitty_shared::folder_name;
+use std::io::ErrorKind;
+use std::path::Component;
 use std::path::{Path, PathBuf};
 
 /// The longest path worth listing; a longer one is a mistake or an attack, and is refused.
@@ -59,6 +62,48 @@ pub(super) fn list(typed: &str, home: Option<&Path>) -> FolderListing {
         exists: true,
         entries,
         truncated,
+        can_create: true,
+    }
+}
+
+/// Makes the one folder `name` directly inside `parent`. The name is checked again here whatever
+/// the client checked, and must be a single plain component, so it cannot name another place; the
+/// parent must already be a folder, and nothing above it is made. `create_dir` fails when anything
+/// is already called that (a link included, which is never followed), so a name cannot be used to
+/// reach through a link into somewhere else.
+pub(super) fn create(parent: &str, name: &str, home: Option<&Path>) -> FolderCreated {
+    if let Some(problem) = folder_name::problem(name) {
+        return FolderCreated::NotAllowed { reason: problem };
+    }
+    // Defence in depth: the rules above already refuse a separator, but what is made is decided by the path's own parse.
+    if !matches!(Path::new(name).components().collect::<Vec<_>>().as_slice(), [Component::Normal(_)]) {
+        return FolderCreated::NotAllowed { reason: "That is not a plain folder name.".into() };
+    }
+    let Some(parent) = resolve(parent, home) else {
+        return FolderCreated::NotAllowed { reason: "Choose the folder to make it in by its full path.".into() };
+    };
+    match std::fs::metadata(&parent) {
+        Ok(meta) if meta.is_dir() => {}
+        Ok(_) => return FolderCreated::NotAllowed { reason: "That is a file, not a folder.".into() },
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            return FolderCreated::NotAllowed { reason: "The folder to make it in is not there any more.".into() };
+        }
+        Err(error) => return FolderCreated::Failed { reason: describe(&error) },
+    }
+    let child = parent.join(name);
+    match std::fs::create_dir(&child) {
+        Ok(()) => FolderCreated::Created { path: child.to_string_lossy().replace('\\', "/") },
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => FolderCreated::Exists,
+        Err(error) => FolderCreated::Failed { reason: describe(&error) },
+    }
+}
+
+/// An I/O error as one line for a person.
+fn describe(error: &std::io::Error) -> String {
+    match error.kind() {
+        ErrorKind::PermissionDenied => "You do not have permission to make a folder here.".to_string(),
+        ErrorKind::ReadOnlyFilesystem => "This disk is read-only.".to_string(),
+        _ => format!("The folder could not be made: {error}"),
     }
 }
 
@@ -187,6 +232,84 @@ mod tests {
         assert!(listing.entries.is_empty());
         let relative = list("code/x", None);
         assert!(!relative.exists);
+    }
+
+    #[test]
+    fn makes_one_folder_inside_the_parent_and_says_when_it_is_there() {
+        let root = scratch("create");
+        let made = create(&root.to_string_lossy(), "fresh", None);
+        let FolderCreated::Created { path } = made else { panic!("{made:?}") };
+        assert!(root.join("fresh").is_dir());
+        assert!(path.ends_with("/fresh"), "{path}");
+        assert_eq!(create(&root.to_string_lossy(), "fresh", None), FolderCreated::Exists);
+        std::fs::write(root.join("a-file"), "x").unwrap();
+        assert_eq!(create(&root.to_string_lossy(), "a-file", None), FolderCreated::Exists);
+    }
+
+    #[test]
+    fn a_name_that_is_not_one_plain_name_makes_nothing() {
+        let root = scratch("create-bad");
+        let parent = root.join("inside");
+        std::fs::create_dir(&parent).unwrap();
+        for name in ["", ".", "..", "../escape", "a/b", "a\\b", "nul", "trailing.", " pad"] {
+            let outcome = create(&parent.to_string_lossy(), name, None);
+            assert!(matches!(outcome, FolderCreated::NotAllowed { .. }), "{name:?}: {outcome:?}");
+        }
+        assert!(!root.join("escape").exists());
+        assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn the_parent_must_be_an_existing_folder_and_nothing_above_it_is_made() {
+        let root = scratch("create-parent");
+        let missing = create(&root.join("nope/deeper").to_string_lossy(), "x", None);
+        assert!(matches!(missing, FolderCreated::NotAllowed { .. }), "{missing:?}");
+        assert!(!root.join("nope").exists());
+        std::fs::write(root.join("file"), "x").unwrap();
+        let file = create(&root.join("file").to_string_lossy(), "x", None);
+        assert!(matches!(file, FolderCreated::NotAllowed { .. }), "{file:?}");
+        let relative = create("code/x", "y", None);
+        assert!(matches!(relative, FolderCreated::NotAllowed { .. }), "{relative:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_with_the_name_is_never_followed_or_replaced() {
+        let root = scratch("create-link");
+        let outside = root.join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        let parent = root.join("parent");
+        std::fs::create_dir(&parent).unwrap();
+        std::os::unix::fs::symlink(&outside, parent.join("shortcut")).unwrap();
+        std::os::unix::fs::symlink(root.join("gone"), parent.join("dangling")).unwrap();
+        assert_eq!(create(&parent.to_string_lossy(), "shortcut", None), FolderCreated::Exists);
+        assert_eq!(create(&parent.to_string_lossy(), "dangling", None), FolderCreated::Exists);
+        assert!(!root.join("gone").exists());
+        assert_eq!(std::fs::read_dir(&outside).unwrap().count(), 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_folder_that_cannot_be_written_is_reported_not_hidden() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = scratch("create-denied");
+        let locked = root.join("locked");
+        std::fs::create_dir(&locked).unwrap();
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+        let outcome = create(&locked.to_string_lossy(), "x", None);
+        std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+        // A superuser is not stopped by the mode, and then the folder is simply made.
+        if let FolderCreated::Created { .. } = outcome {
+            return;
+        }
+        assert!(matches!(outcome, FolderCreated::Failed { ref reason } if reason.contains("permission")), "{outcome:?}");
+    }
+
+    #[test]
+    fn a_tilde_parent_is_the_home_folder() {
+        let home = scratch("create-home");
+        assert!(matches!(create("~", "made", Some(&home)), FolderCreated::Created { .. }));
+        assert!(home.join("made").is_dir());
     }
 
     #[test]

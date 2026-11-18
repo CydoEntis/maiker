@@ -56,7 +56,7 @@ export function DraftAttachments({ attachments, onRemove }: { attachments: reado
             type="button"
             aria-label={`Remove ${attachment.name}`}
             title={`Remove ${attachment.name}`}
-            className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-dim hover:text-fg focus-visible:outline-2 focus-visible:outline-[var(--accent-line)]"
+            className="ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-dim hover:text-fg"
             onClick={() => { onRemove(attachment.id) }}
           >
             <X className="size-3.5" aria-hidden="true" />

@@ -180,7 +180,8 @@ describe('a chat session in the desktop window', () => {
 
     const pane = screen.getByRole('region', { name: /^Terminal 1/ })
     // An agent is running in it, so closing asks first.
-    await user.click(within(pane).getByRole('button', { name: 'Close pane · ends its session' }))
+    await user.click(within(pane).getByRole('button', { name: 'More pane actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close pane · ends its session' }))
     expect(daemon.closeSessionWithUndo).not.toHaveBeenCalled()
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop claude' }))
     await waitFor(() => { expect(daemon.closeSessionWithUndo).toHaveBeenCalledTimes(1) })
@@ -239,7 +240,7 @@ describe('Bypass Permissions in a chat session', () => {
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
     await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
 
-    expect(within(pane).getByRole('checkbox', { name: 'Bypass permissions (skip permission prompts)' })).toBeChecked()
+    expect(within(pane).getByRole('switch', { name: 'Bypass permissions (skip permission prompts)' })).toBeChecked()
     await user.click(within(pane).getByRole('button', { name: 'Start a Claude chat' }))
 
     await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(HOME, 'claude', null, true) })

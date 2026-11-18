@@ -15,9 +15,9 @@ type DocumentCardProps = {
 
 /** A plan or Markdown document the agent wrote, as a card to read: its title and first lines, not a diff. */
 export function DocumentCard({ path, document }: DocumentCardProps) {
+  const { copied, copy } = useCopied('Could not copy the document')
   // Read in place: the file may be outside the project (a Downloads folder), where no panel shows it, and its diff is empty.
   const [open, setOpen] = useState(false)
-  const { copied, copy } = useCopied('Could not copy the document')
   const name = path.slice(path.lastIndexOf('/') + 1)
   return (
     <Card role="group" aria-label={`Write ${path}`} className="mx-doc">

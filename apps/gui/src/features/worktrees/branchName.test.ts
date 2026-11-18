@@ -20,4 +20,8 @@ describe('branchNameProblem', () => {
   ])('refuses %j', (name, hint) => {
     expect(branchNameProblem(name)).toContain(hint)
   })
+
+  it('suggests the name with dashes for spaces', () => {
+    expect(branchNameProblem('feat new login')).toBe('Branch names can’t contain spaces. Try feat-new-login.')
+  })
 })

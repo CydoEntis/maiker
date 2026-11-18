@@ -1,5 +1,3 @@
-import { ToastCard } from '@/components/ui/toast-card'
-import { useEffect, useState } from 'react'
 import { useAppearsAfter } from '@/lib/useAppearsAfter'
 import { useShortcutText } from '@/features/shortcuts/platform'
 import { Icon } from './glyphs'
@@ -13,7 +11,7 @@ function LookingForSessions() {
         <span className="mx-empty-tile"><Icon name="prompt" /></span>
         <div className="mx-empty-copy">
           <h1>Looking for your sessions…</h1>
-          <p>Asking maikerd what is running.</p>
+          <p>Asking the Maiker service what is running.</p>
         </div>
       </div>
     </div>
@@ -57,7 +55,8 @@ export type RestartOffer = {
   label: string
   canRestart: boolean
   pending: boolean
-  onRestart: () => void
+  /** `automatic` marks a restart the window ran by itself (Settings › Restart the service when idle). */
+  onRestart: (automatic?: boolean) => void
   /** The service's protocol and the one this app needs, for "protocol 75 → 76". They are not app versions. */
   from: number
   to: number
@@ -76,47 +75,4 @@ export type AppBehindOffer = {
   appProtocol: number
 }
 
-const SECOND_MS = 1000
 
-/** Under the tabs while maikerd is unreachable: the last known screen stays, input waits. */
-export function OfflineBanner({ retryAt, detail, restart, appBehind = false, onRetry }: { retryAt: number | null; detail: string | null; restart: RestartOffer | null; appBehind?: boolean; onRetry: () => void }) {
-  const [now, setNow] = useState(() => Date.now())
-  const [armed, setArmed] = useState(false)
-  useEffect(() => {
-    const timer = window.setInterval(() => { setNow(Date.now()) }, SECOND_MS)
-    return () => { window.clearInterval(timer) }
-  }, [])
-  const seconds = retryAt === null ? null : Math.max(1, Math.ceil((retryAt - now) / SECOND_MS))
-  return (
-    <div className="mx-offline" role="status">
-      <span className="mx-offline-dot" aria-hidden="true" />
-      <span className="mx-offline-text">
-        {appBehind ? <><strong>Update needed.</strong> This app is older than the service; your sessions keep running.</> : <><strong>Restart needed.</strong> The service is on an older version; your sessions keep running.</>}{seconds !== null && ` Retrying in ${String(seconds)}s.`}
-        {detail && <> {detail}</>}
-      </span>
-      {restart && !appBehind && (
-        <button
-          type="button"
-          className={`mx-offline-button${armed ? ' is-armed' : ''}`}
-          disabled={!restart.canRestart || restart.pending}
-          onClick={() => {
-            if (!armed) {
-              setArmed(true)
-              return
-            }
-            setArmed(false)
-            restart.onRestart()
-          }}
-        >
-          {armed ? 'Click again to restart' : restart.label}
-        </button>
-      )}
-      <button type="button" className="mx-offline-button" onClick={onRetry}>Retry now</button>
-    </div>
-  )
-}
-
-/** A short notice over the workspace (`Toast`), centred under the title bar. */
-export function Toast({ message }: { message: string }) {
-  return <div className="mx-toast"><ToastCard>{message}</ToastCard></div>
-}

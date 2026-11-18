@@ -22,11 +22,14 @@ import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, fontStackFor, type Termi
 import { saysNotConnected } from '@/lib/serviceLine'
 import '@xterm/xterm/css/xterm.css'
 import { copyText } from '@/lib/clipboard'
+import { throttleTrailing, type Throttled } from '@/lib/throttle'
 
 const DEFAULT_SCROLLBACK_LINES = 10000
 const DEFAULT_SCROLL_SPEED = 1
 const LINE_HEIGHT = 1.6
 const CONNECT_RETRY_MS = 250
+/** How often the grid is fitted while its pane keeps changing size (a sliding sidebar or drawer); the last size is always fitted. */
+const FIT_WHILE_ANIMATING_MS = 90
 const CONNECT_RETRIES = 24
 /** How long a pane waits for its font before it opens with the fallback: a slow disk must not hold the terminal back. */
 const FONT_WAIT_MS = 1000
@@ -254,6 +257,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     const stillMounted = () => isMounted
     let emulator: XtermTerminal | null = null
     let resizeObserver: ResizeObserver | null = null
+    let fitOnResize: Throttled | null = null
     let stopListening: (() => void) | null = null
     let disposeInput: (() => void) | null = null
     let disposeBinary: (() => void) | null = null
@@ -393,10 +397,8 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
               text: link.url,
               activate: (event: MouseEvent) => {
                 if (!event.metaKey && !event.ctrlKey) return
-                openLink(link.url).then(
-                  () => { toast.message('Opened in your browser') },
-                  (error: unknown) => { toast.failure(error, 'Could not open the link') },
-                )
+                // The browser coming forward says it opened; only a failure needs words.
+                openLink(link.url).catch((error: unknown) => { toast.failed('Could not open the link', error) })
               },
             }))
             callback(links.length > 0 ? links : undefined)
@@ -589,7 +591,10 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         // Without history, the replay is still on its way over the stream: attaching has not finished.
         if (history || fetched) setConnecting(false)
 
-        resizeObserver = new ResizeObserver(fitAndResize)
+        // A layout animation (the sidebar or a drawer sliding) resizes the pane every frame; fitting the grid at each
+        // one reflows the terminal 60 times a second, so a burst is fitted at most every FIT_WHILE_ANIMATING_MS and once at its end.
+        fitOnResize = throttleTrailing(fitAndResize, FIT_WHILE_ANIMATING_MS)
+        resizeObserver = new ResizeObserver(fitOnResize)
         resizeObserver.observe(hostElement)
         // xterm measures its cells again on its own (after a resize, on a new display scale, once a
         // late font is in) and resizes its screen without the pane changing size. Watching the screen
@@ -651,6 +656,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
       showMissed.current = null
       stopListening?.()
       resizeObserver?.disconnect()
+      fitOnResize?.cancel()
       disposeInput?.()
       disposeBinary?.()
       disposeCopy?.()

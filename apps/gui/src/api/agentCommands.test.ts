@@ -44,8 +44,8 @@ describe('an agent\'s commands on a machine', () => {
 
   it('says why a machine could not list, and never answers with this computer\'s list', async () => {
     const asked = loadAgentCommands('claude', '/srv/app', 3)
-    await answer({ answer: { Err: 'Claude is not installed on this machine' } })
-    await expect(asked).rejects.toThrow('Claude is not installed on this machine')
+    await answer({ answer: { Err: 'claude is not installed on this machine' } })
+    await expect(asked).rejects.toThrow('claude is not installed on this machine')
     expect(shell.invoke).not.toHaveBeenCalledWith('agent_commands', expect.anything())
   })
 

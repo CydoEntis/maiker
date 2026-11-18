@@ -55,7 +55,7 @@ function WithPaneQueue({ typeInto }: { typeInto: (text: string) => Promise<void>
   return (
     <>
       <ChatSession link={LINK} agent="claude" online typeInto={typeInto} paneQueue={paneQueue} sessionId="s1" />
-      <output aria-label="The Maiker service holds">{paneQueue.queued.join(' | ')}</output>
+      <output aria-label="The daemon holds">{paneQueue.queued.join(' | ')}</output>
       <button type="button" onClick={paneQueue.sendNext}>The turn ends</button>
     </>
   )
@@ -167,8 +167,8 @@ describe('a chat whose agent has not said what it is doing yet', () => {
     await settle(1)
     // The window types nothing itself: the daemon holds the message, so it goes whether or not the window stays open.
     expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('start on the parser')
-    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('start on the parser')
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('start on the parser')
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toHaveTextContent('start on the parser')
     expect(box).toHaveValue('')
   })
 
@@ -222,8 +222,9 @@ describe('a message written while a terminal agent works', () => {
     await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'stop, use the other branch{Enter}')
     await settle(1)
     expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('stop, use the other branch')
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('stop, use the other branch')
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await settle(10)
 
@@ -231,10 +232,10 @@ describe('a message written while a terminal agent works', () => {
     expect(typeInto).toHaveBeenCalledTimes(2)
     expect(typeInto).toHaveBeenNthCalledWith(1, `${PASTE_START}stop, use the other branch${PASTE_END}`)
     expect(typeInto).toHaveBeenNthCalledWith(2, '\r')
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
 
     // The daemon no longer holds it, so the turn ending sends nothing more.
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('')
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('')
   })
 
   it('is typed straight in when it is /btw, which Claude Code runs mid-turn, and is never queued', async () => {
@@ -245,8 +246,8 @@ describe('a message written while a terminal agent works', () => {
     await settle(1000)
 
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/btw which file is that?', '\r'])
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('')
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('')
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
   })
 
   it('queues /btw while the agent has not said what it is doing yet, and any other command while it works', async () => {
@@ -256,7 +257,7 @@ describe('a message written while a terminal agent works', () => {
     await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), '/btw hi{Enter}')
     await settle(10)
     expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('/btw hi')
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('/btw hi')
   })
 
   it('queues /compact while the agent works', async () => {
@@ -266,7 +267,7 @@ describe('a message written while a terminal agent works', () => {
     await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), '/compact{Enter}')
     await settle(10)
     expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('/compact')
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('/compact')
   })
 
   it('queues /btw when files are attached, as the message is then a paste and not a command', async () => {
@@ -279,7 +280,7 @@ describe('a message written while a terminal agent works', () => {
     await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), '/btw look{Enter}')
     await settle(10)
     expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('/btw look')
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('/btw look')
   })
 
   it('goes back into the box when it could not be typed in, instead of vanishing', async () => {
@@ -290,6 +291,7 @@ describe('a message written while a terminal agent works', () => {
     await settle(1)
     typeInto.mockRejectedValueOnce(new Error('terminal closed'))
 
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await settle(PASTE_SUBMIT_GAP_MS + 10)
 
@@ -305,14 +307,14 @@ describe('a message written while a terminal agent works', () => {
     await user.click(screen.getByRole('button', { name: 'Queue message' }))
     await settle(1)
     expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('and then add tests')
-    expect(screen.getByRole('list', { name: 'Queued messages' })).toHaveTextContent('and then add tests')
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('and then add tests')
+    expect(screen.getByRole('region', { name: 'Queued messages' })).toHaveTextContent('and then add tests')
 
     // The turn ends and the daemon types it in: it leaves the queue and shows in the chat at once.
     await user.click(screen.getByRole('button', { name: 'The turn ends' }))
     await settle(1)
     expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Sending')).toHaveTextContent('and then add tests')
   })
 
@@ -396,11 +398,12 @@ describe('a message written while a terminal agent works', () => {
     await user.type(box, 'and then add tests{Enter}')
     await settle(1)
 
-    await user.click(within(screen.getByRole('list', { name: 'Queued messages' })).getByRole('button', { name: /^Edit/ }))
+    await user.click(screen.getByRole('button', { name: /^Queued/ }))
+    await user.click(within(screen.getByRole('region', { name: 'Queued messages' })).getByRole('button', { name: /^Edit/ }))
     await settle(1)
 
-    expect(screen.getByRole('status', { name: 'The Maiker service holds' })).toHaveTextContent('')
-    expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('')
+    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
     expect(box).toHaveValue('and then add tests')
     expect(screen.queryByLabelText('Sending')).not.toBeInTheDocument()
   })

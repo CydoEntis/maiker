@@ -52,7 +52,7 @@ export function useRemoteMachines(): RemoteMachines {
       change(state.machine, (before) => ({ conversations: before?.conversations ?? [], heard: before?.heard ?? false, listedAt: before?.listedAt ?? 0, state }))
       // Typing the machine could not take while it was down: say so once it is back.
       if (state.state === 'connected' && state.unsent) {
-        toast.message(`${String(state.unsent)} ${state.unsent === 1 ? 'keystroke' : 'keystrokes'} to ${state.name} ${state.unsent === 1 ? 'was' : 'were'} not sent while it was disconnected`)
+        toast.info(`${String(state.unsent)} ${state.unsent === 1 ? 'keystroke' : 'keystrokes'} to ${state.name} ${state.unsent === 1 ? 'was' : 'were'} not sent while it was disconnected`)
       }
     }
     const list = (id: number, name: string, snapshot: unknown) => {
@@ -86,11 +86,11 @@ export function useRemoteMachines(): RemoteMachines {
         const said = copySaid(id, names.get(id) ?? 'A machine', text.length)
         copyText(text).then(
           () => { toast.success(said.done, { id: COPY_TOAST_ID, duration: COPY_TOAST_MS }) },
-          (error: unknown) => { toast.failure(error, said.failed) },
+          (error: unknown) => { toast.failed(said.failed, error) },
         )
       }),
       listenMachineNotice((text) => {
-        if (document.hasFocus()) toast.message(text)
+        if (document.hasFocus()) toast.info(text)
         else sendNativeNotice(text, '').catch((error: unknown) => { console.warn('Could not show a system notification', error) })
       }),
       listenMachineRemoved((id) => {
@@ -109,7 +109,7 @@ export function useRemoteMachines(): RemoteMachines {
         if (snapshot !== null && name !== undefined) list(id, name, snapshot)
       }),
     ]) {
-      listening.then(keep, (error: unknown) => { toast.failure(error, 'Could not follow the machines') })
+      listening.then(keep, (error: unknown) => { toast.failed('Could not follow the machines', error) })
     }
     return () => {
       gone = true
@@ -122,7 +122,7 @@ export function useRemoteMachines(): RemoteMachines {
 /** What the window can ask of a machine by its name: add, retry, change what it may do, update, remove. */
 export function useMachineActions(localConversations: readonly Conversation[] | undefined) {
   const retryNamed = useCallback((name: string) => {
-    retryMachine(name).catch((error: unknown) => { toast.failure(error, `Could not retry ${name}`) })
+    retryMachine(name).catch((error: unknown) => { toast.failed(`Could not retry ${name}`, error) })
   }, [])
   // A first login runs in a session on this computer; the machine is dialled again when it closes.
   const localTermsRef = useRef<ReadonlySet<number>>(new Set())
@@ -156,7 +156,7 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
     return added
   }, [])
   const grantNamed = useCallback((name: string, grant: Grant, on: boolean) => {
-    setMachineGrant(name, grant, on).catch((error: unknown) => { toast.failure(error, `Could not change ${name}`) })
+    setMachineGrant(name, grant, on).catch((error: unknown) => { toast.failed(`Could not change ${name}`, error) })
   }, [])
   // The restarted daemon is dialled again once the update is in: the state moves on by itself.
   // One update per machine at a time: two would race to replace the same file there.
@@ -174,7 +174,7 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
   }, [])
   const updateNamed = useCallback(async (name: string, action: UpdateAction, whenIdle: boolean) => {
     if (updatingRef.current.has(name)) {
-      toast.message(`${name} is already being updated.`)
+      toast.info(`${name} is already being updated.`)
       return
     }
     updatingRef.current.add(name)
@@ -188,17 +188,17 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
   }, [retryNamed])
   const copyCommand = useCallback((command: string) => {
     copyText(command).then(
-      () => { toast.message('Copied. Run it in a terminal on this computer.') },
-      (error: unknown) => { toast.failure(error, 'Could not copy the command') },
+      () => { toast.info('Copied. Run it in a terminal on this computer.') },
+      (error: unknown) => { toast.failed('Could not copy the command', error) },
     )
   }, [])
   const cancelAdding = useCallback(() => {
-    cancelAddMachine().catch((error: unknown) => { toast.failure(error, 'Could not cancel') })
+    cancelAddMachine().catch((error: unknown) => { toast.failed('Could not cancel', error) })
   }, [])
   const removeNamed = useCallback((name: string) => {
     removeMachine(name).then(
-      () => { toast.message(`Removed ${name}. Its sessions keep running on ${name}.`) },
-      (error: unknown) => { toast.failure(error, `Could not remove ${name}`) },
+      () => { toast.info(`Removed ${name}. Its sessions keep running on ${name}.`) },
+      (error: unknown) => { toast.failed(`Could not remove ${name}`, error) },
     )
   }, [])
   return { retryNamed, addNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed }

@@ -124,6 +124,13 @@ older daemon cannot read, set `REPORTS_READ_SINCE` to the new version in the sam
 test `todays_reports_are_read_by_the_oldest_daemon_they_are_sent_to` holds the shapes. The CLI subcommands and the MCP server (`maiker mcp`, JSON-RPC over stdio)
 are thin wrappers that send the same commands.
 
+Protocol 115 removed the in-app tickets (ADR 0013): `Query::Tickets`, `TicketKeys`, `TicketWrite` and `TicketLinks`, their
+replies, `Command::OpenTicketSetup` and `ServerMsg::TicketSetup`. A peer from 105 to 114 sent or waited for them, so
+`COMPATIBLE_SINCE` moved to 115 (the window is one version) and every older peer is refused. That made each earlier
+message's `*_SINCE` gate and `introduced_in` arm dead, and they were removed; `ServerMsg::introduced_in` and
+`ClientMsg::introduced_in` stay, answering `COMPATIBLE_SINCE`, for the next message added inside a window. Below, the
+"came in protocol N" and "`COMPATIBLE_SINCE` stays 78" lines record when each message appeared, not a live gate.
+
 A conversation that changed is announced to the desktop app's attached clients as
 `ServerMsg::ConversationChanged { id, generation }` (`daemon/conversation/news.rs`): after each
 batch of events the daemon compares a stamp of what a `ConversationRead` would answer (history
@@ -179,7 +186,7 @@ commands are `prewarm_agent_session` (the agent names and flag rules of `start_a
 daemon running is older) and `drop_prewarmed_agent`.
 
 `Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
-app's new chat page and ticket starts, on this computer or another machine, whose own daemon makes it in its checkout
+app's New session dialog, on this computer or another machine, whose own daemon makes it in its checkout
 over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
 absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
 trust copy, the repo's setup hook and the tidy-up list). The daemon checks `branch` as `NewWorktree`'s branch agent
@@ -222,6 +229,13 @@ the alias (`opus`, `sonnet`, `haiku`) of a `/model` typed after it. A read that 
 restart, a wake, a reload, a move) adds them as `--model` and `--effort` (`Daemon::running_as`), quoted for the shell, only for
 Claude and only when they pass `TurnChoice::validate`: Claude starts a resumed session on the account's default model, which a
 `/model` in any other session changes, and an effort set for the session only is gone.
+
+`TermInfo.began_as_agent` says the pane was started as an agent (its command is one), not as a shell an agent was typed
+into. The daemon sets it once at start, saves it with the pane and keeps it across restarts; a pane saved before it
+existed reads from its command. It is a `#[serde(default)]` field, so it needed no new `PROTOCOL_VERSION` and
+`COMPATIBLE_SINCE` stays (a test decodes the old shape, which reads as a terminal, never ended on an agent's account). A
+pane with it whose agent ended, said by its hook or lost by several process scans in a row, is ended by the daemon unless
+an agent is back, a program runs in it or someone typed since (`close_ended_agents`).
 
 A pane's follow-up queue (`TermInfo.queued`) is the daemon's: it types the oldest into the agent when a turn ends, never
 into a question, and keeps the rest across a restart. A turn has ended when the agent's own report says so
@@ -356,7 +370,12 @@ and exit non-zero.
 ## Project-specific: auth model
 
 Socket access is the auth (see `docs/SECURITY.md`); pane status reports also need
-the pane's process tree or `MAIKER_PANE_TOKEN`.
+the pane's process tree or `AGENT_PANE_TOKEN` (a pane started before the prefix change has
+`MAITTY_PANE_TOKEN`, which is read the same way; ADR 0012). The names of the daemon, the socket and
+the variables are not part of the protocol: renaming one is no `PROTOCOL_VERSION` change, and the socket
+name still comes from the command, so a client of another version finds the same daemon and
+the handshake decides whether they can talk. A rename of the command moves the socket; the first run under the
+new name stops the daemon of the old one so it saves its sessions (`ipc::stop_previous_daemon`, ADR 0008).
 
 ## Project-specific: feature/module structure
 
@@ -702,8 +721,9 @@ thinking is not kept.
 `ConversationSend` carries an optional `choice` (`TurnChoice { model, effort }`, `#[serde(default)]`, no
 protocol bump; a send from before it decodes as no choice). The daemon validates it (a plain model name that
 cannot read as an option, an effort in `low | medium | high | xhigh | max`) and keeps it with a queued
-message. For Claude every message starts its own `claude` process, so the choice becomes `--model` and
-`--effort` on that process; for Codex it rides on `turn/start` as `model` and `effort`, which Codex applies
+message. For Claude every message has its own `claude` process, so the choice becomes `--model` and
+`--effort` on that process (one started ahead with the last message's choice is used only when the arguments
+match exactly; see [PERFORMANCE](PERFORMANCE.md#a-claude-chats-next-message-2026-11-18)); for Codex it rides on `turn/start` as `model` and `effort`, which Codex applies
 to that turn and the ones after. The choice never touches the permission arguments or the thread's sandbox
 (ADR 0005). The window sends the picked values with each message, so the daemon stores nothing.
 
@@ -745,9 +765,9 @@ gets `ServerMsg::SettingsChanged`. Keys, values and limits are in
 [ENVIRONMENT](ENVIRONMENT.md#project-specific-settings-both-apps-share). A value of the wrong kind or
 out of range answers `ServerMsg::Error` and leaves the file as it was. A peer that predates the
 variants cannot decode them (a test), and another machine's `SettingsChanged` is ignored.
-Protocol 114 adds `SharedSettings.bypass_off` (defaulted, so an older reply reads as every agent on; a
+Protocol 118 adds `SharedSettings.bypass_off` (defaulted, so an older reply reads as every agent on; a
 test) and `SettingKey::BypassOff`, which a client sends only to a daemon at `BYPASS_SETTING_SINCE` or
-later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays. It also adds `SharedSettings.update_machines`
+later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays 115. It also adds `SharedSettings.update_machines`
 (defaulted to true, the setting's default; a test) and `SettingKey::UpdateMachines`, sent only from
 `UPDATE_MACHINES_SINCE`.
 
@@ -833,6 +853,26 @@ snapshot against a tree of the checkout as it is, untracked files included), wit
 The commit must be one of the checkout's snapshots. The desktop app asks it before it offers a restore
 (`snapshot_restore_count`, this computer's panes only). The request has its own `introduced_in` arm
 (`RESTORE_COUNT_SINCE`), so an older daemon is not asked and the app says to restart it; `COMPATIBLE_SINCE` stays 78.
+
+Protocol 116 adds saving a document from the desktop app's viewer with a conflict check: `RepoRequest::FileStamped { path }`
+answers `RepoReply::FileStamped { text, version }` (the text and the file's *version*, its length and an FNV-1a hash of
+its bytes as one opaque word: equal only for the same bytes, so a touch that changes none is not a change), and
+`Command::SaveFile { term, tag, path, contents, version }` answers `RepoReply::Saved { version }`, or
+`RepoReply::ChangedOnDisk` with nothing written when `version` is `Some` and the file on disk no longer has it (`None`
+is the person's explicit Overwrite after that answer). The path rules, the 256 KiB cap, the refusal of links and
+`.git`, "an existing file only" and the temporary-file-and-rename write are those of `WriteFile`; the version is
+checked again just before the rename, and the permissions of the old file are kept. A save that cannot be written is an
+error with the system's reason, never a quiet success. Only a human client can send it. Both are new messages: an
+older peer is never sent them (`ClientMsg::introduced_in` answers `FILE_EDIT_SINCE`, 116), so `COMPATIBLE_SINCE` stays
+115, and the window offers Edit only to a daemon that answers the stamped read; against an older one it shows Drawn and
+Source. The pinned bytes of `Saved` and `ChangedOnDisk` are in `a_file_write_is_asked_only_of_a_daemon_that_knows_it`.
+For a pane on another machine the window sends `Tree`, `FileStamped` (markdown names only) and `SaveFile` (markdown only) to
+that machine's daemon on a request line (ADR 0014), each answer vetted to the kind that was asked
+(`remote_repo::vet_repo_reply(&request, reply)`, `vet_save_reply`); no message is added or changed, so `PROTOCOL_VERSION`
+stays 117 here and `COMPATIBLE_SINCE` as it is. The window dials machines newest-only, so an older daemon is turned away
+at connect time and offered its update rather than asked. An empty `version` in a vetted `FileStamped` means the text was
+cleaned and must not be saved.
+Line endings are the window's business (`documents/lineEndings.ts`): the daemon stores and compares the bytes it is given.
 
 Protocol 89 adds `RepoRequest::FindFiles { query, limit }` and `RepoReply::Files { paths, truncated }`: the files
 under the pane's checkout (the repository top, or the pane's folder when it is not a repository, as for `Tree` and
@@ -983,93 +1023,6 @@ state, link, code, failure}` (`apps/gui/src/api/agentSignIn.ts` re-checks the li
 address). Asking twice changes nothing, so it may go on a kept line. The spike and the behaviour:
 [chat-sign-in spec](features/chat-sign-in/spec.md).
 
-Protocol 105 adds `Query::Tickets { source, request, tag }` with `Reply::Tickets { tag, answer }`
-(`TICKETS_SINCE`; `COMPATIBLE_SINCE` stays: both are new messages with their own `introduced_in`
-arm, and nothing an older peer sends or reads changed). It reads tickets, read-only; there is no
-request that writes. `source` is a GitHub repository, `owner/name`, read with the machine's own
-`gh` (`daemon/tickets_github.rs`), or `plane` or `linear`, read with the key the daemon kept
-(`daemon/tickets_plane.rs`, `daemon/tickets_linear.rs`; below). A repository name has a slash and the
-providers' do not, so the one message carries all three and an older daemon answers `Invalid`. `request` is a `TicketsRequest`: `Groups` (the repository as a
-`Project` group and its milestones as `Milestone` groups with their ticket count), `List(Filter)`
-(`group`, `state` category, `assignee`, `label`, `search`, `page`; `TICKETS_PAGE_SIZE` (30) a page,
-page 0 to `TICKETS_PAGE_MAX`; `gh` pages only by size, so it is asked for everything up to one past
-the page; GitHub has no `Started` state, so that filter lists nothing) or `Get { id }`. `answer` is
-`Ok(TicketsReply)` (`Groups`, `List(TicketPage)` or `Ticket`) or `Err(TicketError)`: `NotInstalled`,
-`SignedOut`, `NotFound`, `RateLimited`, or `Unreachable(line)` and `Invalid(line)`, whose lines are
-fixed words, never `gh`'s own. Ids are `provider:key`: `github:owner/name#12` for an issue,
-`github:owner/name!3` for a milestone, `github:owner/name` for the repository; an address is built
-from the checked repository and number, never copied. A ticket carries its body, at most
-`TICKET_COMMENTS_MAX` (50, the oldest first, `comments_more` says there were more), the pull
-requests that close it as `links`, and `blocked_by` ids (`gh api …/dependencies/blocked_by`; a GitHub
-that does not know it gives none). Every string is cleaned and cut and every list capped by the pure
-rules in `crates/maitty-shared/src/tickets.rs` (`TicketsReply::cleaned`), by the daemon and again
-for an answer from another machine (`remote_policy::vet`; the verdict is *answer*). Human clients
-only: a pane or a structured runtime gets `ServerMsg::Error`. `gh` runs off the event loop, at most
-twice (30 seconds each), and `gh`'s output is read only up to 4 MiB.
-
-Protocol 106 adds `Query::TicketKeys { change, tag }` with `Reply::TicketKeys { tag, answer }`
-(`TICKET_KEYS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own
-`introduced_in` arm, and no field or variant an older peer reads changed). It keeps the key a keyed
-ticket provider needs. `change` is a `TicketKeyChange`: `Status`, `Set { provider, address, workspace,
-key }` (the key is a `SecretText`, which prints as hidden) or `Remove { provider }`; `provider` is
-`Plane` or `Linear`. `answer` is the state after the change, one `TicketKeyState { provider, set, address,
-workspace, stored_in }` per provider (`stored_in` is `Keychain` or `File`, `#[serde(default)]` to `File`:
-an older daemon sends none and keeps every key in a file, and an older client passes over it, so it
-needs no protocol version), or an `Invalid(line)`; it never holds a key. Plane takes a server address
-(`check_base_url`: https anywhere, http only to your own network) and a workspace; Linear takes a key
-alone, because its one server is fixed in the code. Human clients only: a pane or a structured runtime
-gets `ServerMsg::Error`. A request for a provider with no key answers `TicketError::NotInstalled` (the
-client shows "add your key"); a key the provider refuses is `SignedOut`. The files are written off the
-event loop. Where the key lives: [SECURITY](SECURITY.md) and [DATABASE](DATABASE.md#project-specific-ticket-keys).
-
-Plane and Linear ids follow `provider:key` with `.`, `!` and `#` as separators: Plane `plane:<project>`
-(a project), `plane:<project>!<module>` (a module), `plane:<project>#<work item>`; Linear
-`linear:team.<id>` (a `Project` group), `linear:project.<id>` (a `Module`), `linear:cycle.<id>` (a
-`Cycle`) and `linear:issue.<id>`. A Plane list needs a `group` (a project or module); a Linear list may
-have none. Plane filters nothing server-side, so a page is cut from at most five pages of 100 work items
-read in Plane's order; Linear is asked for the state, assignee, label, title text and group, and read a
-cursor at a time up to eight pages of 50. A Plane 429 is waited out twice (10 seconds each) before
-`RateLimited`; Linear's is reported at once. A Plane `blocked_by` comes from
-`work-items/<id>/relations/` (a Plane without that route has none), a Linear one from the issue's
-inverse `blocks` relations.
-
-`Query::TicketWrite` and `Reply::TicketWrite` (protocol 107, `TICKET_WRITE_SINCE`) are retired: Maiker only
-reads tickets (ADR 0011). They stay on the wire so a window from 107 to 112 that still asks gets `Reply::TicketWrite`
-with `Err(Invalid)` ("Maiker no longer changes tickets; change it in the tracker") and keeps its connection. The
-daemon writes nothing, and no client of protocol 113 asks.
-
-Protocol 108 adds `Query::TicketLinks { place, change, tag }` with `Reply::TicketLinks { tag, answer }`
-(`TICKET_LINKS_SINCE`; `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm).
-The daemon keeps which sources each project reads (`maitty_shared::ticket_links`, `daemon/ticket_links.rs`,
-`<data folder>/ticket-links.json`), so every client of a computer shows a project the same tickets. A provider's key is
-set once for all projects (`TicketKeys`); a link is per project: `github` (`Origin`, the default; `Repo("owner/name")`;
-`Off`), a Plane project and a Linear team (`TicketPick { id, name }`). A project is a `TicketPlace { machine, folder }`:
-`machine` is `None` for this computer, whose folder the daemon takes to its repository's main checkout (the parent of
-`git rev-parse --git-common-dir`), so every worktree of a repository shares one link; another machine's folder (by its
-`[[machines]]` name) is kept as the client gave it. `place` is the folder in front, answered back resolved in
-`answer.project` (with an empty link when it has none); `change` is `Read`, `Set { place, link }`, `Unlink { place }`,
-`SetMe { provider, name }` (your name in Plane or Linear, for Mine) or `Import { projects, me }` (links a client kept
-before protocol 108: each added only when its project has none, a name only when unset). `answer` is
-`Ok(TicketLinks { project, projects, me })`, every linked project sorted by machine and folder, or `Invalid` for a
-folder that is not absolute, a repository not written `owner/name`, or a pick whose id is not a ticket id; nothing
-refused is written. At most 500 projects. Human clients only. A damaged file is logged and read as no links.
-
-Protocol 109 (`TICKET_SETUP_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
-`introduced_in` arm, and the new field is `#[serde(default)]`, which an older peer skips) adds:
-
-- `TicketLinks::repo_file: Option<RepoTicketFile { github, plane, linear, notes }>`. For a place on this computer,
-  `answer.project`'s link is what you linked here with the repository's `.maitty/tickets.toml` filling each source
-  you did not (`daemon/ticket_repo_file.rs`); the flags say which parts came from the file and `notes` (at most 4,
-  160 characters each) why any part was not used. `projects` lists only what was linked here, never the file.
-- `Command::OpenTicketSetup { term, folder, source, link }`, from a pane's agent (`<app>_tickets_setup` in
-  `maiker mcp`). Allowed only for the pane's own client (`client.from == Some(term)`), for its own project
-  (`folder`, when given, must be in it). The daemon reads the project's links and key states off the loop, then
-  broadcasts `ServerMsg::TicketSetup(TicketSetupAsk { term, folder, source, link })` to attached human clients
-  (not panes, not structured runtimes), at most once per project every 5 seconds, and replies `Reply::Text` with
-  what is set up, in words: never a key or where it is sent. `link` is one cleaned word (`clean_suggested_link`,
-  512 characters), shown as text. Nothing is saved; the person finishes the setup in the window. Another machine's
-  `TicketSetup` is ignored (`remote_policy`).
-
 Protocol 110 adds `Query::Extensions { request, tag }` with `Reply::Extensions { tag, answer }` (`EXTENSIONS_SINCE`;
 `COMPATIBLE_SINCE` stays at 78: both are new messages with their own `introduced_in` arm). It reads and changes the
 skills, plugins, MCP servers and marketplaces of Claude Code and Codex on the daemon's computer (design:
@@ -1103,13 +1056,36 @@ that is offline (a daemon older than the window is one that needs its update, AD
 and shown in the picker; nothing falls back to this computer's list. Names and lines from another machine are cleaned and capped again
 (`remote_policy::vet`, `maitty_shared::agent_commands`).
 
-The desktop host sends tickets reads through `tickets(source, request, tag)` and key changes through
-`ticket_keys(change, tag)`, always to this computer's daemon, and raises `tickets` and `ticket-keys` events:
-`{ machine, tag, answer }` with `answer` as `{ Ok }` or `{ Err }` (`apps/gui/src/api/tickets.ts`, which reads them
-with zod). A source longer than 256 bytes is refused in the host. Ticket answers are expected for 60 seconds plus
-the clone margin (`routing::TICKETS_ANSWER_WINDOW`); the window waits 95 seconds. `github_repo_of(folder)` answers
-the `owner/name` a folder of this computer pushes to (`git remote get-url origin`, read by
-`maitty_shared::github::repo_of_remote`), or null.
+Protocol 117 (`FOLDER_CREATE_SINCE`; `COMPATIBLE_SINCE` stays at 115: the question is new and has its own
+`introduced_in` arm) adds `Query::CreateFolder { parent, name, tag }` with `Reply::FolderCreated { tag, outcome }`,
+where `outcome` is `FolderCreated::Created { path }` (absolute, `/` separators), `Exists`, `NotAllowed { reason }` (the
+name or the parent is not accepted) or `Failed { reason }` (the disk refused). `FolderListing` gains
+`can_create: bool` (`#[serde(default)]`: a daemon from before it reads as false), which is how a window knows a machine
+can make folders without asking it in vain: an older daemon passes over an unknown question and never answers. The rules
+are in [SECURITY](SECURITY.md#project-specific-auth-and-permissions). The desktop host sends it through
+`create_folder(machine, parent, name, tag)` and raises a `folder-created` event `{ machine, tag, outcome }`
+(`apps/gui/src/api/folders.ts` `createFolder` waits 10 seconds on it); a daemon's reply is not safe to ask twice
+(`safe_to_ask_twice`).
+
+Protocol 114 (`REPOSITORIES_SINCE`; `COMPATIBLE_SINCE` stays at 78: the two messages are new with their own
+`introduced_in` arm) adds `Query::Repositories { rescan, tag }` with `Reply::Repositories { tag, found }`, where
+`found` is `RepositoryIndex { repos, indexed_at, more }` and each repo is `IndexedRepository { path, branch,
+last_used }` (`maitty_shared::repositories`; `path` absolute with `/`, `last_used` unix seconds, 0 when unknown). The
+daemon keeps the list in memory (`daemon::repo_index`): a search walks the home folder on a blocking thread, breadth
+first, at most 5 folders deep, 100,000 folders and 15 seconds (`REPOSITORY_SEARCH_LIMIT_SECS`), skipping hidden folders,
+build and package folders (`node_modules`, `target`, ...), the system's media and app folders, links (never followed),
+network mounts (Linux: nfs, cifs, sshfs, ...) and linked worktrees; a repository is listed and not entered. It runs no
+git: the branch is `HEAD`, the use is the time of `.git/logs/HEAD`. The first search starts with the daemon; the answer
+to a question counts the repositories panes run in (found or not, outside the home folder too) as used when a pane there
+last had output or input. Without `rescan` the list is answered at once, except that a daemon that has not finished one
+search yet waits for it; with `rescan` a search starts (one at a time; a question during one joins it) and every
+waiting question is answered when it ends. The list is cut at 300, most recently used first, and `more` says it was cut
+or a search ran out of time. Human clients only. The desktop host asks through `repositories(machine, rescan, tag)`
+(this computer when `machine` is left out) and raises a `repositories` event `{ machine, tag, answer }`; the window
+(no longer asked by the desktop window, whose folder picker only browses; the host command remains) would wait 50 seconds, the host expects the
+answer for the search limit plus the clone margin (`routing::REPOSITORIES_ANSWER_WINDOW`). Another machine's list is
+cleaned and capped again (`remote_policy::vet`, `RepositoryIndex::cleaned`). A daemon from before 114 never answers, so
+the window's wait ends with its own words.
 
 Protocol 102 adds `Query::GitIdentityRule { change, tag }` with `Reply::GitIdentityRuleDone { tag, outcome }`
 (`GIT_RULES_SINCE`; `COMPATIBLE_SINCE` stays). `change` is a `GitRuleChange`: `Preview { folder, identity }`
@@ -1546,7 +1522,7 @@ the rest are dropped silently. Nothing blocks and nothing is queued.
 pane address `machine/id`, else `--on`, else the `--remote` adapter (`ipc::Machine::current()`),
 else this computer. Each command is handed that `Target` and opens its connection with
 `ipc::open_to` (for another machine, `maitty_machines::open_remote`); nothing reads the environment for the machine after that. A configured machine only
-attaches. The pane a command runs in (`$MAIKER_TERM_ID`) is a pane of this computer's daemon, so it is
+attaches. The pane a command runs in (`$AGENT_TERM_ID`) is a pane of this computer's daemon, so it is
 the default pane only when the target is this computer or the ad-hoc `--remote` route; a command
 aimed at a named machine needs an explicit `--pane machine/id`. `ls` is unchanged for this computer;
 named at a machine it heads the list with `machine <name>`, writes panes as `name/id`, and

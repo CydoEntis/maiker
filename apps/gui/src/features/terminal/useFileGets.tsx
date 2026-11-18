@@ -3,7 +3,6 @@ import { toast } from '@/lib/toast'
 import { cancelFileSend } from '@/api/fileSends'
 import { getFileFromMachine, listenFileGets, newGetId, openPulledFolder, type GetEvent } from '@/api/fileGets'
 import { SendProgress } from './SendProgress'
-import { PLAIN_TOAST } from './sendToast'
 
 /** What the window knows of a pull it started. */
 type Pull = {
@@ -14,11 +13,10 @@ type Pull = {
 
 /** The progress toast of a pull, with Cancel. The toast is named by `transfer`, so each update replaces it. */
 function showGetProgress(transfer: string, pull: Pull, percent: number | null): void {
-  toast.loading(`Getting ${pull.file} from ${pull.machine}`, {
+  toast.progress(`Getting ${pull.file} from ${pull.machine}`, {
     id: transfer,
     duration: Infinity,
     // Hiding the toast would not stop the pull; Cancel does.
-    dismissible: false,
     closeButton: false,
     description: <SendProgress file={pull.file} percent={percent} verb="Getting" />,
     action: {
@@ -26,7 +24,7 @@ function showGetProgress(transfer: string, pull: Pull, percent: number | null): 
       onClick: (event) => {
         // The toast stays until the host says the pull has stopped.
         event.preventDefault()
-        cancelFileSend(transfer).catch((error: unknown) => { toast.failure(error, 'Could not stop the pull') })
+        cancelFileSend(transfer).catch((error: unknown) => { toast.failed('Could not stop the pull', error) })
       },
     },
   })
@@ -59,29 +57,28 @@ export function useFileGets() {
         case 'done':
           pulls.current.delete(event.transfer)
           toast.success(`Saved ${event.file} from ${pull.machine}`, {
-            ...PLAIN_TOAST,
             id: event.transfer,
             description: event.folder,
             action: {
               label: 'Open folder',
-              onClick: () => { openPulledFolder(event.folder).catch((error: unknown) => { toast.failure(error, 'Could not open the folder') }) },
+              onClick: () => { openPulledFolder(event.folder).catch((error: unknown) => { toast.failed('Could not open the folder', error) }) },
             },
           })
           return
         case 'failed':
           pulls.current.delete(event.transfer)
-          toast.error(event.message, { ...PLAIN_TOAST, id: event.transfer })
+          toast.error(event.message, { id: event.transfer })
           return
         case 'cancelled':
           pulls.current.delete(event.transfer)
-          toast.message(`Stopped getting ${event.file} from ${pull.machine}`, { ...PLAIN_TOAST, id: event.transfer })
+          toast.info(`Stopped getting ${event.file} from ${pull.machine}`, { id: event.transfer })
           return
       }
     }
     listenFileGets(onEvent).then((unlisten) => {
       if (gone) unlisten()
       else stop = unlisten
-    }, (error: unknown) => { toast.failure(error, 'Could not follow file pulls') })
+    }, (error: unknown) => { toast.failed('Could not follow file pulls', error) })
     return () => {
       gone = true
       stop?.()
@@ -96,7 +93,7 @@ export function useFileGets() {
     showGetProgress(transfer, pull, null)
     getFileFromMachine(machine, path, transfer).catch((error: unknown) => {
       pulls.current.delete(transfer)
-      toast.failure(error, `Could not get the file from ${machine}`, { ...PLAIN_TOAST, id: transfer })
+      toast.failed(`Could not get the file from ${machine}`, error, { id: transfer })
     })
   }, [])
 

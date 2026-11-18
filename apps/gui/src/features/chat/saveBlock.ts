@@ -10,13 +10,13 @@ export function saveBlock(what: string, extension: string, text: string): void {
   const folder = readSettingsPreferences().exportFolder
   saveExport(folder, exportName(what, extension, new Date()), text).then(
     (path) => { toast.success(`Saved to ${path}`) },
-    (error: unknown) => { toast.failure(error, 'Could not save the file') },
+    (error: unknown) => { toast.failed('Could not save the file', error) },
   )
 }
 
 export function copyBlock(text: string, failed: string): void {
   copyText(text).then(
-    () => { toast.message('Copied') },
+    () => { toast.info('Copied') },
     () => { toast.error(failed) },
   )
 }

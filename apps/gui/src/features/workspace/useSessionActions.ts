@@ -39,7 +39,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
     setRenameId(null)
     void renameConversationOnDaemon({ id: sessionId }, name)
       .then(async () => { await queryClient.invalidateQueries({ queryKey: ['conversations'] }) })
-      .catch((error: unknown) => { toast.failure(error, 'Could not rename the session') })
+      .catch((error: unknown) => { toast.failed('Could not rename the session', error) })
   }, [queryClient, setRenameId])
 
   // Showing a session shows its own chat: a subagent's chat is left by picking any session, its parent too. It shows
@@ -62,7 +62,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
       return
     }
     if (showing.panes.length >= MAX_PANES) {
-      toast.message(`A window holds ${String(MAX_PANES)} panes at most. Close one to open another beside it.`)
+      toast.info(`A window holds ${String(MAX_PANES)} panes at most. Close one to open another beside it.`)
       return
     }
     movePanes(() => { setLayout((current) => splitPane(current, null, direction, sessionId, makeId)) })
@@ -71,7 +71,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
   const copyText = useCallback((text: string, what: string) => {
     writeClipboard(text).then(
       () => { flash(`${what} copied`) },
-      (error: unknown) => { toast.failure(error, `Could not copy the ${what.toLowerCase()}`) },
+      (error: unknown) => { toast.failed(`Could not copy the ${what.toLowerCase()}`, error) },
     )
   }, [flash])
 
@@ -105,7 +105,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
     // Files and Changes look at this computer's own checkouts; a pane of another machine has none here.
     const refusal = guardLocal(session, 'path-links')
     if (refusal !== null) {
-      toast.message(refusal)
+      toast.info(refusal)
       return
     }
     void repoLocate(session.pane, path)
@@ -115,7 +115,7 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
         setInspectView('files')
         setInspectOpen(true)
       })
-      .catch((error: unknown) => { toast.failure(error, 'Could not open that file') })
+      .catch((error: unknown) => { toast.failed('Could not open that file', error) })
   }, [setInspectOpen, setInspectView, setLookAt, showSessionById])
   return { showSessionById, openPath, copyPathOf, showSubagent, saveName, openInSplit, copyText, usageInfo }
 }

@@ -64,9 +64,10 @@ fn run(
     when_idle: bool,
 ) -> Result<String, String> {
     let mut command = maitty_desktop_client::host_command(executable);
+    // Under every name it has had: the `maitty` that answers may be an older build.
+    maitty_shared::brand::set_child_env(&mut command, "UPDATE_PROGRESS", "1");
     command
         .args(arguments(name, install, when_idle))
-        .env(format!("{}_UPDATE_PROGRESS", maitty_machines::APP_ENV), "1")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

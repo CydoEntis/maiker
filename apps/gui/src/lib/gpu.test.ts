@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isLinuxWebView } from './gpu'
+import { framesAreSlow, isLinuxWebView } from './gpu'
 
 const WEBKITGTK = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15'
 const WEBKITGTK_BUNDLED = 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15'
@@ -16,5 +16,17 @@ describe('telling the Linux web view from the others', () => {
     expect(isLinuxWebView(MACOS)).toBe(false)
     expect(isLinuxWebView(WINDOWS)).toBe(false)
     expect(isLinuxWebView()).toBe(false)
+  })
+})
+
+describe('telling a software painter by its frames', () => {
+  it('is slow when half the frames or more took longer than 24ms', () => {
+    expect(framesAreSlow([40, 38, 42, 17, 17, 17])).toBe(true)
+    expect(framesAreSlow([17, 40, 17, 16, 17, 17])).toBe(false)
+  })
+
+  it('is not slow without frames, or at 60 Hz', () => {
+    expect(framesAreSlow([])).toBe(false)
+    expect(framesAreSlow([16.7, 16.7, 16.6, 16.7, 16.8, 16.7])).toBe(false)
   })
 })

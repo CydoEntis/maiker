@@ -132,7 +132,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
       return
     }
     const toastId = `attach-${String(target)}`
-    toast.loading(`Adding ${chosen.length === 1 ? baseName(chosen[0] ?? '') : `${String(chosen.length)} ${noun(chosen.length)}`}…`, { id: toastId })
+    toast.progress(`Adding ${chosen.length === 1 ? baseName(chosen[0] ?? '') : `${String(chosen.length)} ${noun(chosen.length)}`}…`, { id: toastId })
     void (async () => {
       let failed = 0
       for (const path of chosen) {
@@ -148,7 +148,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
           updateComposer(target, (state) => ({ ...state, attachments: [...state.attachments, { id: newId(), ...kept, preview: null }] }))
         } catch (error) {
           failed += 1
-          toast.failure(error, `Could not attach ${baseName(path)}`)
+          toast.failed(`Could not attach ${baseName(path)}`, error)
         }
       }
       if (failed === chosen.length) toast.dismiss(toastId)
@@ -183,7 +183,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
             keepLanded(target, landed, preview)
           },
         }),
-        (error: unknown) => { toast.failure(error, 'Could not read the image') },
+        (error: unknown) => { toast.failed('Could not read the image', error) },
       ).then(() => {
         // Nothing landed (refused, failed or cancelled): the thumbnail has no chip to belong to.
         if (preview !== null && !peekComposer(target).attachments.some((item) => item.preview === preview)) URL.revokeObjectURL(preview)
@@ -191,7 +191,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
       return
     }
     const toastId = `attach-${String(latest.current.conversation)}`
-    toast.loading('Adding the image…', { id: toastId })
+    toast.progress('Adding the image…', { id: toastId })
     image.arrayBuffer()
       .then((buffer) => saveImageLocally(new Uint8Array(buffer)))
       .then((path) => {
@@ -199,7 +199,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
         append({ id: newId(), path, name: 'Pasted image', size: image.size, kind: 'image', preview: previewOf(image) })
         toast.success('Attached the image', { id: toastId, duration: 2000 })
       })
-      .catch((error: unknown) => { toast.failure(error, 'Could not attach the image', { id: toastId }) })
+      .catch((error: unknown) => { toast.failed('Could not attach the image', error, { id: toastId }) })
   }, [refusal, append, keepLanded])
 
   const pick = useCallback(() => {
@@ -210,7 +210,7 @@ export function useAttachmentIntake({ conversation, blocked, machine = null }: I
     }
     chooseFilesToAttach()
       .then((paths) => { if (paths !== null) addPaths(paths) })
-      .catch((error: unknown) => { toast.failure(error, 'Could not open the file picker') })
+      .catch((error: unknown) => { toast.failed('Could not open the file picker', error) })
   }, [refusal, addPaths])
 
   const remove = useCallback((id: string) => {

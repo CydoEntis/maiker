@@ -1,6 +1,6 @@
 # 0011. Maiker only reads tickets and shows no workflow runs
 
-- **Status:** Accepted
+- **Status:** Accepted; decision 1 (and the ticket parts of 4) superseded by [0013](0013-no-in-app-tickets.md)
 - **Date:** 2026-11-17
 
 ## Context
@@ -15,7 +15,7 @@ of them helps tell which agent needs you. The app was losing focus.
 
 ## Decision
 
-1. **Tickets are read, never changed.** Maiker reads GitHub, Plane and Linear tickets only to
+1. **Tickets are read, never changed.** *(Superseded by 0013: Maiker has no tickets at all.)* Maiker reads GitHub, Plane and Linear tickets only to
    start an agent on one: pick a ticket, read it whole, start. It never comments on, closes or
    edits a ticket; that is done in the tracker. The keys and project links that reading needs stay.
 2. **Maiker shows no workflow runs.** There is no `maiker workflow report`, no Work board and no

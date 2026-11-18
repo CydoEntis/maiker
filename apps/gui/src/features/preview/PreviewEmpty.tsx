@@ -1,17 +1,18 @@
 import { FolderOpen, LoaderCircle, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { TitleBar } from '@/components/TitleBar'
-import { Toaster } from '@/components/ui/sonner'
+import { Toaster } from '@/components/ui/toaster'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { daemonConnectionError } from '@/lib/daemon-connection'
 import { focusMainContent } from './shared'
 import { ConversationSidebar } from './Sidebar'
 import { NewConversationDialog } from './NewConversationDialog'
 import { usePreview } from './previewContext'
+import { DAEMON_NAME } from '@/brand'
 
 /** The screen with no conversation open: the sidebar and what to start. */
 export function PreviewEmpty() {
-  const { statusAnnouncement, filter, sidebarPreferences, isCompactSidebar, sidebarCollapsed, daemonDisconnected, sidebarDrawerOpen, setFilter, openNewSession, togglePin, setArchived, renameConversation, requestEndSession, selectConversation, setSidebarDrawerOpen, setSidebarCollapsed, startingSessions, sessionsQuery, setSettingsDialogOpen, primaryModifier, codexExecutableQuery, desktop, claudeExecutableQuery, daemonRestartAction, mismatch, daemonRestartStatus, newDialogOpen, newProject, setNewProject, newProvider, setNewProvider, newKind, setNewKind, newPermissions, setNewPermissions, chooseFolder, isChoosingFolder, setNewDialogOpen, createConversation, conversationCreationPending, settingsDialog, daemonRestartDialog, settingsPreferences, theme } = usePreview()
+  const { statusAnnouncement, filter, sidebarPreferences, isCompactSidebar, sidebarCollapsed, daemonDisconnected, sidebarDrawerOpen, setFilter, openNewSession, togglePin, setArchived, renameConversation, requestEndSession, selectConversation, setSidebarDrawerOpen, setSidebarCollapsed, startingSessions, sessionsQuery, setSettingsDialogOpen, primaryModifier, codexExecutableQuery, desktop, claudeExecutableQuery, daemonRestartAction, mismatch, daemonRestartStatus, newDialogOpen, newProject, setNewProject, newProvider, setNewProvider, newKind, setNewKind, newPermissions, setNewPermissions, chooseFolder, isChoosingFolder, setNewDialogOpen, createConversation, conversationCreationPending, settingsDialog, daemonRestartDialog } = usePreview()
   return (
     <TooltipProvider>
         <div className="app-shell">
@@ -101,7 +102,7 @@ export function PreviewEmpty() {
                   ? 'Connecting to your local Maiker service.'
                   : sessionsQuery.isError
                     ? daemonConnectionError(sessionsQuery.error)
-                    : 'Start an agent session in a folder, and switch between chat and its native terminal at any time. Sessions live in maikerd, so closing this window never stops an agent.'}
+                    : `Start an agent session in a folder, and switch between chat and its native terminal at any time. Sessions live in ${DAEMON_NAME}, so closing this window never stops an agent.`}
               </p>
               {!sessionsQuery.isLoading && !sessionsQuery.isError && (
                 <div
@@ -208,10 +209,7 @@ export function PreviewEmpty() {
           />
           {settingsDialog}
             {daemonRestartDialog}
-          <Toaster
-            position={settingsPreferences.toastPosition}
-            theme={theme === 'day' ? 'light' : 'dark'}
-          />
+          <Toaster />
         </div>
       </TooltipProvider>
   )

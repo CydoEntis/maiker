@@ -25,7 +25,7 @@ why popover, a new evidence sheet, the Inbox, Settings, and the row menu. The de
 ## Decisions
 
 - The daemon runs the check, never the client (ADR 0001). Maiker observed the result; an agent's
-  claim never counts. The check's process does not inherit `MAIKER_PANE_TOKEN`.
+  claim never counts. The check's process does not inherit `AGENT_PANE_TOKEN`.
 - Checks never stop an agent working. They change what Maiker says about it.
 - The command comes from the user's own config. A command supplied by a repo is a later,
   separate feature with its own approval.

@@ -10254,6 +10254,7 @@ fn ended_agent_pane(d: &mut Daemon, ago: Duration) -> TermId {
     let t = d.terms.get_mut(&id).unwrap();
     t.owner = crate::protocol::Surface::Desktop;
     t.cmd = Some("claude".into());
+    t.began_as_agent = true;
     d.hook(id, "claude".into(), HookStatus::Idle, "SessionStart", &[]);
     d.hook(id, "claude".into(), HookStatus::Gone, "SessionEnd", &[]);
     let t = d.terms.get_mut(&id).unwrap();
@@ -10310,7 +10311,7 @@ fn a_shell_someone_went_on_to_use_after_its_agent_ended_is_kept() {
 fn only_a_desktop_pane_started_as_an_agent_ends_with_its_agent() {
     type Change = fn(&mut crate::daemon::term::Term);
     let cases: [(&str, Change); 3] = [
-        ("a shell an agent was typed into", |t| t.cmd = None),
+        ("a shell an agent was typed into", |t| t.began_as_agent = false),
         ("a terminal app's pane", |t| t.owner = crate::protocol::Surface::Terminal),
         ("a popup", |t| t.popup = true),
     ];
@@ -10321,6 +10322,7 @@ fn only_a_desktop_pane_started_as_an_agent_ends_with_its_agent() {
         let t = d.terms.get_mut(&id).unwrap();
         t.owner = crate::protocol::Surface::Desktop;
         t.cmd = Some("claude".into());
+        t.began_as_agent = true;
         change(t);
         d.hook(id, "claude".into(), HookStatus::Gone, "SessionEnd", &[]);
         assert!(d.terms[&id].agent_ended.is_none(), "{name}");
@@ -10330,6 +10332,77 @@ fn only_a_desktop_pane_started_as_an_agent_ends_with_its_agent() {
         assert!(d.terms.contains_key(&id), "{name}");
         close(&mut d, &[id]);
     }
+}
+
+/// The process scan finds a shell where the agent was, for as many scans as it takes to say so.
+fn scan_finds_only_a_shell(d: &mut Daemon, term: TermId) {
+    for _ in 0..AGENT_MISSING_SCANS {
+        d.handle(Ev::Scan(vec![scan::Found {
+            term,
+            process: "bash".into(),
+            agent: None,
+            cwd: None,
+            agent_cwd: None,
+            mem: 0,
+            cpu: 0.0,
+            remote: None,
+        }]));
+    }
+}
+
+/// An agent that never said it ended (killed, crashed, or a resume that found no conversation after a
+/// restart) used to leave its shell listed for good: this is the leftover terminal row.
+#[test]
+fn an_agent_that_vanished_without_a_word_takes_the_pane_it_started_as_with_it() {
+    let (rt, (mut d, _rx)) = (runtime(), daemon());
+    let _in_rt = rt.enter();
+    let id = pane(&mut d);
+    let t = d.terms.get_mut(&id).unwrap();
+    (t.owner, t.cmd, t.began_as_agent) = (crate::protocol::Surface::Desktop, Some("claude --resume x".into()), true);
+    t.agent = Some("claude".into());
+    t.born = Instant::now() - AGENT_SHOWS_WITHIN - Duration::from_secs(1);
+    t.last_input = crate::clock::ago(Duration::from_secs(600));
+
+    scan_finds_only_a_shell(&mut d, id);
+    assert!(d.terms[&id].agent_ended.is_some(), "the scan's word starts the end");
+    let t = d.terms.get_mut(&id).unwrap();
+    t.agent_ended = t.agent_ended.map(|_| crate::clock::ago(AGENT_ENDED_GRACE));
+    d.close_ended_agents();
+
+    assert!(!d.terms.contains_key(&id), "the shell left behind goes");
+}
+
+#[test]
+fn a_terminal_someone_opened_is_never_ended_with_an_agent_typed_into_it() {
+    let (rt, (mut d, _rx)) = (runtime(), daemon());
+    let _in_rt = rt.enter();
+    let id = pane(&mut d);
+    let t = d.terms.get_mut(&id).unwrap();
+    t.owner = crate::protocol::Surface::Desktop;
+    t.agent = Some("claude".into());
+    t.born = Instant::now() - AGENT_SHOWS_WITHIN - Duration::from_secs(1);
+
+    scan_finds_only_a_shell(&mut d, id);
+    d.close_ended_agents();
+
+    assert!(!d.terms[&id].began_as_agent && d.terms[&id].agent_ended.is_none());
+    assert!(d.terms.contains_key(&id));
+    close(&mut d, &[id]);
+}
+
+#[test]
+fn a_pane_says_whether_it_began_as_an_agent_and_keeps_saying_so_after_a_restart() {
+    let (rt, (mut d, _rx)) = (runtime(), daemon());
+    let _in_rt = rt.enter();
+    let (id, other) = two_panes(&mut d);
+    d.terms.get_mut(&id).unwrap().began_as_agent = true;
+    assert!(d.snapshot().terms[&id].began_as_agent && !d.snapshot().terms[&other].began_as_agent);
+    let saved = d.saved();
+    let saved_panes: Vec<bool> = saved.workspaces.iter().flat_map(|w| w.tabs.iter()).flat_map(|t| t.panes.iter()).filter(|(k, _)| **k == id || **k == other).map(|(k, p)| (*k == id) == p.began_as_agent).collect();
+    assert_eq!(saved_panes, [true, true], "only the pane that began as an agent is saved as one");
+    let old: persist::SavedPane = serde_json::from_str(r#"{"cwd":null,"cmd":null,"agent":null,"session":null}"#).unwrap();
+    assert!(!old.began_as_agent, "a pane saved before the record reads as a terminal");
+    close(&mut d, &[id, other]);
 }
 
 #[test]

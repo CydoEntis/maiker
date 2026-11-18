@@ -14,7 +14,7 @@ export function agentName(process: string): string {
 
 /**
  * Whether an agent runs in the session to take a message from outside its box. A shell or another
- * program would run the text as a command: a ticket's text comes from GitHub, Plane or Linear.
+ * program would run the text as a command.
  */
 export function takesAgentMessages(session: Pick<SessionView, 'conversation' | 'ended'>): boolean {
   return Boolean(session.conversation.agent) && !session.ended

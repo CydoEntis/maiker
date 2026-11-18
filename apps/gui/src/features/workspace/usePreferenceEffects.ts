@@ -14,7 +14,7 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
     try {
       writeSettingsPreferences(preferences)
     } catch (error) {
-      toast.failure(error, 'Could not save settings')
+      toast.failed('Could not save settings', error)
     }
     setSpinnerStyle(preferences.spinner)
   }, [preferences])

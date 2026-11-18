@@ -30,8 +30,9 @@ export function BranchMenu({ spec, branch, worktree, project }: { spec: BranchMe
     if (busy || name === branch) return
     setBusy(true)
     switchBranch(spec.folder, name, false)
-      .then(() => { toast.success(`Now working on ${name}`); reload(); return queryClient.invalidateQueries({ queryKey: ['conversations'] }) })
-      .catch((error: unknown) => { toast.failure(error, `Could not switch to ${name}`) })
+      // The branch chip shows the new branch, so the switch needs no toast.
+      .then(() => { reload(); return queryClient.invalidateQueries({ queryKey: ['conversations'] }) })
+      .catch((error: unknown) => { toast.failed(`Could not switch to ${name}`, error) })
       .finally(() => { setBusy(false) })
   }
   const rows: ChipItem[] = (read?.branches ?? [{ name: branch, when: null }]).map((entry) => ({

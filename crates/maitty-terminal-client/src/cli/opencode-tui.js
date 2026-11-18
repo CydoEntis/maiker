@@ -13,7 +13,7 @@ const ROUTE_POLL_INTERVAL_MS = 100;
 const SELECTION_RETRY_DELAYS_MS = [100, 400, 1_000];
 
 async function requestOnce(sessionID, state, _seq, isCurrent = () => true) {
-  if (!process.env.__APP_ENV___TERM_ID || !sessionID || !isCurrent()) return true;
+  if (!(process.env.__APP_ENV___TERM_ID || process.env.__APP_ENV_PREVIOUS___TERM_ID) || !sessionID || !isCurrent()) return true;
   const status = state === undefined ? "same" : state === "idle" ? (worked.has(sessionID) ? "done" : "idle") : state;
   if (state === "working") worked.add(sessionID);
   const payload = JSON.stringify({ hook_event_name: "opencode.tui", session_id: sessionID });
@@ -28,7 +28,7 @@ async function requestOnce(sessionID, state, _seq, isCurrent = () => true) {
 }
 
 async function requestHelperOnce(sessionID, id, name, start, isCurrent = () => true) {
-  if (!process.env.__APP_ENV___TERM_ID || !sessionID || !id || !isCurrent()) return true;
+  if (!(process.env.__APP_ENV___TERM_ID || process.env.__APP_ENV_PREVIOUS___TERM_ID) || !sessionID || !id || !isCurrent()) return true;
   const event = start ? "SubagentStart" : "SubagentStop";
   const payload = JSON.stringify({
     hook_event_name: event, session_id: sessionID, agent_id: id,
@@ -51,7 +51,7 @@ export default {
 };
 
 async function tui(api) {
-  if (!process.env.__APP_ENV___TERM_ID) return;
+  if (!(process.env.__APP_ENV___TERM_ID || process.env.__APP_ENV_PREVIOUS___TERM_ID)) return;
 
   let disposed = false;
   let context;
@@ -412,7 +412,7 @@ async function tui(api) {
 }
 
 function setup(api) {
-  if (!process.env.__APP_ENV___TERM_ID) return;
+  if (!(process.env.__APP_ENV___TERM_ID || process.env.__APP_ENV_PREVIOUS___TERM_ID)) return;
 
   let disposed = false;
   let selected;

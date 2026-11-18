@@ -93,7 +93,7 @@ export function useConversationSending({ setDrafts, setSendFailures, setMessages
             setDrafts((current) => ({ ...current, [conversationId]: '' }))
             clearSendFailure(conversationId)
             await refreshAfterSubmission(conversationId)
-            toast.message('Message was received; refreshing conversation')
+            toast.info('Message was received; refreshing conversation')
             return
           }
           setSendFailures((current) => ({
@@ -148,13 +148,13 @@ export function useConversationSending({ setDrafts, setSendFailures, setMessages
       if (outcome === 'delivered') {
         setDrafts((current) => ({ ...current, [selected.id]: '' }))
         clearSendFailure(selected.id)
-        toast.message('The daemon confirmed this message was received')
+        toast.info('The daemon confirmed this message was received')
       } else if (outcome === 'not-delivered') {
         setSendFailures((current) => ({
           ...current,
           [selected.id]: { kind: 'not-delivered', operation },
         }))
-        toast.message(
+        toast.info(
           'The daemon confirmed this message was not delivered. Your draft is safe to retry.',
         )
       } else {
@@ -167,11 +167,7 @@ export function useConversationSending({ setDrafts, setSendFailures, setMessages
         )
       }
     } catch (error: unknown) {
-      toast.error(
-        error instanceof Error
-          ? `Could not check delivery: ${error.message}`
-          : 'Could not check delivery',
-      )
+      toast.failed('Could not check delivery', error)
     }
   }
 
@@ -197,11 +193,7 @@ export function useConversationSending({ setDrafts, setSendFailures, setMessages
         ])
       })
       .catch((error: unknown) => {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : 'Could not resume this conversation',
-        )
+        toast.failed('Could not resume this conversation', error)
       })
       .finally(() => {
         setRecoveryPendingId(null)
@@ -240,11 +232,7 @@ export function useConversationSending({ setDrafts, setSendFailures, setMessages
           ])
         })
         .catch((error: unknown) => {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : 'Could not answer approval request',
-          )
+          toast.failed('Could not answer approval request', error)
         })
       return
     }
@@ -291,9 +279,7 @@ export function useConversationSending({ setDrafts, setSendFailures, setMessages
         toast.success(`Answers sent to ${activeConversation.provider}`)
       })
       .catch((error: unknown) => {
-        toast.error(
-          error instanceof Error ? error.message : 'Could not send answers',
-        )
+        toast.failed('Could not send answers', error)
       })
   }
 

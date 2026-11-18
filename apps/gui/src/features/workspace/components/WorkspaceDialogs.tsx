@@ -1,4 +1,4 @@
-import { ticketProjects } from '@/features/tickets/model/ticketProjects'
+import { extensionProjects } from '@/features/extensions/projects'
 import { listSshHosts, machineActivity } from '@/api/machines'
 import { DesktopSettings } from '@/features/settings/components/DesktopSettings'
 import { PerfOverlay } from './PerfOverlay'
@@ -16,6 +16,7 @@ import { NewWorktreeDialog } from '@/features/worktrees/NewWorktreeDialog'
 import { GetFileDialog } from './GetFileDialog'
 import { SpecialistsDialog } from './SpecialistsDialog'
 import { MachineUpdateDialog } from './MachineUpdateDialog'
+import { DraftGuardHost } from '@/features/documents/DraftGuardHost'
 import { ConfirmCloseDialog } from './ConfirmCloseDialog'
 import { RenameDialog, RenameMachineDialog } from './RenameDialog'
 import { RecentSessionsDialog } from './RecentSessionsDialog'
@@ -24,7 +25,6 @@ import { machineProjects } from '../model/newSession'
 import { resolveStartFolder } from '../model/startFolder'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { withNickname, writeMachineNicknames } from '@/data/machineNicknames'
-import { Toast } from './states'
 import type { SessionView } from '../model/session'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { folderExists } from '../model/startFolder'
@@ -32,12 +32,12 @@ import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, toastMessage, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, afterAppUpdate } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate } = useWorkspace()
   const serviceFinishing = useServiceFinishing()
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
-      {mismatch === null && <ServiceBehindNotice sessionsQuery={sessionsQuery} restartWhenIdle={preferences.restartWhenIdle} afterAppUpdate={afterAppUpdate} />}
+      {mismatch === null && <ServiceBehindNotice sessionsQuery={sessionsQuery} restartServiceWhenIdle={preferences.restartServiceWhenIdle} starting={starting} afterAppUpdate={afterAppUpdate} />}
             <HoverTips />
             {shortcutsOpen && <ShortcutOverlay platform={platform} portalContainer={root} onClose={() => { setShortcutsOpen(false) }} />}
             {welcomeOpen && (
@@ -100,6 +100,7 @@ export function WorkspaceDialogs() {
                 onCancel={() => { setUpdateAsk(null) }}
               />
             )}
+            <DraftGuardHost />
             {closeAsk && (
               <ConfirmCloseDialog title={closeAsk.title} body={closeAsk.body} confirmLabel={closeAsk.confirmLabel} onCancel={() => { setCloseAsk(null) }} onConfirm={() => { const run = closeAsk.run; setCloseAsk(null); run() }} />
             )}
@@ -143,12 +144,11 @@ export function WorkspaceDialogs() {
                 usage={usageInfo}
                 onSignInAgent={signInAgent}
                 github={{ onSignIn: signInGitHub, signInsEnded: gitHubSignInsEnded }}
-                ticketProjects={ticketProjects(sessions)}
+                extensionProjects={extensionProjects(sessions)}
                 onChooseFolder={chooseStartFolder}
                 onClose={() => { setPreviewTheme(null); setSettingsSection(null) }}
               />
             )}
-            {toastMessage && <Toast key={toastMessage.key} message={toastMessage.text} />}
             {/* Not while the service still runs the older version: the update is not finished, and its card says so. */}
             {updatedTo && !mismatch && <UpdatedNotice update={updatedTo} serviceFinishing={serviceFinishing} onDone={() => { setUpdatedTo(null) }} />}
             {preferences.perfOverlay && <PerfOverlay />}

@@ -94,7 +94,7 @@ cargo check --target x86_64-unknown-linux-gnu;
 cargo check --target aarch64-apple-darwin.
 Report unavailable targets honestly; a compile check is not a platform live check.
 
-Use isolated MAIKER_SOCKET servers and temporary repos/config roots. Never restart
+Use isolated AGENT_SOCKET servers and temporary repos/config roots. Never restart
 the user's daemon or use private transcripts as fixtures. Paid/live provider runs
 are explicit human acceptance work, separate from deterministic automated tests.
 

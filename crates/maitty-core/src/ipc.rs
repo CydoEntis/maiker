@@ -49,31 +49,57 @@ impl AsyncWrite for Shared {
     }
 }
 
-pub(crate) const STRUCTURED_ENV: [&str; 4] = [
-    concat!(env!("APP_ENV"), "_CONVERSATION_ID"),
-    concat!(env!("APP_ENV"), "_CONVERSATION_GENERATION"),
-    concat!(env!("APP_ENV"), "_CONVERSATION_CONNECTION"),
-    concat!(env!("APP_ENV"), "_CONVERSATION_AUTH"),
+/// The structured chat's identity variables, without the app's prefix (ADR 0003).
+pub(crate) const STRUCTURED_KEYS: [&str; 4] = [
+    "CONVERSATION_ID",
+    "CONVERSATION_GENERATION",
+    "CONVERSATION_CONNECTION",
+    "CONVERSATION_AUTH",
 ];
 /// The variables that send this client's commands to another machine.
-pub(crate) const REMOTE_ROUTE_ENV: [&str; 3] = [
-    concat!(env!("APP_ENV"), "_REMOTE"),
-    concat!(env!("APP_ENV"), "_SSH"),
-    concat!(env!("APP_ENV"), "_REMOTE_CMD"),
-];
-pub(crate) const RUNTIME_ROUTE_ENV: [&str; 6] = [
-    concat!(env!("APP_ENV"), "_SOCKET"),
-    concat!(env!("APP_ENV"), "_CONFIG"),
-    concat!(env!("APP_ENV"), "_DATA_DIR"),
-    concat!(env!("APP_ENV"), "_REMOTE"),
-    concat!(env!("APP_ENV"), "_SSH"),
-    concat!(env!("APP_ENV"), "_REMOTE_CMD"),
-];
+pub(crate) const REMOTE_ROUTE_KEYS: [&str; 3] = ["REMOTE", "SSH", "REMOTE_CMD"];
+const RUNTIME_ROUTE_KEYS: [&str; 6] = ["SOCKET", "CONFIG", "DATA_DIR", "REMOTE", "SSH", "REMOTE_CMD"];
+/// What a pane's agent is told about its pane (ADR 0003): never copied into another process.
+const PANE_KEYS: [&str; 2] = ["TERM_ID", "PANE_TOKEN"];
+
+/// Every name `keys` have, the current prefix first and the old ones after (ADR 0012).
+fn names_of(keys: &[&str]) -> Vec<String> {
+    keys.iter()
+        .flat_map(|key| maitty_shared::brand::env_names(key))
+        .collect()
+}
+
+pub(crate) fn structured_env() -> Vec<String> {
+    names_of(&STRUCTURED_KEYS)
+}
+
+pub(crate) fn remote_route_env() -> Vec<String> {
+    names_of(&REMOTE_ROUTE_KEYS)
+}
+
+pub(crate) fn runtime_route_env() -> Vec<String> {
+    names_of(&RUNTIME_ROUTE_KEYS)
+}
+
+/// The variables that make a process a pane's agent or a structured chat's provider.
+pub(crate) fn identity_env() -> Vec<String> {
+    names_of(&STRUCTURED_KEYS)
+        .into_iter()
+        .chain(names_of(&PANE_KEYS))
+        .collect()
+}
+
+/// Whether `name` is one of [`identity_env`], in any case (Windows folds case).
+pub(crate) fn is_identity_env(name: &str) -> bool {
+    identity_env()
+        .iter()
+        .any(|identity| name.eq_ignore_ascii_case(identity))
+}
 
 pub fn has_structured_identity() -> bool {
-    STRUCTURED_ENV
+    STRUCTURED_KEYS
         .iter()
-        .any(|key| std::env::var_os(key).is_some())
+        .any(|key| maitty_shared::brand::env_var_os(key).is_some())
 }
 
 pub fn framed(stream: Stream) -> (Reader, Writer) {
@@ -130,7 +156,7 @@ pub fn socket_id() -> String {
 
 /// The server identity the app had under the command `app` (an older name, for the rename handover).
 fn socket_id_for(app: &str) -> String {
-    let label = std::env::var(concat!(env!("APP_ENV"), "_SOCKET")).ok();
+    let label = maitty_shared::brand::env_var("SOCKET").ok();
     let username = std::env::var("USERNAME").ok();
     let user = std::env::var("USER").ok();
     maitty_ipc_transport::socket_id(
@@ -262,6 +288,11 @@ async fn connect_named(name: Name<'static>) -> Result<Stream> {
 /// How long a daemon still running under an older name gets to save its sessions and let go.
 const PREVIOUS_STOPS_WITHIN: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// The oldest daemon that reads this build's `Hello` and `KillServer`: the window before the in-app tickets were
+/// removed (ADR 0013). A daemon of the old name from that window no longer speaks this version, but those two
+/// messages kept their shape, so it can still be asked to stop and save its sessions.
+const PREVIOUS_STOP_READ_SINCE: u32 = 78;
+
 /// Stop a daemon still running under the app's older command `app`, so the sessions it saves on the way out are
 /// the ones brought over with its data, and the new name's daemon restores them with their agents resumed.
 /// Nothing running under that name, or one too old to be asked, is left as it is (`false`); the caller still
@@ -275,7 +306,7 @@ pub async fn stop_previous_daemon(app: &str) -> Result<bool> {
     send(&mut w, &hello).await?;
     let daemon = maitty_ipc_transport::welcome_version(&mut r).await?;
     anyhow::ensure!(
-        daemon.speaks_with_us(),
+        daemon.speaks_with_us() || daemon.version >= PREVIOUS_STOP_READ_SINCE,
         "the {app} service is too old to be asked to stop (protocol {}); stop it, then start {APP_COMMAND} again",
         daemon.version
     );
@@ -362,13 +393,13 @@ pub async fn open(attach: bool) -> Result<(Reader, Writer)> {
 /// What the terminal app says about itself in a Hello: the pane and the conversation it runs in,
 /// from the environment.
 pub fn terminal_dial(attach: bool) -> Result<maitty_machines::Dial> {
-    let structured = structured_identity(STRUCTURED_ENV.map(std::env::var_os))?;
+    let structured = structured_identity(STRUCTURED_KEYS.map(maitty_shared::brand::env_var_os))?;
     Ok(maitty_machines::Dial {
         attach,
         surface: protocol::Surface::Terminal,
         replays: true,
-        term: std::env::var(concat!(env!("APP_ENV"), "_TERM_ID")).ok(),
-        token: std::env::var(concat!(env!("APP_ENV"), "_PANE_TOKEN")).ok(),
+        term: maitty_shared::brand::env_var("TERM_ID").ok(),
+        token: maitty_shared::brand::env_var("PANE_TOKEN").ok(),
         structured,
         newest_only: false,
     })
@@ -538,6 +569,19 @@ fn daemon_command(exe: Option<&std::path::Path>) -> Result<std::process::Command
 
 #[cfg(test)]
 mod tests {
+    /// A rename of the daemon or of the variables' prefix must not move the socket: an older client
+    /// and a newer daemon have to find each other, and the handshake decides if they can talk (ADR 0012).
+    #[test]
+    fn the_server_identity_follows_the_command_and_not_the_daemons_name_or_the_prefix() {
+        let id = maitty_ipc_transport::socket_id(super::APP_COMMAND, None, None, Some("someone"));
+        assert!(id.contains(super::APP_COMMAND), "{id}");
+        assert!(!id.contains(maitty_shared::brand::DAEMON_NAME), "{id}");
+        assert!(
+            !id.to_ascii_uppercase().contains(maitty_shared::brand::ENV_PREFIX),
+            "{id}"
+        );
+    }
+
     #[test]
     fn a_second_daemon_is_refused_while_the_first_holds_the_lock() {
         let path =

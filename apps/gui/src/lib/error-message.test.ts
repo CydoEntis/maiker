@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { APP_NAME } from '@/brand'
 import { errorMessage, explainError } from './error-message'
 
 describe('errorMessage', () => {
@@ -28,7 +29,7 @@ describe('explainError', () => {
   it('puts a raw tool failure in plain words and keeps the raw text as details', () => {
     const raw = 'connecting to the local daemon: Connection refused (os error 111)'
     const explained = explainError(raw, 'Could not save the setting')
-    expect(explained.reason).toBe('The Maiker service is not answering. It may still be starting; try again in a moment.')
+    expect(explained.reason).toBe(`The ${APP_NAME} service is not answering. It may still be starting; try again in a moment.`)
     expect(explained.details).toBe(raw)
   })
 

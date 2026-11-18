@@ -38,7 +38,7 @@ function useFolderRules(machine: number, open: boolean): readonly GitIdentityRul
 }
 
 /**
- * The new chat page's Clone a repository: `open` shows the dialog and answers with the cloned
+ * The New session dialog's Clone a repository: `open` shows the dialog and answers with the cloned
  * folder, or null when it is cancelled, the way Browse answers with a chosen one.
  */
 export function useCloneRepo({ machine, where, startIn, chooseFolder, onOpenGitHubSettings }: Target): { open: () => Promise<string | null>; dialog: ReactNode } {

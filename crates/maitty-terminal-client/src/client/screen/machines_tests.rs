@@ -65,7 +65,7 @@ fn frame(app: &mut App, w: u16, h: u16) -> (String, Rect, ratatui::buffer::Buffe
                 + "\n"
         })
         .collect();
-    if std::env::var(concat!(env!("APP_ENV"), "_SHOW")).is_ok() {
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
         println!("===== {w}x{h}\n{text}");
     }
     let rect = *app

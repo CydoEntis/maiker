@@ -1,6 +1,5 @@
-import { useState, type CSSProperties } from 'react'
-import { Popover } from 'radix-ui'
-import { PopupContent } from '@/components/ui/popup'
+import { HoverCard } from 'radix-ui'
+import { StatusIcon } from '@/components/ui/status-icon'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { noteLines } from './noteLines'
 import { DownloadProgress } from './DownloadProgress'
@@ -10,13 +9,17 @@ import { copyText } from '@/lib/clipboard'
 
 const CARD_GAP_PX = 8
 const CARD_EDGE_PX = 12
+const CARD_OPEN_DELAY_MS = 120
+const CARD_CLOSE_DELAY_MS = 120
+/** The running light in the button while the update downloads: the live box's own size. */
+const LIGHT_SIZE_PX = 12
 
 type Props = {
   variant: 'footer' | 'rail'
   state: UpdaterState
-  /** The running version. */
+  /** The running version, named on the card. It is never shown in the sidebar itself: the version lives in Settings. */
   version: string | null
-  /** A release the user chose to skip: it gets no pill. */
+  /** A release the user chose to skip: it gets no button. */
   skipped: string | null
   portalContainer: HTMLElement | null
   onInstall: () => void
@@ -29,42 +32,53 @@ type Offer = Exclude<UpdaterState, { status: 'idle' | 'checking' | 'current' }>
 
 function offerOf(state: UpdaterState, skipped: string | null): Offer | null {
   if (state.status === 'available') return state.version === skipped ? null : state
-  // A failed check is not something you started, so it gets no pill; Settings still says so.
+  // A failed check is not something you started, so it gets no button; Settings still says so.
   if (state.status === 'failed') return state.during === 'update' ? state : null
   if (state.status === 'downloading' || state.status === 'ready') return state
   return null
 }
 
-/** The sidebar footer's left slot: the version, or what an update needs from you, with a card that opens upward. */
-export function UpdateSlot({ variant, state, version, skipped, portalContainer, onInstall, onRestartNow, onCheck, onSkip }: Props) {
-  const [open, setOpen] = useState(false)
-  const offer = offerOf(state, skipped)
+const vee = (version: string) => `v${version.replace(/^v/, '')}`
 
-  if (!offer) {
-    if (variant === 'rail' || version === null) return null
-    return <span className="mx-version">Version <span className="mono">{version}</span></span>
-  }
+/**
+ * The sidebar foot's update button (design: Update button): a download icon with an accent dot, then a running light while
+ * the update comes down, then a restart icon once it needs one. A card beside it says what is ready and what is new; the
+ * click does the next step. With nothing to do it draws nothing, because the version number lives only in Settings.
+ */
+export function UpdateSlot({ variant, state, version, skipped, portalContainer, onInstall, onRestartNow, onCheck, onSkip }: Props) {
+  const offer = offerOf(state, skipped)
+  if (!offer) return null
 
   const percent = offer.status === 'downloading' ? percentOf(offer.progress) : null
   const label = offer.status === 'available' ? `Update to ${offer.version}`
     : offer.status === 'downloading' ? (percent === null ? 'Downloading…' : `${String(percent)}%`)
     : offer.status === 'ready' ? 'Restart to update'
     : 'Update failed'
-  // In the sidebar's foot an update is a small chip beside the gear (layout 2h): ↑ and the version, or Restart once it is in.
-  const chip = variant !== 'rail' && (offer.status === 'available' || offer.status === 'ready')
+  const click = offer.status === 'available' ? onInstall : offer.status === 'ready' ? onRestartNow : offer.status === 'failed' ? onCheck : undefined
+  const icon = offer.status === 'downloading'
+    ? <StatusIcon status="working" size={LIGHT_SIZE_PX} />
+    : offer.status === 'ready' ? <Icon name="restart" />
+    : <Icon name="download" />
+
   const cardBody = (() => {
     switch (offer.status) {
       case 'available': {
         const lines = noteLines(offer.notes)
         return (
           <>
-            <h3>Maiker {offer.version} is available</h3>
-            {version && <p className="mx-upd-sub">You have {version}</p>}
-            {lines.length > 0 && <ul className="mx-upd-notes">{lines.map((line) => <li key={line}>{line}</li>)}</ul>}
-            <div className="mx-upd-actions">
-              <button type="button" className="mx-upd-primary" onClick={() => { onInstall() }}>Download</button>
-              <button type="button" className="mx-upd-ghost" onClick={() => { onSkip(offer.version); setOpen(false) }}>Skip this version</button>
-              <button type="button" className="mx-upd-ghost" onClick={() => { setOpen(false) }}>Later</button>
+            <div className="mx-upd-head">
+              <span className="mx-upd-title">Update ready</span>
+              <span className="mx-upd-versions">{version === null ? '' : <>{vee(version)} <span className="mx-upd-arrow">→</span> </>}<span className="mx-upd-new">{vee(offer.version)}</span></span>
+            </div>
+            {lines.length > 0 && (
+              <div className="mx-upd-log">
+                <span className="mx-upd-log-title">What’s new</span>
+                {lines.map((line) => <div key={line} className="mx-upd-line"><span aria-hidden="true">–</span><span>{line}</span></div>)}
+              </div>
+            )}
+            <div className="mx-upd-foot">
+              <span>Click to download · installs on restart</span>
+              <button type="button" className="mx-upd-skip" onClick={() => { onSkip(offer.version) }}>Skip this version</button>
             </div>
           </>
         )
@@ -72,60 +86,64 @@ export function UpdateSlot({ variant, state, version, skipped, portalContainer, 
       case 'downloading':
         return (
           <>
-            <h3>Downloading Maiker {offer.version}</h3>
-            <DownloadProgress progress={offer.progress} transfer={offer.transfer} />
+            <div className="mx-upd-head"><span className="mx-upd-title">Updating…</span><span className="mx-upd-versions"><span className="mx-upd-new">{vee(offer.version)}</span></span></div>
+            <div className="mx-upd-log"><DownloadProgress progress={offer.progress} transfer={offer.transfer} /></div>
           </>
         )
       case 'ready':
         return (
           <>
-            <h3>Maiker {offer.version} is ready</h3>
-            <ul className="mx-upd-notes is-safe">
-              <li>Your sessions keep running in maikerd.</li>
-              <li>Your tabs and splits reopen.</li>
-              <li>Agents in the middle of a turn are not interrupted.</li>
-            </ul>
-            <div className="mx-upd-actions">
-              <button type="button" className="mx-upd-primary" onClick={() => { setOpen(false); onRestartNow() }}>Restart now</button>
-              <button type="button" className="mx-upd-ghost" onClick={() => { setOpen(false) }}>Later</button>
-            </div>
+            <div className="mx-upd-head"><span className="mx-upd-title">Restart to finish</span><span className="mx-upd-versions"><span className="mx-upd-new">{vee(offer.version)}</span></span></div>
+            <div className="mx-upd-foot"><span>Click to restart · chats keep running</span></div>
           </>
         )
       case 'failed':
         return (
           <>
-            <h3>Update failed</h3>
-            <p className="mx-upd-error">{offer.message}</p>
-            <div className="mx-upd-actions">
-              <button type="button" className="mx-upd-primary" onClick={() => { onCheck() }}>Retry</button>
-              <button type="button" className="mx-upd-ghost" onClick={() => { void copyText(offer.message) }}>Copy details</button>
+            <div className="mx-upd-head"><span className="mx-upd-title">Update failed</span></div>
+            <div className="mx-upd-log"><p className="mx-upd-error">{offer.message}</p></div>
+            <div className="mx-upd-foot">
+              <span>Click to retry</span>
+              <button type="button" className="mx-upd-skip" onClick={() => { void copyText(offer.message) }}>Copy details</button>
             </div>
           </>
         )
     }
   })()
 
+  // The card is for the pointer. What it holds that a keyboard or screen reader needs is also here, in the button's own
+  // description and in two buttons that appear on focus, because a hover card cannot take focus.
+  const description = offer.status === 'failed' ? offer.message : offer.status === 'available' ? noteLines(offer.notes).join('. ') : ''
+  const describedBy = description === '' ? undefined : 'mx-upd-description'
+  const keyAction = offer.status === 'available'
+    ? <button type="button" className="mx-upd-keyonly" onClick={() => { onSkip(offer.version) }}>{`Skip version ${offer.version}`}</button>
+    : offer.status === 'failed'
+      ? <button type="button" className="mx-upd-keyonly" onClick={() => { void copyText(offer.message) }}>Copy update error details</button>
+      : null
+
   return (
-    <Popover.Root open={open} onOpenChange={setOpen}>
-      <Popover.Trigger asChild>
-      <button
-        type="button"
-        className={`mx-upd-pill is-${offer.status} is-${variant}`}
-        aria-label={variant === 'rail' ? `${label}. Open update details` : chip ? label : undefined}
-        style={percent === null ? undefined : { '--p': `${String(percent)}%` } as CSSProperties}
-      >
-        {variant === 'rail' ? <Icon name="download" /> : (
-          <>
-            {offer.status === 'downloading' && <span className="mx-upd-ring" aria-hidden="true" />}
-            {offer.status === 'available' ? <span aria-hidden="true">↑ v{offer.version.replace(/^v/, '')}</span> : chip ? <span aria-hidden="true">↻ Restart</span> : label}
-          </>
-        )}
-      </button>
-      </Popover.Trigger>
-      <PopupContent side="top" align={portalContainer?.dataset.side === 'right' ? 'end' : 'start'} sideOffset={CARD_GAP_PX} collisionPadding={CARD_EDGE_PX} aria-label="Update" className="mx-upd-card" onEscapeKeyDown={(event) => { event.stopPropagation() }}>
-        <button type="button" className="mx-upd-close" aria-label="Close" onClick={() => { setOpen(false) }}><Icon name="close" /></button>
-        {cardBody}
-      </PopupContent>
-    </Popover.Root>
+    <>
+    <HoverCard.Root openDelay={CARD_OPEN_DELAY_MS} closeDelay={CARD_CLOSE_DELAY_MS}>
+      <HoverCard.Trigger asChild>
+        <button
+          type="button"
+          className={`mx-upd-button is-${offer.status} is-${variant}`}
+          aria-label={label}
+          aria-describedby={describedBy}
+          {...(click === undefined ? { 'aria-disabled': true } : { onClick: click })}
+        >
+          {icon}
+          {offer.status === 'available' && <span className="mx-upd-dot" aria-hidden="true" />}
+        </button>
+      </HoverCard.Trigger>
+      <HoverCard.Portal container={portalContainer}>
+        <HoverCard.Content side="top" align={portalContainer?.dataset.side === 'right' ? 'end' : 'start'} sideOffset={CARD_GAP_PX} collisionPadding={CARD_EDGE_PX} className="mx-upd-card" data-float>
+          {cardBody}
+        </HoverCard.Content>
+      </HoverCard.Portal>
+    </HoverCard.Root>
+    {describedBy !== undefined && <span id={describedBy} className="sr-only">{description}</span>}
+    {keyAction}
+    </>
   )
 }
