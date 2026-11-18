@@ -295,7 +295,7 @@ button.mx-file-chip:focus-visible { box-shadow: var(--focus-underline); }
 .mx-composer-error { margin: 6px 0 0; align-self: stretch; font-size: 12px; color: var(--danger); }
 
 /* Layer one: what the agent waits on, a floating card above the message box (`WaitingCard`, Needs Card in the design): the
-   box's width, a --line2 border, the shared floating shadow, folded corners with flaps under Folded. It rises in, 0.2s. */
+   box's width, a --line2 border, the shared floating shadow, folded corners under Folded. It rises in, 0.2s. */
 @keyframes mxRise { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 .mx-waiting {
   position: relative; z-index: 1; width: 100%; margin: 0 0 8px; outline: none;
@@ -526,7 +526,7 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 /* The question tray's slot: no box of its own, so the tray lays out in the column as before; it is only there to find the tray's first control. */
 .mx-question-slot { display: contents; }
 
-/* Folded corners (docs/DESIGN.md): chat blocks and bubbles are cut 10px, a floating action card 14px with its flaps; the
+/* Folded corners (docs/DESIGN.md): chat blocks and bubbles are cut 10px, a floating action card 14px; the
    Square and Rounded corners come from the tokens. */
 :root[data-corners="folded"] .mx-app :is(.mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered) { border-radius: 10px 0 10px 0 !important; }
 :root[data-corners="folded"] .mx-app .mx-waiting { border-radius: 14px 0 14px 0 !important; }

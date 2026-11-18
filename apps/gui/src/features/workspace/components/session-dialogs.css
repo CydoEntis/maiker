@@ -39,7 +39,7 @@
 .mx-nsd-token[data-state="open"] { background: var(--m-sel); color: var(--fg); }
 .mx-nsd-token-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-nsd-token-text.is-mono { font-family: var(--mono); font-size: 12.5px; }
-.mx-nsd-sep { flex: none; color: var(--line2); }
+.mx-nsd-word { flex: none; padding: 0 4px; font-size: 13px; color: var(--muted); }
 
 .mx-nsd-note { margin: 0; padding: 0 16px 8px; font-size: 12px; line-height: 1.45; color: var(--dim); }
 .mx-nsd-note:has(> .mx-note) { padding-top: 2px; }
@@ -185,7 +185,7 @@
 }
 :root[data-reduced-motion="true"] :is(.mx-fp, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename) { animation: none; }
 
-.mx-nsd-where { display: flex; align-items: center; gap: 2px; min-width: 0; height: 36px; padding: 0 4px; border: 1px solid var(--line); background: var(--m-well); }
+.mx-nsd-where { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; min-height: 36px; }
 .mx-nsd-token.is-down { color: var(--warn); }
 .mx-nsd-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .mx-nsd-perm { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; font-size: 12.5px; color: var(--fg2); border: 1px solid var(--line); white-space: nowrap; }
@@ -209,13 +209,22 @@
 /* ---- The New session draft: a chat in the main area, not a dialog ---- */
 /* It sits over the panes, so it stays opaque; the question is centred low, right above the box it leads into. */
 .mx-newchat { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--main); }
-.mx-nc-head { flex: none; height: 44px; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); }
-.mx-nc-draft-name { flex: none; margin: 0; font-size: 13px; font-weight: 600; font-style: italic; color: var(--fg2); }
-.mx-nc-head-end { flex: none; margin-left: auto; display: flex; align-items: center; gap: 8px; }
+/* The header is `.mx-pane-head`: a dashed draft mark, the name, and at the right that nothing is started. */
+.mx-nc-head { min-width: 0; }
+.mx-nc-mark { flex: none; width: 14px; height: 14px; border: 1px dashed var(--dim); }
+.mx-nc-draft-name { flex: none; margin: 0; font-size: 14px; font-weight: 600; color: var(--fg2); }
+.mx-nc-state { font-size: 12px; color: var(--dim); white-space: nowrap; }
+/* The body centres the question, where it runs and the box as one block; while it starts the card takes the top and the box stays low. */
+.mx-nc-body { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
+.mx-nc-body:has(> .mx-nc-start) { justify-content: flex-end; }
+.mx-nc-intro { width: 100%; max-width: var(--chat-width, 760px); margin: 0 auto; padding: 0 20px 14px; box-sizing: border-box; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.mx-nc-title { margin: 0; font-size: clamp(22px, 2.6vw, 28px); font-weight: 650; line-height: 1.15; letter-spacing: -.02em; color: var(--fg); }
+.mx-nc-sub { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+.mx-nc-foot { width: 100%; display: flex; justify-content: space-between; gap: 12px; }
+.mx-nc-works { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-nc-keys { flex: none; }
+.mx-nc-keys b { font: 600 11.5px var(--mono); color: var(--fg2); }
 .mx-nc-start { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 20px 22px; text-align: center; }
-/* An equal space under the composer centres the question and the box together on the page. */
-.mx-newchat:has(> .mx-nc-start:not(.is-starting))::after { content: ''; flex: 1; min-height: 0; }
-.mx-nc-title { margin: 0; font-size: clamp(26px, 3.4vw, 36px); font-weight: 650; line-height: 1.1; letter-spacing: -.025em; color: var(--fg); text-wrap: balance; }
 .mx-nc-start.is-starting { align-items: stretch; justify-content: flex-start; text-align: left; overflow-y: auto; }
 .mx-nc-on { flex: none; font-size: 12px; color: var(--dim); white-space: nowrap; }
 /* The chips of the box's foot: the agent keeps the room it needs, the rest sit beside it. */

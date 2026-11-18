@@ -174,6 +174,9 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
           if (background) throw new Error(NOT_LISTED)
           return false
         }
+        // A start with no launch command is a plain shell, whoever asked (New terminal, a split, a restart): an agent typed into
+        // it later stays in its terminal instead of turning the pane into the chat.
+        if (launch === undefined) rememberShellStart(id)
         place(id)
         return true
       })
@@ -391,7 +394,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       void startOnMachine({ machine: target, name: 'The machine' }, REMOTE_HOME).then((id) => { if (id !== null) rememberShellStart(id) })
       return
     }
-    void runStart(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { rememberShellStart(id); movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
+    void runStart(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
   }, [setSettingsSection, focusedSession, runStart, startOnMachine, preferences.startFolder, home, setLayout])
 
   // Signing in to GitHub is `gh`'s own interactive command, in a terminal of its own in the machine's home folder: it

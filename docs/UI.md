@@ -237,7 +237,7 @@ Rules for `apps/gui/`. Owner-approved 2026-11-04.
    Folded is the default corner style and needs two drawings: `corner-shape: bevel` where it exists, and a `clip-path`
    fallback under `@supports not (corner-shape: bevel)` for WebKit, the engine the app ships in on Linux and macOS
    ([DESIGN](DESIGN.md#desktop-app), Corners). A new surface with a cut is added to both, with its size, and its border,
-   shadow and flaps are checked in the fallback, where a clip-path clips them, and a surface whose edge is not a plain
+   shadow are checked in the fallback, where a clip-path clips them, and a surface whose edge is not a plain
    border (an inset shadow, a themed colour) sets `--fold-line` to that colour so the cut keeps its line. Look at the
    fallback in the real engine, not in Chromium with `corner-shape` switched off: WebKitGTK renders it headless under
    `cage` (`GtkOffscreenWindow`, `WEBKIT_DISABLE_COMPOSITING_MODE=1`, see `scripts/perf/webkit-harness.py`).

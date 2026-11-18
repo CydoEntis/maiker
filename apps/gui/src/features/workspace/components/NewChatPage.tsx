@@ -473,11 +473,12 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
 
   const where = (
     <div className="mx-nsd-where" role="group" aria-label="Where it works">
+      <span className="mx-nsd-word">Run on</span>
       <ChipMenu variant="token" triggerClass={`mx-nsd-token is-machine${targetDown === null ? '' : ' is-down'}`} side="bottom" width={TOKEN_LIST_WIDTH} title="Machine" hint="Where it runs" summary={targetDown === null ? targetLabel : `${targetLabel}, not reachable`}
         icon={<Icon name={remote ? 'server' : 'laptop'} size={13} />} label={<span className="mx-nsd-token-text">{targetLabel}</span>}
         search="Find a machine" sections={[{ heading: 'Machine', items: machineRows }]}
         footer={onAddMachine === undefined ? undefined : <button type="button" className="mx-chip-action" onClick={onAddMachine}><span className="mx-nsd-foot-mark" aria-hidden="true">+</span>Add a machine…</button>} />
-      <span className="mx-nsd-sep" aria-hidden="true">/</span>
+      <span className="mx-nsd-word">in</span>
       <ChipMenu variant="token" triggerClass="mx-nsd-token" side="bottom" width={TOKEN_LIST_WIDTH} title="Project" hint={`on ${targetLabel}`} summary={folderName}
         icon={dot(current?.color ?? 'var(--dim)')} label={<span className="mx-nsd-token-text">{folderName}</span>}
         search={cloner === null ? 'Find a project or folder' : 'Find a project, or paste a GitHub link'} sections={[{ heading: 'Recent', items: shown.map(folderItem) }]} fromQuery={fromTyped}
@@ -488,7 +489,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
             {cloner !== null && <button type="button" className="mx-chip-action" onClick={() => { openCloneWindow({ start: 'repos' }) }}><span className="mx-nsd-foot-mark" aria-hidden="true"><Icon name="repo" size={12} /></span>My GitHub repos…</button>}
           </div>
         )} />
-      <span className="mx-nsd-sep" aria-hidden="true">/</span>
+      <span className="mx-nsd-word">from</span>
       {branches !== null && !remote ? (
         <ChipMenu variant="token" triggerClass="mx-nsd-token is-branch" side="bottom" width={TOKEN_LIST_WIDTH} title="Branch" hint={`in ${folderName}`} summary={branchLabel}
           icon={<Icon name="branch" size={12} />} label={<span className="mx-nsd-token-text is-mono">{branchLabel}</span>}
@@ -525,16 +526,22 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   )
   return (
     <section className="mx-newchat" aria-label="New session" onKeyDown={onKeyDown}>
-      <header className="mx-nc-head">
+      <header className="mx-pane-head mx-nc-head">
         {leading}
+        <span className="mx-nc-mark" aria-hidden="true" />
         <h2 className="mx-nc-draft-name">New session</h2>
-        {where}
-        <span className="mx-nc-head-end">
+        <span className="mx-pane-controls">
+          <span className="mx-nc-state">{starting ? 'Starting…' : 'Draft · not started'}</span>
           {onCancel !== undefined && <button type="button" className="mx-pane-control" aria-label="Close" title="Discard (Esc)" disabled={starting} onClick={discard}><Icon name="close" size={13} /></button>}
         </span>
       </header>
+      <div className="mx-nc-body">
       {sent === null ? (
-        <div className="mx-nc-start"><h1 className="mx-nc-title">What should we work on?</h1></div>
+        <div className="mx-nc-intro">
+          <h1 className="mx-nc-title">What should we build?</h1>
+          <p className="mx-nc-sub">{`${AGENT_LABEL[agent]} starts as soon as you send. You can rename the session any time.`}</p>
+          {where}
+        </div>
       ) : (
         // The same card the session's chat draws until its agent reports in, so the swap to the real pane changes nothing the eye sees.
         <div className="mx-nc-start is-starting" role="status">
@@ -552,7 +559,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
           <div className={`mx-box${starting ? ' is-locked' : ''}`}>
             {slashing && <SlashPicker agent={AGENT_LABEL[agent]} typed={message.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={complete} onHover={(index) => { setCursor({ query, index }) }} />}
             <DraftAttachments attachments={attachments} onRemove={attach.remove} />
-            <textarea ref={text} onKeyDown={onTextKey} onPaste={onPaste} aria-label="What should we work on?" rows={2} value={message} disabled={starting} placeholder="What should we work on?" className="mx-box-text" onChange={(event) => { setMessage(event.target.value) }}
+            <textarea ref={text} onKeyDown={onTextKey} onPaste={onPaste} aria-label="What should we work on?" rows={2} value={message} disabled={starting} placeholder="Describe the task, or type / for commands" className="mx-box-text" onChange={(event) => { setMessage(event.target.value) }}
               {...(slashing && matches.length > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-slash-list', 'aria-activedescendant': `mx-slash-${String(active)}` } : {})} />
             {!remote && <button type="button" className="mx-box-attach" aria-label="Attach files" title="Attach files" onClick={attach.pick}><Icon name="plus" size={16} /></button>}
             <div className="mx-box-row mx-nsd-who">
@@ -569,13 +576,17 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
             </div>
           </div>
           {agent === 'gemini' && <p className="mx-composer-note">{GEMINI_TERMINAL_LINE}</p>}
-          <p className="mx-composer-note">{remote ? 'On another machine it starts and opens.' : onCancel === undefined ? 'Enter starts, Shift+Enter is a new line.' : `Enter starts, Shift+Enter is a new line. ${BACKGROUND_KEY} starts it in the background.`}</p>
+          <div className="mx-composer-note mx-nc-foot">
+            <span className="mx-nc-works">{remote ? 'On another machine it starts and opens.' : folder === '' ? '' : `Works in ${folder}${branches === null ? '' : ` on ${branchLabel}`}`}</span>
+            <span className="mx-nc-keys"><b>Enter</b> start · <b>Shift+Enter</b> new line{onCancel === undefined || remote ? '' : <>{' · '}<b>{BACKGROUND_KEY}</b> in the background</>}</span>
+          </div>
           <StartNotes error={error} treeLine={treeLine} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(explainError(failure, 'Could not open the setup page')) }) }}
             machineDown={targetDown === null ? null : { label: targetLabel, why: targetDown }}
             clone={cloning} onUseFolder={(path) => { setCloning(null); openFolder(path) }} onDismissClone={() => { setCloning(null) }}
             onPickAnotherFolder={cloner === null || cloning === null ? undefined : () => { const again = cloning; setCloning(null); openCloneWindow({ start: 'link', address: again.address, parent: again.parent }) }}
             onOpenGitHubSettings={cloner?.onOpenGitHubSettings} />
         </div>
+      </div>
       </div>
     </section>
   )
