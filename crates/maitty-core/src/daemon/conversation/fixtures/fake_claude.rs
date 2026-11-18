@@ -52,11 +52,15 @@ fn main() {
                 .find_map(|argument| argument.strip_prefix("--resume=").map(str::to_owned))
         })
         .expect("Claude session identity argument");
-    writeln!(
-        output,
-        "{{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"{session_id}\"}}"
-    )
-    .unwrap();
+    // Claude Code 2.1.325 and later send `init` only after the message; this fake sends it early,
+    // except in the scenario that has the late one name another session.
+    if scenario != "late-init-other" {
+        writeln!(
+            output,
+            "{{\"type\":\"system\",\"subtype\":\"init\",\"session_id\":\"{session_id}\"}}"
+        )
+        .unwrap();
+    }
     writeln!(
         output,
         "{}",
@@ -129,8 +133,8 @@ fn main() {
                 .unwrap_or_default()
                 .to_owned();
             assert!(line.contains(r#""subtype":"interrupt""#), "{line}");
-            writeln!(output, r#"{{"response":{{"request_id":"{request_id}","subtype":"success"}},"type":"control_response"}}"#).unwrap();
-            writeln!(output, r#"{{"is_error":false,"result":"interrupted","session_id":"{session_id}","type":"result"}}"#).unwrap();
+            writeln!(output, r#"{{"response":{{"request_id":"{request_id}","response":{{"still_queued":[]}},"subtype":"success"}},"type":"control_response"}}"#).unwrap();
+            writeln!(output, r#"{{"is_error":true,"session_id":"{session_id}","subtype":"error_during_execution","type":"result"}}"#).unwrap();
             output.flush().unwrap();
             return;
         }
@@ -139,6 +143,15 @@ fn main() {
             line.trim_end(),
             r#"{"message":{"content":[{"text":"hello fake Claude","type":"text"}],"role":"user"},"type":"user"}"#
         );
+    }
+
+    if scenario == "late-init-other" {
+        writeln!(output, "{}", r#"{"session_id":"other-session","subtype":"init","type":"system"}"#).unwrap();
+        output.flush().unwrap();
+        // Holds the turn open until the daemon closes its input.
+        line.clear();
+        let _ = input.read_line(&mut line);
+        return;
     }
 
     if scenario == "approval" || scenario == "approval-decline" {
@@ -247,8 +260,9 @@ fn main() {
             line.trim_end(),
             r#"{"request":{"subtype":"interrupt"},"request_id":"interrupt-4","type":"control_request"}"#
         );
-        writeln!(output, "{}", r#"{"response":{"request_id":"interrupt-4","subtype":"success"},"type":"control_response"}"#).unwrap();
-        writeln!(output, "{}", r#"{"is_error":false,"result":"interrupted","session_id":"fixture-session","type":"result"}"#).unwrap();
+        // Claude Code 2.1.327's answer to an interrupt and the result that ends the stopped turn.
+        writeln!(output, "{}", r#"{"response":{"request_id":"interrupt-4","response":{"still_queued":[]},"subtype":"success"},"type":"control_response"}"#).unwrap();
+        writeln!(output, "{}", r#"{"is_error":true,"session_id":"fixture-session","subtype":"error_during_execution","type":"result"}"#).unwrap();
         output.flush().unwrap();
         return;
     }

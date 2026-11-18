@@ -723,6 +723,13 @@ async fn run_turn(
             }
             frame = client.next() => {
                 let frame = frame.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
+                // Claude Code (2.1.325, 2.1.327) sends its `init` only once the message is in, after
+                // the initialize answer, so the session it names is checked here too.
+                if let OutputFrame::Initialized { session_id } = &frame
+                    && session_id.as_str() != session
+                {
+                    return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude initialized a different session than the requested identity") });
+                }
                 if let OutputFrame::ControlRequest { request_id, request } = &frame {
                     if request.get("subtype").and_then(Value::as_str) != Some("can_use_tool") {
                         return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Unsupported Claude control request") });
@@ -750,6 +757,7 @@ async fn run_turn(
                     && let Some(request_id) = response.get("request_id").and_then(Value::as_str)
                 {
                         if let Some(token) = interrupts.remove(request_id) {
+                            projector.interrupt_acknowledged();
                             super::runtime::emit(events, owner, super::runtime::Payload::Response {
                                 token,
                                 result: Ok(serde_json::json!({})),
@@ -857,6 +865,7 @@ mod tests {
         assert!(verified_version("2.1.312"));
         assert!(verified_version("2.1.314"));
         assert!(verified_version("2.1.316"));
+        assert!(verified_version("2.1.327"));
         assert!(!verified_version("2.1.313"));
         assert!(!verified_version("2.1.31"));
     }

@@ -601,6 +601,36 @@ async fn claude_adapter_denies_a_host_declined_tool() {
 }
 
 #[tokio::test]
+async fn a_late_claude_init_naming_another_session_ends_the_turn() {
+    let directory = crate::daemon::persist::scratch_dir();
+    let (launch, owner) = claude_launch(directory.path(), Some("late-init-other"));
+    let (task, _stop, requests, mut received) = start_claude_adapter(launch, owner).await;
+    start_claude_thread(&requests, &mut received, owner).await;
+    requests
+        .send(super::runtime::Command {
+            token: 3,
+            request: super::runtime::Rpc::Send {
+                params: json!({
+                    "threadId":"fixture-session",
+                    "input":[{"type":"text","text":"hello fake Claude"}]
+                }),
+            },
+        })
+        .await
+        .unwrap();
+    assert!(matches!(
+        receive_claude_payload(&mut received, owner).await,
+        Payload::Response { token: 3, result: Err(_) }
+    ));
+    assert!(matches!(
+        receive_claude_payload(&mut received, owner).await,
+        Payload::Terminated { failure: Some(ref failure), .. } if failure.contains("different session")
+    ));
+    task.await.unwrap();
+    drop(directory);
+}
+
+#[tokio::test]
 async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
     let directory = crate::daemon::persist::scratch_dir();
     let (launch, owner) = claude_launch(directory.path(), Some("interrupt"));
@@ -658,10 +688,11 @@ async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
             result: Ok(ref value)
         } if value == &json!({})
     ));
+    // Claude ends a stopped turn with an error result; the person asked for it, so it is interrupted.
     assert!(matches!(
         receive_claude_payload(&mut received, owner).await,
         Payload::Notification { method, params }
-            if method == "turn/completed" && params["turn"]["status"] == "completed"
+            if method == "turn/completed" && params["turn"]["status"] == "interrupted"
     ));
     stop_claude_adapter(task, stop, &mut received, owner).await;
     drop(directory);

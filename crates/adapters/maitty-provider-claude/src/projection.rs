@@ -27,6 +27,8 @@ pub struct TurnProjector {
     /// When this turn began (Unix ms). Claude reports no times, so the daemon-side clock stands in.
     started_at_ms: u64,
     acknowledged: bool,
+    /// Claude acknowledged an interrupt of this turn, so an error result is the stop, not a failure.
+    interrupted: bool,
     active_message_id: Option<String>,
     assistant_text: BTreeMap<String, String>,
     started_messages: BTreeSet<String>,
@@ -48,6 +50,7 @@ impl TurnProjector {
             user_item_id,
             started_at_ms: now_ms(),
             acknowledged: false,
+            interrupted: false,
             active_message_id: None,
             assistant_text: BTreeMap::new(),
             started_messages: BTreeSet::new(),
@@ -59,6 +62,13 @@ impl TurnProjector {
     #[cfg(test)]
     fn acknowledged(&self) -> bool {
         self.acknowledged
+    }
+
+    /// Records that Claude acknowledged an interrupt of this turn. Claude then ends the turn with an
+    /// error result (`error_during_execution`, seen on Claude Code 2.1.325 and 2.1.327), which is the
+    /// person's stop: it is reported as `interrupted`, as Codex reports one, not as a failure.
+    pub fn interrupt_acknowledged(&mut self) {
+        self.interrupted = true;
     }
 
     pub fn project(&mut self, frame: OutputFrame) -> Result<Vec<ProjectedEvent>> {
@@ -223,7 +233,11 @@ impl TurnProjector {
                         serde_json::json!({"item":{"id":message_id,"type":"agentMessage","text":text}}),
                     ));
                 }
-                let status = if is_error { "failed" } else { "completed" };
+                let status = match (is_error, self.interrupted) {
+                    (true, true) => "interrupted",
+                    (true, false) => "failed",
+                    (false, _) => "completed",
+                };
                 events.push(self.notification(
                     "turn/completed",
                     serde_json::json!({"turn":{"id":self.turn_id,"status":status}}),
@@ -436,6 +450,30 @@ mod tests {
         assert_eq!(end["item"]["input"], todos);
         assert!(begin["startedAtMs"].as_u64().unwrap() > 0);
         assert!(end["completedAtMs"].as_u64().unwrap() >= begin["startedAtMs"].as_u64().unwrap());
+    }
+
+    #[test]
+    fn an_error_result_after_an_acknowledged_interrupt_is_an_interrupted_turn() {
+        let status = |interrupted: bool, is_error: bool| {
+            let mut projector = projector();
+            if interrupted {
+                projector.interrupt_acknowledged();
+            }
+            let events = projector
+                .project(OutputFrame::Result {
+                    session_id: "session-1".into(),
+                    is_error,
+                    result: None,
+                })
+                .unwrap();
+            let Some(ProjectedEvent::Notification { params, .. }) = events.last() else {
+                panic!("turn completion");
+            };
+            params["turn"]["status"].clone()
+        };
+        assert_eq!(status(true, true), "interrupted");
+        assert_eq!(status(false, true), "failed", "an error nobody asked for is a failure");
+        assert_eq!(status(true, false), "completed", "a turn that ended before the stop is complete");
     }
 
     #[test]
