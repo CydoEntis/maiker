@@ -46,14 +46,14 @@ describe('the status card', () => {
 })
 
 describe('the permissions card', () => {
-  it('marks the current mode, says what each does, and says Maitty changes none of them', () => {
+  it('marks the current mode, says what each does, and says Maiker changes none of them', () => {
     const card = permissionsCard('codex', 'codexAuto', CODEX_START_MODES)
 
     expect(card).toContain('Codex is set to **Auto**')
     expect(card).toContain('- **Read only**: Reads files and answers.')
     expect(card).toContain('- **Auto** (now): Follows your Codex settings')
     expect(card).toContain('- **Full access**: Changes any file')
-    expect(card).toContain('Maitty never changes it for you.')
+    expect(card).toContain('Maiker never changes it for you.')
   })
 })
 

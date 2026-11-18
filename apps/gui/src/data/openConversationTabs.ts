@@ -13,12 +13,12 @@ export function readOpenConversationTabs(): string[] {
   try {
     value = JSON.parse(stored)
   } catch (error) {
-    console.warn('Ignoring invalid Maitty open tabs', error)
+    console.warn('Ignoring invalid Maiker open tabs', error)
     return []
   }
 
   if (!Array.isArray(value) || !value.every((id) => typeof id === 'string')) {
-    console.warn('Ignoring unsupported Maitty open tabs')
+    console.warn('Ignoring unsupported Maiker open tabs')
     return []
   }
 

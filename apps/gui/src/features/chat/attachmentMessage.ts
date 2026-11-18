@@ -8,7 +8,7 @@ import type { AttachmentKind } from '@/api/attachments'
  * attachment field, only these two change.
  */
 
-export const ATTACHMENT_HEADER = 'Attached files (kept by Maitty; read them with your file tools):'
+export const ATTACHMENT_HEADER = 'Attached files (kept by Maiker; read them with your file tools):'
 
 const LINE_PREFIX = '- '
 

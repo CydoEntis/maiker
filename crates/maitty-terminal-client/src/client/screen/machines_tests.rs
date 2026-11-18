@@ -270,11 +270,11 @@ fn down_walks_into_the_hosts_and_up_from_the_first_one_is_back_in_the_input() {
 #[test]
 fn parse_reads_user_host_and_path() {
     assert_eq!(
-        parse_target("dev@kingdom.lan:~/maitty"),
+        parse_target("dev@kingdom.lan:~/maiker"),
         Some(Parsed {
             user: Some("dev".into()),
             host: "kingdom.lan".into(),
-            path: Some("~/maitty".into()),
+            path: Some("~/maiker".into()),
         })
     );
     assert_eq!(
@@ -502,7 +502,7 @@ fn a_machine_that_needs_the_app_shows_the_key_that_installs_or_updates_it() {
         let said = words(&text, r);
         assert!(said.contains("u install"), "the bar names what u does: {w}x{h}\n{text}");
         assert!(
-            said.contains("run `maitty machine update kingdom --install`"),
+            said.contains("run `maiker machine update kingdom --install`"),
             "the fix under the chosen one names the machine: {w}x{h}\n{text}"
         );
     }

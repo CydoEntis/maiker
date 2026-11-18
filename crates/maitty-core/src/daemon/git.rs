@@ -173,7 +173,7 @@ pub fn create_worktree(
 ) -> Result<(PathBuf, String)> {
     let branch = branch.trim();
     if branch.is_empty() || branch.starts_with('-') || branch.contains(char::is_whitespace) {
-        bail!("invalid branch name `{branch}`");
+        bail!("`{branch}` is not a branch name that can be used: it must not be empty, start with `-` or hold spaces.");
     }
     let common = abs(
         dir,
@@ -194,7 +194,10 @@ pub fn create_worktree(
     );
     let path = crate::daemon::clean_path(path);
     if path.exists() {
-        bail!("{} already exists", path.display());
+        bail!(
+            "Could not make a worktree for branch `{branch}`: its folder {} is already there. Remove that folder, or pick another branch name.",
+            path.display()
+        );
     }
     let has = |r: &str| git(&root, &["show-ref", "--verify", "--quiet", r]).is_ok();
     let existing = has(&format!("refs/heads/{branch}"))
@@ -214,7 +217,7 @@ pub fn create_worktree(
     let p = path.to_string_lossy().into_owned();
     if existing {
         // Existing branch (git sets up tracking for a remote-only one).
-        git(&root, &["worktree", "add", &p, branch])?;
+        git(&root, &["worktree", "add", &p, branch]).map_err(|e| worktree_add_failed(branch, &e))?;
     } else {
         let mut args = vec!["worktree", "add", "-b", branch, &p];
         // Cut from a remote branch, the new one would otherwise track it and `git pull` would
@@ -225,13 +228,32 @@ pub fn create_worktree(
         if let Some(b) = base {
             // A base that looks like an option would be read as one.
             if b.starts_with('-') {
-                bail!("not a branch to start from: {b}");
+                bail!("`{b}` is not a branch a worktree can start from. Pick a branch from the list.");
             }
             args.push(b);
         }
-        git(&root, &args)?;
+        git(&root, &args).map_err(|e| worktree_add_failed(branch, &e))?;
     }
     Ok((path, repo))
+}
+
+/// Git's refusal to add a worktree, in plain words with what to do; for a case not listed, git's
+/// own last line follows the sentence.
+fn worktree_add_failed(branch: &str, error: &anyhow::Error) -> anyhow::Error {
+    let said = format!("{error:#}");
+    if said.contains("is already checked out") || said.contains("is already used by worktree") {
+        anyhow::anyhow!("Branch `{branch}` is already open in another folder, and git opens a branch in one place only. Pick another branch, or start a new worktree off it.")
+    } else if said.contains("a branch named") && said.contains("already exists") {
+        anyhow::anyhow!("A branch named `{branch}` already exists. Pick it from the branch list, or choose another name.")
+    } else if said.contains("invalid reference") || said.contains("not a valid") {
+        anyhow::anyhow!("Branch `{branch}` was not found. Fetch the repository, or pick a branch from the list.")
+    } else {
+        let last = said.lines().rev().find(|line| !line.trim().is_empty()).unwrap_or("").trim();
+        // `git()` puts the command before git's own words; only git's words are worth reading.
+        let words = last.split_once(": ").filter(|_| last.starts_with("git ")).map_or(last, |(_, said)| said);
+        let reason = words.trim_start_matches("fatal: ").trim_start_matches("error: ");
+        anyhow::anyhow!("Git could not make a worktree for branch `{branch}`: {reason}")
+    }
 }
 
 /// Branch names a made-up one must avoid: the local branches and `origin`'s, since
@@ -789,7 +811,7 @@ pub fn remove_worktree(path: &Path, force: bool, delete_branch: bool) -> Result<
         .ok()
         .filter(|b| b != "HEAD");
     if root.canonicalize().ok() == path.canonicalize().ok() {
-        bail!("refusing to remove the main checkout");
+        bail!("This is the project's main folder, not a worktree, so it is not removed. Only worktrees can be removed.");
     }
     let p = path.to_string_lossy().into_owned();
     let mut args = vec!["worktree", "remove", &p];
@@ -814,7 +836,9 @@ pub fn remove_worktree(path: &Path, force: bool, delete_branch: bool) -> Result<
         }
         std::thread::sleep(std::time::Duration::from_millis(300));
     }
-    Err(last.unwrap_or_else(|| anyhow::anyhow!("git worktree remove failed")))
+    Err(last.unwrap_or_else(|| {
+        anyhow::anyhow!("Git could not remove the worktree. Close anything still using that folder, then try again.")
+    }))
 }
 
 #[cfg(test)]
@@ -1051,5 +1075,19 @@ two
 
         let (fresh, _) = create_worktree(&repo, "swift-lynx", Some("HEAD"), template).expect("worktree");
         assert_eq!(head_of(&fresh), new, "a base: a new branch from the current checkout");
+    }
+}
+
+#[cfg(test)]
+mod worktree_words {
+    use super::worktree_add_failed;
+
+    #[test]
+    fn git_s_refusals_to_add_a_worktree_read_as_sentences_with_a_next_step() {
+        let say = |stderr: &str| worktree_add_failed("dev", &anyhow::anyhow!("git worktree add: {stderr}")).to_string();
+        assert!(say("fatal: 'dev' is already checked out at '/srv/app'").starts_with("Branch `dev` is already open in another folder"));
+        assert!(say("fatal: a branch named 'dev' already exists").starts_with("A branch named `dev` already exists."));
+        assert!(say("fatal: invalid reference: dev").starts_with("Branch `dev` was not found."));
+        assert_eq!(say("fatal: disk full"), "Git could not make a worktree for branch `dev`: disk full");
     }
 }

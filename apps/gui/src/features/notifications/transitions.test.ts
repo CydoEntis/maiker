@@ -5,7 +5,7 @@ import { noticeForAttention, noticesFor, type NotifySwitches } from './transitio
 const ALL: NotifySwitches = { needs: true, finished: true, error: true }
 
 function session(id: string, status: SessionStatus): SessionView {
-  return { id, name: null, title: 'maitty', process: 'codex', cwdLabel: '~/code/maitty', status } as unknown as SessionView
+  return { id, name: null, title: 'maiker', process: 'codex', cwdLabel: '~/code/maiker', status } as unknown as SessionView
 }
 const seen = (entries: Array<[string, SessionStatus]>) => new Map(entries)
 
@@ -16,7 +16,7 @@ describe('noticesFor', () => {
 
   it('notifies when a session starts needing you, naming it and where it is but never what it asked', () => {
     const notices = noticesFor(seen([['t1', 'working']]), [session('t1', 'needs')], ALL, null)
-    expect(notices).toEqual([{ sessionId: 't1', title: 'maitty needs you', body: 'codex in ~/code/maitty' }])
+    expect(notices).toEqual([{ sessionId: 't1', title: 'maiker needs you', body: 'codex in ~/code/maiker' }])
   })
 
   it('says nothing when a command in a running shell fails: the shell did not exit', () => {
@@ -28,7 +28,7 @@ describe('noticesFor', () => {
   it('notifies for finished and for an error, each by its own switch', () => {
     const before = seen([['a', 'working'], ['b', 'working']])
     const now = [session('a', 'done'), session('b', 'error')]
-    expect(noticesFor(before, now, ALL, null).map((notice) => notice.title)).toEqual(['maitty finished', 'maitty exited with an error'])
+    expect(noticesFor(before, now, ALL, null).map((notice) => notice.title)).toEqual(['maiker finished', 'maiker exited with an error'])
     expect(noticesFor(before, now, { ...ALL, finished: false }, null).map((notice) => notice.sessionId)).toEqual(['b'])
     expect(noticesFor(before, now, { needs: true, finished: false, error: false }, null)).toEqual([])
   })
@@ -37,7 +37,7 @@ describe('noticesFor', () => {
     const before = seen([['a', 'working'], ['b', 'working'], ['c', 'working']])
     const now = [session('a', 'done'), session('b', 'done'), session('c', 'needs')]
     const queued = (item: SessionView) => (item.id === 'b' ? 0 : 2)
-    expect(noticesFor(before, now, ALL, null, queued).map((notice) => notice.title)).toEqual(['maitty finished', 'maitty needs you'])
+    expect(noticesFor(before, now, ALL, null, queued).map((notice) => notice.title)).toEqual(['maiker finished', 'maiker needs you'])
     expect(noticesFor(before, now, ALL, null, queued).map((notice) => notice.sessionId)).toEqual(['b', 'c'])
   })
 
@@ -62,7 +62,7 @@ describe('noticesFor', () => {
 
   it('says a limited session needs you or exited when it starts asking or fails', () => {
     const before = seen([['a', 'limited'], ['b', 'limited']])
-    expect(noticesFor(before, [session('a', 'needs'), session('b', 'error')], ALL, null).map((notice) => notice.title)).toEqual(['maitty needs you', 'maitty exited with an error'])
+    expect(noticesFor(before, [session('a', 'needs'), session('b', 'error')], ALL, null).map((notice) => notice.title)).toEqual(['maiker needs you', 'maiker exited with an error'])
   })
 
   it('starts a session of another machine with the machine in brackets, as its own notices do', () => {
@@ -74,8 +74,8 @@ describe('noticesFor', () => {
 
 describe('noticeForAttention', () => {
   it('names the session for a daemon that said it needs you or finished, never what it asked', () => {
-    expect(noticeForAttention(session('t1', 'working'), 'blocked', ALL)).toEqual({ sessionId: 't1', title: 'maitty needs you', body: 'codex in ~/code/maitty' })
-    expect(noticeForAttention(session('t1', 'working'), 'done', ALL)?.title).toBe('maitty finished')
+    expect(noticeForAttention(session('t1', 'working'), 'blocked', ALL)).toEqual({ sessionId: 't1', title: 'maiker needs you', body: 'codex in ~/code/maiker' })
+    expect(noticeForAttention(session('t1', 'working'), 'done', ALL)?.title).toBe('maiker finished')
   })
 
   it('says nothing for a kind of notice that is switched off', () => {

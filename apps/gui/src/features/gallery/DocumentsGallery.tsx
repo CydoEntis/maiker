@@ -12,7 +12,7 @@ const SAMPLE_HEIGHT = 520
 
 /** The document viewer in each of its states, on a pretend disk (docs/DESIGN.md, "Documents"). */
 
-const README = `# Maitty
+const README = `# Maiker
 
 Run many coding agents at once and see which ones need you.
 

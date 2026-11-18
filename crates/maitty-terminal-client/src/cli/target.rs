@@ -490,7 +490,7 @@ mod tests {
     #[test]
     fn remote_text_loses_its_escape_sequences_and_local_text_is_untouched() {
         let hostile = "ok\u{1b}]52;c;AAAA\u{7}\u{1b}[2J\nnext";
-        let remote = Target::of(Machine::ssh("box", vec!["ssh".into()], "maitty"));
+        let remote = Target::of(Machine::ssh("box", vec!["ssh".into()], "maiker"));
         assert_eq!(remote.plain(hostile), "ok]52;c;AAAA[2J\nnext");
         assert_eq!(Target::of(Machine::local()).plain(hostile), hostile);
     }
@@ -520,7 +520,7 @@ mod tests {
             Reply::List(snap) => snap.workspaces[0].name.clone(),
             _ => panic!("a list"),
         };
-        let remote = Target::of(Machine::ssh("box", vec!["ssh".into()], "maitty"));
+        let remote = Target::of(Machine::ssh("box", vec!["ssh".into()], "maiker"));
         assert_eq!(
             named(remote.safe_reply(list()).unwrap()),
             "ws]52;c;QQ==name"

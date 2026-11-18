@@ -213,7 +213,7 @@ fn a_fix_names_the_machine_so_the_command_can_be_run_as_it_stands() {
         },
     );
     let why = told.why.expect("a fix");
-    assert!(why.contains("`maitty machine update build --install`"), "{why}");
+    assert!(why.contains("`maiker machine update build --install`"), "{why}");
     assert!(!why.contains("<name>"), "{why}");
 }
 
@@ -890,7 +890,7 @@ async fn a_chat_request_reaches_a_machines_daemon_on_a_line_of_its_own() {
 
     assert!(wire.daemon(Some(BOX.0 + 5), || Err("unused".into())).is_err(), "a machine that is not listed takes nothing");
     assert!(matches!(
-        wire.daemon(None, || Ok(PathBuf::from("maitty"))),
+        wire.daemon(None, || Ok(PathBuf::from("maiker"))),
         Ok(Daemon::Local(_))
     ));
 }

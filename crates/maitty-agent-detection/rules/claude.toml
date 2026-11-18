@@ -1,4 +1,4 @@
-# Maitty's own screen rules for Claude Code, added to the vendored Herdr manifest of the same id
+# Maiker's own screen rules for Claude Code, added to the vendored Herdr manifest of the same id
 # (vendor/herdr-detection/claude.toml stays an unmodified snapshot; see its NOTICE.md).
 id = "claude"
 

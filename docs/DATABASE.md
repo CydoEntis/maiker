@@ -1,6 +1,6 @@
 # Database
 
-> **Not applicable:** Maitty has no database. Its state is small files: `config.toml`
+> **Not applicable:** Maiker has no database. Its state is small files: `config.toml`
 > (settings), a JSON session snapshot written by the daemon (`daemon/persist.rs`), and
 > the client's saved projects list. Add a pack if a database ever arrives.
 
@@ -215,7 +215,7 @@ dropped.
 `daemon/conversation/history_storage.rs` is a private structured display cache,
 not a database or a replacement for provider-native context. `Cache::for_session`
 derives `<data>/session-<socket>.history/` from the existing session snapshot path.
-Conversation directories and immutable page filenames use numeric Maitty IDs;
+Conversation directories and immutable page filenames use numeric Maiker IDs;
 native IDs never become paths. Pages hold at most 128 entries / 256 KiB.
 
 A synced, atomically replaced `manifest.json` commits the revision, a SHA-256

@@ -8141,6 +8141,40 @@ fn an_agent_saved_mid_turn_comes_back_as_a_resume_of_its_conversation() {
 }
 
 #[test]
+fn a_resume_keeps_bypass_only_for_an_agent_that_started_with_it_and_while_its_switch_is_on() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.session) = (Some("claude".into()), Some("abc123".into()));
+        p.cmd = Some("claude --dangerously-skip-permissions 'fix it'".into());
+    }
+    let resume = d.resume_cmd(&d.terms[&t]).expect("claude can be resumed");
+    assert!(resume.contains("--dangerously-skip-permissions") && resume.contains("abc123"), "{resume}");
+    // After a restart too, from what was saved.
+    let saved = persist::SavedPane {
+        agent: Some("claude".into()),
+        session: Some("abc123".into()),
+        cmd: Some("claude --dangerously-skip-permissions".into()),
+        ..Default::default()
+    };
+    assert!(d.restore_cmd(&saved).is_some_and(|cmd| cmd.contains("--dangerously-skip-permissions")));
+
+    // One that started asking keeps asking: a resume never widens it.
+    d.terms.get_mut(&t).unwrap().cmd = Some("claude 'fix it'".into());
+    let asking = d.resume_cmd(&d.terms[&t]).expect("claude can be resumed");
+    assert!(!asking.contains("--dangerously-skip-permissions"), "{asking}");
+    let typed = persist::SavedPane { cmd: None, ..saved.clone() };
+    assert!(d.restore_cmd(&typed).is_some_and(|cmd| !cmd.contains("--dangerously-skip-permissions")));
+
+    // Switched off since: it comes back asking.
+    d.terms.get_mut(&t).unwrap().cmd = Some("claude --dangerously-skip-permissions".into());
+    d.cfg.permissions.bypass.insert("claude".into(), false);
+    let off = d.resume_cmd(&d.terms[&t]).expect("claude can be resumed");
+    assert!(!off.contains("--dangerously-skip-permissions"), "{off}");
+}
+
+#[test]
 fn a_resumed_claude_runs_the_model_and_effort_it_last_said() {
     let (mut d, _rx) = daemon();
     let t = pane(&mut d);

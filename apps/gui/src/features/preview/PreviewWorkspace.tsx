@@ -95,7 +95,7 @@ export function PreviewWorkspace() {
                 desktop
                   ? daemonDisconnected
                     ? 'Daemon disconnected'
-                    : 'Connected to Maitty daemon'
+                    : 'Connected to Maiker daemon'
                   : 'Local preview · daemon not connected'
               }
               sessionCount={conversations.length}

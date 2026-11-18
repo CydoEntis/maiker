@@ -1,3 +1,4 @@
+import { BYPASS_FLAG } from './newChatHost'
 import { abilitiesOf } from './agentAbilities'
 import type { SessionView } from './session'
 import { suggestBranchName } from './worktreeName'
@@ -33,10 +34,12 @@ export function resumeWords(agent: 'claude' | 'codex', sessionId: string): strin
 
 /**
  * The line typed into the pane's shell after the agent exits: go to the new folder and resume the
- * same conversation there. Null when the folder or id is not safe to type.
+ * same conversation there, without permission prompts only when it started that way (`bypassed`), so a move never
+ * widens what the session may do. Null when the folder or id is not safe to type.
  */
-export function resumeLine(agent: 'claude' | 'codex', sessionId: string, folder: string, windows: boolean): string | null {
-  const words = resumeWords(agent, sessionId)
+export function resumeLine(agent: 'claude' | 'codex', sessionId: string, folder: string, windows: boolean, bypassed = false): string | null {
+  const resumed = resumeWords(agent, sessionId)
+  const words = resumed === null ? null : bypassed ? [BYPASS_FLAG[agent], ...resumed] : resumed
   if (words === null || folder === '' || unsafeFolder(folder)) return null
   const then = windows ? ';' : '&&'
   const resume = [agent, ...words, ...(agent === 'codex' ? ['-C', `"${folder}"`] : [])].join(' ')

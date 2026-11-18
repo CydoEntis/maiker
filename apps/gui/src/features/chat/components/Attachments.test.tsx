@@ -144,7 +144,9 @@ describe('the file picker', () => {
     await settle()
 
     // The toast says what failed, then the host's own words.
-    expect(currentToasts().items.map((item) => item.description)).toContain('folder is not a file; folders cannot be attached')
+    // The host's own words, made one sentence; the raw text stays behind Copy details.
+    expect(currentToasts().items.map((item) => item.description)).toContain('Folder is not a file; folders cannot be attached.')
+    expect(currentToasts().items.map((item) => item.details)).toContain('folder is not a file; folders cannot be attached')
     expect(screen.getByText('ok.txt')).toBeInTheDocument()
   })
 })
@@ -245,7 +247,8 @@ describe('pasting an image', () => {
     fireEvent.paste(box, { clipboardData: clipboard('', [PNG]) })
     await settle()
 
-    expect(currentToasts().items.map((item) => item.description)).toContain('the clipboard holds something that is not a PNG')
+    expect(currentToasts().items.map((item) => item.description)).toContain('The clipboard holds something that is not a PNG.')
+    expect(currentToasts().items.map((item) => item.details)).toContain('the clipboard holds something that is not a PNG')
     expect(screen.queryByRole('list', { name: 'Attached files' })).not.toBeInTheDocument()
   })
 })
@@ -347,7 +350,7 @@ describe('a sent message of a chat on another machine', () => {
     fake.attachmentsExist.mockResolvedValue([false])
     render(
       <FilesHereContext.Provider value={false}>
-        <SentAttachments files={[{ path: '/home/dev/.cache/maitty/pastes/paste-1-0a1b2c3d-image.png', name: 'Pasted image.png', kind: 'image' }]} />
+        <SentAttachments files={[{ path: '/home/dev/.cache/maiker/pastes/paste-1-0a1b2c3d-image.png', name: 'Pasted image.png', kind: 'image' }]} />
       </FilesHereContext.Provider>,
     )
     await act(async () => { await Promise.resolve() })

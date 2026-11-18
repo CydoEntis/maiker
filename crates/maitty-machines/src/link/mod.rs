@@ -311,7 +311,7 @@ mod tests {
     }
 
     fn nowhere(name: &str) -> Machine {
-        Machine::ssh(name, vec!["no-such-ssh-program".into()], "maitty")
+        Machine::ssh(name, vec!["no-such-ssh-program".into()], "maiker")
     }
 
     #[test]

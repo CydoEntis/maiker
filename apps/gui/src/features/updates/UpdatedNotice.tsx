@@ -11,19 +11,30 @@ type Props = {
   update: RestartedUpdate
   /** Called once the toast is gone and the dialog, if it was opened, is closed. */
   onDone: () => void
+  /** The service still runs the older release and is restarted once no agent is at work. */
+  serviceFinishing?: boolean
 }
 
 /** After a restart into an update: a success toast with a way into What's new, and that dialog. */
-export function UpdatedNotice({ update, onDone }: Props) {
+export function UpdatedNotice({ update, onDone, serviceFinishing = false }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const lines = noteLines(update.notes)
   const shown = useToasts().items.some((item) => item.id === UPDATED_TOAST_ID)
   // Done is when the toast has been up and gone, and the dialog is not open: not before the toast first shows.
   const seen = useRef(false)
+  const shownRef = useRef(shown)
+  useEffect(() => { shownRef.current = shown })
 
   useEffect(() => {
-    toast.success(`Updated to ${update.version}`, { id: UPDATED_TOAST_ID, action: { label: 'What’s new', onClick: (event) => { event.preventDefault(); setDialogOpen(true) } } })
-  }, [update.version])
+    // The service finishing is learnt after the toast first shows: it updates the toast in place, never brings back one
+    // already dismissed.
+    if (seen.current && !shownRef.current) return
+    toast.success(`Updated to ${update.version}`, {
+      id: UPDATED_TOAST_ID,
+      ...(serviceFinishing ? { description: 'The service finishes updating once no agent is working.' } : {}),
+      action: { label: 'What’s new', onClick: (event) => { event.preventDefault(); setDialogOpen(true) } },
+    })
+  }, [update.version, serviceFinishing])
 
   // The toast goes once the dialog is open, so the two are never both gone before you have read the notes.
   useEffect(() => { if (dialogOpen) toast.dismiss(UPDATED_TOAST_ID) }, [dialogOpen])

@@ -238,7 +238,7 @@ pub(in crate::client) fn draw_service_down(app: &mut App, f: &mut Frame, area: R
         ("Try, in this order:", s.fg(t.muted)),
         ("1  r   connect again", s.fg(t.strong)),
         ("2  s   start the service", s.fg(t.strong)),
-        ("3  run `maitty doctor` in another terminal", s.fg(t.strong)),
+        ("3  run `maiker doctor` in another terminal", s.fg(t.strong)),
         ("It also tries again by itself every 15 seconds.", s.fg(t.muted)),
     ];
     for (i, (text, style)) in lines.iter().enumerate() {

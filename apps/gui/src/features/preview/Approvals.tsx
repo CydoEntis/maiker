@@ -249,7 +249,7 @@ function UserInputRequest({
       ))}
       {questions.length === 0 ? (
         <div className="approval-resolved">
-          This input request has no supported questions. Maitty left it
+          This input request has no supported questions. Maiker left it
           unanswered.
         </div>
       ) : (
@@ -410,7 +410,7 @@ function ApprovalRequest({
             {message.approvalKind === 'FileChange' &&
             (message.approvalChanges?.length ?? 0) === 0
               ? `Waiting for ${provider} to send the file diff. Approval is disabled until the requested change is visible.`
-              : 'No supported decision is available for this request. Maitty has left it unanswered.'}
+              : 'No supported decision is available for this request. Maiker has left it unanswered.'}
           </div>
         )
       ) : (
@@ -444,7 +444,7 @@ export function RecoveryNotice({
       <CircleHelp size={15} />
       <span>
         {canResumeInChat
-          ? `${conversation.provider} stopped before the turn finished. Resume this exact session; Maitty will not replay the interrupted turn.`
+          ? `${conversation.provider} stopped before the turn finished. Resume this exact session; Maiker will not replay the interrupted turn.`
           : conversation.execution === 'Native'
             ? 'This terminal session needs recovery. Reopen it from the terminal app.'
             : 'This conversation needs recovery. Reconnect to the daemon before continuing.'}

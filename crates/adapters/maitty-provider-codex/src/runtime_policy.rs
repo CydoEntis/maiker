@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use serde_json::{Map, Value, json};
 
-/// Preserves supported Codex runtime settings and adds required Maitty environment forwarding.
+/// Preserves supported Codex runtime settings and adds required Maiker environment forwarding.
 pub fn runtime_policy_overrides(
     response: &Value,
     structured_environment: &[&str],

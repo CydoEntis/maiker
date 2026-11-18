@@ -1702,7 +1702,7 @@ pub(super) fn settings_group(row: &SRow) -> &'static str {
         SRow::Agent(_) => AGENT_STATUS_GROUP,
         SRow::Version => "UPDATES",
         SRow::Setting(s) => match s.path {
-            "ui.update_check" => "UPDATES",
+            "ui.update_check" | "updates.machines" => "UPDATES",
             "ui.splash" | "ui.splash_animation" => "STARTUP",
             "prefix" | "ui.mouse" | "ui.which_key" | "ui.alt_keys" | "ui.alt_arrows" => "INPUT",
             "shell" | "editor" | "shell_integration" | "ui.start_dir" => "SHELL",

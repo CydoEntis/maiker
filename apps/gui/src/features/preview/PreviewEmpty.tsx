@@ -66,7 +66,7 @@ export function PreviewEmpty() {
               }}
               daemonLabel={
                 sessionsQuery.isLoading
-                  ? 'Connecting to Maitty daemon'
+                  ? 'Connecting to Maiker daemon'
                   : sessionsQuery.isError
                     ? 'Daemon disconnected'
                     : 'Daemon connected'
@@ -88,7 +88,7 @@ export function PreviewEmpty() {
               </div>
               <h1>
                 {sessionsQuery.isLoading
-                  ? 'Connecting to Maitty'
+                  ? 'Connecting to Maiker'
                   : sessionsQuery.isError
                     ? 'Daemon disconnected'
                     : 'Run your coding agents side by side.'}
@@ -99,7 +99,7 @@ export function PreviewEmpty() {
                 }
               >
                 {sessionsQuery.isLoading
-                  ? 'Connecting to your local Maitty service.'
+                  ? 'Connecting to your local Maiker service.'
                   : sessionsQuery.isError
                     ? daemonConnectionError(sessionsQuery.error)
                     : `Start an agent session in a folder, and switch between chat and its native terminal at any time. Sessions live in ${DAEMON_NAME}, so closing this window never stops an agent.`}
@@ -111,7 +111,7 @@ export function PreviewEmpty() {
                 >
                   <span>
                     <i className="connection-dot is-connected" />
-                    Maitty daemon connected
+                    Maiker daemon connected
                   </span>
                   <span>
                     <i
@@ -163,10 +163,10 @@ export function PreviewEmpty() {
                         {mismatch.daemonProtocol > mismatch.guiProtocol
                           ? 'This service is newer than the GUI. Update the GUI before reconnecting.'
                           : daemonRestartStatus.sessionCount > 0
-                            ? `The older service owns ${String(daemonRestartStatus.sessionCount)} sessions. Maitty will leave it running so your TUI work is not interrupted.`
+                            ? `The older service owns ${String(daemonRestartStatus.sessionCount)} sessions. Maiker will leave it running so your TUI work is not interrupted.`
                             : daemonRestartStatus.activeTurnCount === null
-                              ? 'Maitty could not verify that the older service is idle, so it will leave the service running.'
-                              : 'The older service still reports active work, so Maitty will leave it running.'}
+                              ? 'Maiker could not verify that the older service is idle, so it will leave the service running.'
+                              : 'The older service still reports active work, so Maiker will leave it running.'}
                       </p>
                     )}
                 </>

@@ -1,3 +1,4 @@
+import { startedBypassed } from '@/features/chat/bypassSessions'
 import { useCallback, useEffect, useRef } from 'react'
 import { addWorktree, folderBranches } from '@/api/daemon'
 import { toast } from '@/lib/toast'
@@ -31,7 +32,7 @@ export function useMoveToWorktree({ sessionMap, sendTo }: {
       const known = await folderBranches(session.cwd)
       const taken = [...(known?.branches.map((b) => b.name) ?? []), ...(known?.worktrees.flatMap((w) => (w.branch === null ? [] : [w.branch])) ?? [])]
       const folder = await addWorktree(session.cwd, worktreeBranch(taken))
-      const line = resumeLine(agent, id, folder, IS_WINDOWS)
+      const line = resumeLine(agent, id, folder, IS_WINDOWS, startedBypassed(session.id))
       if (line === null) throw new Error('The new worktree folder has a name that cannot be typed safely. It was made, but the chat was not moved.')
       await typeMessage((text) => sendTo(session, text), agent, '/exit')
       const deadline = Date.now() + EXIT_WAIT_MS

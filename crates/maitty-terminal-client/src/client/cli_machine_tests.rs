@@ -30,7 +30,7 @@ fn def(sandbox: &Sandbox, name: &str, mode: &str, calls: &std::path::Path) -> Ma
         target: format!("{name}.example"),
         ssh_args: vec![
             format!("--mode={mode}"),
-            format!("--maitty={}", sandbox.maitty.display()),
+            format!("--maiker={}", sandbox.maiker.display()),
             format!("--env={}={}", maitty_shared::brand::env_name("SOCKET"), sandbox.socket),
             format!("--env={}={}", maitty_shared::brand::env_name("DATA_DIR"), sandbox.dir.join("data").display()),
             format!("--env={}={}", maitty_shared::brand::env_name("CONFIG"), sandbox.dir.join("config.toml").display()),

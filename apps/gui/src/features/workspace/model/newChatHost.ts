@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { agentsInstalled, folderBranches, savedConversations, type FolderBranches, type SavedConversation } from '@/api/daemon'
 import { DEFAULT_PICK, type ReasoningPick } from '@/features/chat/agentChoice'
-import { CODEX_FULL_MODE, PICKABLE_MODES } from '@/features/chat/chatMeta'
+import { BYPASS_MODE, CODEX_FULL_MODE, PICKABLE_MODES } from '@/features/chat/chatMeta'
 import type { ChatAgent } from './chatView'
 
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]*$/
@@ -38,16 +38,39 @@ export function launchFlags(agent: ChatAgent, model: string, effort: ReasoningPi
   return flags.length === 0 ? '' : ` ${flags.join(' ')}`
 }
 
-/** Each agent's own flag for yolo mode. Claude's only allows Bypass permissions (Shift+Tab reaches it); Codex and Gemini start with it on. */
-const YOLO_FLAG: Readonly<Record<ChatAgent, string>> = {
-  claude: '--allow-dangerously-skip-permissions',
+/**
+ * Each agent's own flag that starts it without permission prompts: the same as the daemon's `BYPASS_FLAGS`
+ * (maitty-settings), which tells from it that a resumed session started this way.
+ */
+export const BYPASS_FLAG: Readonly<Record<ChatAgent, string>> = {
+  claude: '--dangerously-skip-permissions',
   codex: '--dangerously-bypass-approvals-and-sandbox',
   gemini: '--yolo',
 }
+/** Lets Claude switch to Bypass permissions later (Shift+Tab) when it starts in another mode picked for it. */
+const CLAUDE_ALLOW_BYPASS = '--allow-dangerously-skip-permissions'
+/** `--permission-mode` and the mode it names. */
+const MODE_WORDS = 2
 
-/** The launch flag of the agent's yolo mode, or nothing when that agent's yolo setting is off. */
-export function yoloFlags(agent: ChatAgent, on: Readonly<Record<ChatAgent, boolean>>): string {
-  return on[agent] ? ` ${YOLO_FLAG[agent]}` : ''
+/**
+ * The words an agent starts with once Bypass Permissions is taken into account (`on`: its switch). Claude started in a
+ * picked mode keeps that mode and may switch to Bypass later; picked in Bypass, or with no mode, it starts in it by its
+ * own flag. With the switch off nothing is added, and a picked Bypass mode is dropped, since Claude would refuse it.
+ * The flag goes first, as the daemon puts it right after the program: Codex reads it there before `resume`.
+ */
+export function withBypass(agent: ChatAgent, words: readonly string[], on: boolean): string[] {
+  const at = words.indexOf('--permission-mode')
+  const picked = at === -1 ? null : words[at + 1]
+  const withoutMode = at === -1 ? [...words] : [...words.slice(0, at), ...words.slice(at + MODE_WORDS)]
+  if (!on) return picked === BYPASS_MODE ? withoutMode : [...words]
+  if (agent !== 'claude' || picked === null) return [BYPASS_FLAG[agent], ...words]
+  if (picked === BYPASS_MODE) return [BYPASS_FLAG.claude, ...withoutMode]
+  return [CLAUDE_ALLOW_BYPASS, ...words]
+}
+
+/** Whether these start words run the agent without permission prompts. */
+export function startsBypassed(agent: ChatAgent, words: readonly string[]): boolean {
+  return words.includes(BYPASS_FLAG[agent])
 }
 
 const MINUTE = 60

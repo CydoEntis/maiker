@@ -25,7 +25,7 @@ export function readMachineNicknames(): MachineNicknames {
     shown = isNicknames(value) ? value : {}
     return shown
   } catch (error) {
-    console.warn('Ignoring invalid Maitty machine names', error)
+    console.warn('Ignoring invalid Maiker machine names', error)
     return {}
   }
 }

@@ -165,9 +165,9 @@ describe('a pasted image sent to the machine of a pane', () => {
     const typed: Array<[string, string]> = []
     const transfer = await startImage((session, text) => { typed.push([session, text]); return true })
     emit({ kind: 'progress', transfer, file: 'image', index: 0, count: 1, percent: 40 })
-    emit({ kind: 'sent', transfer, file: 'image', index: 0, count: 1, remotePath: '/home/me/.cache/maitty/pastes/p-image.png', bytes: 1 })
+    emit({ kind: 'sent', transfer, file: 'image', index: 0, count: 1, remotePath: '/home/me/.cache/maiker/pastes/p-image.png', bytes: 1 })
     emit({ kind: 'done', transfer, sent: 1, count: 1 })
-    expect(typed).toEqual([['build/t7', '/home/me/.cache/maitty/pastes/p-image.png ']])
+    expect(typed).toEqual([['build/t7', '/home/me/.cache/maiker/pastes/p-image.png ']])
     expect(toasts.success).toHaveBeenCalledWith('Sent the image to build', expect.objectContaining({ id: transfer }))
   })
 

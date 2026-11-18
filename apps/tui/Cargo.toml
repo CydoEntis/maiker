@@ -1,5 +1,5 @@
 [package]
-name = "maitty"
+name = "maiker"
 version = "0.79.0"
 edition = "2024"
 description = "All agents on deck: run many coding agents side by side, see which need you, keep them running when you leave"
@@ -11,9 +11,9 @@ build = "build.rs"
 # APP_PREVIOUS, APP_DAEMON, APP_DAEMON_PREVIOUS, APP_ENV and APP_ENV_PREVIOUS (read through
 # `maitty_shared::brand`). `env_prefix` is brand-free on purpose: a rename leaves it alone.
 [package.metadata.brand]
-name = "Maitty"
+name = "Maiker"
 tagline = "All agents on deck"
-previous = ["vibecasso", "seshi", "hydra", "drover"]
+previous = ["maitty", "vibecasso", "seshi", "hydra", "drover"]
 daemon = "maikerd"
 daemon_previous = ["maitty-gui-daemon"]
 env_prefix = "AGENT"

@@ -35,7 +35,7 @@ fn prefix(sandbox: &Sandbox, mode: &str, calls: &Path) -> Vec<String> {
     vec![
         sandbox.shim.to_string_lossy().into_owned(),
         format!("--mode={mode}"),
-        format!("--maitty={}", sandbox.maitty.display()),
+        format!("--maiker={}", sandbox.maiker.display()),
         format!("--calls={}", calls.display()),
         format!("--env={}={}", maitty_shared::brand::env_name("SOCKET"), sandbox.socket),
         format!("--env={}={}", maitty_shared::brand::env_name("DATA_DIR"), sandbox.dir.join("data").display()),
@@ -491,7 +491,7 @@ fn a_login_that_needs_a_person_opens_ssh_in_a_popup_on_this_computer() {
         assert!(cmd.contains(kept), "{kept:?} missing: {cmd}");
     }
     assert!(
-        cmd.ends_with("-- box 'maitty --version'"),
+        cmd.ends_with("-- box 'maiker --version'"),
         "`--` comes before the target and the command is last: {cmd}"
     );
     assert_eq!(
@@ -520,7 +520,7 @@ fn a_remote_command_that_needs_quoting_cannot_use_the_popup_and_says_how_to_log_
     let def = MachineDef {
         name: "odd".into(),
         target: "box".into(),
-        remote_cmd: Some("/opt/my tools/maitty".into()),
+        remote_cmd: Some("/opt/my tools/maiker".into()),
         ..MachineDef::default()
     };
     let machine = ipc::Machine::from_def_via(&def, &h.app.machine_flow.ssh);

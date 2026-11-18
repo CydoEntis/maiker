@@ -84,7 +84,7 @@ export function useReopenRemoved(onReopened: () => void): { state: RemakeState; 
       let outcome: RemakeState
       try {
         const asked = await reopenClosedSession(closed.agent, closed.session)
-        outcome = asked ? { kind: 'idle' } : { kind: 'failed', message: 'Restart the Maitty service to reopen it.' }
+        outcome = asked ? { kind: 'idle' } : { kind: 'failed', message: 'Restart the Maiker service to reopen it.' }
       } catch (error) {
         outcome = { kind: 'failed', message: errorMessage(error, 'Could not reopen the session.') }
       }

@@ -193,14 +193,14 @@ describe('picking a file with @ in the message box', () => {
     expect(fake.submitMessage).toHaveBeenCalledOnce()
   })
 
-  it('says so in one quiet line when the search fails, as with an older Maitty service', async () => {
-    fake.repoFindFiles.mockRejectedValue(new Error('the Maitty service running is older than this app'))
+  it('says so in one quiet line when the search fails, as with an older Maiker service', async () => {
+    fake.repoFindFiles.mockRejectedValue(new Error('the Maiker service running is older than this app'))
     const { user, box } = await open()
 
     await user.type(box, '@src')
     await settle(SEARCH_WAIT_MS)
 
-    expect(screen.getByText('Could not search the files: the Maitty service running is older than this app')).toBeInTheDocument()
+    expect(screen.getByText('Could not search the files: the Maiker service running is older than this app')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 

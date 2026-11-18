@@ -140,7 +140,7 @@ describe('the GitHub page of Settings', () => {
     expect(accounts).toEqual(['kingdom-meactive', 'work-me'])
     expect(await details.findByText('Commits as Casey Example <casey@example.invalid>')).toBeInTheDocument()
     const rules = within(details.getByRole('list', { name: 'Folder rules' })).getAllByRole('listitem').map((item) => item.textContent)
-    expect(rules).toEqual(['/home/dev/workwork-me · Casey At Work <casey@work.invalid>ChangeRemove', '~/ossset outside Maitty'])
+    expect(rules).toEqual(['/home/dev/workwork-me · Casey At Work <casey@work.invalid>ChangeRemove', '~/ossset outside Maiker'])
     expect(screen.getByRole('button', { name: 'Accounts and folder rules on kingdom' })).toHaveAttribute('aria-expanded', 'true')
   })
 
@@ -234,7 +234,7 @@ describe('the GitHub page of Settings', () => {
     expect(git.loadGitIdentities).toHaveBeenCalledOnce()
   })
 
-  it('offers no change or removal for a rule set outside Maitty', async () => {
+  it('offers no change or removal for a rule set outside Maiker', async () => {
     const user = userEvent.setup()
     answers({ 0: signedIn('me') })
     git.loadGitIdentities.mockResolvedValue(WITH_RULE)

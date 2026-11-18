@@ -526,7 +526,7 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
       mode={facts.modeKey ?? ''}
       {...(facts.modes === undefined ? {} : { modes: facts.modes })}
       onPick={facts.onPickMode}
-      bypassOff={facts.bypassAllowed === true ? undefined : { note: 'needs a new session', why: 'Claude only allows this when it starts with Yolo mode on (Settings, General). This session started without it: turn the setting on and start a new session.' }}
+      bypassOff={facts.bypassAllowed === true ? undefined : { note: 'needs a new session', why: 'Claude only allows this when it starts with Bypass Permissions on (Settings › Permissions). This session started without it: turn the setting on and start a new session.' }}
     >
       <button type="button" className={`mx-mode-button${danger}`} title={`Permissions: ${name}`} aria-label={`Permission mode: ${name}. Pick another.`}>
         <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />

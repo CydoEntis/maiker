@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { APP_NAME } from '@/brand'
 import { currentToasts, holdToasts, readingToasts, resetToasts, toast, TOAST_HIDE_MS } from './toast'
 
 const shown = () => currentToasts().items
@@ -84,7 +85,8 @@ describe('the toast store', () => {
 
   it('says what failed in the title and the error\'s own words as the reason and behind Copy details', () => {
     toast.failed('Could not open the link', new Error('xdg-open exited with code 3'))
-    expect(shown()[0]).toMatchObject({ kind: 'error', title: 'Could not open the link', description: 'xdg-open exited with code 3', details: 'xdg-open exited with code 3' })
+    // A raw tool message is made one sentence; its own text stays behind Copy details.
+    expect(shown()[0]).toMatchObject({ kind: 'error', title: 'Could not open the link', description: 'Xdg-open exited with code 3.', details: 'xdg-open exited with code 3' })
   })
 
   it('dismisses one toast, or all', () => {
@@ -93,6 +95,31 @@ describe('the toast store', () => {
     toast.dismiss(id)
     expect(shown().map((item) => item.title)).toEqual(['Two'])
     toast.dismiss()
+    expect(shown()).toHaveLength(0)
+  })
+})
+
+describe('toast.failed', () => {
+  beforeEach(() => { resetToasts() })
+  afterEach(() => { resetToasts() })
+
+  it('titles the toast with what failed and says why in plain words, with Copy details for the raw text', () => {
+    toast.failed('Could not save the file', 'Permission denied (os error 13)')
+
+    expect(shown()[0]).toMatchObject({ title: 'Could not save the file', details: 'Permission denied (os error 13)' })
+    expect(shown()[0]?.description).toMatch(new RegExp(`^${APP_NAME} is not allowed`))
+  })
+
+  it('has no Copy details when the reason is the whole story', () => {
+    toast.failed('Could not switch branch', new Error('The branch is checked out in another worktree.'))
+
+    expect(shown()[0]).toMatchObject({ description: 'The branch is checked out in another worktree.' })
+    expect(shown()[0]?.details).toBeUndefined()
+  })
+
+  it('stays quiet when the failure is only that the window has no line to the service', () => {
+    toast.failed('Could not send', 'The terminal is not connected to the daemon')
+
     expect(shown()).toHaveLength(0)
   })
 })

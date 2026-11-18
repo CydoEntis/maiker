@@ -321,7 +321,7 @@ async fn the_changes_of_a_pane_on_a_machine_are_read_from_that_machines_daemon_a
         assert_eq!(refused, "Inspect is local-only in v1: the files are on box, not on this computer.", "{question:?}");
     }
     assert!(matches!(
-        wire.repo_daemon(None, &RepoRequest::Branches, || Ok(std::path::PathBuf::from("maitty"))),
+        wire.repo_daemon(None, &RepoRequest::Branches, || Ok(std::path::PathBuf::from("maiker"))),
         Ok(maitty_desktop_client::Daemon::Local(_))
     ));
 }

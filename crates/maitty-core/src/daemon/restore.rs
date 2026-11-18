@@ -467,6 +467,7 @@ impl Daemon {
                     Some(runs) => self.running_as(cmd, &def.name, runs),
                     None => cmd,
                 };
+                let cmd = self.keeping_bypass(cmd, &def.name, p.cmd.as_deref());
                 p.account
                     .as_deref()
                     .map(|a| self.cfg.as_account(a, &cmd))
@@ -743,6 +744,15 @@ impl Daemon {
         }
     }
 
+    /// A resume of an agent that started without permission prompts starts without them again, while its
+    /// switch is still on (ADR 0005): one that started asking keeps asking, so a resume never widens it.
+    pub(super) fn keeping_bypass(&self, cmd: String, agent: &str, started: Option<&str>) -> String {
+        match started {
+            Some(started) if self.cfg.started_bypassed(agent, started) => self.cfg.with_bypass(agent, &cmd),
+            _ => cmd,
+        }
+    }
+
     /// The command that resumes an agent's conversation, if its kind supports it.
     pub(super) fn resume_cmd(&self, t: &Term) -> Option<String> {
         let def = t
@@ -754,12 +764,15 @@ impl Daemon {
             _ => def.resume_last.clone(),
         };
         // Under the account it was started as: its conversation is in that account's folder.
-        resume.map(|cmd| self.running_as(cmd, &def.name, &t.runs_with)).map(|cmd| {
-            t.account
-                .as_deref()
-                .map(|a| self.cfg.as_account(a, &cmd))
-                .unwrap_or(cmd)
-        })
+        resume
+            .map(|cmd| self.running_as(cmd, &def.name, &t.runs_with))
+            .map(|cmd| self.keeping_bypass(cmd, &def.name, t.cmd.as_deref()))
+            .map(|cmd| {
+                t.account
+                    .as_deref()
+                    .map(|a| self.cfg.as_account(a, &cmd))
+                    .unwrap_or(cmd)
+            })
     }
 
     /// Restart an agent that is running, in the same spot and conversation, so it loads hooks

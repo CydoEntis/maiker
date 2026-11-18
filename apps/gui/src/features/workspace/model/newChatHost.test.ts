@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ageOf, launchFlags, yoloFlags } from './newChatHost'
+import { ageOf, launchFlags, startsBypassed, withBypass } from './newChatHost'
 
 
 describe('launchFlags', () => {
@@ -56,18 +56,25 @@ describe('ageOf', () => {
   })
 })
 
-describe('yolo launch flags', () => {
-  const off = { claude: false, codex: false, gemini: false }
-
-  it('adds nothing while an agent\'s yolo setting is off', () => {
-    for (const agent of ['claude', 'codex', 'gemini'] as const) expect(yoloFlags(agent, off)).toBe('')
+describe('Bypass Permissions on the launch line', () => {
+  it('adds each agent\'s own flag while its switch is on', () => {
+    expect(withBypass('claude', ['--model', 'opus'], true)).toEqual(['--dangerously-skip-permissions', '--model', 'opus'])
+    expect(withBypass('codex', [], true)).toEqual(['--dangerously-bypass-approvals-and-sandbox'])
+    expect(withBypass('gemini', ['-m', 'pro'], true)).toEqual(['--yolo', '-m', 'pro'])
+    for (const agent of ['claude', 'codex', 'gemini'] as const) expect(startsBypassed(agent, withBypass(agent, [], true))).toBe(true)
   })
 
-  it('adds each agent\'s own flag, and only for the agent that is on', () => {
-    expect(yoloFlags('claude', { ...off, claude: true })).toBe(' --allow-dangerously-skip-permissions')
-    expect(yoloFlags('codex', { ...off, codex: true })).toBe(' --dangerously-bypass-approvals-and-sandbox')
-    expect(yoloFlags('gemini', { ...off, codex: true })).toBe('')
-    expect(yoloFlags('gemini', { ...off, gemini: true })).toBe(' --yolo')
+  it('adds nothing while the switch is off, and drops a picked Bypass mode Claude would refuse', () => {
+    for (const agent of ['claude', 'codex', 'gemini'] as const) expect(withBypass(agent, [], false)).toEqual([])
+    expect(withBypass('claude', ['--permission-mode', 'bypassPermissions', '--effort', 'high'], false)).toEqual(['--effort', 'high'])
+    expect(withBypass('claude', ['--permission-mode', 'plan'], false)).toEqual(['--permission-mode', 'plan'])
+  })
+
+  it('starts Claude in Bypass by its own flag, and keeps another picked mode with Bypass reachable', () => {
+    expect(withBypass('claude', ['--permission-mode', 'bypassPermissions'], true)).toEqual(['--dangerously-skip-permissions'])
+    const plan = withBypass('claude', ['--permission-mode', 'plan'], true)
+    expect(plan).toEqual(['--allow-dangerously-skip-permissions', '--permission-mode', 'plan'])
+    expect(startsBypassed('claude', plan)).toBe(false)
   })
 })
 

@@ -429,7 +429,7 @@ describe('desktop terminal multiplexer', () => {
   })
 
   it('shows the branch on a row but no diff counts or folder badge, and leaves "working" to the status icon', async () => {
-    daemon.loadConversations.mockResolvedValue([inRepo(3, `${HOME}/code/maitty`, `${HOME}/code/maitty`, { agent: 'claude', status: 'working', branch: 'agent/grow-028', diffAdded: 104, diffRemoved: 61 })])
+    daemon.loadConversations.mockResolvedValue([inRepo(3, `${HOME}/code/maiker`, `${HOME}/code/maiker`, { agent: 'claude', status: 'working', branch: 'agent/grow-028', diffAdded: 104, diffRemoved: 61 })])
     renderDesktopApp()
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
 
@@ -440,7 +440,7 @@ describe('desktop terminal multiplexer', () => {
     expect(row).not.toHaveTextContent('+104')
     expect(row).not.toHaveTextContent('−61')
     expect(row).not.toHaveTextContent('working')
-    expect(within(sidebar).queryByRole('button', { name: 'Show only maitty' })).not.toBeInTheDocument()
+    expect(within(sidebar).queryByRole('button', { name: 'Show only maiker' })).not.toBeInTheDocument()
   })
 
   it('starts a new terminal in the start folder from Settings, with ~ meaning the home folder', async () => {
@@ -457,16 +457,16 @@ describe('desktop terminal multiplexer', () => {
   it('lists every session under what it is doing, what needs you first, each named by its folder or agent', async () => {
     daemon.loadConversations.mockResolvedValue([
       term(9, `${HOME}/Downloads`),
-      inRepo(3, `${HOME}/code/maitty`, `${HOME}/code/maitty/crates/maitty-core`, { agent: 'codex', status: 'working' }),
-      inRepo(2, `${HOME}/code/maitty`, `${HOME}/code/maitty`),
+      inRepo(3, `${HOME}/code/maiker`, `${HOME}/code/maiker/crates/maitty-core`, { agent: 'codex', status: 'working' }),
+      inRepo(2, `${HOME}/code/maiker`, `${HOME}/code/maiker`),
       inRepo(4, `${HOME}/code/docs`, `${HOME}/code/docs`, { status: 'needs-you' }),
     ])
     renderDesktopApp()
 
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
-    await within(sidebar).findByRole('button', { name: 'maitty, shell, idle' })
+    await within(sidebar).findByRole('button', { name: 'maiker, shell, idle' })
     const rows = within(sidebar).getAllByRole('button', { name: /, (shell|codex), / }).map((row) => row.getAttribute('aria-label'))
-    expect(rows).toEqual(['docs, shell, needs you', 'codex, codex, working', 'Downloads, shell, idle', 'maitty, shell, idle'])
+    expect(rows).toEqual(['docs, shell, needs you', 'codex, codex, working', 'Downloads, shell, idle', 'maiker, shell, idle'])
     expect(sidebar).not.toHaveTextContent(`${DAEMON_NAME} ·`)
   })
 
@@ -511,17 +511,17 @@ describe('desktop terminal multiplexer', () => {
 
   it('splits right in the focused shell’s folder, moves focus, and ends the focused pane’s session on Ctrl+Shift+W', async () => {
     const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([inRepo(2, `${HOME}/code/maitty`, `${HOME}/code/maitty/apps`)])
+    daemon.loadConversations.mockResolvedValue([inRepo(2, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`)])
     renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/code/maitty/apps' })
-    daemon.loadConversations.mockResolvedValue([inRepo(2, `${HOME}/code/maitty`, `${HOME}/code/maitty/apps`), inRepo(7, `${HOME}/code/maitty`, `${HOME}/code/maitty/apps`)])
+    await screen.findByRole('region', { name: 'Shell in ~/code/maiker/apps' })
+    daemon.loadConversations.mockResolvedValue([inRepo(2, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`), inRepo(7, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`)])
 
     await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
 
-    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code/maitty/apps`) })
-    expect(await screen.findByRole('region', { name: 'Terminal 2: ~/code/maitty/apps, focused' })).toBeInTheDocument()
+    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code/maiker/apps`) })
+    expect(await screen.findByRole('region', { name: 'Terminal 2: ~/code/maiker/apps, focused' })).toBeInTheDocument()
     await user.keyboard('{Control>}[[{/Control}')
-    expect(screen.getByRole('region', { name: 'Terminal 1: ~/code/maitty/apps, focused' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Terminal 1: ~/code/maiker/apps, focused' })).toBeInTheDocument()
 
     await user.keyboard('{Control>}{Shift>}w{/Shift}{/Control}')
     await waitFor(() => { expect(screen.getAllByRole('region', { name: /^Terminal \d/ })).toHaveLength(1) })
@@ -633,11 +633,11 @@ describe('desktop terminal multiplexer', () => {
 
   it('asks about the pane you are in when Ctrl+Shift+W is pressed, and Cancel closes nothing', async () => {
     const user = userEvent.setup()
-    const claude = inRepo(2, `${HOME}/code/maitty`, `${HOME}/code/maitty/apps`, { agent: 'claude' })
+    const claude = inRepo(2, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`, { agent: 'claude' })
     daemon.loadConversations.mockResolvedValue([claude])
     renderDesktopApp()
     await screen.findByRole('region', { name: /^Terminal 1:/ })
-    daemon.loadConversations.mockResolvedValue([claude, inRepo(7, `${HOME}/code/maitty`, `${HOME}/code/maitty/apps`, { agent: 'codex' })])
+    daemon.loadConversations.mockResolvedValue([claude, inRepo(7, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`, { agent: 'codex' })])
     await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
     await screen.findByRole('region', { name: /^Terminal 2:.*focused/ })
 
@@ -891,7 +891,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 
   it('asks to restart an older service, and Later leaves a chip that asks again', async () => {
     const user = userEvent.setup()
-    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maitty service uses protocol v49, while this GUI needs v62')
+    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maiker service uses protocol v49, while this GUI needs v62')
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 62, canRestart: true, sessionCount: 2, activeTurnCount: 0 })
     renderDesktopApp()
 
@@ -908,17 +908,17 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
   })
 
   it('leaves an older daemon running while it owns sessions it is not saving', async () => {
-    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running server is another maitty version (protocol v49, this one v59); run maitty in a terminal to restart it')
+    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running server is another maiker version (protocol v49, this one v59); run maiker in a terminal to restart it')
     renderDesktopApp()
 
     expect(await screen.findByRole('button', { name: 'Service in use' })).toBeDisabled()
     expect(screen.getByText('The app updated, but the service behind it is still the older one.')).toBeInTheDocument()
-    expect(screen.getByText(/owns 2 sessions but is not saving them, so Maitty leaves it running/)).toBeInTheDocument()
+    expect(screen.getByText(/owns 2 sessions but is not saving them, so Maiker leaves it running/)).toBeInTheDocument()
     expect(daemon.restartMismatchedDaemon).not.toHaveBeenCalled()
   })
 
   it('asks to update the app, not restart the service, when the service is newer than the app', async () => {
-    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maitty service uses protocol v77, while this GUI needs v76')
+    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maiker service uses protocol v77, while this GUI needs v76')
     renderDesktopApp()
 
     const card = await screen.findByRole('alertdialog', { name: `Update ${APP_NAME} to reconnect` })
@@ -932,7 +932,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 
   it('offers to restart an older daemon that owns saved sessions, says what survives, and asks twice', async () => {
     const user = userEvent.setup()
-    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maitty service uses protocol v49, while this GUI needs v62')
+    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maiker service uses protocol v49, while this GUI needs v62')
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 62, canRestart: true, sessionCount: 4, activeTurnCount: 1 })
     daemon.restartMismatchedDaemon.mockResolvedValue(undefined)
     renderDesktopApp()
@@ -948,7 +948,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 
   it('restarts an idle older daemon only after a second click', async () => {
     const user = userEvent.setup()
-    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maitty service uses protocol v49, while this GUI needs v62')
+    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maiker service uses protocol v49, while this GUI needs v62')
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 62, canRestart: true, sessionCount: 0, activeTurnCount: 0 })
     daemon.restartMismatchedDaemon.mockResolvedValue(undefined)
     renderDesktopApp()
@@ -1078,7 +1078,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 
     await user.keyboard('{Control>},{/Control}')
     await user.keyboard('a')
-    await user.click(screen.getByRole('button', { name: 'Dark theme: Maitty Dark' }))
+    await user.click(screen.getByRole('button', { name: 'Dark theme: Maiker Dark' }))
     await user.type(screen.getByRole('textbox', { name: 'Search dark themes' }), 'tokyo')
     const listbox = await screen.findByRole('radiogroup', { name: 'Dark themes' })
     expect(within(listbox).getAllByRole('radio')).toHaveLength(1)
@@ -1093,7 +1093,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 })
 
 describe('desktop overlays and pane tools', () => {
-  const root = `${HOME}/code/maitty`
+  const root = `${HOME}/code/maiker`
   const at = (pane: number, extra: Partial<Conversation> = {}) => inRepo(pane, root, `${root}/p${String(pane)}`, extra)
 
   beforeEach(() => {
@@ -1223,7 +1223,7 @@ describe('desktop overlays and pane tools', () => {
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     const app = renderDesktopApp({ firstRun: true })
 
-    const dialog = await screen.findByRole('dialog', { name: 'Welcome to Maitty' })
+    const dialog = await screen.findByRole('dialog', { name: 'Welcome to Maiker' })
     expect(dialog).toHaveTextContent('Closing this window never stops an agent')
     // Global shortcuts are ignored while it is open.
     await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
@@ -1246,23 +1246,23 @@ describe('desktop overlays and pane tools', () => {
     app.unmount()
     renderDesktopApp({ firstRun: true })
     await screen.findByRole('heading', { name: 'No sessions running' })
-    expect(screen.queryByRole('dialog', { name: 'Welcome to Maitty' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
   })
 
   it('skips the welcome with Escape and does not greet a window that already has settings', async () => {
     const user = userEvent.setup()
     renderDesktopApp({ firstRun: true })
-    await screen.findByRole('dialog', { name: 'Welcome to Maitty' })
+    await screen.findByRole('dialog', { name: 'Welcome to Maiker' })
 
     await user.keyboard('{Escape}')
-    expect(screen.queryByRole('dialog', { name: 'Welcome to Maitty' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
 
     window.localStorage.removeItem('maitty.gui.welcomed.v1')
     window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ accent: 'blue' }))
     cleanup()
     renderDesktopApp({ firstRun: true })
     await screen.findByRole('heading', { name: 'No sessions running' })
-    expect(screen.queryByRole('dialog', { name: 'Welcome to Maitty' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
   })
 
   it('shows every shortcut from the keymap on Ctrl+/, ignores other shortcuts while it is open, and closes with the key or Esc', async () => {

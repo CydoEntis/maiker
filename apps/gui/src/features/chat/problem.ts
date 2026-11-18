@@ -52,16 +52,22 @@ export function agoWords(since: number | null, now: number): string | null {
   return `${String(Math.floor(seconds / HOUR))}h`
 }
 
-/** The signal-killed codes a process exits with, in words. */
-const KILLED: Readonly<Record<number, string>> = { 130: 'interrupted', 137: 'out of memory or killed', 139: 'crashed', 143: 'terminated' }
+/** What the codes a process is stopped with mean, in plain words. */
+const KILLED: Readonly<Record<number, string>> = {
+  130: 'It was interrupted',
+  137: 'The system stopped it, most often because the computer ran out of memory',
+  139: 'It crashed',
+  143: 'Something asked it to stop',
+}
 
 /** The plain exit code the reason may name; any other code stays in Copy details. */
 const PLAIN_EXIT = 1
 
+/** Why the agent's process ended, as a sentence, with its exit code kept at the end for whoever reads the log. */
 export function exitWords(code: number | null): string {
-  if (code === null) return 'The process exited.'
+  if (code === null) return 'Its process ended.'
   const why = KILLED[code]
-  return `The process exited (code ${String(code)}${why === undefined ? '' : `, ${why}`}).`
+  return `${why ?? 'Its process ended with an error'} (exit code ${String(code)}).`
 }
 
 /** What the dialog and the dock line say about a problem: a short title, one plain sentence, and the raw facts for Copy details. */
@@ -70,11 +76,14 @@ export type ProblemWords = { title: string; reason: string; line: string; detail
 export function problemWords(problem: ChatProblem, now: number): ProblemWords {
   switch (problem.kind) {
     case 'stopped': {
-      const how = problem.code === PLAIN_EXIT ? ` exited with code ${String(PLAIN_EXIT)}` : problem.code === null ? ' exited' : ` ${KILLED[problem.code] ?? 'exited'}`
+      const killed = problem.code === null ? undefined : KILLED[problem.code]
+      const how = killed !== undefined
+        ? `${problem.agent} stopped in the middle of a step. ${killed}.`
+        : `${problem.agent}${problem.code === PLAIN_EXIT ? ` exited with code ${String(PLAIN_EXIT)}` : ' exited'} in the middle of a step.`
       const carry = problem.onRestart === null ? 'Open the terminal to see why.' : 'Restart to carry on from the last message.'
       return {
         title: `${problem.agent} stopped`,
-        reason: `${problem.agent}${how} in the middle of a step. Your messages and changes are safe. ${carry}`,
+        reason: `${how} Your messages and changes are safe. ${carry}`,
         line: 'Your messages and changes are safe.',
         details: `${problem.agent} stopped. ${exitWords(problem.code)}`,
       }

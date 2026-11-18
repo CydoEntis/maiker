@@ -17,7 +17,7 @@ import { UpdateBox } from './UpdateBox'
 import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { ExtensionProject } from '@/features/extensions/projects'
 import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
-import { CHAT_AGENTS } from '@/features/workspace/model/chatView'
+import { CHAT_AGENTS, type ChatAgent } from '@/features/workspace/model/chatView'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { Icon } from '@/features/workspace/components/glyphs'
@@ -30,7 +30,7 @@ import type { Added, Grant, HostChoice, MachineActivity } from '@/api/machines'
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
-import { CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
+import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
 import { DAEMON_NAME } from '@/brand'
 
 export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'usage' | 'performance'
@@ -262,7 +262,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
     switch (id) {
       case 'general': return <GeneralSection preferences={preferences} update={update} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} />
       case 'chat': return <ChatSection preferences={preferences} update={update} />
-      case 'permissions': return <><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
+      case 'permissions': return <><BypassSection preferences={preferences} update={update} /><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
       case 'terminal': return <TerminalSection preferences={preferences} update={update} />
       case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
       case 'usage': return <UsageSection usage={props.usage} />
@@ -388,11 +388,29 @@ function SegmentedChoice<T extends string | number>({ label, value, options, onC
   )
 }
 
-const YOLO_AGENTS = [
-  { key: 'yoloClaude', label: 'Claude', detail: 'Lets you pick Bypass permissions in a chat, where Claude asks about nothing. New chats still start in the mode you had.' },
-  { key: 'yoloCodex', label: 'Codex', detail: 'Starts new Codex sessions with approvals and the sandbox off, so it runs commands and edits files without asking.' },
-  { key: 'yoloGemini', label: 'Gemini', detail: 'Starts new Gemini sessions in its yolo mode, which approves every tool call without asking.' },
-] as const
+const BYPASS_DETAIL: Readonly<Record<ChatAgent, string>> = {
+  claude: 'New Claude sessions start in Bypass permissions and ask about nothing. A new chat can still pick another mode.',
+  codex: 'New Codex sessions start with approvals and the sandbox off, so they run commands and edit files without asking.',
+  gemini: 'New Gemini sessions start in its yolo mode, which approves every tool call without asking.',
+}
+
+/** One switch per agent that can start without permission prompts; shared with the terminal app (`[permissions.bypass]`). */
+function BypassSection({ preferences, update }: { preferences: SettingsPreferences; update: Update }) {
+  return (
+    <Card
+      title="Bypass Permissions"
+      foot="On for every agent unless you turn it off. The agent can change files and run commands without asking, so turn it off for any agent you want to approve each step. Only sessions started after a change get it; sessions already running keep how they started."
+    >
+      {BYPASS_AGENTS.map((agent) => (
+        <Row key={agent} label={AGENT_LABEL[agent]} detail={BYPASS_DETAIL[agent]}>
+          <Switch aria-label={`Bypass Permissions for ${AGENT_LABEL[agent]}`} checked={bypasses(preferences, agent)} onCheckedChange={(value) => {
+            update('bypassOff', value ? preferences.bypassOff.filter((off) => off !== agent) : [...preferences.bypassOff, agent])
+          }} />
+        </Row>
+      ))}
+    </Card>
+  )
+}
 
 /** How long a card says Saved after one of its values changed. */
 const SAVED_FLASH_MS = 2000
@@ -461,6 +479,9 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
         <Row label="Restart the service when idle" detail="After an update, an older service restarts by itself once no agent is working, waiting on you or starting. Sessions come back.">
           <Switch aria-label="Restart the service when idle" checked={preferences.restartServiceWhenIdle} onCheckedChange={(value) => { update('restartServiceWhenIdle', value) }} />
         </Row>
+        <Row label="Update remote machines too" detail="After this computer updates, each machine follows once its agents are idle. Off: click Update on each one.">
+          <Switch aria-label="Update remote machines too" checked={preferences.updateMachines} onCheckedChange={(value) => { update('updateMachines', value) }} />
+        </Row>
       </Card>
       <Card title="Sessions">
         <Row label="Reopen layout on launch" detail="Restore the panes and splits you had last time.">
@@ -519,7 +540,7 @@ function FontFamilyField({ value, onCommit }: { value: string; onCommit: (family
   // A family saved earlier that this computer no longer reports still shows as the current choice.
   const saved = value !== '' && value !== BUNDLED_FONT_NAME && !names.includes(value) ? [item(value, 'Saved choice')] : []
   const groups: PickerGroup[] = [
-    { items: [item(BUNDLED_FONT_NAME, 'Bundled with Maitty')] },
+    { items: [item(BUNDLED_FONT_NAME, 'Bundled with Maiker')] },
     ...(saved.length + names.length > 0 ? [{ label: 'Installed here', items: [...saved, ...names.map((name) => item(name, 'Monospace'))] }] : []),
   ]
   return <PickerSelect label="Terminal font family" value={value === '' ? BUNDLED_FONT_NAME : value} groups={groups} onPick={(next) => { onCommit(next === BUNDLED_FONT_NAME ? '' : next) }} width={240} />
@@ -628,28 +649,12 @@ function ChatSection({ preferences, update }: { preferences: SettingsPreferences
         <Row label="Chat text size" detail="Draws everything in the chat larger or smaller: its messages, its cards and its message box.">
           <SegmentedChoice label="Chat text size" value={preferences.chatTextSize} options={CHAT_TEXT_SIZE_OPTIONS} onChange={(value) => { update('chatTextSize', value) }} />
         </Row>
-        <Row label="Full access in new chats" detail="Start new chats with the agent's skip-permissions mode: no sandbox and no approval prompts. Each chat can still turn it off or on when it starts.">
-          <Switch aria-label="Full access in new chats" checked={preferences.fullAccessNewChats} onCheckedChange={(value) => { update('fullAccessNewChats', value) }} />
-        </Row>
         <Row label="Hide successful tool calls" detail="Leaves out the file reads and searches that worked. Commands, edits, other tools and anything that failed still show.">
           <Switch aria-label="Hide successful tool calls" checked={preferences.hideSuccessfulTools} onCheckedChange={(value) => { update('hideSuccessfulTools', value) }} />
         </Row>
         {CHAT_AGENTS.map((agent) => (
           <Row key={agent} label={`${AGENT_LABEL[agent]} sessions open in`} detail="Only a session with a chat opens in it; the switch on each pane changes one session.">
             <SegmentedChoice label={`${AGENT_LABEL[agent]} sessions open in`} value={preferences.chatViewDefault[agent]} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('chatViewDefault', { ...preferences.chatViewDefault, [agent]: value }) }} />
-          </Row>
-        ))}
-      </Card>
-      <Card
-        title="Yolo mode"
-        foot="Off for every agent by default. Only sessions started after you turn one on get it. Every session already running has to be closed and started again."
-      >
-        {YOLO_AGENTS.map(({ key, label, detail }) => (
-          <Row key={key} label={label} detail={detail}>
-            <Switch aria-label={`Yolo mode for ${label}`} checked={preferences[key]} onCheckedChange={(value) => {
-              update(key, value)
-              if (value) toast.info(`Yolo mode for ${label} is on for new sessions only`, { description: `Sessions already running keep how they started. Restart one, or start a new session, to get it.` })
-            }} />
           </Row>
         ))}
       </Card>
@@ -705,7 +710,7 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
     {shown !== null && <SignInCard view={shown} onCancel={() => { signIn.cancel(shown.agent) }} onClose={signIn.close} onRetry={() => { signIn.begin(shown.agent) }} />}
     <Card title="Accounts"
       meta={<button type="button" className="mx-scard-meta-button" onClick={again}>Check again</button>}
-      foot="Sign in runs the agent's own sign-in and shows its link and code here. Maitty keeps no passwords or keys."
+      foot="Sign in runs the agent's own sign-in and shows its link and code here. Maiker keeps no passwords or keys."
     >
       {ACCOUNT_AGENTS.map(([agent, label]) => {
         const state = states[agent]

@@ -36,18 +36,20 @@ type Extra = {
   onWarm?: (spec: unknown) => void
   pickFolder?: (machine: number) => Promise<PickedFolder | null>
   defaultAgent?: 'claude' | 'codex' | 'gemini'
-  codexYolo?: boolean
-  fullAccess?: boolean
+  bypassOff?: readonly ('claude' | 'codex' | 'gemini')[]
   seed?: { folder: string; message: string }
   projects?: typeof PROJECTS
   onAddMachine?: () => void
   onOtherMachine?: (machine: number) => void
 }
 
+/** Bypass Permissions switched off for every agent, so a mode is picked as before it was on by default. */
+const ALL_OFF = ['claude', 'codex', 'gemini'] as const
+
 function dialog(onStart: (request: NewChatRequest) => Promise<void> = () => Promise.resolve(), extra: Extra = {}) {
-  const { pickFolder = null, onCancel = () => undefined, onOtherMachine = () => undefined, defaultAgent = 'claude', projects = PROJECTS, ...rest } = extra
+  const { pickFolder = null, onCancel = () => undefined, onOtherMachine = () => undefined, defaultAgent = 'claude', projects = PROJECTS, bypassOff = ALL_OFF, ...rest } = extra
   return render(
-    <NewSessionDialog machine={0} machines={HERE} projects={projects} defaultAgent={defaultAgent} pickFolder={pickFolder} onStart={onStart} onOtherMachine={onOtherMachine} onCancel={onCancel} {...rest} />,
+    <NewSessionDialog machine={0} machines={HERE} projects={projects} defaultAgent={defaultAgent} bypassOff={bypassOff} pickFolder={pickFolder} onStart={onStart} onOtherMachine={onOtherMachine} onCancel={onCancel} {...rest} />,
     { container: windowRoot() },
   )
 }
@@ -393,27 +395,27 @@ describe('the New session dialog', () => {
     expect(add).toHaveBeenCalledOnce()
   })
 
-  it('starts a Codex chat on the agent\'s full-access mode while Full access in new chats is on', async () => {
+  it('starts Claude in Bypass permissions by default', async () => {
     const onStart = vi.fn(() => Promise.resolve())
-    dialog(onStart, { defaultAgent: 'codex', fullAccess: true })
+    dialog(onStart, { bypassOff: [] })
     await pickedProject('growth')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
-    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'codex', mode: 'codexFullAccess' })) })
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude', mode: 'bypassPermissions' })) })
   })
 
-  it('keeps Claude on its usual mode with full access on when Yolo mode does not allow Bypass permissions', async () => {
+  it('keeps Claude on its usual mode while its Bypass Permissions is off', async () => {
     const onStart = vi.fn(() => Promise.resolve())
-    dialog(onStart, { fullAccess: true })
+    dialog(onStart, { bypassOff: ['claude'] })
     await pickedProject('growth')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude', mode: 'default' })) })
   })
 
-  it('sends no mode of its own for a Codex chat while its Yolo setting is on', async () => {
+  it('sends no mode of its own for a Codex chat while its Bypass Permissions is on: its flag already gives full access', async () => {
     const onStart = vi.fn(() => Promise.resolve())
-    dialog(onStart, { defaultAgent: 'codex', codexYolo: true })
+    dialog(onStart, { defaultAgent: 'codex', bypassOff: [] })
     await pickedProject('growth')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())

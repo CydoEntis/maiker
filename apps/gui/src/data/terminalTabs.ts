@@ -21,7 +21,7 @@ export function readTerminalTabs(): SavedTerminalTabs {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return new Map()
     return new Map(Object.entries(value).filter((entry): entry is [string, string[][][]] => isTabList(entry[1])))
   } catch (error) {
-    console.warn('Ignoring invalid Maitty terminal tabs', error)
+    console.warn('Ignoring invalid Maiker terminal tabs', error)
     return new Map()
   }
 }

@@ -32,7 +32,7 @@ describe('starts in the background', () => {
     unmount()
     fail(new Error('boom'))
 
-    await waitFor(() => { expect(toast.error).toHaveBeenCalledWith('Could not start “fix the login”: boom') })
+    await waitFor(() => { expect(toast.failed).toHaveBeenCalledWith('Could not start “fix the login”', new Error('boom')) })
     expect(revoke).toHaveBeenCalledWith('blob:shot')
   })
 

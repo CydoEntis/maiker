@@ -104,7 +104,7 @@ export function failureOf(error: z.infer<typeof ErrorSchema>): ExtensionFailure 
 
 /** A command can take a minute in the daemon; the host waits that long and a little more. */
 const ANSWER_MS = 95_000
-const NOT_ANSWERED = 'The Maitty service did not answer in time'
+const NOT_ANSWERED = 'The Maiker service did not answer in time'
 
 const ask = taggedAnswers('extensions', AnswerSchema)
 

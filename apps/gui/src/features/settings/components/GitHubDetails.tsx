@@ -23,9 +23,9 @@ function defaultWords(report: GitIdentityReport): string {
   return 'No name or email is set for commits'
 }
 
-/** What a rule gives its folder, or that Maitty did not write it and so knows only the folder. */
+/** What a rule gives its folder, or that Maiker did not write it and so knows only the folder. */
 function ruleWords(rule: GitIdentityRule): string {
-  if (rule.identity === null) return 'set outside Maitty'
+  if (rule.identity === null) return 'set outside Maiker'
   const { login, name, email } = rule.identity
   return `${login} · ${name} <${email}>`
 }
@@ -85,7 +85,7 @@ function Identities({ state, active, actions }: { state: Loaded; active: string 
 
 /**
  * Under a machine's row on the GitHub page: every account signed in there, the name and email its
- * commits carry, and the folders where a rule gives another account and identity. A rule Maitty
+ * commits carry, and the folders where a rule gives another account and identity. A rule Maiker
  * wrote can be changed or removed here, and another added; that machine's daemon writes git's config.
  */
 export function GitHubDetails({ machine, label, accounts, asked, onAddAccount }: {

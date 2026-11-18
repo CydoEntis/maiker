@@ -14,8 +14,8 @@
 $ErrorActionPreference = 'Stop'
 
 # The app's command and where it is released: the only place this script names it (ADR 0008).
-$app = 'maitty'
-$repo = 'CydoEntis/maitty'
+$app = 'maiker'
+$repo = 'CydoEntis/maiker'
 
 # The prefix of the app's environment variables, and the one it had before (still read).
 $envPrefix = 'AGENT'

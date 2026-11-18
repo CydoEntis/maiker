@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { errorMessage } from '@/lib/error-message'
+import { errorMessage, explainError } from '@/lib/error-message'
 import { saysNotConnected } from '@/lib/serviceLine'
 
 /**
@@ -167,14 +167,18 @@ function showError(title: string, options?: ToastOptions): string {
 }
 
 /**
- * A failure with its error: the title says what failed, the error's own words are the reason (clamped) and Copy
- * details. An error that only says the window has no line to the service is not shown (`showError`).
+ * A failure with its error (docs/CODE-STANDARDS.md#errors): the title says what failed, the reason says why in plain
+ * words (`explainError`: a raw tool or OS failure of a known kind in plain words, any other made one sentence), and the
+ * error's own text is behind Copy details when it says more than the reason. An error that only says the window has
+ * no line to the service is not shown (`showError`).
  */
 function showFailure(what: string, error: unknown, options: ToastOptions = {}): string {
   const said = errorMessage(error, '')
   if (saysNotConnected(said)) return NOT_SHOWN
-  const reason = said === '' || said === what ? undefined : said
-  return show('error', what, { ...(reason === undefined ? {} : { description: reason, details: said }), ...options })
+  // An error that only repeats the title adds nothing under it.
+  if (said !== '' && said === what) return show('error', what, options)
+  const { reason, details } = explainError(said, what)
+  return show('error', what, { description: reason, ...(details === null ? {} : { details }), ...options })
 }
 
 export const toast = {
@@ -184,7 +188,7 @@ export const toast = {
   info: (title: string, options?: ToastOptions) => show('info', title, options),
   /** Something failed where you are not looking. Stays until dismissed. */
   error: showError,
-  /** `error` with the error's own words as the reason and behind Copy details. */
+  /** `error` with why in plain words as the reason, and the error's own text behind Copy details. */
   failed: showFailure,
   /** Worth knowing and not a failure (a machine on an older version). Stays until dismissed. */
   warning: (title: string, options?: ToastOptions) => show('warning', title, options),

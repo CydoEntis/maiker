@@ -23,9 +23,9 @@ function screenFor(error: unknown, tab: string): Screen {
     return { tone: 'wait', title: 'Git is finishing something', body: 'Another git command is working in this project. It usually wraps up in a few seconds.', autoRetrySeconds: GIT_BUSY_RETRY_SECONDS, reassure: true }
   }
   if (PERMISSION_WORDS.some((word) => text.includes(word))) {
-    return { tone: 'stop', title: 'Maitty can’t read this folder', body: 'The folder’s permissions keep it private. Allow your user to read it, then try again.', autoRetrySeconds: null, reassure: true }
+    return { tone: 'stop', title: 'Maiker can’t read this folder', body: 'The folder’s permissions keep it private. Allow your user to read it, then try again.', autoRetrySeconds: null, reassure: true }
   }
-  return { tone: 'wait', title: `Maitty couldn’t load your ${tab}`, body: 'Your terminals and agents keep running. Only this panel is affected.', autoRetrySeconds: null, reassure: true }
+  return { tone: 'wait', title: `Maiker couldn’t load your ${tab}`, body: 'Your terminals and agents keep running. Only this panel is affected.', autoRetrySeconds: null, reassure: true }
 }
 
 /** Counts down once a second to `onZero`, which then runs and the count starts over; holds still while `paused`. */

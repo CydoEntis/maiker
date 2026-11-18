@@ -154,7 +154,7 @@ fn scripted(files: Vec<PathBuf>, script: &str) -> Job {
     std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
     Job {
         transfer: "t-1".into(),
-        machine: Machine::ssh("box", vec![program.display().to_string()], "maitty"),
+        machine: Machine::ssh("box", vec![program.display().to_string()], "maiker"),
         name: "box".into(),
         files,
         kind: SendKind::Files,
@@ -457,7 +457,7 @@ fn a_dropped_folder_is_planned_and_sent_whole() {
             "--mode=remote-sh".into(),
             format!("--home={}", home.display()),
         ],
-        "maitty",
+        "maiker",
     );
     let events = std::sync::Mutex::new(Vec::new());
     run(&job, &Arc::new(AtomicBool::new(false)), &|event| events.lock().unwrap().push(event));

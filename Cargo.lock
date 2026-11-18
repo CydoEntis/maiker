@@ -2730,7 +2730,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "maitty"
+name = "maiker"
 version = "0.79.0"
 dependencies = [
  "maitty-shared",

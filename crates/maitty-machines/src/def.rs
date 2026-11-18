@@ -384,13 +384,13 @@ mod tests {
 
     #[test]
     fn a_remote_cmd_must_be_text_without_control_characters() {
-        for cmd in ["", "  ", "maitty\nrm -rf ~"] {
+        for cmd in ["", "  ", "maiker\nrm -rf ~"] {
             let mut m = machine("box", "h");
             m.remote_cmd = Some(cmd.into());
             assert!(refusal(&[m]).contains("`remote_cmd`"), "{cmd:?}");
         }
         let mut ok = machine("box", "h");
-        ok.remote_cmd = Some("~/.cargo/bin/maitty".into());
+        ok.remote_cmd = Some("~/.cargo/bin/maiker".into());
         validate_machines(&[ok]).unwrap();
     }
 }

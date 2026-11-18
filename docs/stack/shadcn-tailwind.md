@@ -73,7 +73,7 @@ Square corners (`apps/gui/src/tokens.css`). A surface takes its fill from its ro
 float or field), and a control inside it from the `--m-*` and `--c-*` tokens there; the look is flat, with no
 gradient or blur ([DESIGN](../DESIGN.md#desktop-app)).
 
-Maitty Night is the default dark theme and Maitty Day the default light one (sea-glass and brass,
+Maiker Night is the default dark theme and Maiker Day the default light one (sea-glass and brass,
 their `palette` in `crates/maitty-settings/themes.json`). A primary button is the theme's accent; teal means only
 working; `--needs` (the theme's warn) means only needs-you; red is reserved for errors and recovery. Use the shared CSS variables for every
 theme and keep shadcn primitives unchanged unless an accessibility or product

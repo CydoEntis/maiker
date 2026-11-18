@@ -233,7 +233,7 @@ describe('the commands the window answers itself', () => {
     expect(fake.sideAnswer).not.toHaveBeenCalled()
   })
 
-  it('renames the session in Maitty too for /rename with a name, and still sends it so Claude Code agrees', async () => {
+  it('renames the session in Maiker too for /rename with a name, and still sends it so Claude Code agrees', async () => {
     const actions = windowActions()
     const { user, box } = await open({ windowActions: actions })
 
@@ -307,7 +307,7 @@ describe('the commands the window answers itself', () => {
 
     await user.type(box, '/permissions{Escape}{Enter}')
     const card = screen.getByRole('region', { name: 'Permissions' })
-    expect(card).toHaveTextContent('Maitty never changes it for you')
+    expect(card).toHaveTextContent('Maiker never changes it for you')
 
     await user.type(box, '/diff{Escape}{Enter}')
     expect(actions.openPanel).toHaveBeenCalledExactlyOnceWith('changes')

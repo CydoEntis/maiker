@@ -12,14 +12,14 @@ const MACHINES: PickerMachine[] = [
 ]
 
 function folder(path: string, names: string[], canCreate = true): FolderListing {
-  return { path, exists: true, truncated: false, can_create: canCreate, entries: names.map((name) => ({ name, git: name === 'maitty' ? 'dev' : null, has_children: true })) }
+  return { path, exists: true, truncated: false, can_create: canCreate, entries: names.map((name) => ({ name, git: name === 'maiker' ? 'dev' : null, has_children: true })) }
 }
 
 /** A machine whose home holds two folders and a hidden one, one of them a repo with a folder inside. */
 function disk() {
   return vi.fn((_machine: number, path: string): Promise<FolderListing> => {
-    if (path === '~' || path === HOME) return Promise.resolve(folder(HOME, ['maitty', 'notes', '.cache']))
-    if (path === `${HOME}/maitty`) return Promise.resolve(folder(`${HOME}/maitty`, ['src']))
+    if (path === '~' || path === HOME) return Promise.resolve(folder(HOME, ['maiker', 'notes', '.cache']))
+    if (path === `${HOME}/maiker`) return Promise.resolve(folder(`${HOME}/maiker`, ['src']))
     if (path === '/home') return Promise.resolve(folder('/home', ['dev']))
     return Promise.resolve({ path, exists: false, truncated: false, can_create: true, entries: [] })
   })
@@ -46,7 +46,7 @@ describe('Open a folder on a machine', () => {
     expect(screen.getByRole('button', { name: 'Machine: kingdom' })).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.queryByText(/Rescan|Indexed by/)).not.toBeInTheDocument()
-    expect(await screen.findByRole('option', { name: /maitty/ })).toHaveTextContent('dev')
+    expect(await screen.findByRole('option', { name: /maiker/ })).toHaveTextContent('dev')
     const path = within(screen.getByRole('navigation', { name: 'Path' }))
     expect(path.getByRole('button', { name: '~' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: /notes/ })).toBeInTheDocument()
@@ -75,11 +75,11 @@ describe('Open a folder on a machine', () => {
   it('goes into a folder with the arrow keys and Enter, up with Backspace, and chooses with Ctrl+Enter', async () => {
     const user = userEvent.setup()
     const { onPick } = open()
-    await screen.findByRole('option', { name: /maitty/ })
+    await screen.findByRole('option', { name: /maiker/ })
     await user.keyboard('{ArrowDown}{Enter}')
     expect(await screen.findByRole('option', { name: /src/ })).toBeInTheDocument()
     await user.keyboard('{Control>}{Enter}{/Control}')
-    expect(onPick).toHaveBeenCalledWith({ machine: 2, folder: `${HOME}/maitty` })
+    expect(onPick).toHaveBeenCalledWith({ machine: 2, folder: `${HOME}/maiker` })
     await user.keyboard('{Backspace}')
     expect(await screen.findByRole('option', { name: /notes/ })).toBeInTheDocument()
   })
@@ -140,7 +140,7 @@ describe('Making a new folder', () => {
   it('opens an inline field from the button, creates on Enter in the folder shown, and selects the new folder', async () => {
     const user = userEvent.setup()
     const create = vi.fn<Create>(() => Promise.resolve({ kind: 'created', path: `${HOME}/fresh` }))
-    const list = vi.fn(() => Promise.resolve(folder(HOME, create.mock.calls.length === 0 ? ['maitty', 'notes'] : ['fresh', 'maitty', 'notes'])))
+    const list = vi.fn(() => Promise.resolve(folder(HOME, create.mock.calls.length === 0 ? ['maiker', 'notes'] : ['fresh', 'maiker', 'notes'])))
     open(list, create)
     await screen.findByRole('option', { name: /notes/ })
     await user.click(screen.getByRole('button', { name: 'New folder' }))
@@ -228,9 +228,9 @@ describe('Making a new folder', () => {
 
   it('shows the button disabled, with the reason, when the machine\'s service is older', async () => {
     const user = userEvent.setup()
-    const old = vi.fn(() => Promise.resolve(folder(HOME, ['maitty'], false)))
+    const old = vi.fn(() => Promise.resolve(folder(HOME, ['maiker'], false)))
     const { create } = open(old)
-    await screen.findByRole('option', { name: /maitty/ })
+    await screen.findByRole('option', { name: /maiker/ })
     const button = screen.getByRole('button', { name: 'New folder' })
     expect(button).toBeDisabled()
     expect(screen.getByText(/This machine.s service is older: restart it to create folders\./)).toBeInTheDocument()

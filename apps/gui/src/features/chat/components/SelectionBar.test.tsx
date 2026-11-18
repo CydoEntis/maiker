@@ -123,6 +123,18 @@ describe('text selected in the chat', () => {
     expect(screen.queryByRole('group', { name: 'Selected text' })).not.toBeInTheDocument()
   })
 
+  it('draws the bar over everything, outside the chat, kept inside the window', async () => {
+    const { said } = await open()
+    select(said)
+
+    fireEvent.mouseUp(said, { clientX: 2, clientY: 3 })
+
+    const bar = screen.getByRole('group', { name: 'Selected text' })
+    expect(bar.closest('.mx-chat')).toBeNull()
+    expect(bar.style.left).toBe('90px')
+    expect(bar.style.top).toBe('48px')
+  })
+
   it('puts the bar away on Esc', async () => {
     const { user, said } = await open()
     select(said)

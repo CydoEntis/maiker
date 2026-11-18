@@ -5,7 +5,7 @@
 
 ## Context
 
-Status (working, needs you, done, idle) is the one thing Maitty must get right. It had several
+Status (working, needs you, done, idle) is the one thing Maiker must get right. It had several
 writers (hooks, a screen scan, user actions, check results, chat state) and several readers that
 derived their own view (the TUI, the GUI poll). Every fix added a time-window guard to one copy,
 and the same bugs came back.

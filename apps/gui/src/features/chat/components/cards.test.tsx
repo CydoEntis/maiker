@@ -132,7 +132,7 @@ describe('edit step', () => {
     await openStep()
 
     expect(screen.getByRole('group', { name: 'Edit app/.env' })).toBeInTheDocument()
-    expect(screen.getByText(/Secret file: Maitty doesn.t show its contents/)).toBeInTheDocument()
+    expect(screen.getByText(/Secret file: Maiker doesn.t show its contents/)).toBeInTheDocument()
     expect(screen.queryByText(/unavailable/)).toBeNull()
     expect(screen.queryByText(/^[+−]\d+$/)).toBeNull()
   })

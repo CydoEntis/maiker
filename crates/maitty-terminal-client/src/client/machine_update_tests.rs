@@ -201,16 +201,17 @@ impl Talk for Person {
     }
 }
 
-/// A plain command name no host has on its PATH (this host's own `maitty` must not answer).
+/// A plain command name no host has on its PATH (this host's own `maiker` must not answer).
 const UNLISTED: &str = "maitty-not-on-any-path";
 const LINUX: &str = "Linux x86_64";
-const AT_HOME: &str = "~/.local/bin/maitty";
+const AT_HOME: &str = "~/.local/bin/maiker";
 const INSTALL: Flags = Flags {
     install: true,
     yes: false,
     force: false,
     restart: false,
     wait: false,
+    agents_idle: false,
 };
 const YES: Flags = Flags {
     install: false,
@@ -218,6 +219,7 @@ const YES: Flags = Flags {
     force: false,
     restart: false,
     wait: false,
+    agents_idle: false,
 };
 const NO_FLAGS: Flags = Flags {
     install: false,
@@ -225,6 +227,7 @@ const NO_FLAGS: Flags = Flags {
     force: false,
     restart: false,
     wait: false,
+    agents_idle: false,
 };
 
 fn run(
@@ -269,13 +272,13 @@ fn a_missing_app_is_installed_with_the_flag_and_runs_afterwards() {
         }
     );
     assert_eq!(
-        remote.read(".local/bin/maitty"),
+        remote.read(".local/bin/maiker"),
         format!("#!/bin/sh\necho '{APP_COMMAND} {APP_VERSION}'\n")
     );
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mode = std::fs::metadata(remote.home.join(".local/bin/maitty"))
+        let mode = std::fs::metadata(remote.home.join(".local/bin/maiker"))
             .unwrap()
             .permissions()
             .mode();
@@ -300,6 +303,29 @@ fn a_missing_app_is_installed_with_the_flag_and_runs_afterwards() {
 }
 
 #[test]
+fn the_app_under_its_old_name_is_an_older_version_to_replace_not_a_missing_one() {
+    needs_sh!();
+    let Some(old) = crate::brand::previous().next() else {
+        return;
+    };
+    let remote = Remote::new(LINUX);
+    remote.write_program(
+        &format!(".local/bin/{old}"),
+        &format!("#!/bin/sh\necho '{old} 0.1.0'\n"),
+    );
+    let mut person = Person::absent();
+    let outcome = run(&remote, AT_HOME, YES, &new_build(&remote), &mut person).unwrap();
+    assert_eq!(
+        outcome,
+        Outcome::Installed {
+            version: APP_VERSION.into(),
+            destination: AT_HOME.into()
+        }
+    );
+    assert!(person.heard(&format!("{APP_COMMAND} 0.1.0")), "{:?}", person.said);
+}
+
+#[test]
 fn a_missing_app_without_the_flag_or_a_person_is_refused_and_nothing_is_sent() {
     needs_sh!();
     let remote = Remote::new(LINUX);
@@ -312,7 +338,7 @@ fn a_missing_app_without_the_flag_or_a_person_is_refused_and_nothing_is_sent() {
     ));
     assert_eq!(
         message,
-        "maitty is not installed on box; run `maitty machine update box --install`"
+        "maiker is not installed on box; run `maiker machine update box --install`"
     );
     assert!(!remote.uploaded());
     assert!(!remote.home.join(".local").exists());
@@ -335,14 +361,14 @@ fn a_person_is_asked_and_a_no_changes_nothing() {
     assert!(!remote.uploaded());
     let mut yes = Person::says(true);
     run(&remote, AT_HOME, NO_FLAGS, &new_build(&remote), &mut yes).unwrap();
-    assert!(remote.home.join(".local/bin/maitty").is_file());
+    assert!(remote.home.join(".local/bin/maiker").is_file());
 }
 
 #[test]
 fn wait_installs_then_asks_the_far_daemon_to_restart_when_idle() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", "0.1.0");
+    remote.install(".local/bin/maiker", "0.1.0");
     let flags = Flags {
         wait: true,
         ..YES
@@ -358,6 +384,25 @@ fn wait_installs_then_asks_the_far_daemon_to_restart_when_idle() {
     let commands = remote.commands();
     assert!(
         commands.last().unwrap().ends_with("restart-if-idle"),
+        "{commands:?}"
+    );
+}
+
+#[test]
+fn agents_idle_installs_then_asks_the_far_daemon_to_restart_once_no_agent_works() {
+    needs_sh!();
+    let remote = Remote::new(LINUX);
+    remote.install(".local/bin/maiker", "0.1.0");
+    let flags = Flags {
+        agents_idle: true,
+        ..YES
+    };
+    let mut person = Person::absent();
+    run(&remote, AT_HOME, flags, &new_build(&remote), &mut person).unwrap();
+    assert!(person.heard("waiting until no agent is working or waiting"), "{:?}", person.said);
+    let commands = remote.commands();
+    assert!(
+        commands.last().unwrap().ends_with("restart-if-idle --agents-idle"),
         "{commands:?}"
     );
 }
@@ -568,7 +613,7 @@ fn put_sends_a_file_and_a_folder_and_says_where_each_landed() {
 fn restart_asks_the_far_daemon_to_restart_even_with_sessions_open() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", "0.1.0");
+    remote.install(".local/bin/maiker", "0.1.0");
     let flags = Flags {
         restart: true,
         ..YES
@@ -608,7 +653,7 @@ esac
 fn a_daemon_left_running_by_open_sessions_is_restarted_when_the_person_agrees() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", "0.1.0");
+    remote.install(".local/bin/maiker", "0.1.0");
     let mut person = Person::absent();
     person.answer = Some(true);
     run(&remote, AT_HOME, YES, &busy_daemon_build(&remote), &mut person).unwrap();
@@ -625,7 +670,7 @@ fn a_daemon_left_running_by_open_sessions_is_restarted_when_the_person_agrees() 
 fn a_daemon_left_running_stays_untouched_when_the_person_declines_and_the_way_out_is_said() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", "0.1.0");
+    remote.install(".local/bin/maiker", "0.1.0");
     let mut person = Person::absent();
     person.answer = Some(false);
     run(&remote, AT_HOME, YES, &busy_daemon_build(&remote), &mut person).unwrap();
@@ -641,7 +686,7 @@ fn a_daemon_left_running_stays_untouched_when_the_person_declines_and_the_way_ou
 fn a_daemon_left_running_with_nobody_to_ask_says_the_way_out_without_restarting() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", "0.1.0");
+    remote.install(".local/bin/maiker", "0.1.0");
     let mut person = Person::absent();
     run(&remote, AT_HOME, YES, &busy_daemon_build(&remote), &mut person).unwrap();
     assert!(person.asked.is_empty());
@@ -652,7 +697,7 @@ fn a_daemon_left_running_with_nobody_to_ask_says_the_way_out_without_restarting(
 fn the_window_is_told_when_the_app_there_is_already_this_version() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", APP_VERSION);
+    remote.install(".local/bin/maiker", APP_VERSION);
     assert!(installed_is_current(&remote.machine(AT_HOME), "box"));
 }
 
@@ -660,7 +705,7 @@ fn the_window_is_told_when_the_app_there_is_already_this_version() {
 fn an_older_app_there_is_not_called_current() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", "0.1.0");
+    remote.install(".local/bin/maiker", "0.1.0");
     assert!(!installed_is_current(&remote.machine(AT_HOME), "box"));
 }
 
@@ -668,7 +713,7 @@ fn an_older_app_there_is_not_called_current() {
 fn an_older_app_is_replaced_on_yes_and_the_daemon_is_asked_not_killed() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", "0.1.0");
+    remote.install(".local/bin/maiker", "0.1.0");
     let mut person = Person::absent();
     let outcome = run(&remote, AT_HOME, YES, &new_build(&remote), &mut person).unwrap();
     assert_eq!(
@@ -678,8 +723,8 @@ fn an_older_app_is_replaced_on_yes_and_the_daemon_is_asked_not_killed() {
             destination: AT_HOME.into()
         }
     );
-    assert!(remote.read(".local/bin/maitty").contains(APP_VERSION));
-    assert!(person.heard("maitty 0.1.0"), "{:?}", person.said);
+    assert!(remote.read(".local/bin/maiker").contains(APP_VERSION));
+    assert!(person.heard("maiker 0.1.0"), "{:?}", person.said);
     let commands = remote.commands();
     assert!(
         commands.last().unwrap().ends_with("restart-if-idle"),
@@ -696,7 +741,7 @@ fn an_older_app_is_replaced_on_yes_and_the_daemon_is_asked_not_killed() {
 fn an_older_app_without_yes_or_a_person_is_refused_and_untouched() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    let old = remote.install(".local/bin/maitty", "0.1.0");
+    let old = remote.install(".local/bin/maiker", "0.1.0");
     let before = std::fs::read_to_string(&old).unwrap();
     let message = failure_text(run(
         &remote,
@@ -714,7 +759,7 @@ fn an_older_app_without_yes_or_a_person_is_refused_and_untouched() {
 fn a_matching_app_is_left_alone() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", APP_VERSION);
+    remote.install(".local/bin/maiker", APP_VERSION);
     let mut person = Person::absent();
     let outcome = run(&remote, AT_HOME, INSTALL, &new_build(&remote), &mut person).unwrap();
     assert_eq!(
@@ -725,7 +770,7 @@ fn a_matching_app_is_left_alone() {
     );
     assert_eq!(
         outcome.line("box"),
-        format!("box: maitty {APP_VERSION} is already up to date")
+        format!("box: maiker {APP_VERSION} is already up to date")
     );
     assert!(!remote.uploaded());
 }
@@ -734,7 +779,7 @@ fn a_matching_app_is_left_alone() {
 fn a_matching_app_still_asks_a_stale_far_daemon_to_restart() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", APP_VERSION);
+    remote.install(".local/bin/maiker", APP_VERSION);
     let mut person = Person::absent();
     run(&remote, AT_HOME, YES, &new_build(&remote), &mut person).unwrap();
     assert!(!remote.uploaded());
@@ -750,7 +795,7 @@ fn a_matching_app_still_asks_a_stale_far_daemon_to_restart() {
 fn restart_with_a_matching_app_restarts_the_far_daemon_even_with_sessions_open() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maitty", APP_VERSION);
+    remote.install(".local/bin/maiker", APP_VERSION);
     let flags = Flags {
         restart: true,
         ..YES
@@ -768,7 +813,7 @@ fn restart_with_a_matching_app_restarts_the_far_daemon_even_with_sessions_open()
 fn a_newer_app_is_not_downgraded_without_force() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    let newer = remote.install(".local/bin/maitty", "99.0.0");
+    let newer = remote.install(".local/bin/maiker", "99.0.0");
     let before = std::fs::read_to_string(&newer).unwrap();
     let message = failure_text(run(
         &remote,
@@ -791,14 +836,14 @@ fn a_newer_app_is_not_downgraded_without_force() {
         &mut Person::absent(),
     )
     .unwrap();
-    assert!(remote.read(".local/bin/maitty").contains(APP_VERSION));
+    assert!(remote.read(".local/bin/maiker").contains(APP_VERSION));
 }
 
 #[test]
 fn fewer_bytes_than_announced_abort_and_leave_the_old_app_and_no_temp_file() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    let old = remote.install(".local/bin/maitty", "0.1.0");
+    let old = remote.install(".local/bin/maiker", "0.1.0");
     let before = (
         std::fs::read_to_string(&old).unwrap(),
         std::fs::metadata(&old).unwrap().modified().unwrap(),
@@ -821,7 +866,7 @@ fn fewer_bytes_than_announced_abort_and_leave_the_old_app_and_no_temp_file() {
     );
     assert_eq!(
         remote.names_in(".local/bin"),
-        vec!["maitty".to_string()],
+        vec!["maiker".to_string()],
         "the temp file is gone"
     );
 }
@@ -830,7 +875,7 @@ fn fewer_bytes_than_announced_abort_and_leave_the_old_app_and_no_temp_file() {
 fn a_file_that_does_not_run_there_aborts_and_leaves_the_old_app() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    let old = remote.install(".local/bin/maitty", "0.1.0");
+    let old = remote.install(".local/bin/maiker", "0.1.0");
     let before = std::fs::read_to_string(&old).unwrap();
     let junk = remote.dir.join("junk");
     std::fs::write(&junk, "this is not a program\n").unwrap();
@@ -845,7 +890,7 @@ fn a_file_that_does_not_run_there_aborts_and_leaves_the_old_app() {
         "{message}"
     );
     assert_eq!(std::fs::read_to_string(&old).unwrap(), before);
-    assert_eq!(remote.names_in(".local/bin"), vec!["maitty".to_string()]);
+    assert_eq!(remote.names_in(".local/bin"), vec!["maiker".to_string()]);
 }
 
 #[test]
@@ -869,7 +914,7 @@ fn a_first_install_that_fails_says_nothing_was_installed() {
         message.ends_with("did not finish; nothing was installed"),
         "{message}"
     );
-    assert!(!remote.home.join(".local/bin/maitty").exists());
+    assert!(!remote.home.join(".local/bin/maiker").exists());
 }
 
 #[test]
@@ -895,7 +940,7 @@ fn a_destination_that_cannot_be_made_aborts_with_the_write_message() {
 fn a_path_with_spaces_and_a_quote_is_one_literal_destination() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    let cmd = "~/my tools/it's/maitty";
+    let cmd = "~/my tools/it's/maiker";
     run(
         &remote,
         cmd,
@@ -904,14 +949,14 @@ fn a_path_with_spaces_and_a_quote_is_one_literal_destination() {
         &mut Person::absent(),
     )
     .unwrap();
-    assert!(remote.read("my tools/it's/maitty").contains(APP_VERSION));
+    assert!(remote.read("my tools/it's/maiker").contains(APP_VERSION));
 }
 
 #[test]
 fn an_absolute_remote_cmd_is_where_the_app_goes() {
     needs_sh!();
     let remote = Remote::new(LINUX);
-    let target = remote.dir.join("opt").join("maitty");
+    let target = remote.dir.join("opt").join("maiker");
     let cmd = target.to_string_lossy().replace('\\', "/");
     if !cmd.starts_with('/') {
         eprintln!("skipped: this host's paths are not absolute to a POSIX sh");
@@ -935,7 +980,7 @@ fn a_default_install_says_when_the_folder_is_not_on_the_path() {
     let mut person = Person::absent();
     run(&remote, UNLISTED, INSTALL, &new_build(&remote), &mut person).unwrap();
     assert!(
-        remote.home.join(".local/bin/maitty").is_file(),
+        remote.home.join(".local/bin/maiker").is_file(),
         "the default destination"
     );
     assert!(
@@ -1055,7 +1100,7 @@ fn a_matching_platform_streams_this_computers_own_build_not_a_download() {
     let releases = FakeReleases {
         sums: String::new(),
     };
-    let exe = remote.dir.join("this-computers-maitty");
+    let exe = remote.dir.join("this-computers-maiker");
     std::fs::write(
         &exe,
         format!("#!/bin/sh\necho '{APP_COMMAND} {APP_VERSION}'\n"),
@@ -1066,7 +1111,7 @@ fn a_matching_platform_streams_this_computers_own_build_not_a_download() {
         local: Some((here, exe)),
     };
     run(&remote, AT_HOME, INSTALL, &sources, &mut Person::absent()).unwrap();
-    assert!(remote.home.join(".local/bin/maitty").is_file());
+    assert!(remote.home.join(".local/bin/maiker").is_file());
 }
 
 #[test]

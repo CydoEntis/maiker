@@ -7,7 +7,7 @@ import { machineHeads, type RemoteMachine } from '@/features/workspace/model/mac
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 import { DAEMON_NAME } from '@/brand'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maitty Dark', lightTheme: 'Maitty Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, yoloClaude: false, yoloCodex: false, yoloGemini: false, fullAccessNewChats: false, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -181,13 +181,22 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ defaultAgent: 'codex' }))
   })
 
-  it('has a yolo switch for each agent, all off, set from the settings screen', async () => {
+  it('has a switch to update remote machines after this computer, on by default', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('chat')
+    const { onChange } = renderSettings('general')
+    const remote = screen.getByRole('switch', { name: 'Update remote machines too' })
+    expect(remote).toBeChecked()
+    await user.click(remote)
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ updateMachines: false }))
+  })
 
-    for (const agent of ['Claude', 'Codex', 'Gemini']) expect(screen.getByRole('switch', { name: `Yolo mode for ${agent}` })).not.toBeChecked()
-    await user.click(screen.getByRole('switch', { name: 'Yolo mode for Codex' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ yoloCodex: true, yoloClaude: false, yoloGemini: false }))
+  it('has a Bypass Permissions switch for each agent on the Permissions page, all on, shared with the terminal app', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('permissions')
+
+    for (const agent of ['Claude', 'Codex', 'Gemini']) expect(screen.getByRole('switch', { name: `Bypass Permissions for ${agent}` })).toBeChecked()
+    await user.click(screen.getByRole('switch', { name: 'Bypass Permissions for Codex' }))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ bypassOff: ['codex'] }))
   })
 
   it('turns on hiding successful tool calls, off by default', async () => {
@@ -211,7 +220,7 @@ describe('desktop settings', () => {
 
   it('keeps the two update switches on General, and the update itself at the foot of the nav', async () => {
     const user = userEvent.setup()
-    const updates = { summary: 'Maitty 0.61.0 is available.', status: 'available' as const, version: '0.61.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    const updates = { summary: 'Maiker 0.61.0 is available.', status: 'available' as const, version: '0.61.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     const { onChange } = renderSettings('general', { updates })
 
     const box = within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('group', { name: 'Updates' })
@@ -245,7 +254,7 @@ describe('desktop settings', () => {
   })
 
   it('offers nothing to press while a download runs', () => {
-    const updates = { summary: 'Downloading Maitty 0.72.0…', status: 'downloading' as const, version: '0.72.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    const updates = { summary: 'Downloading Maiker 0.72.0…', status: 'downloading' as const, version: '0.72.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     renderSettings('general', { updates })
 
     expect(within(screen.getByRole('group', { name: 'Updates' })).getByRole('status')).toHaveTextContent('Downloading v0.72.0')
@@ -254,7 +263,7 @@ describe('desktop settings', () => {
 
   it('shows how far a download is: a bar, what has arrived, the percent and the time left', () => {
     const download = { progress: 0.42, transfer: { received: 42 * 1024 * 1024, total: 100 * 1024 * 1024, bytesPerSecond: 1024 * 1024 } }
-    const updates = { summary: 'Downloading Maitty 0.74.0…', status: 'downloading' as const, version: '0.74.0', download, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    const updates = { summary: 'Downloading Maiker 0.74.0…', status: 'downloading' as const, version: '0.74.0', download, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     renderSettings('general', { updates })
 
     expect(screen.getByRole('progressbar', { name: 'Download' })).toHaveAttribute('aria-valuenow', '42')
@@ -264,7 +273,7 @@ describe('desktop settings', () => {
   })
 
   it('keeps the bar moving before the size of a download is known', () => {
-    const updates = { summary: 'Downloading Maitty 0.74.0…', status: 'downloading' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    const updates = { summary: 'Downloading Maiker 0.74.0…', status: 'downloading' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     renderSettings('general', { updates })
     const bar = screen.getByRole('progressbar', { name: 'Download' })
     expect(bar).not.toHaveAttribute('aria-valuenow')
@@ -339,14 +348,14 @@ describe('desktop settings', () => {
     await user.click(screen.getByRole('button', { name: 'Dark theme: Gruvbox Dark' }))
     const dark = (await screen.findByRole('radiogroup', { name: 'Dark themes' }))
     expect(within(dark).getAllByRole('radio')[0]).toHaveTextContent('Gruvbox Dark')
-    expect(within(dark).queryByRole('radio', { name: /Maitty Day/ })).not.toBeInTheDocument()
+    expect(within(dark).queryByRole('radio', { name: /Maiker Day/ })).not.toBeInTheDocument()
     await user.type(screen.getByRole('textbox', { name: 'Search dark themes' }), 'tokyo')
     expect(within(dark).getAllByRole('radio')).toHaveLength(1)
     await user.click(within(dark).getByRole('radio', { name: /Tokyo Night/ }))
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ darkTheme: 'Tokyo Night' }))
     expect(screen.queryByRole('radiogroup', { name: 'Dark themes' })).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Light theme: Maitty Day' }))
+    await user.click(screen.getByRole('button', { name: 'Light theme: Maiker Day' }))
     expect(within((await screen.findByRole('radiogroup', { name: 'Light themes' }))).getByRole('radio', { name: /GitHub Light/ })).toBeInTheDocument()
   })
 
@@ -363,7 +372,7 @@ describe('desktop settings', () => {
     const user = userEvent.setup()
     renderSettings('appearance')
 
-    await user.click(screen.getByRole('button', { name: 'Dark theme: Maitty Dark' }))
+    await user.click(screen.getByRole('button', { name: 'Dark theme: Maiker Dark' }))
     const list = (await screen.findByRole('radiogroup', { name: 'Dark themes' }))
     expect(list.closest('.mx-scard')).toBeNull()
     expect(list.closest('.mx-picker-menu')).toBeInTheDocument()
@@ -377,14 +386,14 @@ describe('desktop settings', () => {
     const user = userEvent.setup()
     const { onPreviewTheme } = renderSettings('appearance', { preferences: { ...PREFS, themeMode: 'dark' } })
 
-    await user.click(screen.getByRole('button', { name: 'Dark theme: Maitty Dark' }))
+    await user.click(screen.getByRole('button', { name: 'Dark theme: Maiker Dark' }))
     await user.hover(within((await screen.findByRole('radiogroup', { name: 'Dark themes' }))).getByRole('radio', { name: /Gruvbox Dark/ }))
     expect(onPreviewTheme).toHaveBeenLastCalledWith('Gruvbox Dark')
     await user.hover(screen.getByRole('textbox', { name: 'Search dark themes' }))
     expect(onPreviewTheme).toHaveBeenLastCalledWith(null)
 
     await user.keyboard('{Escape}')
-    await user.click(screen.getByRole('button', { name: 'Light theme: Maitty Day' }))
+    await user.click(screen.getByRole('button', { name: 'Light theme: Maiker Day' }))
     onPreviewTheme.mockClear()
     await user.hover(within((await screen.findByRole('radiogroup', { name: 'Light themes' }))).getByRole('radio', { name: /GitHub Light/ }))
     expect(onPreviewTheme).not.toHaveBeenCalledWith('GitHub Light')
@@ -548,17 +557,17 @@ describe('the Machines page', () => {
 
   it('offers to copy the update command, and never runs it', async () => {
     const onCopyCommand = vi.fn()
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box --install` (or set `remote_cmd` to its path), then retry'), onCopyCommand }))
-    expect(screen.getByText('maitty machine update box --install')).toBeInTheDocument()
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box --install` (or set `remote_cmd` to its path), then retry'), onCopyCommand }))
+    expect(screen.getByText('maiker machine update box --install')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Copy the update command for box' }))
-    expect(onCopyCommand).toHaveBeenCalledWith('maitty machine update box --install')
+    expect(onCopyCommand).toHaveBeenCalledWith('maiker machine update box --install')
   })
 
   it('asks before updating a machine, says what happens to its sessions, then updates it', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }))
-    expect(screen.getByText('box runs another version of Maitty.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onUpdate }))
+    expect(screen.getByText('box runs another version of Maiker.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
     expect(onUpdate).not.toHaveBeenCalled()
     expect(await screen.findByText(/come back with their agents resumed/)).toBeInTheDocument()
     await user.click(await screen.findByRole('button', { name: 'Update box now' }))
@@ -568,11 +577,11 @@ describe('the Machines page', () => {
   it('installs on a machine with none in one confirmed click, without asking what is open there', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
     const onCheckActivity = vi.fn(() => Promise.resolve(null))
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box --install` (or set `remote_cmd` to its path), then retry'), onUpdate, onCheckActivity }))
-    expect(screen.getByText('Maitty is not installed on box.')).toBeInTheDocument()
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box --install` (or set `remote_cmd` to its path), then retry'), onUpdate, onCheckActivity }))
+    expect(screen.getByText('Maiker is not installed on box.')).toBeInTheDocument()
     expect(screen.queryByText(/set `remote_cmd`/)).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Install Maitty on box' }))
-    expect(screen.getByText(/Puts this version of Maitty on box over ssh/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Install Maiker on box' }))
+    expect(screen.getByText(/Puts this version of Maiker on box over ssh/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Install on box now' }))
     expect(onUpdate).toHaveBeenCalledWith('box', 'install', false)
     expect(onCheckActivity).not.toHaveBeenCalled()
@@ -580,31 +589,31 @@ describe('the Machines page', () => {
 
   it('does not update when the question is cancelled', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }))
-    await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onUpdate }))
+    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
     await user.click(await screen.findByRole('button', { name: 'Cancel' }))
     expect(onUpdate).not.toHaveBeenCalled()
   })
 
   it('can wait for the machine to be idle before it updates', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onUpdate }))
-    await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onUpdate }))
+    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
     await user.click(await screen.findByRole('button', { name: 'Update box when idle' }))
     expect(onUpdate).toHaveBeenCalledWith('box', 'update', true)
   })
 
   it('says how many sessions are open and how many are busy before it updates', async () => {
     const onCheckActivity = vi.fn(() => Promise.resolve({ sessions: 3, busy: 1, current: false }))
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onCheckActivity }))
-    await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onCheckActivity }))
+    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
     expect(await screen.findByText(/box has 3 sessions open, 1 busy\./)).toBeInTheDocument()
     expect(onCheckActivity).toHaveBeenCalledWith('box')
   })
 
   it('still asks, and says it could not see what is open, when the machine cannot say', async () => {
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maitty machine update box`, then retry'), onCheckActivity: vi.fn(() => Promise.reject(new Error('no route'))) }))
-    await user.click(screen.getByRole('button', { name: 'Update Maitty on box' }))
+    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onCheckActivity: vi.fn(() => Promise.reject(new Error('no route'))) }))
+    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
     expect(await screen.findByText(/box could not say what is open on it\./)).toBeInTheDocument()
   })
 
@@ -673,7 +682,7 @@ describe('what a machine may do to this computer', () => {
 
 describe('adding a machine', () => {
   const hosts = [{ alias: 'build', detail: 'me@build.example' }, { alias: 'lab', detail: 'lab.example' }]
-  const added = (name: string) => ({ outcome: 'added' as const, name, version: 'maitty 1.2.3' })
+  const added = (name: string) => ({ outcome: 'added' as const, name, version: 'maiker 1.2.3' })
   /** Opens the add flow from the Machines page. */
   const startAdding = async (add: Partial<MachinesInfo['add']> = {}, extra: Partial<Parameters<typeof DesktopSettings>[0]> = {}) => {
     const user = userEvent.setup()
@@ -714,14 +723,14 @@ describe('adding a machine', () => {
     await user.click(await screen.findByRole('radio', { name: /build/ }))
     await user.click(screen.getByRole('button', { name: 'Connect build' }))
     expect(onAdd).toHaveBeenCalledWith('build', undefined)
-    expect(await screen.findByText(/build is added and connecting\. maitty 1\.2\.3 answered there\./)).toBeInTheDocument()
+    expect(await screen.findByText(/build is added and connecting\. maiker 1\.2\.3 answered there\./)).toBeInTheDocument()
   })
 
   it('adds the address as typed, under the name given', async () => {
     const onAdd = vi.fn().mockResolvedValue(added('box'))
     const user = await startAdding({ onAdd })
     await byAddress(user, 'me@box.example')
-    await user.type(screen.getByRole('textbox', { name: 'Name in Maitty' }), 'box{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Name in Maiker' }), 'box{Enter}')
     expect(onAdd).toHaveBeenCalledWith('me@box.example', 'box')
   })
 
@@ -738,7 +747,7 @@ describe('adding a machine', () => {
     const onAdd = vi.fn().mockResolvedValueOnce({ outcome: 'needs-name' })
     const user = await startAdding({ onAdd })
     await byAddress(user, 'me@{Enter}')
-    expect(await screen.findByText('Give me@ a name in Maitty to add it.')).toBeInTheDocument()
+    expect(await screen.findByText('Give me@ a name in Maiker to add it.')).toBeInTheDocument()
   })
 
   it('shows checking with a way to cancel while ssh is looked at', async () => {

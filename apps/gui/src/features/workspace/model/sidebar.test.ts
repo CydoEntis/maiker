@@ -49,8 +49,8 @@ describe('a row', () => {
   })
 
   it('gives a project the same one of five colours every time', () => {
-    expect(projectColor('maitty')).toBe(projectColor('maitty'))
-    expect(projectColor('maitty')).toMatch(/^var\(--proj-[1-5]\)$/)
+    expect(projectColor('maiker')).toBe(projectColor('maiker'))
+    expect(projectColor('maiker')).toMatch(/^var\(--proj-[1-5]\)$/)
   })
 })
 

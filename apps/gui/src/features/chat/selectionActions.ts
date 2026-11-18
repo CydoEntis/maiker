@@ -5,7 +5,7 @@ const EDITED = 'textarea, input, [contenteditable="true"]'
 /** The bar itself: a release on one of its buttons is that button's click, not a new selection. */
 export const SELECTION_BAR = '.mx-select-bar'
 
-/** Text selected in the chat, who said it (when the selection began in a message), and where the mouse let go of it, measured from the chat's top left corner. */
+/** Text selected in the chat, who said it (when the selection began in a message), and where the mouse let go of it, in the window. */
 export type PickedText = { readonly text: string; readonly speaker: 'user' | 'agent' | null; readonly x: number; readonly y: number }
 
 /** Whose message a selection began in: the person's bubble, the agent's reply, or neither (a step, a thought). */
@@ -28,10 +28,5 @@ export function pickedText(event: MouseEvent<HTMLElement>): PickedText | null | 
   if (selection === null || selection.isCollapsed || !event.currentTarget.contains(selection.anchorNode)) return null
   const text = selection.toString()
   if (text.trim() === '') return null
-  const frame = event.currentTarget.getBoundingClientRect()
-  // The chat may be drawn larger or smaller than it is laid out (Settings › Chat text size): the bar is placed in
-  // the chat's own measure, so the distance on screen is taken back to it.
-  const drawn = event.currentTarget.offsetWidth > 0 ? frame.width / event.currentTarget.offsetWidth : 1
-  const scale = drawn > 0 ? drawn : 1
-  return { text, speaker: speakerOf(selection.anchorNode), x: (event.clientX - frame.left) / scale, y: (event.clientY - frame.top) / scale }
+  return { text, speaker: speakerOf(selection.anchorNode), x: event.clientX, y: event.clientY }
 }

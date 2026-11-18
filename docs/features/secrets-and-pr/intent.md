@@ -11,13 +11,13 @@ prompt, not in chat. I can link a pull request to this thread and watch its chec
 reviews."
 
 Today an agent that needs a key asks for it in chat, so the key lands in the transcript.
-Maitty also knows nothing about a pane's pull request, so a failing check or a new review goes
+Maiker also knows nothing about a pane's pull request, so a failing check or a new review goes
 unseen until someone looks. The `#PR` tag in the status line shipped as "no data yet"
 ([phase 14](../../ROADMAP.md)).
 
 ## Proposed outcome
 
-An agent asks for a secret and the user types it into a masked prompt in Maitty. The agent gets
+An agent asks for a secret and the user types it into a masked prompt in Maiker. The agent gets
 a file path or a one-command wrapper, never the value in chat. Each pane's pull request, found
 from its branch or linked by hand, shows its checks and review state. When checks fail, a
 review arrives or a merge conflict appears, the agent gets a short message once its turn is
@@ -27,11 +27,11 @@ over.
 
 Anyone running agents that need credentials or that open pull requests. The existing MCP
 server (`crates/maitty-terminal-client/src/cli/mcp.rs`), the daemon (a new `crates/maitty-core/src/daemon/secrets.rs` and a PR watcher), the
-protocol, the client prompt, the status line and sidebar, and the `maitty` CLI.
+protocol, the client prompt, the status line and sidebar, and the `maiker` CLI.
 
 ## Constraints
 
-- Builds on the existing MCP server and `MAITTY_PANE_TOKEN` trust; there is no new server
+- Builds on the existing MCP server and `AGENT_PANE_TOKEN` trust; there is no new server
   (AGENTS.md non-negotiable 5).
 - Only the user can answer a secret prompt. Like `AnswerHelpers`, the answer is refused from
   inside a pane.

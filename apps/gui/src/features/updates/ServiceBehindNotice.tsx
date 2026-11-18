@@ -11,9 +11,11 @@ import { loadDaemonUpdateStatus, restartStaleDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
 import { serviceRestartStep } from './serviceRestart'
 import { useIdleServiceRestart } from './useIdleServiceRestart'
+import { serviceStep } from './finishUpdate'
+import { SERVICE_STATUS_KEY } from './serviceUpdateStatus'
 
 const TOAST_ID = 'service-behind'
-const STATUS_KEY = ['daemon-update-status']
+const STATUS_KEY = SERVICE_STATUS_KEY
 
 type ServiceBehindNoticeProps = {
   sessionsQuery: UseQueryResult<Conversation[]>
@@ -25,6 +27,11 @@ type ServiceBehindNoticeProps = {
   restartServiceWhenIdle?: boolean
   /** A session is being started from this window. */
   starting?: boolean
+  /**
+   * This launch is the app restarted into an update: the service's restart is part of that update, never a second
+   * question. It still waits for the same quiet moment as Restart the service when idle.
+   */
+  afterAppUpdate?: boolean
 }
 
 const plural = (count: number, word: string) => `${String(count)} ${word}${count === 1 ? '' : 's'}`
@@ -35,7 +42,7 @@ const plural = (count: number, word: string) => `${String(count)} ${word}${count
  * so and offers the restart, which asks first. With Settings › Restart the service when idle on, it restarts by
  * itself at the first quiet moment (idle agents come back resumed) and keeps the notice until then.
  */
-export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = false, starting = false }: ServiceBehindNoticeProps) {
+export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = false, starting = false, afterAppUpdate = false }: ServiceBehindNoticeProps) {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -55,14 +62,18 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
   const canRestart = Boolean(status?.canRestart)
   const [restartingNow, setRestartingNow] = useState(false)
   const step = serviceRestartStep({
-    enabled: restartServiceWhenIdle && Boolean(status?.behind),
+    enabled: (restartServiceWhenIdle || afterAppUpdate) && Boolean(status?.behind),
     restarting: restartingNow || pending,
     starting,
     service: status,
     sessionStatuses: sessionsQuery.data?.map((conversation) => conversation.status) ?? null,
   })
-  // Only while the restart is actually under way is there nothing to ask; while it waits for a quiet moment the notice stays.
-  const unasked = step === 'restart' || restartingNow
+  // Right after an app update the service's restart is part of it: nothing is asked while it waits for the agents to
+  // finish, unless it cannot be restarted with nothing lost or cannot say who is working.
+  const finishingUpdate = afterAppUpdate && status?.behind === true
+    && serviceStep({ afterAppUpdate, restartWhenIdle: false, canRestart: status.canRestart, activeTurnCount: status.activeTurnCount }) !== 'ask'
+  // Otherwise only while the restart is actually under way is there nothing to ask; while it waits for a quiet moment the notice stays.
+  const unasked = step === 'restart' || restartingNow || finishingUpdate
   const sessionCount = status?.sessionCount ?? 0
   const refetchSessions = sessionsQuery.refetch
 
@@ -77,6 +88,8 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
         async () => {
           await refetchSessions()
           await queryClient.invalidateQueries({ queryKey: STATUS_KEY })
+          // Part of an app update, the app's own notice already says it was updated.
+          if (afterAppUpdate) return
           toast.success('Service restarted', { description: sessionCount === 0 ? 'It restarted by itself to finish the update.' : `It restarted by itself to finish the update. ${plural(sessionCount, 'session')} came back.` })
         },
         (error: unknown) => {

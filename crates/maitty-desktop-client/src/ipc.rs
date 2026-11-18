@@ -118,7 +118,7 @@ pub async fn open_stream_for_user(daemon_executable: &std::path::Path) -> Result
             Err(error) => last_error = Some(error),
         }
     }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("daemon did not start")))
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("The Maiker service did not start. Try again; if it keeps happening, run maiker in a terminal to see why.")))
 }
 
 async fn open_as(attach: bool) -> Result<(Reader, Writer)> {
@@ -174,7 +174,7 @@ pub async fn open_or_spawn_for_user(
             Err(error) => last_error = Some(error),
         }
     }
-    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("daemon did not start")))
+    Err(last_error.unwrap_or_else(|| anyhow::anyhow!("The Maiker service did not start. Try again; if it keeps happening, run maiker in a terminal to see why.")))
 }
 
 fn spawn_daemon(executable: &std::path::Path) -> Result<()> {
@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn gui_daemon_drops_pane_and_remote_identity_but_keeps_user_configuration() {
-        let command = daemon_command(std::path::Path::new("maitty"));
+        let command = daemon_command(std::path::Path::new("maiker"));
         let removed = command
             .get_envs()
             .filter(|(_, value)| value.is_none())

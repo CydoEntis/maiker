@@ -285,7 +285,7 @@ describe('Inspect panel', () => {
     vi.mocked(invoke).mockReset().mockRejectedValue('git diff: fatal: bad object HEAD')
     renderPanel('changes')
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('Maitty couldn’t load your changes')
+    expect(alert).toHaveTextContent('Maiker couldn’t load your changes')
     // The daemon's own words are kept for support, behind one link, and not in the headline.
     expect(alert).not.toHaveTextContent('bad object HEAD')
     fireEvent.click(screen.getByRole('button', { name: 'Show details for support' }))
@@ -306,7 +306,7 @@ describe('Inspect panel', () => {
     vi.mocked(invoke).mockReset().mockRejectedValue('read /code/app: Permission denied (os error 13)')
     renderPanel('files')
     const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('Maitty can’t read this folder')
+    expect(alert).toHaveTextContent('Maiker can’t read this folder')
     expect(alert).not.toHaveTextContent('Trying again automatically')
   })
 

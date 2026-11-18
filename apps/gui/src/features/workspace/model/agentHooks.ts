@@ -5,7 +5,7 @@ type Agent = Parameters<typeof connectAgent>[0]
 const connecting = new Map<Agent, Promise<void>>()
 
 /**
- * An agent's status hooks are connected once per run of the window (`maitty integrate` is idempotent, but it is a
+ * An agent's status hooks are connected once per run of the window (`maiker integrate` is idempotent, but it is a
  * process to start). A chat that starts waits for this, so it is asked ahead of time where the window can; a failure
  * is forgotten so the next start tries again.
  */

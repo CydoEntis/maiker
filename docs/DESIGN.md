@@ -1,6 +1,6 @@
 # Design
 
-Maitty's current look, in one page. It describes the visual language; the detailed rules
+Maiker's current look, in one page. It describes the visual language; the detailed rules
 (sizes, what gives way, keys, every state's words) live in [UI](UI.md), and each section
 below links to the part of UI.md that owns them. The code is the final word: the theme in
 `crates/maitty-terminal-client/src/theme.rs`, the screen in `crates/maitty-terminal-client/src/client/screen/`, and the reference frames the tests compare
@@ -24,12 +24,12 @@ Most of this document describes the TUI. The desktop app's look is in
 ## Themes and colour roles
 
 Colours come only from the theme's roles, never a literal. Dark and light are two remembered
-slots (Settings › Appearance) and a switch; **Maitty Dark** (id `maitty-dark`) is the default dark theme (the desktop app does not list Maitty Night, id `night`, which stays in the shared file for the terminal app) and
-**Maitty Day** (id `day`) the default light one, and the browser lists each side on its own tab. **Maitty Dark** (`maitty-dark`) and **Maitty Light** (`maitty-light`) are the same accents on a standard black and white ground, from the file's `dark` and `light` sections. They are
+slots (Settings › Appearance) and a switch; **Maiker Dark** (id `maitty-dark`) is the default dark theme (the desktop app does not list Maiker Night, id `night`, which stays in the shared file for the terminal app) and
+**Maiker Day** (id `day`) the default light one, and the browser lists each side on its own tab. **Maiker Dark** (`maitty-dark`) and **Maiker Light** (`maitty-light`) are the same accents on a standard black and white ground, from the file's `dark` and `light` sections. They are
 Sea-glass and Brass, built from `crates/maitty-settings/maitty-tokens.json`, the one file the colours are
 read from: brass is the accent, teal only ever means working, coral only ever means needs you, and the AI in
 the wordmark is gold. Night is a deep teal-black ground; Day a pale sea-glass one. The other twelve built-in
-themes (a dark and a light each of GitHub, One, Catppuccin, Solarized, Gruvbox and Tokyo Night, listed with Maitty's four in
+themes (a dark and a light each of GitHub, One, Catppuccin, Solarized, Gruvbox and Tokyo Night, listed with Maiker's four in
 `crates/maitty-settings/themes.json`) fill the same roles; [theme sources](theme-credits.md) lists where they come from.
 
 | Role | Used for | Night | Day |
@@ -83,7 +83,7 @@ accent fill. See UI › *UI conventions*.
 ## Sidebar
 
 Each machine with its sessions under it, on the panel ground, 34 columns by default (24 to 60
-resizable). On the top border the ` maitty ` chip at the left and ` « ` (hide) at the right; hidden,
+resizable). On the top border the ` maiker ` chip at the left and ` « ` (hide) at the right; hidden,
 a ` » ` chip beside the panes brings it back. Filtering is a command (`/`) with its own modal,
 no field; the folder button groups sessions by folder. In folder view each folder has a coloured bar and icon (the theme's pane colours in turn) and a line before the next folder. A machine is a heading chip with its count (` This computer 5 `), an accent ` + `
 chip (a shell there at once) and a green `●` at the right while it is up. While its app is missing
@@ -165,7 +165,9 @@ its line, then outlined ones, then text ones (Copy details); Copy details says C
 - **Toasts** (`toast.*`). Bottom right, 16px in, 360px wide, newest on top, at most 3. Title 13px 600, the reason 12.5px
   `--fg2` up to three lines, the actions on their own row, a ✕ at the top right. Errors, warnings, needs-you and progress
   stay until dismissed or replaced; success and notes go after 4 s and wait while the pointer or focus is on the stack.
-  The same failure again is one toast with `×2`. A needs-you toast names the session ("Parser fix needs you"), says what it
+  An error toast's title is what failed ("Could not …") and its reason why in plain words (`explainError`: a raw tool or
+  OS failure of a known kind in plain words), with **Copy details** when the tool's own text says more (CODE-STANDARDS ›
+  error messages). The same failure again is one toast with `×2`. A needs-you toast names the session ("Parser fix needs you"), says what it
   asks, and offers **Allow** (only when the window can answer) and **Open session**. A progress toast (a file being sent)
   has no ✕, only **Cancel**, and becomes its outcome in place. They slide in 8px and fade; reduced motion only fades.
   Settings › Notifications and the desktop settings each have a **Show a test** row.
@@ -181,14 +183,14 @@ its line, then outlined ones, then text ones (Copy details); Copy details says C
   95% or more is a caution line there instead ("Context almost full", **New chat with summary**, **Compact**), never a
   dialog. The chat dialog does not trap focus, as the sidebar and other panes still work.
 - **Service offline** (`ServiceStatus.tsx`). A blip (under 3 s) is a title-bar chip, **Reconnecting…** with the running
-  mark. Then the whole window dims (`--bg` at 78%) under one dialog that traps focus: "Maitty can’t reach its background
+  mark. Then the whole window dims (`--bg` at 78%) under one dialog that traps focus: "Maiker can’t reach its background
   service", **Start service** (then "Starting…"), **Not now**, **Copy details**, and "Trying again in Ns" in mono at its
   right. Not now leaves a red **× Offline** chip that opens it again. Back after an outage, the dialog turns green
   ("Reconnecting…", "Found the service. Picking your chats back up.") for 1.2 s, then a **Back online** toast, yellow with
   **Restart both/all** when chats were interrupted. The sidebar foot has no service dot.
-- **Service update** (same dialog, caution): **Restart Maitty to finish updating** with what a restart keeps (`✓` green),
+- **Service update** (same dialog, caution): **Restart Maiker to finish updating** with what a restart keeps (`✓` green),
   warns about (`▲` caution) and stops (`–` dim), a restart that asks for a second click, **Later** and `protocol a → b`;
-  Later leaves a caution **Restart needed** chip. A downloaded app update is a note toast that stays, "Maitty X is ready",
+  Later leaves a caution **Restart needed** chip. A downloaded app update is a note toast that stays, "Maiker X is ready",
   with **Restart now** and **Later**; after the relaunch a success toast "Updated to X" offers **What’s new**.
 - **Light and dark.** The tones are the theme's own, so the same rules draw both; on the light theme a filled fix is the
   tone at its soft ground with a darker line. Folded, Rounded and Square corners all apply through the float material.
@@ -213,7 +215,7 @@ See UI › *the frame* (Status bar).
 Centred on the ground: the name as a wordmark in 5-row block letters drawn as filled cells, its
 "AI" in the accent; under it the swell, one rolling `▁▂▃▄▅▄▃▂` line fading into the ground at
 each end; the tagline in italics; then, when a release is out (or installed and waiting for a restart), a
-banner boxed as the look boxes a pane in the accent: `↑ maitty 0.47.0 is out` and `u update`,
+banner boxed as the look boxes a pane in the accent: `↑ maiker 0.47.0 is out` and `u update`,
 which `u` or a click does; then the choice cards (Resume, New session, Open a project),
 the chosen one with an accent `▌` edge. On the first start of a version the letters rise from
 the deep colour one by one and the swell fades in. Night has its own wordmark, swell and deep
@@ -227,8 +229,8 @@ Only one too small for the START box draws the cards.
 
 ## Desktop app
 
-The desktop app is drawn to the redesign handoff (`design_handoff_maitty_redesign`, "Maitty Desktop.dc.html",
-Maitty Dark first). One model: **sessions live in the sidebar, an agent opens as a chat, a shell opens as a terminal,
+The desktop app is drawn to the redesign handoff (`design_handoff_maitty_redesign`, "Maiker Desktop.dc.html",
+Maiker Dark first). One model: **sessions live in the sidebar, an agent opens as a chat, a shell opens as a terminal,
 and a terminal for an agent exists only when you ask** ("New terminal"). Every session is still a shell that
 maikerd owns; Claude Code and Codex sessions have a chat view ([chat view plan](features/chat-gui/chat-view-plan.md)),
 every other agent and every plain shell stays terminal-only. The prototype is the reference for exact sizes, shadows
@@ -368,7 +370,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   when its app needs installing or updating: the command, Copy command, and the confirm before it runs), Allow
   (clipboard, notifications), GitHub (when connected) and Remove (asks first). This computer's are the daemon card and
   its GitHub row. **Add machine** replaces the page with a breadcrumb back and a box: From ~/.ssh/config (a radio list
-  of the hosts, name and address) or By address, **Name in Maitty**, and **Connect <name>**; then one stage, "Reaching
+  of the hosts, name and address) or By address, **Name in Maiker**, and **Connect <name>**; then one stage, "Reaching
   <target> over ssh…" with Cancel (Esc), and either the failure in the machine's words with **Edit and try again**, or
   what was added with **Add another** and **Open its settings**.
   **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
@@ -394,13 +396,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   gives focus back. **Session**: Open, Open in split right, Open in split down (not for the one in front), Open
   terminal here (agents), Rename… (F2), Copy folder path, Get a file… (another machine's sessions), Show changes
   (agents), Stop session or Close shell.
-  **Machine**: Install Maitty or Update Maitty first (a machine that needs it), New agent chat here, New shell here, Collapse or Expand, Group by project or Show as one list, Machine
+  **Machine**: Install Maiker or Update Maiker first (a machine that needs it), New agent chat here, New shell here, Collapse or Expand, Group by project or Show as one list, Machine
   settings…. **Pane** (⋯ or a right-click in the pane): Split right, Split down, Changes and files, Pin terminals
   under chat or Move terminals to side panel (agents); then Rename…, Maximize pane, Show chat or Show terminal, and New
   terminal (agents) or Clear and Copy folder path (shells); then Close pane, only when there are several. **Close pane** on one pane of several closes only the pane when its
   session has work in it (an agent, a chat, a shell running a program): the session keeps running and stays in the
   sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session as before, with Undo.
-- **No status bar.** The window has none: the service's state is the title bar's chip and, once it has been out of reach for 3 seconds, one dialog over the whole window (see *Errors*). A downloaded update is a toast that stays, "Maitty X is ready.", with **Restart now** and **Later**.
+- **No status bar.** The window has none: the service's state is the title bar's chip and, once it has been out of reach for 3 seconds, one dialog over the whole window (see *Errors*). A downloaded update is a toast that stays, "Maiker X is ready.", with **Restart now** and **Later**.
   The the theme and corners are in Settings › Appearance, the terminal
   text size is Ctrl+= and Ctrl+− (and Settings › Terminal), and the shortcuts open with their own key.
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; the whole-app mock). Agents only: no fleets, ships
@@ -515,8 +517,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Settings pages.** ESSENTIALS: **General** (start and export folders, each the folder shown with **Browse…**, which
   opens the system's folder picker, and a way back to the default; nothing is typed; the start folder reads as `cd <folder>`
   and says "Saved" for two seconds after a change; updates; sessions) and **Chat** (how a
-  chat starts and is drawn: default agent, the view each agent's sessions open in, width, text size, **Full access in new
-  chats**, which ticks Full access on a pane's "start a chat" offer at first (`fullAccessNewChats`, off by default), Yolo) and **Agents** (the account each
+  chat starts and is drawn: default agent, the view each agent's sessions open in, width, text size) and **Permissions** (first a
+  **Bypass Permissions** card, one switch per agent, all on, with a foot that says what it allows; then the account each
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). TERMINAL: **Terminal** (text,
   scrollback, and Panes: where an agent's terminals open), **Appearance** (look, surfaces, density and pane
@@ -576,7 +578,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   with the current one marked; the pick stays the shield button's. With something after the name (`/export notes.md`,
   `/plan fix the build`) the command goes to the agent as typed. Still terminal-only, each needing the agent's own screen or
   a change the daemon would have to make: `/add-dir`, `/cd`, `/branch`, `/fork`, `/rename` for Codex, `/agents`, `/model`.
-  **`/rename <name>`** names the Maitty session too (the sidebar's rename) and still goes to Claude Code, so both
+  **`/rename <name>`** names the Maiker session too (the sidebar's rename) and still goes to Claude Code, so both
   agree. A name Claude Code gives a session with a terminal, by `/rename` typed in the chat or the terminal, with a name
   or alone, renames the pane as well: the daemon reads the transcript's `custom-title` line (`follow.rs`; the names
   already in the file when it is first read are left alone, so a restart never undoes a rename made in the window).
@@ -715,7 +717,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   program's name (`node`) cannot be told this way.
 - **A dialog only the terminal shows still stops the chat.** Claude Code opens choosers no hook reports (its "We
   recommend compacting earlier" prompt). The daemon reads them off the screen (`crates/maitty-agent-detection/rules/
-  claude.toml`, Maitty's own rules beside the vendored Herdr ones) and says the pane needs you, so the chat shows
+  claude.toml`, Maiker's own rules beside the vendored Herdr ones) and says the pane needs you, so the chat shows
   "claude is waiting for you", its box is off until it is answered in the terminal, and nothing queued is typed into it.
 - **Hotkeys are keycaps.** Settings › Hotkeys lists them in the same rows as every other page, and draws each key as
   its own flat cap (`--m-raise`, a hairline and a thicker bottom edge, no gradient or highlight; symbols ⌘⇧⌃⌥ in the interface font, other keys in Geist Mono), with a dim "or"
@@ -776,7 +778,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   agent's mark and its branch line. Its pane has no terminal | chat switch; the pane is the chat. The approvals
   (y / a / n), user-input form, Stop and the daemon's queue are the chat's own.
 - **Chat body** (`features/chat/chat.css`). A 760px centred column, 20px in, rows 16px apart, under a 36px fade at its
-  top. The scroller is as wide as the column, so its scrollbar sits at the column's edge and not the pane's, and the jump-to-latest button is centred over the column; the wheel still scrolls the chat from the empty room beside it. Every card in the feed is the shared **Card** (a hairline, `--card`, no shadow; head 36px, body 10/12, foot 40px), every colour a token. Your messages are right-aligned bubbles (`--bubble`, a `--line` hairline, padding 9/13, 14/1.55, at most `min(560px, 85%)`), attachments above and a meta line under it (the time and the ⋯ menu); one still sending is at 60% with "Sending…".
+  top. The scroller is as wide as the column, so its scrollbar sits at the column's edge and not the pane's, and the jump-to-latest button is centred over the column; the wheel still scrolls the chat from the empty room beside it. A message you send moves to the top of the view, just under the fade, and the reply is drawn under it (see UI, *List*). Every card in the feed is the shared **Card** (a hairline, `--card`, no shadow; head 36px, body 10/12, foot 40px), every colour a token. Your messages are right-aligned bubbles (`--bubble`, a `--line` hairline, padding 9/13, 14/1.55, at most `min(560px, 85%)`), attachments above and a meta line under it (the time and the ⋯ menu); one still sending is at 60% with "Sending…".
   An agent's reply has no avatar: its lead sentence at 600 in `--fg`, the rest in `--fg2` at 14.5/1.65, 10px between
   blocks, as rich text (headings 22 / 18 / 16 / 14.5 / 13 / 12, lists indented 20 and 22 with 4px between items, a quote
   with a 2px `--line2` rule, inline code as a **CodeChip**, a link in `--link`, a file's name as a **file badge**). A code
@@ -866,7 +868,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   request is in the row's hover card and Checks), no replay control and no model name.
 - **New session dialog.** 720px (`min(720px, 100vw - 48px)`), `--main` with a `--line2` edge, the dialog shadow and a 14px corner (Folded: bevel and flaps), over a 50% black scrim. It is one size whatever is chosen: Chat or Terminal, the agent, model, effort, Own worktree, an error, a long project or branch name. A 44px header band on `--well` holds the Machine, Project and Branch tokens (28px, 13px text, a 9px chevron, `/` between them; each opens a 320px list with a 34px head that names the token, a 32px search and 32px rows; a footer row for **Add a machine…**, **Open a folder…**, **Clone from GitHub…**; the Branch token has a width of its own, 148px that gives up room first, so the name changing with Own worktree moves nothing), then the **Own worktree** switch with its 12px label and ×. The message box is a fixed 168px (14px on 1.5, no border of its own; a long message scrolls inside it) and in Terminal the same box holds the note about the plain terminal. Under it a notes line of fixed height (48px; 76px when narrow) holds the worktree line, a failed start, a failed background start or a missing agent, and scrolls if there is more. The foot is one row of three slots: the **agent dropdown** (300px; its mark, the name, the model and the effort in one line, `Claude · Sonnet 5.5 · Medium` with a chevron; the effort is dropped for an agent without one), **Opens as** Chat | Terminal and **Start** (28px, `--fg` on the page colour, `Ctrl ↵` in 11px mono, one width, 172px, for Start and Open terminal). The dropdown's menu (the chat's model menu, 300px) opens upward from the button's left edge and has an **Agent** list (flat marks, the current one ticked, typing a letter jumps to an agent), the **Model** rows and **Reasoning** as the one Segmented (none for an agent without an effort setting); it stays open while the agent, model or effort is changed and closes on Esc, Enter or a click outside. Each agent keeps its own model and effort while the dialog is open. Terminal keeps the worktree switch and the agent dropdown in place, unseen (`visibility: hidden`, so out of Tab and the reader), and Start reads **Open terminal**. Under 768px wide the foot is two rows, the same in both modes: the dropdown full width, then Opens as and Start (the key hint is left out, and the switch shows without its words). Focus is the 2px accent underline on every control, except the message box, which has none (the dialog's border does not change either). Agent marks are bare glyphs with no tile. Token lists sit above the dialog (z-index 95). The design's prototype (`Maiker Desktop`) draws a Claude | Codex segmented switch and a separate model button; the dropdown replaces both on the user's request.
 - **Open a folder picker.** 580px, the same float. A 46px head ("Open a folder on" and the machine dropdown, 14px 600), a 34px filter field, a 24px path row (up button, mono crumbs, and **New folder** at the right: a quiet 11.5px text button with a plus; disabled at 45% opacity with a note under the row when the machine's service is older), then a 300px list of 30px folder rows (name, a mono `--dim` branch, an enter chevron). **New folder** opens a 34px field at the top of the list on `--m-well` with a folder mark, mono 13px text, the hint "↵ Create · Esc" (hidden under 420px) and the accent underline while focused; a problem is one 11.5px `--danger` line under it. Hover and focus change colour and the underline only; nothing moves. The foot is 50px: the Hidden folders switch at the left, Cancel and **Open <name> ↵** at the right. The M loader shows while a machine is read for more than 160 ms; an asleep machine shows an amber dot and a sentence instead of a list.
-- **New session dialog on another machine.** The same dialog as on this computer, with the machine in its Machine token: its projects, a pasted path, **Open a folder…** (the folder picker on that machine), no branch, attach or warm-agent controls, an **Own worktree** switch (made on that machine on a new two-word branch), and a model button with the agent switch, the fixed models (Default, Opus, Sonnet, Haiku for Claude) and the effort.
+- **New session dialog on another machine.** The same dialog as on this computer, with the machine in its Machine token: its projects, a pasted path, **Open a folder…** (the folder picker on that machine), no branch, attach or warm-agent controls, an **Own worktree** switch (made on that machine on a new two-word branch), and a model button with the agent switch, the fixed models (Default, Fable, Opus, Sonnet, Haiku for Claude) and the effort.
 - **Focus mode (⌘.).** Hides the sidebar; a pill at the bottom says where you are and
   how many sessions need you elsewhere. Esc or the pill's Exit leaves it.
 - **Broadcast (⌘⇧B).** Per layout. While on, every pane of the layout has a violet outline and a
@@ -928,7 +930,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   A worktree whose folder was deleted by hand reads "its folder is gone" in the worktree manager with **Recreate**, which
   makes it again on its branch at the same place. Each row's standing comes from the daemon (`worktree_standing`), and one
   idle past `worktree.inactive_days` leads with "inactive N days". The same list opens with a line when two checkouts changed one file ("orders and rate-limit both changed checkout.ts"; the comparison is `maitty_shared::overlap`, shared with the terminal client). A pane's menu has **Hand off to <agent>** for an agent's pane: a new
-  session of the other agent in the same folder starts with the text brief `maitty handoff` writes (`maitty_shared::handoff`; the
+  session of the other agent in the same folder starts with the text brief `maiker handoff` writes (`maitty_shared::handoff`; the
   desktop lists only uncommitted files and says so). The one other thing the panel
   changes is a file: **Edit** in the Files tab (this computer only, never in a diff) replaces an existing file whole;
   **Save** (Ctrl+S) first re-reads it and asks before overwriting a file that changed since the edit began. The daemon
@@ -959,7 +961,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Branch or worktree.** A session in the project's own folder shows its branch in `--branch` (violet: #A78BFA on a dark ground, #6B46C1 on a light one, set by `themeStyle`; every branch name and icon uses it) with the branch mark;
   one in a linked worktree (the daemon's `TermInfo.linked`, never worked out from the folder) shows it in `--branch`
   with a tree, on its sidebar row, and its pane header's branch crumb. The tooltip says which.
-- **A session whose agent asks for a secret** (`maitty_request_secret`) shows a bar across the top of its pane with the
+- **A session whose agent asks for a secret** (`maiker_request_secret`) shows a bar across the top of its pane with the
   label and the reason the agent gave, and **Provide…** (a masked box; Enter gives it) and **Decline**. The value goes
   from that box to the daemon and nowhere else: it is not kept in the window's state and not shown in the chat, and the
   agent gets a single-use reference (ADR 0006, `SecretAskBar.tsx`). This computer's sessions only.
@@ -1040,8 +1042,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   of the whole (`34.9 MB of 102 MB`) and, on the right, the percent and the time left from the last ten seconds' speed (`about 12 min left`, `downloadEta.ts`); once downloaded it says **Restart to finish** and "Click to restart · chats keep running"; a failure
   shows the real error with **Copy details** and "Click to retry". The click does the next step (download, nothing while it downloads, restart, retry); **Skip this version** is on the card of an available update, and a skipped release gets no button. Settings shows the same bar and line under its update row while a download runs, with the percent on its button (`DownloadProgress`); a light passes along the bar, and with no size yet a short run slides across, so it never reads as stuck. The updater downloads first and installs only on
   **Restart now**, or by itself when the app is idle, so sessions keep running either way. Settings › General › Updates shows the state with
-  one fitting button and three switches: download automatically (on), **Install updates when idle** (on, helper
-  "Never while an agent is working") and **Restart the service when idle** (off; helper "After an update, an older service restarts by itself once no agent is working, waiting on you or starting. Sessions come back."). Idle means no agent working or waiting on an answer, no keyboard input
+  one fitting button and four switches: download automatically (on), **Install updates when idle** (on, helper
+  "Never while an agent is working"), **Restart the service when idle** (off; helper "After an update, an older service restarts by itself once no agent is working, waiting on you or starting. Sessions come back.") and **Update remote machines too** (on, shared with the terminal app's
+  General › Updates row). Right after the app restarts into an update, an older service is restarted as part of that
+  update at the same quiet moment, with no second question, whatever the service switch says. Idle means no agent working or waiting on an answer, no keyboard input
   for 5 minutes, and the window unfocused or minimized. After the relaunch
   a success toast "Updated to X" with **What’s new** for 4 s (dismissable), and What's new opens a 460 px dialog with the release's
   notes and "No session was interrupted."
@@ -1105,12 +1109,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Desktop dialogs.** The New session dialog, the folder picker, the command palette, Recent sessions, Resume a saved chat and the service card share one float: the page colour, a hairline, 14px (Folded: the cut corner and flaps), the shared dialog shadow, a 160ms scale from .96 in, and the 2px accent underline for focus. Lists opened from a token or the machine name grow from their anchor (160ms, `cubic-bezier(.2,.8,.2,1)`, from .9). Reduce motion turns the movement off. The **switch** is 26x14 with a 1px `--line2` border (`--fg2` when on), an 8px knob, and a faint fill when on; it is the one control for an on/off setting (a per-file tick that selects what to commit stays a checkbox).
 - **Notices** (toasts, dialogs and lines; see *Errors*): flat floats in the same colours. A safety signal keeps its colour and words: the offline dialog and chip stay red, a needs-you toast keeps its amber edge.
 - **Process icons** are generic tiles, never a product's mark: `>_` shell, `✻` codex, `rs` cargo.
-- **Themes**: fifty-four in the desktop app (the terminal app also ships Maitty Night), twenty-eight dark and twenty-six light (`crates/maitty-settings/themes.json` lists them; a TUI test holds its ground and text equal to it). Eleven are Maitty's own. Nine are the chat handoff's, each with a `palette` that the desktop draws exactly as written (every surface, text, accent, status, meter and shading role; `paletteTheme` in `theme/themes.ts`): **Maitty Night** and **Maitty Day** (sea-glass and brass, the defaults), **Maitty Dark** and **Maitty Light** (a standard black and white ground, same accents), and **Abyss**, **Ember**, **Moss**, **Dusk** (dark) and **Paper** (light), each with its own accent and its own needs-you colour (`--warn`). The TUI still builds Night, Day, Dark and Light from `crates/maitty-settings/maitty-tokens.json`, so those four differ slightly between the two apps until it reads the palettes too. **Maitty Retro Dark** and **Maitty Retro Light** (navy ground, mint text and a lime accent by night; white, ink and a darker green by day) are generated like the families below. In Maitty's first four, brass is the accent (`--accent` as a fill, `--accent-text` as text, darker by day), teal is only ever `--working`, coral is only ever needs-you (`--warn`). The other forty-four are twenty-two families, each with a dark and a light (GitHub, One, Catppuccin, Solarized, Gruvbox, Tokyo Night, Dracula, Nord, Ayu, Everforest, Rosé Pine, Kanagawa, Nightfox, Flexoki, Gruvbox Material, One Half, PaperColor, Tomorrow, Melange, Cyberdream, Doom One, Zenbones), generated from six inputs (`bg fg accent mag blue green` and a light flag) by Oklab mixing. A saved theme that is gone, or Maitty Night saved by the terminal app, falls back to Maitty Dark or Maitty Day (the TUI maps each removed id to its nearest survivor). The theme is stored as its id (`night`, `github-dark`, ...) in the shared settings. Every theme's `--pane` is its opaque
+- **Themes**: fifty-four in the desktop app (the terminal app also ships Maiker Night), twenty-eight dark and twenty-six light (`crates/maitty-settings/themes.json` lists them; a TUI test holds its ground and text equal to it). Eleven are Maiker's own. Nine are the chat handoff's, each with a `palette` that the desktop draws exactly as written (every surface, text, accent, status, meter and shading role; `paletteTheme` in `theme/themes.ts`): **Maiker Night** and **Maiker Day** (sea-glass and brass, the defaults), **Maiker Dark** and **Maiker Light** (a standard black and white ground, same accents), and **Abyss**, **Ember**, **Moss**, **Dusk** (dark) and **Paper** (light), each with its own accent and its own needs-you colour (`--warn`). The TUI still builds Night, Day, Dark and Light from `crates/maitty-settings/maitty-tokens.json`, so those four differ slightly between the two apps until it reads the palettes too. **Maiker Retro Dark** and **Maiker Retro Light** (navy ground, mint text and a lime accent by night; white, ink and a darker green by day) are generated like the families below. In Maiker's first four, brass is the accent (`--accent` as a fill, `--accent-text` as text, darker by day), teal is only ever `--working`, coral is only ever needs-you (`--warn`). The other forty-four are twenty-two families, each with a dark and a light (GitHub, One, Catppuccin, Solarized, Gruvbox, Tokyo Night, Dracula, Nord, Ayu, Everforest, Rosé Pine, Kanagawa, Nightfox, Flexoki, Gruvbox Material, One Half, PaperColor, Tomorrow, Melange, Cyberdream, Doom One, Zenbones), generated from six inputs (`bg fg accent mag blue green` and a light flag) by Oklab mixing. A saved theme that is gone, or Maiker Night saved by the terminal app, falls back to Maiker Dark or Maiker Day (the TUI maps each removed id to its nearest survivor). The theme is stored as its id (`night`, `github-dark`, ...) in the shared settings. Every theme's `--pane` is its opaque
   `--main`. The foreground, terminal text (`--fg2`), muted and dim text keep 4.5:1 on both `--term` and the
-  window `--bg`, and Maitty Night and Maitty Day also hold it for the accent text, working, needs-you, red, done and the ANSI blue,
+  window `--bg`, and Maiker Night and Maiker Day also hold it for the accent text, working, needs-you, red, done and the ANSI blue,
   magenta and green; the theme tests check this. Every light theme holds it too, for accent, amber, red,
   green, blue, magenta and all 15 ANSI text colours but black (the generated ones darken a published hue in
-  place until it passes). Maitty Day uses the file's darker *Text colours so those hold on the light ground. A pane's
+  place until it passes). Maiker Day uses the file's darker *Text colours so those hold on the light ground. A pane's
   xterm palette comes from the same tokens, and on a light theme xterm also lifts any 256-colour or truecolour
   foreground a program picks to 4.5:1 (`minimumContrastRatio`; dark themes leave them as asked). The
   scroll viewport behind the rows is painted `--term`, never xterm's black. **Settings › Appearance › Theme** has an Appearance switch (System, Dark or Light:
@@ -1128,8 +1132,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   you. A machine that is down shows `disconnected since 2m ago` and its fix (wrapped, in `--dim`) under the
   header, and its folders are drawn at 60% opacity. A machine that needs the app has a line under its header,
   lined up with its mark: `▲ not installed` or `▲ needs update` in `--danger` and an **Install** or **Update**
-  text button in the accent (11.5px), which opens the same question as the menu's Install Maitty or Update
-  Maitty (`components/MachineUpdateDialog.tsx`, the Rename dialog's frame: what it needs, what it interrupts,
+  text button in the accent (11.5px), which opens the same question as the menu's Install Maiker or Update
+  Maiker (`components/MachineUpdateDialog.tsx`, the Rename dialog's frame: what it needs, what it interrupts,
   Cancel, Update when idle, and the primary Install now or Update now); a machine's header shows even with no
   sessions anywhere. With one machine there is no header. **Settings › Machines** is a card per machine (chip
   in its tone, how long, what it needs in plain words or the fix in full, the primary **Install** or **Update**

@@ -1,6 +1,6 @@
 //! Metadata for agents with native status integrations.
 
-/// An agent that Maitty can connect to native status reporting.
+/// An agent that Maiker can connect to native status reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StatusAgent {
     pub id: &'static str,

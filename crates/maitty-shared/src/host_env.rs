@@ -145,8 +145,8 @@ mod tests {
     fn what_only_describes_the_bundle_is_dropped_with_it() {
         let changes = bundle_changes(vars(&[
             ("APPDIR", "/tmp/.mount_MaittyAbc"),
-            ("APPIMAGE", "/home/casey/Apps/Maitty.AppImage"),
-            ("ARGV0", "./Maitty.AppImage"),
+            ("APPIMAGE", "/home/casey/Apps/Maiker.AppImage"),
+            ("ARGV0", "./Maiker.AppImage"),
             ("OWD", "/home/casey"),
         ]));
         for key in ["APPIMAGE", "ARGV0", "OWD"] {

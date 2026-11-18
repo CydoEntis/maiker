@@ -241,7 +241,7 @@ function Expanded(props: SidebarProps) {
     const name = head.name
     const action = head.updateAction
     return [
-      ...(name !== null && action !== null ? [{ label: `${UPDATE_WORDS[action].verb} Maitty`, run: () => { props.onUpdateMachine(name, action) } }, 'separator' as const] : []),
+      ...(name !== null && action !== null ? [{ label: `${UPDATE_WORDS[action].verb} Maiker`, run: () => { props.onUpdateMachine(name, action) } }, 'separator' as const] : []),
       { label: 'New agent chat here', hint: shortcutText('new-agent-chat'), disabled: !props.canStart || head.down, run: () => { props.onNewAgentChat(head.machine) } },
       { label: 'New shell here', disabled: !props.canStart || head.down, run: () => { props.onNewShell(head.machine) } },
       'separator',
@@ -429,7 +429,7 @@ function MachineNotes({ heads, progress, onUpdate }: { heads: readonly MachineHe
   const waiting = heads.flatMap((head) => (head.name !== null && (head.updateAction !== null || progress?.[head.name] !== undefined) ? [{ head, name: head.name }] : []))
   if (waiting.length === 0) return null
   return (
-    <div className="mx-machine-notes" role="group" aria-label="Machines that need Maitty">
+    <div className="mx-machine-notes" role="group" aria-label="Machines that need Maiker">
       {waiting.map(({ head, name }) => {
         const done = progress?.[name]
         return (
@@ -527,7 +527,7 @@ function DraftRow({ process }: { process: string }) {
 function UpdateButton({ name, action, onUpdate }: { name: string; action: UpdateAction; onUpdate: (name: string, action: UpdateAction) => void }) {
   const words = UPDATE_WORDS[action]
   return (
-    <button type="button" className="mx-machine-update" aria-label={`${words.verb} Maitty on ${name}`} title={words.need(name)} onClick={() => { onUpdate(name, action) }}>
+    <button type="button" className="mx-machine-update" aria-label={`${words.verb} Maiker on ${name}`} title={words.need(name)} onClick={() => { onUpdate(name, action) }}>
       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="m5 12 7-7 7 7" /></svg>
       {words.verb}
     </button>

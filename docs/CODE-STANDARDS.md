@@ -243,6 +243,25 @@ warnings`. No lint config file; allow-attributes are local and explained.
 - **Layout numbers** (popup widths, column offsets) may stay inline in drawing
   code when used once; repeated ones become named consts.
 
+## Project-specific: error messages
+
+Every failure a person sees has three parts, in plain words:
+
+1. **What failed**: the action, as the title ("Could not start the chat", "Could not save the setting").
+2. **Why**: one sentence a person can act on, not a tool's raw output. Write a home folder as `~`; no
+   stack traces, OS error codes or lower-case tool messages in the reason.
+3. **What to do**: a next step in the sentence ("Remove that folder, or pick another branch name"), or
+   a button (Retry, Put back, Open settings).
+
+The tool's own text is kept for **Copy details**, never thrown away. In the desktop app a toast is
+`toast.failure(error, 'Could not …')` and a failure in place is `ErrorNote` (`components/ErrorNote.tsx`);
+both read the failure through `explainError` (`lib/error-message.ts`), which keeps a reason that already
+reads as a sentence and puts known raw ones (no service, timed out, permission denied, missing file,
+not a repository, already there, no network) in plain words. Never show `errorMessage(...)` alone as a
+title: it loses what was being done. Errors the daemon or host write for people (`bail!`,
+`anyhow!` with a message a client shows) are full sentences that say what to do, and a test asserts
+the wording of the common ones.
+
 ## Project-specific: desktop frontend
 
 The optional `gui/` frontend follows `docs/stack/typescript.md`,

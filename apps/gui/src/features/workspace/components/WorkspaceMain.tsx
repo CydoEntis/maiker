@@ -56,9 +56,7 @@ export function WorkspaceMain() {
                     busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}
                     viewDefaults={preferences.chatViewDefault}
                     defaultAgent={preferences.defaultAgent}
-                    bypassAllowed={preferences.yoloClaude}
-                    codexYolo={preferences.yoloCodex}
-                    fullAccess={preferences.fullAccessNewChats}
+                    bypassOff={preferences.bypassOff}
                     pickFolder={folderPick.pick}
                     clone={cloneRepo.open}
                     onStart={startNewChat}

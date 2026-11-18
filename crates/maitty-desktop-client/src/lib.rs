@@ -120,7 +120,7 @@ pub async fn list_sessions(daemon_executable: PathBuf) -> Result<Value> {
     let reply = request(ClientMsg::Query(Query::List), daemon_executable).await?;
     match reply {
         Reply::List(snapshot) => Ok(serde_json::to_value(snapshot)?),
-        _ => bail!("daemon returned an unexpected session list reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (session list). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -128,7 +128,7 @@ pub async fn list_sessions(daemon_executable: PathBuf) -> Result<Value> {
 pub async fn daemon_restart_status() -> Result<Value> {
     let daemon_protocol = match ipc::open_for_user().await {
         Err(error) => ipc::other_version(&error)
-            .ok_or_else(|| error.context("checking the local daemon version"))?,
+            .ok_or_else(|| error.context("Could not ask the Maiker service which version it is"))?,
         Ok((reader, writer)) => {
             drop((reader, writer));
             bail!("the local {APP_NAME} service is already compatible with this GUI")
@@ -196,11 +196,11 @@ fn validate_restart_activity(activity: Option<&Activity>, sessions_saved: bool) 
     }
     match activity {
         Some(activity) => bail!(
-            "the older Maitty service owns {} sessions but isn't saving them, so a restart would lose them; it was left running",
+            "the older Maiker service owns {} sessions but isn't saving them, so a restart would lose them; it was left running",
             activity.sessions
         ),
         None => bail!(
-            "couldn't verify that the older Maitty service's sessions are saved; it was left running"
+            "couldn't verify that the older Maiker service's sessions are saved; it was left running"
         ),
     }
 }
@@ -374,7 +374,7 @@ pub fn is_daemon_invocation(program: &[u8], first_argument: Option<&[u8]>) -> bo
 pub async fn restart_mismatched_daemon(expected_protocol: u32) -> Result<()> {
     let daemon_protocol = match ipc::open_for_user().await {
         Err(error) => ipc::other_version(&error)
-            .ok_or_else(|| error.context("checking the local daemon version"))?,
+            .ok_or_else(|| error.context("Could not ask the Maiker service which version it is"))?,
         Ok((reader, writer)) => {
             drop((reader, writer));
             bail!("the local {APP_NAME} service is already compatible with this GUI")
@@ -461,7 +461,7 @@ pub async fn read_conversation(
     .await?;
     match reply {
         Reply::ConversationRead(history) => Ok(serde_json::to_value(history)?),
-        _ => bail!("daemon returned an unexpected conversation history reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (conversation history). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -478,7 +478,7 @@ pub async fn read_helper(term: u32, helper: String, daemon: impl Into<Daemon>) -
     }
     match request(ClientMsg::Query(Query::HelperRead { term, helper }), daemon).await? {
         Reply::HelperRead(record) => Ok(serde_json::to_value(record)?),
-        _ => bail!("daemon returned an unexpected helper reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (helper). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -487,7 +487,7 @@ pub async fn read_helper(term: u32, helper: String, daemon: impl Into<Daemon>) -
 pub async fn read_specialists(term: u32, daemon: impl Into<Daemon>) -> Result<Value> {
     match request(ClientMsg::Query(Query::Specialists { term }), daemon).await? {
         Reply::Specialists(list) => Ok(serde_json::to_value(list)?),
-        _ => bail!("daemon returned an unexpected specialists reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (specialists). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -506,7 +506,7 @@ pub async fn conversation_diff(
     .await?;
     match reply {
         Reply::ConversationDiff(diff) => Ok(serde_json::to_value(diff)?),
-        _ => bail!("daemon returned an unexpected conversation diff reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (conversation diff). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -527,7 +527,7 @@ pub async fn conversation_files(
     .await?;
     match reply {
         Reply::ConversationFiles(entries) => Ok(serde_json::to_value(entries)?),
-        _ => bail!("daemon returned an unexpected project file listing"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (project file listing). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -548,7 +548,7 @@ pub async fn conversation_file(
     .await?;
     match reply {
         Reply::ConversationFile(content) => Ok(content),
-        _ => bail!("daemon returned an unexpected project file"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (project file). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -567,7 +567,7 @@ pub async fn terminal_screen(
     .await?;
     match reply {
         Reply::Text(screen) => Ok(screen),
-        _ => bail!("daemon returned an unexpected terminal screen reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal screen). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -586,7 +586,7 @@ pub async fn terminal_replay(
     .await?;
     match reply {
         Reply::TerminalReplay(replay) => Ok(replay),
-        _ => bail!("daemon returned an unexpected terminal replay reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal replay). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -602,7 +602,7 @@ pub async fn send_terminal_input(
     );
     let (mut reader, mut writer) = ipc::open_or_spawn_for_user(&daemon_executable)
         .await
-        .context("connecting to the local daemon")?;
+        .context("Could not reach the Maiker service")?;
     ipc::send_message(
         &mut writer,
         &ClientMsg::Command(Command::ConversationTerminalInput {
@@ -614,7 +614,7 @@ pub async fn send_terminal_input(
     .await?;
     match receive_reply(&mut reader).await? {
         Reply::Ok => {}
-        _ => bail!("daemon returned an unexpected terminal input reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal input). Restart the service in Settings, or update the app so both are the same version."),
     }
     ipc::send_message(
         &mut writer,
@@ -628,7 +628,7 @@ pub async fn send_terminal_input(
         .await
         .and_then(|reply| match reply {
             Reply::Text(screen) => Ok(screen),
-            _ => bail!("daemon returned an unexpected terminal screen reply"),
+            _ => bail!("The Maiker service gave an answer this app does not understand (terminal screen). Restart the service in Settings, or update the app so both are the same version."),
         })
 }
 
@@ -651,7 +651,7 @@ pub async fn resize_terminal(
     .await?;
     match reply {
         Reply::Ok => Ok(()),
-        _ => bail!("daemon returned an unexpected terminal resize reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal resize). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -721,7 +721,7 @@ pub async fn pane_terminal_screen(term: u32, daemon_executable: PathBuf) -> Resu
     .await?;
     match reply {
         Reply::Text(screen) => Ok(screen),
-        _ => bail!("daemon returned an unexpected terminal screen reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal screen). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -733,7 +733,7 @@ pub async fn pane_terminal_replay(term: u32, daemon_executable: PathBuf) -> Resu
     .await?;
     match reply {
         Reply::TerminalReplay(replay) => Ok(replay),
-        _ => bail!("daemon returned an unexpected terminal replay reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal replay). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -750,7 +750,7 @@ pub async fn pane_terminal_resize(
     .await?;
     match reply {
         Reply::Ok => Ok(()),
-        _ => bail!("daemon returned an unexpected terminal resize reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal resize). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -792,7 +792,7 @@ impl TerminalInput {
 pub async fn open_terminal_line(daemon_executable: PathBuf) -> Result<(ipc::Reader, ipc::Writer)> {
     ipc::open_stream_for_user(&daemon_executable)
         .await
-        .context("connecting to the local daemon")
+        .context("Could not reach the Maiker service")
 }
 
 pub async fn open_terminal_stream(
@@ -800,15 +800,15 @@ pub async fn open_terminal_stream(
 ) -> Result<(TerminalStream, TerminalInput)> {
     let (reader, writer) = ipc::open_stream_for_user(&daemon_executable)
         .await
-        .context("connecting to the local daemon")?;
+        .context("Could not reach the Maiker service")?;
     Ok((TerminalStream { reader }, TerminalInput { writer }))
 }
 
 /// Start a plain shell in a folder. The user types what they want to run in it.
 pub async fn start_shell_session(cwd: PathBuf, daemon_executable: PathBuf) -> Result<Value> {
-    let cwd = cwd.canonicalize().context("resolving the start folder")?;
+    let cwd = cwd.canonicalize().context("The start folder is not there. It may have been moved or deleted")?;
     if !cwd.is_dir() {
-        bail!("the start folder is not a directory");
+        bail!("The start folder is a file, not a folder. Pick a folder to start in.");
     }
     let reply = request(
         ClientMsg::Command(Command::NewWorkspace {
@@ -821,7 +821,7 @@ pub async fn start_shell_session(cwd: PathBuf, daemon_executable: PathBuf) -> Re
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected shell session reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (shell session). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -843,7 +843,7 @@ pub async fn start_command_session(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected reply to a command session"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (reply to a command session). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -855,9 +855,9 @@ pub async fn start_terminal_session(
 ) -> Result<Value> {
     let cwd = cwd
         .canonicalize()
-        .context("resolving the selected project folder")?;
+        .context("The project folder is not there. It may have been moved or deleted")?;
     if !cwd.is_dir() {
-        bail!("the selected project folder is not a directory");
+        bail!("The project path is a file, not a folder.");
     }
     let program = provider.agent_name();
     let reply = request(
@@ -871,7 +871,7 @@ pub async fn start_terminal_session(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected terminal session reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal session). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -905,9 +905,9 @@ pub async fn start_agent_session(
     daemon_executable: PathBuf,
 ) -> Result<Value> {
     let command = agent_command(&agent, &flags)?;
-    let cwd = cwd.canonicalize().context("resolving the start folder")?;
+    let cwd = cwd.canonicalize().context("The start folder is not there. It may have been moved or deleted")?;
     if !cwd.is_dir() {
-        bail!("the start folder is not a directory");
+        bail!("The start folder is a file, not a folder. Pick a folder to start in.");
     }
     let reply = request(
         ClientMsg::Command(Command::NewWorkspace {
@@ -920,7 +920,7 @@ pub async fn start_agent_session(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected agent session reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (agent session). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -940,7 +940,7 @@ pub fn github_sign_in_message(cwd: PathBuf) -> ClientMsg {
 pub async fn start_github_sign_in(home: PathBuf, daemon_executable: PathBuf) -> Result<Value> {
     match request(github_sign_in_message(home), daemon_executable).await? {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected terminal session reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (terminal session). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -948,9 +948,9 @@ pub async fn start_github_sign_in(home: PathBuf, daemon_executable: PathBuf) -> 
 /// next with the same agent, flags and folder is the one already running.
 pub fn prewarm_message(cwd: PathBuf, agent: &str, flags: &[String]) -> Result<ClientMsg> {
     let cmd = agent_command(agent, flags)?;
-    let cwd = cwd.canonicalize().context("resolving the start folder")?;
+    let cwd = cwd.canonicalize().context("The start folder is not there. It may have been moved or deleted")?;
     if !cwd.is_dir() {
-        bail!("the start folder is not a directory");
+        bail!("The start folder is a file, not a folder. Pick a folder to start in.");
     }
     Ok(ClientMsg::Command(Command::Prewarm { cwd, cmd }))
 }
@@ -978,13 +978,13 @@ async fn ask_if_known(message: ClientMsg) -> Result<bool> {
     answered_within(REQUEST_TIMEOUT, async {
         let (mut connection, version) = ipc::open_for_user_knowing_version()
             .await
-            .context("connecting to the local daemon")?;
+            .context("Could not reach the Maiker service")?;
         if !daemon_reads(&message, version) {
             return Ok(false);
         }
         match ask(&mut connection, &message).await? {
             Reply::Ok => Ok(true),
-            _ => bail!("daemon returned an unexpected reply"),
+            _ => bail!("The Maiker service gave an answer this app does not understand. Restart the service in Settings, or update the app so both are the same version."),
         }
     })
     .await
@@ -996,7 +996,7 @@ async fn ask_running_daemon_if_it_reads(message: &ClientMsg) -> Result<Reply> {
     answered_within(REQUEST_TIMEOUT, async {
         let (mut connection, version) = ipc::open_for_user_knowing_version()
             .await
-            .context("connecting to the local daemon")?;
+            .context("Could not reach the Maiker service")?;
         refuse_unless_daemon_reads(message, version)?;
         ask(&mut connection, message).await
     })
@@ -1013,7 +1013,7 @@ fn repo_question_needs_version(message: &ClientMsg) -> bool {
 fn refuse_unless_daemon_reads(message: &ClientMsg, daemon_version: u32) -> Result<()> {
     if !daemon_reads(message, daemon_version) {
         bail!(
-            "the Maitty service running is older than this app and cannot answer this yet: restart it (Settings › Daemon)"
+            "the Maiker service running is older than this app and cannot answer this yet: restart it (Settings › Daemon)"
         );
     }
     Ok(())
@@ -1039,7 +1039,7 @@ pub async fn send_when_ready(
     let reply = send_named(held_message(text)?.message(term), operation, daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected reply to a held message"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (reply to a held message). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1065,7 +1065,7 @@ pub async fn queue_follow_up(
         send_named(queued_message(text, first)?.message(term), operation, daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected reply to a queued message"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (reply to a queued message). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1118,7 +1118,7 @@ pub async fn drop_queued(term: u32, index: u32, text: String) -> Result<Value> {
     if ask_if_known(PaneCommand::DropQueued { index, text }.message(term)).await? {
         Ok(Value::Null)
     } else {
-        bail!("the Maitty service is from an older release: restart it to take back one queued message")
+        bail!("the Maiker service is from an older release: restart it to take back one queued message")
     }
 }
 
@@ -1130,7 +1130,7 @@ pub async fn rename_terminal_session(
     let reply = request(PaneCommand::Rename(name).message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected rename reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (rename). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1149,7 +1149,7 @@ pub async fn repo_query(term: u32, question: maitty_shared::repo::RepoRequest, d
     };
     match reply {
         Reply::Repo { reply, .. } => Ok(serde_json::to_value(reply)?),
-        _ => bail!("daemon returned an unexpected repository reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (repository). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1158,7 +1158,7 @@ pub async fn repo_query(term: u32, question: maitty_shared::repo::RepoRequest, d
 pub async fn git_identities(daemon: impl Into<Daemon>) -> Result<Value> {
     match request(ClientMsg::Query(Query::GitIdentities { tag: 0 }), daemon).await? {
         Reply::GitIdentities { report, .. } => Ok(serde_json::to_value(report)?),
-        _ => bail!("daemon returned an unexpected answer about who commits"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (answer about who commits). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1168,7 +1168,7 @@ pub async fn git_identity_rule(change: maitty_shared::protocol::GitRuleChange, d
     match request(ClientMsg::Query(Query::GitIdentityRule { change, tag: 0 }), daemon).await? {
         Reply::GitIdentityRuleDone { outcome: Ok(files), .. } => Ok(serde_json::to_value(files)?),
         Reply::GitIdentityRuleDone { outcome: Err(why), .. } => bail!("{why}"),
-        _ => bail!("daemon returned an unexpected answer about a folder's rule"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (answer about a folder's rule). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1191,7 +1191,7 @@ pub async fn git_request(term: u32, request: maitty_shared::protocol::GitRequest
     match request_within(asked, daemon, limit).await? {
         Reply::GitDone { outcome: Ok(line), .. } => Ok(line),
         Reply::GitDone { outcome: Err(why), .. } => bail!("{why}"),
-        _ => bail!("daemon returned an unexpected git reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (git). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1206,7 +1206,7 @@ pub async fn new_worktree_session(
 ) -> Result<Value> {
     let snapshot = match request(ClientMsg::Query(Query::List), daemon_executable.clone()).await? {
         Reply::List(snapshot) => snapshot,
-        _ => bail!("daemon returned an unexpected session list reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (session list). Restart the service in Settings, or update the app so both are the same version."),
     };
     let ws = snapshot
         .workspaces
@@ -1235,7 +1235,7 @@ pub async fn new_worktree_session(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected worktree reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (worktree). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1245,7 +1245,7 @@ pub async fn new_worktree_session(
 pub async fn tidy_worktrees(items: Vec<(PathBuf, bool)>, daemon_executable: PathBuf) -> Result<Value> {
     match request(ClientMsg::Command(Command::TidyWorktrees { items }), daemon_executable).await? {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected worktree reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (worktree). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1257,15 +1257,15 @@ pub async fn worktree_standing(repo: PathBuf, folder: PathBuf) -> Result<Value> 
     answered_within(REQUEST_TIMEOUT, async {
         let (mut connection, version) = ipc::open_for_user_knowing_version()
             .await
-            .context("connecting to the local daemon")?;
+            .context("Could not reach the Maiker service")?;
         if !daemon_reads(&message, version) {
             bail!(
-                "the Maitty service running is older than this app and cannot say where a worktree stands: restart it (Settings › Daemon)"
+                "the Maiker service running is older than this app and cannot say where a worktree stands: restart it (Settings › Daemon)"
             );
         }
         match ask(&mut connection, &message).await? {
             Reply::WorktreeStanding(standing) => standing_shown(standing),
-            _ => bail!("daemon returned an unexpected worktree standing reply"),
+            _ => bail!("The Maiker service gave an answer this app does not understand (worktree standing). Restart the service in Settings, or update the app so both are the same version."),
         }
     })
     .await
@@ -1294,10 +1294,10 @@ pub async fn branch_worktree(project: PathBuf, branch: String, daemon: impl Into
             answered_within(BRANCH_WORKTREE_TIMEOUT, async {
                 let (mut connection, version) = ipc::open_for_user_knowing_version()
                     .await
-                    .context("connecting to the local daemon")?;
+                    .context("Could not reach the Maiker service")?;
                 if !daemon_reads(&message, version) {
                     bail!(
-                        "the Maitty service running is older than this app and cannot make a worktree yet: restart it (Settings › Daemon), then try again"
+                        "the Maiker service running is older than this app and cannot make a worktree yet: restart it (Settings › Daemon), then try again"
                     );
                 }
                 ask(&mut connection, &message).await
@@ -1308,7 +1308,7 @@ pub async fn branch_worktree(project: PathBuf, branch: String, daemon: impl Into
     };
     match reply {
         Reply::Text(folder) => Ok(Value::String(folder)),
-        _ => bail!("daemon returned an unexpected worktree reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (worktree). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1321,7 +1321,7 @@ pub async fn search_panes(query: String, daemon_executable: PathBuf) -> Result<V
     .await?;
     match reply {
         Reply::Search(hits) => Ok(serde_json::to_value(hits)?),
-        _ => bail!("daemon returned an unexpected search reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (search). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1337,7 +1337,7 @@ pub async fn usage_report(
     .await?;
     match reply {
         Reply::UsageReport(report) => Ok(serde_json::to_value(report)?),
-        _ => bail!("daemon returned an unexpected usage reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (usage). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1362,7 +1362,7 @@ pub async fn restore_snapshot(
             reply: maitty_shared::repo::RepoReply::Restored(changed),
             ..
         } => Ok(changed as u64),
-        _ => bail!("daemon returned an unexpected restore reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (restore). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1377,10 +1377,10 @@ pub async fn restore_count(term: u32, commit: String) -> Result<u64> {
     answered_within(REQUEST_TIMEOUT, async {
         let (mut connection, version) = ipc::open_for_user_knowing_version()
             .await
-            .context("connecting to the local daemon")?;
+            .context("Could not reach the Maiker service")?;
         if !daemon_reads(&message, version) {
             bail!(
-                "the Maitty service running is older than this app and cannot count a restore yet: restart it (Settings › Daemon), then try again"
+                "the Maiker service running is older than this app and cannot count a restore yet: restart it (Settings › Daemon), then try again"
             );
         }
         match ask(&mut connection, &message).await? {
@@ -1388,7 +1388,7 @@ pub async fn restore_count(term: u32, commit: String) -> Result<u64> {
                 reply: maitty_shared::repo::RepoReply::RestoreCount(changed),
                 ..
             } => Ok(changed as u64),
-            _ => bail!("daemon returned an unexpected restore count reply"),
+            _ => bail!("The Maiker service gave an answer this app does not understand (restore count). Restart the service in Settings, or update the app so both are the same version."),
         }
     })
     .await
@@ -1410,10 +1410,10 @@ pub async fn write_project_file(
     answered_within(Duration::from_secs(30), async {
         let (mut connection, version) = ipc::open_for_user_knowing_version()
             .await
-            .context("connecting to the local daemon")?;
+            .context("Could not reach the Maiker service")?;
         if !daemon_reads(&message, version) {
             bail!(
-                "the Maitty service running is older than this app and cannot save a file yet: restart it (Settings › Daemon), then try again"
+                "the Maiker service running is older than this app and cannot save a file yet: restart it (Settings › Daemon), then try again"
             );
         }
         match ask(&mut connection, &message).await? {
@@ -1421,7 +1421,7 @@ pub async fn write_project_file(
                 reply: maitty_shared::repo::RepoReply::Written,
                 ..
             } => Ok(Value::Null),
-            _ => bail!("daemon returned an unexpected save reply"),
+            _ => bail!("The Maiker service gave an answer this app does not understand (save). Restart the service in Settings, or update the app so both are the same version."),
         }
     })
     .await
@@ -1457,7 +1457,7 @@ pub async fn close_terminal_session(term: u32, daemon_executable: PathBuf) -> Re
     let reply = request(PaneCommand::Close.message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected close reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (close). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1467,7 +1467,7 @@ pub async fn close_session_with_undo(term: u32, daemon_executable: PathBuf) -> R
     let reply = request(PaneCommand::CloseSession.message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected close reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (close). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1476,7 +1476,7 @@ pub async fn undo_close_terminal_session(term: u32, daemon_executable: PathBuf) 
     let reply = request(PaneCommand::UndoClose.message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected undo reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (undo). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1489,7 +1489,7 @@ pub async fn pin_terminal_session(
     let reply = request(PaneCommand::Pin(pinned).message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected pin reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (pin). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1506,7 +1506,7 @@ pub async fn archive_terminal_session(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected archive reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (archive). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1519,7 +1519,7 @@ pub async fn snooze_terminal_session(
     let reply = request(PaneCommand::Snooze(until).message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected snooze reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (snooze). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1528,7 +1528,7 @@ pub async fn reload_terminal_session(term: u32, daemon_executable: PathBuf) -> R
     let reply = request(PaneCommand::Reload.message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected reload reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (reload). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1552,7 +1552,7 @@ pub async fn answer_helpers(
     let reply = request(PaneCommand::AnswerHelpers(choice).message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected helper answer reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (helper answer). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1571,7 +1571,7 @@ pub fn approval_choice(word: &str) -> Result<maitty_shared::protocol::ApprovalCh
 pub async fn check_command(term: u32, command: PaneCommand, daemon_executable: PathBuf) -> Result<Value> {
     match request(command.message(term), daemon_executable).await? {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected check reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (check). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1579,7 +1579,7 @@ pub async fn check_command(term: u32, command: PaneCommand, daemon_executable: P
 pub async fn check_output(term: u32, name: Option<String>, daemon_executable: PathBuf) -> Result<Value> {
     match request(ClientMsg::Query(Query::CheckOutput { term, name }), daemon_executable).await? {
         Reply::Text(output) => Ok(Value::String(output)),
-        _ => bail!("daemon returned an unexpected check output reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (check output). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1592,7 +1592,7 @@ pub async fn answer_secret(id: u64, value: Option<String>, daemon_executable: Pa
     });
     match request(message, daemon_executable).await? {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected secret reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (secret). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1600,7 +1600,7 @@ pub async fn mark_terminal_seen(term: u32, daemon_executable: PathBuf) -> Result
     let reply = request(PaneCommand::Seen.message(term), daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected mark-seen reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (mark-seen reply). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1627,7 +1627,7 @@ pub async fn send_conversation(
         Reply::ConversationSent(receipt) => Ok(serde_json::to_value(receipt)?),
         // The conversation was busy: the daemon holds the message and sends it when the turn ends.
         Reply::ConversationQueued(queued) => Ok(serde_json::to_value(queued)?),
-        _ => bail!("daemon returned an unexpected conversation send reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (conversation send). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1648,7 +1648,7 @@ pub async fn dequeue_conversation(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected queued message removal reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (queued message removal). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1673,7 +1673,7 @@ pub async fn send_conversation_now(
     };
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected send now reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (send now). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1696,7 +1696,7 @@ pub async fn approve_conversation(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected conversation approval reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (conversation approval). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1719,7 +1719,7 @@ pub async fn answer_user_input(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected conversation input reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (conversation input). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1738,7 +1738,7 @@ pub async fn cancel_conversation(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected turn cancellation reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (turn cancellation). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1757,7 +1757,7 @@ pub async fn rename_conversation(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected rename reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (rename). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1776,7 +1776,7 @@ pub async fn archive_conversation(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected close reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (close). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1800,7 +1800,7 @@ pub async fn resume_codex_conversation(
         Reply::ConversationStarted { id, generation } => {
             Ok(json!({"id": id.0, "generation": generation}))
         }
-        _ => bail!("daemon returned an unexpected conversation resume reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (conversation resume). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1822,7 +1822,7 @@ pub async fn allow_conversation_always(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected remembered approval reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (remembered approval). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1838,7 +1838,7 @@ pub async fn close_conversation_with_undo(id: u64, generation: u64, daemon_execu
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected close reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (close). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1853,7 +1853,7 @@ pub async fn undo_close_conversation(id: u64, daemon_executable: PathBuf) -> Res
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected undo reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (undo). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1862,7 +1862,7 @@ pub async fn allowed_commands(daemon_executable: PathBuf) -> Result<Value> {
     let reply = request(ClientMsg::Query(Query::AllowedCommands), daemon_executable).await?;
     match reply {
         Reply::AllowedCommands(commands) => Ok(serde_json::to_value(commands)?),
-        _ => bail!("daemon returned an unexpected approved commands reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (approved commands). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1873,13 +1873,13 @@ pub async fn saved_conversations(agent: String, folder: String) -> Result<Value>
     answered_within(REQUEST_TIMEOUT, async {
         let (mut connection, version) = ipc::open_for_user_knowing_version()
             .await
-            .context("connecting to the local daemon")?;
+            .context("Could not reach the Maiker service")?;
         if !daemon_reads(&message, version) {
             return Ok(Value::Null);
         }
         match ask(&mut connection, &message).await? {
             Reply::SavedConversations { found, .. } => Ok(serde_json::to_value(found)?),
-            _ => bail!("daemon returned an unexpected saved conversations reply"),
+            _ => bail!("The Maiker service gave an answer this app does not understand (saved conversations). Restart the service in Settings, or update the app so both are the same version."),
         }
     })
     .await
@@ -1902,7 +1902,7 @@ pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk, daemon
             answered_within(SIDE_ANSWER_TIMEOUT, async {
                 let (mut connection, version) = ipc::open_for_user_knowing_version()
                     .await
-                    .context("connecting to the local daemon")?;
+                    .context("Could not reach the Maiker service")?;
                 refuse_unless_daemon_reads(&message, version)?;
                 ask(&mut connection, &message).await
             })
@@ -1912,7 +1912,7 @@ pub async fn side_answer(id: u64, side: maitty_shared::protocol::SideAsk, daemon
     };
     match reply {
         Reply::SideAnswer { answer, .. } => Ok(serde_json::to_value(answer)?),
-        _ => bail!("daemon returned an unexpected side answer reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (side answer). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -1923,13 +1923,13 @@ pub async fn closed_sessions() -> Result<Value> {
     answered_within(REQUEST_TIMEOUT, async {
         let (mut connection, version) = ipc::open_for_user_knowing_version()
             .await
-            .context("connecting to the local daemon")?;
+            .context("Could not reach the Maiker service")?;
         if !daemon_reads(&message, version) {
             return Ok(Value::Null);
         }
         match ask(&mut connection, &message).await? {
             Reply::ClosedSessions(list) => with_folder_presence(list, FOLDER_LOOK_LIMIT, |path| path.is_dir()).await,
-            _ => bail!("daemon returned an unexpected closed sessions reply"),
+            _ => bail!("The Maiker service gave an answer this app does not understand (closed sessions). Restart the service in Settings, or update the app so both are the same version."),
         }
     })
     .await
@@ -1990,7 +1990,7 @@ pub async fn forget_allowed_command(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected forget reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (forget). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -2010,11 +2010,11 @@ pub async fn end_conversation(
     .await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected end conversation reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (end conversation). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
-/// What a new conversation may do. The provider enforces it; Maitty only picks it.
+/// What a new conversation may do. The provider enforces it; Maiker only picks it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Permissions {
     ReadOnly,
@@ -2081,9 +2081,9 @@ pub async fn create_conversation(
 ) -> Result<Value> {
     let cwd = cwd
         .canonicalize()
-        .context("resolving the selected project folder")?;
+        .context("The project folder is not there. It may have been moved or deleted")?;
     if !cwd.is_dir() {
-        bail!("the selected project folder is not a directory");
+        bail!("The project path is a file, not a folder.");
     }
     let (executable, config_root) = match provider {
         Provider::Codex => (codex_app_server_executable()?, codex_config_dir()),
@@ -2114,7 +2114,7 @@ pub async fn create_conversation(
         Reply::ConversationStarted { id, generation } => {
             Ok(json!({"id": id, "generation": generation}))
         }
-        _ => bail!("daemon returned an unexpected conversation start reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (conversation start). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 
@@ -2615,7 +2615,7 @@ async fn request_within(message: ClientMsg, daemon: impl Into<Daemon>, limit: Du
                 ask_reusing(&IDLE_CONNECTIONS, MAX_IDLE_CONNECTIONS, &message, || async {
                     ipc::open_or_spawn_for_user(&daemon_executable)
                         .await
-                        .context("connecting to the local daemon")
+                        .context("Could not reach the Maiker service")
                 }),
             )
             .await
@@ -2879,7 +2879,7 @@ async fn ask_answer(connection: &mut Connection, message: &ClientMsg) -> Result<
         match ipc::receive_server(&mut connection.0).await? {
             Some(ServerMsg::Reply(reply)) => return Ok(Ok(reply)),
             Some(ServerMsg::Error(error)) => return Ok(Err(error)),
-            Some(ServerMsg::Bye) | None => bail!("local daemon closed the connection"),
+            Some(ServerMsg::Bye) | None => bail!("The Maiker service closed the connection before answering. Try again; if it keeps happening, restart it in Settings."),
             Some(_) => continue,
         }
     }
@@ -2890,9 +2890,9 @@ async fn receive_reply(reader: &mut ipc::Reader) -> Result<Reply> {
         match ipc::receive_server(reader).await? {
             Some(ServerMsg::Reply(reply)) => return Ok(reply),
             Some(ServerMsg::Error(error)) => bail!(error),
-            Some(ServerMsg::Bye) => bail!("local daemon closed the connection"),
+            Some(ServerMsg::Bye) => bail!("The Maiker service closed the connection before answering. Try again; if it keeps happening, restart it in Settings."),
             Some(_) => continue,
-            None => bail!("local daemon closed the connection"),
+            None => bail!("The Maiker service closed the connection before answering. Try again; if it keeps happening, restart it in Settings."),
         }
     }
 }
@@ -2929,9 +2929,9 @@ mod restart_confirmation_tests {
             format!("/repo/target/debug/{daemon}-x86_64-unknown-linux-gnu"),
             format!("/tmp/.mount_AppXyZ/usr/bin/{old}"),
             format!("/repo/target/debug/{old}-x86_64-unknown-linux-gnu"),
-            format!(r"C:\Users\me\AppData\Local\Maitty\{command}.exe"),
-            format!(r"C:\Program Files\Maitty\{daemon}.EXE"),
-            format!(r"C:\Program Files\Maitty\{old}.EXE"),
+            format!(r"C:\Users\me\AppData\Local\Maiker\{command}.exe"),
+            format!(r"C:\Program Files\Maiker\{daemon}.EXE"),
+            format!(r"C:\Program Files\Maiker\{old}.EXE"),
         ] {
             assert!(is_daemon_command_line(&line(&program, "daemon")), "{program}");
         }
@@ -3483,7 +3483,7 @@ pub async fn fleet_command(command: FleetCommand, daemon_executable: PathBuf) ->
     let reply = request(message, daemon_executable).await?;
     match reply {
         Reply::Ok => Ok(Value::Null),
-        _ => bail!("daemon returned an unexpected fleet reply"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (fleet). Restart the service in Settings, or update the app so both are the same version."),
     }
 }
 

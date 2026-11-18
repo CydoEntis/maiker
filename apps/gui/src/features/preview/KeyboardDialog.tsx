@@ -49,7 +49,7 @@ export function KeyboardDialog({
         <DialogHeader>
           <DialogTitle>Keyboard shortcuts</DialogTitle>
           <DialogDescription>
-            Shortcuts available in Maitty Desktop.
+            Shortcuts available in Maiker Desktop.
           </DialogDescription>
         </DialogHeader>
         <div className="keyboard-shortcut-list">

@@ -12,9 +12,9 @@ const ReportSchema = z.object({
   problem: z.string().nullable(),
 })
 
-/** Who commits, and as which GitHub account git signs in, inside a folder with a rule Maitty wrote. */
+/** Who commits, and as which GitHub account git signs in, inside a folder with a rule Maiker wrote. */
 export type GitIdentity = z.infer<typeof IdentitySchema>
-/** A folder whose checkouts use another identity. `identity` is null for a rule set outside Maitty: only its folder is known. */
+/** A folder whose checkouts use another identity. `identity` is null for a rule set outside Maiker: only its folder is known. */
 export type GitIdentityRule = z.infer<typeof RuleSchema>
 /**
  * What a machine's global git config says: the name and email commits carry by default (each null
@@ -66,7 +66,7 @@ function plain(path: string): string {
 }
 
 /**
- * The rule Maitty wrote that covers `folder`: the deepest one whose folder is it or holds it. A
+ * The rule Maiker wrote that covers `folder`: the deepest one whose folder is it or holds it. A
  * Windows folder is matched without regard to case, as git matches it there. Null when none does.
  */
 export function ruleCovering(rules: readonly GitIdentityRule[], folder: string): GitIdentity | null {

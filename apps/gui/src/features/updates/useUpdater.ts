@@ -98,9 +98,9 @@ export function updaterSummary(state: UpdaterState): string {
     case 'idle': return 'Not checked yet.'
     case 'checking': return 'Checking…'
     case 'current': return 'You are on the latest version.'
-    case 'available': return `Maitty ${state.version} is available.`
-    case 'downloading': return `Downloading Maitty ${state.version}…`
-    case 'ready': return `Maitty ${state.version} is downloaded. Restart to use it.`
+    case 'available': return `Maiker ${state.version} is available.`
+    case 'downloading': return `Downloading Maiker ${state.version}…`
+    case 'ready': return `Maiker ${state.version} is downloaded. Restart to use it.`
     case 'failed': return state.during === 'check' ? `Could not check for updates: ${state.message}` : `The update failed: ${state.message}`
   }
 }

@@ -22,7 +22,7 @@ pub fn fake_ssh() -> PathBuf {
 fn build_with_cargo(what: &[&str], target_name: &str) -> PathBuf {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
     let built = Command::new(cargo)
-        .args(["build", "--package", "maitty"])
+        .args(["build", "--package", "maiker"])
         .args(what)
         .arg("--message-format=json-render-diagnostics")
         .stderr(Stdio::inherit())
@@ -92,7 +92,7 @@ pub fn text(bytes: &[u8]) -> String {
 pub fn maitty_binary() -> PathBuf {
     static BUILT: OnceLock<PathBuf> = OnceLock::new();
     BUILT
-        .get_or_init(|| build_with_cargo(&["--bin", "maitty"], "maitty"))
+        .get_or_init(|| build_with_cargo(&["--bin", "maiker"], "maiker"))
         .clone()
 }
 
@@ -124,7 +124,7 @@ fn pwsh_on_path() -> bool {
 pub struct Sandbox {
     pub dir: PathBuf,
     pub socket: String,
-    maitty: PathBuf,
+    maiker: PathBuf,
     daemon: Option<std::process::Child>,
 }
 
@@ -141,7 +141,7 @@ impl Sandbox {
         Sandbox {
             dir,
             socket,
-            maitty: maitty_binary(),
+            maiker: maitty_binary(),
             daemon: None,
         }
     }
@@ -155,7 +155,7 @@ impl Sandbox {
         self.dir.join("ssh-calls.txt")
     }
 
-    /// The sandbox's environment: what makes a `maitty` its own daemon's.
+    /// The sandbox's environment: what makes a `maiker` its own daemon's.
     pub fn env(&self) -> [(String, String); 3] {
         let name = maitty_shared::brand::env_name;
         [
@@ -168,9 +168,9 @@ impl Sandbox {
         ]
     }
 
-    /// `maitty` as this sandbox's own, with no remote and no pane identity.
-    pub fn maitty(&self) -> Command {
-        let mut command = Command::new(&self.maitty);
+    /// `maiker` as this sandbox's own, with no remote and no pane identity.
+    pub fn maiker(&self) -> Command {
+        let mut command = Command::new(&self.maiker);
         command.envs(self.env());
         for key in ["REMOTE", "REMOTE_CMD", "TERM_ID", "PANE_TOKEN"] {
             maitty_shared::brand::remove_child_env(&mut command, key);
@@ -184,7 +184,7 @@ impl Sandbox {
     pub fn shim_args(&self, mode: &str) -> Vec<String> {
         let mut args = vec![
             format!("--mode={mode}"),
-            format!("--maitty={}", self.maitty.display()),
+            format!("--maiker={}", self.maiker.display()),
             format!("--calls={}", self.calls().display()),
         ];
         args.extend(
@@ -197,7 +197,7 @@ impl Sandbox {
     /// Start this sandbox's daemon and wait until it answers.
     pub fn start_daemon(&mut self) {
         let child = self
-            .maitty()
+            .maiker()
             .arg("daemon")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -208,7 +208,7 @@ impl Sandbox {
         let start = Instant::now();
         loop {
             let up = self
-                .maitty()
+                .maiker()
                 .args(["ls", "--json"])
                 .stdin(Stdio::null())
                 .stdout(Stdio::null())
@@ -259,7 +259,7 @@ impl Drop for Sandbox {
     fn drop(&mut self) {
         // Must not panic: a test that failed is already unwinding, and a second panic aborts.
         let _ = self
-            .maitty()
+            .maiker()
             .arg("kill-server")
             .stdin(Stdio::null())
             .stdout(Stdio::null())

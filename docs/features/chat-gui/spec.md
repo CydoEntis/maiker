@@ -9,12 +9,12 @@ Evidence baseline: dev at c08354ce6afc7888774f309e9d7c4873ed721abd.
   cancellation alone does not release ownership.
 - Trust: accept structured status only from a daemon-owned provider connection
   bound to the current conversation generation. Retain authenticated pane reports.
-- History: provider-native session context and Maitty display history are distinct.
+- History: provider-native session context and Maiker display history are distinct.
   Reconcile terminal-authored messages before enabling structured input.
 - Permissions: preserve the effective permission/sandbox posture. Refuse a handoff
   when a provider cannot represent it; never broaden permissions to make it work.
 - Privacy: extend current private atomic-file storage; no new database. With
-  restore.output=false, remove/prevent Maitty chat caches. Native provider history
+  restore.output=false, remove/prevent Maiker chat caches. Native provider history
   is not deleted; it may hydrate memory for this attachment but is never recached.
 - Compatibility: new IPC variants require a protocol bump under ADR 0002.
   Record verified Codex versions/capabilities before enabling the adapter.
@@ -28,7 +28,7 @@ Evidence baseline: dev at c08354ce6afc7888774f309e9d7c4873ed721abd.
 
 - R1. Native TUI workflows, ordinary panes, existing providers, checks and SSH still
   behave as before; existing tests plus isolated nested-server exercise.
-- R2. A stable Maitty conversation identifies provider, exact native session,
+- R2. A stable Maiker conversation identifies provider, exact native session,
   account/profile/config root, binary and working directory/worktree. Ambiguity
   refuses transfer; no most-recent fallback or implicit fork. Identity tests.
 - R3. Structured processes belong to the daemon, survive client disconnect and
@@ -65,7 +65,7 @@ Evidence baseline: dev at c08354ce6afc7888774f309e9d7c4873ed721abd.
 
 ## Design
 
-Keep provider-native history as executable agent context. Maitty holds a private
+Keep provider-native history as executable agent context. Maiker holds a private
 display projection and stable conversation binding, not a replacement agent loop.
 
 Proposed feature locations: pure identity/state types in crates/maitty-shared/src/conversation.rs;
@@ -94,12 +94,12 @@ cargo check --target x86_64-unknown-linux-gnu;
 cargo check --target aarch64-apple-darwin.
 Report unavailable targets honestly; a compile check is not a platform live check.
 
-Use isolated MAITTY_SOCKET servers and temporary repos/config roots. Never restart
+Use isolated AGENT_SOCKET servers and temporary repos/config roots. Never restart
 the user's daemon or use private transcripts as fixtures. Paid/live provider runs
 are explicit human acceptance work, separate from deterministic automated tests.
 
-Phase 34 ticket coverage: R1 → [#206](https://github.com/CydoEntis/maitty/issues/206),[#207](https://github.com/CydoEntis/maitty/issues/207); R2 → [#198](https://github.com/CydoEntis/maitty/issues/198),[#204](https://github.com/CydoEntis/maitty/issues/204),[#205](https://github.com/CydoEntis/maitty/issues/205);
-R3 → [#199](https://github.com/CydoEntis/maitty/issues/199),[#200](https://github.com/CydoEntis/maitty/issues/200),[#201](https://github.com/CydoEntis/maitty/issues/201); R4 → [#201](https://github.com/CydoEntis/maitty/issues/201),[#202](https://github.com/CydoEntis/maitty/issues/202),[#203](https://github.com/CydoEntis/maitty/issues/203); R5 → [#204](https://github.com/CydoEntis/maitty/issues/204),[#205](https://github.com/CydoEntis/maitty/issues/205); R6 → [#200](https://github.com/CydoEntis/maitty/issues/200),[#205](https://github.com/CydoEntis/maitty/issues/205);
-R7 → [#198](https://github.com/CydoEntis/maitty/issues/198),[#204](https://github.com/CydoEntis/maitty/issues/204),[#205](https://github.com/CydoEntis/maitty/issues/205),[#206](https://github.com/CydoEntis/maitty/issues/206),[#207](https://github.com/CydoEntis/maitty/issues/207); R8 → [#198](https://github.com/CydoEntis/maitty/issues/198),[#200](https://github.com/CydoEntis/maitty/issues/200); R9 → [#198](https://github.com/CydoEntis/maitty/issues/198),[#199](https://github.com/CydoEntis/maitty/issues/199),[#200](https://github.com/CydoEntis/maitty/issues/200),[#201](https://github.com/CydoEntis/maitty/issues/201).
-[#197](https://github.com/CydoEntis/maitty/issues/197) establishes capability evidence supporting R2–R7.
+Phase 34 ticket coverage: R1 → [#206](https://github.com/CydoEntis/maiker/issues/206),[#207](https://github.com/CydoEntis/maiker/issues/207); R2 → [#198](https://github.com/CydoEntis/maiker/issues/198),[#204](https://github.com/CydoEntis/maiker/issues/204),[#205](https://github.com/CydoEntis/maiker/issues/205);
+R3 → [#199](https://github.com/CydoEntis/maiker/issues/199),[#200](https://github.com/CydoEntis/maiker/issues/200),[#201](https://github.com/CydoEntis/maiker/issues/201); R4 → [#201](https://github.com/CydoEntis/maiker/issues/201),[#202](https://github.com/CydoEntis/maiker/issues/202),[#203](https://github.com/CydoEntis/maiker/issues/203); R5 → [#204](https://github.com/CydoEntis/maiker/issues/204),[#205](https://github.com/CydoEntis/maiker/issues/205); R6 → [#200](https://github.com/CydoEntis/maiker/issues/200),[#205](https://github.com/CydoEntis/maiker/issues/205);
+R7 → [#198](https://github.com/CydoEntis/maiker/issues/198),[#204](https://github.com/CydoEntis/maiker/issues/204),[#205](https://github.com/CydoEntis/maiker/issues/205),[#206](https://github.com/CydoEntis/maiker/issues/206),[#207](https://github.com/CydoEntis/maiker/issues/207); R8 → [#198](https://github.com/CydoEntis/maiker/issues/198),[#200](https://github.com/CydoEntis/maiker/issues/200); R9 → [#198](https://github.com/CydoEntis/maiker/issues/198),[#199](https://github.com/CydoEntis/maiker/issues/199),[#200](https://github.com/CydoEntis/maiker/issues/200),[#201](https://github.com/CydoEntis/maiker/issues/201).
+[#197](https://github.com/CydoEntis/maiker/issues/197) establishes capability evidence supporting R2–R7.
 R10–R12 are later-phase outcomes; ticket coverage is required on phase activation.

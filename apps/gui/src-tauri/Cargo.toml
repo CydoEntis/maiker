@@ -1,10 +1,10 @@
 [package]
 name = "maitty-gui"
 version = "0.1.0"
-description = "Optional Maitty desktop GUI"
+description = "Optional Maiker desktop GUI"
 authors = ["CydoEntis"]
 license = "MIT"
-repository = "https://github.com/CydoEntis/maitty"
+repository = "https://github.com/CydoEntis/maiker"
 edition = "2024"
 rust-version = "1.90"
 

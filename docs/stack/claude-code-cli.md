@@ -1,6 +1,6 @@
 # Claude Code CLI
 
-> **Use for:** daemon-owned Claude Code conversations in Maitty's optional chat GUI.
+> **Use for:** daemon-owned Claude Code conversations in Maiker's optional chat GUI.
 > **Requires:** the Claude Code CLI installed on the user's machine.
 > **Fills:** ARCHITECTURE § planned structured conversations; API_PATTERNS § structured conversation IPC.
 
@@ -8,7 +8,7 @@
 
 - Drive the installed Claude Code executable through headless JSON streaming.
   Keep process ownership, session identity and durable conversation state in
-  Maitty's daemon; the GUI and Tauri host are clients.
+  Maiker's daemon; the GUI and Tauri host are clients.
 - Keep the Claude protocol in its own provider adapter. Do not emulate Codex
   JSON-RPC or expose provider frames to the GUI.
 - Preserve and resume only the exact native session ID and its verified
@@ -29,7 +29,7 @@
   tree cleanup before releasing conversation ownership. Client disconnects do
   not stop daemon-owned work.
 - Let the installed Claude Code CLI own authentication. The user signs in with
-  `claude auth login`; Maitty does not collect, copy, store or transmit Claude
+  `claude auth login`; Maiker does not collect, copy, store or transmit Claude
   credentials. Do not put credentials in process arguments, logs, conversation
   records or GUI IPC.
 - Keep the TUI-only build independent of desktop packaging. Test Windows,
@@ -40,19 +40,19 @@
 The selected protocol is Claude Code's `stream-json` input/output, following
 PandaCode's installed-CLI provider shape. The user approved subscription sign-in
 through the installed CLI. Anthropic's Help Center currently says third-party
-app usage continues to draw from Claude subscription limits; Maitty does not
+app usage continues to draw from Claude subscription limits; Maiker does not
 provide a separate Claude login or implement its own agent harness. The official
 Agent SDK uses `--permission-prompt-tool=stdio` for its `canUseTool` callback.
-The Maitty adapter follows that wire contract. See ADR
+The Maiker adapter follows that wire contract. See ADR
 0039 and
 the [transport research](../research/claude-code-gui-transport.md).
 
-Windows Claude Code 2.1.314 was verified directly and through Maitty's daemon on
+Windows Claude Code 2.1.314 was verified directly and through Maiker's daemon on
 2026-10-30. The daemon smoke covered conversation creation, streamed
 response/history, exact-session resume, an SDK stdio permission request, user
 approval, and a completed file write. A direct CLI check covered active-turn
 interruption. Authentication uses the existing local Claude Code sign-in.
-Claude Code 2.1.316 also passed a Windows GUI smoke on 2026-10-31: Maitty
+Claude Code 2.1.316 also passed a Windows GUI smoke on 2026-10-31: Maiker
 created a Claude conversation, sent a prompt, and displayed the reply in that
 conversation. This smoke does not replace the deeper 2.1.314 permission and
 resume checks.

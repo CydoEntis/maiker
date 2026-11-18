@@ -17,7 +17,7 @@ export function readAgentTerminals(): AgentTerminals {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return new Map()
     return new Map(Object.entries(value).filter((entry): entry is [string, string[]] => isIdList(entry[1])))
   } catch (error) {
-    console.warn('Ignoring invalid Maitty agent terminals', error)
+    console.warn('Ignoring invalid Maiker agent terminals', error)
     return new Map()
   }
 }

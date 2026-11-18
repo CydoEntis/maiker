@@ -46,7 +46,7 @@ export function EmptyState({ hasSessions, listed, startFolderLabel, canStart, on
           <button type="button" className="mx-primary" disabled={!canStart} onClick={onNewSession}>New session<kbd>{shortcutText('new-session')}</kbd></button>
           <button type="button" className="mx-quiet" onClick={onChangeStartFolder}>Change start folder</button>
         </div>
-        <span className="mx-empty-note-small">Sessions live in {DAEMON_NAME}. Closing this window never stops them, and the Maitty TUI sees the same sessions.</span>
+        <span className="mx-empty-note-small">Sessions live in {DAEMON_NAME}. Closing this window never stops them, and the Maiker TUI sees the same sessions.</span>
       </div>
     </div>
   )

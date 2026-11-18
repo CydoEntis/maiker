@@ -111,7 +111,7 @@ describe('attaching in a chat on another machine', () => {
     const { result } = intake()
     result.current.addPaths(['/a/docs'])
     await settle()
-    expect(currentToasts().items[0]).toMatchObject({ kind: 'error', description: 'docs is not a file; only files can be sent' })
+    expect(currentToasts().items[0]).toMatchObject({ kind: 'error', description: 'Docs is not a file; only files can be sent.', details: 'docs is not a file; only files can be sent' })
     expect(peekComposer(7).attachments).toEqual([])
   })
 

@@ -10,7 +10,7 @@ Plan: Plane epic to be filed (see [spec.md](spec.md) for the tickets)
 time. With several projects and several machines there is no single place that
 shows every agent at once, and no one key that goes to the next one waiting.
 Workbench (Matt Birchler) ships exactly this as its Overview and ⌘J, and it is the
-closest thing to maitty's mission statement as a screen.
+closest thing to maiker's mission statement as a screen.
 
 ## Proposed outcome
 

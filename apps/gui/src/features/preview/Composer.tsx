@@ -90,7 +90,7 @@ export function Composer({
           <CircleAlert size={15} />
           <span>
             {deliveryNotice === 'unknown'
-              ? 'Delivery is unknown. Maitty will not retry this prompt. Check the native terminal before continuing.'
+              ? 'Delivery is unknown. Maiker will not retry this prompt. Check the native terminal before continuing.'
               : 'Message was not delivered. Your draft is still here and safe to retry.'}
           </span>
           {deliveryNotice === 'not-delivered' ? (

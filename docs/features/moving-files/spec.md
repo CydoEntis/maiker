@@ -58,9 +58,9 @@ as untrusted. Each rule below is a requirement of the tickets.
 - R2: the ssh line runs it with the path as one quoted argument and the cap as another.
 - R3: a streaming reader writes the bytes into a `.part` file, enforces rules 1 to 4, and
   returns the final local path.
-- R4: `maitty machine get <machine> <remote path> [local path]` saves into the current folder
+- R4: `maiker machine get <machine> <remote path> [local path]` saves into the current folder
   (or the given path) and prints where it landed. Exit 0 done, 2 usage, 1 failure.
-- R5: the desktop app saves into `Downloads/maitty/<machine>/` and reports progress and
+- R5: the desktop app saves into `Downloads/maiker/<machine>/` and reports progress and
   completion as events; its dialog offers Cancel and Open folder.
 
 - R6: a fixed script prints one folder's contents (sub-folders, then other entries) with its

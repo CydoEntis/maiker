@@ -792,11 +792,16 @@ pub(crate) fn setting_from_wire(
             SettingKey::WindowStyle,
             SettingValue::WindowStyle(word::<WindowStyle>(value)?),
         ),
+        "update_machines" => match value {
+            serde_json::Value::Bool(on) => (SettingKey::UpdateMachines, SettingValue::Bool(on)),
+            _ => return Err("This setting takes true or false".to_string()),
+        },
         "reduce_motion" => match value {
             serde_json::Value::Bool(on) => (SettingKey::ReduceMotion, SettingValue::Bool(on)),
             _ => return Err("This setting takes true or false".to_string()),
         },
         "spinner" => (SettingKey::Spinner, SettingValue::List(word::<Vec<String>>(value)?)),
+        "bypass_off" => (SettingKey::BypassOff, SettingValue::List(word::<Vec<String>>(value)?)),
         _ => return Err("That is not a shared setting".to_string()),
     })
 }
@@ -1530,6 +1535,10 @@ mod tests {
             setting_from_wire("spinner", json!(["a", "b"])).unwrap(),
             (SettingKey::Spinner, SettingValue::List(vec!["a".to_string(), "b".to_string()]))
         );
+        assert_eq!(
+            setting_from_wire("bypass_off", json!(["codex"])).unwrap(),
+            (SettingKey::BypassOff, SettingValue::List(vec!["codex".to_string()]))
+        );
         assert!(setting_from_wire("window_style", json!("tiled")).is_err(), "tiled is gone");
         assert!(setting_from_wire("reduce_motion", json!("yes")).is_err());
         assert!(setting_from_wire("start_dir", json!(3)).is_err());
@@ -1549,6 +1558,8 @@ mod tests {
             start_dir: String::new(),
             reduce_motion: false,
             window_style: WindowStyle::Flat,
+            bypass_off: vec![],
+            update_machines: true,
         };
         let mut streams = Streams::default();
         let now = Instant::now();

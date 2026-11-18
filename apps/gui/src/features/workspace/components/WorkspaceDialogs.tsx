@@ -11,6 +11,7 @@ import { UpdatedNotice } from '@/features/updates/UpdatedNotice'
 import { indexRemoteFiles, listRemoteFolder } from '@/api/fileGets'
 import { updaterSummary } from '@/features/updates/useUpdater'
 import { ServiceBehindNotice } from '@/features/updates/ServiceBehindNotice'
+import { useServiceFinishing } from '@/features/updates/serviceUpdateStatus'
 import { NewWorktreeDialog } from '@/features/worktrees/NewWorktreeDialog'
 import { GetFileDialog } from './GetFileDialog'
 import { SpecialistsDialog } from './SpecialistsDialog'
@@ -31,11 +32,12 @@ import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, cancelAdding, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate } = useWorkspace()
+  const serviceFinishing = useServiceFinishing()
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
-      {mismatch === null && <ServiceBehindNotice sessionsQuery={sessionsQuery} restartServiceWhenIdle={preferences.restartServiceWhenIdle} starting={starting} />}
+      {mismatch === null && <ServiceBehindNotice sessionsQuery={sessionsQuery} restartServiceWhenIdle={preferences.restartServiceWhenIdle} starting={starting} afterAppUpdate={afterAppUpdate} />}
             <HoverTips />
             {shortcutsOpen && <ShortcutOverlay platform={platform} portalContainer={root} onClose={() => { setShortcutsOpen(false) }} />}
             {welcomeOpen && (
@@ -148,11 +150,11 @@ export function WorkspaceDialogs() {
               />
             )}
             {/* Not while the service still runs the older version: the update is not finished, and its card says so. */}
-            {updatedTo && !mismatch && <UpdatedNotice update={updatedTo} onDone={() => { setUpdatedTo(null) }} />}
+            {updatedTo && !mismatch && <UpdatedNotice update={updatedTo} serviceFinishing={serviceFinishing} onDone={() => { setUpdatedTo(null) }} />}
             {preferences.perfOverlay && <PerfOverlay />}
             {restarting && (
               <div className="mx-restarting" role="status">
-                <strong>Restarting Maitty</strong>
+                <strong>Restarting Maiker</strong>
                 <span>Reopening your layout. Your sessions never stopped.</span>
               </div>
             )}

@@ -5,7 +5,7 @@ import {
 } from '@/api/sharedSettings'
 import { framesOfTuiSpinner, isWebSpinner, tuiSpinnerOfFrames } from '@/lib/spinner-clock'
 import { themeIdOf, themeNameOf } from '@/features/workspace/theme/themes'
-import type { SettingsPreferences } from './preferences'
+import { bypassOffOf, type SettingsPreferences } from './preferences'
 
 type Update = (change: (current: SettingsPreferences) => SettingsPreferences) => void
 
@@ -22,6 +22,8 @@ export function sharedFrom(preferences: SettingsPreferences): Partial<SharedSett
     theme_light: themeIdOf(preferences.lightTheme),
     start_dir: preferences.startFolder,
     reduce_motion: preferences.reduceMotion,
+    bypass_off: [...preferences.bypassOff],
+    update_machines: preferences.updateMachines,
   }
   if (preferences.themeMode !== 'system') shared.appearance = preferences.themeMode
   if (!isWebSpinner(preferences.spinner)) shared.spinner = [...framesOfTuiSpinner(preferences.spinner)]
@@ -35,6 +37,8 @@ export function applyShared(preferences: SettingsPreferences, shared: SharedSett
     sidebarSide: shared.sidebar_side,
     startFolder: shared.start_dir,
     reduceMotion: shared.reduce_motion,
+    bypassOff: bypassOffOf(shared.bypass_off) ?? preferences.bypassOff,
+    updateMachines: shared.update_machines,
   }
   if (shared.default_agent === 'claude' || shared.default_agent === 'codex') next.defaultAgent = shared.default_agent
   const dark = themeNameOf(shared.theme_dark)

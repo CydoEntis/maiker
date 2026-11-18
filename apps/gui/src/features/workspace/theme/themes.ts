@@ -74,8 +74,8 @@ export type ThemeEntry = { id: string; name: string; family: string; light: bool
 /** Which theme is in use: the dark theme, the light theme, or whichever one the system's own setting asks for. */
 export type ThemeMode = 'system' | 'dark' | 'light'
 
-export const DEFAULT_THEME = 'Maitty Dark'
-export const DEFAULT_LIGHT_THEME = 'Maitty Day'
+export const DEFAULT_THEME = 'Maiker Dark'
+export const DEFAULT_LIGHT_THEME = 'Maiker Day'
 export const MIN_TEXT_CONTRAST = 4.5
 
 const CSS_VARIABLES: Record<keyof ThemeTokens, string> = {
@@ -107,29 +107,29 @@ const MIX = {
 }
 
 /**
- * Maitty's own themes, built from `maitty-tokens.json`: Night and Day (sea-glass green) and Dark and Light (a standard black and white ground with the same accents) (the TUI reads the same file): sea-glass and brass. Teal means
+ * Maiker's own themes, built from `maitty-tokens.json`: Night and Day (sea-glass green) and Dark and Light (a standard black and white ground with the same accents) (the TUI reads the same file): sea-glass and brass. Teal means
  * only "working" (`working`), coral only "needs you" (`warn`), brass is the accent. Text uses the file's *Text colours
  * so every pair meets AA; fills (a button's brass) use the fill colours with their *On ink.
  */
 /** How far the tokens file's colours are mixed to make the roles it does not name (percent). */
-const MAITTY_MIX = { hover: 50, line2: 40, muted: 50, warnSoft: 7, warnLine: 30, paneLine: 8 }
+const MAIKER_MIX = { hover: 50, line2: 40, muted: 50, warnSoft: 7, warnLine: 30, paneLine: 8 }
 type MaittySide = typeof maittyTokens.night
 function maittyTheme(side: MaittySide, light: boolean): ThemeTokens {
   const { bg, line, text, accent, state } = side
   const status = light ? LIGHT_STATUS : DARK_STATUS
   return {
     bg: bg.page, main: bg.card, pane: bg.card, term: bg.terminal,
-    raise: bg.surface, hover: mixOklab(bg.card, bg.selected, MAITTY_MIX.hover), sel: bg.selected,
-    line: line.default, line2: mixOklab(line.default, text.dim, MAITTY_MIX.line2), well: bg.depth3,
-    fg: text.strong, fg2: text.body, muted: mixOklab(text.body, text.dim, MAITTY_MIX.muted), dim: text.dim,
+    raise: bg.surface, hover: mixOklab(bg.card, bg.selected, MAIKER_MIX.hover), sel: bg.selected,
+    line: line.default, line2: mixOklab(line.default, text.dim, MAIKER_MIX.line2), well: bg.depth3,
+    fg: text.strong, fg2: text.body, muted: mixOklab(text.body, text.dim, MAIKER_MIX.muted), dim: text.dim,
     accent: accent.brass, accentText: accent.brassText, onAccent: accent.brassOn,
     accentSoft: withAlpha(accent.brass, MIX.accentSoft), accentLine: withAlpha(accent.brass, MIX.accentLine),
     working: state.workingText,
-    warn: state.needsText, warnSoft: withAlpha(state.needs, MAITTY_MIX.warnSoft), warnLine: withAlpha(state.needs, MAITTY_MIX.warnLine), onWarn: state.needsOn,
+    warn: state.needsText, warnSoft: withAlpha(state.needs, MAIKER_MIX.warnSoft), warnLine: withAlpha(state.needs, MAIKER_MIX.warnLine), onWarn: state.needsOn,
     danger: status.danger, dangerSoft: status.dangerSoft, dangerLine: status.dangerLine,
     ok: state.doneText,
     ansiBlue: light ? '#2F5FD0' : '#82AAFF', ansiMag: light ? '#8146C9' : '#C3A6F2', ansiGreen: state.doneText,
-    paneLine: withAlpha(text.strong, MAITTY_MIX.paneLine),
+    paneLine: withAlpha(text.strong, MAIKER_MIX.paneLine),
     ...(light ? LIGHT_METERS : DARK_METERS),
   }
 }
@@ -159,9 +159,9 @@ export function paletteTheme(palette: ThemePalette): ThemeTokens {
     meterOk: palette.mOk, meterMid: palette.mMid, meterHigh: palette.mOr, meterMax: palette.mHi,
   }
 }
-const MAITTY_DAY = maittyTheme(maittyTokens.day, true)
-const MAITTY_DARK = maittyTheme(maittyTokens.dark, false)
-const MAITTY_LIGHT = maittyTheme(maittyTokens.light, true)
+const MAIKER_DAY = maittyTheme(maittyTokens.day, true)
+const MAIKER_DARK = maittyTheme(maittyTokens.dark, false)
+const MAIKER_LIGHT = maittyTheme(maittyTokens.light, true)
 
 const SHIFT_STEP = 2
 
@@ -237,15 +237,15 @@ const entry = (id: string, name: string, family: string, light: boolean, tokens:
   ...(shading === undefined ? {} : { shading }),
 })
 
-const MAITTY_TOKENS = { day: MAITTY_DAY, dark: MAITTY_DARK, light: MAITTY_LIGHT } as const
+const MAIKER_TOKENS = { day: MAIKER_DAY, dark: MAIKER_DARK, light: MAIKER_LIGHT } as const
 
 /**
- * The themes both apps ship, in display order, from `themes.json` (the TUI reads the same list): Maitty's own nine, drawn
+ * The themes both apps ship, in display order, from `themes.json` (the TUI reads the same list): Maiker's own nine, drawn
  * exactly from the desktop design's palettes, the Retro pair, and families with a dark and a light each, generated from six colours.
  */
 /**
  * Themes the manifest ships for the terminal app that the desktop app does not offer. The terminal app still starts on
- * Night (`theme.rs` DEFAULT), so the shared file keeps it; here a saved "Maitty Night" falls back to the default theme.
+ * Night (`theme.rs` DEFAULT), so the shared file keeps it; here a saved "Maiker Night" falls back to the default theme.
  */
 const TERMINAL_ONLY_THEME_IDS: readonly string[] = ['night']
 
@@ -255,7 +255,7 @@ export const THEMES: readonly ThemeEntry[] = themeManifest.themes.filter((theme)
     const palette: ThemePalette = theme.palette
     return entry(theme.id, theme.name, `${theme.family} · ${kind}`, theme.light, paletteTheme(palette), { hk: palette.hk, sk: palette.sk })
   }
-  if ('tokens' in theme) return entry(theme.id, theme.name, `${theme.family} · ${kind}`, theme.light, MAITTY_TOKENS[theme.tokens as keyof typeof MAITTY_TOKENS])
+  if ('tokens' in theme) return entry(theme.id, theme.name, `${theme.family} · ${kind}`, theme.light, MAIKER_TOKENS[theme.tokens as keyof typeof MAIKER_TOKENS])
   const { bg, fg, accent, mag, blue, green, light } = theme
   return entry(theme.id, theme.name, `${theme.family} · ${kind}`, light, generateTheme({ bg, fg, accent, mag, blue, green, light }))
 })
@@ -294,7 +294,7 @@ const LIGHT_GLASS = { '--hl': '112,92,52', '--hs': '255,255,255', '--hk': '.85',
 /** A dark ground at or above this luminance (One Dark's grey) is as light as the glass's sheen can sit on without turning grey. */
 const SOFT_GROUND_LUMINANCE = 0.03
 /**
- * The frost's sheen and edge on a dark ground, in strength: full on a deep ground (Maitty Dark), a third of it on a light grey one
+ * The frost's sheen and edge on a dark ground, in strength: full on a deep ground (Maiker Dark), a third of it on a light grey one
  * (One Dark), where the same white would wash the panel out.
  */
 const FROST_DEEP = { hi: 0.06, lo: 0.02, edge: 0.12 }

@@ -44,7 +44,7 @@ const PROBLEMS: Record<string, ChatProblem> = {
 function TitleBar({ chip }: { chip?: ReactNode }) {
   return (
     <div style={{ height: 38, display: 'flex', alignItems: 'center', gap: 12, padding: '0 12px', borderBottom: '1px solid var(--line)', background: 'var(--bg)' }}>
-      <b style={{ fontSize: 13 }}>Maitty</b>
+      <b style={{ fontSize: 13 }}>Maiker</b>
       {chip}
     </div>
   )

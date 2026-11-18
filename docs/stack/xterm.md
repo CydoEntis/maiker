@@ -1,6 +1,6 @@
 # xterm.js
 
-> **Use for:** Terminal emulation inside Maitty's desktop GUI.
+> **Use for:** Terminal emulation inside Maiker's desktop GUI.
 > **Requires:** React, TypeScript
 > **Fills:** UI Â§ terminal interaction
 

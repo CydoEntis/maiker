@@ -18,13 +18,13 @@ import type { AppBehindOffer, RestartOffer } from './components/states'
 function olderServiceNote(status: { canRestart: boolean; sessionCount: number; activeTurnCount: number | null } | undefined): string {
   if (!status || status.sessionCount === 0) return ''
   const sessions = `${String(status.sessionCount)} session${status.sessionCount === 1 ? '' : 's'}`
-  if (!status.canRestart) return ` The older service owns ${sessions} but is not saving them, so Maitty leaves it running.`
+  if (!status.canRestart) return ` The older service owns ${sessions} but is not saving them, so Maiker leaves it running.`
   const midTurn = status.activeTurnCount ? ` ${String(status.activeTurnCount)} working or waiting agent${status.activeTurnCount === 1 ? '' : 's'} will offer a Resume.` : ''
   return ` Restarting it stops what is running in its ${sessions}. They reopen in the same folders.${midTurn}`
 }
 
 /** What the window offers when it and the service speak different protocols: restart the older service, or update the older app. */
-export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, sessionsQuery, restartServiceWhenIdle, starting }: {
+export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, refetchSessions, updater, restartNow, sessionsQuery, restartServiceWhenIdle, starting, afterAppUpdate = false }: {
   mismatch: { daemonProtocol: number; guiProtocol: number } | null
   serviceNewer: boolean
   restartStatusQuery: UseQueryResult<{ daemonProtocol: number; guiProtocol: number; canRestart: boolean; sessionCount: number; activeTurnCount: number | null }>
@@ -36,6 +36,8 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
   restartServiceWhenIdle: boolean
   /** A session is being started from this window. */
   starting: boolean
+  /** This launch is the app restarted into an update: an older service is restarted as part of it, once no agent works. */
+  afterAppUpdate?: boolean
 }) {
   const [restartPending, setRestartPending] = useState(false)
   const restartOffer: RestartOffer | null = mismatch && !serviceNewer
@@ -54,16 +56,17 @@ export function useServiceOffers({ mismatch, serviceNewer, restartStatusQuery, r
               await refetchSessions()
               toast.success(`Service restarted · ${String(restartStatusQuery.data?.sessionCount ?? 0)} sessions back`, automatic ? { description: 'It restarted by itself because no agent was working or waiting.' } : undefined)
             })
-            .catch((error: unknown) => { toast.failed('Could not restart the Maitty service', error) })
+            .catch((error: unknown) => { toast.failed('Could not restart the Maiker service', error) })
             .finally(() => { setRestartPending(false) })
         },
       }
     : null
-  // The same button flow, run for you at a quiet moment. The window cannot read sessions from a service on another
-  // protocol, so the service's own count of working and waiting agents is the guard here.
+  // The same button flow, run for you at a quiet moment: under Restart the service when idle, or right after an app
+  // update, whose service restart is part of it. The window cannot read sessions from a service on another protocol,
+  // so the service's own count of working and waiting agents is the guard here.
   const refetchRestartStatus = restartStatusQuery.refetch
   useIdleServiceRestart({
-    step: serviceRestartStep({ enabled: restartServiceWhenIdle, restarting: restartPending, starting, service: restartStatusQuery.data, sessionStatuses: null }),
+    step: serviceRestartStep({ enabled: restartServiceWhenIdle || afterAppUpdate, restarting: restartPending, starting, service: restartStatusQuery.data, sessionStatuses: null }),
     key: restartOffer && restartOffer.canRestart ? `protocol-${String(restartOffer.from)}` : null,
     restart: () => { restartOffer?.onRestart(true) },
     recheck: () => { void refetchRestartStatus() },

@@ -1805,12 +1805,13 @@ mod screen_tests {
         let key = |c: KeyCode| KeyEvent::new(c, KeyModifiers::NONE);
         let cmd = super::screen::np_command(&app, "claude", 1, "fix the login bug").unwrap();
         assert!(
-            cmd.starts_with("claude --model opus ") && cmd.contains("fix the login bug"),
+            cmd.starts_with("claude --dangerously-skip-permissions --model fable ")
+                && cmd.contains("fix the login bug"),
             "{cmd}"
         );
         assert_eq!(
             super::screen::np_command(&app, "claude", 0, "  ").as_deref(),
-            Some("claude")
+            Some("claude --dangerously-skip-permissions")
         );
         assert_eq!(super::screen::np_command(&app, "shell", 0, "x"), None);
         app.screen_new(0, false);
@@ -1826,7 +1827,10 @@ mod screen_tests {
             o.contains("TASK") && o.contains("add tests"),
             "the task row shows what you typed"
         );
-        assert!(o.contains("Runs: claude --model opus"), "and what will run");
+        assert!(
+            o.contains("Runs: claude --dangerously-skip-permissions --model fable"),
+            "and what will run"
+        );
         app.on_key(key(KeyCode::Esc));
         app.screen_new(0, false);
         assert!(
@@ -2652,13 +2656,13 @@ mod screen_tests {
         app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         let o = draw(&mut app, 160, 45);
         assert!(
-            o.contains("Dark themes") && o.contains("Maitty Night") && !o.contains("Maitty Day"),
+            o.contains("Dark themes") && o.contains("Maiker Night") && !o.contains("Maiker Day"),
             "the dark tab lists only dark themes"
         );
         app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
         let o = draw(&mut app, 160, 45);
         assert!(
-            o.contains("Light themes") && o.contains("Maitty Day") && !o.contains("Maitty Night"),
+            o.contains("Light themes") && o.contains("Maiker Day") && !o.contains("Maiker Night"),
             "Tab shows the light tab, on the light theme chosen"
         );
         app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));

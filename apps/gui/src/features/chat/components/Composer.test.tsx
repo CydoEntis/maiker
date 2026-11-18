@@ -321,7 +321,7 @@ describe('while the agent works', () => {
   })
 
   it('shows a queued message with its files as chips, never the lines that name them, and gives both back on Edit', async () => {
-    const withFile = 'look at this\n\nAttached files (kept by Maitty; read them with your file tools):\n- C:\\kept\\attach-1794395248212-6aebc0c8-notes.txt'
+    const withFile = 'look at this\n\nAttached files (kept by Maiker; read them with your file tools):\n- C:\\kept\\attach-1794395248212-6aebc0c8-notes.txt'
     const { daemon, user, box } = await open((setup) => {
       setup.status = 'Working'
       setup.queued.push({ operation: 7, text: withFile })
@@ -330,7 +330,7 @@ describe('while the agent works', () => {
 
     const queued = screen.getByRole('region', { name: 'Queued messages' })
     expect(queued).toHaveTextContent('look at this')
-    expect(queued).not.toHaveTextContent('Attached files (kept by Maitty')
+    expect(queued).not.toHaveTextContent('Attached files (kept by Maiker')
 
     await user.click(screen.getByRole('button', { name: /^Queued/ }))
     expect(within(queued).getByRole('list', { name: 'Attached files' })).toHaveTextContent('notes.txt')

@@ -14,8 +14,8 @@
 set -eu
 
 # The app's command and where it is released: the only place this script names it (ADR 0008).
-APP="maitty"
-REPO="CydoEntis/maitty"
+APP="maiker"
+REPO="CydoEntis/maiker"
 
 # The prefix of the app's environment variables, and the one it had before (still read).
 ENV_PREFIX="AGENT"
@@ -39,7 +39,7 @@ esac
 case "$(uname -m)" in
   x86_64 | amd64) arch=x86_64 ;;
   aarch64 | arm64) arch=aarch64 ;;
-  *) fail "no build for $(uname -m) yet; build from source with: cargo install --git https://github.com/$REPO maitty" ;;
+  *) fail "no build for $(uname -m) yet; build from source with: cargo install --git https://github.com/$REPO maiker" ;;
 esac
 target="$arch-$os"
 asset="$APP-$target.tar.gz"

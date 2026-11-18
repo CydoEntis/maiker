@@ -149,6 +149,13 @@ pub const SETTINGS: &[Setting] = &[
         ),
     },
     Setting {
+        path: "updates.machines",
+        label: "Update remote machines too",
+        kind: Kind::Bool,
+        cat: Cat::General,
+        help: "After this computer updates, each machine follows once its agents are idle. Off: press u on each in Machines.",
+    },
+    Setting {
         path: "ui.splash",
         label: "Splash screen",
         kind: Kind::Bool,
@@ -572,6 +579,27 @@ pub const SETTINGS: &[Setting] = &[
         kind: Kind::Bool,
         cat: Cat::Agents,
         help: "An agent stopped by its plan limit is told \"continue\" once the limit resets.",
+    },
+    Setting {
+        path: "permissions.bypass.claude",
+        label: "Bypass Permissions · Claude",
+        kind: Kind::Bool,
+        cat: Cat::Agents,
+        help: "On: Claude starts with --dangerously-skip-permissions, never asking. Off: it asks first.",
+    },
+    Setting {
+        path: "permissions.bypass.codex",
+        label: "Bypass Permissions · Codex",
+        kind: Kind::Bool,
+        cat: Cat::Agents,
+        help: "On: Codex starts with no sandbox and no approvals. Off: it asks first.",
+    },
+    Setting {
+        path: "permissions.bypass.gemini",
+        label: "Bypass Permissions · Gemini",
+        kind: Kind::Bool,
+        cat: Cat::Agents,
+        help: "On: Gemini starts with --yolo, approving every tool. Off: it asks first.",
     },
     Setting {
         path: "mcp.approve",

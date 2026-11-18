@@ -36,6 +36,9 @@ pub enum Sandbox {
 
 /// Reasoning efforts both providers' CLIs accept, lowest first.
 pub const TURN_EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
+/// The model aliases `claude --model` takes, strongest first. Each names the newest model of its
+/// family, as `/model` names it ("Fable 5.2"); a family Claude Code adds needs adding here.
+pub const CLAUDE_MODEL_ALIASES: [&str; 4] = ["fable", "opus", "sonnet", "haiku"];
 /// Longest model name a message may carry.
 pub const MAX_MODEL_CHARS: usize = 64;
 

@@ -21,6 +21,9 @@ import { type Arrangement, focusPane, type PaneSlot, toggleMaximize } from '../m
 import { toSubagentView } from '../model/subagents'
 import { isShell } from '../model/sidebar'
 import { moveRefusal } from '../model/moveToWorktree'
+import { startsBypassed, withBypass } from '../model/newChatHost'
+import { bypasses } from '@/features/settings/preferences'
+import { rememberBypassSession } from '@/features/chat/bypassSessions'
 import { guardLocal } from '@/lib/localOnly'
 import type { RewindPlace } from '@/features/chat/editFromHere'
 import { fileSearchOf } from '@/features/chat/fileMention'
@@ -145,11 +148,13 @@ export function WorkspacePane({ shown, pane, kept }: {
           onBackToTerminal={showTerminal}
           onStartAgent={(agent) => {
             paneViews.choose(session.id, 'terminal')
-            void sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, `${agent}\r`).catch((error: unknown) => { toast.failed(`Could not start ${agent}`, error) })
+            const words = withBypass(agent, [], bypasses(preferences, agent))
+            if (startsBypassed(agent, words)) rememberBypassSession(session.id)
+            void sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, `${[agent, ...words].join(' ')}\r`).catch((error: unknown) => { toast.failed(`Could not start ${agent}`, error) })
           }}
           hideSuccessfulTools={preferences.hideSuccessfulTools}
           onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
-          fullAccessDefault={preferences.fullAccessNewChats}
+          fullAccessDefault={bypasses(preferences, 'claude') && bypasses(preferences, 'codex')}
         />
         </OpenSubagentContext.Provider>
         </PaneErrorBoundary>

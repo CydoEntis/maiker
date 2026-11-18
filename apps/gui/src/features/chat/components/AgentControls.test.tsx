@@ -107,28 +107,38 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(screen.getByRole('button', { name: /^Permission mode: Read only/ })).toBeInTheDocument()
   })
 
-  it('sends a working Codex nothing and says why', async () => {
+  it('holds a mode picked while Codex works and sends it once the turn ends', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const typeInto = open('codex', 'Working')
     await settle(IDLE_POLL_MS)
 
     await user.click(screen.getByRole('button', { name: /^Permission mode: .* Pick another/ }))
-    await user.click(await screen.findByRole('menuitemradio', { name: /^Full access/ }))
+    await user.click(await screen.findByRole('menuitemradio', { name: /^Read only/ }))
     expect(typeInto).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /^Permission mode: Read only/ })).toBeInTheDocument()
+
+    if (fake.current instanceof FakeDaemonHistory) fake.current.status = 'Idle'
+    await settle(IDLE_POLL_MS * 2)
+    await settle(COMMAND_SUBMIT_GAP_MS)
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/permissions :read-only --approval-policy=on-request', '\r'])
   })
 
-  it('keeps the mode chip in place while the agent works, greyed out with the reason, and sends nothing from it', async () => {
+  it('lets the mode be picked while Claude works, typing nothing until the turn ends', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const typeInto = open('claude', 'Working')
     await settle(IDLE_POLL_MS)
 
-    const mode = screen.getByRole('button', { name: /^Permission mode: Auto/ })
-    expect(mode).toHaveAttribute('aria-disabled', 'true')
-    expect(mode).toHaveAttribute('title', expect.stringMatching(/working/))
-
+    const mode = screen.getByRole('button', { name: /^Permission mode: .* Pick another/ })
+    expect(mode).not.toHaveAttribute('aria-disabled', 'true')
     await user.click(mode)
-    expect(screen.queryByRole('menuitemradio')).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('menuitemradio', { name: /Plan/ }))
     expect(typeInto).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: /^Permission mode: Plan/ })).toBeInTheDocument()
+
+    if (fake.current instanceof FakeDaemonHistory) fake.current.status = 'Idle'
+    await settle(IDLE_POLL_MS * 2)
+    // The fake screen shows Accept edits, so Shift+Tab is pressed to move on towards Plan.
+    expect(typeInto).toHaveBeenCalledWith('\u001b[Z')
   })
 
   it('sends a model and an effort picked while the agent works at once, as typing them in the terminal does', async () => {

@@ -19,6 +19,7 @@ use crate::remote_install::{
     destination, names_destination, parse_platform, state_of, upload_result,
 };
 use binary::{Github, ReleaseSources, Sources};
+use maitty_machines::RestartWhen;
 use maitty_machines::ssh_run::{self, ASK_LIMIT, Ran, UPLOAD_LIMIT};
 use maitty_shared::hidden::sanitize;
 
@@ -32,6 +33,9 @@ pub(crate) struct Flags {
     pub restart: bool,
     /// Keep asking the far daemon to restart until nothing is open, up to half an hour.
     pub wait: bool,
+    /// Keep asking the far daemon to restart until its sessions are saved and no agent is working or
+    /// waiting, up to `MOST_AGENTS_IDLE_ASKS`: nothing is lost, so nobody is asked first.
+    pub agents_idle: bool,
 }
 
 /// A mistake in how it was asked (exit 2), or a step that did not work (exit 1).
@@ -125,7 +129,10 @@ pub(crate) fn update(
     talk.say(&format!("probing {name}…"));
     talk.progress(stage::PROBING);
     let platform = probe_platform(machine, &name)?;
-    let installed = probe_installed(machine, &name)?;
+    let installed = match probe_installed(machine, &name)? {
+        Installed::Missing => installed_under_older_name(machine).unwrap_or(Installed::Missing),
+        found => found,
+    };
     talk.say(&found_line(&name, &platform, &installed));
     talk.progress(stage::FOUND);
     let state = state_of(&installed, APP_VERSION).ok_or_else(|| {
@@ -195,8 +202,10 @@ fn ask_daemon_to_restart(
     flags: Flags,
     talk: &mut dyn Talk,
 ) {
-    if flags.wait {
-        restart_when_idle(machine, program, name, IDLE_POLL, talk);
+    if flags.agents_idle {
+        restart_when_idle(machine, program, name, RestartWhen::AgentsIdle, talk);
+    } else if flags.wait {
+        restart_when_idle(machine, program, name, RestartWhen::NoSession, talk);
     } else {
         restart_daemon(machine, program, name, flags.restart, talk);
     }
@@ -242,6 +251,22 @@ fn probe_installed(machine: &Machine, name: &str) -> Result<Installed, Failure> 
     let ran = ssh_run::run(&argv, None, ASK_LIMIT).map_err(Failure::Failed)?;
     reached(&ran, name)?;
     Ok(classify_version(ran.code, &ran.stdout))
+}
+
+/// The app on the machine under a name it had before a rename (`maitty` for `maiker`): an older version to
+/// replace, not a missing app to install, so an update needs no `--install`. It is looked for where the app
+/// installs itself. The new name goes in beside it,
+/// and the first run there brings the old name's data and sessions over.
+fn installed_under_older_name(machine: &Machine) -> Option<Installed> {
+    crate::brand::previous().find_map(|old| {
+        // Where the app installs itself, under the old name: a PATH lookup could find an unrelated copy.
+        let argv = machine.probe_argv_for(&format!("~/.local/bin/{old}")).ok()?;
+        let ran = ssh_run::run(&argv, None, ASK_LIMIT).ok()?;
+        match crate::remote_install::classify_version_of(old, ran.code, &ran.stdout) {
+            found @ Installed::Version(_) => Some(found),
+            _ => None,
+        }
+    })
 }
 
 /// ssh's own failure (status 255, or killed by the limit) is the machine not being reached.
@@ -318,23 +343,32 @@ const IDLE_POLL: std::time::Duration = if cfg!(test) {
     std::time::Duration::from_secs(30)
 };
 const MOST_IDLE_ASKS: u32 = 60;
+/// How many times `--agents-idle` asks (about four hours): agents finish their turns far sooner than every
+/// session closes, but one left mid-task for a long time should not keep this running for days.
+const MOST_AGENTS_IDLE_ASKS: u32 = 480;
 
-/// Ask the far daemon to restart if idle, again and again until it does. The new file is
-/// already installed, so each ask runs the new binary, which can read the daemon's activity.
-/// Giving up is a note, not a failure: the update is done and the daemon was left running.
-fn restart_when_idle(
-    machine: &Machine,
-    to: &str,
-    name: &str,
-    pause: std::time::Duration,
-    talk: &mut dyn Talk,
-) {
+/// Ask the far daemon to restart when `when` allows it, again and again until it does. The new
+/// file is already installed, so each ask runs the new binary, which can read the daemon's
+/// activity. Giving up is a note, not a failure: the update is done and the daemon was left running.
+fn restart_when_idle(machine: &Machine, to: &str, name: &str, when: RestartWhen, talk: &mut dyn Talk) {
+    let (waiting_for, most_asks, still) = match when {
+        RestartWhen::AgentsIdle => (
+            "no agent is working or waiting",
+            MOST_AGENTS_IDLE_ASKS,
+            "still had agents working after four hours",
+        ),
+        _ => (
+            "no session is open",
+            MOST_IDLE_ASKS,
+            "still had sessions open after half an hour",
+        ),
+    };
     talk.say(&format!(
-        "waiting until no session is open on {name}, then restarting its daemon…"
+        "waiting until {waiting_for} on {name}, then restarting its daemon…"
     ));
-    for ask in 0..MOST_IDLE_ASKS {
+    for ask in 0..most_asks {
         let asked = machine
-            .restart_if_idle_argv(to, false)
+            .restart_if_idle_argv(to, when)
             .map_err(|e| format!("{e:#}"))
             .and_then(|argv| ssh_run::run(&argv, None, ASK_LIMIT));
         match asked {
@@ -357,12 +391,12 @@ fn restart_when_idle(
                 return;
             }
         }
-        if ask + 1 < MOST_IDLE_ASKS {
-            std::thread::sleep(pause);
+        if ask + 1 < most_asks {
+            std::thread::sleep(IDLE_POLL);
         }
     }
     talk.say(&format!(
-        "note: {name} still had sessions open after half an hour; its daemon was left running and takes the new version when it next restarts (`{APP_COMMAND} machine update {name} --restart` does it now)"
+        "note: {name} {still}; its daemon was left running and takes the new version when it next restarts (`{APP_COMMAND} machine update {name} --restart` does it now)"
     ));
 }
 
@@ -375,7 +409,7 @@ fn restart_daemon(machine: &Machine, to: &str, name: &str, now: bool, talk: &mut
         format!("asking the daemon on {name} to restart if no session is open…")
     });
     let asked = machine
-        .restart_if_idle_argv(to, now)
+        .restart_if_idle_argv(to, if now { RestartWhen::Now } else { RestartWhen::NoSession })
         .map_err(|e| format!("{e:#}"))
         .and_then(|argv| ssh_run::run(&argv, None, ASK_LIMIT));
     match asked {

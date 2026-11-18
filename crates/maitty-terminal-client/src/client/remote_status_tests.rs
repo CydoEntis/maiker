@@ -15,7 +15,7 @@ const BOX: MachineId = MachineId(1);
 pub(super) struct Sandbox {
     pub(super) dir: PathBuf,
     pub(super) socket: String,
-    pub(super) maitty: PathBuf,
+    pub(super) maiker: PathBuf,
     pub(super) shim: PathBuf,
 }
 
@@ -26,11 +26,11 @@ impl Sandbox {
         let socket = format!("remote-status-{}-{n}", std::process::id());
         let dir = std::env::temp_dir().join(&socket);
         std::fs::create_dir_all(dir.join("data")).expect("create the sandbox");
-        let (maitty, shim) = built();
+        let (maiker, shim) = built();
         Sandbox {
             dir,
             socket,
-            maitty,
+            maiker,
             shim,
         }
     }
@@ -42,12 +42,12 @@ impl Sandbox {
             vec![
                 self.shim.to_string_lossy().into_owned(),
                 "--mode=proxy".into(),
-                format!("--maitty={}", self.maitty.display()),
+                format!("--maiker={}", self.maiker.display()),
                 format!("--env={}={}", maitty_shared::brand::env_name("SOCKET"), self.socket),
                 format!("--env={}={}", maitty_shared::brand::env_name("DATA_DIR"), self.dir.join("data").display()),
                 format!("--env={}={}", maitty_shared::brand::env_name("CONFIG"), self.dir.join("config.toml").display()),
             ],
-            "maitty",
+            "maiker",
         )
     }
 }
@@ -55,7 +55,7 @@ impl Sandbox {
 impl Drop for Sandbox {
     fn drop(&mut self) {
         // Must not panic: a failed test is already unwinding.
-        let _ = Process::new(&self.maitty)
+        let _ = Process::new(&self.maiker)
             .arg("kill-server")
             .env(maitty_shared::brand::env_name("SOCKET"), &self.socket)
             .env(maitty_shared::brand::env_name("DATA_DIR"), self.dir.join("data"))
@@ -70,7 +70,7 @@ impl Drop for Sandbox {
     }
 }
 
-/// The `maitty` binary and the shim, built here: `cargo test -p <this crate>` builds neither.
+/// The `maiker` binary and the shim, built here: `cargo test -p <this crate>` builds neither.
 pub(super) fn built() -> (PathBuf, PathBuf) {
     (
         maitty_test_support::maitty_binary(),
@@ -218,11 +218,11 @@ fn reported(app: &App) -> Option<Status> {
         .map(|t| t.status)
 }
 
-/// Type `maitty ask-human` in the pane: the daemon marks the pane as asking and keeps it so
+/// Type `maiker ask-human` in the pane: the daemon marks the pane as asking and keeps it so
 /// until the question is answered. The path is spelled with forward slashes and no quotes,
 /// which every shell the daemon starts runs.
 fn ask_in_pane(sandbox: &Sandbox, term: TermId, question: &str) -> ClientMsg {
-    let exe = sandbox.maitty.to_string_lossy().replace('\\', "/");
+    let exe = sandbox.maiker.to_string_lossy().replace('\\', "/");
     assert!(
         !exe.contains(' '),
         "the test types the path unquoted: {exe}"

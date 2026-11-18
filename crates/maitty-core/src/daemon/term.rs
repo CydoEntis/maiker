@@ -655,7 +655,7 @@ fn set_pane_env(cmd: &mut CommandBuilder, key: &str, value: impl AsRef<std::ffi:
 }
 
 /// A pane works on this machine: `--remote` routing the daemon was started under (its host,
-/// ssh program and remote command) must not make the pane's own `maitty` reach another one.
+/// ssh program and remote command) must not make the pane's own `maiker` reach another one.
 fn remove_remote_route(cmd: &mut CommandBuilder) {
     for key in crate::ipc::remote_route_env() {
         cmd.env_remove(key);
@@ -924,10 +924,7 @@ impl Term {
         let mut child = pair
             .slave
             .spawn_command(cmd)
-            .with_context(|| match &direct_label {
-                Some(executable) => format!("spawning {executable}"),
-                None => format!("spawning {shell_args:?}"),
-            })?;
+            .map_err(|error| spawn_failed(direct_label.as_deref(), shell_args.as_deref().unwrap_or_default(), &error))?;
         drop(pair.slave);
         let pid = child.process_id();
         let killer = child.clone_killer();
@@ -1881,5 +1878,40 @@ mod tests {
         assert_eq!(find_query(b"ab\x1b[6ncd").map(|q| (q.0, q.1)), Some((2, 4)));
         assert_eq!(find_query(b"\x1b[31m\x1b[c").map(|q| q.0), Some(5));
         assert!(find_query(b"\x1b[1;5A").is_none());
+    }
+}
+
+/// Why a session's program did not start, in plain words: a missing program is named as one that
+/// is not installed (or not on the service's PATH), anything else keeps the OS's reason.
+fn spawn_failed(executable: Option<&str>, shell_args: &[String], error: &anyhow::Error) -> anyhow::Error {
+    let missing = error
+        .chain()
+        .any(|cause| cause.downcast_ref::<std::io::Error>().is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound));
+    // The program as a person types it (`claude`), not its full path.
+    let named = executable.map(|path| {
+        std::path::Path::new(path)
+            .file_stem()
+            .map_or_else(|| path.to_string(), |stem| stem.to_string_lossy().into_owned())
+    });
+    match named.as_deref() {
+        Some(program) if missing => anyhow::anyhow!(
+            "{program} is not installed, or this service cannot find it on its PATH. Install it, or run `{program}` once in a terminal to check."
+        ),
+        Some(program) => anyhow::anyhow!("Could not start {program}: {error:#}"),
+        None => anyhow::anyhow!("Could not start the shell ({}): {error:#}", shell_args.join(" ")),
+    }
+}
+
+#[cfg(test)]
+mod spawn_words {
+    use super::spawn_failed;
+
+    #[test]
+    fn a_program_that_is_not_there_is_named_as_not_installed() {
+        let missing = anyhow::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory"));
+        let said = spawn_failed(Some("/usr/local/bin/claude"), &[], &missing).to_string();
+        assert!(said.starts_with("claude is not installed, or this service cannot find it on its PATH."), "{said}");
+        let other = anyhow::anyhow!("out of memory");
+        assert_eq!(spawn_failed(Some("codex"), &[], &other).to_string(), "Could not start codex: out of memory");
     }
 }

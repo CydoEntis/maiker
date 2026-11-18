@@ -696,7 +696,7 @@ impl Daemon {
                 let tx = self.tx.clone();
                 self.pending_ops += 1;
                 tokio::task::spawn_blocking(move || {
-                    let result = create_trusted_worktree(&project, &branch, None, &template, from_default);
+                    let result = branch_worktree(&project, &branch, &template, from_default);
                     let _ = tx.blocking_send(Ev::BranchWorktreeMade {
                         client,
                         set_up: false,

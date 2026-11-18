@@ -350,3 +350,27 @@ fn a_person_may_name_a_repository_the_app_has_not_seen_and_an_agent_may_not() {
     close_all(&mut d);
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_branch_already_checked_out_gets_a_new_branch_cut_from_it_each_time() {
+    let root = scratch("branch-worktree-busy");
+    let repo = repo_in(&root);
+    let busy = crate::gitfs::head(&repo).map(|h| h.branch).expect("the main checkout has a branch");
+    let template = Config::default().worktree.dir;
+
+    let (first, _) = branch_worktree(&repo, &busy, &template, false).expect("first worktree off it");
+    let (second, _) = branch_worktree(&repo, &busy, &template, false).expect("and a second one");
+    assert_ne!(first, second, "each gets its own folder");
+    let tip = |dir: &Path| git::git(dir, &["rev-parse", "HEAD"]).unwrap();
+    for made in [&first, &second] {
+        let branch = crate::gitfs::head(made).map(|h| h.branch).unwrap();
+        assert_ne!(branch, busy, "{made:?} is on a new branch, since {busy} is checked out already");
+        assert_eq!(tip(made), tip(&repo), "cut from {busy}");
+    }
+
+    // A branch checked out nowhere is checked out itself, as before.
+    git::git(&repo, &["branch", "free"]).unwrap();
+    let (free, _) = branch_worktree(&repo, "free", &template, false).expect("a free branch");
+    assert_eq!(crate::gitfs::head(&free).map(|h| h.branch).as_deref(), Some("free"));
+    let _ = std::fs::remove_dir_all(&root);
+}

@@ -450,7 +450,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
           <AnswerButton decision="Decline" busy={busy} onAnswer={() => { run(() => answer('deny')) }} />
           {pick !== undefined && always.length > 0 && <span className="mx-spacer" />}
           {pick !== undefined && always.map((choice) => (
-            <Button key={choice.index} variant="ghost" size="sm" disabled={busy} title="Claude's own choice, in its words. Claude keeps it; Maitty adds no rule." onClick={() => { run(() => pick(choice.index)) }}>
+            <Button key={choice.index} variant="ghost" size="sm" disabled={busy} title="Claude's own choice, in its words. Claude keeps it; Maiker adds no rule." onClick={() => { run(() => pick(choice.index)) }}>
               {choice.label}
             </Button>
           ))}

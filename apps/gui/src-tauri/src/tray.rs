@@ -8,7 +8,7 @@ use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager};
 
-const APP: &str = "Maitty";
+const APP: &str = "Maiker";
 const TRAY_ID: &str = "main";
 const MAIN_WINDOW: &str = "main";
 /// The window is told the chosen session by this event; its payload is the session's id.

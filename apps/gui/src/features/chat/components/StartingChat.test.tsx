@@ -60,7 +60,7 @@ describe('the chat of a session that is still starting', () => {
 
     expect(heldFirstMessage('s1')).toContain('/data/attachments/attach-1-errors.log')
     expect(screen.getByLabelText('Sending')).toHaveTextContent('why does this fail?')
-    expect(screen.getByLabelText('Sending')).not.toHaveTextContent('Attached files (kept by Maitty')
+    expect(screen.getByLabelText('Sending')).not.toHaveTextContent('Attached files (kept by Maiker')
     expect(screen.getByLabelText('Sending')).toHaveTextContent('errors.log')
   })
 
@@ -153,7 +153,7 @@ describe('the chat of a session that is still starting', () => {
     act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS - 1) })
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
     act(() => { vi.advanceTimersByTime(1) })
-    expect(screen.getByRole('note')).toHaveTextContent('maitty integrate codex')
+    expect(screen.getByRole('note')).toHaveTextContent('maiker integrate codex')
   })
 })
 

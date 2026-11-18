@@ -15,7 +15,7 @@ describe('messagePreview', () => {
   })
 
   it('drops a block the daemon clipped inside its own header', () => {
-    const clipped = `<pasted_content id="3bc2">\n${WORDS}\n</pasted_content id="3bc2">\n\nAttached files (kept by Maitty; read them with your fi`
+    const clipped = `<pasted_content id="3bc2">\n${WORDS}\n</pasted_content id="3bc2">\n\nAttached files (kept by Maiker; read them with your fi`
     expect(messagePreview(clipped)).toBe(WORDS)
   })
 

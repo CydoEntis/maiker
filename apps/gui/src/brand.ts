@@ -6,9 +6,9 @@
  */
 
 /** What people see in titles and messages. */
-export const APP_NAME = 'Maitty'
+export const APP_NAME = 'Maiker'
 /** What people type: the CLI binary. */
-export const APP_COMMAND = 'maitty'
+export const APP_COMMAND = 'maiker'
 /** The background service that owns every session, as people and the bundled binary call it. */
 export const DAEMON_NAME = 'maikerd'
 /** The names the bundled service had before DAEMON_NAME: a running old one still answers to them. */

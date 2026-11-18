@@ -3,7 +3,7 @@ import { useWarmAgent, type WarmAgent, type WarmSpec } from '../useWarmAgent'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
-import { errorMessage } from '@/lib/error-message'
+import { explainError, type ExplainedError } from '@/lib/error-message'
 import { DEFAULT_PICK, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { BYPASS_MODE, CODEX_FULL_MODE, START_MODE } from '@/features/chat/chatMeta'
@@ -52,12 +52,11 @@ type Props = {
   defaultAgent: ChatAgent
   /** How each agent's chat opens unless the dialog picks the other view (Settings › Chat). */
   viewDefaults?: ChatViewDefaults
-  /** Yolo mode is on for Claude, so a Claude chat may start in Bypass permissions. */
-  bypassAllowed?: boolean
-  /** Yolo mode is on for Codex, so every Codex chat starts with full access whatever is picked here. */
-  codexYolo?: boolean
-  /** Settings › Chat › Full access in new chats: the mode starts on the agent's full-access one, where it has one it may take. */
-  fullAccess?: boolean
+  /**
+   * The agents whose Bypass Permissions is off (Settings › Permissions). Every other one starts on its skip-permissions
+   * mode: Claude on Bypass permissions, Codex on Full access, fixed.
+   */
+  bypassOff?: readonly ChatAgent[]
   /** Opens the folder picker on that machine and answers with the folder chosen (and the machine it is on), or null when it is cancelled. Null when there is none. */
   pickFolder: ((machine: number) => Promise<PickedFolder | null>) | null
   /** Clones a repository from GitHub onto that computer and answers with its new folder, or null when it is cancelled. Without it the dialog has no such button. */
@@ -87,6 +86,8 @@ const BRANCH_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
 /** The width of a token's list, as the design draws it. */
 const TOKEN_LIST_WIDTH = 320
 const NO_BUSY: BusyBranches = new Map()
+/** No agent switched off: every one starts on its skip-permissions mode. */
+const NONE_OFF: readonly ChatAgent[] = []
 const FIRST_CHOICE: AgentChoice = { model: DEFAULT_PICK, reasoning: START_REASONING }
 
 /** Where the chat works: in the checkout, a worktree of its own, or `auto`: a worktree only when another chat is on that branch here. */
@@ -102,7 +103,7 @@ type Picked = { machine: number; folder: string }
  * macOS) starts, Ctrl+Shift+Enter starts it in the background and keeps the dialog for the next one, Esc closes. The chat
  * it starts is the agent in a terminal the daemon owns, shown as its chat (ADR 0003).
  */
-export function NewSessionDialog({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassAllowed = false, codexYolo = false, fullAccess = false, pickFolder, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onNewShell, onCancel, onAgentChange, seed = null }: Props) {
+export function NewSessionDialog({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, viewDefaults = DEFAULT_CHAT_VIEWS, bypassOff = NONE_OFF, pickFolder, clone = null, onStart, onWarm, onOtherMachine, onAddMachine, onNewShell, onCancel, onAgentChange, seed = null }: Props) {
   // On another machine the chat is the agent started in a shell there: this computer's extra models, branches and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   // The window's root, where the theme's variables live; read once, so the dialog's portal never moves.
@@ -111,8 +112,9 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
   const targetLabel = target?.label ?? 'This computer'
   const [agent, setAgent] = useState<ChatAgent>(defaultAgent)
   useEffect(() => { onAgentChange?.(agent) }, [agent, onAgentChange])
-  // Full access in new chats starts Claude in Bypass permissions (only where Yolo mode allows it) and Codex in Full access.
-  const firstMode = (next: ChatAgent): string => (!fullAccess ? START_MODE[next] : next === 'codex' ? CODEX_FULL_MODE : next === 'claude' && bypassAllowed ? BYPASS_MODE : START_MODE[next])
+  const bypassOn = (which: ChatAgent) => !bypassOff.includes(which)
+  // Bypass Permissions starts Claude in Bypass permissions and Codex in Full access.
+  const firstMode = (next: ChatAgent): string => (!bypassOn(next) ? START_MODE[next] : next === 'codex' ? CODEX_FULL_MODE : next === 'claude' ? BYPASS_MODE : START_MODE[next])
   const [mode, setMode] = useState(() => firstMode(defaultAgent))
   // Each agent keeps its own model and effort while the dialog is open, so going back to one finds what it was left at.
   const [choices, setChoices] = useState<Partial<Record<ChatAgent, AgentChoice>>>({})
@@ -128,7 +130,7 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
   const [starting, setStarting] = useState(false)
   // The folder picker is over the dialog: the dialog is out of sight meanwhile and comes back with its folder.
   const [picking, setPicking] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ExplainedError | null>(null)
   const background = useBackgroundStarts(onStart)
   // Branch names chats started from this dialog took, which the branch list may not show yet: the next suggestion avoids them.
   const [takenNames, setTakenNames] = useState<ReadonlySet<string>>(() => new Set())
@@ -173,8 +175,8 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
     setMode(firstMode(next))
   }
   const modes = abilitiesOf(agent).permissionModes?.modes ?? []
-  // The Yolo setting already starts Codex with full access, and its flag cannot be combined with a mode's.
-  const forcedFull = abilitiesOf(agent).yoloExcludesMode && codexYolo
+  // Bypass Permissions already starts Codex with full access, and its flag cannot be combined with a mode's.
+  const forcedFull = abilitiesOf(agent).yoloExcludesMode && bypassOn(agent)
   const startMode = !forcedFull && modes.includes(mode) ? mode : 'default'
   // A branch or a worktree is made when the chat starts, so only a chat on the folder as it is can have its agent started ahead.
   const warmSpec = useMemo<WarmSpec | null>(
@@ -202,7 +204,7 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
     onStart(request)
       // Another machine's branches are not read again, so the name it took is kept here and the next start gets another.
       .then(() => { const made = request.branch; if (remote && made !== null) setTakenNames((now) => new Set([...now, made.name])) })
-      .catch((failure: unknown) => { setError(errorMessage(failure, 'Could not start the chat')) })
+      .catch((failure: unknown) => { setError(explainError(failure, 'Could not start the chat')) })
       .finally(() => { setStarting(false); reloadBranches() })
   }
   // The box is emptied for the next chat and every other choice stays. A new branch's name is taken, so the next start
@@ -378,7 +380,7 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
           )}
         </div>
         <div className="mx-nsd-notes">
-          <StartNotes error={error} treeLine={terminal ? null : treeLine} background={background} onPutBack={putBack} agentMissing={agentMissing && !terminal ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(errorMessage(failure, 'Could not open the setup page')) }) }} />
+          <StartNotes error={error} treeLine={terminal ? null : treeLine} background={background} onPutBack={putBack} agentMissing={agentMissing && !terminal ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(explainError(failure, 'Could not open the setup page')) }) }} />
         </div>
         <div className="mx-nsd-foot">
           {/* The agent means nothing to a plain shell, so in Terminal the dropdown keeps its place and goes unseen and out of reach. */}
@@ -401,21 +403,21 @@ export function NewSessionDialog({ machines, machine, projects, busy: busyBranch
 }
 
 /** What went wrong with a start, under the message: the start's own failure, the background starts that failed, a missing agent; and the worktree line. */
-function StartNotes({ error, treeLine, background, onPutBack, agentMissing, onSetUp }: { error: string | null; treeLine: string | null; background: ReturnType<typeof useBackgroundStarts>; onPutBack: (key: number) => void; agentMissing: ChatAgent | null; onSetUp: () => void }) {
+function StartNotes({ error, treeLine, background, onPutBack, agentMissing, onSetUp }: { error: ExplainedError | null; treeLine: string | null; background: ReturnType<typeof useBackgroundStarts>; onPutBack: (key: number) => void; agentMissing: ChatAgent | null; onSetUp: () => void }) {
   return (
     <>
       {treeLine !== null && <p className="mx-nsd-note">{treeLine}</p>}
-      {error !== null && <div className="mx-nsd-note"><InlineNote title="Could not start the chat" reason={error} actions={<CopyDetails text={error} copy={copyText} />} /></div>}
+      {error !== null && <div className="mx-nsd-note"><InlineNote title={error.title} reason={error.reason} actions={error.details === null ? undefined : <CopyDetails text={`${error.title}\n${error.details}`} copy={copyText} />} /></div>}
       {background.failed.map((failed) => (
         <div key={failed.key} className="mx-nsd-note">
           <InlineNote
-            title={`Could not start ${failedStartLabel(failed)}`}
-            reason={failed.reason}
+            title={failed.error.title}
+            reason={failed.error.reason}
             actions={(
               <>
                 {failed.draft !== null && <FeedbackButton kind="primary" aria-label={`Put back ${failedStartLabel(failed)}`} onClick={() => { onPutBack(failed.key) }}>Put back</FeedbackButton>}
                 <FeedbackButton kind="text" aria-label={`Dismiss ${failedStartLabel(failed)}`} onClick={() => { background.dismiss(failed.key) }}>Dismiss</FeedbackButton>
-                <CopyDetails text={failed.reason} copy={copyText} />
+                {failed.error.details !== null && <CopyDetails text={`${failed.error.title}\n${failed.error.details}`} copy={copyText} />}
               </>
             )}
           />

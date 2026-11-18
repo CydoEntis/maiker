@@ -61,13 +61,13 @@ describe('pulling a file from a machine', () => {
 
   it('says where the file was saved and opens that folder from the toast', async () => {
     const transfer = await start()
-    emit({ kind: 'done', transfer, file: 'out.log', path: '/d/maitty/devbox/out.log', folder: '/d/maitty/devbox' })
+    emit({ kind: 'done', transfer, file: 'out.log', path: '/d/maiker/devbox/out.log', folder: '/d/maiker/devbox' })
     const [title, options] = toasts.success.mock.calls[0] as [string, { description: string; action: { label: string; onClick: () => void } }]
     expect(title).toBe('Saved out.log from devbox')
-    expect(options.description).toBe('/d/maitty/devbox')
+    expect(options.description).toBe('/d/maiker/devbox')
     expect(options.action.label).toBe('Open folder')
     options.action.onClick()
-    expect(host.open).toHaveBeenCalledWith('/d/maitty/devbox')
+    expect(host.open).toHaveBeenCalledWith('/d/maiker/devbox')
   })
 
   it("shows the host's own words when the pull fails, and when the host refuses it", async () => {

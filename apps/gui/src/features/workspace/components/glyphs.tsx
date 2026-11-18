@@ -7,7 +7,7 @@ import { CLAUDE_MARK, CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } fr
 import { FOLDER_PATH } from './paths'
 import { useReducedMotion } from './motion'
 
-/** The working spinner: the Maitty TUI's text frames or a web SVG spinner, whichever was picked in Settings. */
+/** The working spinner: the Maiker TUI's text frames or a web SVG spinner, whichever was picked in Settings. */
 export function Spinner({ className = 'mx-spin', frozen = false }: { className?: string; frozen?: boolean }) {
   const reduced = useReducedMotion()
   const style = useSpinnerStyle()

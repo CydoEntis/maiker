@@ -272,7 +272,7 @@
       case 'plugin:app|version':
         return '0.62.1'
       case 'plugin:app|name':
-        return 'Maitty'
+        return 'Maiker'
       case 'plugin:updater|check':
         return null
       case 'plugin:notification|is_permission_granted':

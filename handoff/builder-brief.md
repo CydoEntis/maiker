@@ -1,4 +1,4 @@
-# Builder brief: Maitty daily-loop tickets
+# Builder brief: Maiker daily-loop tickets
 
 You implement ONE Plane ticket in ONE git worktree. The ticket text and the worktree path are
 in the message that sent you here. The user is asleep and cannot answer questions.
@@ -6,7 +6,7 @@ in the message that sent you here. The user is asleep and cannot answer question
 ## Rules
 
 - Work only inside your worktree. It is already on its own branch, cut from `origin/dev`.
-  Never touch `C:\dev\maitty` or any other worktree.
+  Never touch `C:\dev\maiker` or any other worktree.
 - Read `AGENTS.md` first, then the docs its documentation map names for the areas you touch.
   Read `docs/features/daily-loop/intent.md`. Follow them; they outrank this brief where they
   are stricter.
