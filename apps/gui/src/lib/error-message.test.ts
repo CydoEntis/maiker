@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import { APP_NAME } from '@/brand'
-import { errorMessage, explainError } from './error-message'
+import { errorMessage, explainError, explainStartFailure } from './error-message'
+
+describe('explainStartFailure', () => {
+  const tree = { name: 'dev', worktree: true }
+
+  it('names a worktree folder that is already there, and keeps the tool line for the details', () => {
+    const raw = "fatal: '/home/cydo/dev/app-worktrees/dev' already exists"
+    expect(explainStartFailure(new Error(raw), 'Could not start the chat', tree)).toEqual({
+      title: 'Could not make a worktree for branch dev',
+      reason: 'Its folder ~/dev/app-worktrees/dev is already there. Remove that folder, or pick another branch name.',
+      details: raw,
+      fix: 'Pick another branch',
+    })
+  })
+
+  it('explains any other failure as usual, and a folder that exists when no worktree was being made', () => {
+    expect(explainStartFailure(new Error('timed out'), 'Could not start the chat', tree).title).toBe('Could not start the chat')
+    expect(explainStartFailure(new Error("fatal: '/x/y' already exists"), 'Could not start the chat', { name: 'dev', worktree: false }).fix).toBeUndefined()
+    expect(explainStartFailure(new Error("fatal: '/x/y' already exists"), 'Could not start the chat', null).fix).toBeUndefined()
+  })
+})
 
 describe('errorMessage', () => {
   it('keeps useful Tauri string errors', () => {

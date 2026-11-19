@@ -199,12 +199,21 @@
 /* A chip that cannot be used says why in its tooltip: dimmed, not hidden, and no hover. */
 .mx-nsd-token.is-quiet { color: var(--dim); cursor: default; }
 .mx-nsd-token.is-quiet:hover { background: transparent; color: var(--dim); }
-/* Own worktree: a toggle chip in the Where line; its state is a word, and a lit edge while it is on. */
-.mx-nsd-tree { flex: none; margin-left: 4px; height: 28px; display: inline-flex; align-items: center; gap: 7px; padding: 0 8px; font-size: 13px; color: var(--fg2); border: 1px solid var(--line); white-space: nowrap; cursor: pointer; }
-.mx-nsd-tree.is-on { color: var(--fg); border-color: var(--fg2); }
-.mx-nsd-tree.is-quiet { color: var(--dim); cursor: default; }
-.mx-nsd-tree-state { flex: none; font-size: 11.5px; color: var(--dim); }
-.mx-nsd-tree.is-on .mx-nsd-tree-state { color: var(--fg); }
+/* Where the chat works (This folder, New worktree): a token like the others, so its two-line choices open from it. */
+.mx-nsd-token.is-mode { flex: none; margin-left: 4px; }
+/* The checkout's standing against origin: the sentence, and the one button that acts on it, at its end. */
+.mx-nsd-sync { display: flex; align-items: center; gap: 8px; }
+.mx-nsd-sync > span { min-width: 0; }
+.mx-nsd-sync .mx-text-button { flex: none; margin-left: auto; }
+.mx-nsd-sync-name { font: 500 12px var(--mono); color: var(--fg2); }
+.mx-chip-menu.is-token .mx-nc-behind { font-size: 11.5px; color: var(--dim); }
+.mx-chip-menu.is-token .mx-chip-row .mx-nc-in-use + .mx-nc-behind::before { content: '\00b7'; margin-right: 6px; }
+/* The branch list's fetch button at the end of its search box, and the reason a typed name is refused under it. */
+.mx-chip-fetch { flex: none; display: inline-flex; align-items: center; height: 22px; padding: 0 6px; font-size: 11.5px; color: var(--dim); white-space: nowrap; }
+.mx-chip-fetch:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
+.mx-chip-fetch:disabled { opacity: .7; cursor: default; }
+.mx-chip-refused { flex: none; display: flex; gap: 6px; margin: 0; padding: 4px 16px; font-size: 12px; line-height: 1.4; color: var(--danger); }
+.mx-nsd-foot-hint { margin: 0; padding: 4px 8px 2px; font-size: 11.5px; color: var(--dim); }
 
 /* ---- The New session draft: a chat in the main area, not a dialog ---- */
 /* It sits over the panes, so it stays opaque; the question is centred low, right above the box it leads into. */

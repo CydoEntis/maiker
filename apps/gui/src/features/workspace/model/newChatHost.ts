@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { agentsInstalled, folderBranches, savedConversations, type FolderBranches, type SavedConversation } from '@/api/daemon'
+import { agentsInstalled, folderBranches, folderSyncState, savedConversations, type FolderBranches, type FolderSync, type SavedConversation } from '@/api/daemon'
 import { DEFAULT_PICK, type ReasoningPick } from '@/features/chat/agentChoice'
 import { BYPASS_MODE, CODEX_FULL_MODE, PICKABLE_MODES } from '@/features/chat/chatMeta'
 import type { ChatAgent } from './chatView'
@@ -135,6 +135,60 @@ export function useFolderBranches(folder: string): [FolderBranches | null, () =>
   const reload = useCallback(() => { setAgain((count) => count + 1) }, [])
   const settled = folder === '' || read.folder === folder
   return [read.folder === folder ? read.data : null, reload, settled]
+}
+
+/** Whether the remote has been asked for the folder: not yet (or it could not answer), being asked, or answered. */
+export type FetchState = 'idle' | 'running' | 'done'
+
+/** How a folder's checkout stands against its upstream, and the means to ask the remote again or read it again. */
+export type FolderSyncRead = { sync: FolderSync | null; /** The folder has been read: a null `sync` then means it is not in a repository. */ read: boolean; fetch: FetchState; fetchAgain: () => void; reload: () => void }
+
+/**
+ * A folder's standing against its upstream. It is read at once from what is already fetched, and the remote is asked
+ * once so "behind" is true; an offline remote leaves the first reading. An answer for another folder is dropped.
+ */
+export function useFolderSync(folder: string): FolderSyncRead {
+  const [known, setKnown] = useState<{ folder: string; sync: FolderSync | null }>({ folder: '', sync: null })
+  // The last ask that was answered, by folder and number: an ask not answered yet is the one running.
+  const [asked, setAsked] = useState<{ folder: string; ask: number; fetched: boolean }>({ folder: '', ask: 0, fetched: false })
+  // The first ask is the open's own; each press of the fetch button is another.
+  const [fetches, setFetches] = useState(1)
+  const [reads, setReads] = useState(0)
+  useEffect(() => {
+    if (folder === '') return
+    const stop = new AbortController()
+    void (async () => {
+      try {
+        const sync = await folderSyncState(folder, false)
+        if (!stop.signal.aborted) setKnown({ folder, sync })
+      } catch (error) {
+        // The folder is left unread rather than called a non-repository: a failed read says nothing of it.
+        console.warn('Could not read where the folder stands against its upstream', error)
+      }
+    })()
+    return () => { stop.abort() }
+  }, [folder, reads])
+  useEffect(() => {
+    if (folder === '') return
+    const stop = new AbortController()
+    void (async () => {
+      try {
+        const sync = await folderSyncState(folder, true)
+        if (stop.signal.aborted) return
+        setKnown({ folder, sync })
+        setAsked({ folder, ask: fetches, fetched: sync?.fetched === true })
+      } catch (error) {
+        if (!stop.signal.aborted) setAsked({ folder, ask: fetches, fetched: false })
+        console.warn('Could not ask the remote', error)
+      }
+    })()
+    return () => { stop.abort() }
+  }, [folder, fetches])
+  const fetchAgain = useCallback(() => { setFetches((count) => count + 1) }, [])
+  const reload = useCallback(() => { setReads((count) => count + 1) }, [])
+  const answered = asked.folder === folder && asked.ask === fetches
+  const fetch: FetchState = folder === '' ? 'idle' : !answered ? 'running' : asked.fetched ? 'done' : 'idle'
+  return { sync: known.folder === folder ? known.sync : null, read: known.folder === folder, fetch, fetchAgain, reload }
 }
 
 /** What is known of a folder's saved conversations: not asked yet, the list, a service too old to say, or a failed read. */
