@@ -15,15 +15,14 @@ const refuse = (message: string): Address => ({ ok: false, message })
 function ipv4Problem(host: string): string | null {
   if (!/^[\d.]+$/.test(host) || !host.includes('.')) return null
   const parts = host.split('.')
-  if (parts.length !== OCTETS || parts.some((part) => part === '')) return `An IP address has 4 numbers separated by dots, like 192.168.1.20. This one has ${String(parts.filter((part) => part !== '').length)}.`
-  const big = parts.find((part) => Number(part) > MOST_OCTET)
-  return big === undefined ? null : `Each number in an IP address goes up to 255, and ${big} is too big.`
+  if (parts.length !== OCTETS || parts.some((part) => part === '')) return `An IP address has 4 numbers, like 192.168.1.20. This one has ${String(parts.filter((part) => part !== '').length)}.`
+  return parts.some((part) => Number(part) > MOST_OCTET) ? 'Each number in an IP address goes up to 255.' : null
 }
 
 /** Reads `[user@]host[:port]` as typed, with the messages the Add machine screen gives for each way it can be wrong. */
 export function checkAddress(typed: string): Address {
   const text = typed.trim()
-  if (/\s/.test(text)) return refuse("An address can't have spaces in it. It looks like you@192.168.1.20.")
+  if (/\s/.test(text)) return refuse("An address can't have spaces. It looks like you@192.168.1.20.")
   if (text === '') return refuse(NOT_AN_ADDRESS)
   const at = text.lastIndexOf('@')
   const user = at < 0 ? '' : text.slice(0, at)

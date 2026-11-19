@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react'
 import { extensionProjects } from '@/features/extensions/projects'
-import { inspectHostKey, inspectKeyLogin, listSshHosts, localUserName, machineActivity, setMachineUser, setUpKeyLogin, trustHostKey } from '@/api/machines'
+import { inspectHostKey, listSshHosts, machineActivity, trustHostKey } from '@/api/machines'
 import { DesktopSettings } from '@/features/settings/components/DesktopSettings'
 import { PerfOverlay } from './PerfOverlay'
 import { CommandPalette } from './CommandPalette'
@@ -34,10 +33,6 @@ import { useWorkspace } from '../workspaceContext'
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
   const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate } = useWorkspace()
-  const [localUser, setLocalUser] = useState<string | null>(null)
-  useEffect(() => {
-    localUserName().then(setLocalUser, (error: unknown) => { console.warn('Could not read the local user name', error) })
-  }, [])
   const serviceFinishing = useServiceFinishing()
   return (
     <>
@@ -145,7 +140,7 @@ export function WorkspaceDialogs() {
                 platform={platform}
                 daemon={{ online, sessionCount: sessions.length }}
                 appVersion={runningVersion}
-                machines={{ known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, localUser, onSetUser: setMachineUser, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, keyLogin: { inspect: inspectKeyLogin, setUp: setUpKeyLogin }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { windows: navigator.userAgent.includes('Windows'), loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding, onStartOn: (name) => { newSession(heads.find((head) => head.name === name)?.machine) } } }}
+                machines={{ known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding } }}
                 usage={usageInfo}
                 onSignInAgent={signInAgent}
                 github={{ onSignIn: signInGitHub, signInsEnded: gitHubSignInsEnded }}

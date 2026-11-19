@@ -63,7 +63,7 @@
    whose input sits in a wrapper draws it on the wrapper and lists the input here. The message box is the one exception: its
    whole border turns accent (the terminal's own focus is the pane's line, not a box). */
 .mx-app :focus-visible { outline: none; box-shadow: var(--focus-underline); }
-.mx-app :is(.xterm-helper-textarea, .mx-box-text, .mx-palette-input input, .mx-chip-search input, .mx-folder-field input, .mx-search-field input, .mx-settings-search input, .mx-mach-search input, .mx-fp-field input, .mx-fp-new input):focus-visible { box-shadow: none; }
+.mx-app :is(.xterm-helper-textarea, .mx-box-text, .mx-palette-input input, .mx-chip-search input, .mx-folder-field input, .mx-search-field input, .mx-settings-search input, .mx-fp-field input, .mx-fp-new input):focus-visible { box-shadow: none; }
 
 /* One fade for every state a control can take (hover, focus, picked, pressed): the colours and the opacity move over
    `--t-fast`, never size, place or shadow (`hoverMotion.test.ts`). `:where()` gives it no weight, so a rule that
@@ -74,7 +74,7 @@
   .mx-step-row, .mx-waiting-step, .mx-slash-row, .mx-pm-mode, .mx-agents-head, .mx-changes-row,
   .mx-chip, .mx-chip-row, .mx-section-head, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-fp-row, .mx-fp-machine-row,
   .mx-grp-project, .mx-settings-update-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
-  .mx-mach-local, .mx-mach-tile, .mx-mach-hostrow, .mx-mach-radio, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
+  .mx-rm-row, .mx-rm-host, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
   .mx-pane-name, .mx-crumb, .mx-rail-bar, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-mm-model, .mx-dialog-close
 ) {
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
@@ -731,173 +731,104 @@
 .mx-specialist-file pre { margin: 0; padding: 10px; border-radius: 8px; background: var(--m-well); overflow: auto; max-height: 50vh; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; font-family: var(--mono); }
 
 /* Settings › Remote machines: this computer, the toolbar, the grid of other machines and the add flow. */
-.mx-mach { display: flex; flex-direction: column; gap: 12px; }
-.mx-mach-local { display: flex; align-items: center; gap: 10px; padding: 9px 12px; text-align: left; background: var(--m-well); border: 1px solid var(--line2); border-radius: var(--r-control); }
-.mx-mach-local:hover, .mx-mach-tile:hover { border-color: var(--fg2); }
-.mx-mach-local.is-on, .mx-mach-tile.is-on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
-.mx-mach-icon { position: relative; flex: none; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--m-raise); box-shadow: inset 0 0 0 1px var(--line); color: var(--fg2); border-radius: var(--r-badge); }
-.mx-mach-square { position: absolute; right: -3px; bottom: -3px; width: 9px; height: 9px; background: var(--dim); box-shadow: 0 0 0 2px var(--main); }
-.mx-mach-square.is-ok { background: var(--ok); }
-.mx-mach-square.is-bad { background: var(--danger); }
-.mx-mach-names { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mx-mach-name { font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-mach-host { font-family: var(--mono); font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-mach-aside { font-size: 12px; color: var(--dim); }
-.mx-mach-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.mx-mach-count { margin-left: 6px; font-family: var(--mono); font-size: 11px; color: var(--dim); }
-.mx-mach-search { flex: 1 1 160px; min-width: 0; height: 32px; display: flex; align-items: center; gap: 7px; padding: 0 9px; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-control); color: var(--dim); }
-.mx-mach-search:focus-within { box-shadow: var(--focus-underline); }
-.mx-mach-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: none; background: transparent; font-size: 12.5px; color: var(--fg); }
-.mx-mach-search input::placeholder { color: var(--dim); }
-.mx-mach-add, .mx-mach-go { height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--on-accent); background: var(--accent); }
-.mx-mach-add:hover:not(:disabled), .mx-mach-go:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 90%, #fff); }
-.mx-mach-add:disabled, .mx-mach-go:disabled { color: var(--dim); background: var(--m-raise); }
-.mx-mach-quiet { height: 32px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); border: 1px solid var(--line2); }
-.mx-mach-quiet:hover { background: var(--m-hover); }
-.mx-mach-summary { font-size: 12px; color: var(--muted); }
-.mx-mach-summary.is-bad { color: var(--danger); }
-.mx-mach-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
-.mx-mach-tile { display: flex; flex-direction: column; gap: 8px; padding: 11px 12px; text-align: left; background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-control); transition: border-color var(--t-fast) var(--ease); }
-.mx-mach-tile.is-bad { opacity: .75; }
-.mx-mach-tile.is-bad.is-on { opacity: 1; }
-.mx-mach-tile-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.mx-mach-state { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--muted); }
-.mx-mach-state.is-ok { color: var(--ok); }
-.mx-mach-state.is-bad { color: var(--danger); }
-.mx-mach-glyph { font: 700 10px/1 var(--mono); }
-.mx-mach-word { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-mach-foot { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
-.mx-mach-update { margin-left: auto; font-family: var(--font-sans, inherit); color: var(--accent-text); }
-.mx-mach-hint { margin: 0; font-size: 12px; color: var(--dim); }
-.mx-mach-selbar { display: flex; align-items: center; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
-.mx-mach-selbar > span { flex: 1; font-size: 15px; font-weight: 600; color: var(--fg); }
-.mx-mach-selbar button { height: 26px; padding: 0 8px; font-size: 12px; color: var(--muted); border-radius: var(--r-control); }
-.mx-mach-selbar button:hover { background: var(--m-hover); color: var(--fg); }
 .mx-mach-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .mx-mach-dot { width: 7px; height: 7px; border-radius: 50%; }
 .mx-mach-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
-.mx-mach-addflow { display: flex; flex-direction: column; gap: 14px; animation: v7fade .18s ease-out; }
-.mx-mach-crumbs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
-.mx-mach-crumbs button { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 4px; margin-left: -4px; color: var(--muted); border-radius: var(--r-control); }
-.mx-mach-crumbs button:hover { background: var(--m-hover); color: var(--fg); }
-.mx-mach-crumb-here { font-weight: 600; color: var(--fg); }
-.mx-mach-addbox { display: flex; flex-direction: column; background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel); }
-.mx-mach-form { display: flex; flex-direction: column; gap: 14px; padding: 14px; }
-.mx-mach-form > [role="radiogroup"]:first-of-type { align-self: flex-start; }
-.mx-mach-field { display: flex; flex-direction: column; gap: 6px; }
-.mx-mach-field > span:first-child, .mx-mach-label { font-size: 12px; font-weight: 600; color: var(--fg2); }
-.mx-mach-field input { height: 34px; padding: 0 10px; border: 1px solid var(--line2); border-radius: var(--r-control); background: var(--m-well); outline: none; font-size: 13px; color: var(--fg); }
-.mx-mach-help { font-size: 11.5px; color: var(--dim); }
-.mx-mach-note { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dim); }
-.mx-mach-hosts { display: flex; flex-direction: column; gap: 4px; }
-.mx-mach-hosts .mx-mach-label { padding-bottom: 2px; }
-.mx-mach-hostrow { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 12px; text-align: left; border: 1px solid var(--line); border-radius: var(--r-control); }
-.mx-mach-hostrow:hover { background: var(--m-hover); }
-.mx-mach-hostrow.is-on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
-.mx-mach-hostrow.is-on:focus-visible { box-shadow: inset 0 0 0 1px var(--accent), var(--focus-underline); }
-.mx-mach-radio { flex: none; width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid var(--line2); box-shadow: inset 0 0 0 2px var(--main); }
-.mx-mach-hostrow.is-on .mx-mach-radio { border-color: var(--accent); background: var(--accent); }
-.mx-mach-hostname { font-size: 13px; font-weight: 600; color: var(--fg); }
-.mx-mach-hostaddr { flex: 1; min-width: 0; font-family: var(--mono); font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* Add machine: the stepper, the heading, an address problem and the collapsed Advanced options. */
-.mx-mach-stepper { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--dim); }
-.mx-mach-stepper li { display: flex; align-items: center; gap: 7px; }
-.mx-mach-stepper li.is-now { color: var(--fg); font-weight: 600; }
-.mx-mach-stepper li.is-done { color: var(--fg2); }
-.mx-mach-stepper-mark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line2); font-size: 11px; }
-.mx-mach-stepper li.is-now .mx-mach-stepper-mark { background: var(--fg); border-color: var(--fg); color: var(--bg); }
-.mx-mach-stepper li.is-done .mx-mach-stepper-mark { border-color: var(--ok); color: var(--ok); }
-.mx-mach-h { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
-.mx-mach-note.is-bad { color: var(--danger); }
-.mx-mach-field input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--danger-line); }
-.mx-mach-more { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.mx-mach-more .mx-mach-quiet { border-color: transparent; padding-left: 0; }
-/* Add machine, stages 2 and 3: the steps with their detail, the box under a step, and the Ready screen. */
-.mx-add-where { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 13px; }
-.mx-add-where .mono { color: var(--dim); margin-left: 6px; }
-.mx-add-steps { gap: 14px; }
-.mx-add-steps .mx-mach-stage { align-items: flex-start; }
-.mx-add-steps .mx-mach-stage-mark { width: 22px; height: 22px; box-sizing: border-box; border: 1px solid var(--line2); }
-.mx-add-steps .mx-mach-stage.is-ok .mx-mach-stage-mark { border-color: var(--ok); }
-.mx-add-steps .mx-mach-stage.is-warn .mx-mach-stage-mark { border-color: var(--needs); color: var(--needs); background: color-mix(in srgb, var(--needs) 14%, transparent); }
-.mx-add-steps .mx-mach-stage.is-bad .mx-mach-stage-mark { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
-.mx-add-step-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; padding-top: 2px; }
-.mx-add-step-title { font-weight: 600; color: var(--fg); }
-.mx-mach-stage.is-wait .mx-add-step-title { color: var(--dim); font-weight: 500; }
-.mx-add-step-text { font-size: 12.5px; color: var(--fg2); }
-.mx-mach-stage.is-wait .mx-add-step-text { color: var(--dim); }
-.mx-add-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; padding: 12px 14px; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); font-size: 13px; line-height: 1.55; color: var(--fg2); }
-.mx-add-box p, .mx-add-box ul { margin: 0; }
-.mx-add-box ul { padding-left: 18px; }
-.mx-add-box.is-needs { box-shadow: inset 2px 0 0 var(--needs); }
-.mx-add-box.is-bad { box-shadow: inset 2px 0 0 var(--danger); }
-.mx-add-box-title { color: var(--fg); font-size: 13.5px; }
-.mx-add-act { height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--fg); }
-.mx-add-act.is-needs { background: color-mix(in srgb, var(--needs) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--needs) 50%, transparent); }
-.mx-add-act.is-bad { background: color-mix(in srgb, var(--danger) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 50%, transparent); }
-.mx-add-act:disabled { opacity: .5; }
-.mx-add-toggle { border-color: transparent; padding-left: 0; color: var(--dim); }
-.mx-add-raw { margin: 0; max-width: 100%; padding: 8px 10px; overflow-x: auto; background: var(--bg); border-radius: var(--r-control); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg2); user-select: text; }
-.mx-add-copy { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 6px 6px 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-control); }
-.mx-add-copy code { min-width: 0; overflow-wrap: anywhere; user-select: text; }
-.mx-add-ready { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; text-align: center; }
-.mx-add-ready-tick { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; font-size: 24px; color: var(--ok); border: 1.5px solid var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
-.mx-add-preview { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 13px; }
-.mx-add-preview .mono { color: var(--dim); }
-.mx-add-preview span:last-child { margin-left: auto; color: var(--ok); }
-.mx-add-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
-.mx-mach-formfoot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
-.mx-mach-formfoot > span { flex: 1 1 220px; min-width: 0; font-size: 11.5px; color: var(--dim); }
-.mx-mach-run { display: flex; flex-direction: column; gap: 10px; padding: 14px; }
-.mx-mach-target { font-family: var(--mono); font-size: 12px; color: var(--dim); }
-.mx-mach-stage { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--fg); }
-.mx-mach-stage.is-failed { color: var(--danger); }
-.mx-mach-stage-mark { flex: none; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; font: 700 12px/1 var(--mono); color: var(--ok); }
-.mx-mach-stage.is-failed .mx-mach-stage-mark { color: var(--danger); }
-.mx-mach-spin { width: 9px; height: 9px; box-sizing: border-box; border: 1.5px solid var(--line2); border-top-color: var(--working); animation: mx-mach-spin .9s linear infinite; }
+.mx-mach-spin { width: 9px; height: 9px; box-sizing: border-box; flex: none; margin: 4px 0; border: 1.5px solid var(--line2); border-top-color: var(--working); animation: mx-mach-spin .9s linear infinite; }
 @keyframes mx-mach-spin { to { transform: rotate(360deg); } }
 .mx-app[data-motion="reduced"] .mx-mach-spin { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-mach-spin { animation: none; } }
-.mx-mach-runfoot { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--dim); }
-.mx-mach-runfoot > span { flex: 1; }
-.mx-mach-fail { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; padding: 10px 12px; border: 1px solid color-mix(in oklab, var(--danger) 45%, var(--line)); font-size: 12px; line-height: 1.5; color: var(--fg2); }
-.mx-mach-fail .mx-mach-buttons { justify-content: flex-start; }
-.mx-mach-done { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 4px; padding-top: 12px; border-top: 1px solid var(--line); }
-.mx-mach-done > span { flex: 1 1 220px; font-size: 13px; }
-.mx-mach-done > .is-good { color: var(--ok); }
-.mx-mach-done > .is-bad { color: var(--danger); }
-.mx-mach-done > .is-warn { color: var(--warn); }
-.mx-mach-steps { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.mx-mach-stage.is-wait { color: var(--dim); }
-.mx-mach-stage.is-bad { color: var(--danger); }
-.mx-mach-stage.is-bad .mx-mach-stage-mark { color: var(--danger); }
-.mx-mach-stage.is-warn .mx-mach-stage-mark { color: var(--warn); }
-.mx-mach-stage.is-wait .mx-mach-stage-mark { color: var(--dim); }
-.mx-mach-warn { display: flex; flex-direction: column; gap: 6px; flex: 1 1 100%; padding: 10px 12px; border: 1px solid var(--warn-line); background: var(--warn-soft); font-size: 12px; line-height: 1.5; color: var(--fg2); }
-.mx-mach-warn .mono { color: var(--fg); overflow-wrap: anywhere; user-select: text; }
-.mx-mach-warn .mx-mach-buttons { justify-content: flex-start; }
 
-/* Settings rows: the start folder's cd, a card's quiet meta button, and hotkeys that show Change on hover. */
-.mx-folder-cd { flex: none; font-size: 11.5px; color: var(--dim); }
-.mx-scard-meta-button { font-size: 12px; color: var(--fg2); border-radius: var(--r-badge); }
-.mx-scard-meta-button:hover { color: var(--fg); }
-.mx-pos-test { margin-left: 4px; }
-.mx-hotkey-row .mx-hotkey-actions .mx-text-button { opacity: 0; transition: opacity var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-hotkey-row:hover .mx-hotkey-actions .mx-text-button, .mx-hotkey-row:focus-within .mx-hotkey-actions .mx-text-button { opacity: 1; }
-.mx-mach-hostlist { display: flex; flex-direction: column; gap: 4px; }
-.mx-resume-pick { display: flex; align-items: center; gap: 8px; }
+/* Settings › Remote machines (docs/UI.md): a list with one line per machine, a machine's page, and Add a machine. Colour only
+   ever says status: green connected, amber needs you, red failed, teal working. The one filled button is the neutral primary,
+   filled with the text colour; no button is filled with a status colour or the accent. */
+.mx-rm, .mx-rm-add, .mx-rm-page { display: flex; flex-direction: column; gap: 12px; }
+.mx-rm-hint { margin: 0; font-size: 12px; color: var(--dim); }
+.mx-rm-primary { flex: none; height: 32px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--bg); background: var(--fg); }
+.mx-rm-primary:hover:not(:disabled, [aria-disabled="true"]) { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); }
+.mx-rm-primary:disabled, .mx-rm-primary[aria-disabled="true"] { color: var(--dim); background: var(--m-raise); }
+.mx-rm-text { height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); }
+.mx-rm-text:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
+.mx-rm-text:disabled { color: var(--dim); }
+.mx-rm-out { height: 26px; padding: 0 10px; border-radius: var(--r-control); font-size: 12px; color: var(--fg); border: 1px solid var(--line2); }
+.mx-rm-out:hover { background: var(--m-hover); }
 
-/* A pane whose view failed to draw (`PaneErrorBoundary`): said in the pane, on its own ground, with the way out. */
-.mx-pane-fault { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; text-align: center; color: var(--fg2); }
-.mx-pane-fault-title { margin: 0; font-size: 14px; font-weight: 600; color: var(--fg); }
-.mx-pane-fault-detail { margin: 0; max-width: 46ch; font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }
-.mx-pane-fault-actions { display: flex; gap: 8px; margin-top: 4px; }
+.mx-rm-head { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.mx-rm-count { flex: 1; font-size: 12.5px; color: var(--muted); }
+.mx-rm-search { width: 200px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 12.5px; color: var(--fg); }
+.mx-rm-list { border-top: 1px solid var(--line); }
+.mx-rm-item { border-bottom: 1px solid var(--line); }
+.mx-rm-row { display: grid; grid-template-columns: 14px minmax(90px, 170px) minmax(0, 1fr) auto 72px; align-items: center; column-gap: 12px; min-height: 40px; padding: 0 6px; cursor: pointer; }
+.mx-rm-row:hover { background: var(--m-hover); }
+.mx-rm-row.is-current { background: var(--m-raise); box-shadow: inset 2px 0 0 var(--fg); }
+.mx-rm-name { min-width: 0; text-align: left; font-size: 13px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-rm-addr { min-width: 0; font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-rm-line { font-size: 12.5px; color: var(--fg2); text-align: right; white-space: nowrap; }
+.mx-rm-line.is-bad { color: var(--danger); }
+.mx-rm-line.is-needs { color: var(--fg2); }
+.mx-rm-line.is-quiet { color: var(--dim); }
+.mx-rm-act { display: flex; justify-content: flex-end; }
+.mx-rm-busy { font-size: 12px; color: var(--muted); }
+.mx-rm-mark { flex: none; width: 14px; text-align: center; font: 700 11px/1.5 var(--mono); }
+.mx-rm-mark.is-ok, .mx-rm-mark.is-done { color: var(--ok); }
+.mx-rm-mark.is-quiet { color: var(--dim); }
+.mx-rm-mark.is-needs { color: var(--needs); }
+.mx-rm-mark.is-bad { color: var(--danger); }
+.mx-rm-local { display: flex; align-items: center; gap: 10px; padding: 6px; font-size: 12.5px; color: var(--fg2); }
+.mx-rm-localline { flex: 1; min-width: 0; font-size: 11.5px; color: var(--dim); }
+.mx-rm-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px 20px; border: 1px dashed var(--line2); border-radius: var(--r-panel); }
+.mx-rm-empty strong { font-size: 14px; color: var(--fg); }
+.mx-rm-empty p { margin: 0; max-width: 52ch; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
 
-/* The add form's user, host and port, the user row of a machine, and a host key that has changed. */
-.mx-mach-fields { display: flex; flex-wrap: wrap; gap: 10px; }
-.mx-mach-fields .mx-mach-field { flex: 1 1 150px; min-width: 0; }
-.mx-mach-fields .mx-mach-field:last-child { flex: 0 0 84px; }
-.mx-mach-userinput { width: 140px; }
-.mx-mach-warn.is-danger { border-color: color-mix(in oklab, var(--danger) 55%, var(--line)); background: color-mix(in oklab, var(--danger) 7%, transparent); }
-.mx-mach-steps-text { white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-.mx-mach-check { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+/* The one block that reports progress and problems: a mark or spinner, one sentence, an optional command, the actions. */
+.mx-rm-block { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: var(--m-well); box-shadow: inset 2px 0 0 var(--line2); animation: mx-rm-in .16s ease-out; }
+.mx-rm-block.is-ok { box-shadow: inset 2px 0 0 var(--ok); }
+.mx-rm-block.is-work { box-shadow: inset 2px 0 0 var(--working); }
+.mx-rm-block.is-needs { box-shadow: inset 2px 0 0 var(--needs); }
+.mx-rm-block.is-bad { box-shadow: inset 2px 0 0 var(--danger); }
+.mx-rm-block.is-plain { padding: 12px 0; background: none; box-shadow: none; }
+@keyframes mx-rm-in { from { opacity: 0; transform: translateX(-3px); } to { opacity: 1; transform: none; } }
+.mx-app[data-motion="reduced"] .mx-rm-block { animation: none; }
+@media (prefers-reduced-motion: reduce) { .mx-rm-block { animation: none; } }
+.mx-rm-words { min-width: 0; font-size: 13px; line-height: 1.5; text-wrap: pretty; }
+.mx-rm-bline { display: flex; align-items: flex-start; gap: 10px; text-align: left; white-space: normal; }
+.mx-rm-lead { color: var(--fg); }
+.mx-rm-more { color: var(--fg2); }
+.mx-rm-copy { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 4px 4px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-control); }
+.mx-rm-copy code { flex: 1; min-width: 0; font-size: 12px; color: var(--fg); overflow-wrap: anywhere; user-select: text; }
+.mx-rm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.mx-rm-raw { margin: 0; padding: 8px 10px; background: var(--bg); border-radius: var(--r-control); font-size: 11.5px; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+
+.mx-rm-crumbs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
+.mx-rm-crumbs button, .mx-rm-back { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 4px; margin-left: -4px; font-size: 12.5px; color: var(--muted); border-radius: var(--r-control); }
+.mx-rm-crumbs button:hover, .mx-rm-back:hover { background: var(--m-hover); color: var(--fg); }
+.mx-rm-back { align-self: flex-start; }
+.mx-rm-here { font-weight: 600; color: var(--fg); }
+.mx-rm-lead-text { margin: 0; font-size: 13px; color: var(--fg2); }
+.mx-rm-address { display: flex; gap: 8px; }
+.mx-rm-address input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
+.mx-rm-address input[aria-invalid="true"] { border-color: var(--danger-line); }
+.mx-rm-address .mx-rm-primary { height: 36px; padding: 0 16px; }
+.mx-rm-error { margin: 0; font-size: 12.5px; color: var(--danger); }
+.mx-rm-label { display: block; padding: 4px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); }
+.mx-rm-host { display: grid; grid-template-columns: minmax(90px, 170px) minmax(0, 1fr) auto; align-items: center; column-gap: 12px; width: 100%; min-height: 40px; padding: 0 6px; text-align: left; border-bottom: 1px solid var(--line); }
+.mx-rm-host:hover, .mx-rm-host:focus-visible { background: var(--m-hover); }
+.mx-rm-hostname { font-size: 13px; font-weight: 500; color: var(--fg); }
+.mx-rm-hostaddr { min-width: 0; font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-rm-hostgo { font-size: 12px; color: var(--fg2); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.mx-rm-host:hover .mx-rm-hostgo, .mx-rm-host:focus-visible .mx-rm-hostgo { opacity: 1; }
+
+.mx-rm-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--fg); }
+.mx-rm-status { border-top: 1px solid var(--line); }
+.mx-rm-rows { border-top: 1px solid var(--line); }
+.mx-rm-prow { display: flex; align-items: center; gap: 16px; min-height: 46px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--fg); }
+.mx-rm-prow > label, .mx-rm-prow > .mx-rm-k { flex: 0 0 120px; }
+.mx-rm-value { flex: 1; min-width: 0; color: var(--fg2); overflow-wrap: anywhere; }
+.mx-rm-value.mono { font-size: 12px; }
+.mx-rm-nameinput { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
+.mx-rm-ptext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: 6px 0; }
+.mx-rm-ptext > :last-child { font-size: 12px; color: var(--dim); }
+.mx-rm-pbuttons { display: flex; align-items: center; gap: 6px; }
+.mx-rm-quiet { padding: 0; font-size: 12.5px; color: var(--dim); }
+.mx-rm-quiet:hover { color: var(--danger); }
+.mx-rm-remove { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }

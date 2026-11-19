@@ -26,7 +26,7 @@ import { loadAgentAuth, signOutAgent, type AgentAuth } from '@/api/daemon'
 import { SignInCard } from '@/features/signin/SignInCard'
 import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { BUNDLED_FONT_NAME, fontStackFor, installedMonospaceFamilies, WEIGHT_BOLD, WEIGHT_EXTRA_BOLD, WEIGHT_LIGHT, WEIGHT_MEDIUM, WEIGHT_REGULAR, WEIGHT_SEMIBOLD, type TerminalFontWeight } from '@/lib/terminalFont'
-import type { Added, Grant, HostChoice, HostKeyReport, KeyLoginReport, KeySetupResult, MachineActivity } from '@/api/machines'
+import type { Added, Grant, HostChoice, HostKeyReport, MachineActivity } from '@/api/machines'
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
@@ -57,27 +57,19 @@ export type MachinesInfo = {
   onCopyCommand: (command: string) => void
   /** Opens ssh in a session on this computer for a machine that needs a login (by its number), so its prompts can be answered. */
   onOpenLogin: (machine: number) => void
-  /** The user name ssh would connect as here when a machine names none; null when unknown. */
-  localUser: string | null
-  /** Sets the user a machine connects as (blank for none) and dials it again as that user. */
-  onSetUser: (name: string, user: string) => Promise<void>
+  /** Names a machine in the window (a local label; blank takes the name away). Nothing changes on the machine. */
+  onRename: (name: string, nickname: string) => void
   /** Looks at a machine's host key, and trusts the one that was shown. */
   hostKey: { inspect: (name: string) => Promise<HostKeyReport>; trust: (name: string, fingerprint: string) => Promise<void> }
-  /** Key login set up with the account password once. */
-  keyLogin: { inspect: (name: string) => Promise<KeyLoginReport>; setUp: (name: string, password: string, createKey: boolean) => Promise<KeySetupResult> }
   /** How many sessions the sidebar shows for a machine (by its number); without it a tile says it does not know. */
   sessionsOn?: (machine: number) => number
   add: {
-    /** Windows has no ssh agent by default: the page says to use keys. */
-    windows: boolean
     /** The hosts of ~/.ssh/config that are not machines yet. Stable between renders. */
     loadHosts: () => Promise<HostChoice[]>
     /** Looks at the target and adds it. Rejects with the words to show when it cannot be added. */
     onAdd: (target: string, name?: string, port?: number) => Promise<Added>
     /** Ends the look that is running. */
     onCancel: () => void
-    /** Opens a New session draft that runs on the machine just added; absent where there is none to open. */
-    onStartOn?: (name: string) => void
   }
 }
 

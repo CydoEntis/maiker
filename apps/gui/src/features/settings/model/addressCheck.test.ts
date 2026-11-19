@@ -13,7 +13,7 @@ describe('a typed address', () => {
   })
 
   it('says an address cannot have spaces', () => {
-    expect(message('you @host')).toBe("An address can't have spaces in it. It looks like you@192.168.1.20.")
+    expect(message('you @host')).toBe("An address can't have spaces. It looks like you@192.168.1.20.")
   })
 
   it('says what an address looks like when it does not parse', () => {
@@ -22,11 +22,11 @@ describe('a typed address', () => {
   })
 
   it('counts the numbers of an IP address', () => {
-    expect(message('cydo@10.0.4')).toBe('An IP address has 4 numbers separated by dots, like 192.168.1.20. This one has 3.')
+    expect(message('cydo@10.0.4')).toBe('An IP address has 4 numbers, like 192.168.1.20. This one has 3.')
   })
 
-  it('says which number of an IP address is too big', () => {
-    expect(message('10.0.256.1')).toBe('Each number in an IP address goes up to 255, and 256 is too big.')
+  it('says each number of an IP address goes up to 255', () => {
+    expect(message('10.0.256.1')).toBe('Each number in an IP address goes up to 255.')
   })
 
   it('keeps ports to 1 to 65535', () => {

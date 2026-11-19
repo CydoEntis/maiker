@@ -17,6 +17,7 @@ import type { PaletteItem } from '@/features/workspace/model/palette'
 import { withLook, type Corners } from '@/features/workspace/theme/corners'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
 import { ErrorsGallery } from './ErrorsGallery'
+import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleHostKey, sampleSessions } from './machinesSample'
 import { galleryParams } from './galleryParams'
 
 /*
@@ -80,14 +81,14 @@ function DockBox({ what }: { what: string }) {
 
 const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
 const CLIENT = new QueryClient()
-const SETTINGS_MACHINES = { known: true, list: [], onRetry: SAME, onRemove: SAME, onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve(null), onCopyCommand: SAME, onOpenLogin: SAME, localUser: 'you', onSetUser: () => Promise.resolve(), hostKey: { inspect: () => Promise.reject(new Error('Not in the gallery')), trust: () => Promise.resolve() }, keyLogin: { inspect: () => Promise.reject(new Error('Not in the gallery')), setUp: () => Promise.reject(new Error('Not in the gallery')) }, add: { windows: false, loadHosts: () => Promise.resolve([]), onAdd: SAME, onCancel: SAME } }
+const SETTINGS_MACHINES = { known: true, list: SAMPLE_HEADS, sessionsOn: sampleSessions, onRetry: SAME, onRemove: SAME, onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve({ sessions: 3, busy: 1, current: false }), onCopyCommand: SAME, onOpenLogin: SAME, onRename: SAME, hostKey: { inspect: sampleHostKey, trust: () => Promise.resolve() }, add: { loadHosts: () => Promise.resolve(SAMPLE_HOSTS), onAdd: sampleAdd, onCancel: SAME } }
 
 function Settings({ section }: { section: DesktopSettingsSection }) {
   const [prefs, setPrefs] = useState(PREFS)
   return (
     <QueryClientProvider client={CLIENT}>
       <DesktopSettings section={section} onSection={SAME} preferences={prefs} onChange={setPrefs} systemReducedMotion={false} systemDark onPreviewTheme={SAME} onShowWelcome={SAME} platform="linux" daemon={{ online: true, sessionCount: 3 }}
-        machines={SETTINGS_MACHINES as never} appVersion="0.80.0" usage={{ budget: null, onBudget: SAME, sessionForTerm: () => null, onOpenSession: SAME }} onClose={SAME} />
+        machines={SETTINGS_MACHINES} appVersion="0.80.0" usage={{ budget: null, onBudget: SAME, sessionForTerm: () => null, onOpenSession: SAME }} onClose={SAME} />
     </QueryClientProvider>
   )
 }

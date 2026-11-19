@@ -377,19 +377,21 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   sidebar settings sit in Appearance, the daemon's in Remote machines ("This computer") and the approved commands in
   Permissions. **Usage** and **Performance** have no nav item: Ctrl+Shift+U and Ctrl+Shift+P or the palette open them,
   and they take the whole dialog, with no nav (Usage's groups run full width).
-  **Remote machines** (`MachinesPage.tsx`) is a wide **This computer** tile (a monitor glyph with a status square, its
-  version and sessions), a toolbar (a segmented All | Connected | Needs attention, each with its count, a "Find a
-  machine" field and **+ Add machine**), a summary line of the real counts ("3 machines · 2 connected · 1
-  unreachable"), and a two-column grid of machine tiles, the troubled first: a server glyph with a status square, the
-  name, the state word in its colour (with how long it has been down) and its sessions, with "Update" or "Install" when
-  its app needs one. A click selects a tile (accent border, `--m-raise`) and draws its cards under the grid, with a
-  bar naming it and **Close**: Connection (Link, or the down state with **Retry now**; Since; Sessions), Version (only
-  when its app needs installing or updating: the command, Copy command, and the confirm before it runs), Allow
-  (clipboard, notifications), GitHub (when connected) and Remove (asks first). This computer's are the daemon card and
-  its GitHub row. **Add machine** replaces the page with a breadcrumb back and a box: From ~/.ssh/config (a radio list
-  of the hosts, name and address) or By address, **Name in Maiker**, and **Connect <name>**; then one stage, "Reaching
-  <target> over ssh…" with Cancel (Esc), and either the failure in the machine's words with **Edit and try again**, or
-  what was added with **Add another** and **Open its settings**.
+  **Remote machines** (`MachinesPage.tsx`) is one list, a machine's page, or **Add a machine**, one at a time in the
+  same pane. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
+  button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
+  Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
+  `user@host` in mono, the one line that matters (sessions, "Key rejected", "Can't reach it · 14 min", "N sessions ·
+  older Maiker", "Maiker not installed") and at most one outlined button (Fix opens its page; Retry, Update and Install
+  run in place and say Retrying… or Updating… meanwhile). Order: failed, then to update, then connecting, then just
+  added, then connected by sessions. A search field shows past 12 machines. A "This computer" line with **Details**
+  sits under the list. A machine's page is **← All machines**, its name, one status block, and 46px plain rows (Name,
+  saved as you type as the sidebar nickname; Address; Maiker with its Update; Copy to your clipboard; Notifications;
+  **Remove…**, which asks in place). The status block (`StatusBlock.tsx`) is the one place progress and problems show:
+  a mark or teal spinner, one sentence, an optional command or fingerprint with Copy, the actions, and raw output behind
+  Details. **Add a machine** is a breadcrumb, one address field with **Connect**, an error line after Enter, the status
+  block (reaching, trust a new host key, install or update Maiker, or what failed) and **From your SSH config** rows
+  that connect on a click. The design is in the handoff `maiker-remote-handoff-v2`; there is no stepper and no name field.
   **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
   (not Usage, which holds figures): while it has text the body is the pages' groups, each titled "Page · Group", whole
   when the page name or the group title matches, else with only the rows whose label or detail match, and a group with

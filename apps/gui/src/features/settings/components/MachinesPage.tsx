@@ -1,90 +1,26 @@
-import { useContext, useEffect, useState, type ReactNode } from 'react'
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
-import { errorMessage } from '@/lib/error-message'
 import { exportDaemonLog, openDaemonLog } from '@/api/daemon'
-import { LOCAL_MACHINE, type MachineActivity } from '@/api/machines'
-import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
-import { Switch } from '@/components/ui/switch'
-import { DisconnectedSince } from '@/features/workspace/components/times'
-import { installNote, UPDATE_WORDS, updateVerb, updateWarning, type MachineHead, type UpdateAction } from '@/features/workspace/model/machines'
+import { LOCAL_MACHINE } from '@/api/machines'
+import type { MachineHead } from '@/features/workspace/model/machines'
+import { matching, nameOf, ordered, rowOf, SEARCH_AFTER, updatable, UPDATE_ALL_FROM, type MachineRow, type RowAction } from '../model/machineRows'
 import { SettingsSearch } from '../settingsSearch'
-import { Card, Row, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
+import { AddMachinePanel } from './AddMachinePanel'
+import { Card, Row as SettingsRow, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
-import { HOST_KEY_WORDS, HostKeyCard } from './HostKeyCard'
-import { KeyLoginCard, PASSWORD_OFFERED } from './KeyLoginCard'
-import { userOf, userProblem } from '../model/machineTarget'
-import { AddMachineChoose, type ChooseHosts, type Chosen } from './AddMachineChoose'
-import { AddMachineConnect, type Phase } from './AddMachineConnect'
-import { DAEMON_NAME } from '@/brand'
+import { MachinePage } from './MachinePage'
+import { Since } from './Since'
+import { StateMark, StatusBlock } from './StatusBlock'
+import { UpdateAsk } from './UpdateAsk'
+import { useUpdateFlow, type UpdateFlow } from './useUpdateFlow'
 
-/** A computer: this one, and the tile of a remote one. The window does not know a machine's kind, so every remote is a server. */
-const MONITOR_PATH = 'M3 4h18v12H3zM8 20h8M12 16v4'
-const SERVER_PATH = 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01'
-const PLUS_PATH = 'M12 5v14M5 12h14'
-const SEARCH_PATH = 'm20 20-4.2-4.2'
-const BACK_PATH = 'm15 18-6-6 6-6'
+/** How long "Retrying…" shows before the row's own state is trusted again. */
+const RETRY_BUSY_MS = 6000
 
-/** The selection that shows this computer's card rather than a remote's. */
-const LOCAL = 'local'
+type View = { kind: 'list' } | { kind: 'machine'; key: string } | { kind: 'add' } | { kind: 'this' }
 
-type Filter = 'all' | 'connected' | 'problems'
-type Health = 'ok' | 'quiet' | 'bad'
-
-/** Whether the chip names a line that is down (as against an app to install or update). */
-const DOWN_WORDS = new Set(['unreachable', 'refused'])
-const LOGIN_WORD = 'needs login'
-
-function healthOf(head: MachineHead): Health {
-  return head.chip?.tone ?? 'quiet'
-}
-
-/** Something about the machine asks for you: its line is down, it needs a login, or its app needs installing or updating. */
-function needsAttention(head: MachineHead): boolean {
-  return healthOf(head) === 'bad' || head.updateAction !== null
-}
-
-const HEALTH_ORDER: Readonly<Record<Health, number>> = { bad: 0, quiet: 1, ok: 2 }
-
-function sessionWords(count: number): string {
-  return count === 1 ? '1 session' : `${String(count)} sessions`
-}
-
-/** The first letter up, for a chip word written in lower case. */
-function capitalised(word: string): string {
-  return word.charAt(0).toUpperCase() + word.slice(1)
-}
-
-/** The summary line under the toolbar: how many there are, and every kind of trouble that is in it. */
-function summaryOf(heads: readonly MachineHead[]): { text: string; bad: boolean } {
-  const connected = heads.filter((head) => healthOf(head) === 'ok').length
-  const down = heads.filter((head) => DOWN_WORDS.has(head.chip?.word ?? '')).length
-  const login = heads.filter((head) => head.chip?.word === LOGIN_WORD).length
-  const waiting = heads.filter((head) => healthOf(head) === 'quiet').length
-  const update = heads.filter((head) => head.updateAction !== null).length
-  const parts = [
-    `${String(heads.length)} ${heads.length === 1 ? 'machine' : 'machines'}`,
-    `${String(connected)} connected`,
-    ...(down > 0 ? [`${String(down)} unreachable`] : []),
-    ...(login > 0 ? [`${String(login)} ${login === 1 ? 'needs' : 'need'} a login`] : []),
-    ...(waiting > 0 ? [`${String(waiting)} connecting`] : []),
-    ...(update > 0 ? [`${String(update)} to update`] : []),
-  ]
-  return { text: parts.join(' · '), bad: down + login > 0 }
-}
-
-function Glyph({ path, size = 15, width = '1.8' }: { path: string; size?: number; width?: string }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={width} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={path} /></svg>
-}
-
-function MachineIcon({ path, health }: { path: string; health: Health }) {
-  return (
-    <span className="mx-mach-icon">
-      <Glyph path={path} />
-      <span className={`mx-mach-square is-${health}`} />
-    </span>
-  )
-}
+const BUTTON_WORDS: Record<Exclude<RowAction, 'retry'>, string> = { fix: 'Fix', update: 'Update', install: 'Install' }
 
 type Props = {
   daemon: DaemonInfo
@@ -93,124 +29,174 @@ type Props = {
   appVersion: string | null
 }
 
-/** Settings › Remote machines: this computer, a grid of the others to pick from, the picked one's settings, and the add flow. */
+/** Settings › Remote machines: the list, a machine's page, Add a machine, or this computer's details, one at a time. */
 export function MachinesPage({ daemon, machines, github, appVersion }: Props) {
-  const [selected, setSelected] = useState<string | null>(null)
-  const [adding, setAdding] = useState(false)
-  const [filter, setFilter] = useState<Filter>('all')
-  const [query, setQuery] = useState('')
+  const [view, setView] = useState<View>({ kind: 'list' })
+  // The machine the person last opened, so the list marks it when they come back; and the one they just added.
+  const [opened, setOpened] = useState<string | null>(null)
+  const [justAdded, setJustAdded] = useState<string | null>(null)
   const search = useContext(SettingsSearch)
+  const flow = useUpdateFlow(machines.onUpdate, machines.onCheckActivity)
   const countOf = (head: MachineHead) => machines.sessionsOn?.(head.machine) ?? null
 
   // Search results hold only cards with rows: this computer's are the ones that are always there.
   if (search !== null) return <ThisComputer daemon={daemon} github={github} />
-  if (adding) {
+  const back = () => { setView({ kind: 'list' }) }
+  if (view.kind === 'add') {
+    return <AddMachinePanel machines={machines} onClose={back} onAdded={(name) => { setJustAdded(name); back() }} />
+  }
+  if (view.kind === 'this') {
     return (
-      <AddMachine
-        machines={machines}
-        onClose={() => { setAdding(false) }}
-        onOpen={(name) => {
-          setAdding(false)
-          const added = machines.list.find((head) => head.name === name)
-          setSelected(added?.key ?? null)
-        }}
-      />
+      <div className="mx-rm-page">
+        <button type="button" className="mx-rm-back" onClick={back}>All machines</button>
+        <ThisComputer daemon={daemon} github={github} />
+      </div>
     )
   }
+  const picked = view.kind === 'machine' ? machines.list.find((head) => head.key === view.key) ?? null : null
+  if (picked !== null) {
+    return <MachinePage key={picked.key} head={picked} sessions={countOf(picked)} machines={machines} flow={flow} appVersion={appVersion} onBack={back} onRemoved={back} />
+  }
+  return (
+    <MachineList
+      machines={machines}
+      flow={flow}
+      countOf={countOf}
+      opened={opened}
+      justAdded={justAdded}
+      localLine={localLineOf(daemon, machines, appVersion)}
+      onOpen={(head) => { setOpened(head.key); setView({ kind: 'machine', key: head.key }) }}
+      onAdd={() => { setView({ kind: 'add' }) }}
+      onThisComputer={() => { setView({ kind: 'this' }) }}
+    />
+  )
+}
+
+function localLineOf(daemon: DaemonInfo, machines: MachinesInfo, appVersion: string | null): string {
+  const count = machines.sessionsOn?.(LOCAL_MACHINE) ?? daemon.sessionCount
+  const version = daemon.version ?? appVersion
+  return `${version === null ? '' : `${version} · `}${count === 1 ? '1 session' : `${String(count)} sessions`}`
+}
+
+type ListProps = {
+  machines: MachinesInfo
+  flow: UpdateFlow
+  countOf: (head: MachineHead) => number | null
+  opened: string | null
+  justAdded: string | null
+  localLine: string
+  onOpen: (head: MachineHead) => void
+  onAdd: () => void
+  onThisComputer: () => void
+}
+
+function MachineList({ machines, flow, countOf, opened, justAdded, localLine, onOpen, onAdd, onThisComputer }: ListProps) {
+  const [query, setQuery] = useState('')
+  const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set())
+  const [askingAll, setAskingAll] = useState(false)
+  const timers = useRef(new Set<number>())
+  useEffect(() => { const held = timers.current; return () => { for (const timer of held) window.clearTimeout(timer) } }, [])
 
   const heads = machines.list
-  const counts: Readonly<Record<Filter, number>> = { all: heads.length, connected: heads.filter((head) => healthOf(head) === 'ok').length, problems: heads.filter(needsAttention).length }
-  const typed = query.trim().toLowerCase()
-  const shown = heads
-    .filter((head) => filter === 'all' || (filter === 'connected' ? healthOf(head) === 'ok' : needsAttention(head)))
-    .filter((head) => typed === '' || `${head.label} ${head.name ?? ''}`.toLowerCase().includes(typed))
-    .sort((a, b) => HEALTH_ORDER[healthOf(a)] - HEALTH_ORDER[healthOf(b)] || Number(b.updateAction !== null) - Number(a.updateAction !== null) || (countOf(b) ?? 0) - (countOf(a) ?? 0))
-  const summary = summaryOf(heads)
-  const picked = selected === LOCAL ? null : heads.find((head) => head.key === selected) ?? null
-  const localCount = machines.sessionsOn?.(LOCAL_MACHINE) ?? daemon.sessionCount
-  const localVersion = daemon.version ?? appVersion
-  const localLine = localVersion === null ? sessionWords(localCount) : `${localVersion} · ${sessionWords(localCount)}`
-  const toggle = (key: string) => { setSelected((now) => (now === key ? null : key)) }
+  const shown = ordered(matching(heads, query), countOf, justAdded)
+  const behind = updatable(heads)
+
+  const retry = (name: string) => {
+    setRetrying((now) => new Set(now).add(name))
+    machines.onRetry(name)
+    const timer = window.setTimeout(() => {
+      timers.current.delete(timer)
+      setRetrying((now) => new Set([...now].filter((other) => other !== name)))
+    }, RETRY_BUSY_MS)
+    timers.current.add(timer)
+  }
+
+  const act = (head: MachineHead, action: RowAction) => {
+    if (action === 'fix') onOpen(head)
+    else if (action === 'retry') retry(head.label)
+    else flow.ask(head)
+  }
 
   return (
-    <>
-      <section className="mx-mach" aria-label="Remote machines">
-        <button type="button" className={`mx-mach-local${selected === LOCAL ? ' is-on' : ''}`} aria-pressed={selected === LOCAL} onClick={() => { toggle(LOCAL) }}>
-          <MachineIcon path={MONITOR_PATH} health={daemon.online ? 'ok' : 'bad'} />
-          <span className="mx-mach-names">
-            <span className="mx-mach-name">This computer</span>
-            <span className="mx-mach-host">{localLine}</span>
-          </span>
-          <span className="mx-mach-aside">Every remote connects to this one</span>
-        </button>
-        <div className="mx-mach-tools">
-          <Segmented aria-label="Show" value={filter} onValueChange={(next) => { if (next === 'all' || next === 'connected' || next === 'problems') setFilter(next) }}>
-            <SegmentedItem value="all">All <span className="mx-mach-count">{counts.all}</span></SegmentedItem>
-            <SegmentedItem value="connected">Connected <span className="mx-mach-count">{counts.connected}</span></SegmentedItem>
-            <SegmentedItem value="problems">Needs attention <span className="mx-mach-count">{counts.problems}</span></SegmentedItem>
-          </Segmented>
-          <label className="mx-mach-search">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d={SEARCH_PATH} /></svg>
-            <input value={query} placeholder="Find a machine" aria-label="Find a machine" spellCheck={false} onChange={(event) => { setQuery(event.target.value) }} />
-          </label>
-          <button type="button" className="mx-mach-add" disabled={!machines.known} onClick={() => { setAdding(true) }}><Glyph path={PLUS_PATH} size={13} width="2.2" />Add machine</button>
+    <section className="mx-rm" aria-label="Remote machines">
+      <div className="mx-rm-head">
+        <span className="mx-rm-count">{heads.length === 1 ? '1 machine' : `${String(heads.length)} machines`}</span>
+        {heads.length > SEARCH_AFTER && <input className="mx-rm-search" type="search" value={query} placeholder="Find a machine" aria-label="Find a machine" spellCheck={false} onChange={(event) => { setQuery(event.target.value) }} />}
+        {behind.length >= UPDATE_ALL_FROM && <button type="button" className="mx-rm-text" disabled={askingAll} onClick={() => { setAskingAll(true) }}>Update all {behind.length}</button>}
+        <button type="button" className="mx-rm-primary" disabled={!machines.known} onClick={onAdd}>+ Add machine</button>
+      </div>
+      {askingAll && (
+        <StatusBlock tone="needs" lead={`Update ${String(behind.length)} machines?`} more="Updating restarts each machine's service. Their sessions are saved and come back with their agents resumed; an agent in the middle of a turn loses that turn if you update now. Update when idle waits until nothing is open on a machine, up to half an hour.">
+          <button type="button" className="mx-rm-primary" onClick={() => { flow.runAll(behind.map((head) => head.label), false); setAskingAll(false) }}>Update all now</button>
+          <button type="button" className="mx-rm-text" onClick={() => { flow.runAll(behind.map((head) => head.label), true); setAskingAll(false) }}>Update all when idle</button>
+          <button type="button" className="mx-rm-text" onClick={() => { setAskingAll(false) }}>Cancel</button>
+        </StatusBlock>
+      )}
+      {!machines.known && <SkeletonLines label="Reading machines" className="mx-rm-hint" />}
+      {machines.known && heads.length === 0 && (
+        <div className="mx-rm-empty">
+          <strong>No remote machines yet</strong>
+          <p>Run agents on another computer, like a dev box or a cloud server. Maiker connects over SSH, and their sessions show in your sidebar next to these.</p>
+          <button type="button" className="mx-rm-primary" onClick={onAdd}>+ Add a machine</button>
         </div>
-        {!machines.known && <SkeletonLines label="Reading machines" className="mx-mach-hint" />}
-        {machines.known && heads.length === 0 && <p className="mx-mach-hint">No other machines yet. Add one to see its sessions in your sidebar.</p>}
-        {machines.known && heads.length > 0 && (
-          <>
-            <span className={`mx-mach-summary${summary.bad ? ' is-bad' : ''}`}>{summary.text}</span>
-            <div className="mx-mach-grid">
-              {shown.map((head) => <MachineTile key={head.key} head={head} sessions={countOf(head)} on={selected === head.key} onPick={() => { toggle(head.key) }} />)}
-            </div>
-            {shown.length === 0 && <span className="mx-mach-hint">No machines match.</span>}
-          </>
-        )}
-        {selected === null
-          ? machines.known && heads.length > 0 && <span className="mx-mach-hint">Click a machine to see and change its settings.</span>
-          : (
-            <div className="mx-mach-selbar">
-              <span>{selected === LOCAL ? 'This computer' : picked?.label}</span>
-              <button type="button" onClick={() => { setSelected(null) }}>Close</button>
-            </div>
-          )}
-      </section>
-      {selected === LOCAL && <ThisComputer daemon={daemon} github={github} />}
-      {picked !== null && <MachineDetail key={picked.key} head={picked} sessions={countOf(picked)} machines={machines} github={github} onRemoved={() => { setSelected(null) }} />}
-    </>
+      )}
+      {machines.known && heads.length > 0 && (
+        <div role="list" className="mx-rm-list">
+          {shown.map((head) => {
+            const busy = flow.running.has(head.label) ? (head.updateAction === 'install' ? 'Installing…' : 'Updating…') : flow.checking === head.label ? 'Checking…' : retrying.has(head.label) ? 'Retrying…' : null
+            return (
+              <MachineRowView key={head.key} head={head} row={rowOf(head, countOf(head), head.name === justAdded)} current={opened === head.key} busy={busy} onOpen={() => { onOpen(head) }} onAction={(action) => { act(head, action) }}>
+                {flow.asking?.name === head.label && <UpdateAsk flow={flow} />}
+              </MachineRowView>
+            )
+          })}
+          {shown.length === 0 && <p className="mx-rm-hint">No machines match.</p>}
+        </div>
+      )}
+      <div className="mx-rm-local">
+        <StateMark glyph="●" tone="ok" />
+        <span>This computer</span>
+        <span className="mono mx-rm-localline">{localLine}</span>
+        <button type="button" className="mx-rm-text" onClick={onThisComputer}>Details</button>
+      </div>
+    </section>
   )
 }
 
-function MachineTile({ head, sessions, on, onPick }: { head: MachineHead; sessions: number | null; on: boolean; onPick: () => void }) {
-  const health = healthOf(head)
-  const chip = head.chip
-  const update = head.updateAction === null ? null : UPDATE_WORDS[head.updateAction].verb
+type RowProps = {
+  head: MachineHead
+  row: MachineRow
+  current: boolean
+  busy: string | null
+  onOpen: () => void
+  onAction: (action: RowAction) => void
+  children?: ReactNode
+}
+
+/** One line per machine: what matters now, and at most one fix. Clicking the row opens the machine's page. */
+function MachineRowView({ head, row, current, busy, onOpen, onAction, children }: RowProps) {
+  const name = nameOf(head)
   return (
-    <button type="button" className={`mx-mach-tile is-${health}${on ? ' is-on' : ''}`} aria-pressed={on} title={`${head.label} settings`} onClick={onPick}>
-      <span className="mx-mach-tile-head">
-        <MachineIcon path={SERVER_PATH} health={health} />
-        <span className="mx-mach-names">
-          <span className="mx-mach-name">{head.label}</span>
-          {head.target !== null
-            ? <span className="mx-mach-host" title={head.target.includes('@') ? undefined : 'No user set: ssh connects as this computer\'s user'}>{head.target}{head.target.includes('@') ? '' : ' · no user'}</span>
-            : head.name !== null && head.name !== head.label && <span className="mx-mach-host">{head.name}</span>}
+    <div role="listitem" className="mx-rm-item" aria-current={current ? 'true' : undefined}>
+      <div className={`mx-rm-row${current ? ' is-current' : ''}`} onClick={onOpen}>
+        <StateMark glyph={row.glyph} tone={row.tone} />
+        <button type="button" className="mx-rm-name" onClick={(event) => { event.stopPropagation(); onOpen() }}>{name}</button>
+        <span className="mx-rm-addr mono">{head.target ?? ''}</span>
+        <span className={`mx-rm-line is-${row.tone}`}>{row.line}{row.showsSince && head.downSince !== null && <> · <Since at={head.downSince} /></>}</span>
+        <span className="mx-rm-act">
+          {busy !== null
+            ? <span className="mx-rm-busy">{busy}</span>
+            : row.action !== null && <button type="button" className="mx-rm-out" aria-label={`${row.action === 'retry' ? 'Retry' : BUTTON_WORDS[row.action]} ${name}`} onClick={(event) => { event.stopPropagation(); onAction(row.action as RowAction) }}>{row.action === 'retry' ? 'Retry' : BUTTON_WORDS[row.action]}</button>}
         </span>
-      </span>
-      <span className={`mx-mach-state is-${health}`}>
-        {chip && <span className="mx-mach-glyph" aria-hidden="true">{chip.glyph}</span>}
-        <span className="mx-mach-word">{chip ? capitalised(chip.word) : 'Connecting'}{head.down && <> · <DisconnectedSince at={head.downSince} /></>}</span>
-      </span>
-      <span className="mx-mach-foot">
-        <span>{sessions === null ? 'sessions unknown' : sessionWords(sessions)}</span>
-        {update !== null && <span className="mx-mach-update">{update}</span>}
-      </span>
-    </button>
+      </div>
+      {children}
+    </div>
   )
 }
 
-/** A row whose value is plain text, in the cards of a picked machine. */
+/** A row whose value is plain text, in the cards of this computer. */
 function ValueRow({ label, detail, children }: { label: string; detail: string; children: ReactNode }) {
-  return <Row label={label} detail={detail}><span className="mx-scard-value">{children}</span></Row>
+  return <SettingsRow label={label} detail={detail}><span className="mx-scard-value">{children}</span></SettingsRow>
 }
 
 function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSignIn | undefined }) {
@@ -230,231 +216,15 @@ function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSi
         {daemon.version && <ValueRow label="Version" detail="Shared by the GUI and the Maiker TUI.">{daemon.version}</ValueRow>}
         {daemon.socket && <ValueRow label="Socket" detail="Where clients connect.">{daemon.socket}</ValueRow>}
         <ValueRow label="Sessions" detail="Owned by the daemon. The GUI only attaches.">{daemon.sessionCount}</ValueRow>
-        <Row label="Service log" detail="What the service did lately, for working out a problem. Save a copy puts it in your Downloads folder as maiker-log.txt. It names your folders and repositories, so look before you share it.">
+        <SettingsRow label="Service log" detail="What the service did lately, for working out a problem. Save a copy puts it in your Downloads folder as maiker-log.txt. It names your folders and repositories, so look before you share it.">
           <span className="mx-mach-buttons">
             <button type="button" className="mx-scard-button" onClick={saveLog}>Save a copy</button>
             <button type="button" className="mx-scard-button" onClick={showLog}>Show in folder</button>
           </span>
-        </Row>
+        </SettingsRow>
       </Card>
       <GitHubSection machines={[]} signIn={github} only={LOCAL_MACHINE} />
     </>
   )
 }
 
-/** The settings of one other machine: how it is reached, its app's version, what it may do here, GitHub there, and removing it. */
-function MachineDetail({ head, sessions, machines, github, onRemoved }: { head: MachineHead; sessions: number | null; machines: MachinesInfo; github: GitHubSignIn | undefined; onRemoved: () => void }) {
-  const name = head.label
-  const health = healthOf(head)
-  const login = head.chip?.word === LOGIN_WORD
-  const down = DOWN_WORDS.has(head.chip?.word ?? '') || login
-  return (
-    <>
-      <Card title="Connection">
-        {health === 'ok' && <ValueRow label="Link" detail={`Over ssh, through its own ${DAEMON_NAME}.`}>connected</ValueRow>}
-        {health === 'quiet' && <ValueRow label="Link" detail={`Over ssh, through its own ${DAEMON_NAME}.`}>{head.chip?.word ?? 'connecting'}</ValueRow>}
-        {login && (
-          <>
-            <Row label="Needs login" detail={head.why ?? 'ssh could not log in by itself.'}>
-              <span className="mx-mach-buttons">
-                <button type="button" className="mx-scard-button is-primary" aria-label={`Retry ${name}`} onClick={() => { machines.onRetry(name) }}>Retry now</button>
-              </span>
-            </Row>
-            {head.said !== null && <ValueRow label="ssh said" detail="Its last line, as ssh printed it.">{<span className="mono">{head.said}</span>}</ValueRow>}
-            {head.said !== null && PASSWORD_OFFERED.test(head.said) && <KeyLoginCard name={name} inspect={machines.keyLogin.inspect} setUp={machines.keyLogin.setUp} onOpenTerminal={() => { machines.onOpenLogin(head.machine) }} />}
-            {head.said !== null && HOST_KEY_WORDS.test(head.said)
-              ? <HostKeyCard name={name} inspect={machines.hostKey.inspect} trust={machines.hostKey.trust} onOpenTerminal={() => { machines.onOpenLogin(head.machine) }} />
-              : (
-                <Row label="Still stuck?" detail="Check the user above first: ssh logs in as it. If a password or a key passphrase is needed, log in once in a terminal and this machine connects on its own.">
-                  <span className="mx-mach-buttons">
-                    <button type="button" className="mx-mach-quiet" aria-label={`Open a terminal for ${name}`} onClick={() => { machines.onOpenLogin(head.machine) }}>Open a terminal</button>
-                    {head.loginCommand !== null && <button type="button" className="mx-mach-quiet" aria-label={`Copy the ssh command for ${name}`} onClick={() => { if (head.loginCommand !== null) machines.onCopyCommand(head.loginCommand) }}>Copy command</button>}
-                  </span>
-                </Row>
-              )}
-          </>
-        )}
-        {down && !login && (
-          <Row label={capitalised(head.chip?.word ?? 'unreachable')} detail={head.why ?? 'Maiker keeps trying to reach it.'}>
-            <span className="mx-mach-buttons">
-              <button type="button" className="mx-scard-button is-primary" aria-label={`Retry ${name}`} onClick={() => { machines.onRetry(name) }}>Retry now</button>
-            </span>
-          </Row>
-        )}
-        {head.target !== null && <UserRow key={head.target} name={name} target={head.target} machines={machines} />}
-        {head.down && <ValueRow label="Since" detail="When the line went down.">{<DisconnectedSince at={head.downSince} />}</ValueRow>}
-        <ValueRow label="Sessions" detail={health === 'ok' ? 'Running there, shown in your sidebar.' : 'Its sessions come back when it does.'}>{sessions === null ? '—' : health === 'ok' ? String(sessions) : `${String(sessions)} shown`}</ValueRow>
-      </Card>
-      <VersionCard head={head} machines={machines} />
-      <Card title="Allow">
-        <Row label="Copy to your clipboard" detail={`Let ${name} put text on your clipboard.`}>
-          <Switch aria-label={`Allow ${name} to copy to your clipboard`} checked={head.grants.clipboard} onCheckedChange={(on) => { machines.onGrant(name, 'clipboard', on) }} />
-        </Row>
-        <Row label="Notifications" detail={`Let ${name} raise notices, and tell you when its sessions need you or finish.`}>
-          <Switch aria-label={`Allow ${name} to notify you`} checked={head.grants.notices} onCheckedChange={(on) => { machines.onGrant(name, 'notices', on) }} />
-        </Row>
-      </Card>
-      {health === 'ok' && <GitHubSection machines={[head]} signIn={github} only={head.machine} />}
-      <RemoveCard name={name} onRemove={() => { machines.onRemove(name); onRemoved() }} />
-    </>
-  )
-}
-
-/** The user a machine connects as: never hidden, a warning when there is none, and changed in place. */
-function UserRow({ name, target, machines }: { name: string; target: string; machines: MachinesInfo }) {
-  const stored = userOf(target)
-  const [user, setUser] = useState(stored)
-  const [saving, setSaving] = useState(false)
-  const typed = user.trim()
-  const problem = userProblem(typed)
-  const detail = stored === ''
-    ? `No user is set, so ssh connects as ${machines.localUser ?? "this computer's user"}, which is usually wrong on another machine. Type the user you log in as on ${name}.`
-    : `ssh logs in to ${name} as ${stored}.`
-  const save = () => {
-    setSaving(true)
-    machines.onSetUser(name, typed).then(
-      () => { toast.success(`${name} will connect as ${typed === '' ? 'the local user' : typed}`) },
-      (error: unknown) => { toast.failed(`Could not change the user of ${name}`, error) },
-    ).finally(() => { setSaving(false) })
-  }
-  return (
-    <Row label="Connects as" detail={problem ?? detail}>
-      <span className="mx-mach-buttons">
-        <input className="mono mx-mach-userinput" aria-label={`User for ${name}`} value={user} placeholder="user" spellCheck={false} onChange={(event) => { setUser(event.target.value) }} />
-        <button type="button" className="mx-scard-button" aria-label={`Save the user of ${name}`} disabled={saving || problem !== null || typed === stored} onClick={save}>Save</button>
-      </span>
-    </Row>
-  )
-}
-
-/** The machine's app, when it needs installing or updating: the fix, said before it runs, and the command to run instead. */
-function VersionCard({ head, machines }: { head: MachineHead; machines: MachinesInfo }) {
-  const name = head.label
-  const action = head.updateAction
-  const [asking, setAsking] = useState(false)
-  const [activity, setActivity] = useState<MachineActivity | null>(null)
-  const [checking, setChecking] = useState(false)
-  const [running, setRunning] = useState(false)
-  if (action === null && head.updateCommand === null && head.chip?.word !== 'newer than this app') return null
-  const words = action === null ? null : UPDATE_WORDS[action]
-  const ask = (chosen: UpdateAction) => {
-    setActivity(null)
-    if (chosen === 'install') { setAsking(true); return }
-    setChecking(true)
-    void machines.onCheckActivity(name)
-      .catch(() => null)
-      .then((found) => { setActivity(found); setAsking(true) })
-      .finally(() => { setChecking(false) })
-  }
-  const run = (chosen: UpdateAction, whenIdle: boolean) => {
-    setAsking(false)
-    setRunning(true)
-    void machines.onUpdate(name, chosen, whenIdle).finally(() => { setRunning(false) })
-  }
-  const detail = asking && action !== null
-    ? (action === 'install' ? installNote(name) : updateWarning(name, activity))
-    // At rest the fix is the button: the detail is the command to run by hand, not ssh's whole sentence about it.
-    : running && words !== null ? words.running(name) : head.updateCommand ?? head.why ?? ''
-  return (
-    <Card title="Version">
-      <Row label={words === null ? 'Maiker' : words.need(name)} detail={detail}>
-        <span className="mx-mach-buttons">
-          {action !== null && words !== null && !asking && <button type="button" className="mx-scard-button is-primary" disabled={running || checking} aria-label={`${words.verb} Maiker on ${name}`} onClick={() => { ask(action) }}>{checking ? 'Checking…' : words.verb}</button>}
-          {asking && action === 'install' && <button type="button" className="mx-scard-button is-primary" onClick={() => { run(action, false) }}>Install on {name} now</button>}
-          {asking && action === 'update' && (
-            <>
-              <button type="button" className="mx-scard-button is-danger" onClick={() => { run(action, false) }}>{updateVerb(action, activity)} {name} now</button>
-              <button type="button" className="mx-scard-button" onClick={() => { run(action, true) }}>{updateVerb(action, activity)} {name} when idle</button>
-            </>
-          )}
-          {asking && <button type="button" className="mx-scard-button" onClick={() => { setAsking(false) }}>Cancel</button>}
-          {!asking && head.updateCommand !== null && <button type="button" className="mx-scard-button" aria-label={`Copy the update command for ${name}`} onClick={() => { if (head.updateCommand !== null) machines.onCopyCommand(head.updateCommand) }}>Copy command</button>}
-        </span>
-      </Row>
-    </Card>
-  )
-}
-
-function RemoveCard({ name, onRemove }: { name: string; onRemove: () => void }) {
-  const [asking, setAsking] = useState(false)
-  return (
-    <Card title="Remove">
-      <Row label={`Remove ${name}`} detail={asking ? `Removes ${name} from this list. Its sessions keep running on ${name}.` : `Its sessions stop showing here. Nothing on ${name} is deleted.`}>
-        <span className="mx-mach-buttons">
-          {asking
-            ? (
-              <>
-                <button type="button" className="mx-scard-button is-danger" onClick={onRemove}>Remove {name}</button>
-                <button type="button" className="mx-scard-button" onClick={() => { setAsking(false) }}>Keep</button>
-              </>
-            )
-            : <button type="button" className="mx-scard-button is-danger" aria-label={`Remove ${name}`} onClick={() => { setAsking(true) }}>Remove</button>}
-        </span>
-      </Row>
-    </Card>
-  )
-}
-
-type HostsState = ChooseHosts
-/** Where the add flow is: choosing a computer, or connecting to the one chosen (and what that came to). */
-type AddStep =
-  | { step: 'form'; note: string | null }
-  | { step: 'connect'; chosen: Chosen; phase: Phase }
-
-/** The add-a-machine flow: choose a computer, watch Maiker connect to it, and see that it is ready. */
-function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onClose: () => void; onOpen: (name: string) => void }) {
-  const { add } = machines
-  const [hosts, setHosts] = useState<HostsState>({ status: 'loading' })
-  const [state, setState] = useState<AddStep>({ step: 'form', note: null })
-  const { loadHosts } = add
-  useEffect(() => {
-    let gone = false
-    loadHosts().then(
-      (list) => { if (!gone) setHosts({ status: 'ready', hosts: list }) },
-      (error: unknown) => { if (!gone) setHosts({ status: 'failed', message: errorMessage(error, 'Could not read ~/.ssh/config') }) },
-    )
-    return () => { gone = true }
-  }, [loadHosts])
-
-  const connect = (chosen: Chosen) => {
-    const { target, name, port } = chosen
-    setState({ step: 'connect', chosen, phase: { kind: 'running' } })
-    add.onAdd(target, name, port).then(
-      (result) => {
-        if (result.outcome === 'needs-name') { setState({ step: 'form', note: `Give ${target} a name in Maiker to add it.` }); return }
-        if (result.outcome === 'cancelled') { setState({ step: 'form', note: 'Cancelled. Nothing was added.' }); return }
-        setHosts((now) => (now.status === 'ready' ? { status: 'ready', hosts: now.hosts.filter((choice) => choice.alias !== target) } : now))
-        setState({ step: 'connect', chosen, phase: { kind: 'added', added: result } })
-      },
-      (error: unknown) => { setState({ step: 'connect', chosen, phase: { kind: 'failed', message: errorMessage(error, 'Could not add the machine') } }) },
-    )
-  }
-
-  return (
-    <section className="mx-mach-addflow" aria-label="Add a machine">
-      <nav aria-label="Breadcrumb" className="mx-mach-crumbs">
-        <button type="button" onClick={onClose}><Glyph path={BACK_PATH} size={13} width="2.2" />Remote machines</button>
-        <span aria-hidden="true">›</span>
-        <span className="mx-mach-crumb-here">Add a machine</span>
-      </nav>
-      <div className="mx-mach-addbox">
-        {state.step === 'form'
-          ? <AddMachineChoose hosts={hosts} taken={machines.list.flatMap((head) => (head.name === null ? [] : [head.name]))} note={state.note} windows={add.windows} onConnect={connect} onCancel={onClose} />
-          : (
-            <AddMachineConnect
-              target={state.chosen.target}
-              label={state.chosen.name ?? state.chosen.target}
-              phase={state.phase}
-              machines={machines}
-              onTryAgain={() => { connect(state.chosen) }}
-              onChange={() => { setState({ step: 'form', note: null }) }}
-              onCancel={add.onCancel}
-              onBack={onClose}
-              onOpen={onOpen}
-              onStartOn={(name) => { add.onStartOn?.(name) }}
-            />
-          )}
-      </div>
-    </section>
-  )
-}

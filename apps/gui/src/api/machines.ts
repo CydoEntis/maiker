@@ -271,53 +271,6 @@ export async function trustHostKey(name: string, fingerprint: string): Promise<v
   if (isTauri()) await invoke('trust_host_key', { name, fingerprint })
 }
 
-const KeyLoginSchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('unavailable'), reason: z.string() }),
-  z.object({ status: z.literal('host-key-not-trusted') }),
-  z.object({ status: z.literal('no-key'), path: z.string() }),
-  z.object({ status: z.literal('encrypted'), path: z.string() }),
-  z.object({ status: z.literal('blocked'), reason: z.string() }),
-  z.object({ status: z.literal('ready'), path: z.string(), key_type: z.string(), fingerprint: z.string() }),
-])
-/** What this computer has to offer for key login, and whether it can run. */
-export type KeyLoginReport = z.infer<typeof KeyLoginSchema>
-
-const KeySetupSchema = z.discriminatedUnion('outcome', [
-  z.object({ outcome: z.literal('installed'), added: z.boolean(), fingerprint: z.string() }),
-  z.object({ outcome: z.literal('wrong-password'), attempts_left: z.number() }),
-  z.object({ outcome: z.literal('stopped') }),
-  z.object({ outcome: z.literal('manual'), reason: z.string(), steps: z.string() }),
-  z.object({ outcome: z.literal('not-verified'), message: z.string(), steps: z.string() }),
-])
-/** What setting up key login came to. It never carries the password. */
-export type KeySetupResult = z.infer<typeof KeySetupSchema>
-
-/** Look at the key on this computer and whether key login can be set up for a machine. */
-export async function inspectKeyLogin(name: string): Promise<KeyLoginReport> {
-  if (!isTauri()) throw new Error('Key login can only be set up in the desktop app')
-  return KeyLoginSchema.parse(await invoke<unknown>('inspect_key_login', { name }))
-}
-
-/**
- * Put this computer's public key on a machine using the account password once. The password is sent
- * to the host in this one call and not kept; the caller clears its own copy as it calls.
- */
-export async function setUpKeyLogin(name: string, password: string, createKey: boolean): Promise<KeySetupResult> {
-  if (!isTauri()) throw new Error('Key login can only be set up in the desktop app')
-  return KeySetupSchema.parse(await invoke<unknown>('set_up_key_login', { name, password, createKey }))
-}
-
-/** The user name ssh would connect as on this computer when a machine names none; null when it cannot be told. */
-export async function localUserName(): Promise<string | null> {
-  if (!isTauri()) return null
-  return z.string().nullable().parse(await invoke<unknown>('local_user_name'))
-}
-
-/** Set the user a machine connects as (blank for none); the machine is dialled again as that user. */
-export async function setMachineUser(name: string, user: string): Promise<void> {
-  if (isTauri()) await invoke('set_machine_user', { name, user })
-}
-
 /** Open ssh in a session on this computer for a machine that needs a login, so its prompts can be answered. */
 export async function openMachineLogin(machine: number): Promise<void> {
   if (isTauri()) await invoke('open_machine_login', { machine })
