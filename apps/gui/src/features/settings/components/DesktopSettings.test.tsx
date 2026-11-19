@@ -711,7 +711,7 @@ describe('what a machine may do to this computer', () => {
 
 describe('adding a machine', () => {
   const hosts = [{ alias: 'build', detail: 'me@build.example' }, { alias: 'lab', detail: 'lab.example' }]
-  const added = (name: string) => ({ outcome: 'added' as const, name, version: 'maiker 1.2.3' })
+  const added = (name: string, reach: 'answered' | 'missing' | 'older' | 'newer-here' | 'not-running' = 'answered') => ({ outcome: 'added' as const, name, version: reach === 'answered' ? 'maiker 1.2.3' : null, reach, took_ms: 18 })
   /** Opens the add flow from the Machines page. */
   const startAdding = async (add: Partial<MachinesInfo['add']> = {}, extra: Partial<Parameters<typeof DesktopSettings>[0]> = {}) => {
     const user = userEvent.setup()
@@ -747,8 +747,8 @@ describe('adding a machine', () => {
     expect(screen.getByRole('textbox', { name: 'What should Maiker call it?' })).toHaveValue('build')
     await user.click(screen.getByRole('button', { name: 'Connect to build' }))
     expect(onAdd).toHaveBeenCalledWith('build', 'build', undefined)
-    expect(await screen.findByText(/build is added and connecting\./)).toHaveClass('is-good')
-    expect(screen.getByText(/Maiker answered there \(maiker 1\.2\.3\)/)).toBeInTheDocument()
+    expect(await screen.findByRole('status', { name: '' })).toBeInTheDocument()
+    expect(await screen.findByText('build is ready')).toBeInTheDocument()
   })
 
   it('clears the typed address when a computer is picked, and the pick when an address is typed', async () => {
@@ -793,13 +793,28 @@ describe('adding a machine', () => {
     expect(onAdd).not.toHaveBeenCalled()
   })
 
-  it('shows the words of a machine that cannot be added, and goes back to the form to try again', async () => {
-    const onAdd = vi.fn().mockRejectedValue(new Error('nope.example: could not resolve'))
+  it('says a machine that cannot be reached could not be found, and tries again or goes back to change the address', async () => {
+    const onAdd = vi.fn().mockRejectedValue(new Error('nope.example: ssh: Could not resolve hostname nope.example'))
     const user = await startAdding({ onAdd })
     await byAddress(user, 'nope.example{Enter}')
-    expect(await screen.findByRole('alert')).toHaveTextContent('nope.example: could not resolve')
-    await user.click(screen.getByRole('button', { name: 'Edit and try again' }))
-    expect(screen.getByRole('textbox', { name: 'Type its address' })).toHaveValue('')
+    expect(await screen.findByRole('alert', { name: "Couldn't find nope.example" })).toBeInTheDocument()
+    expect(screen.getByText("Couldn't connect to nope")).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await screen.findByRole('alert', { name: "Couldn't find nope.example" })
+    expect(onAdd).toHaveBeenCalledTimes(2)
+    await user.click(screen.getByRole('button', { name: 'Change address' }))
+    expect(screen.getByRole('textbox', { name: 'Type its address' })).toBeInTheDocument()
+  })
+
+  it('says a machine that does not answer might be off, on another network or behind a firewall', async () => {
+    const onAdd = vi.fn().mockRejectedValue(new Error('cydo@10.9.9.9: connect to host 10.9.9.9 port 22: Connection timed out'))
+    const user = await startAdding({ onAdd })
+    await byAddress(user, 'cydo@10.9.9.9{Enter}')
+    expect(await screen.findByRole('alert', { name: "server-9 didn't answer" })).toBeInTheDocument()
+    expect(screen.getByText("It's turned off or asleep.")).toBeInTheDocument()
+    expect(screen.queryByText(/Connection timed out/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Show technical details/ }))
+    expect(screen.getByText(/Connection timed out/)).toBeInTheDocument()
   })
 
   it('asks for a name when none can be made', async () => {
@@ -816,7 +831,7 @@ describe('adding a machine', () => {
     const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
     const user = await startAdding({ onAdd, onCancel })
     await byAddress(user, 'slow.example{Enter}')
-    expect(within(screen.getByRole('region', { name: 'Add a machine' })).getByText('Reaching slow.example over ssh…')).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'Add a machine' })).getByText('Looking for slow…')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(onCancel).toHaveBeenCalled()
   })
@@ -840,14 +855,55 @@ describe('adding a machine', () => {
     const onCopyCommand = vi.fn()
     const user = await startAdding({ onAdd }, { machines: info({ add: { ...info().add, onAdd }, onCopyCommand }) })
     await byAddress(user, '100.97.58.91{Enter}')
-    expect(await screen.findByText(/box is added but not connected yet: it needs a login/)).toHaveClass('is-warn')
+    expect(await screen.findByRole('alert', { name: "box didn't accept your key" })).toBeInTheDocument()
+    expect(screen.getByText('box needs you')).toBeInTheDocument()
+    expect(screen.getByText('ssh-copy-id 100.97.58.91')).toBeInTheDocument()
+    expect(screen.queryByText(said)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Show technical details/ }))
     expect(screen.getByText(said)).toBeInTheDocument()
-    expect(screen.getByText('vox')).toBeInTheDocument()
-    expect(screen.getByText('ssh could not log in by itself')).toBeInTheDocument()
-    expect(screen.queryByText(/Logged in with your ssh keys/)).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Copy command' }))
-    expect(onCopyCommand).toHaveBeenCalledWith(command)
-    expect(within(screen.getByRole('region', { name: 'Add a machine' })).queryByRole('button', { name: /terminal/i })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy' }))
+    expect(onCopyCommand).toHaveBeenCalledWith('ssh-copy-id 100.97.58.91')
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    expect(command).toContain('ssh')
+  })
+
+  it('asks before installing Maiker on a machine that has none, then installs it and is ready', async () => {
+    const onAdd = vi.fn().mockResolvedValue(added('box', 'missing'))
+    const onUpdate = vi.fn().mockResolvedValue(undefined)
+    const user = await startAdding({ onAdd }, { machines: info({ add: { ...info().add, onAdd }, onUpdate }) })
+    await byAddress(user, 'me@box.example{Enter}')
+    expect(await screen.findByRole('group', { name: "Maiker isn't on box yet" })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Install Maiker' }))
+    expect(onUpdate).toHaveBeenCalledWith('box', 'install', false)
+    expect(await screen.findByText('box is ready')).toBeInTheDocument()
+  })
+
+  it('lets Maiker be left off for now, and says so on the way to ready', async () => {
+    const onAdd = vi.fn().mockResolvedValue(added('box', 'missing'))
+    const user = await startAdding({ onAdd })
+    await byAddress(user, 'me@box.example{Enter}')
+    await user.click(await screen.findByRole('button', { name: 'Not now' }))
+    expect(await screen.findByText('box is ready')).toBeInTheDocument()
+    expect(screen.getByText(/Maiker isn't installed there yet/)).toBeInTheDocument()
+  })
+
+  it('offers to update an older Maiker, or keep it', async () => {
+    const onAdd = vi.fn().mockResolvedValue(added('box', 'older'))
+    const onUpdate = vi.fn().mockResolvedValue(undefined)
+    const user = await startAdding({ onAdd }, { machines: info({ add: { ...info().add, onAdd }, onUpdate }) })
+    await byAddress(user, 'me@box.example{Enter}')
+    expect(await screen.findByRole('group', { name: 'box has an older Maiker' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Update Maiker' }))
+    expect(onUpdate).toHaveBeenCalledWith('box', 'update', false)
+  })
+
+  it('starts a session on the machine from the ready screen', async () => {
+    const onAdd = vi.fn().mockResolvedValue(added('box'))
+    const onStartOn = vi.fn()
+    const user = await startAdding({ onAdd, onStartOn })
+    await byAddress(user, 'me@box.example{Enter}')
+    await user.click(await screen.findByRole('button', { name: 'Start a session on box' }))
+    expect(onStartOn).toHaveBeenCalledWith('box')
   })
 
   it('offers the host key to trust, not a terminal, when ssh stopped on an unknown host', async () => {

@@ -812,6 +812,40 @@
 .mx-mach-field input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--danger-line); }
 .mx-mach-more { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .mx-mach-more .mx-mach-quiet { border-color: transparent; padding-left: 0; }
+/* Add machine, stages 2 and 3: the steps with their detail, the box under a step, and the Ready screen. */
+.mx-add-where { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 13px; }
+.mx-add-where .mono { color: var(--dim); margin-left: 6px; }
+.mx-add-steps { gap: 14px; }
+.mx-add-steps .mx-mach-stage { align-items: flex-start; }
+.mx-add-steps .mx-mach-stage-mark { width: 22px; height: 22px; box-sizing: border-box; border: 1px solid var(--line2); }
+.mx-add-steps .mx-mach-stage.is-ok .mx-mach-stage-mark { border-color: var(--ok); }
+.mx-add-steps .mx-mach-stage.is-warn .mx-mach-stage-mark { border-color: var(--needs); color: var(--needs); background: color-mix(in srgb, var(--needs) 14%, transparent); }
+.mx-add-steps .mx-mach-stage.is-bad .mx-mach-stage-mark { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, transparent); }
+.mx-add-step-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; padding-top: 2px; }
+.mx-add-step-title { font-weight: 600; color: var(--fg); }
+.mx-mach-stage.is-wait .mx-add-step-title { color: var(--dim); font-weight: 500; }
+.mx-add-step-text { font-size: 12.5px; color: var(--fg2); }
+.mx-mach-stage.is-wait .mx-add-step-text { color: var(--dim); }
+.mx-add-box { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 8px; padding: 12px 14px; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); font-size: 13px; line-height: 1.55; color: var(--fg2); }
+.mx-add-box p, .mx-add-box ul { margin: 0; }
+.mx-add-box ul { padding-left: 18px; }
+.mx-add-box.is-needs { box-shadow: inset 2px 0 0 var(--needs); }
+.mx-add-box.is-bad { box-shadow: inset 2px 0 0 var(--danger); }
+.mx-add-box-title { color: var(--fg); font-size: 13.5px; }
+.mx-add-act { height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--fg); }
+.mx-add-act.is-needs { background: color-mix(in srgb, var(--needs) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--needs) 50%, transparent); }
+.mx-add-act.is-bad { background: color-mix(in srgb, var(--danger) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--danger) 50%, transparent); }
+.mx-add-act:disabled { opacity: .5; }
+.mx-add-toggle { border-color: transparent; padding-left: 0; color: var(--dim); }
+.mx-add-raw { margin: 0; max-width: 100%; padding: 8px 10px; overflow-x: auto; background: var(--bg); border-radius: var(--r-control); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg2); user-select: text; }
+.mx-add-copy { display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 6px 6px 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-control); }
+.mx-add-copy code { min-width: 0; overflow-wrap: anywhere; user-select: text; }
+.mx-add-ready { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0; text-align: center; }
+.mx-add-ready-tick { display: flex; align-items: center; justify-content: center; width: 48px; height: 48px; border-radius: 50%; font-size: 24px; color: var(--ok); border: 1.5px solid var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.mx-add-preview { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 13px; }
+.mx-add-preview .mono { color: var(--dim); }
+.mx-add-preview span:last-child { margin-left: auto; color: var(--ok); }
+.mx-add-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
 .mx-mach-formfoot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
 .mx-mach-formfoot > span { flex: 1 1 220px; min-width: 0; font-size: 11.5px; color: var(--dim); }
 .mx-mach-run { display: flex; flex-direction: column; gap: 10px; padding: 14px; }

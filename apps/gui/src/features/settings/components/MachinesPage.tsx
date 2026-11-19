@@ -3,7 +3,7 @@ import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
 import { exportDaemonLog, openDaemonLog } from '@/api/daemon'
-import { LOCAL_MACHINE, type Added, type MachineActivity } from '@/api/machines'
+import { LOCAL_MACHINE, type MachineActivity } from '@/api/machines'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { DisconnectedSince } from '@/features/workspace/components/times'
@@ -15,6 +15,7 @@ import { HOST_KEY_WORDS, HostKeyCard } from './HostKeyCard'
 import { KeyLoginCard, PASSWORD_OFFERED } from './KeyLoginCard'
 import { userOf, userProblem } from '../model/machineTarget'
 import { AddMachineChoose, type ChooseHosts, type Chosen } from './AddMachineChoose'
+import { AddMachineConnect, type Phase } from './AddMachineConnect'
 import { DAEMON_NAME } from '@/brand'
 
 /** A computer: this one, and the tile of a remote one. The window does not know a machine's kind, so every remote is a server. */
@@ -395,40 +396,12 @@ function RemoveCard({ name, onRemove }: { name: string; onRemove: () => void }) 
 }
 
 type HostsState = ChooseHosts
-/** Where the add flow is: filling in the form, looking at the machine over ssh, or how that went. */
+/** Where the add flow is: choosing a computer, or connecting to the one chosen (and what that came to). */
 type AddStep =
   | { step: 'form'; note: string | null }
-  | { step: 'checking'; target: string }
-  | { step: 'failed'; target: string; message: string }
-  | { step: 'done'; target: string; added: Done }
+  | { step: 'connect'; chosen: Chosen; phase: Phase }
 
-type Done = Exclude<Added, { outcome: 'needs-name' | 'cancelled' }>
-type Mark = 'spin' | 'ok' | 'warn' | 'bad' | 'wait'
-type Step = { mark: Mark; text: string }
-
-const MARK_GLYPH: Readonly<Record<Mark, string>> = { spin: '', ok: '✓', warn: '!', bad: '✕', wait: '–' }
-
-/** The three things adding a machine does, each with how it really went: reach it, log in, and check Maiker there. */
-function stepsOf(state: Exclude<AddStep, { step: 'form' }>): Step[] {
-  const where = state.target
-  if (state.step === 'checking') return [{ mark: 'spin', text: `Reaching ${where} over ssh…` }, { mark: 'wait', text: 'Log in with your ssh keys' }, { mark: 'wait', text: 'Check Maiker on it' }]
-  if (state.step === 'failed') return [{ mark: 'bad', text: `Reach ${where} over ssh` }, { mark: 'wait', text: 'Log in with your ssh keys' }, { mark: 'wait', text: 'Check Maiker on it' }]
-  const { added } = state
-  if (added.outcome === 'added') {
-    return [{ mark: 'ok', text: `Reached ${where} over ssh` }, { mark: 'ok', text: 'Logged in with your ssh keys' }, added.version ? { mark: 'ok', text: `Maiker answered there (${added.version})` } : { mark: 'warn', text: 'Maiker is not ready there yet: it may be missing, old, or not running. Open its settings for the fix.' }]
-  }
-  return [{ mark: 'ok', text: `Reached ${where} over ssh` }, { mark: 'bad', text: 'ssh could not log in by itself' }, { mark: 'wait', text: 'Check Maiker on it: after you have logged in' }]
-}
-
-/** What the done step says the machine came to, and whether that is all well. */
-function doneWords(added: Done): { text: string; good: boolean } {
-  switch (added.outcome) {
-    case 'added': return { text: `${added.name} is added and connecting. Its sessions will show in your sidebar.`, good: true }
-    case 'login': return { text: `${added.name} is added but not connected yet: it needs a login.`, good: false }
-  }
-}
-
-/** The add-a-machine flow: pick a host of ~/.ssh/config or type an address, name it, and connect. */
+/** The add-a-machine flow: choose a computer, watch Maiker connect to it, and see that it is ready. */
 function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onClose: () => void; onOpen: (name: string) => void }) {
   const { add } = machines
   const [hosts, setHosts] = useState<HostsState>({ status: 'loading' })
@@ -444,19 +417,18 @@ function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onC
   }, [loadHosts])
 
   const connect = (chosen: Chosen) => {
-    const { target, name: typedName, port } = chosen
-    setState({ step: 'checking', target })
-    add.onAdd(target, typedName, port).then(
+    const { target, name, port } = chosen
+    setState({ step: 'connect', chosen, phase: { kind: 'running' } })
+    add.onAdd(target, name, port).then(
       (result) => {
         if (result.outcome === 'needs-name') { setState({ step: 'form', note: `Give ${target} a name in Maiker to add it.` }); return }
         if (result.outcome === 'cancelled') { setState({ step: 'form', note: 'Cancelled. Nothing was added.' }); return }
         setHosts((now) => (now.status === 'ready' ? { status: 'ready', hosts: now.hosts.filter((choice) => choice.alias !== target) } : now))
-        setState({ step: 'done', target, added: result })
+        setState({ step: 'connect', chosen, phase: { kind: 'added', added: result } })
       },
-      (error: unknown) => { setState({ step: 'failed', target, message: errorMessage(error, 'Could not add the machine') }) },
+      (error: unknown) => { setState({ step: 'connect', chosen, phase: { kind: 'failed', message: errorMessage(error, 'Could not add the machine') } }) },
     )
   }
-  const again = () => { setState({ step: 'form', note: null }) }
 
   return (
     <section className="mx-mach-addflow" aria-label="Add a machine">
@@ -466,68 +438,23 @@ function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onC
         <span className="mx-mach-crumb-here">Add a machine</span>
       </nav>
       <div className="mx-mach-addbox">
-        {state.step === 'form' && <AddMachineChoose hosts={hosts} taken={machines.list.flatMap((head) => (head.name === null ? [] : [head.name]))} note={state.note} windows={add.windows} onConnect={connect} onCancel={onClose} />}
-        {state.step !== 'form' && (
-          <div className="mx-mach-run">
-            <span className="mx-mach-target">{state.target}</span>
-            <ol className="mx-mach-steps" aria-label="Steps">
-              {stepsOf(state).map((item, index) => (
-                <li key={index} className={`mx-mach-stage is-${item.mark}`}>
-                  <span className="mx-mach-stage-mark" aria-hidden="true">{item.mark === 'spin' ? <span className="mx-mach-spin" /> : MARK_GLYPH[item.mark]}</span>
-                  {item.text}
-                </li>
-              ))}
-            </ol>
-            {state.step === 'checking' && (
-              <div className="mx-mach-runfoot" data-owns-escape onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); add.onCancel() } }}>
-                <span role="status">Esc ends ssh and adds nothing.</span>
-                <button type="button" className="mx-mach-quiet" autoFocus onClick={add.onCancel}>Cancel</button>
-              </div>
-            )}
-            {state.step === 'failed' && (
-              <div className="mx-mach-fail" role="alert">
-                <span className="mono">{state.message}</span>
-                <span className="mx-mach-buttons">
-                  <button type="button" className="mx-mach-go" onClick={() => { setState({ step: 'form', note: null }) }}>Edit and try again</button>
-                  <button type="button" className="mx-mach-quiet" onClick={onClose}>Cancel</button>
-                </span>
-              </div>
-            )}
-            {state.step === 'done' && <DoneFoot added={state.added} machines={machines} onAgain={again} onOpen={onOpen} />}
-          </div>
-        )}
+        {state.step === 'form'
+          ? <AddMachineChoose hosts={hosts} taken={machines.list.flatMap((head) => (head.name === null ? [] : [head.name]))} note={state.note} windows={add.windows} onConnect={connect} onCancel={onClose} />
+          : (
+            <AddMachineConnect
+              target={state.chosen.target}
+              label={state.chosen.name ?? state.chosen.target}
+              phase={state.phase}
+              machines={machines}
+              onTryAgain={() => { connect(state.chosen) }}
+              onChange={() => { setState({ step: 'form', note: null }) }}
+              onCancel={add.onCancel}
+              onBack={onClose}
+              onOpen={onOpen}
+              onStartOn={(name) => { add.onStartOn?.(name) }}
+            />
+          )}
       </div>
     </section>
-  )
-}
-
-function DoneFoot({ added, machines, onAgain, onOpen }: { added: Done; machines: MachinesInfo; onAgain: () => void; onOpen: (name: string) => void }) {
-  const words = doneWords(added)
-  const login = added.outcome === 'login' ? added : null
-  const user = login === null ? '' : userOf(login.target)
-  return (
-    <div className="mx-mach-done">
-      <span className={words.good ? 'is-good' : 'is-warn'} role="status">{words.text}</span>
-      {login !== null && (
-        <div className="mx-mach-warn">
-          <span>ssh said</span>
-          <span className="mono">{login.said}</span>
-          <span>It tried to log in as <strong>{user === '' ? (machines.localUser ?? "this computer's user") : user}</strong>{user === '' ? ' because no user was given' : ''}.</span>
-        </div>
-      )}
-      {login !== null && HOST_KEY_WORDS.test(login.said) && <HostKeyCard name={login.name} inspect={machines.hostKey.inspect} trust={machines.hostKey.trust} />}
-      {login !== null && PASSWORD_OFFERED.test(login.said) && <KeyLoginCard name={login.name} inspect={machines.keyLogin.inspect} setUp={machines.keyLogin.setUp} />}
-      {login !== null && !HOST_KEY_WORDS.test(login.said) && (
-        <span className="mx-mach-note">Open its settings to change the user, or to open a terminal if it needs a password or a key passphrase.{login.command !== null && ' Or run its ssh command yourself:'}</span>
-      )}
-      {login?.command != null && (
-        <span className="mx-mach-buttons">
-          <span className="mono">{login.command}</span>
-          <button type="button" className="mx-mach-quiet" onClick={() => { if (login.command !== null) machines.onCopyCommand(login.command) }}>Copy command</button>
-        </span>
-      )}
-      <button type="button" className="mx-mach-quiet" onClick={onAgain}>Add another</button>
-      <button type="button" className="mx-mach-go" onClick={() => { onOpen(added.name) }}>Open its settings</button>
-    </div>
   )
 }
