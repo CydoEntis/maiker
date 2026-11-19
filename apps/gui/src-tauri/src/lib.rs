@@ -1907,10 +1907,13 @@ pub fn run() {
 mod tests {
     #[test]
     fn only_an_absolute_claude_folder_without_dot_dot_can_be_repaired_from_the_window() {
-        assert!(super::connectable_config_dir("claude", "/srv/agents/claude-home").is_ok());
+        // Windows has no absolute path without a drive letter, so the sample comes from the system.
+        let absolute = std::env::temp_dir().join("agents").join("claude-home");
+        let absolute = absolute.to_str().unwrap();
+        assert!(super::connectable_config_dir("claude", absolute).is_ok());
         assert!(super::connectable_config_dir("claude", "relative/dir").is_err());
-        assert!(super::connectable_config_dir("claude", "/srv/../etc").is_err());
-        assert!(super::connectable_config_dir("codex", "/srv/agents/codex").is_err());
+        assert!(super::connectable_config_dir("claude", &format!("{absolute}/../etc")).is_err());
+        assert!(super::connectable_config_dir("codex", absolute).is_err());
     }
 
     #[test]
