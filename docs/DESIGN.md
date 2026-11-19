@@ -913,7 +913,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   **Checks**; a shell's further terminals still open here.
   Files reads the focused session's top folder before the panel opens; while a list or a file is still being read
   it shows still bars in its place, never the word "Loading". **References** is the first entry of the Files tree and
-  opens as `Files › References`. **History** is a segmented control: **Snapshots** (the commit log and the agent's
+  opens as `Files › References`, which says "Every agent on this project sees these · kept on this computer, not in git" and, when empty, "Show agents what to build". It only lists: adding, renaming and deleting references need GUI commands that do not exist yet (the TUI adds them). **History** is a segmented control: **Snapshots** (the commit log and the agent's
   snapshots; snapshots that cannot be read are said, with Try again, above the commits) and **Status log** (what the
   pane reported lately, "Why the status changed"). A session's own terminals are in the terminal dock, not here.
   **Changes** has a top bar: the branch (a menu of the others with a ✓ on the current one, for a checkout on this

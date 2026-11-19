@@ -12,8 +12,12 @@ export function ReferencesTab({ term }: { term: number }) {
   const now = query.dataUpdatedAt / MS_PER_SECOND
   return (
     <div className="mx-inspect-body">
+      <p className="mx-inspect-note">Every agent on this project sees these · kept on this computer, not in git</p>
       {query.data.length === 0 && (
-        <p className="mx-inspect-note">No references yet. Files in this project&apos;s <code>.maiker/references</code> folder show here, and agents can list them.</p>
+        <>
+          <h3 className="mx-inspect-file">Show agents what to build</h3>
+          <p className="mx-inspect-note">Screenshots, mockups and design files agents look at before UI work. Put them in this project&apos;s <code>.maiker/references</code> folder and they show here.</p>
+        </>
       )}
       <ul className="mx-inspect-list">
         {query.data.map((item) => (

@@ -167,7 +167,7 @@ export function FilesTab({ term, machine = 0, machineName = null, lookAt, docume
     <div className="mx-files">
       <nav className="mx-files-tree" aria-label="Files">
         {onReferences !== undefined && (
-          <button type="button" className="mx-files-refs" onClick={onReferences}>
+          <button type="button" className="mx-files-refs" title="References agents look at before UI work" onClick={onReferences}>
             <Icon name="references" size={13} />
             <span>References</span>
             <Icon name="chevron" />
