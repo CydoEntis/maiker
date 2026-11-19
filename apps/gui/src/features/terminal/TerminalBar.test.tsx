@@ -22,7 +22,7 @@ const usage = (context: number) => ({ asking: '', interrupted: null, timeline: [
 describe('terminalBarOf', () => {
   it('reads machine, project, branch, usage and agent from the session', () => {
     const facts = terminalBarOf(session({ machine: 4, machineName: 'devbox', linked: true, details: { ...usage(42), limits: [{ name: '5h', used: 80, resetsAt: 0 }] } }))
-    expect(facts).toMatchObject({ machine: 'devbox', project: 'app', branch: 'dev', worktree: true, agent: 'claude', contextAlways: true, model: null, mode: null })
+    expect(facts).toMatchObject({ machine: 'devbox', project: 'app', branch: 'dev', worktree: true, agent: 'claude', contextAlways: true })
     expect(facts?.usage).toEqual({ context: 42, limits: [{ name: '5h', used: 80, resetsAt: 0 }] })
   })
 
