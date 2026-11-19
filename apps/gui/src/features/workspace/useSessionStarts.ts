@@ -17,8 +17,7 @@ import { entrustFirstMessage, holdFirstMessage, holdStartChoice } from '@/featur
 import { connectAgentOnce } from './model/agentHooks'
 import type { WarmAgent } from './useWarmAgent'
 import { nameFromMessage } from './model/newSession'
-import { usePaneViews } from './usePaneViews'
-import { openViewFor, type ChatAgent, type PaneView, type StructuredAgent } from './model/chatView'
+import type { ChatAgent, StructuredAgent } from './model/chatView'
 import { rememberShellStart } from './model/shellStarts'
 import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import type { WireChoice } from '@/features/chat/agentChoice'
@@ -56,7 +55,7 @@ function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> {
 }
 
 /** Every way the window starts a session: a shell, an agent in a terminal, a chat, a worktree, on this computer or another machine. */
-export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLayout, flash, focusedSession, setNewChatOpen, online, starting, setStarting, setStartedFrom, sessionMap, preferences, setExpectedAgents, paneViews, setSettingsSection, setNewChatMachine, setNewChatSeed, home, machinesRef }: {
+export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLayout, flash, focusedSession, setNewChatOpen, online, starting, setStarting, setStartedFrom, sessionMap, preferences, setExpectedAgents, setSettingsSection, setNewChatMachine, setNewChatSeed, home, machinesRef }: {
   queryClient: QueryClient
   sessions: SessionView[]
   setWorktreeFrom: Dispatch<SetStateAction<SessionView | null>>
@@ -71,7 +70,6 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   sessionMap: Map<string, SessionView>
   preferences: SettingsPreferences
   setExpectedAgents: Dispatch<SetStateAction<Record<string, ChatAgent>>>
-  paneViews: ReturnType<typeof usePaneViews>
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   setNewChatMachine: Dispatch<SetStateAction<number>>
   setNewChatSeed: Dispatch<SetStateAction<{ folder: string; message: string } | null>>
@@ -190,8 +188,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   }, [online, beginStart, endStart, startShell])
 
   // A new session is the default agent, running in a terminal the daemon owns, shown as its chat or
-  // as its terminal as Settings says. It is one session either way: the view can be switched at any
-  // time without restarting the agent (ADR 0003). A plain shell is `runStart` and has no chat view.
+  // as its terminal as Settings says for the whole app, so changing that setting never restarts the agent
+  // (ADR 0003). A plain shell is `runStart` and has no chat view.
   // The agent is the new session's first command, so it starts as soon as the shell does instead of being typed in once the
   // shell is ready. Its status hooks are connected first: an agent already running never loads them, and its chat would
   // wait on them until it was restarted.
@@ -220,7 +218,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   }, [online, startWords])
 
   // `background` leaves the new session unopened, listed in the sidebar, and the window as it was.
-  const startAgentSession = useCallback((folder: () => Promise<string>, agent: ChatAgent, view: PaneView, firstMessage = '', flags = '', placed: { afterPlace?: (id: string) => void; alongside?: boolean; background?: boolean; /** This session's Bypass Permissions choice, over Settings. */ bypass?: boolean; /** A name typed for it, in place of the first message's words. */ name?: string } = {}): Promise<boolean> => {
+  const startAgentSession = useCallback((folder: () => Promise<string>, agent: ChatAgent, firstMessage = '', flags = '', placed: { afterPlace?: (id: string) => void; alongside?: boolean; background?: boolean; /** This session's Bypass Permissions choice, over Settings. */ bypass?: boolean; /** A name typed for it, in place of the first message's words. */ name?: string } = {}): Promise<boolean> => {
     return runStart(folder, (id) => {
       // A first message waits under the session and goes out once the agent takes input; its words name the session.
       if (firstMessage !== '') {
@@ -234,14 +232,10 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       setExpectedAgents((current) => ({ ...current, [id]: agent }))
       if (startsBypassed(agent, startWords(agent, flags, placed.bypass))) rememberBypassSession(id)
       window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
-      // The view asked for wins over the agent's default (the New session draft's Open as). It and `afterPlace` (which
-      // closes the page) go in the same update as the pane opens: `movePanes` commits its update at once and the browser
-      // pictures the window right after it, so anything set after it would show a frame later, as a flash of the pane in
-      // the wrong view or under the page still open.
-      const settle = () => {
-        paneViews.choose(id, view)
-        placed.afterPlace?.(id)
-      }
+      // `afterPlace` (which closes the page) goes in the same update as the pane opens: `movePanes` commits its update at
+      // once and the browser pictures the window right after it, so anything set after it would show a frame later, as a
+      // flash of the page still open.
+      const settle = () => { placed.afterPlace?.(id) }
       if (placed.background) {
         setStartedFrom((current) => (current === null ? null : new Set([...current, id])))
         settle()
@@ -252,7 +246,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
         })
       }
     }, launchAgent(agent, flags, placed.bypass), placed.background ? 'background' : placed.alongside ? 'alongside' : 'alone')
-  }, [runStart, launchAgent, setExpectedAgents, startWords, setLayout, setStartedFrom, paneViews])
+  }, [runStart, launchAgent, setExpectedAgents, startWords, setLayout, setStartedFrom])
 
   // Signing an agent's account in is the agent's own interactive command, so it runs in a terminal of its own, in
   // the home folder: a browser opens from it, or it asks for a code. The session is a terminal, never a chat.
@@ -275,7 +269,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     if (!online || starting) return
     // Gemini has no structured chat: it starts as a terminal session shown as its chat.
     if (!hasAbility(agent, 'structuredChat')) {
-      void startAgentSession(() => Promise.resolve(from.cwd), agent, 'chat')
+      void startAgentSession(() => Promise.resolve(from.cwd), agent)
       return
     }
     if (!beginStart('alone')) return
@@ -293,14 +287,14 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!online || starting) return
     try {
-      await startAgentSession(() => Promise.resolve(from.cwd), to, openViewFor(to, preferences.openSessionsIn), await handoffBrief(from))
+      await startAgentSession(() => Promise.resolve(from.cwd), to, await handoffBrief(from))
     } catch (error: unknown) {
       toast.failed(`Could not hand off to ${to}`, error)
     }
-  }, [online, starting, startAgentSession, preferences.openSessionsIn])
+  }, [online, starting, startAgentSession])
 
   // Starts a shell on another machine and opens it once the machine lists it; resolves to its id.
-  const startOnMachine = useCallback(async (target: { machine: number; name: string }, folder: string, launch?: () => Promise<void>, open = true, withPane?: (id: string) => void): Promise<string | null> => {
+  const startOnMachine = useCallback(async (target: { machine: number; name: string }, folder: string, launch?: () => Promise<void>, open = true): Promise<string | null> => {
     const known = new Set((machinesRef.current.get(target.machine)?.conversations ?? []).map((item) => item.id))
     await (launch ?? (() => startSessionOnMachine(target.machine, folder)))()
     // The machine tells its new session in its next list; its layout opens when it does.
@@ -308,8 +302,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     while (Date.now() < deadline) {
       const fresh = machinesRef.current.get(target.machine)?.conversations.find((item) => item.kind === 'terminal' && !known.has(item.id))
       if (fresh) {
-        // What the pane needs to open right (its view) goes in the same update that opens it, so no frame shows it without.
-        if (open) movePanes(() => { setLayout((current) => openArrangement(current, fresh.id, makeId)); withPane?.(fresh.id) })
+        if (open) movePanes(() => { setLayout((current) => openArrangement(current, fresh.id, makeId)) })
         return fresh.id
       }
       await new Promise((resolve) => { setTimeout(resolve, REMOTE_START_POLL_MS) })
@@ -327,7 +320,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   const startRemoteChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (request.branch?.worktree === false) throw new Error(`A branch is switched only on this computer. Start it in a new worktree, or in ${request.machineName}'s folder as it is.`)
     const folder = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine) : request.folder
-    const id = await startOnMachine({ machine: request.machine, name: request.machineName }, folder, undefined, !background, (opened) => { paneViews.choose(opened, request.view ?? 'chat') })
+    const id = await startOnMachine({ machine: request.machine, name: request.machineName }, folder, undefined, !background)
     if (id === null) throw new Error(`${request.machineName} did not report the new session`)
     if (request.message !== '') {
       holdFirstMessage(id, request.message)
@@ -335,17 +328,16 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     setExpectedAgents((current) => ({ ...current, [id]: request.agent }))
     window.setTimeout(() => { setExpectedAgents((current) => omitKey(current, id)) }, EXPECTED_AGENT_MS)
-    if (background) paneViews.choose(id, request.view ?? 'chat')
     if (request.name !== undefined) void renameConversationOnDaemon({ id }, request.name).catch((error: unknown) => { console.warn('Could not name the new session', error) })
     const words = startWords(request.agent, launchFlags(request.agent, everywhereModel(request.agent, request.model), request.reasoning, request.mode), request.bypass)
     if (startsBypassed(request.agent, words)) rememberBypassSession(id)
     await sendTerminalInput({ id, generation: 0 }, `${[request.agent, ...words].join(' ')}\r`)
     if (!background) setNewChatOpen(false)
     onPlaced?.(id)
-  }, [startOnMachine, setExpectedAgents, paneViews, setNewChatOpen, startWords])
+  }, [startOnMachine, setExpectedAgents, setNewChatOpen, startWords])
 
-  // The new chat is the agent in a terminal the daemon owns, shown as its chat: one session whose view
-  // switches to the terminal at any time (ADR 0003), the same for every agent. Starts from the page run alongside each
+  // The new chat is the agent in a terminal the daemon owns, shown as its chat: one session shown in
+  // the app's view (ADR 0003), the same for every agent. Starts from the page run alongside each
   // other; one in the `background` is not opened and leaves the page open for the next.
   const startNewChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (!online) throw new Error('The Maiker service is not reachable')
@@ -359,7 +351,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the
     // empty window (or the last chat) for a moment between the two.
-    await startAgentSession(() => Promise.resolve(folder), request.agent, request.view ?? 'chat', request.message, flags, { alongside: true, background, ...(request.bypass === undefined ? {} : { bypass: request.bypass }), ...(request.name === undefined ? {} : { name: request.name }), afterPlace: (id) => {
+    await startAgentSession(() => Promise.resolve(folder), request.agent, request.message, flags, { alongside: true, background, ...(request.bypass === undefined ? {} : { bypass: request.bypass }), ...(request.name === undefined ? {} : { name: request.name }), afterPlace: (id) => {
       // Codex has no file that says its mode, so what it was started in is what its chat shows: Full access under Bypass Permissions.
       const codexMode = (request.bypass ?? bypasses({ bypassOff }, 'codex')) ? CODEX_FULL_MODE : request.mode === 'default' ? null : request.mode
       holdStartChoice(id, { model: request.model, reasoning: request.reasoning, mode: request.agent === 'claude' ? request.mode : request.agent === 'codex' ? codexMode : null })

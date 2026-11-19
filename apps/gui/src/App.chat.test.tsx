@@ -118,7 +118,7 @@ function renderDesktopApp() {
   render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
 }
 
-describe('the Terminal | Chat view of a pane', () => {
+describe('the one Chat or Terminal view of the app', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
@@ -126,80 +126,56 @@ describe('the Terminal | Chat view of a pane', () => {
     terminal.focused.length = 0
     forgetChatFeeds()
     forgetComposers()
-    // These tests switch a pane between its views, so agents start in the terminal here; the default (the chat) has its own test.
-    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'terminal' } }))
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 59, canRestart: false, sessionCount: 1, activeTurnCount: 0 })
   })
 
+  const openIn = (view: 'chat' | 'terminal') => { window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: view })) }
+
   it('opens an agent as its chat when no view was chosen', async () => {
-    window.localStorage.clear()
     daemon.loadConversations.mockResolvedValue([claude(2)])
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    expect(within(pane).getByRole('radio', { name: /^Chat view/ })).toBeChecked()
     expect(within(pane).getByRole('region', { name: 'Chat' })).toBeInTheDocument()
   })
 
-  it('switches to the chat and back with the button and Ctrl+Shift+E, sending nothing to the daemon and keeping the terminal mounted', async () => {
+  it('has no switch on a pane and no key for one: the chat stays over a terminal that keeps running, sending nothing', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(2)])
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    const view = within(pane).getByRole('radiogroup', { name: 'Pane view' })
-    expect(within(view).getByRole('radio', { name: /^Terminal view/ })).toBeChecked()
+    expect(within(pane).queryByRole('radiogroup', { name: 'Pane view' })).not.toBeInTheDocument()
     vi.clearAllMocks()
 
-    await user.click(within(view).getByRole('radio', { name: /^Chat view/ }))
+    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
     expect(within(pane).getByRole('region', { name: 'Chat' })).toBeInTheDocument()
-    expect(within(view).getByRole('radio', { name: /^Chat view/ })).toBeChecked()
     // The terminal is still mounted under the chat, and was not mounted again.
     expect(within(pane).getByText('Pane 2')).toBeInTheDocument()
     expect(terminal.mounts).toBe(1)
-
-    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
-    expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
-    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
-    expect(within(pane).getByRole('region', { name: 'Chat' })).toBeInTheDocument()
-
     expect(daemon.sendTerminalInput).not.toHaveBeenCalled()
     expect(daemon.resizeTerminal).not.toHaveBeenCalled()
-    expect(terminal.mounts).toBe(1)
   })
 
-  it('shows "Chat view is for agent sessions" on a shell tab, with a way back and a way to start an agent', async () => {
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(3)])
-    renderDesktopApp()
-    const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    // A plain shell has no chat, so its pane has no Terminal | Chat switch; the shortcut still shows why.
-    expect(within(pane).queryByRole('radiogroup', { name: 'Pane view' })).not.toBeInTheDocument()
-
-    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
-    expect(within(pane).getByRole('heading', { name: 'Chat view is for agent sessions' })).toBeInTheDocument()
-
-    await user.click(within(pane).getByRole('button', { name: 'Start Claude here' }))
-    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude --dangerously-skip-permissions\r')
-    expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
-
-    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
-    await user.click(within(pane).getByRole('button', { name: 'Back to terminal' }))
-    expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
-  })
-
-  it('leaves an agent without an event stream terminal-only and says so', async () => {
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(4, { agent: 'opencode', process: 'opencode' })])
+  it('shows every agent session as its terminal, and has no chat to show, when Settings says Terminal', async () => {
+    openIn('terminal')
+    daemon.loadConversations.mockResolvedValue([claude(2)])
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
 
-    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
-    expect(within(pane).getByText(/opencode has no event stream/)).toBeInTheDocument()
-    expect(within(pane).queryByRole('button', { name: /Start Claude here/ })).not.toBeInTheDocument()
+    expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
+    await waitFor(() => { expect(terminal.focused.at(-1)).toBe(true) })
+  })
+
+  it('keeps a shell, and an agent without an event stream, in the terminal whatever Settings says', async () => {
+    daemon.loadConversations.mockResolvedValue([term(3), term(4, { agent: 'opencode', process: 'opencode' })])
+    renderDesktopApp()
+
+    await waitFor(() => { expect(screen.getAllByRole('region', { name: /^Terminal / }).length).toBeGreaterThan(0) })
+    for (const pane of screen.getAllByRole('region', { name: /^Terminal / })) expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
   })
 
   it('opens a Claude session in the chat when Settings says so, and never opens a shell there', async () => {
-    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'chat', codex: 'terminal' } }))
+    openIn('chat')
     daemon.loadConversations.mockResolvedValue([claude(2), term(3)])
     renderDesktopApp()
 
@@ -207,23 +183,31 @@ describe('the Terminal | Chat view of a pane', () => {
     const panes = screen.getAllByRole('region', { name: /^Terminal / })
     const chats = panes.filter((pane) => within(pane).queryByRole('region', { name: 'Chat' }) !== null)
     expect(chats).toHaveLength(1)
-    expect(within(chats[0] as HTMLElement).getByRole('radio', { name: /^Chat view/ })).toBeChecked()
+  })
+
+  it('shows the terminal log of a stopped agent over its chat, without changing the app\'s view, and goes back', async () => {
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([claude(2, { status: 'idle', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, exit: { code: 1, at: 0 } } })])
+    renderDesktopApp()
+    const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
+    await user.click(await within(pane).findByRole('button', { name: 'Show the log' }))
+
+    expect(within(pane).queryByRole('region', { name: 'Chat' })).not.toBeInTheDocument()
+    await user.click(within(pane).getByRole('button', { name: 'More pane actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Back to chat' }))
+    expect(within(pane).getByRole('region', { name: 'Chat' })).toBeInTheDocument()
   })
 
   it('shows the daemon\'s conversation in the chat and keeps the terminal untouched while it reads', async () => {
-    const user = userEvent.setup()
     const history = new FakeDaemonHistory()
     history.upsert(history.message('t1', 'u', 'User', 'fix the failing test'))
     history.upsert(history.message('t1', 'a', 'Assistant', 'I found the cause. It was a stale fixture.'))
     history.upsert(history.turnStatus('t1', 'Completed', { started_at_ms: 1_000, completed_at_ms: 8_000 }))
     daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
     daemon.loadConversations.mockResolvedValue([claude(2)])
+    daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    vi.clearAllMocks()
-    daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
-
-    await user.click(within(pane).getByRole('radio', { name: /^Chat view/ }))
 
     expect(await within(pane).findByText('fix the failing test')).toBeInTheDocument()
     expect(within(pane).getByText('I found the cause.')).toBeInTheDocument()
@@ -240,11 +224,9 @@ describe('the Terminal | Chat view of a pane', () => {
     history.status = 'Blocked'
     history.approvals = [{ request_id: 'req-1', kind: 'Command', turn_id: 't1', command: 'git push', choices: ['Accept', 'Decline'] }]
     daemon.loadConversations.mockResolvedValue([claude(2)])
+    daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
-
-    await user.click(within(pane).getByRole('radio', { name: /^Chat view/ }))
     const box = await within(pane).findByRole('textbox', { name: 'Message Claude' })
     await waitFor(() => { expect(box).toBeDisabled() })
     expect(box).toHaveAttribute('placeholder', 'Answer the request above first')
@@ -266,10 +248,9 @@ describe('the Terminal | Chat view of a pane', () => {
     daemon.loadConversations.mockResolvedValue([claude(2)])
     attachments.attachLocalFile.mockResolvedValue({ path: '/cache/attachments/attach-1730000000000-0a1b2c3d-shot.png', name: 'shot.png', size: 2048, kind: 'image' })
     attachments.attachmentsExist.mockImplementation((paths: string[]) => Promise.resolve(paths.map(() => true)))
+    daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    daemon.readConversationPage.mockImplementation((_id: number, cursor: never) => history.read(cursor))
-    await user.click(within(pane).getByRole('radio', { name: /^Chat view/ }))
     const box = await within(pane).findByRole('textbox', { name: 'Message Claude' })
 
     // jsdom has no hit testing: the pointer is over the text box.
@@ -289,13 +270,10 @@ describe('the Terminal | Chat view of a pane', () => {
   })
 
   it('does not hand the keyboard to the terminal while the chat covers it', async () => {
-    const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(2)])
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    await waitFor(() => { expect(terminal.focused.at(-1)).toBe(true) })
-
-    await user.click(within(pane).getByRole('radio', { name: /^Chat view/ }))
+    expect(within(pane).getByRole('region', { name: 'Chat' })).toBeInTheDocument()
     await waitFor(() => { expect(terminal.focused.at(-1)).toBe(false) })
   })
 })

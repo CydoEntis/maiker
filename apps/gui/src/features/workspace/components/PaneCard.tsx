@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { MAX_PANES, type PaneSlot, type SplitDirection } from '../model/layout'
 import { machineLabel } from '@/data/machineNicknames'
 import { MAX_SESSION_NAME_LENGTH, STATUS_WORD, type SessionView } from '../model/session'
-import { headerFit, shellProgram } from '../model/paneHeader'
+import { shellProgram } from '../model/paneHeader'
 import { isShell, keepsRunningUnseen, projectOf, rowTitle } from '../model/sidebar'
 import { InlineName } from './InlineName'
 import { BranchMenu, type BranchMenuSpec } from '@/features/chat/components/BranchMenu'
@@ -10,7 +10,6 @@ import { StatusIcon } from '@/components/ui/status-icon'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import { Icon } from './glyphs'
 import { beginPointerDrag } from './dragSession'
-import { PaneViewSwitch } from './PaneViewSwitch'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { menuPoint } from './menuPoint'
 import { CHAT_AGENTS, type ChatAgent, type PaneView } from '../model/chatView'
@@ -33,10 +32,10 @@ export type PaneCardProps = {
   /** What letting go over this pane does, said on it while it is the target. */
   dropWord: string
   terminal: ReactNode
-  /** The view the pane shows. The terminal stays mounted under the chat, so it keeps streaming and keeps its size. */
+  /** The view the pane shows: the app-wide one (Settings › Open sessions in). The terminal stays mounted under the chat, so it keeps streaming and keeps its size. */
   view?: PaneView
-  /** Present when the pane has a terminal | chat switch; picking a view sends nothing to the daemon. */
-  onViewChange?: (view: PaneView) => void
+  /** Present while the pane shows its terminal log over a chat that could not carry on; it puts the chat back. */
+  onHideLog?: () => void
   /** The chat that covers the terminal while `view` is `chat`. */
   chat?: ReactNode
   /** What floats over the top of the body in either view: the agent's running subagents. */
@@ -71,6 +70,8 @@ export type PaneCardProps = {
   leading?: ReactNode
   /** Where the branch crumb can switch the chat's branch (a session on this computer); without it the branch is only said. */
   branchMenu?: BranchMenuSpec | undefined
+  /** A shell's way to an agent of its own in the same folder (a chat session, or Gemini's terminal one); absent for an agent. */
+  onStartChat?: (agent: ChatAgent) => void
   /** Starts another agent beside this one's work, with a brief of it. */
   onHandoff: (agent: ChatAgent) => void
   /** Starts a new shell in an ended pane's folder, in its place. */
@@ -79,29 +80,11 @@ export type PaneCardProps = {
   onAnswerHelpers?: (choice: 'allow' | 'always' | 'no') => void
 }
 
-/** The pane's width as it is laid out, so its header can give up controls as it narrows. */
-function useWidth(): [React.RefObject<HTMLElement | null>, number | null] {
-  const element = useRef<HTMLElement>(null)
-  const [width, setWidth] = useState<number | null>(null)
-  useEffect(() => {
-    const target = element.current
-    if (!target || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver((entries) => {
-      const box = entries[0]?.contentRect
-      if (box) setWidth(Math.round(box.width))
-    })
-    observer.observe(target)
-    return () => { observer.disconnect() }
-  }, [])
-  return [element, width]
-}
-
 const stop = (event: MouseEvent) => { event.stopPropagation() }
 
 export function PaneCard(props: PaneCardProps) {
   const { pane, session, paneCount, focused, maximized } = props
   const shortcutText = useShortcutText()
-  const [box, width] = useWidth()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
   const menuWasOpen = useRef(false)
   const [naming, setNaming] = useState(false)
@@ -110,7 +93,6 @@ export function PaneCard(props: PaneCardProps) {
   const ended = session.ended
   const view = props.view ?? 'terminal'
   const shown = view
-  const fit = headerFit(width)
   const title = rowTitle(session)
   const shell = isShell(session)
   const changesTip = shortcutText('inspect') === '' ? 'Changes' : `Changes · ${shortcutText('inspect')}`
@@ -121,6 +103,11 @@ export function PaneCard(props: PaneCardProps) {
   const handoffItems: MenuEntry[] = CHAT_AGENTS.includes(session.process as ChatAgent) && !ended
     ? CHAT_AGENTS.filter((agent) => agent !== session.process).map((agent) => ({ label: `Hand off to ${agentName(agent)}`, disabled: !props.online, run: () => { props.onHandoff(agent) } }))
     : []
+
+  // A shell is always a terminal, so this menu is where it gets an agent of its own in the same folder.
+  const startItems: MenuEntry[] = props.onStartChat === undefined || ended
+    ? []
+    : CHAT_AGENTS.map((agent) => ({ label: agent === 'gemini' ? `Start ${agentName(agent)} here` : `Start a ${agentName(agent)} chat here`, disabled: !props.online, run: () => { props.onStartChat?.(agent) } }))
 
   // What the removed tools bar held, behind the ⋯: the side panel's four views and the terminal dock.
   const toolItems: MenuEntry[] = [
@@ -136,13 +123,12 @@ export function PaneCard(props: PaneCardProps) {
     ...(toolItems.length > 0 ? [...toolItems, 'separator' as const] : []),
     { label: 'Split right', hint: shortcutText('split-right'), disabled: full, run: () => { props.onSplit(pane.id, 'right') } },
     { label: 'Split down', hint: shortcutText('split-down'), disabled: full, run: () => { props.onSplit(pane.id, 'down') } },
+    ...startItems,
     ...handoffItems,
     'separator',
     { label: 'Rename…', hint: 'F2', run: props.onRename },
     { label: maximized ? 'Restore layout' : 'Maximize pane', disabled: !multi && !maximized, run: () => { props.onToggleMaximize(pane.id) } },
-    ...(props.onViewChange
-      ? [{ label: view === 'chat' ? 'Show terminal' : 'Show chat', hint: shortcutText('chat-toggle'), run: () => { props.onViewChange?.(view === 'chat' ? 'terminal' : 'chat') } }]
-      : []),
+    ...(props.onHideLog === undefined ? [] : [{ label: 'Back to chat', run: props.onHideLog }]),
     ...(props.onNewTerminal === undefined
       ? [{ label: 'Clear', hint: 'Ctrl+L', disabled: !props.online || ended, run: props.onClear }, { label: 'Copy folder path', run: props.onCopyPath }]
       : [{ label: 'New terminal', disabled: !props.online, run: props.onNewTerminal }]),
@@ -154,7 +140,6 @@ export function PaneCard(props: PaneCardProps) {
   return (
     <>
     <section
-      ref={box}
       className={`mx-pane${shown === 'terminal' ? ' is-terminal' : ' is-chat'}${multi ? ' is-card' : ''}${focused && multi ? ' is-focused' : ''}${props.broadcast ? ' is-broadcast' : ''}${props.dropTarget ? ' is-drop-target' : ''}${props.dragging ? ' is-dragging' : ''}`}
       aria-label={`Terminal ${String(props.index + 1)}: ${session.cwdLabel}${focused ? ', focused' : ''}`}
       data-session-id={session.id}
@@ -194,9 +179,6 @@ export function PaneCard(props: PaneCardProps) {
         </div>
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
         <span className="mx-pane-controls">
-          {props.onViewChange !== undefined && fit.switcher && (
-            <PaneViewSwitch views={['chat', 'terminal']} view={shown} onChange={(next) => { props.onViewChange?.(next) }} />
-          )}
           {props.onPanel !== undefined && (
             <>
               <button type="button" className={`mx-pane-control${props.panelView === 'changes' ? ' is-on' : ''}`} aria-label="Changes" title={changesTip} aria-pressed={props.panelView === 'changes'} onMouseDown={stop} onClick={() => { props.onPanel?.('changes') }}>
@@ -206,8 +188,8 @@ export function PaneCard(props: PaneCardProps) {
               <button type="button" className={`mx-pane-control${props.panelView === 'files' ? ' is-on' : ''}`} aria-label="Files" title="Files" aria-pressed={props.panelView === 'files'} onMouseDown={stop} onClick={() => { props.onPanel?.('files') }}><Icon name="files" size={15} /></button>
             </>
           )}
-          {props.onViewChange === undefined && props.onToggleTerminal !== undefined && (
-            // A pane with no Chat | Terminal switch (the chat alone) still has a visible way to its terminal.
+          {shown === 'chat' && props.onToggleTerminal !== undefined && (
+            // The chat has no terminal under it to switch to, so the dock's terminal stays one visible click away.
             <button type="button" className={`mx-pane-control${props.terminalShown ? ' is-on' : ''}`} aria-label="Terminal" title={props.terminalShown ? 'Hide terminal' : 'Terminal'} aria-pressed={props.terminalShown} onMouseDown={stop} onClick={props.onToggleTerminal}><Icon name="terminalBox" size={15} /></button>
           )}
           <button

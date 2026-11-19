@@ -21,7 +21,7 @@ import { MAX_SHOWN, SlashPicker } from '@/features/chat/components/SlashPicker'
 import { commandText, matchCommands, slashQuery, useSlashCommands, type SlashCommand } from '@/features/chat/slashCommands'
 import { openAgentDocs } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { chatAgentOf, openViewFor, type ChatAgent, type PaneView } from '../model/chatView'
+import { chatAgentOf, type ChatAgent } from '../model/chatView'
 import { abilitiesOf } from '../model/agentAbilities'
 import { useFolderBranches, useInstalledAgents } from '../model/newChatHost'
 import type { BusyBranches, NewSessionProject } from '../model/newSession'
@@ -47,7 +47,7 @@ export type BranchChoice = { name: string; create: boolean; worktree: boolean }
  * `bypass` is this session's Bypass Permissions choice over Settings, and `name` a name for it; without one the first
  * message names the session.
  */
-export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; view?: PaneView; name?: string; bypass?: boolean | undefined }
+export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; name?: string; bypass?: boolean | undefined }
 
 /** How a start is asked for: `background` starts the session without opening it, and the page stays for the next; `onPlaced` hears its id. */
 export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void }
@@ -78,8 +78,6 @@ type Props = {
   /** The branches other sessions are working on, per folder: a session started on one gets a worktree of its own. */
   busy?: BusyBranches
   defaultAgent: ChatAgent
-  /** The view a new session opens in (Settings › Open sessions in); Gemini always opens in its terminal. */
-  openIn?: PaneView
   /**
    * The agents whose Bypass Permissions is off (Settings › Permissions). Every other one starts on its skip-permissions
    * mode: Claude on Bypass permissions, Codex on Full access. The page shows it and More options changes it for one session.
@@ -149,7 +147,7 @@ function permissionWords(agent: ChatAgent, bypass: boolean): { text: string; dan
  * swaps in the session's pane in one update. Ctrl+Enter (⌘Enter on macOS) starts from anywhere, Ctrl+Shift+Enter starts it
  * in the background and keeps the draft for the next one, Esc discards it. A plain shell is "New terminal", not here.
  */
-export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, openIn = 'chat', bypassOff = NONE_OFF, pickFolder, cloner = null, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
   // On another machine the session is the agent started in a shell there: this computer's extra models, branches and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
@@ -235,8 +233,6 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   }, [explicit, treeMode, suggested])
   const isInstalled = (id: string) => (installed === null ? chatAgentOf(id) !== null : installed.includes(id))
   const agentMissing = !remote && !isInstalled(agent)
-  // The session opens as Settings says (Gemini always in its terminal); the other view is one click away on its pane.
-  const opensAs: PaneView = openViewFor(agent, openIn)
 
   // The message box takes the keys when the draft opens, and again after a start that did not go through.
   useEffect(() => { if (!starting) text.current?.focus() }, [folder, starting])
@@ -262,7 +258,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   useWarmAgent(onWarm, warmSpec, starting || background.pending > 0)
   const requestFor = (task: string): NewChatRequest => ({
     folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments), bypass,
-    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetLabel, resume: null, view: opensAs,
+    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetLabel, resume: null,
   })
   const empty = message.trim() === '' && attachments.length === 0
   const off = starting || folder === '' || agentMissing || empty || targetDown !== null || cloning !== null

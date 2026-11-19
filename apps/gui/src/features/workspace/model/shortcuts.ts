@@ -49,7 +49,6 @@ export type ShortcutAction =
   | 'text-smaller'
   | 'usage'
   | 'performance'
-  | 'chat-toggle'
   | 'terminal'
 
 /** The sections of the shortcut overlay, in the order it shows them. */
@@ -108,7 +107,6 @@ export const BINDINGS: readonly Binding[] = [
   { action: 'inspect', label: 'Inspect the repository', group: 'Find & jump', mac: [cmd('I')], other: [ctrlShift('I')], available: true },
   { action: 'find', label: 'Find in the pane or every session', group: 'Find & jump', mac: [cmd('F')], other: [ctrlShift('F')], available: true },
   { action: 'toggle-sidebar', label: 'Collapse sidebar', group: 'Window', mac: [cmd('B')], other: [ctrlShift('B')], available: true },
-  { action: 'chat-toggle', label: 'Terminal or chat', group: 'Window', mac: [cmd('E', 'shift')], other: [ctrlShift('E')], available: true },
   // The terminal dock. ⌃` is the usual terminal key on macOS, where Ctrl is not the shell's; elsewhere Shift joins it (the contract above).
   { action: 'terminal', label: 'Show or hide the terminal', group: 'Window', mac: [{ mods: ['ctrl'], key: '`' }], other: [ctrlShift('`')], available: true },
   { action: 'usage', label: 'Usage and cost', group: 'Window', mac: [cmd('U', 'shift')], other: [ctrlShift('U')], available: true },

@@ -189,19 +189,7 @@ describe('a chat session in the desktop window', () => {
     expect(daemon.archiveConversationOnDaemon).not.toHaveBeenCalled()
   })
 
-  it('stays out of the way of the typed-command start: Start claude here still types into the shell', async () => {
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(3, { repo: null, folder: HOME, cwd: HOME })])
-    renderDesktopApp()
-    const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
-
-    await user.click(within(pane).getByRole('button', { name: 'Start Claude here' }))
-    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't3', generation: 0 }, 'claude --dangerously-skip-permissions\r')
-    expect(daemon.startChatSession).not.toHaveBeenCalled()
-  })
-
-  it('"Start a Claude chat" on a shell starts a chat session in its folder and opens it, typing nothing', async () => {
+  it('"Start a Claude chat here" in a shell\'s menu starts a chat session in its folder and opens it, typing nothing', async () => {
     const user = userEvent.setup()
     serveHistory()
     daemon.loadConversations.mockResolvedValue([term(3, { repo: null, folder: HOME, cwd: HOME })])
@@ -211,9 +199,9 @@ describe('a chat session in the desktop window', () => {
     })
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
 
-    await user.click(within(pane).getByRole('button', { name: 'Start a Claude chat' }))
+    await user.click(within(pane).getByRole('button', { name: 'More pane actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Start a Claude chat here' }))
 
     await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(HOME, 'claude', null, true) })
     expect(daemon.sendTerminalInput).not.toHaveBeenCalled()
@@ -228,7 +216,7 @@ describe('Bypass Permissions in a chat session', () => {
     window.localStorage.clear()
   })
 
-  it('starts the chat bypassing permissions by default, and shows it on the chat afterwards', async () => {
+  it('starts the chat bypassing permissions by default (Settings), and shows it on the chat afterwards', async () => {
     const user = userEvent.setup()
     serveHistory()
     daemon.loadConversations.mockResolvedValue([term(3, { repo: null, folder: HOME, cwd: HOME })])
@@ -238,10 +226,9 @@ describe('Bypass Permissions in a chat session', () => {
     })
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    await user.keyboard('{Control>}{Shift>}e{/Shift}{/Control}')
 
-    expect(within(pane).getByRole('switch', { name: 'Bypass permissions (skip permission prompts)' })).toBeChecked()
-    await user.click(within(pane).getByRole('button', { name: 'Start a Claude chat' }))
+    await user.click(within(pane).getByRole('button', { name: 'More pane actions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Start a Claude chat here' }))
 
     await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(HOME, 'claude', null, true) })
     expect(await screen.findByText('Bypass permissions')).toBeInTheDocument()
@@ -273,13 +260,13 @@ describe('the chat that follows an agent in a pane', () => {
     daemon.loadConversations.mockResolvedValue([term(2, { provider: 'Claude', agent: 'claude', process: 'claude', chat: { conversation: 41, generation: 1, readOnly: true } })])
     renderDesktopApp()
     const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
-    // An agent opens as its chat, and the switch to its terminal is there.
+    // An agent opens as its chat; the app's one view has no switch on the pane.
     const chat = await within(pane).findByRole('region', { name: 'Chat' })
     await within(chat).findByText('On it.')
 
     const composer = within(chat).getByRole('textbox')
     await waitFor(() => { expect(composer).toBeEnabled() })
-    expect(within(pane).getByRole('radiogroup', { name: 'Pane view' })).toBeInTheDocument()
+    expect(within(pane).queryByRole('radiogroup', { name: 'Pane view' })).not.toBeInTheDocument()
 
     await user.type(composer, 'run the tests{Enter}')
 

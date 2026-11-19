@@ -33,14 +33,14 @@ import type { NewChatRequest } from './components/NewChatPage'
 
 const ID = '0d0f5c1e-1111-4222-8333-444455556666'
 
-type Watch = { /** Bypass Permissions off for these; every agent unless a test says otherwise. */ bypassOff?: readonly string[]; setLayout?: () => void; setNewChatOpen?: (open: boolean) => void; setStartedFrom?: (change: unknown) => void; choose?: () => void }
+type Watch = { /** Bypass Permissions off for these; every agent unless a test says otherwise. */ bypassOff?: readonly string[]; setLayout?: () => void; setNewChatOpen?: (open: boolean) => void; setStartedFrom?: (change: unknown) => void }
 function starts(watch: Watch = {}) {
   const { bypassOff } = watch
   const setter = vi.fn()
   const props = {
     queryClient: new QueryClient(), sessions: [], setWorktreeFrom: setter, setLayout: watch.setLayout ?? setter, flash: setter, focusedSession: undefined,
     setNewChatOpen: watch.setNewChatOpen ?? setter, online: true, starting: false, setStarting: setter, setStartedFrom: watch.setStartedFrom ?? setter, sessionMap: new Map([['old', {}]]),
-    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'] }, setExpectedAgents: setter, paneViews: { choose: watch.choose ?? setter },
+    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'] }, setExpectedAgents: setter,
     setSettingsSection: setter, setNewChatMachine: setter, setNewChatSeed: setter, home: '/home/me', machinesRef: { current: remote.machines },
   } as unknown as Parameters<typeof useSessionStarts>[0]
   return renderHook(() => useSessionStarts(props)).result.current
@@ -114,16 +114,16 @@ describe('opening a new chat from the page', () => {
     return { transition, remove: () => { panes.remove(); Reflect.deleteProperty(document, 'startViewTransition'); if (matchMedia === undefined) Reflect.deleteProperty(window, 'matchMedia'); else Object.defineProperty(window, 'matchMedia', matchMedia) } }
   }
 
-  it('shows its view and closes the page in the same update that opens the pane, not a frame later', async () => {
+  it('closes the page in the same update that opens the pane, not a frame later', async () => {
     const glide = glidingPane()
     const during: Record<string, boolean> = {}
     const note = (what: string) => () => { during[what] = glide.transition.inside }
     try {
-      await starts({ setLayout: note('layout'), setNewChatOpen: note('page'), choose: note('view') }).startNewChat(request({ message: 'hello' }))
+      await starts({ setLayout: note('layout'), setNewChatOpen: note('page') }).startNewChat(request({ message: 'hello' }))
     } finally {
       glide.remove()
     }
-    expect(during).toEqual({ layout: true, view: true, page: true })
+    expect(during).toEqual({ layout: true, page: true })
   })
 
   it('does the same for a chat started on another machine', async () => {
@@ -132,12 +132,12 @@ describe('opening a new chat from the page', () => {
     const during: Record<string, boolean> = {}
     const note = (what: string) => () => { during[what] = glide.transition.inside }
     try {
-      await starts({ setLayout: note('layout'), choose: note('view') }).startNewChat(request({ machine: 3, machineName: 'box' }))
+      await starts({ setLayout: note('layout') }).startNewChat(request({ machine: 3, machineName: 'box' }))
     } finally {
       glide.remove()
       remote.machines.delete(3)
     }
-    expect(during).toEqual({ layout: true, view: true })
+    expect(during).toEqual({ layout: true })
   })
 })
 

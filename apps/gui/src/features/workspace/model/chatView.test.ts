@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { chatAvailability, effectiveView, noChatReason, type ChatAvailability, type ChatViewDefaults } from './chatView'
+import { chatAvailability, effectiveView, noChatReason, openViewFor } from './chatView'
 
 const LINK = { conversation: 7, generation: 2 }
-const TERMINAL_FIRST: ChatViewDefaults = { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }
 
 describe('chatAvailability', () => {
   it('is ready for a Claude or Codex session the daemon holds a conversation for', () => {
@@ -32,22 +31,20 @@ describe('chatAvailability', () => {
 })
 
 describe('effectiveView', () => {
-  const ready: ChatAvailability = { kind: 'ready', agent: 'claude', link: LINK }
-
-  it('opens as the terminal unless the agent default says chat', () => {
-    expect(effectiveView(undefined, ready, TERMINAL_FIRST)).toBe('terminal')
-    expect(effectiveView(undefined, ready, { claude: 'chat', codex: 'terminal', gemini: 'terminal' })).toBe('chat')
-    expect(effectiveView(undefined, { kind: 'ready', agent: 'codex', link: LINK }, { claude: 'chat', codex: 'terminal', gemini: 'terminal' })).toBe('terminal')
+  it('shows every agent session that has or will have a chat in the view the whole app is in', () => {
+    expect(effectiveView({ kind: 'ready', agent: 'claude', link: LINK }, 'chat')).toBe('chat')
+    expect(effectiveView({ kind: 'ready', agent: 'codex', link: LINK }, 'terminal')).toBe('terminal')
+    expect(effectiveView({ kind: 'no-events', agent: 'claude' }, 'chat')).toBe('chat')
   })
 
-  it('never opens a session without a chat in the chat view by default', () => {
-    expect(effectiveView(undefined, { kind: 'shell' }, { claude: 'chat', codex: 'chat', gemini: 'chat' })).toBe('terminal')
-    expect(effectiveView(undefined, { kind: 'no-events', agent: 'claude' }, { claude: 'chat', codex: 'chat', gemini: 'chat' })).toBe('terminal')
+  it('keeps Gemini in its terminal whatever the app is set to', () => {
+    expect(effectiveView({ kind: 'ready', agent: 'gemini', link: LINK }, 'chat')).toBe('terminal')
+    expect(openViewFor('gemini', 'chat')).toBe('terminal')
   })
 
-  it('lets an explicit choice win, even on a shell tab (it shows the empty chat card)', () => {
-    expect(effectiveView('chat', { kind: 'shell' }, TERMINAL_FIRST)).toBe('chat')
-    expect(effectiveView('terminal', ready, { claude: 'chat', codex: 'chat', gemini: 'chat' })).toBe('terminal')
+  it('keeps a shell and an agent the app does not read in the terminal', () => {
+    expect(effectiveView({ kind: 'shell' }, 'chat')).toBe('terminal')
+    expect(effectiveView({ kind: 'unsupported', agent: 'opencode' }, 'chat')).toBe('terminal')
   })
 })
 

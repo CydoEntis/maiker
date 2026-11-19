@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
@@ -160,15 +161,35 @@ describe('desktop settings', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('sets the one view every new session opens in, with no per-agent choice', async () => {
+  it('sets the one view the whole app is in, under How you work, with no per-agent choice', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('chat')
+    const { onChange } = renderSettings('general')
 
-    const opens = screen.getByRole('radiogroup', { name: 'Open sessions in' })
+    const how = screen.getByRole('region', { name: 'How you work' })
+    const opens = within(how).getByRole('radiogroup', { name: 'Open sessions in' })
     expect(within(opens).getByRole('radio', { name: 'Terminal' })).toBeChecked()
+    expect(how).toHaveTextContent('every open session follows it')
+    expect(how).toHaveTextContent('Gemini has no chat view, so it always opens in Terminal')
     await user.click(within(opens).getByRole('radio', { name: 'Chat' }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ openSessionsIn: 'chat' }))
     expect(screen.queryByRole('radiogroup', { name: 'Claude sessions open in' })).toBeNull()
+  })
+
+  it('says every session moved, and undoes it', async () => {
+    const user = userEvent.setup()
+    function Held() {
+      const [preferences, setPreferences] = useState(PREFS)
+      return <QueryClientProvider client={new QueryClient()}><DesktopSettings usage={{ budget: null, onBudget: vi.fn(), sessionForTerm: () => null, onOpenSession: vi.fn() }} section="general" onSection={vi.fn()} preferences={preferences} onChange={setPreferences} systemReducedMotion={false} systemDark onPreviewTheme={vi.fn()} onShowWelcome={vi.fn()} platform="linux" daemon={{ online: true, sessionCount: 3 }} machines={info()} appVersion="0.64.0" onClose={vi.fn()} /></QueryClientProvider>
+    }
+    render(<Held />)
+
+    expect(screen.queryByRole('status')).toBeNull()
+    await user.click(screen.getByRole('radio', { name: 'Chat' }))
+    expect(screen.getByRole('status')).toHaveTextContent('All sessions now open in Chat')
+    expect(screen.getByRole('status')).toHaveTextContent('Gemini always opens in Terminal')
+    await user.click(screen.getByRole('button', { name: 'Undo' }))
+    expect(screen.getByRole('radio', { name: 'Terminal' })).toBeChecked()
+    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('chooses the default agent and what a new session opens as', async () => {

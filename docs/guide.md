@@ -962,8 +962,7 @@ means](#what-a-sessions-status-means).
 on a Mac) opens the New session draft: a chat that has not been sent, in the main window, not a dialog. When nothing is
 running, the window is that draft; Esc discards it. It asks where (machine, project, branch), what ("What should we work on?"), and who (the agent
 and its model). It starts on your most recent project: write the task and press Enter. Settings › Chat › **Open
-sessions in** decides whether it opens as its chat or its terminal; the Chat | Terminal switch in the pane changes it
-any time. A plain shell is **New terminal**.
+sessions in** decides whether every session, the open ones too, shows as its chat or its terminal; it is one setting for the whole app, so there is no switch on a pane. A plain shell is **New terminal**.
 
 **Where the chat runs** is in the dialog's header, as it is on a running chat's pane:
 
