@@ -132,6 +132,12 @@ describe('status sections', () => {
     expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t2']], ['working', ['t1']]])
   })
 
+  it('lists a held row that starts working under Working, not where it was picked', () => {
+    const sessions = [session(1, { agent: 'claude', status: 'working' }), session(2, { agent: 'claude', status: 'idle' })]
+    const sections = statusSections(sessions, { id: 't1', section: 'idle' })
+    expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['working', ['t1']], ['idle', ['t2']]])
+  })
+
   it('keeps the held row in the section it was picked in, and moves the others', () => {
     const sessions = [session(1, { agent: 'claude', status: 'idle' }), session(2, { agent: 'claude', status: 'idle' })]
     const sections = statusSections(sessions, { id: 't1', section: 'done' })
