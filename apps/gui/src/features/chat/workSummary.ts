@@ -13,11 +13,10 @@ function said({ n, one, many }: Count): string {
   return `${String(n)} ${n === 1 ? one : many}`
 }
 
-/**
- * What a run of steps did, in a line: "Read 2 files, edited 3, ran 1 command". Files are counted once however
- * often they were touched. Only what the steps say is counted; a tool of no known kind is "used N tools".
- */
-export function workSummary(steps: readonly WorkStep[]): string {
+type Tally = { readonly read: number; readonly searches: number; readonly edited: number; readonly commands: number; readonly others: number }
+
+/** What a run did, each kind counted: files once however often they were touched. */
+function tally(steps: readonly WorkStep[]): Tally {
   const read = new Set<string>()
   const edited = new Set<string>()
   let searches = 0
@@ -30,15 +29,30 @@ export function workSummary(steps: readonly WorkStep[]): string {
     else if (SEARCH_TOOL.test(step.name)) searches += 1
     else others += 1
   }
+  return { read: read.size, searches, edited: edited.size, commands, others }
+}
+
+/**
+ * What a run of steps did, in a line: "Read 2 files, edited 3, ran 1 command". Files are counted once however
+ * often they were touched. Only what the steps say is counted; a tool of no known kind is "used N tools".
+ */
+export function workSummary(steps: readonly WorkStep[]): string {
+  const { read, searches, edited, commands, others } = tally(steps)
   const parts: string[] = []
-  if (read.size > 0) parts.push(`read ${said({ n: read.size, one: 'file', many: 'files' })}`)
+  if (read > 0) parts.push(`read ${said({ n: read, one: 'file', many: 'files' })}`)
   if (searches > 0) parts.push(`searched ${said({ n: searches, one: 'time', many: 'times' })}`)
   // After "read 2 files" the noun is understood: "edited 3".
-  if (edited.size > 0) parts.push(read.size > 0 ? `edited ${String(edited.size)}` : `edited ${said({ n: edited.size, one: 'file', many: 'files' })}`)
+  if (edited > 0) parts.push(read > 0 ? `edited ${String(edited)}` : `edited ${said({ n: edited, one: 'file', many: 'files' })}`)
   if (commands > 0) parts.push(`ran ${said({ n: commands, one: 'command', many: 'commands' })}`)
   if (others > 0) parts.push(`used ${said({ n: others, one: 'tool', many: 'tools' })}`)
   const line = parts.join(', ')
   return line.charAt(0).toUpperCase() + line.slice(1)
+}
+
+/** Whether the summary is one count that already is the number of steps ("Ran 3 commands"), so "3 steps" beside it would say the same twice. */
+export function summaryCountsEverything(steps: readonly WorkStep[]): boolean {
+  const counts = Object.values(tally(steps)).filter((n) => n > 0)
+  return counts.length === 1 && counts[0] === steps.length
 }
 
 /** The run as one status: running while any step is, failed when one failed, else how the last one ended. */
