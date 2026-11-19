@@ -269,3 +269,29 @@ describe('a subagent’s own chat', () => {
     expect(onBackToMain).toHaveBeenCalled()
   })
 })
+
+describe('a chat kept out of sight', () => {
+  it('shows what it had, reads nothing while paused, and reads at once when shown again', async () => {
+    const daemon = conversation(2)
+    const reads = vi.spyOn(daemon, 'read')
+    const { rerender } = render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+    rerender(<ChatSession link={link()} agent="claude" online paused />)
+    reads.mockClear()
+
+    daemon.upsert(daemon.message('t1', 'm2', 'Assistant', 'said while away'))
+    await settle(IDLE_POLL_MS * 3)
+
+    expect(reads).not.toHaveBeenCalled()
+    expect(screen.getByText('message 1')).toBeInTheDocument()
+    expect(screen.queryByText('said while away')).not.toBeInTheDocument()
+
+    rerender(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+    await settle(1500)
+
+    expect(reads).toHaveBeenCalled()
+    expect(screen.getByText('said while away')).toBeInTheDocument()
+    expect(screen.getAllByText('message 1')).toHaveLength(1)
+  })
+})

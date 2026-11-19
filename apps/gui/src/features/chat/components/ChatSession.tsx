@@ -170,6 +170,8 @@ type Props = {
   hideSuccessfulTools?: boolean
   /** The window's own screens a command opens instead of Claude Code's menu (`windowCommands.ts`); absent where there are none. */
   windowActions?: WindowActions | undefined
+  /** The chat is mounted out of sight, behind the tab showing: it keeps what it shows but reads nothing until it is shown. */
+  paused?: boolean
 }
 
 /** The screens a command can open beside the chat: a Settings page, a tab of the session's side panel, the closed sessions. */
@@ -182,8 +184,8 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
-  const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
+export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, paused = false }: Props) {
+  const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent, paused })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
   const working = !agentFree && (feed.status === 'Working' || paneWorking)

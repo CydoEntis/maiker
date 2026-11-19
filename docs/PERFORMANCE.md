@@ -716,3 +716,33 @@ unverified version), `--model haiku`, a small project with no MCP servers, one r
 About 0.95 s saved per message here; more with MCP servers, plugins or a slow disk, since that is
 the start-up being skipped. To re-measure, time from writing the user message to the first
 `text_delta` with and without a process started a few seconds earlier.
+
+## Switching between chats (2026-11-18)
+
+A click on another session shows a chat that was built from nothing: three keys (`PaneErrorBoundary` and `TerminalView` by
+session id in `WorkspacePane.tsx`, `ChatSession` by conversation in `ChatPane.tsx`) throw the old tree away. A side-by-side
+test of v0.79.0 and v0.80.0 found no single cause: v0.80 does 15 to 36 percent more component renders per switch, spread
+over the redesign, so the likely cost is paint or animation, which a headless test cannot see.
+
+Done: the pane's 200 ms entrance fade is gone (`pane.css`); the chat paints from the feed cache with no loading frame
+(`useChatFeed`, `CACHE_LIMIT`); a pointer on a sidebar row reads its feed ahead (`warmChatFeed`); the focused id is not in
+`flipKey`. **Step A:** a tab kept out of sight (`KEPT_TABS`) keeps its chat mounted as well as its terminal, with the feed
+paused (`useChatFeed` `paused`: no reads and no listening, and one read at once when it shows again), so going back to
+one of the last two tabs shows its chat, scroll position, draft and open trays as they were. Cost is memory: two more chats.
+Not measured on screen yet; record one session click in the built app (F12, Performance) before taking Step B.
+
+Open: **Step B**, one `ChatPane` per slot that swaps content (the keys removed), needs an audit of every piece of state in
+`ChatSession` (reset on switch, or remembered per conversation), per-conversation scroll restored in a layout effect, an
+error boundary with `resetKeys`, and tests that fail if a draft, queue, question or handler of session A is visible or
+usable in session B (rapid A to B to A, a switch mid-stream). **Step C**, a content-keyed cache of rendered markdown for
+finished messages.
+
+Step B audit (2026-11-18): removing the two keys would let about twenty pieces of state of the chat just left reach the next
+one. The dangerous ones are `useEditFromHere` (a pending restore of the wrong checkout), the mode, model and effort loops
+in `ChatSession` and the `RESUBMIT_AFTER_MS` timer in `useChatComposer` (keys typed into the wrong agent's terminal), the
+echo, held-mode and approval-answer state, `QuestionTray` request ids (numeric, so two conversations collide), and
+`PaneErrorBoundary`'s fault. Per-conversation stores (`composerStore`, `agentChoice`, the feed cache) are already safe. The
+state body of `ChatSession` is cheap to rebuild from the feed cache; what costs is re-measuring rows and scroll in
+`VirtualList`. So the plan is not to remove the keys: keep `VirtualList`'s shell mounted and reset it explicitly when the
+conversation changes (heights, follow, scroll), and keep the stateful body keyed by `conversation:generation`. Do that only
+if the measurement in MAITTY-432, with Step A in, still shows a delay the rebuild explains.

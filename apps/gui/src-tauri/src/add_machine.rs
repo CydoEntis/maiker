@@ -55,11 +55,26 @@ pub fn host_choices(hosts: &[SshHost], existing: &[MachineDef]) -> Vec<HostChoic
 /// How a machine that was looked at is to be brought up.
 #[derive(Debug, PartialEq, Eq)]
 pub enum How {
-    /// Dial it now. `version` is what the app there said, when it answered.
-    Connect { version: Option<String> },
+    /// Dial it now. `version` is what the app there said, when it answered; `reach` is how far the look got.
+    Connect { version: Option<String>, reach: Reach },
     /// ssh needs a person: write the entry and open ssh where prompts can be answered.
     /// `said` is ssh's own last line, why it could not log in.
     Login { said: String },
+}
+
+/// How far the look got on a machine ssh could log in to: the app answered, or why it did not.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Reach {
+    Answered,
+    /// No app on its PATH.
+    Missing,
+    /// An older app than this computer's.
+    Older,
+    /// A newer app than this computer's.
+    NewerHere,
+    /// The app is there but its daemon is not running.
+    NotRunning,
 }
 
 #[derive(Debug, PartialEq)]
@@ -115,6 +130,7 @@ pub fn prepare(
             def,
             how: How::Connect {
                 version: Some(version).filter(|v| !v.is_empty()),
+                reach: Reach::Answered,
             },
         }),
         Probe::Failed(FailureClass::Login(said)) => Ok(Prepare::Ready {
@@ -122,15 +138,24 @@ pub fn prepare(
             how: How::Login { said },
         }),
         Probe::Failed(FailureClass::Unreachable(why)) => Err(format!("{}: {why}", def.target)),
-        // Reached, but the app is missing, old or not running: the connection's own state says
-        // which, with the fix, once it dials.
-        Probe::Failed(_) => Ok(Prepare::Ready {
+        // Reached, but the app is missing, old or not running: said here so the window can ask
+        // about it at once, and the connection's own state carries on once it dials.
+        Probe::Failed(class) => Ok(Prepare::Ready {
             def,
-            how: How::Connect { version: None },
+            how: How::Connect { version: None, reach: reach_of(&class) },
         }),
     }
 }
 
+
+fn reach_of(class: &FailureClass) -> Reach {
+    match class {
+        FailureClass::Install => Reach::Missing,
+        FailureClass::Update => Reach::Older,
+        FailureClass::UpdateHere => Reach::NewerHere,
+        FailureClass::NoDaemon | FailureClass::Login(_) | FailureClass::Unreachable(_) => Reach::NotRunning,
+    }
+}
 
 /// The look in flight, so the window can end it.
 #[derive(Default)]
@@ -141,8 +166,9 @@ pub struct AddProbe(Mutex<Option<Arc<AtomicBool>>>);
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 pub enum Outcome {
-    /// Written and dialling. `version` is what the app there answered, when it did.
-    Added { name: String, version: Option<String> },
+    /// Written and dialling. `version` is what the app there answered, when it did; `reach` says
+    /// how far the look got, and `took_ms` how long it took to log in and ask.
+    Added { name: String, version: Option<String>, reach: Reach, took_ms: u64 },
     /// Written and dialling, but ssh could not log in without a person. Nothing is opened: the
     /// window shows `said` (ssh's own words), and the way forward (the host key card, or the
     /// user to fix). `command` is the same login to run in any terminal, when the machine has one.
@@ -180,6 +206,7 @@ pub async fn add_machine(
     let cancel = Arc::new(AtomicBool::new(false));
     *probing.0.lock().map_err(|_| "Adding is busy".to_string())? = Some(cancel.clone());
     let file = config_path().with_file_name("config.local.toml");
+    let started = std::time::Instant::now();
     let looked = {
         let cancel = cancel.clone();
         tauri::async_runtime::spawn_blocking(move || look_and_write(&file, &target, name.as_deref(), &ssh_args, &cancel))
@@ -196,7 +223,12 @@ pub async fn add_machine(
     };
     handle.add(def.clone());
     match how {
-        How::Connect { version } => Ok(Outcome::Added { name: def.name, version }),
+        How::Connect { version, reach } => Ok(Outcome::Added {
+            name: def.name,
+            version,
+            reach,
+            took_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+        }),
         How::Login { said } => Ok(Outcome::Login {
             command: Machine::from_def(&def, maitty_machines::SSH_PROGRAM).first_login_command().ok(),
             name: def.name,
@@ -311,10 +343,11 @@ mod tests {
             panic!("ready");
         };
         assert_eq!((def.name.as_str(), def.target.as_str()), ("build.example", "build.example"));
-        let How::Connect { version } = how else {
+        let How::Connect { version, reach } = how else {
             panic!("connect");
         };
         assert!(version.is_some_and(|v| !v.is_empty()));
+        assert_eq!(reach, Reach::Answered);
     }
 
     #[test]
@@ -329,7 +362,7 @@ mod tests {
     fn an_app_that_is_not_installed_is_still_added_so_its_state_can_say_how_to_fix_it() {
         assert!(matches!(
             look("not-installed"),
-            Ok(Prepare::Ready { how: How::Connect { version: None }, .. })
+            Ok(Prepare::Ready { how: How::Connect { version: None, reach: Reach::Missing }, .. })
         ));
     }
 
