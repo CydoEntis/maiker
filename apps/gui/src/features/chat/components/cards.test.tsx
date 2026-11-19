@@ -355,7 +355,7 @@ describe('approval card', () => {
   it('tells the person to use the terminal when the chat cannot answer', () => {
     render(<ApprovalCard event={approvalEvent(1)} actions={null} step={null} onGoToStep={null} />)
 
-    expect(screen.getByText(/Answer it in the terminal/)).toBeInTheDocument()
+    expect(screen.getByText(/can take it/)).toBeInTheDocument()
   })
 
   it('is not a tab stop once answered', () => {

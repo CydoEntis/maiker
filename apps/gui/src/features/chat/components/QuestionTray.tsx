@@ -121,7 +121,7 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
         {reason}
         {actions !== null && event.questions.length > 0
           ? <UserInputForm questions={event.questions} busy={actions.busy} onSubmit={(answers) => { actions.answerInput(event.requestId, answers) }} />
-          : <p className="mx-waiting-note">Answer it in the terminal.</p>}
+          : <p className="mx-waiting-note">Only the agent's terminal can take this answer.</p>}
       </WaitingCard>
     )
   }
@@ -134,7 +134,7 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
       aside={agent}
       flush={hasCommand && reason === null}
       onEnter={main}
-      foot={actions === null ? <span className="mx-waiting-note">Answer it in the terminal.</span> : (
+      foot={actions === null ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : (
         <>
           {answerable.map((choice) => <AnswerButton key={choice} decision={choice} busy={actions.busy} onAnswer={() => { actions.answer(event.requestId, choice) }} />)}
           <span className="mx-spacer" />
@@ -371,11 +371,11 @@ const sendAllAside = (questions: readonly AskedQuestion[]) => `${String(question
 
 /** Claude's plan, formatted as a reply would be, for the person to approve or send back. */
 function PlanBody({ plan }: { plan: AskedPlan | null }) {
-  if (plan === null) return <p className="mx-waiting-note">The plan is in the terminal.</p>
+  if (plan === null) return <p className="mx-waiting-note">The plan is only in the agent's terminal.</p>
   return (
     <>
       <Markdown className="mx-waiting-plan" text={plan.text} />
-      {plan.cut && <p className="mx-waiting-note">The history kept only the start of this plan. Read the rest in the terminal.</p>}
+      {plan.cut && <p className="mx-waiting-note">The history kept only the start of this plan. The rest is in the agent's terminal.</p>}
     </>
   )
 }
@@ -397,7 +397,7 @@ function PlanTray({ label, plan, asking, send, readScreen }: { label: string; pl
       title="Approve this plan?"
       aside="Plan mode"
       foot={press === undefined
-        ? (send === undefined ? <span className="mx-waiting-note">Answer in the terminal.</span> : null)
+        ? (send === undefined ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : null)
         : <Button variant="soft" keyHint="n" aria-keyshortcuts="n" disabled={busy} title="Esc in the terminal: Claude stays in plan mode" onClick={() => { run(() => press(KEY_ESCAPE)) }}>Keep planning</Button>}
     >
       <PlanBody plan={plan} />
@@ -492,7 +492,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
             </Button>
           ))}
         </>
-      ) : <span className="mx-waiting-note">Answer in the terminal.</span>}
+      ) : <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span>}
     >
       {shownDetail}
     </WaitingCard>

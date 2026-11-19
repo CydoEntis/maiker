@@ -110,7 +110,7 @@ export function ApprovalCard({ event, actions, step, onGoToStep }: Props) {
       {event.approvalKind === 'UserInput' && actions !== null && event.questions.length > 0 ? (
         <UserInputForm questions={event.questions} busy={actions.busy} onSubmit={(answers) => { actions.answerInput(event.requestId, answers) }} />
       ) : event.approvalKind === 'UserInput' || actions === null ? (
-        <p className="mt-2 mb-0 text-[12.5px] text-fg2">Waiting for your answer. Answer it in the terminal.</p>
+        <p className="mt-2 mb-0 text-[12.5px] text-fg2">Waiting for your answer. Only the agent's terminal can take it.</p>
       ) : (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           {event.choices.map((choice, index) => (
