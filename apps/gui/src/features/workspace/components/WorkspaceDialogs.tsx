@@ -1,11 +1,11 @@
 import { extensionProjects } from '@/features/extensions/projects'
 import { inspectHostKey, listSshHosts, machineActivity, trustHostKey } from '@/api/machines'
-import { DesktopSettings } from '@/features/settings/components/DesktopSettings'
+import { DesktopSettings, type MachinesInfo } from '@/features/settings/components/DesktopSettings'
 import { PerfOverlay } from './PerfOverlay'
 import { CommandPalette } from './CommandPalette'
 import { HoverTips } from './HoverTips'
 import { ShortcutOverlay } from '@/features/shortcuts/ShortcutOverlay'
-import { WelcomeDialog } from '@/features/welcome/WelcomeDialog'
+import { Onboarding } from '@/features/welcome/Onboarding'
 import { markWelcomed } from '@/features/welcome/welcomed'
 import { UpdatedNotice } from '@/features/updates/UpdatedNotice'
 import { indexRemoteFiles, listRemoteFolder } from '@/api/fileGets'
@@ -32,8 +32,10 @@ import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate } = useWorkspace()
   const serviceFinishing = useServiceFinishing()
+  // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
+  const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding } }
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
@@ -41,14 +43,15 @@ export function WorkspaceDialogs() {
             <HoverTips />
             {shortcutsOpen && <ShortcutOverlay platform={platform} portalContainer={root} onClose={() => { setShortcutsOpen(false) }} />}
             {welcomeOpen && (
-              <WelcomeDialog
-                platform={platform}
-                startFolder={preferences.startFolder}
+              <Onboarding
+                reducedMotion={reducedMotion}
                 portalContainer={root}
                 validateFolder={folderExists}
+                onChooseFolder={chooseStartFolder}
+                onOpenSessionsIn={(view) => { setPreferences((current) => ({ ...current, openSessionsIn: view })) }}
                 onStartFolder={(path) => { setPreferences((current) => ({ ...current, startFolder: path })) }}
-                onClose={() => { markWelcomed(); setWelcomeOpen(false) }}
-                onStartSession={() => { newSession(focusedMachineNumber) }}
+                machines={machinesInfo}
+                onClose={(startSession) => { markWelcomed(); setWelcomeOpen(false); if (startSession) newSession(focusedMachineNumber) }}
               />
             )}
             {paletteOpen && <CommandPalette items={paletteItems} outputItem={paletteOutputItem} onClose={() => { setPaletteOpen(false) }} />}
@@ -140,7 +143,7 @@ export function WorkspaceDialogs() {
                 platform={platform}
                 daemon={{ online, sessionCount: sessions.length }}
                 appVersion={runningVersion}
-                machines={{ known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding } }}
+                machines={machinesInfo}
                 usage={usageInfo}
                 onSignInAgent={signInAgent}
                 github={{ onSignIn: signInGitHub, signInsEnded: gitHubSignInsEnded }}

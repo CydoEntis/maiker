@@ -493,7 +493,7 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
         <Row label="Closing the window" detail="Sessions are owned by the Maiker service and keep running.">
           <span style={{ fontSize: 12, color: 'var(--dim)' }}>Keeps running</span>
         </Row>
-        <Row label="Welcome" detail="Replay the short intro: where sessions start and the keys to know.">
+        <Row label="Welcome" detail="Replay the setup: how you like to work and where to start.">
           <button type="button" className="mx-scard-button" onClick={onShowWelcome}>Show the welcome again</button>
         </Row>
       </Card>

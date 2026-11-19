@@ -36,6 +36,7 @@ const daemon = vi.hoisted(() => ({
   restartMismatchedDaemon: vi.fn<(protocol: number) => Promise<void>>(),
   openDaemonLog: vi.fn<() => Promise<void>>(),
   suggestProjectFolders: vi.fn<(typed: string) => Promise<string[]>>(),
+  agentsInstalled: vi.fn<() => Promise<string[]>>(() => Promise.resolve([])),
   sendTerminalInput: vi.fn<(conversation: { id: string; generation: number }, input: string | Uint8Array) => Promise<void>>(),
   answerHelpers: vi.fn<(conversation: { id: string }, choice: 'allow' | 'always' | 'no') => Promise<void>>(),
   prewarmAgentSession: vi.fn<(folder: string, agent: string, flags: readonly string[]) => Promise<boolean>>(() => Promise.resolve(true)),
@@ -1212,51 +1213,58 @@ describe('desktop overlays and pane tools', () => {
     expect(daemon.markSeenOnDaemon).not.toHaveBeenCalled()
   })
 
-  it('greets a first launch, saves the start folder, shows the keys, and never greets again', async () => {
+  it('greets a first launch, saves the choices, starts in the folder, and never greets again', async () => {
     const user = userEvent.setup()
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
+    daemon.agentsInstalled.mockResolvedValue(['claude'])
     const app = renderDesktopApp({ firstRun: true })
 
-    const dialog = await screen.findByRole('dialog', { name: 'Welcome to Maiker' })
-    expect(dialog).toHaveTextContent('Closing this window never stops an agent')
+    const dialog = await screen.findByRole('dialog', { name: 'Set up Maiker' })
+    expect(dialog).toHaveTextContent('keep them running when you close the app')
     // Global shortcuts are ignored while it is open.
     await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
 
-    await user.type(within(dialog).getByRole('textbox', { name: 'New sessions start in' }), '/definitely/not/here')
+    await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
+    await user.click(within(dialog).getByRole('radio', { name: /Terminal/ }))
     await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    await user.click(within(dialog).getByRole('radio', { name: /Add a project folder/ }))
+
+    await user.type(within(dialog).getByRole('textbox', { name: 'Folder' }), '/definitely/not/here')
+    await user.click(within(dialog).getByRole('button', { name: 'Start in here' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('That folder was not found.')
 
-    await user.clear(within(dialog).getByRole('textbox', { name: 'New sessions start in' }))
-    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
-    const set = await screen.findByRole('dialog', { name: "You're set" })
-    expect(within(set).getAllByRole('listitem')).toHaveLength(6)
-    expect(set).toHaveTextContent('New session')
-
-    await user.click(within(set).getByRole('button', { name: 'Start a session' }))
-    expect(screen.queryByRole('dialog', { name: "You're set" })).not.toBeInTheDocument()
+    daemon.suggestProjectFolders.mockResolvedValue(['/home/casey/code/api/'])
+    await user.clear(within(dialog).getByRole('textbox', { name: 'Folder' }))
+    await user.type(within(dialog).getByRole('textbox', { name: 'Folder' }), '/home/casey/code/api')
+    await user.click(within(dialog).getByRole('button', { name: 'Start in api' }))
+    expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
     await screen.findByRole('region', { name: 'New session' })
+    expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api', openSessionsIn: 'terminal' })
 
     app.unmount()
     renderDesktopApp({ firstRun: true })
     await screen.findByRole('region', { name: 'New session' })
-    expect(screen.queryByRole('dialog', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
   })
 
-  it('skips the welcome with Escape and does not greet a window that already has settings', async () => {
+  it('skips the setup, steps back with Escape, and does not greet a window that already has settings', async () => {
     const user = userEvent.setup()
     renderDesktopApp({ firstRun: true })
-    await screen.findByRole('dialog', { name: 'Welcome to Maiker' })
+    const dialog = await screen.findByRole('dialog', { name: 'Set up Maiker' })
 
+    await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
     await user.keyboard('{Escape}')
-    expect(screen.queryByRole('dialog', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Skip for now' }))
+    expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
 
     window.localStorage.removeItem('maiker.gui.welcomed.v1')
     window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ accent: 'blue' }))
     cleanup()
     renderDesktopApp({ firstRun: true })
     await screen.findByRole('region', { name: 'New session' })
-    expect(screen.queryByRole('dialog', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
   })
 
   it('shows every shortcut from the keymap on Ctrl+/, ignores other shortcuts while it is open, and closes with the key or Esc', async () => {
