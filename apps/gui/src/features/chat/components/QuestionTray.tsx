@@ -455,7 +455,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
     )
   }
 
-  const title = ask === null ? `${agentName(agent)} is waiting for you` : isQuestion ? `${agentName(agent)} has a question for you` : ask.tool === 'Bash' ? 'Wants to run a command' : `Wants to use ${ask.tool}`
+  const title = ask === null ? `${agentName(agent)} is waiting ${mirror === undefined ? 'for you' : 'in its own menu'}` : isQuestion ? `${agentName(agent)} has a question for you` : ask.tool === 'Bash' ? 'Wants to run a command' : `Wants to use ${ask.tool}`
   const detail = ask !== null && ask.detail !== '' ? ask.detail : null
   const shownDetail = detail === null ? null : isQuestion ? <p className="mx-waiting-text">{detail}</p> : <pre className="mx-waiting-command">{detail}</pre>
 

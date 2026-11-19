@@ -234,19 +234,17 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-compacted-pill { flex: none; display: inline-flex; height: 24px; align-items: center; gap: 6px; padding: 0 10px; border-radius: 999px; background: color-mix(in oklab, var(--link) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--link) 40%, transparent); color: var(--link); font-size: 12px; font-weight: 600; }
 .mx-compacted-hooks { font-weight: 400; color: var(--muted); }
 .mx-divider.is-failed { color: var(--err); }
-.mx-changed [data-slot="card-head"] { gap: 8px; font-weight: 400; }
 /* Where the agent summarised the earlier conversation: a divider whose words open the summary. */
 .mx-summary { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
 .mx-summary-toggle { flex: none; display: inline-flex; height: 24px; align-items: center; gap: 6px; padding: 0 8px; border-radius: 6px; font-size: 12px; color: var(--muted); }
 .mx-summary-toggle:hover { color: var(--fg); background: rgba(var(--hl), calc(.05 * var(--hk))); }
 .mx-summary-body { max-height: 360px; overflow-y: auto; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(var(--hl), calc(.09 * var(--hk))); font-size: 12.5px; color: var(--fg2); animation: v7fade .2s ease-out; }
-/* The files a turn changed, as chips: a 26px hairline box each, type tag, name and, at the end, the turn's counts. */
-.mx-changed { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.mx-file-chip { display: inline-flex; min-width: 0; max-width: 100%; height: 26px; align-items: center; gap: 7px; padding: 0 8px; border: 1px solid var(--line2); border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); outline: none; }
-button.mx-file-chip:hover { background: var(--m-hover); color: var(--fg); }
-button.mx-file-chip:focus-visible { box-shadow: var(--focus-underline); }
-.mx-file-chip.is-more { color: var(--dim); }
-.mx-changed-counts { display: flex; gap: 6px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; }
+/* The turn's changed-files bar: a head-only card, icon, how many files, the turn's counts and Review at the end. */
+.mx-changed-title { font-size: 13px; font-weight: 600; color: var(--fg); }
+.mx-changed-counts { display: flex; gap: 6px; font-family: var(--mono); font-size: 12px; font-weight: 500; }
+.mx-changed-review { flex: none; height: 24px; padding: 0 8px; border: 1px solid var(--line2); background: var(--m-hover); color: var(--fg); font-size: 12px; font-weight: 600; white-space: nowrap; outline: none; }
+.mx-changed-review:hover { border-color: var(--fg2); }
+.mx-changed-review:focus-visible { box-shadow: var(--focus-underline); }
 .mx-changed-counts .is-add { color: var(--done); }
 .mx-changed-counts .is-remove { color: var(--err); }
 
@@ -532,7 +530,6 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 :root[data-corners="folded"] .mx-app .mx-waiting { border-radius: 14px 0 14px 0 !important; }
 :root[data-corners="folded"] .mx-app .mx-chat .mx-waiting-step { border-radius: 0 !important; }
 .mx-waiting-head:has(+ .mx-waiting-body > .mx-waiting-form) { border-bottom: 0; }
-:root[data-corners="folded"] .mx-app .mx-file-chip { border-radius: 5px 0 5px 0 !important; }
 
 /* An agent's mark in the chat is a flat glyph in its own colour: no tile, no gradient, no ring behind it (design: the mark
    is never set on a coloured square). It covers the model chip, the agent picker and any mark in the feed. */

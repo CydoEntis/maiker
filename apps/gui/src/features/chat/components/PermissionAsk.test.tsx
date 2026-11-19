@@ -280,7 +280,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
   it('still says the agent is waiting when its hook reported no question', async () => {
     await open('Blocked', null)
 
-    expect(screen.getByText('Claude is waiting for you')).toBeInTheDocument()
+    expect(screen.getByText('Claude is waiting in its own menu')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
     // The card above carries the terminal's keys, so the box points at it and never sends the person to the terminal.
     expect(screen.getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()

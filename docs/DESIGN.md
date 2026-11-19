@@ -823,7 +823,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   folds into one line, "Allowed", "Allowed for this session" or "Denied". A turn ends with a divider (centred words
   between hairlines, "Finished in 3m 40s · 10:46"; failed in `--err` and stopped in `--dim`, each with its mark; a
   turn the person stopped in the terminal is "Stopped after …", never a bubble of Claude's "[Request interrupted…]") and,
-  when it edited files, the changed-files card (a head-only card: icon, "N changed files", +A −R, **Review**). card. While the agent works the chat shows the turn as it arrives and the live box at its end (see *The live box*). Problems with the history (offline, incomplete, a provider error) and Full access show in one
+  when it edited files, the changed-files card (a head-only card: icon, "N changed files", +A −R, **Review**; no file chips, the files are listed in the side panel). While the agent works the chat shows the turn as it arrives and the live box at its end (see *The live box*). Problems with the history (offline, incomplete, a provider error) and Full access show in one
   slim strip above the list. **A subagent's chat** replaces the list with a 36px bar on `--well` (**‹ Main session**,
   "· Subagent", its name, its time in mono and a **read-only** tag), then the helper's own steps drawn as the chat's rows (read from the record its agent keeps, every 1.5 s while it
   works, "Its earlier steps are not shown." above them when the start was cut). Where there is no record (another
@@ -839,7 +839,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   needs colour, **This session** `a` and **No** `n` soft, and for a command request **Always in this project** as a
   ghost at the right (the daemon then approves that exact command in that project without asking; see ADR 0005).
   Settings → Permissions lists these under "Commands approved for a project" (`ApprovedCommands.tsx`), each with **Forget**.
-  A plan has Claude's own menu, each choice on its number, and **Keep planning** `n` (no `y`: the menu has no single yes); a form **Send answer(s)** `⏎`; a menu its keys. y, a and n
+  A plan has Claude's own menu, each choice on its number, and **Keep planning** `n` (no `y`: the menu has no single yes); a form **Send answer(s)** `⏎`; a menu its keys, headed "<agent> is waiting in its own menu" when the hook named no question. y, a and n
   answer from anywhere in the chat but a field, a choice's number picks it, and Enter on the card gives its main
   answer. Answering removes it, the box unlocks and the agent is working again (its row and the badge follow the
   daemon); the request then folds into one line in the feed (a hairline row: its mark, "Allowed for this session",

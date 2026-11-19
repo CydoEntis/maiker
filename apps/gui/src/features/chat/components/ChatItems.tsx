@@ -25,7 +25,6 @@ import { compactionOf, type Compaction } from '../compaction'
 import { ContextSummary } from './ContextSummary'
 import { InlineMarkdown, Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
-import { FileBadge } from './cardParts'
 import { StepView } from './StepCards'
 import { ThoughtRow } from './ThoughtRow'
 import { WorkCard } from './WorkCard'
@@ -40,8 +39,6 @@ import { stripRestoreNote, type EditFromHere } from '../editFromHere'
 
 /** The character a turn's footer starts with, by how the turn ended. */
 const DIVIDER_MARK = { completed: '✓', failed: '×', interrupted: '■' } as const
-/** How many changed files a turn's row names; the rest are counted. */
-const CHANGED_CHIPS = 8
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
@@ -273,17 +270,20 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
         </div>
       )
     case 'changes': {
-      // The files the turn changed as chips (design: file chips); choosing one opens what this turn changed in the side panel.
-      const shown = row.files.slice(0, CHANGED_CHIPS)
-      const more = row.files.length - shown.length
+      // The turn's changed-files bar (design: ChangedFilesBar): how many files and lines, and Review, which opens what this
+      // turn changed in the side panel. The files themselves are listed there.
+      const count = row.files.length
+      const first = row.files[0]
       return (
         <Frame>
-          <div className="mx-changed" role="group" aria-label={`${String(row.files.length)} changed ${row.files.length === 1 ? 'file' : 'files'}`}>
-            {shown.map((file) => (openDiff === null
-              ? <span key={file} className="mx-file-chip" title={file}><FileBadge path={file} /></span>
-              : <button key={file} type="button" className="mx-file-chip" title={`Show what this turn changed in ${file}`} onClick={() => { openDiff(file, row.turn) }}><FileBadge path={file} /></button>))}
-            {more > 0 && <span className="mx-file-chip is-more">+{more} more</span>}
-            {row.lines !== null && <span className="mx-changed-counts"><span className="is-add">+{row.lines.added}</span><span className="is-remove">−{row.lines.removed}</span></span>}
+          <div className="mx-block mx-changed" role="group" aria-label={`${String(count)} changed ${count === 1 ? 'file' : 'files'}`}>
+            <div className="mx-block-head is-static">
+              <Icon name="toolEdit" />
+              <span className="mx-changed-title">{count} changed {count === 1 ? 'file' : 'files'}</span>
+              {row.lines !== null && <span className="mx-changed-counts"><span className="is-add">+{row.lines.added}</span><span className="is-remove">−{row.lines.removed}</span></span>}
+              <span className="mx-spacer" />
+              {openDiff !== null && first !== undefined && <button type="button" className="mx-changed-review" title="Show what this turn changed in the side panel" onClick={() => { openDiff(first, row.turn) }}>Review</button>}
+            </div>
           </div>
         </Frame>
       )
