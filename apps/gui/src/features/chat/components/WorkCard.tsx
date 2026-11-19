@@ -3,7 +3,7 @@ import { useRevealOpen } from '../chatActions'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { isWaitingStep } from '../stepInfo'
-import { workStatus, workSummary, type WorkStep } from '../workSummary'
+import { summaryCountsEverything, workStatus, workSummary, type WorkStep } from '../workSummary'
 import { StepView } from './StepCards'
 
 const SUFFIX = { running: '', completed: '', failed: ', a step failed', interrupted: ', then stopped' } as const
@@ -40,7 +40,7 @@ export function WorkCard({ steps, root, openDiff, waitingStep, rowKey }: WorkCar
           ? <StatusIcon status="working" size={RUNNING_LIGHT_PX} />
           : <span className="mx-work-mark" aria-hidden="true">✱</span>}
         <span className="mx-work-text">{workSummary(steps)}{status === 'interrupted' && ', then stopped'}</span>
-        <span className="mx-work-count">{steps.length} {steps.length === 1 ? 'step' : 'steps'}</span>
+        {!summaryCountsEverything(steps) && <span className="mx-work-count">{steps.length} {steps.length === 1 ? 'step' : 'steps'}</span>}
         {failed && <span className="mx-work-failed-note">failed</span>}
         <span className="mx-spacer" />
         <span className={`mx-caret-wrap${open ? ' is-open' : ''}`}><Icon name="caret" /></span>

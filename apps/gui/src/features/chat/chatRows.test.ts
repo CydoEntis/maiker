@@ -154,6 +154,11 @@ describe('paragraphs and the lead sentence', () => {
     expect(splitLead(['I fixed it. The test passes now.', 'Details follow.'])).toEqual({ lead: 'I fixed it.', rest: ['The test passes now.', 'Details follow.'] })
     expect(splitLead(['No full stop here'])).toEqual({ lead: 'No full stop here', rest: [] })
     expect(splitLead([])).toEqual({ lead: '', rest: [] })
+    // A full stop after an abbreviation is not the end of the sentence.
+    expect(splitLead(['Use a tool, e.g. grep, for this. Then stop.'])).toEqual({ lead: 'Use a tool, e.g. grep, for this.', rest: ['Then stop.'] })
+    // A cut inside bold or code would leave a bare mark, so the paragraph stays whole.
+    expect(splitLead(['**Cause found. It was the config.**'])).toEqual({ lead: '**Cause found. It was the config.**', rest: [] })
+    expect(splitLead(['Run `a. b` now. Then stop.', 'More.'])).toEqual({ lead: 'Run `a. b` now. Then stop.', rest: ['More.'] })
     // A table with no outer pipes is not a sentence either.
     const table = 'a | b\n--- | ---\n1 | 2'
     expect(splitLead([table, 'After.'])).toEqual({ lead: '', rest: [table, 'After.'] })
