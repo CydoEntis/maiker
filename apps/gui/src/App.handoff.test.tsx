@@ -917,7 +917,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     const card = await screen.findByRole('alertdialog', { name: `Update ${APP_NAME} to reconnect` })
     expect(within(card).getByText(/The service behind this app is newer than the app\./)).toBeInTheDocument()
     expect(within(card).getByText('protocol 76 → 77')).toBeInTheDocument()
-    expect(within(card).getByRole('button', { name: 'Check again' })).toBeEnabled()
+    expect(await within(card).findByRole('button', { name: 'Check again' })).toBeEnabled()
     expect(screen.queryByRole('alertdialog', { name: `Restart ${APP_NAME} to finish updating` })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Service in use' })).not.toBeInTheDocument()
     expect(daemon.restartMismatchedDaemon).not.toHaveBeenCalled()
