@@ -41,7 +41,8 @@ const CLEAR_SCREEN = '\x0c'
 
 /**
  * One pane of the layout: its header, and the session's terminal with its chat over it when the chat shows.
- * A pane of a tab kept out of sight keeps only its terminal, paused: no chat reads, takes keys or answers for it.
+ * A pane of a tab kept out of sight keeps its terminal and its chat mounted, both paused: neither reads, takes keys or
+ * answers for it, so going back to the tab shows both at once.
  */
 export function WorkspacePane({ shown, pane, kept }: {
   shown: Arrangement
@@ -118,7 +119,7 @@ export function WorkspacePane({ shown, pane, kept }: {
       dropWord={dragId === null ? 'Drop to show it here' : 'Drop to swap'}
       view={chat.view}
       {...(chatOnly || !hasChat(chat.availability) ? {} : { onViewChange: (view: PaneView) => { if (view === 'terminal') showTerminal(); else paneViews.choose(session.id, view) } })}
-      chat={chat.view === 'chat' && !kept ? (
+      chat={chat.view === 'chat' ? (
         <PaneErrorBoundary key={session.id} what="This chat" fallback={chatOnly ? null : { label: 'Show the terminal', run: showTerminal }}>
         <OpenSubagentContext.Provider value={openHelperChat}>
         <ChatPane
@@ -143,6 +144,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           usage={{ context: session.usage.context, limits: session.limits }}
           process={session.process}
           online={online}
+          paused={kept}
           subagent={subagent ?? null}
           subagents={helpers}
           onBackToMain={() => { setOpenSubagent(null) }}

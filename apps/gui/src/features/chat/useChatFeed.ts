@@ -84,6 +84,8 @@ type Options = {
   /** The generation the session list reports; a different one means the conversation started over. */
   generation: number
   provider: ChatProvider
+  /** The chat is mounted out of sight: no reads and no listening until it shows again, which reads at once. */
+  paused?: boolean
 }
 
 /**
@@ -93,7 +95,7 @@ type Options = {
  * next read starts from the beginning, so nothing is shown twice and nothing is missed. The daemon
  * also says when the conversation changed (`listenConversationChanged`), and the chat reads then.
  */
-export function useChatFeed({ conversation, generation, provider }: Options) {
+export function useChatFeed({ conversation, generation, provider, paused = false }: Options) {
   const [feed, setFeed] = useState<ChatFeed>(() => startFeed(provider, conversation, generation))
   const [forGeneration, setForGeneration] = useState(generation)
   const [offline, setOffline] = useState(false)
@@ -112,6 +114,10 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
   const wake = useRef<() => void>(() => undefined)
 
   useEffect(() => {
+    if (paused) {
+      wake.current = () => undefined
+      return undefined
+    }
     const life = { stopped: false }
     // A function, so a check after an await is not taken for the one before it.
     const gone = () => life.stopped
@@ -198,7 +204,7 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
       window.clearTimeout(timer)
       void listening.then((stop) => { stop() })
     }
-  }, [conversation, generation, provider])
+  }, [conversation, generation, provider, paused])
 
   /** Reads again now, for after an answer or a message was sent. */
   const refresh = useCallback(() => { wake.current() }, [])
