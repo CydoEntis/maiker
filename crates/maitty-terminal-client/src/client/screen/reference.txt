@@ -1,6 +1,6 @@
 ===== 07 Evidence · short output | floating | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -44,7 +44,7 @@
  Esc back   r re-run   f full output   i why
 ===== 07 Evidence · short output | floating | 100x30 | 28,1 71x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -73,7 +73,7 @@
  Esc back   r re-run   f full output   i why
 ===== 07 Evidence · short output | floating | 80x24 | 28,1 51x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-foote
@@ -96,7 +96,7 @@
  Esc back   r re-run   f full output   i why
 ===== 07 Evidence · short output | tiled | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -140,7 +140,7 @@
  Esc back   r re-run   f full output   i why
 ===== 07 Evidence · short output | tiled | 100x30 | 27,1 72x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -169,7 +169,7 @@
  Esc back   r re-run   f full output   i why
 ===== 07 Evidence · short output | tiled | 80x24 | 27,1 52x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -192,7 +192,7 @@
  Esc back   r re-run   f full output   i why
 ===== 07 Evidence · short output | flat | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -236,7 +236,7 @@
  Esc back   r re-run   f full output   i why
 ===== 07 Evidence · short output | flat | 100x30 | 26,1 73x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -265,7 +265,7 @@
  Esc back   r re-run   f full output   i why
 ===== 07 Evidence · short output | flat | 80x24 | 26,1 53x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -288,7 +288,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | floating | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -332,7 +332,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | floating | 100x30 | 28,1 71x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -361,7 +361,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | floating | 80x24 | 28,1 51x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-foote
@@ -384,7 +384,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | tiled | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -428,7 +428,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | tiled | 100x30 | 27,1 72x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -457,7 +457,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | tiled | 80x24 | 27,1 52x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -480,7 +480,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | flat | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -524,7 +524,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | flat | 100x30 | 26,1 73x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -553,7 +553,7 @@
  Esc back   r re-run   f full output   i why
 ===== 08 Evidence · long output | flat | 80x24 | 26,1 53x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -576,7 +576,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | floating | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -620,7 +620,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | floating | 100x30 | 28,1 71x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -649,7 +649,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | floating | 80x24 | 28,1 51x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-foote
@@ -672,7 +672,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | tiled | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -716,7 +716,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | tiled | 100x30 | 27,1 72x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -745,7 +745,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | tiled | 80x24 | 27,1 52x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -768,7 +768,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | flat | 160x45 | 89,1 70x43
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -812,7 +812,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | flat | 100x30 | 26,1 73x28
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -841,7 +841,7 @@
  Esc back   r re-run   f full output   i why
 ===== 09 Evidence · no output | flat | 80x24 | 26,1 53x22
 
-  ✕ failed   exit 1
+  × failed   exit 1
 
  Command  npm test
  Folder   ~\dev\affiliate-site-worktrees\fix-footer
@@ -1153,11 +1153,11 @@
 ===== 11 Inbox | floating | 160x45 | 89,1 70x43
 
   NEEDS YOU  1
- ● warm-finch · pixls                                              3m
+ ! warm-finch · pixls                                              3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                     2m
+▎× fix-footer · affiliate-site                                     2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1197,11 +1197,11 @@
 ===== 11 Inbox | floating | 100x30 | 28,1 71x28
 
   NEEDS YOU  1
- ● warm-finch · pixls                                               3m
+ ! warm-finch · pixls                                               3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                      2m
+▎× fix-footer · affiliate-site                                      2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1226,11 +1226,11 @@
 ===== 11 Inbox | floating | 80x24 | 28,1 51x22
 
   NEEDS YOU  1
- ● warm-finch · pixls                           3m
+ ! warm-finch · pixls                           3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                  2m
+▎× fix-footer · affiliate-site                  2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1249,11 +1249,11 @@
 ===== 11 Inbox | tiled | 160x45 | 89,1 70x43
 
   NEEDS YOU  1
- ● warm-finch · pixls                                              3m
+ ! warm-finch · pixls                                              3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                     2m
+▎× fix-footer · affiliate-site                                     2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1293,11 +1293,11 @@
 ===== 11 Inbox | tiled | 100x30 | 27,1 72x28
 
   NEEDS YOU  1
- ● warm-finch · pixls                                                3m
+ ! warm-finch · pixls                                                3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                       2m
+▎× fix-footer · affiliate-site                                       2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1322,11 +1322,11 @@
 ===== 11 Inbox | tiled | 80x24 | 27,1 52x22
 
   NEEDS YOU  1
- ● warm-finch · pixls                            3m
+ ! warm-finch · pixls                            3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                   2m
+▎× fix-footer · affiliate-site                   2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1345,11 +1345,11 @@
 ===== 11 Inbox | flat | 160x45 | 89,1 70x43
 
   NEEDS YOU  1
- ● warm-finch · pixls                                              3m
+ ! warm-finch · pixls                                              3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                     2m
+▎× fix-footer · affiliate-site                                     2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1389,11 +1389,11 @@
 ===== 11 Inbox | flat | 100x30 | 26,1 73x28
 
   NEEDS YOU  1
- ● warm-finch · pixls                                                 3m
+ ! warm-finch · pixls                                                 3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                        2m
+▎× fix-footer · affiliate-site                                        2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1418,11 +1418,11 @@
 ===== 11 Inbox | flat | 80x24 | 26,1 53x22
 
   NEEDS YOU  1
- ● warm-finch · pixls                             3m
+ ! warm-finch · pixls                             3m
    Use pnpm or npm for the workspace?
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                    2m
+▎× fix-footer · affiliate-site                    2m
 ▎  failed: test · exit 1 · 14:22
 ▎  ✗ legal.test.tsx › footer shows current year
 ▎   Output ⏎   Re-run r   Override… O
@@ -1513,10 +1513,10 @@
 ===== A1 Repo command waits | floating | 160x45 | 89,1 70x43
 
   NEEDS YOU  2
- ● warm-finch · pixls                                              3m
+ ! warm-finch · pixls                                              3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                                     1m
+▎! fix-footer · affiliate-site                                     1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -1557,10 +1557,10 @@
 ===== A1 Repo command waits | floating | 100x30 | 28,1 71x28
 
   NEEDS YOU  2
- ● warm-finch · pixls                                               3m
+ ! warm-finch · pixls                                               3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                                      1m
+▎! fix-footer · affiliate-site                                      1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -1586,10 +1586,10 @@
 ===== A1 Repo command waits | floating | 80x24 | 28,1 51x22
 
   NEEDS YOU  2
- ● warm-finch · pixls                           3m
+ ! warm-finch · pixls                           3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                  1m
+▎! fix-footer · affiliate-site                  1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -1609,10 +1609,10 @@
 ===== A1 Repo command waits | tiled | 160x45 | 89,1 70x43
 
   NEEDS YOU  2
- ● warm-finch · pixls                                              3m
+ ! warm-finch · pixls                                              3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                                     1m
+▎! fix-footer · affiliate-site                                     1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -1653,10 +1653,10 @@
 ===== A1 Repo command waits | tiled | 100x30 | 27,1 72x28
 
   NEEDS YOU  2
- ● warm-finch · pixls                                                3m
+ ! warm-finch · pixls                                                3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                                       1m
+▎! fix-footer · affiliate-site                                       1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -1682,10 +1682,10 @@
 ===== A1 Repo command waits | tiled | 80x24 | 27,1 52x22
 
   NEEDS YOU  2
- ● warm-finch · pixls                            3m
+ ! warm-finch · pixls                            3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                   1m
+▎! fix-footer · affiliate-site                   1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -1705,10 +1705,10 @@
 ===== A1 Repo command waits | flat | 160x45 | 89,1 70x43
 
   NEEDS YOU  2
- ● warm-finch · pixls                                              3m
+ ! warm-finch · pixls                                              3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                                     1m
+▎! fix-footer · affiliate-site                                     1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -1749,10 +1749,10 @@
 ===== A1 Repo command waits | flat | 100x30 | 26,1 73x28
 
   NEEDS YOU  2
- ● warm-finch · pixls                                                 3m
+ ! warm-finch · pixls                                                 3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                                        1m
+▎! fix-footer · affiliate-site                                        1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -1778,10 +1778,10 @@
 ===== A1 Repo command waits | flat | 80x24 | 26,1 53x22
 
   NEEDS YOU  2
- ● warm-finch · pixls                             3m
+ ! warm-finch · pixls                             3m
    Use pnpm or npm for the workspace?
 
-▎● fix-footer · affiliate-site                    1m
+▎! fix-footer · affiliate-site                    1m
 ▎  approve check command: npm test
 ▎   Read the command ⏎
 
@@ -2377,16 +2377,16 @@
 ===== C2 Several checkpoints · Inbox | floating | 160x45 | 89,1 70x43
 
   NEEDS YOU  2
-▎● warm-finch · pixls                                              3m
+▎! warm-finch · pixls                                              3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site                                  40s
-   needs you: approval · commits ✓ · test ✓ · approval ● · review …
+ ! add-payments · affiliate-site                                  40s
+   needs you: approval · commits ✓ · test ✓ · approval ! · review …
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                     2m
-▎  failed: test · commits ✓ · test ✕ · approval … · review …
+▎× fix-footer · affiliate-site                                     2m
+▎  failed: test · commits ✓ · test × · approval … · review …
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1
@@ -2421,16 +2421,16 @@
 ===== C2 Several checkpoints · Inbox | floating | 100x30 | 28,1 71x28
 
   NEEDS YOU  2
-▎● warm-finch · pixls                                               3m
+▎! warm-finch · pixls                                               3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site                                   40s
-   needs you: approval · commits ✓ · test ✓ · approval ● · review …
+ ! add-payments · affiliate-site                                   40s
+   needs you: approval · commits ✓ · test ✓ · approval ! · review …
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                      2m
-▎  failed: test · commits ✓ · test ✕ · approval … · review …
+▎× fix-footer · affiliate-site                                      2m
+▎  failed: test · commits ✓ · test × · approval … · review …
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1
@@ -2450,16 +2450,16 @@
 ===== C2 Several checkpoints · Inbox | floating | 80x24 | 28,1 51x22
 
   NEEDS YOU  2
-▎● warm-finch · pixls                           3m
+▎! warm-finch · pixls                           3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site               40s
-   needs you: approval ✓✓●…
+ ! add-payments · affiliate-site               40s
+   needs you: approval ✓✓!…
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                  2m
-▎  failed: test ✓✕……
+▎× fix-footer · affiliate-site                  2m
+▎  failed: test ✓×……
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1
@@ -2473,16 +2473,16 @@
 ===== C2 Several checkpoints · Inbox | tiled | 160x45 | 89,1 70x43
 
   NEEDS YOU  2
-▎● warm-finch · pixls                                              3m
+▎! warm-finch · pixls                                              3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site                                  40s
-   needs you: approval · commits ✓ · test ✓ · approval ● · review …
+ ! add-payments · affiliate-site                                  40s
+   needs you: approval · commits ✓ · test ✓ · approval ! · review …
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                     2m
-▎  failed: test · commits ✓ · test ✕ · approval … · review …
+▎× fix-footer · affiliate-site                                     2m
+▎  failed: test · commits ✓ · test × · approval … · review …
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1
@@ -2517,16 +2517,16 @@
 ===== C2 Several checkpoints · Inbox | tiled | 100x30 | 27,1 72x28
 
   NEEDS YOU  2
-▎● warm-finch · pixls                                                3m
+▎! warm-finch · pixls                                                3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site                                    40s
-   needs you: approval · commits ✓ · test ✓ · approval ● · review …
+ ! add-payments · affiliate-site                                    40s
+   needs you: approval · commits ✓ · test ✓ · approval ! · review …
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                       2m
-▎  failed: test · commits ✓ · test ✕ · approval … · review …
+▎× fix-footer · affiliate-site                                       2m
+▎  failed: test · commits ✓ · test × · approval … · review …
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1
@@ -2546,16 +2546,16 @@
 ===== C2 Several checkpoints · Inbox | tiled | 80x24 | 27,1 52x22
 
   NEEDS YOU  2
-▎● warm-finch · pixls                            3m
+▎! warm-finch · pixls                            3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site                40s
-   needs you: approval ✓✓●…
+ ! add-payments · affiliate-site                40s
+   needs you: approval ✓✓!…
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                   2m
-▎  failed: test ✓✕……
+▎× fix-footer · affiliate-site                   2m
+▎  failed: test ✓×……
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1
@@ -2569,16 +2569,16 @@
 ===== C2 Several checkpoints · Inbox | flat | 160x45 | 89,1 70x43
 
   NEEDS YOU  2
-▎● warm-finch · pixls                                              3m
+▎! warm-finch · pixls                                              3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site                                  40s
-   needs you: approval · commits ✓ · test ✓ · approval ● · review …
+ ! add-payments · affiliate-site                                  40s
+   needs you: approval · commits ✓ · test ✓ · approval ! · review …
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                     2m
-▎  failed: test · commits ✓ · test ✕ · approval … · review …
+▎× fix-footer · affiliate-site                                     2m
+▎  failed: test · commits ✓ · test × · approval … · review …
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1
@@ -2613,16 +2613,16 @@
 ===== C2 Several checkpoints · Inbox | flat | 100x30 | 26,1 73x28
 
   NEEDS YOU  2
-▎● warm-finch · pixls                                                 3m
+▎! warm-finch · pixls                                                 3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site                                     40s
-   needs you: approval · commits ✓ · test ✓ · approval ● · review …
+ ! add-payments · affiliate-site                                     40s
+   needs you: approval · commits ✓ · test ✓ · approval ! · review …
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                                        2m
-▎  failed: test · commits ✓ · test ✕ · approval … · review …
+▎× fix-footer · affiliate-site                                        2m
+▎  failed: test · commits ✓ · test × · approval … · review …
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1
@@ -2642,16 +2642,16 @@
 ===== C2 Several checkpoints · Inbox | flat | 80x24 | 26,1 53x22
 
   NEEDS YOU  2
-▎● warm-finch · pixls                             3m
+▎! warm-finch · pixls                             3m
 ▎  Use pnpm or npm for the workspace?
 ▎   Reply m   Open o
 
- ● add-payments · affiliate-site                 40s
-   needs you: approval ✓✓●…
+ ! add-payments · affiliate-site                 40s
+   needs you: approval ✓✓!…
 
   FAILED CHECKS  1
-▎✕ fix-footer · affiliate-site                    2m
-▎  failed: test ✓✕……
+▎× fix-footer · affiliate-site                    2m
+▎  failed: test ✓×……
 ▎  ✗ legal.test.tsx › footer shows current year
 
   FINISHED  1

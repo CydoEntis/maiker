@@ -557,8 +557,8 @@ mod tests {
                 SearchHit { term: term.term, line: 3, text: "running migrate step 1".into() },
             ],
         );
-        let text = frame(&mut app, "search commands with IN SESSIONS");
-        assert!(text.contains("IN SESSIONS") && text.contains("running migrate step 2"), "{text}");
+        let text = frame(&mut app, "search with what chats printed");
+        assert!(text.contains("In chats") && text.contains("running migrate step 2"), "{text}");
         assert!(!text.contains("step 1"), "the newest line of each session only: {text}");
         assert!(text.contains(&name), "{text}");
         let Mode::KeyMap(km) = &app.mode else { panic!("search closed") };

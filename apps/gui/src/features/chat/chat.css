@@ -104,9 +104,9 @@
 .mx-task-tick { width: 10px; height: 10px; }
 .mx-md-item { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A note: the well with a 2px coloured edge; its lead in the text colour. */
-.mx-note { display: flex; gap: 10px; padding: 10px 12px; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: inset 2px 0 0 var(--needs); font-size: 13.5px; line-height: 1.55; }
-.mx-note-lead { flex: none; font-weight: 600; color: var(--fg); }
-.mx-note-text { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mx-md-quote { display: flex; gap: 10px; padding: 10px 12px; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: inset 2px 0 0 var(--needs); --fold-line: var(--line); font-size: 13.5px; line-height: 1.55; }
+.mx-md-quote-lead { flex: none; font-weight: 600; color: var(--fg); }
+.mx-md-quote-text { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-code-chip { padding: 1px 5px; background: var(--m-sel); font-family: var(--mono); font-size: .9em; color: var(--fg); }
 .mx-code-body { margin: 0; padding: 8px 0; overflow-x: auto; overflow-y: hidden; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; white-space: pre; color: var(--fg); }
 .mx-code-body .code-line { display: flex; min-width: max-content; }

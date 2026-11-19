@@ -235,6 +235,8 @@ impl App {
         self.screen.show_own = Some(term);
         self.screen.cursor = None;
         self.mode = Mode::Normal;
+        // Looking at the chat is handling its news.
+        self.toasts.retain(|t| t.term != Some(term));
         self.cmd_on(term.machine, Command::FocusPane { term: term.term });
     }
 
@@ -458,6 +460,7 @@ impl App {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: false,
         }));
     }
 
@@ -621,6 +624,8 @@ impl App {
             }
             // It opens the Inbox, and closes it again.
             Action::Jump if matches!(self.mode, Mode::GoTo { .. }) => self.mode = Mode::Normal,
+            // With a toast on show the jump key goes to its chat; the inbox is one key away in the menu.
+            Action::Jump if self.toast_go() => {}
             Action::Jump => self.open_goto(),
             Action::PrevPrompt | Action::NextPrompt => {
                 if let Some(t) = self.focused() {
@@ -805,6 +810,16 @@ impl App {
         true
     }
 
+    /// `ctrl+g` beside the panes: Changes opens for the chat on the cursor, or closes if it is open.
+    fn toggle_changes(&mut self) {
+        if matches!(self.view, Some(crate::client::View::Changes(_))) {
+            self.view = None;
+            self.view_set_aside = None;
+        } else {
+            self.act(Action::Changes);
+        }
+    }
+
     /// Two columns wider or narrower, within the sidebar's limits.
     fn resize_sidebar(&mut self, grow: bool) {
         let w = self
@@ -850,6 +865,14 @@ impl App {
             };
             return;
         }
+        if k.modifiers == KeyModifiers::CONTROL && k.code == KeyCode::Char('g') {
+            self.toggle_changes();
+            return;
+        }
+        if k.modifiers == KeyModifiers::CONTROL && k.code == KeyCode::Char(',') {
+            self.act(Action::Settings);
+            return;
+        }
         // A key that needs no leader acts here as it does over a pane, on the sidebar's row
         // where it has one (Alt+x closes the selected session), instead of being typed.
         if let Some(a) = self.keymap.global.get(&spec).cloned() {
@@ -859,6 +882,9 @@ impl App {
         let plain = !k
             .modifiers
             .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        if plain && k.code == KeyCode::Char('i') && self.toast_install() {
+            return;
+        }
         if k.code == KeyCode::Enter
             && let Some(c) = self.screen.cursor.and_then(|key| self.session_term(key))
             && self.asks_you(c)
@@ -872,6 +898,9 @@ impl App {
         {
             self.screen_side_leave();
             self.open_approval(c);
+            return;
+        }
+        if self.on_side_shortcut(k) {
             return;
         }
         match spec.code {
@@ -1089,6 +1118,7 @@ impl App {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
     }
 
@@ -1918,7 +1948,6 @@ impl App {
                     self.screen.subs_opened.insert(key);
                 }
             }
-            ScreenHit::ReleaseMenu => self.release_menu(),
             ScreenHit::NoPaneNew => self.new_ship(None),
             // A shell on that machine at once.
             ScreenHit::MachinePlus(machine) => self.new_ship_on(machine),
@@ -1941,6 +1970,21 @@ impl App {
             ScreenHit::PaneProject(term) => {
                 let at = self.hover.map_or((0, 0), |p| (p.x, p.y.saturating_sub(1)));
                 self.menu_for_project_tools(term, at);
+            }
+            ScreenHit::Compact(term) => self.send_compact(term),
+            ScreenHit::StoppedRestart(term) => self.stopped_restart(term),
+            ScreenHit::StoppedNotNow(term) => self.stopped_not_now(term),
+            ScreenHit::StoppedCopy(term) => self.stopped_copy(term),
+            ScreenHit::StoppedReopen(term) => self.stopped_reopen(term),
+            ScreenHit::ServiceStart => self.on_service_key(&KeyEvent::new(KeyCode::Char('s'), KeyModifiers::NONE)),
+            ScreenHit::ServiceNotNow => self.on_service_key(&KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)),
+            ScreenHit::ServiceCopy => self.on_service_key(&KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE)),
+            ScreenHit::ServiceReopen => self.service_reopen(),
+            ScreenHit::SidebarSearch => self.act(Action::Palette),
+            ScreenHit::SidebarKeys => self.act(Action::Help),
+            ScreenHit::PaneChanges(term) => {
+                self.cmd_on(term.machine, Command::FocusPane { term: term.term });
+                self.act(Action::Changes);
             }
             ScreenHit::TidyRow(i) => self.tidy_click(i),
             ScreenHit::ClonePick(i) => self.clone_click(i),
@@ -2026,6 +2070,15 @@ impl App {
                 self.cancel_send();
                 self.dismiss_notice();
             }
+            ScreenHit::ToastGo => {
+                self.toast_go();
+            }
+            ScreenHit::ToastDismiss => {
+                self.toast_dismiss();
+            }
+            ScreenHit::ToastInstall => {
+                self.toast_install();
+            }
             ScreenHit::SettingsBody => {}
             ScreenHit::FinderPick(i) => {
                 if let Mode::Finder(fd) = &self.mode {
@@ -2095,6 +2148,7 @@ impl App {
                 if let Mode::ScreenSettings(v) = &mut self.mode {
                     v.cat = i;
                     v.sel = 0;
+                    v.in_rows = false;
                     v.editing = None;
                     v.capturing = false;
                 }
@@ -2125,11 +2179,12 @@ impl App {
                 let Mode::ScreenSettings(v) = &mut self.mode else {
                     return;
                 };
-                let again = v.sel == i;
+                let again = v.in_rows && v.sel == i;
                 v.sel = i;
+                v.in_rows = true;
                 let cat = crate::client::modal::Cat::ALL
                     [v.cat.min(crate::client::modal::Cat::ALL.len() - 1)];
-                let row = crate::client::design::settings_rows(cat).get(i).cloned();
+                let row = self.settings_page_rows(cat).get(i).cloned();
                 let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
                 match (h, row) {
                     (ScreenHit::SetVal(_, vi), Some(row @ SRow::Setting(_)))

@@ -235,7 +235,7 @@ export async function listSshHosts(): Promise<HostChoice[]> {
 }
 
 const AddedSchema = z.discriminatedUnion('outcome', [
-  z.object({ outcome: z.literal('added'), name: z.string(), version: z.string().nullable() }),
+  z.object({ outcome: z.literal('added'), name: z.string(), version: z.string().nullable(), reach: z.enum(['answered', 'missing', 'older', 'newer-here', 'not-running']), took_ms: z.number() }),
   z.object({ outcome: z.literal('login'), name: z.string(), target: z.string(), said: z.string(), command: z.string().nullable() }),
   z.object({ outcome: z.literal('needs-name') }),
   z.object({ outcome: z.literal('cancelled') }),

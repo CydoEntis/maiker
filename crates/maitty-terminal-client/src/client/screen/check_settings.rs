@@ -930,7 +930,7 @@ impl App {
         let Mode::ScreenSettings(v) = &self.mode else {
             return false;
         };
-        if modal::Cat::ALL.get(v.cat) != Some(&modal::Cat::Check) {
+        if modal::Cat::ALL.get(v.cat) != Some(&modal::Cat::Check) || !v.in_rows {
             return false;
         }
         if matches!(k.code, KeyCode::Tab | KeyCode::BackTab | KeyCode::Esc) {

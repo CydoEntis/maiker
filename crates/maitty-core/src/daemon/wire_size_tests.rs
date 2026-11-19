@@ -361,6 +361,7 @@ fn pane(i: u32) -> TermInfo {
         linked: true,
         diff_added: 128,
         diff_removed: 42,
+        diff_files: 3,
         subagents: vec!["Explore".into()],
         subagent_activity: vec![helper(i)],
         session: Some(format!("8f3c2a10-5d4e-4b7a-9c21-{i:012}")),

@@ -1,4 +1,4 @@
-//! Changes beyond the local review: ticking the files a commit takes and writing its message,
+//! Changes beyond the local review: picking the files a commit takes and writing its message,
 //! comments on lines of the diff for the agent, fetch, pull and push, and the same view for a
 //! pane on another machine, whose checkout that machine's daemon reads (`Query::Repo`) and
 //! changes (`Query::Git`). Every git step runs off the UI thread: here in `spawn_bg`, there on
@@ -34,10 +34,13 @@ fn next_tag() -> u64 {
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ChangesExtra {
-    /// Files ticked for the next commit; with none ticked a commit takes every change.
-    pub ticked: BTreeSet<String>,
-    /// The commit message being written (`c`), until Enter commits or Esc drops it.
+    /// Files left out of the next commit. Every changed file is in it until it is unpicked, so a
+    /// file the agent changes next is in without a key.
+    pub unticked: BTreeSet<String>,
+    /// The commit message being edited (`m`, or a click on it), until Esc stops editing.
     pub message: Option<String>,
+    /// The message as edited, kept after editing stops; None: the one made from the changes.
+    pub draft: Option<String>,
     /// The diff's cursor (an index into the review's diff lines) while the diff has the keys.
     pub line: Option<usize>,
     /// A comment being written on the cursor's line.
@@ -153,6 +156,41 @@ pub fn suggested_message(summary: &str, paths: &[&str]) -> String {
                 _ => format!("Update {} files", many.len()),
             }
         }
+    }
+}
+
+/// Ctrl+Enter, which a terminal that cannot tell it from Enter sends as Ctrl+J.
+fn commit_key(k: &KeyEvent) -> bool {
+    k.modifiers.contains(KeyModifiers::CONTROL) && matches!(k.code, KeyCode::Enter | KeyCode::Char('j'))
+}
+
+impl views::ChangesView {
+    /// Whether the next commit takes `path`.
+    pub fn is_picked(&self, path: &str) -> bool {
+        !self.extra.unticked.contains(path)
+    }
+
+    /// The files the next commit takes, in the review's order.
+    pub fn picked(&self) -> Vec<String> {
+        let Some(r) = &self.review else { return Vec::new() };
+        r.files.iter().filter(|f| self.is_picked(&f.path)).map(|f| f.path.clone()).collect()
+    }
+
+    fn toggle_picked(&mut self, path: &str) {
+        if !self.extra.unticked.remove(path) {
+            self.extra.unticked.insert(path.to_string());
+        }
+    }
+
+    /// The message the next commit carries: the one being edited, else the one written, else
+    /// one made from the agent's summary or the picked files.
+    pub fn message_text(&self) -> String {
+        if let Some(m) = self.extra.message.as_ref().or(self.extra.draft.as_ref()) {
+            return m.clone();
+        }
+        let (Some(r), picked) = (&self.review, self.picked()) else { return String::new() };
+        let paths: Vec<&str> = picked.iter().map(String::as_str).collect();
+        suggested_message(&r.task.summary, &paths)
     }
 }
 
@@ -276,17 +314,19 @@ impl App {
                 added: i64::try_from(f.additions).unwrap_or(i64::MAX),
                 removed: i64::try_from(f.deletions).unwrap_or(i64::MAX),
                 untracked: f.patch.contains("\nnew file mode") || f.patch.starts_with("new file mode"),
+                deleted: f.patch.contains("\ndeleted file mode") || f.patch.starts_with("deleted file mode"),
             })
             .collect();
         let keep = v.review.as_ref().map(|r| r.sel);
         let task = remote.task.clone();
         // Ticks and marks of files no longer changed go.
-        v.extra.ticked.retain(|p| files.iter().any(|f| f.path == *p));
+        v.extra.unticked.retain(|p| files.iter().any(|f| f.path == *p));
         v.reviewed.retain(|p| files.iter().any(|f| f.path == *p));
         let n = files.len();
         v.review = Some(tasks::Review {
             task,
             merge_base: "HEAD".into(),
+            to_push: None,
             files,
             sel: 0,
             diff: Vec::new(),
@@ -415,26 +455,31 @@ impl App {
         }
     }
 
+    /// Commit the picked files with the message shown; nothing picked, or no message, says so.
+    fn commit_picked(&mut self, v: &mut views::ChangesView) {
+        let paths = v.picked();
+        if paths.is_empty() {
+            return self.warn("Pick at least one file to commit".into());
+        }
+        let message = v.message_text().trim().to_string();
+        if message.is_empty() {
+            return self.notify("Write a message first".into(), true);
+        }
+        v.extra.message = None;
+        v.extra.draft = None;
+        self.changes_git(v, GitRequest::Commit { message, paths: Some(paths) }, "committing…");
+    }
+
     /// The keys this file adds to Changes, ahead of the review's own. None: not one of them.
     pub(super) fn changes_more_key(&mut self, v: &mut views::ChangesView, k: &KeyEvent) -> Option<bool> {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         let esc = k.code == KeyCode::Esc || k.code == KeyCode::Char('\x1b');
-        // Writing the commit message.
+        // Editing the commit message: Enter is a new line, Ctrl+Enter commits, Esc stops.
         if let Some(message) = &mut v.extra.message {
             match k.code {
-                _ if esc => v.extra.message = None,
-                KeyCode::Enter => {
-                    let message = message.trim().to_string();
-                    if message.is_empty() {
-                        self.notify("write a message first; Esc leaves it".into(), true);
-                        return Some(true);
-                    }
-                    let paths = (!v.extra.ticked.is_empty())
-                        .then(|| v.extra.ticked.iter().cloned().collect::<Vec<_>>());
-                    v.extra.message = None;
-                    v.extra.ticked.clear();
-                    self.changes_git(v, GitRequest::Commit { message, paths }, "committing…");
-                }
+                _ if esc => v.extra.draft = v.extra.message.take(),
+                _ if commit_key(k) => self.commit_picked(v),
+                KeyCode::Enter if message.chars().count() < TEXT_MAX => message.push('\n'),
                 KeyCode::Backspace => {
                     message.pop();
                 }
@@ -530,27 +575,14 @@ impl App {
                     v.extra.line = Some(first);
                 }
             }
-            KeyCode::Char('t') => {
+            KeyCode::Char(' ' | 't') => {
                 if let Some(f) = r.files.get(r.sel) {
                     let path = f.path.clone();
-                    if !v.extra.ticked.remove(&path) {
-                        v.extra.ticked.insert(path);
-                    }
+                    v.toggle_picked(&path);
                 }
             }
-            // Asked first: `c` is also Changes' leader key. The message box is the question.
-            KeyCode::Char('c') => {
-                if r.files.is_empty() {
-                    self.notify("nothing to commit".into(), false);
-                    return Some(true);
-                }
-                let paths: Vec<&str> = if v.extra.ticked.is_empty() {
-                    r.files.iter().map(|f| f.path.as_str()).collect()
-                } else {
-                    v.extra.ticked.iter().map(String::as_str).collect()
-                };
-                v.extra.message = Some(suggested_message(&r.task.summary, &paths));
-            }
+            _ if commit_key(k) => self.commit_picked(v),
+            KeyCode::Char('m') => v.extra.message = Some(v.message_text()),
             KeyCode::Char('s') => self.send_line_comments(v),
             KeyCode::Char('f') => self.changes_git(v, GitRequest::Fetch, "fetching…"),
             KeyCode::Char('u') => self.changes_git(v, GitRequest::Pull, "pulling…"),
@@ -571,7 +603,7 @@ impl App {
                     }
                 }
             }
-            KeyCode::Char('e' | 'm' | 'M' | 'd') if remote => {
+            KeyCode::Char('e' | 'B' | 'M' | 'd') if remote => {
                 let machine = v.extra.remote.as_ref().map(|r| r.machine.clone()).unwrap_or_default();
                 self.notify(
                     format!(

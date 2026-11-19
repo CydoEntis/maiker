@@ -388,14 +388,25 @@ pub(in crate::client) fn draw_new_pane(
 
 // Settings ------------------------------------------------------------------------------------
 
+/// The spinners the settings row shows as choices (Blocks, Braille, Dots, Line); Enter opens the rest.
+const SPINNER_CHOICES: usize = 4;
+
 /// The values a settings row offers as chips, and which one is current.
 pub(in crate::client) fn chips_for(app: &App, row: &SRow) -> Option<(Vec<String>, Option<usize>)> {
     use crate::client::modal::Kind;
     let SRow::Setting(s) = row else { return None };
     let cur = crate::client::modal::current(&app.cfg, s.path);
     match s.kind {
-        Kind::Bool => {
-            let on = cur.and_then(|v| v.as_bool()).unwrap_or(false);
+        Kind::Spinner => {
+            let name = crate::config::spinner_name(&app.cfg.ui.spinner);
+            let shown = &crate::config::SPINNERS[..SPINNER_CHOICES];
+            Some((
+                shown.iter().map(|(n, _)| n.to_string()).collect(),
+                shown.iter().position(|(n, _)| *n == name),
+            ))
+        }
+        Kind::Bool | Kind::BoolOff => {
+            let on = crate::client::modal::is_on(&app.cfg, s);
             Some((
                 vec!["on".into(), "off".into()],
                 Some(if on { 0 } else { 1 }),
@@ -433,6 +444,13 @@ pub(in crate::client) fn set_chip(app: &mut App, row: &SRow, vi: usize) {
     let SRow::Setting(s) = row else { return };
     let v: toml_edit::Value = match s.kind {
         Kind::Bool => (vi == 0).into(),
+        Kind::BoolOff => (vi != 0).into(),
+        Kind::Spinner => {
+            let Some((_, frames)) = crate::config::SPINNERS.get(vi).filter(|_| vi < SPINNER_CHOICES) else {
+                return;
+            };
+            frames.iter().copied().collect::<toml_edit::Array>().into()
+        }
         Kind::Choice(opts) => match opts.get(vi) {
             Some(o) => (*o).into(),
             None => return,
@@ -453,54 +471,12 @@ pub(in crate::client) fn set_chip(app: &mut App, row: &SRow, vi: usize) {
 }
 
 /// Columns the label column of a settings page holds; no setting label is longer.
+#[cfg(test)]
 pub(in crate::client) const SETTINGS_LABEL_COLS: u16 = 33;
-
-/// The sections column's width, the line beside it included.
-const SECTIONS_W: u16 = 22;
-/// Narrower than this, Settings keeps the sections column to its longest name.
-const SECTIONS_FULL_FROM: u16 = 90;
-const SECTIONS_NARROW_W: u16 = 14;
-
-/// The sections column's width in a Settings body `w` wide.
-fn sections_w(w: u16) -> u16 {
-    if w >= SECTIONS_FULL_FROM { SECTIONS_W } else { SECTIONS_NARROW_W }
-}
-
-/// The width the right column gives a row's help, in a Settings body `w` wide.
-pub(in crate::client) fn settings_help_cols(w: u16) -> u16 {
-    w.saturating_sub(sections_w(w) + 3)
-}
-
-/// The sections down the left: the chosen one on the selection ground with an accent `▎`.
-fn draw_sections(app: &mut App, buf: &mut Buffer, r: Rect, t: &Theme, cur: usize) {
-    use crate::client::modal::Cat;
-    let c = Style::default().bg(t.card);
-    // One row each: the list is a quick index, not a set of settings to read apart.
-    let step = 1;
-    for (i, cat) in Cat::ALL.iter().enumerate() {
-        let y = r.y + 1 + i as u16 * step;
-        if y >= r.bottom() {
-            break;
-        }
-        let on = i == cur;
-        let row = Rect { x: r.x, y, width: r.width, height: 1 };
-        let bg = if on { t.selection_bg } else { t.card };
-        fill(buf, row, bg);
-        let st = Style::default().bg(bg);
-        if on {
-            put(buf, r.x, y, &[seg("▎", st.fg(t.accent))], r.x + 1);
-        }
-        put(buf, r.x + 2, y, &[seg(cat.label(), st.fg(if on { t.strong } else { t.text }))], r.right());
-        hit(app, row, ScreenHit::SetTab(i));
-    }
-    for y in r.top()..r.bottom() {
-        put(buf, r.right(), y, &[seg("│", c.fg(t.line))], r.right() + 1);
-    }
-}
 
 /// What is off about the versions, each a line under the section's title: a newer release, an
 /// installed or daemon version that differs, a restart that waits. Returns the lines used.
-fn draw_version_notes(app: &mut App, buf: &mut Buffer, r: Rect, y0: u16, t: &Theme) -> u16 {
+pub(in crate::client) fn draw_version_notes(app: &mut App, buf: &mut Buffer, r: Rect, y0: u16, t: &Theme) -> u16 {
     let look = Look::of(&app.cfg.ui);
     let c = Style::default().bg(t.card);
     let window = env!("APP_VERSION");
@@ -563,202 +539,6 @@ fn draw_version_notes(app: &mut App, buf: &mut Buffer, r: Rect, y0: u16, t: &The
         used += 1;
     }
     used
-}
-
-/// The footer: a rule, then the keys at the left and where the settings are saved at the right.
-fn draw_settings_footer(buf: &mut Buffer, r: Rect, t: &Theme) {
-    let c = Style::default().bg(t.card);
-    let y = r.bottom().saturating_sub(1);
-    hline(buf, r.x, y.saturating_sub(1), r.width, t, t.card);
-    let mut segs = Vec::new();
-    for (key, words) in [("↑↓", "move"), ("tab", "section"), ("enter", "change"), ("o", "open"), ("esc", "close")] {
-        segs.push(seg(key, c.fg(t.accent).add_modifier(Modifier::BOLD)));
-        segs.push(seg(format!(" {words}  "), c.fg(t.muted)));
-    }
-    let used = put(buf, r.x + 2, y, &segs, r.right());
-    let saved = format!("saved to {}", tilde(&crate::config::config_path()));
-    let sx = r.right().saturating_sub(2 + saved.width() as u16);
-    if sx > used + 1 {
-        put(buf, sx, y, &[seg(saved, c.fg(t.muted))], r.right());
-    }
-}
-
-/// A choice row's value as the design draws it: the value bold in the accent, `‹ ›`, then where
-/// it is among the choices (`2/3`).
-fn choice_segs(opts: &[String], cur: Option<usize>, bg: Color, t: &Theme) -> Vec<Seg> {
-    let st = Style::default().bg(bg);
-    let i = cur.unwrap_or(0);
-    vec![
-        seg(opts.get(i).cloned().unwrap_or_default(), st.fg(t.accent).add_modifier(Modifier::BOLD)),
-        seg("  ‹ ›", st.fg(t.muted)),
-        seg(format!("  {}/{}", i + 1, opts.len()), st.fg(t.faint())),
-    ]
-}
-
-/// Settings: the sections down the left, the chosen section's rows at the right (label, value),
-/// the selected row's help, and the footer. Enter or a click changes a value.
-pub(in crate::client) fn draw_settings(
-    app: &mut App,
-    buf: &mut Buffer,
-    r: Rect,
-    t: &Theme,
-    v: &SettingsView,
-) {
-    use crate::client::design::settings_group;
-    use crate::client::modal::Cat;
-    hit(app, r, ScreenHit::SettingsBody);
-    let c = Style::default().bg(t.card);
-    let foot = 2u16;
-    let body = Rect { height: r.height.saturating_sub(foot), ..r };
-    let sw = sections_w(r.width);
-    draw_sections(app, buf, Rect { width: sw - 1, ..body }, t, v.cat);
-    draw_settings_footer(buf, r, t);
-    let right = Rect {
-        x: r.x + sw + 2,
-        width: settings_help_cols(r.width),
-        ..body
-    };
-    let cat = Cat::ALL[v.cat.min(Cat::ALL.len() - 1)];
-    put(buf, right.x, right.y + 1, &[seg(cat.label().to_lowercase(), c.fg(t.muted))], right.right());
-    let notes = draw_version_notes(app, buf, right, right.y + 2, t);
-    if cat == Cat::Check {
-        let page = Rect { x: right.x.saturating_sub(3), width: right.width + 3, ..body };
-        return crate::client::screen::check_settings::draw_page(app, buf, page, right.y + 3 + notes, t);
-    }
-    if cat == Cat::Agents && !app.claude_hooks_asked {
-        app.claude_hooks_asked = true;
-        app.spawn_bg(|| {
-            let installed = crate::cli::claude_status_hooks_installed();
-            crate::client::Bg::Then(Box::new(move |app: &mut App| {
-                app.claude_hooks = Some(installed)
-            }))
-        });
-    }
-    if cat == Cat::Agents && !app.codex_hooks_asked {
-        app.codex_hooks_asked = true;
-        app.spawn_bg(|| {
-            let state = crate::cli::codex_hooks_state();
-            crate::client::Bg::Then(Box::new(move |app: &mut App| app.codex_hooks = Some(state)))
-        });
-    }
-    let rows = crate::client::design::settings_rows(cat);
-    let lx = right.x;
-    // The labels' column as wide as this section's longest label, so its values have the room.
-    let label_cols = rows
-        .iter()
-        .map(|row| match row {
-            SRow::Setting(s) => s.label.width(),
-            SRow::Bind { label, .. } => label.width(),
-            SRow::Agent(row) => row.label().width(),
-            SRow::Version => "Version".width(),
-        })
-        .max()
-        .unwrap_or(0)
-        .min(SETTINGS_LABEL_COLS as usize) as u16;
-    let vx = if right.width >= label_cols + 18 {
-        lx + label_cols + 2
-    } else {
-        lx + right.width * 55 / 100
-    };
-    let help = match rows.get(v.sel) {
-        Some(SRow::Setting(s)) => s.help.to_string(),
-        Some(SRow::Bind { acts, .. }) if acts.len() > 1 => "Several keys; change them in the config file (o).".into(),
-        Some(SRow::Bind { .. }) => "Enter, then press the new key.".into(),
-        Some(SRow::Agent(row)) => row.help().to_string(),
-        Some(SRow::Version) => concat!("u looks for a newer ", env!("APP_COMMAND"), " now; Enter installs one that was found.").into(),
-        None => String::new(),
-    };
-    // A group's heading, then its rows; the selected row's help stays two lines over the footer.
-    enum L {
-        Head(&'static str),
-        Row(usize),
-        Gap,
-    }
-    let top = right.y + 3 + notes;
-    let help_y = body.bottom().saturating_sub(2);
-    let h = help_y.saturating_sub(top + 1) as usize;
-    // Groups sit a blank row apart, unless the window is too short to spare the rows; rows get
-    // a blank row between them only when the whole list still fits that way.
-    let roomy = body.height >= 20;
-    let build = |spaced: bool| {
-        let mut lines: Vec<L> = Vec::new();
-        let mut last = "";
-        for (i, row) in rows.iter().enumerate() {
-            let g = settings_group(row);
-            if g != last {
-                if roomy && !lines.is_empty() {
-                    lines.push(L::Gap);
-                }
-                lines.push(L::Head(g));
-                last = g;
-            } else if spaced {
-                lines.push(L::Gap);
-            }
-            lines.push(L::Row(i));
-        }
-        lines
-    };
-    let spaced = build(true);
-    let lines = if spaced.len() <= h { spaced } else { build(false) };
-    let at = lines
-        .iter()
-        .position(|l| matches!(l, L::Row(i) if *i == v.sel))
-        .unwrap_or(0);
-    let start = (at + 1).min(lines.len()).saturating_sub(h);
-    let row_x = right.x.saturating_sub(2);
-    let row_w = right.right().saturating_sub(row_x);
-    for (k, line) in lines.iter().enumerate().skip(start).take(h) {
-        let y = top + (k - start) as u16;
-        match line {
-            L::Gap => {}
-            L::Head(g) => {
-                // A dim heading and a rule out to the edge.
-                let end = put(buf, lx, y, &[seg(*g, c.fg(t.muted).add_modifier(Modifier::BOLD)), seg(" ", c)], right.right());
-                hline(buf, end, y, right.right().saturating_sub(end), t, t.card);
-            }
-            L::Row(i) => {
-                let row = &rows[*i];
-                let sel = *i == v.sel;
-                let rr = Rect { x: row_x, y, width: row_w, height: 1 };
-                let bg = if sel { t.hov } else { t.card };
-                fill(buf, rr, bg);
-                let st = Style::default().bg(bg);
-                let label = match row {
-                    SRow::Setting(s) => s.label.to_string(),
-                    SRow::Bind { label, .. } => label.to_string(),
-                    SRow::Agent(row) => row.label().to_string(),
-                    SRow::Version => "Version".into(),
-                };
-                put(buf, lx, y, &[seg(truncate(&label, (vx - lx - 1) as usize), st.fg(t.text))], vx - 1);
-                hit(app, Rect { x: row_x, y, width: vx - row_x, height: 1 }, ScreenHit::SetRow(*i));
-                let value: Vec<Seg> = match chips_for(app, row).filter(|_| !(sel && v.editing.is_some())) {
-                    Some((opts, cur)) => choice_segs(&opts, cur, bg, t),
-                    None => crate::client::design::control(app, t, row, v, sel)
-                        .into_iter()
-                        .map(|(x, s)| (x, if s.bg.is_none() { s.bg(bg) } else { s }))
-                        .collect(),
-                };
-                let next = chips_for(app, row)
-                    .map_or(usize::MAX, |(opts, cur)| (cur.unwrap_or(0) + 1) % opts.len().max(1));
-                let end = put(buf, vx, y, &value, right.right());
-                hit(
-                    app,
-                    Rect { x: vx, y, width: end.saturating_sub(vx).max(1), height: 1 },
-                    ScreenHit::SetVal(*i, next),
-                );
-            }
-        }
-    }
-    if rows.is_empty() {
-        put(buf, lx, top, &[seg("Nothing to change here.", c.fg(t.muted))], right.right());
-    }
-    for (k, line) in wrap_two(&help, right.width as usize)
-        .iter()
-        .enumerate()
-        .filter(|(_, l)| !l.is_empty())
-    {
-        put(buf, lx, help_y + k as u16, &[seg(line.clone(), c.fg(t.muted))], right.right());
-    }
 }
 
 /// `text` on up to two lines of `width` columns, broken at spaces; the second ends in `…` if cut.

@@ -76,7 +76,7 @@ fn bound(app: &App, a: &Action) -> Option<KeySpec> {
 
 /// The key that runs `a` with no leader, if it has one (`Alt+↓` for the next session): the one to show while typing,
 /// since it works from where you are. When there are several, the same one every time.
-fn bound_global(app: &App, a: &Action) -> Option<KeySpec> {
+pub(super) fn bound_global(app: &App, a: &Action) -> Option<KeySpec> {
     app.keymap
         .global
         .iter()
@@ -95,12 +95,12 @@ pub(in crate::client) fn short_key(k: &KeySpec) -> String {
     }
 }
 
-/// A hint: its key bold in the accent, what it does muted.
+/// A hint: its key bold, what it does muted. Keys are not the accent: that colour only marks an update.
 fn hint(key: String, words: &str, hit: Option<ScreenHit>, t: &Theme) -> Piece {
     let base = Style::default().bg(t.bg);
     Piece {
         segs: vec![
-            seg(key, base.fg(t.accent).add_modifier(Modifier::BOLD)),
+            seg(key, base.fg(t.strong).add_modifier(Modifier::BOLD)),
             seg(format!(" {words}"), base.fg(t.muted)),
         ],
         gap: GAP,
@@ -108,11 +108,11 @@ fn hint(key: String, words: &str, hit: Option<ScreenHit>, t: &Theme) -> Piece {
     }
 }
 
-/// The mode chip: its word on its own ground, dark ink, bold.
+/// The mode chip: its word, lower case, on its own ground.
 fn mode_chip(label: &str, ground: Color, ink: Color, hit: Option<ScreenHit>) -> Piece {
     Piece {
         segs: vec![seg(
-            format!(" {label} "),
+            format!(" {} ", label.to_lowercase()),
             Style::default().fg(ink).bg(ground).add_modifier(Modifier::BOLD),
         )],
         gap: 0,
@@ -120,19 +120,32 @@ fn mode_chip(label: &str, ground: Color, ink: Color, hit: Option<ScreenHit>) -> 
     }
 }
 
-/// Typing: a key that needs the leader is shown with it in front (`^space ? help`): the bare key would be typed into the
-/// pane. The session keys are the ones that need none (`alt+↓/alt+↑`). The leader alone starts key mode (a click starts it), and `? help` lists
-/// the keys.
+/// The leader key that runs `a`, preferring a letter (`k` for search) over a named key (`space`).
+fn bound_letter(app: &App, a: &Action) -> Option<KeySpec> {
+    app.keymap
+        .prefixed_order
+        .iter()
+        .filter(|k| app.keymap.prefixed.get(k) == Some(a))
+        .find(|k| matches!(k.code, crossterm::event::KeyCode::Char(c) if c.is_alphanumeric()))
+        .copied()
+        .or_else(|| bound(app, a))
+}
+
+/// Typing: every key but the few below goes to the agent, so a key that needs the leader is shown with it in front
+/// (`^space k search`). The session keys need none (`alt+↓/alt+↑`). The leader alone starts key mode (a click
+/// starts it).
 fn pane_hints(app: &App, t: &Theme) -> Vec<Piece> {
     let lead = short_key(&app.keymap.prefix);
     let mut hints = Vec::new();
-    hints.push(hint(lead.clone(), "keys", Some(ScreenHit::ShortcutMode), t));
-    // Changing session without the leader (Alt+↓ / Alt+↑) when it has such keys, since they work from the pane; else the leader keys.
     if let (Some(next), Some(prev)) = (bound_global(app, &Action::NextSession), bound_global(app, &Action::PrevSession)) {
-        hints.push(hint(format!("{}/{}", short_key(&next), short_key(&prev)), "sessions", None, t));
-    } else if let (Some(next), Some(prev)) = (bound(app, &Action::NextSession), bound(app, &Action::PrevSession)) {
-        hints.push(hint(format!("{lead} {}/{}", short_key(&next), short_key(&prev)), "sessions", None, t));
+        hints.push(hint(format!("{}/{}", short_key(&next), short_key(&prev)), "chats", None, t));
     }
+    for (action, words) in [(Action::Palette, "search"), (Action::PickSession, "new"), (Action::FocusNext, "next pane")] {
+        if let Some(key) = bound_letter(app, &action) {
+            hints.push(hint(format!("{lead} {}", short_key(&key)), words, None, t));
+        }
+    }
+    hints.push(hint(lead.clone(), "keys", Some(ScreenHit::ShortcutMode), t));
     if let Some(help) = bound(app, &Action::Help) {
         hints.push(hint(format!("{lead} {}", short_key(&help)), "help", None, t));
     }
@@ -240,15 +253,21 @@ fn keys_holder(app: &App) -> Option<Holder> {
             ("Esc", "cancel"),
         ),
         Mode::ScreenSettings(v)
-            if crate::client::modal::Cat::ALL.get(v.cat)
-                == Some(&crate::client::modal::Cat::Check) =>
+            if v.in_rows
+                && crate::client::modal::Cat::ALL.get(v.cat)
+                    == Some(&crate::client::modal::Cat::Check) =>
         {
             check_page_holder(app)
         }
+        Mode::ScreenSettings(v) if !v.in_rows => holder(
+            "SETTINGS",
+            &[("↑↓", "page"), ("Enter", "open")],
+            ("Esc", "close"),
+        ),
         Mode::ScreenSettings(_) => holder(
             "SETTINGS",
-            &[("↑↓", "move"), ("Tab", "section"), ("Enter", "change")],
-            ("Esc", "close"),
+            &[("↑↓", "move"), ("Space", "toggle"), ("←→", "change")],
+            ("Esc", "back"),
         ),
         // A merge or throw-away asked in a finished row: Enter does it, Esc only drops the question.
         Mode::GoTo { .. } => match app.screen.inbox_confirm {
@@ -563,9 +582,11 @@ fn view_holder(app: &App) -> Option<Holder> {
             ("Esc", "close"),
         ),
         View::Changes(v) if v.confirm.is_some() => holder("CHANGES", &[("y", "yes")], ("n", "no")),
-        View::Changes(v) if v.extra.message.is_some() => {
-            holder("COMMIT MESSAGE", &[("Enter", "commit")], ("Esc", "cancel"))
-        }
+        View::Changes(v) if v.extra.message.is_some() => holder(
+            "COMMIT MESSAGE",
+            &[("ctrl+enter", "commit"), ("Enter", "new line")],
+            ("Esc", "stop editing"),
+        ),
         View::Changes(v) if v.extra.commenting.is_some() => {
             holder("COMMENT", &[("Enter", "keep it")], ("Esc", "cancel"))
         }
@@ -578,10 +599,10 @@ fn view_holder(app: &App) -> Option<Holder> {
             "CHANGES",
             &[
                 ("↑↓", "file"),
-                ("c", "commit"),
-                ("t", "tick"),
-                ("l", "diff"),
-                ("x", "reviewed"),
+                ("space", "pick"),
+                ("m", "message"),
+                ("ctrl+enter", "commit"),
+                ("p", "PR"),
             ],
             ("Esc", "close"),
         ),
@@ -687,7 +708,7 @@ pub(in crate::client) fn draw_mode_bar(app: &mut App, buf: &mut Buffer, row: Rec
         }
         (tag, right, where_piece(app, t))
     } else {
-        let tag = mode_chip("PANE", t.accent, t.acc_ink, Some(ScreenHit::ShortcutMode));
+        let tag = mode_chip("pane", t.btn, t.strong, Some(ScreenHit::ShortcutMode));
         (tag, pane_hints(app, t), where_piece(app, t))
     };
     let mut releases: Vec<Piece> = if app.screen.release_in_side {
@@ -700,7 +721,11 @@ pub(in crate::client) fn draw_mode_bar(app: &mut App, buf: &mut Buffer, row: Rec
     };
     let room = row.width.saturating_sub(2);
     let tag_w = width(std::slice::from_ref(&tag));
-    let mut place = place;
+    // The service's chip replaces whatever the bar says about the session while it is away or has just returned.
+    let mut place = match super::service_chip(app, t).or_else(|| super::release_chip(app, t)) {
+        Some((segs, hit)) => Some(Piece { segs, gap: 1, hit }),
+        None => place,
+    };
     let used = |place: &Option<Piece>, right: &[Piece], releases: &[Piece]| {
         tag_w
             + place.as_ref().map_or(0, |p| width(std::slice::from_ref(p)))

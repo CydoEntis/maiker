@@ -48,6 +48,8 @@ pub struct Theme {
     pub acc_ink: Color,
     /// Discard, failures.
     pub err: Color,
+    /// A caution that is neither needs you nor a failure (context almost full, an empty commit).
+    pub warning: Color,
     /// Project colours (violet, sky, pink, teal), when the theme has its own.
     pub ws: Option<[Color; 4]>,
     /// Terminal colours for agent output (red, green, yellow, blue, magenta, cyan, gray),
@@ -72,9 +74,18 @@ pub struct SplashColors {
 #[serde(default)]
 pub struct ThemeOverrides(pub BTreeMap<String, String>);
 
-/// How much of the accent a selected row's ground carries (a share of 1): enough to be seen on a dark ground, little enough that
-/// the text on it keeps its contrast.
-const SELECTED_ACCENT: f32 = 0.24;
+/// How much of the strongest text a selected row's ground carries (a share of 1): enough to be seen on a dark ground and on a
+/// light one, little enough that the text on it keeps its contrast. A selection is neutral; the accent is for the update dot.
+const SELECTED_TINT: f32 = 0.17;
+
+/// The caution colour for a ground: the design's yellow on a dark one, its darker brass-yellow on a light one.
+fn warning_for(bg: Color) -> Color {
+    if contrast(bg, Color::Rgb(255, 255, 255)) < contrast(bg, Color::Rgb(0, 0, 0)) {
+        Color::Rgb(0x8a, 0x61, 0x00)
+    } else {
+        Color::Rgb(0xe8, 0xc2, 0x5a)
+    }
+}
 
 /// The theme when none is chosen.
 pub const DEFAULT: &str = "night";
@@ -565,6 +576,7 @@ impl Theme {
             strong,
             acc_ink,
             err: readable_on(ansi[0], ink, &[card], 3.0),
+            warning: warning_for(bg),
             ws: Some([ansi[4], ansi[3], ansi[0], ansi[5]]),
             ansi: Some(ansi),
             splash: None,
@@ -584,20 +596,20 @@ impl Theme {
         c
     }
 
-    /// The selected row's ground: the background tinted with the theme's accent, so a selection is
-    /// the accent's colour and is seen on any ground, dark or light.
+    /// The selected row's ground: the background tinted with the strongest text, so a selection is
+    /// neutral and is seen on any ground, dark or light.
     /// Tree lines and line numbers: half way from the quiet text to the ground.
     pub fn faint(&self) -> Color {
         mix(self.muted, self.bg, 0.5)
     }
 
     pub fn sel_bg(&self) -> Color {
-        mix(self.bg, self.accent, SELECTED_ACCENT)
+        mix(self.bg, self.strong, SELECTED_TINT)
     }
 
-    /// The selected row's ground on a raised surface (a sheet, a popup): `ground` tinted with the accent.
+    /// The selected row's ground on a raised surface (a sheet, a popup): `ground` tinted with the strongest text.
     pub fn sel_on(&self, ground: Color) -> Color {
-        mix(ground, self.accent, SELECTED_ACCENT)
+        mix(ground, self.strong, SELECTED_TINT)
     }
 
     /// A pointed-at row on a raised surface.
@@ -675,6 +687,7 @@ impl Theme {
             strong: fg,
             acc_ink: bg,
             err: hex(c[11]),
+            warning: warning_for(bg),
             ws: None,
             ansi: None,
             splash: None,
@@ -710,6 +723,7 @@ impl Theme {
             strong: h(8),
             acc_ink: h(10),
             err: h(13),
+            warning: warning_for(h(0)),
             ws: Some(ws.map(hex)),
             ansi: Some(a.map(hex)),
             splash: None,
@@ -802,7 +816,7 @@ impl Theme {
     pub fn named(name: &str) -> Theme {
         let name = canonical(name);
         let mut theme = Theme::base(name);
-        // The row the keys are on is the accent tinted into the ground, in every theme: a theme's own hover colour was often a step
+        // The row the keys are on is the strongest text tinted into the ground, in every theme: a theme's own hover colour was often a step
         // from the card too small to see on a dark ground.
         theme.hov = theme.sel_on(theme.card);
         if matches!(name, "night" | "day" | "maiker-dark" | "maiker-light") {

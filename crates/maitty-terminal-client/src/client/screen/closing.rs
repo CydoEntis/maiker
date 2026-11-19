@@ -128,9 +128,6 @@ impl App {
 
     /// The banner to draw now.
     pub(in crate::client) fn closing_banner(&self) -> Option<Banner> {
-        if let Some(bar) = self.service_banner() {
-            return Some(bar);
-        }
         let long = crate::client::design::long_key;
         let lead = long(&self.keymap.prefix);
         let undo = self

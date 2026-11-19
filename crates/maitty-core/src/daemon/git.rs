@@ -287,23 +287,25 @@ pub fn ahead_of(dir: &Path, base: &str) -> u32 {
         .unwrap_or(0)
 }
 
-/// Lines added and removed in the working tree against HEAD, for the sidebar's `+N -N`.
-/// Untracked files are not counted, as with any `git diff`. `None`: not a repository, or no
-/// commit to compare with.
-pub fn diff_counts(dir: &Path) -> Option<(u32, u32)> {
+/// Lines added, lines removed and files changed in the working tree against HEAD, for the
+/// sidebar's `+N -N` and the pane's `changes N`. Untracked files are not counted, as with any
+/// `git diff`. `None`: not a repository, or no commit to compare with.
+pub fn diff_counts(dir: &Path) -> Option<(u32, u32, u32)> {
     git(dir, &["diff", "--numstat", "--no-ext-diff", "HEAD", "--"])
         .ok()
         .map(|out| parse_numstat(&out))
 }
 
-/// Sum `git diff --numstat` lines. A binary file shows `-` for both counts and adds nothing.
-fn parse_numstat(out: &str) -> (u32, u32) {
-    out.lines().fold((0, 0), |(added, removed), line| {
+/// Sum `git diff --numstat` lines. A binary file shows `-` for both counts and adds no lines,
+/// but is still a changed file.
+fn parse_numstat(out: &str) -> (u32, u32, u32) {
+    out.lines().filter(|line| !line.is_empty()).fold((0, 0, 0), |(added, removed, files), line| {
         let mut cols = line.split('\t');
         let count = |c: Option<&str>| c.and_then(|c| c.parse::<u32>().ok()).unwrap_or(0);
         (
             added.saturating_add(count(cols.next())),
             removed.saturating_add(count(cols.next())),
+            files.saturating_add(1),
         )
     })
 }
@@ -847,9 +849,9 @@ mod tests {
 
     #[test]
     fn numstat_lines_add_up_and_a_binary_file_counts_for_nothing() {
-        assert_eq!(parse_numstat(""), (0, 0));
-        assert_eq!(parse_numstat("3\t1\tsrc/a.rs\n10\t0\tb.rs"), (13, 1));
-        assert_eq!(parse_numstat("-\t-\timage.png\n2\t2\tc.rs"), (2, 2));
+        assert_eq!(parse_numstat(""), (0, 0, 0));
+        assert_eq!(parse_numstat("3\t1\tsrc/a.rs\n10\t0\tb.rs"), (13, 1, 2));
+        assert_eq!(parse_numstat("-\t-\timage.png\n2\t2\tc.rs"), (2, 2, 2));
     }
 
     fn git_at(dir: &Path, args: &[&str]) {
@@ -880,11 +882,11 @@ mod tests {
         std::fs::write(repository.path().join("a.txt"), "one\ntwo\n").expect("file");
         git_at(repository.path(), &["add", "--all"]);
         git_at(repository.path(), &["commit", "--quiet", "-m", "baseline"]);
-        assert_eq!(diff_counts(repository.path()), Some((0, 0)));
+        assert_eq!(diff_counts(repository.path()), Some((0, 0, 0)));
 
         std::fs::write(repository.path().join("a.txt"), "one\nthree\nfour\n").expect("edit");
         std::fs::write(repository.path().join("untracked.txt"), "x\n").expect("untracked");
-        assert_eq!(diff_counts(repository.path()), Some((2, 1)));
+        assert_eq!(diff_counts(repository.path()), Some((2, 1, 1)));
     }
 
     #[test]

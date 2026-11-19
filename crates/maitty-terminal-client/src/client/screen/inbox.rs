@@ -1096,9 +1096,9 @@ mod tests {
             |want| {
                 for (i, row) in want.rows.clone().iter().enumerate() {
                     if row.contains("needs you: approval") {
-                        want.set_row(i, "   needs you: test · build ✓ · test ●");
+                        want.set_row(i, "   needs you: test · build ✓ · test !");
                     } else if row.contains("failed: test ") {
-                        want.set_row(i, "▎  failed: test · build ✓ · test ✕");
+                        want.set_row(i, "▎  failed: test · build ✓ · test ×");
                     } else if row.contains("Several checkpoints read as one line") {
                         want.set_row(i, "");
                     }

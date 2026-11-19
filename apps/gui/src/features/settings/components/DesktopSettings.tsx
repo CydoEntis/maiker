@@ -77,6 +77,8 @@ export type MachinesInfo = {
     onAdd: (target: string, name?: string, port?: number) => Promise<Added>
     /** Ends the look that is running. */
     onCancel: () => void
+    /** Opens a New session draft that runs on the machine just added; absent where there is none to open. */
+    onStartOn?: (name: string) => void
   }
 }
 

@@ -255,9 +255,9 @@ const BlockView = memo(function BlockView({ block, replying }: { block: Block; r
       const [first, ...rest] = block.inlines
       const lead = first?.kind === 'strong' ? first : null
       return (
-        <div data-fold="" className="mx-note">
-          {lead !== null && <span className="mx-note-lead"><Inlines nodes={lead.children} /></span>}
-          <span className="mx-note-text"><Inlines nodes={lead === null ? block.inlines : rest} /></span>
+        <div data-fold="" className="mx-md-quote">
+          {lead !== null && <span className="mx-md-quote-lead"><Inlines nodes={lead.children} /></span>}
+          <span className="mx-md-quote-text"><Inlines nodes={lead === null ? block.inlines : rest} /></span>
         </div>
       )
     }

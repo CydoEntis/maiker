@@ -1476,6 +1476,7 @@ mod tests {
             added: 1,
             removed: 0,
             untracked: false,
+            deleted: false,
         };
         let files = vec![f("a.rs"), f("b.rs")];
         let marks: HashMap<String, u64> = [
@@ -1504,6 +1505,7 @@ mod tests {
             added: 1,
             removed: 0,
             untracked: false,
+            deleted: false,
         };
         let files = vec![f("a.rs"), f("b.rs")];
         let marks: HashMap<String, u64> = [("a.rs".to_string(), 1), ("b.rs".to_string(), 2)].into();
@@ -1532,6 +1534,7 @@ mod tests {
                 root: PathBuf::new(),
             },
             merge_base: String::new(),
+            to_push: None,
             files: paths
                 .iter()
                 .map(|p| Changed {
@@ -1539,6 +1542,7 @@ mod tests {
                     added: 1,
                     removed: 0,
                     untracked: false,
+                    deleted: false,
                 })
                 .collect(),
             sel: 0,
