@@ -4,12 +4,14 @@ import { useCallback } from 'react'
 import { TerminalView } from '@/TerminalView'
 import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
-import { chatAvailability, type PaneView } from '../model/chatView'
+import { chatAvailability, type ChatAgent, type PaneView } from '../model/chatView'
 import { toast } from '@/lib/toast'
 import { answerHelpers, dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
 import { isChatSession } from '../model/chatSession'
 import { carryDraftToTerminal } from '../model/draftCarry'
 import { PaneCard } from './PaneCard'
+import { ShellHint, TerminalBar } from '@/features/terminal/TerminalBar'
+import { showsShellHint, terminalBarOf } from '@/features/terminal/terminalBar'
 import { PaneErrorBoundary } from '@/components/PaneErrorBoundary'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { TurnSpan } from '@/features/inspect/turnRange'
@@ -76,6 +78,14 @@ export function WorkspacePane({ shown, pane, kept }: {
     paneViews.choose(session.id, 'terminal')
     void carryDraftToTerminal(session).catch((error: unknown) => { toast.failed('Could not move your message to the terminal', error) })
   }
+  // Types the agent's command into the shell, from the chat's start card or the shell hint under the terminal.
+  const startAgent = (agent: ChatAgent) => {
+    paneViews.choose(session.id, 'terminal')
+    const words = withBypass(agent, [], bypasses(preferences, agent))
+    if (startsBypassed(agent, words)) rememberBypassSession(session.id)
+    void sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, `${[agent, ...words].join(' ')}\r`).catch((error: unknown) => { toast.failed(`Could not start ${agent}`, error) })
+  }
+  const barFacts = terminalBarOf(session)
   const head = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
   const fullPercent = contextFull({ context: session.usage.context, limits: [] })
   const interrupted = session.interrupted !== null && !dismissedRestores.has(session.id) ? session.interrupted : null
@@ -161,12 +171,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           onBackToMain={() => { setOpenSubagent(null) }}
           windowActions={{ openSettings: setSettingsSection, openPanel: (view) => { openPanel(pane.id, session.id, view) }, openRecent: () => { setRecentOpen(true) }, renameSession: (name) => { saveName(session.id, name) } }}
           onBackToTerminal={showTerminal}
-          onStartAgent={(agent) => {
-            paneViews.choose(session.id, 'terminal')
-            const words = withBypass(agent, [], bypasses(preferences, agent))
-            if (startsBypassed(agent, words)) rememberBypassSession(session.id)
-            void sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, `${[agent, ...words].join(' ')}\r`).catch((error: unknown) => { toast.failed(`Could not start ${agent}`, error) })
-          }}
+          onStartAgent={startAgent}
           hideSuccessfulTools={preferences.hideSuccessfulTools}
           onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
           fullAccessDefault={bypasses(preferences, 'claude') && bypasses(preferences, 'codex')}
@@ -174,6 +179,7 @@ export function WorkspacePane({ shown, pane, kept }: {
         </OpenSubagentContext.Provider>
         </PaneErrorBoundary>
       ) : undefined}
+      bar={barFacts !== null ? <TerminalBar facts={barFacts} onOpenUsage={() => { setSettingsSection('usage') }} /> : showsShellHint(session) ? <ShellHint onStart={startAgent} disabled={!online} /> : undefined}
       panelView={inspectOpen && focused ? inspectView : null}
       {...(hasPanel ? { onPanel: (view: InspectView) => { togglePanel(pane.id, session.id, view) } } : {})}
       changedFiles={focused ? (diffStat.data?.files ?? 0) : 0}

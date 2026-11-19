@@ -209,3 +209,24 @@
 /* Reduced motion (the OS or Settings): the dock and the glide between panes appear and go at once. */
 :root[data-motion="reduced"] .mx-tdock, .mx-app[data-motion="reduced"] .mx-tdock { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-tdock, .mx-tdock[data-leaving] { animation: none; } }
+
+
+/* The bar under an agent's terminal: where it runs at the left, usage, model and mode at the right, 38px on the terminal's own ground. */
+.mx-tbar { flex: none; display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px 0 18px; border-top: 1px solid var(--line); background: var(--main); font-size: 12.5px; color: var(--muted); }
+.mx-tbar-where { flex: 0 3 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
+.mx-tbar-where > svg { flex: none; }
+.mx-tbar-machine { flex: none; margin-right: 6px; }
+.mx-tbar-project { flex: 0 0 auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.mx-tbar-sep { flex: none; color: var(--line2); }
+.mx-tbar-branch { min-width: 0; display: inline-flex; align-items: center; gap: 5px; color: var(--branch); }
+.mx-tbar-branch.is-worktree { color: var(--link); }
+.mx-tbar-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); }
+.mx-tbar-tag { flex: none; font-size: 11px; color: var(--dim); }
+.mx-tbar-spacer { flex: 1; min-width: 8px; }
+.mx-tbar-model { flex: none; display: inline-flex; align-items: center; height: 26px; padding: 0 6px; white-space: nowrap; }
+/* A plain shell has no session to describe, so it gets a dashed one-line hint of how to start one. */
+.mx-shint { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 18px; border-top: 1px dashed var(--line2); background: var(--main); font-size: 12.5px; color: var(--muted); }
+.mx-shint-agent { height: 24px; padding: 0 10px; font: 500 12px var(--mono); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-shint-agent:not(:disabled):hover { background: var(--m-hover); }
+.mx-shint-agent:disabled { opacity: .4; }
+.mx-shint-note { font-size: 12px; color: var(--dim); }

@@ -358,6 +358,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   while checks fail) and **Terminal**
   (shows or hides the dock, adding the first terminal when the session has none; `toggleTerminal`), then the pane's own entries.
   A view button opens the side panel on that view, or closes it when it already shows it. There is no middle column and no tab bar: the window is the sidebar, the workspace and the side panel.
+- **Terminal bar.** An agent's terminal pane ends in a 38px bar (`TerminalBar`, `features/terminal/`): a 1px `--line` top border on `--main`,
+  12.5px `--muted` text, 18px left and 14px right padding. At the left the machine (only for another computer), the project
+  (the repository, else the `~` path; 180px at most, ellipsised), then `/` in `--line2` and the branch (12px mono, `--branch`; `--link`
+  with a dim 11px `worktree` tag in a linked worktree). At the right the usage meters (the chat's `mx-usage` meters, so the two rows read
+  alike), and the agent's name (the model and permission mode are not shown: a terminal pane does not read them). The bar only says: where a session runs is set when it starts. A plain shell has no bar but a dashed one-line hint
+  (`ShellHint`) that offers `claude`, `codex` and `gemini`.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   52px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
