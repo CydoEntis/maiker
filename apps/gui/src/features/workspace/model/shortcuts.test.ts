@@ -32,7 +32,6 @@ const TABLE: readonly [ShortcutAction, string, string][] = [
   ['inspect', '⌘I', 'Ctrl+Shift+I'],
   ['find', '⌘F', 'Ctrl+Shift+F'],
   ['toggle-sidebar', '⌘B', 'Ctrl+Shift+B'],
-  ['chat-toggle', '⌘⇧E', 'Ctrl+Shift+E'],
   ['terminal', '⌃`', 'Ctrl+Shift+`'],
   ['usage', '⌘⇧U', 'Ctrl+Shift+U'],
   ['performance', '⌘⇧P', 'Ctrl+Shift+P'],

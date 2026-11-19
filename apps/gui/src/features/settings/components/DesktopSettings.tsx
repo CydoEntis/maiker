@@ -1,4 +1,5 @@
 import { ApprovedCommands } from './ApprovedCommands'
+import type { PaneView } from '@/features/workspace/model/chatView'
 import { toast } from '@/lib/toast'
 import type { UpdaterState } from '@/features/updates/useUpdater'
 import type { Transfer } from '@/features/updates/downloadEta'
@@ -436,8 +437,31 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
   const home = preferences.startFolder === ''
   const [saved, flashSaved] = useSavedFlash()
   const setStart = (folder: string) => { update('startFolder', folder); flashSaved() }
+  const searching = useContext(SettingsSearch) !== null
+  // Said once after a change, with the way back: the change moves every open session, so it must not pass unnoticed.
+  const [moved, setMoved] = useState<{ from: PaneView; to: PaneView } | null>(null)
+  const openIn = preferences.openSessionsIn
+  const changeView = (to: PaneView) => {
+    if (to === openIn) return
+    setMoved({ from: openIn, to })
+    update('openSessionsIn', to)
+  }
   return (
     <>
+      <Card title="How you work">
+        <Row label="Open sessions in" detail="Chat shows a conversation; Terminal shows the agent's own CLI. It is one setting for the whole app, so every open session follows it. Gemini has no chat view, so it always opens in Terminal.">
+          <SegmentedChoice label="Open sessions in" value={openIn} options={CHAT_VIEW_OPTIONS} onChange={changeView} />
+        </Row>
+        {moved !== null && moved.to === openIn && !searching && (
+          <div className="mx-scard-row" role="status">
+            <div className="mx-scard-text">
+              <span>{`All sessions now open in ${VIEW_WORD[openIn]}`}</span>
+              <span>Gemini always opens in Terminal.</span>
+            </div>
+            <button type="button" className="mx-scard-button" onClick={() => { update('openSessionsIn', moved.from); setMoved(null) }}>Undo</button>
+          </div>
+        )}
+      </Card>
       <Card
         title="Start folder"
         meta={saved ? <span className="mx-scard-meta" role="status">Saved</span> : undefined}
@@ -502,6 +526,7 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
 }
 
 const CHAT_VIEW_OPTIONS = [['chat', 'Chat'], ['terminal', 'Terminal']] as const
+const VIEW_WORD: Readonly<Record<PaneView, string>> = { chat: 'Chat', terminal: 'Terminal' }
 const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as const
 const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creation', 'Creation'], ['priority', 'Priority']]
 const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
@@ -656,9 +681,6 @@ function ChatSection({ preferences, update }: { preferences: SettingsPreferences
         </Row>
         <Row label="Colour file names" detail="Draws a file's name in the message in the colour of its type (TypeScript, Rust, Markdown and so on). Off shows plain names.">
           <Switch aria-label="Colour file names" checked={preferences.colourFileNames} onCheckedChange={(value) => { update('colourFileNames', value) }} />
-        </Row>
-        <Row label="Open sessions in" detail="Where every session opens, the ones already open too. It is one session either way: the Chat and Terminal switch on each pane changes just that one at any time. Gemini has no chat view and always opens in its terminal.">
-          <SegmentedChoice label="Open sessions in" value={preferences.openSessionsIn} options={CHAT_VIEW_OPTIONS} onChange={(value) => { update('openSessionsIn', value) }} />
         </Row>
       </Card>
     </>

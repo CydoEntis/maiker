@@ -157,7 +157,7 @@ type Props = {
   onBackToMain?: () => void
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage
-  /** Shows the session's terminal in place of this chat, for a command whose menu only the terminal draws. */
+  /** Shows the session's terminal log over this chat, for a command whose menu only the terminal draws; the app's view is unchanged. */
   onShowTerminal?: () => void
   /** What is wrong with the chat, if anything: shown as a banner over the message box when nothing else is asked of the person. */
   problem?: ChatProblem | null
@@ -382,10 +382,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     applyNow(heldMode.mode)
   }, [applyNow, heldMode, working, pickerLocked])
   const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
-  // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
+  // A command that opens a menu of its own is typed into the agent's terminal, whose log is shown over the chat: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
-    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so it opened in the terminal.`)
+    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so its menu is in the terminal log.`)
     void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.failed(`Could not run ${command}`, error) })
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer

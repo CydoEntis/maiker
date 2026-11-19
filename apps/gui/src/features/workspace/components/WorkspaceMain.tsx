@@ -61,7 +61,6 @@ export function WorkspaceMain() {
                     onOtherMachine={setNewChatMachine}
                     projects={machineProjects(sessions, newChatMachine, focusedSession, newChatStartFolder)}
                     busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}
-                    openIn={preferences.openSessionsIn}
                     defaultAgent={preferences.defaultAgent}
                     bypassOff={preferences.bypassOff}
                     pickFolder={folderPick.pick}

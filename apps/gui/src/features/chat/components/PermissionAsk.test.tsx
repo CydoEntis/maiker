@@ -135,7 +135,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(screen.getByRole('group', { name: 'Which database?' })).toBeInTheDocument()
     expect(screen.queryByRole('group', { name: 'Which language?' })).not.toBeInTheDocument()
     expect(screen.queryByText(/1 SQLite · 2 Postgres/)).not.toBeInTheDocument()
-    expect(screen.queryByText('Answer in the terminal.')).not.toBeInTheDocument()
+    expect(screen.queryByText("Only the agent's terminal can take this answer.")).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
 
     // Nothing is typed until every question has an answer, so one can be changed first.

@@ -1,14 +1,11 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef } from 'react'
 import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction } from './model/shortcuts'
-import type { ChatAvailability, PaneView } from './model/chatView'
 import { toast } from '@/lib/toast'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { guardLocal } from '@/lib/localOnly'
 import { isChatSession } from './model/chatSession'
-import { carryDraftToTerminal } from './model/draftCarry'
 import { discardDraft } from './model/newSessionDraft'
-import { usePaneViews } from './usePaneViews'
 import { activeArrangement, cycleFocus, type Layout, type SplitDirection, toggleBroadcast } from './model/layout'
 import type { SessionView } from './model/session'
 import { type EscLayer, topmostOpen } from './model/escLadder'
@@ -93,7 +90,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
 }
 
 /** What each shortcut does. The palette and the keyboard both go through it. */
-export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, chatOf, paneViews, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
+export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
   newSession: (machine?: number) => void
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
@@ -111,8 +108,6 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
   flash: (text: string) => void
   showSessionById: (sessionId: string) => void
   undoLastClose: () => void
-  chatOf: (session: SessionView) => { availability: ChatAvailability; view: PaneView }
-  paneViews: ReturnType<typeof usePaneViews>
   setFocusMode: Dispatch<SetStateAction<boolean>>
   setShortcutsOpen: Dispatch<SetStateAction<boolean>>
   setTextSize: (size: number) => void
@@ -178,14 +173,6 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
       case 'usage':
         setSettingsSection('usage')
         return
-      case 'chat-toggle': {
-        // A chat session has only its chat; there is nothing to switch to.
-        if (!focusedSession || isChatSession(focusedSession.conversation)) return
-        const next: PaneView = chatOf(focusedSession).view === 'chat' ? 'terminal' : 'chat'
-        paneViews.choose(focusedSession.id, next)
-        if (next === 'terminal') void carryDraftToTerminal(focusedSession).catch((error: unknown) => { toast.failed('Could not move your message to the terminal', error) })
-        return
-      }
       case 'focus-mode':
         setFocusMode((on) => !on)
         return
@@ -223,6 +210,6 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
         }
         return
     }
-  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, chatOf, paneViews, online, setWorktreeFrom, toggleTerminal])
+  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal])
   return { runShortcut }
 }

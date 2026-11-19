@@ -1,5 +1,5 @@
 /**
- * Which view a pane shows, the terminal or the chat (v18 B.3), and whether a session has a chat to
+ * Which view the app shows, the terminal or the chat (v18 B.3), and whether a session has a chat to
  * show at all. Pure: the window keeps the choices, this decides what they mean.
  *
  * The chat reads the daemon's structured events (ADR 0006), never the terminal's text. So a session
@@ -16,22 +16,12 @@ export const CHAT_AGENTS: readonly ChatAgent[] = ['claude', 'codex', 'gemini']
 /** The agents the daemon can also run as a structured chat with no terminal (`startChatSession`); the rest are a terminal session shown as a chat. */
 export type StructuredAgent = Exclude<ChatAgent, 'gemini'>
 
-/** A per-agent choice of the view a session opens in. An agent opens as its chat unless the user changes it. */
-export type ChatViewDefaults = Readonly<Record<ChatAgent, PaneView>>
-
-export const DEFAULT_CHAT_VIEWS: ChatViewDefaults = { claude: 'chat', codex: 'chat', gemini: 'terminal' }
-
 /**
- * The view a new session of `agent` opens in: what Settings › Open sessions in says, except Gemini, which has no chat
- * events to show and so always opens in its terminal. The other view is one click away on the pane header.
+ * The view a session of `agent` shows: what Settings › Open sessions in says for the whole app, except Gemini, which has
+ * no chat events to show and so always shows its terminal.
  */
 export function openViewFor(agent: ChatAgent, openIn: PaneView): PaneView {
   return agent === 'gemini' ? 'terminal' : openIn
-}
-
-/** `openViewFor` for every agent, as `effectiveView` reads it. */
-export function viewDefaultsFor(openIn: PaneView): ChatViewDefaults {
-  return { claude: openViewFor('claude', openIn), codex: openViewFor('codex', openIn), gemini: openViewFor('gemini', openIn) }
 }
 
 /** The daemon conversation that carries a session's structured events. */
@@ -79,12 +69,11 @@ export function chatAvailability(source: ChatSource): ChatAvailability {
 }
 
 /**
- * The view a pane shows. An explicit choice wins; otherwise a session whose chat is ready opens in
- * its agent's default, and everything else opens as the terminal it is.
+ * The view a pane shows. The whole app is in one view (`openIn`), so an agent session that has, or is about to have, a
+ * chat follows it; a shell and an agent the app does not read are terminals whatever the setting says.
  */
-export function effectiveView(choice: PaneView | undefined, availability: ChatAvailability, defaults: ChatViewDefaults): PaneView {
-  if (choice !== undefined) return choice
-  return availability.kind === 'ready' ? defaults[availability.agent] : 'terminal'
+export function effectiveView(availability: ChatAvailability, openIn: PaneView): PaneView {
+  return availability.kind === 'ready' || availability.kind === 'no-events' ? openViewFor(availability.agent, openIn) : 'terminal'
 }
 
 /** The words the empty chat card gives for a session that has no chat. */
@@ -121,7 +110,7 @@ export const hookProblemHint = (agent: ChatAgent, problem: { file: string; why: 
 export const configFolderOf = (file: string): string => file.replace(/[\\/][^\\/]*$/, '')
 
 /** What the empty chat says once it has waited too long, in place of promising that a message is sent when the agent is ready. */
-export const stuckChatLine = (agent: ChatAgent): string => `No conversation to show yet. Open the terminal to see what ${agent} is doing.`
+export const stuckChatLine = (agent: ChatAgent): string => `No conversation to show yet. Show the terminal log to see what ${agent} is doing.`
 
 /** Shown instead when the daemon already knows the agent is stopped for an answer (a trust-this-folder question, a login). */
 export const waitingInTerminalHint = (agent: ChatAgent): string => `${agent} is waiting for you in the terminal, for example to trust this folder. Answer it there and the chat takes over.`

@@ -30,7 +30,6 @@ vi.mock('@/api/daemon', () => ({
 
 import { NewChatPage, type NewChatRequest } from './NewChatPage'
 import type { BusyBranches } from '../model/newSession'
-import type { PaneView } from '../model/chatView'
 import type { RepoCloner } from './NewChatPage'
 import type { PickedFolder } from '../model/folderPick'
 import { discardDraft, parkedDraft } from '../model/newSessionDraft'
@@ -44,7 +43,6 @@ const TWO_WORDS = /^[a-z]+-[a-z]+(-[0-9]+)?$/
 type Extra = {
   busy?: BusyBranches
   onCancel?: () => void
-  openIn?: PaneView
   cloner?: RepoCloner
   machines?: { machine: number; label: string; local: boolean; down?: string | null }[]
   onWarm?: (spec: unknown) => void
@@ -317,7 +315,7 @@ describe('the New session draft', () => {
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalled() })
-    expect(onStart.mock.calls[0]?.[0]).toMatchObject({ branch: null, message: 'hello', machine: 0, view: 'chat' })
+    expect(onStart.mock.calls[0]?.[0]).toMatchObject({ branch: null, message: 'hello', machine: 0 })
   })
 
   it('gives the session a worktree of its own when another chat works on that branch here, and says why', async () => {
@@ -427,23 +425,14 @@ describe('the New session draft', () => {
     expect(screen.getByRole('switch', { name: 'Skip permission prompts' })).toBeInTheDocument()
   })
 
-  it.each([['chat', 'claude'], ['terminal', 'claude'], ['terminal', 'codex'], ['chat', 'codex']] as const)('opens the session in the view Settings chose (%s) for %s', async (openIn, agent) => {
+  it('says in one line that a Gemini session opens in its terminal', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
-    dialog(onStart, { openIn, defaultAgent: agent })
-    await ready()
-    await userEvent.type(box(), 'hello')
-    await userEvent.click(startButton())
-    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ view: openIn })) })
-  })
-
-  it('opens a Gemini session in the terminal whatever Settings says, and says why in one line', async () => {
-    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
-    dialog(onStart, { openIn: 'chat', defaultAgent: 'gemini' })
+    dialog(onStart, { defaultAgent: 'gemini' })
     await ready()
     expect(screen.getByText('Gemini has no chat view yet, so this session opens in its terminal.')).toBeInTheDocument()
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
-    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'gemini', view: 'terminal' })) })
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'gemini' })) })
   })
 
   it('says nothing about Gemini for the other agents', async () => {

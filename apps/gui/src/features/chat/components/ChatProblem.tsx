@@ -99,7 +99,7 @@ export function useChatProblem(problem: ChatProblem | null, summarize: () => str
         actions={(
           <>
             {fix !== null && <FeedbackButton kind="primary" large onClick={runFix}>{fix.label}</FeedbackButton>}
-            {problem.kind === 'stopped' && fix === null && <FeedbackButton kind="primary" large onClick={problem.onViewLog}>Show the terminal</FeedbackButton>}
+            {problem.kind === 'stopped' && problem.onViewLog !== null && <FeedbackButton kind={fix === null ? 'primary' : 'text'} large onClick={problem.onViewLog}>Show the log</FeedbackButton>}
             <FeedbackButton large onClick={() => { setPutOff(key) }}>Not now</FeedbackButton>
             {copy(true)}
           </>

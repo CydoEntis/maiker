@@ -461,7 +461,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             </>
           )}
         </SessionBar>
-        {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Open the terminal to answer anything it asks.</p>}
+        {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Anything it asks can only be answered there.</p>}
         {restoreNote !== null && composer.conversationKey !== undefined && (
           <p className="mx-composer-note">
             Your next message starts with a line telling {agentLabel(agent)} the files were restored.{' '}

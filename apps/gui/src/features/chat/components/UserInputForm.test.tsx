@@ -69,7 +69,7 @@ describe('the approval card for a user-input request', () => {
 
   it('points to the terminal only where there is nothing to answer with', () => {
     render(<ApprovalCard event={event} actions={null} step={null} onGoToStep={null} />)
-    expect(screen.getByText(/Answer it in the terminal/)).toBeInTheDocument()
+    expect(screen.getByText(/can take it/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Send answer' })).not.toBeInTheDocument()
   })
 })

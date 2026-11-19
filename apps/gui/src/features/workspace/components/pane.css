@@ -76,8 +76,6 @@
 /* The Changes button's count of changed files. */
 .mx-pane-count { position: absolute; top: 1px; right: 0; min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 9px/1 var(--mono); color: var(--bg); background: var(--fg2); }
 
-/* The Chat | Terminal toggle: the shared segmented frame (folded under Folded corners), 13px mark and word in each choice. */
-.mx-view-switch { margin-right: 6px; }
 .mx-tdock-docks { margin: 0 2px; }
 .mx-view-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
 .mx-view-needs { width: 7px; height: 7px; border-radius: 2px; background: var(--needs); }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carriesCredentials, cloneParentFor, cloneTargetOf, DEFAULT_CLONE_PARENT, explainCloneFailure, parseRepoAddress } from './repoAddress'
-import { openViewFor, viewDefaultsFor } from './chatView'
+import { openViewFor } from './chatView'
 
 describe('reading a pasted repository address', () => {
   it.each([
@@ -92,7 +92,5 @@ describe('the view a new session opens in', () => {
     expect(openViewFor('claude', 'chat')).toBe('chat')
     expect(openViewFor('codex', 'terminal')).toBe('terminal')
     expect(openViewFor('gemini', 'chat')).toBe('terminal')
-    expect(viewDefaultsFor('chat')).toEqual({ claude: 'chat', codex: 'chat', gemini: 'terminal' })
-    expect(viewDefaultsFor('terminal')).toEqual({ claude: 'terminal', codex: 'terminal', gemini: 'terminal' })
   })
 })

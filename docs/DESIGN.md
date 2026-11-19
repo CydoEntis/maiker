@@ -423,7 +423,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   (agents), Stop session or Close shell.
   **Machine**: Install Maiker or Update Maiker first (a machine that needs it), New session here, New terminal here (or a disabled "Not reachable: <why>" line when it is down), Collapse or Expand, Machine
   settings…. **Pane** (⋯ or a right-click in the pane): Split right, Split down, Changes and files, Pin terminals
-  under chat or Move terminals to side panel (agents); then Rename…, Maximize pane, Show chat or Show terminal, and New
+  under chat or Move terminals to side panel (agents); then Rename…, Maximize pane, and New
   terminal (agents) or Clear and Copy folder path (shells); then Close pane, only when there are several. **Close pane** on one pane of several closes only the pane when its
   session has work in it (an agent, a chat, a shell running a program): the session keeps running and stays in the
   sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session as before, with Undo.
@@ -541,7 +541,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Settings pages.** ESSENTIALS: **General** (start and export folders, each the folder shown with **Browse…**, which
   opens the system's folder picker, and a way back to the default; nothing is typed; the start folder reads as `cd <folder>`
   and says "Saved" for two seconds after a change; updates; sessions) and **Chat** (how a
-  chat starts and is drawn: default agent, the view every new session opens in (**Open sessions in**), width, text size) and **Permissions** (first a
+  chat starts and is drawn: default agent, width, text size; **How you work** on General holds **Open sessions in**, the one view the whole app is in) and **Permissions** (first a
   **Bypass Permissions** card, one switch per agent, all on, with a foot that says what it allows; then the account each
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). TERMINAL: **Terminal** (text,
@@ -657,11 +657,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Pane** (`components/PaneCard.tsx`, `pane.css`, `frame.css`). Agents and shells share one 44px header ruled off by
   a `--line` hairline: the 20px flat app icon with its status badge (named "Agent · Status" for screen readers), the
   name (14px, 600; the folder and branch in its tooltip) and a pull request's state (`#45 merged` in `--ok`; once the
-  branch has commits after the merged one, `#45 merged · 3 new commits` in `--working`, since work goes on), then at the right the **Chat ·
-  Terminal** tabs (agents with a chat; 12.5px 500 `--dim`, the chosen one `--fg` underlined 2px in `--accent`), ⋯ and
+  branch has commits after the merged one, `#45 merged · 3 new commits` in `--working`, since work goes on), then at the right ⋯ and
   close. Split right, Split down, Maximize, Changes and files and Show or Hide the terminals are in ⋯ and on their
-  keys; the header's buttons and ⋯ menu do the side panel and the terminals. Under 360px the tabs go too
-  (`model/paneHeader.ts`); Show chat or Show terminal stays in ⋯ and the title keeps its room. The main area is one
+  keys; the header's buttons and ⋯ menu do the side panel and the terminals. The header has no view switch: the view is one app-wide setting. The main area is one
   flat card on `--card` with a `--line` hairline, 8px from the window and the sidebar, and a lone pane fills it edge to
   edge; with two or more the shared card goes and each pane is a card of its own (the same `--card` and hairline) and the
   focused one gets a 2px accent line along its top edge, drawn above its content (as the focused terminal split does). A pane's status is the
@@ -774,12 +772,15 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   too. A binding with `available: false` is registered but its key does nothing and the overlay
   hides it until the feature lands; none is off now (Undo close is on).
   Jump to the next session that needs you is ⌘J on macOS and Ctrl+Shift+J elsewhere: a bare Ctrl+J is a terminal key.
-- **Chat | Terminal toggle.** An agent's pane header carries the toggle, Chat then Terminal. The
-  chat covers the pane body while the terminal stays mounted underneath, hidden by `visibility`, so it keeps streaming
-  and keeps its size: switching sends nothing to the daemon, except that going to the terminal moves the text waiting
+- **One app-wide view.** The pane header has no Chat | Terminal toggle: the whole app is in the chat view or the terminal
+  view, picked in Settings › General › **How you work › Open sessions in**, and changing it moves every open session
+  (an "All sessions now open in X" note with **Undo** shows under the row). In the chat view the chat covers the pane body while the terminal stays
+  mounted underneath, hidden by `visibility`, so it keeps streaming and keeps its size, and nothing is sent to the
+  daemon. A pane can show its terminal log over a chat that cannot carry on (**Show the log** on a stopped agent, **Show
+  the terminal log** on a chat that never starts or failed to draw), with **Back to chat** in its ⋯ menu; that moves the text waiting
   in the chat box into the agent's prompt (one paste, no Enter; `model/draftCarry.ts`), under the message box's rule: only while
-  the agent is idle or done, and not when files are attached. Text typed in the terminal's prompt does not come back to the box. **An agent opens as its chat**; a shell opens as a
-  terminal, and stays one when an agent is typed into it (the view tabs still show its chat): only New session opens a chat.
+  the agent is idle or done, and not when files are attached. **An agent opens in the app's view** (Gemini always as its terminal); a shell is a
+  terminal, and stays one when an agent is typed into it, and its ⋯ menu starts a chat in its folder.
   Every session on this computer, agent or shell, has terminals of its own in its folder, shown in the **terminal
   dock** (`components/TerminalDock.tsx`, layout 2h): one card beside the chat, for the focused session, opened and
   closed by the ⋯ menu's Terminal, its New terminal or ⌃\` (Ctrl+Shift+\` on Windows and Linux,
@@ -805,9 +806,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   is whose, and how they are split, is the window's own memory (`data/agentTerminals.ts`, `data/terminalTabs.ts`),
   so the terminal app lists them as sessions, and one whose agent is gone is a row again. Closing the dock only
   hides them.
-  Settings › Chat › Chat view picks the view each of Claude and
-  Codex opens in (Chat by default). A shell, an unsupported agent or a session on another machine shows the chat
-  card's empty state, "Chat view is for agent sessions", with the reason and the ways to start one.
+  Settings › General › How you work › Open sessions in picks the one view for every agent but
+  Gemini (Chat by default). A shell and an unsupported agent are terminals whatever it says; the chat card's empty state,
+  "Chat view is for agent sessions", only shows where a pane has no session to hold a chat for.
   Changing the view, or switching between sessions, plays no animation.
 - **Chat session ([ADR 0003](adr/0003-status-and-conversation-trust.md)).** A row and pane like any session, with the
   agent's mark and its branch line. Its pane has no terminal | chat switch; the pane is the chat. The approvals
@@ -898,7 +899,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   the session's name (14px 600; one click turns it into a field, Enter or leaving saves, Esc cancels), and under it the folder (the locked folder for a
   chat with a worktree of its own, a plain one otherwise), the project in `--muted`, `/`, the branch in mono `--branch` as a button
   with a chevron that opens "Branch in <project>", and, for a session on another machine, `· machine`. A plain shell has one line, `zsh · <cwd>`, and nothing else until an agent starts in it.
-  The header is a size container: under 700px the project goes, under 560px the branch's name and the machine. Right: the **Chat | Terminal** toggle (a data-fold segmented frame, a 13px mark and the word in each), the
+  The header is a size container: under 700px the project goes, under 560px the branch's name and the machine. Right: the
   **Changes** button (two joined branches) with a count badge of the changed files, a **Files** button and the **⋯** menu (Changes, Files, History, Checks, Terminal, then split, rename and the pane's other entries). There is no PR chip (the pull
   request is in the row's hover card and Checks), no replay control and no model name.
 - **New session draft.** A chat that has not been sent, in the main area (`position: absolute; inset: 0` over the panes, `--main`, opaque), never a float or a scrim. The header is a session pane's own (52px, `.mx-pane-head`), and its chips stand where a session's name and crumbs are: **Where**: the Machine, Project and Branch and Work in tokens on one 36px line (28px tokens, 13px text, a 9px chevron, `/` between them; each opens a 320px list with a 34px head that names the token, a 32px search and 32px rows; the Project list is headed **Recent** and ends in **Open folder…**, **Clone from link…** and **My GitHub repos…**, the Machine list in **Add a machine…**; a machine that is down is a dimmed row with its reason under the name and a "not reachable" tag, and as the current machine its token turns to the warning colour; the Branch token has a width of its own, 148px that gives up room first; it is always drawn: in a folder that is no git repository, while it is read, and on another machine it is a quiet `--dim` chip with no hover that reads `no git repo`, `reading…` or `not read here`, the reason in its tooltip. **Work in** is a token like the others (icon, `This folder` or `New worktree`, a chevron), after the Branch token; its list has two 32px rows with an 11.5px `--dim` line under each and no search; dimmed `n/a` with the reason in its tooltip when there is no git repository). The Branch list's search box ends in an 11.5px `--dim` **Fetch** button, and a typed name git would refuse shows a 12px `--danger` line under the search box in place of its row. Under the box, the checkout's standing against origin is a 12px `--dim` line with the branch in mono and one text button at its end (**Update first**, **Use a worktree**), and at the right a × (absent on the home screen). Below it the chat's own empty line ("No messages yet. Write the first one below to start the session.", the 13px `--dim` line an empty session shows) sits above the chat's own message box (`mx-composer`: attach at its top right, 2 rows). The box's foot is **Who**: the agent dropdown (the agent's mark, name, model and effort in one button, `Claude · Sonnet 5.5 · Medium`), the **permission chip** (a small pill in the muted colour, `Permissions: Bypass permissions` in the danger colour while it skips prompts), a 28px **More options** button (three dots) that opens a popover below it with the **Skip permission prompts** switch and a 12px line saying what it does, and the round send button at the right. Under the box are two 12px muted lines (Gemini: "Gemini has no chat view yet, so this session opens in its terminal."; and the keys: Enter starts, Shift+Enter is a new line, Ctrl Shift ↵ starts it in the background), then the notes: the worktree line, a clone in progress or its failure (with **Use it**, **Pick another folder** or **Open GitHub settings**), a failed start, a failed background start or a missing agent. There is no Chat | Terminal control: Settings decides the opening view. While it starts, the title is replaced by the message sent and the **Starting <agent>…** card with the agent's working mark, the same card the session's pane draws, and the box is locked. The dropdown's menu opens downward from the button's left edge (up only when there is no room below; never taller than the room there is), clear of the message box, and has an **Agent** list (flat marks, the current one ticked, typing a letter jumps to an agent), the **Model** rows and **Reasoning** as the one Segmented; it stays open while the agent, model or effort is changed and closes on Esc, Enter or a click outside. Each agent keeps its own model and effort while the draft is open, and the last agent and choices are the next default. Under 768px wide the foot wraps and the agent has its own row. Focus is the 2px accent underline on every control. Agent marks are bare glyphs with no tile. Token lists sit above the page (z-index 95).
