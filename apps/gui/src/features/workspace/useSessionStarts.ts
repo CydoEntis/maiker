@@ -360,24 +360,6 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     } })
   }, [online, setNewChatOpen, startAgentSession, startRemoteChat, bypassOff])
 
-  // New session (the shortcut, the palette, the sidebar's chat button): the New session draft, on the machine asked for or the
-  // focused session's.
-  const newSession = useCallback((machine?: number) => {
-    setSettingsSection(null)
-    setNewChatMachine(machine ?? remoteTargetOf(focusedSession)?.machine ?? LOCAL_MACHINE)
-    setNewChatSeed(null)
-    setNewChatOpen(true)
-  }, [focusedSession, setNewChatOpen, setNewChatMachine, setNewChatSeed, setSettingsSection])
-
-  // "New chat with summary" on a chat whose context is nearly full: the New session draft, on the same machine and folder, with
-  // the summary as its first message to read and edit before it is sent.
-  const newChatWithSummary = useCallback((from: SessionView, summary: string) => {
-    setSettingsSection(null)
-    setNewChatMachine(from.machine)
-    setNewChatSeed({ folder: from.cwd, message: summary })
-    setNewChatOpen(true)
-  }, [setNewChatOpen, setNewChatMachine, setNewChatSeed, setSettingsSection])
-
   // A plain shell in the start folder: terminal view only, whatever the default agent is.
   // On another machine it starts in that machine's home folder.
   const newTerminal = useCallback((machine?: number) => {
@@ -389,6 +371,18 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     void runStart(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
   }, [setSettingsSection, focusedSession, runStart, startOnMachine, preferences.startFolder, home, setLayout])
+
+  // The terminal experiment: New session is a plain shell, the same as New terminal. You type the agent's command in it.
+  const newSession = newTerminal
+
+  // "New chat with summary" on a chat whose context is nearly full: the New session draft, on the same machine and folder, with
+  // the summary as its first message to read and edit before it is sent.
+  const newChatWithSummary = useCallback((from: SessionView, summary: string) => {
+    setSettingsSection(null)
+    setNewChatMachine(from.machine)
+    setNewChatSeed({ folder: from.cwd, message: summary })
+    setNewChatOpen(true)
+  }, [setNewChatOpen, setNewChatMachine, setNewChatSeed, setSettingsSection])
 
   // Signing in to GitHub is `gh`'s own interactive command, in a terminal of its own in the machine's home folder: it
   // shows a code and opens a browser. The host holds the command; only the machine is chosen here. The session is

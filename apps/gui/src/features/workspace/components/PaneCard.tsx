@@ -1,18 +1,15 @@
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { MAX_PANES, type PaneSlot, type SplitDirection } from '../model/layout'
 import { machineLabel } from '@/data/machineNicknames'
-import { MAX_SESSION_NAME_LENGTH, STATUS_WORD, type SessionView } from '../model/session'
+import { STATUS_WORD, type SessionView } from '../model/session'
 import { shellProgram } from '../model/paneHeader'
 import { isShell, keepsRunningUnseen, projectOf, rowTitle } from '../model/sidebar'
-import { InlineName } from './InlineName'
 import { BranchMenu, type BranchMenuSpec } from '@/features/chat/components/BranchMenu'
-import { StatusIcon } from '@/components/ui/status-icon'
-import type { InspectView } from '@/features/inspect/InspectPanel'
-import { Icon } from './glyphs'
+import { AppIcon, Icon } from './glyphs'
 import { beginPointerDrag } from './dragSession'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { menuPoint } from './menuPoint'
-import { CHAT_AGENTS, type ChatAgent, type PaneView } from '../model/chatView'
+import type { PaneView } from '../model/chatView'
 import { agentName } from '../model/agentMessage'
 import { SecretAskBar } from './SecretAskBar'
 import { useShortcutText } from '@/features/shortcuts/platform'
@@ -38,18 +35,8 @@ export type PaneCardProps = {
   onHideLog?: () => void
   /** The chat that covers the terminal while `view` is `chat`. */
   chat?: ReactNode
-  /** The strip under the terminal while it shows: an agent's session bar, or a shell's hint. Absent for neither. */
-  bar?: ReactNode
   /** What floats over the top of the body in either view: the agent's running subagents. */
   overlay?: ReactNode
-  /** The view the side panel shows for this pane; null while it is closed or shows another pane. */
-  panelView: InspectView | null
-  /** Opens the side panel for this pane on a view, or closes it when it already shows that; absent when the panel has nothing to show for it. */
-  onPanel?: (view: InspectView) => void
-  /** Files the repository says changed: the badge on the Changes button; 0 shows none. */
-  changedFiles: number
-  /** Checks of the pull request that fail: said beside Checks in the ⋯ menu. */
-  failingChecks: number
   /** Shows or hides the terminal dock; absent where the session cannot have one. */
   onToggleTerminal?: () => void
   terminalShown: boolean
@@ -67,15 +54,10 @@ export type PaneCardProps = {
   onCopyPath: () => void
   onRename: () => void
   /** Saves a name typed into the title, which a double-click on it opens; without it the title is only shown. */
-  onSaveName?: (name: string) => void
   /** Before the agent's tile: a control the window puts there (Show sidebar, while the sidebar is hidden). */
   leading?: ReactNode
   /** Where the branch crumb can switch the chat's branch (a session on this computer); without it the branch is only said. */
   branchMenu?: BranchMenuSpec | undefined
-  /** A shell's way to an agent of its own in the same folder (a chat session, or Gemini's terminal one); absent for an agent. */
-  onStartChat?: (agent: ChatAgent) => void
-  /** Starts another agent beside this one's work, with a brief of it. */
-  onHandoff: (agent: ChatAgent) => void
   /** Starts a new shell in an ended pane's folder, in its place. */
   onRestart: (paneId: string) => void
   /** Answers the session's request to start helpers; absent where it cannot be answered. */
@@ -89,7 +71,6 @@ export function PaneCard(props: PaneCardProps) {
   const shortcutText = useShortcutText()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
   const menuWasOpen = useRef(false)
-  const [naming, setNaming] = useState(false)
   const multi = paneCount > 1
   const full = paneCount >= MAX_PANES
   const ended = session.ended
@@ -97,43 +78,18 @@ export function PaneCard(props: PaneCardProps) {
   const shown = view
   const title = rowTitle(session)
   const shell = isShell(session)
-  const changesTip = shortcutText('inspect') === '' ? 'Changes' : `Changes · ${shortcutText('inspect')}`
   // One pane of several closes alone when its session has work in it (`useClosing`); otherwise closing ends the session.
   const closeLabel = multi && keepsRunningUnseen(session) ? 'Close pane · its session keeps running' : 'Close pane · ends its session'
 
-  // An agent's work can move to another agent; a shell or an ended session has none to move.
-  const handoffItems: MenuEntry[] = CHAT_AGENTS.includes(session.process as ChatAgent) && !ended
-    ? CHAT_AGENTS.filter((agent) => agent !== session.process).map((agent) => ({ label: `Hand off to ${agentName(agent)}`, disabled: !props.online, run: () => { props.onHandoff(agent) } }))
-    : []
-
-  // A shell is always a terminal, so this menu is where it gets an agent of its own in the same folder.
-  const startItems: MenuEntry[] = props.onStartChat === undefined || ended
-    ? []
-    : CHAT_AGENTS.map((agent) => ({ label: agent === 'gemini' ? `Start ${agentName(agent)} here` : `Start a ${agentName(agent)} chat here`, disabled: !props.online, run: () => { props.onStartChat?.(agent) } }))
-
-  // What the removed tools bar held, behind the ⋯: the side panel's four views and the terminal dock.
-  const toolItems: MenuEntry[] = [
-    ...(props.onPanel === undefined ? [] : PANEL_VIEWS.map(({ view, label }) => ({
-      label,
-      hint: view === 'changes' ? shortcutText('inspect') : view === 'checks' && props.failingChecks > 0 ? `${String(props.failingChecks)} failed` : props.panelView === view ? 'Open' : '',
-      run: () => { props.onPanel?.(view) },
-    }))),
-    ...(props.onToggleTerminal === undefined ? [] : [{ label: props.terminalShown ? 'Hide terminal' : 'Terminal', hint: shortcutText('terminal'), run: props.onToggleTerminal }]),
-  ]
-
   const menuItems: MenuEntry[] = [
-    ...(toolItems.length > 0 ? [...toolItems, 'separator' as const] : []),
     { label: 'Split right', hint: shortcutText('split-right'), disabled: full, run: () => { props.onSplit(pane.id, 'right') } },
     { label: 'Split down', hint: shortcutText('split-down'), disabled: full, run: () => { props.onSplit(pane.id, 'down') } },
-    ...startItems,
-    ...handoffItems,
     'separator',
     { label: 'Rename…', hint: 'F2', run: props.onRename },
     { label: maximized ? 'Restore layout' : 'Maximize pane', disabled: !multi && !maximized, run: () => { props.onToggleMaximize(pane.id) } },
     ...(props.onHideLog === undefined ? [] : [{ label: 'Back to chat', run: props.onHideLog }]),
-    ...(props.onNewTerminal === undefined
-      ? [{ label: 'Clear', hint: 'Ctrl+L', disabled: !props.online || ended, run: props.onClear }, { label: 'Copy folder path', run: props.onCopyPath }]
-      : [{ label: 'New terminal', disabled: !props.online, run: props.onNewTerminal }]),
+    { label: 'Clear', hint: 'Ctrl+L', disabled: !props.online || ended, run: props.onClear },
+    { label: 'Copy folder path', run: props.onCopyPath },
     // The header has no close button; with the sidebar hidden this is the one close in reach, on the only pane too.
     'separator',
     { label: closeLabel, danger: true, run: () => { props.onClose(pane.id) } },
@@ -165,31 +121,15 @@ export function PaneCard(props: PaneCardProps) {
         {props.leading}
         <div className={`mx-pane-id${shell ? ' is-shell' : ''}`}>
           <span className="mx-pane-icon" role="img" aria-label={`${agentName(session.process)} · ${STATUS_WORD[session.status]}`}>
-            <StatusIcon status={session.status} />
+            <AppIcon process={session.process} size={14} />
           </span>
           <span className="mx-pane-title">
-            {naming && props.onSaveName !== undefined ? (
-              <InlineName value={session.name ?? ''} placeholder={title} label="Session name" maxLength={MAX_SESSION_NAME_LENGTH} onCommit={(name) => { setNaming(false); props.onSaveName?.(name) }} onCancel={() => { setNaming(false) }} />
-            ) : props.onSaveName === undefined ? (
-              <span className="mx-pane-name">{shell ? `${session.name ?? shellProgram(session)} · ${session.cwdLabel}` : title}</span>
-            ) : (
-              // One click renames: the name is a plain button, so a press on it is never the start of a drag.
-              <button type="button" className="mx-pane-name is-editable" aria-label={`Rename ${title}`} onMouseDown={stop} onClick={() => { setNaming(true) }}>{shell ? `${session.name ?? shellProgram(session)} · ${session.cwdLabel}` : title}</button>
-            )}
+            <span className="mx-pane-name">{shell ? `${session.name ?? shellProgram(session)} · ${session.cwdLabel}` : title}</span>
           </span>
           {!shell && <PaneCrumbs session={session} branchMenu={props.branchMenu} />}
         </div>
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
         <span className="mx-pane-controls">
-          {props.onPanel !== undefined && (
-            <>
-              <button type="button" className={`mx-pane-control${props.panelView === 'changes' ? ' is-on' : ''}`} aria-label="Changes" title={changesTip} aria-pressed={props.panelView === 'changes'} onMouseDown={stop} onClick={() => { props.onPanel?.('changes') }}>
-                <Icon name="gitChanges" />
-                {props.changedFiles > 0 && <span className="mx-pane-count" aria-label={`${String(props.changedFiles)} changed`}>{props.changedFiles}</span>}
-              </button>
-              <button type="button" className={`mx-pane-control${props.panelView === 'files' ? ' is-on' : ''}`} aria-label="Files" title="Files" aria-pressed={props.panelView === 'files'} onMouseDown={stop} onClick={() => { props.onPanel?.('files') }}><Icon name="files" size={15} /></button>
-            </>
-          )}
           {shown === 'chat' && props.onToggleTerminal !== undefined && (
             // The chat has no terminal under it to switch to, so the dock's terminal stays one visible click away.
             <button type="button" className={`mx-pane-control${props.terminalShown ? ' is-on' : ''}`} aria-label="Terminal" title={props.terminalShown ? 'Hide terminal' : 'Terminal'} aria-pressed={props.terminalShown} onMouseDown={stop} onClick={props.onToggleTerminal}><Icon name="terminalBox" size={15} /></button>
@@ -207,6 +147,8 @@ export function PaneCard(props: PaneCardProps) {
             onClick={(event) => { if (!menuWasOpen.current) setMenuAt(menuPoint(event, true)) }}
           ><Icon name="more" /></button>
         </span>
+        {/* The header's bottom edge says the status: the plain line while idle, a strip sweeping right to left while working, lit while it needs you. */}
+        <span className="mx-pane-status" data-status={session.status} aria-hidden="true" />
       </div>
       <div
         className={`mx-pane-body${shown === 'chat' ? ' is-chat' : ''}`}
@@ -221,7 +163,6 @@ export function PaneCard(props: PaneCardProps) {
         {shown === 'chat' && props.chat}
         {props.overlay}
       </div>
-      {shown === 'terminal' && props.bar}
       {session.helperAsk.length > 0 && props.onAnswerHelpers && (
         <div className="mx-pane-ended is-ask" role="alert" aria-label="Wants to start helpers">
           <span className="mx-pane-ended-text">
@@ -242,21 +183,12 @@ export function PaneCard(props: PaneCardProps) {
         </div>
       )}
       {props.dropTarget && <span className="mx-pane-drop" aria-hidden="true">{props.dropWord}</span>}
-      <span className="mx-pane-ring" aria-hidden="true" />
     </section>
     {/* Beside the pane, not in it: a pane has `contain: paint`, which would place the menu's fixed anchor from the pane's corner. */}
     {menuAt && <MenuPopup key={`${String(menuAt.x)},${String(menuAt.y)}`} title={title} untitled at={menuAt} items={menuItems} portalContainer={props.portalContainer} onClose={() => { setMenuAt(null) }} />}
     </>
   )
 }
-
-/** The side panel's views the ⋯ menu lists, in the design's order. */
-const PANEL_VIEWS: readonly { view: InspectView; label: string }[] = [
-  { view: 'changes', label: 'Changes' },
-  { view: 'files', label: 'Files' },
-  { view: 'history', label: 'History' },
-  { view: 'checks', label: 'Checks' },
-]
 
 /**
  * The header's second line: the folder (locked when the chat has a worktree of its own), its project, `/`, its branch,

@@ -25,10 +25,10 @@ function session(pane: number, extra: Partial<Conversation> = {}): SessionView {
 function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   const none = vi.fn()
   const props: SidebarProps = {
-    sessions, listed: true, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, mode: 'docked', online: true, canStart: true, renamingId: null, portalContainer: null,
+    sessions, listed: true, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, grouping: 'machine', onGrouping: none, onSearch: none,
     onNewSession: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
-    onSetName: none, onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onPutAway: none, onBringBack: none, onSnooze: none, onUnsnooze: none, onGetFile: none,
+    onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onPutAway: none, onBringBack: none, onSnooze: none, onUnsnooze: none, onGetFile: none,
     onEndSession: none, onOpenSettings: none, onRecentSessions: none, updateSlot: null, railUpdateSlot: null,
     ...more,
   }
@@ -67,8 +67,8 @@ describe('the sidebar', () => {
 
   it('keeps sessions in the order they were created, so a row never moves when its state changes', () => {
     show(MIXED())
-    // The shell is a terminal: it is listed in the Terminals section, last, not among the agents.
-    expect(names()).toEqual(['Idle agent', 'Working', 'Asking', 'Finished', 'Exited shell'])
+    // A shell is an ordinary row, in the order it was created.
+    expect(names()).toEqual(['Exited shell', 'Idle agent', 'Working', 'Asking', 'Finished'])
     expect(screen.getByRole('button', { name: /^Exited shell/ })).toHaveTextContent('exited')
   })
 
@@ -88,7 +88,7 @@ describe('the sidebar', () => {
 
   it('moves only a session that needs you to the top when the order is priority', () => {
     show(MIXED(), { order: 'priority' })
-    expect(names()).toEqual(['Asking', 'Idle agent', 'Working', 'Finished', 'Exited shell'])
+    expect(names()).toEqual(['Asking', 'Exited shell', 'Idle agent', 'Working', 'Finished'])
   })
 
   it('puts the name first and the folder, project and branch under it', () => {
@@ -186,17 +186,11 @@ describe('a machine that needs maiker installed or updated', () => {
 })
 
 describe('a session row', () => {
-  it('says how long an agent has been in its state, and nothing for a shell or when the daemon did not say', () => {
-    const details = (since: number) => ({ asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, since })
-    const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 5 * 60
-    show([
-      session(1, { agent: 'claude', named: true, title: 'Timed', details: details(fiveMinutesAgo) }),
-      session(2, { named: true, title: 'A shell', details: details(fiveMinutesAgo) }),
-      session(3, { agent: 'claude', named: true, title: 'Untimed', details: details(0) }),
-    ])
-    expect(screen.getByRole('button', { name: /^Timed,/ })).toHaveTextContent('5m')
-    expect(screen.getByRole('button', { name: /^A shell,/ })).not.toHaveTextContent('5m')
-    expect(screen.getByRole('button', { name: /^Untimed,/ }).querySelector('.mx-row-when')).toBeNull()
+  it('puts the status icon at the right of the name and, under it, the time the window has known the session at the right of the place', () => {
+    show([session(1, { agent: 'claude', named: true, title: 'Timed' })])
+    const row = screen.getByRole('button', { name: /^Timed,/ })
+    expect(row.querySelector('.mx-row-title .mx-row-status')).not.toBeNull()
+    expect(row.querySelector('.mx-row-sub .mx-row-when')).toHaveTextContent('now')
   })
 
   it('offers Mark as done on a finished agent only, and asks for that session', async () => {
@@ -210,26 +204,12 @@ describe('a session row', () => {
     expect(onMarkDone).toHaveBeenCalledWith('t1')
   })
 
-  it('offers Put away on a finished or idle session, not on a busy one, and asks for that session', async () => {
-    const onPutAway = vi.fn()
-    show([session(1, { agent: 'claude', named: true, title: 'Finished', status: 'done' }), session(2, { named: true, title: 'Shell' }), session(3, { agent: 'claude', named: true, title: 'Busy', status: 'working' })], { onPutAway })
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^Busy,/ }))
-    expect(screen.queryByRole('menuitem', { name: 'Put away' })).toBeNull()
-    await userEvent.keyboard('{Escape}')
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^Shell,/ }))
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Put away' }))
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^Finished,/ }))
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Put away' }))
-    expect(onPutAway.mock.calls).toEqual([['t2'], ['t1']])
-  })
-
   it('lists put-away sessions, terminals included, only under a folded Put away section at the bottom', async () => {
-    const onBringBack = vi.fn()
     show([
       session(1, { agent: 'claude', named: true, title: 'Away agent', status: 'done', archived: true }),
       session(2, { named: true, title: 'Away shell', archived: true }),
       session(3, { agent: 'claude', named: true, title: 'Here' }),
-    ], { grouping: 'status', onBringBack })
+    ], { grouping: 'status' })
     expect(names()).toEqual(['Here'])
     const head = screen.getByRole('button', { name: /^Put away/, expanded: false })
     expect(head).toHaveTextContent('2')
@@ -237,8 +217,6 @@ describe('a session row', () => {
     const list = screen.getByRole('list', { name: 'Put away' })
     expect(within(list).getAllByRole('button', { name: /, (idle|finished)$/ }).map((row) => row.getAttribute('aria-label')?.split(',')[0])).toEqual(['Away agent', 'Away shell'])
     expect(screen.queryByRole('list', { name: 'Terminals' })).toBeNull()
-    await userEvent.click(within(list).getByRole('button', { name: 'Bring back Away shell' }))
-    expect(onBringBack).toHaveBeenCalledWith('t2')
   })
 
   it('offers Bring back in the menu of a put-away session', async () => {
@@ -253,27 +231,7 @@ describe('a session row', () => {
 
   describe('snoozing', () => {
     const UNTIL = new Date(2026, 0, 5, 14, 5).getTime()
-    const resets = Math.ceil(Date.now() / 1000) + 4 * 3600
     const withDetails = (extra: object) => ({ asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, ...extra })
-
-    it('offers an hour and tomorrow at 9:00, and the limit reset only for a session held by its plan limit', async () => {
-      const onSnooze = vi.fn()
-      show([session(1, { agent: 'claude', named: true, title: 'Finished', status: 'done' }), session(2, { agent: 'claude', named: true, title: 'Held', details: withDetails({ resumeAt: resets }) })], { onSnooze })
-      fireEvent.contextMenu(screen.getByRole('button', { name: /^Finished,/ }))
-      expect(screen.getAllByRole('menuitem').map((item) => item.textContent).filter((text) => text.startsWith('Snooze'))).toEqual(['Snooze 1 hour', 'Snooze until tomorrow 9:00'])
-      await userEvent.click(screen.getByRole('menuitem', { name: 'Snooze 1 hour' }))
-      expect(onSnooze).toHaveBeenCalledTimes(1)
-      expect(onSnooze.mock.calls[0]?.[0]).toBe('t1')
-      fireEvent.contextMenu(screen.getByRole('button', { name: /^Held,/ }))
-      await userEvent.click(screen.getByRole('menuitem', { name: 'Snooze until the limit resets' }))
-      expect(onSnooze).toHaveBeenLastCalledWith('t2', resets)
-    })
-
-    it('offers no snooze on a busy session or one put away', () => {
-      show([session(1, { agent: 'claude', named: true, title: 'Busy', status: 'working' })])
-      fireEvent.contextMenu(screen.getByRole('button', { name: /^Busy,/ }))
-      expect(screen.queryByRole('menuitem', { name: /^Snooze/ })).toBeNull()
-    })
 
     it('lists a snoozed session under Put away with when it returns, and Unsnooze wakes it', async () => {
       const onUnsnooze = vi.fn()
@@ -287,10 +245,8 @@ describe('a session row', () => {
       fireEvent.contextMenu(within(list).getByRole('button', { name: /^Napping,/ }))
       expect(screen.queryByRole('menuitem', { name: 'Bring back' })).toBeNull()
       expect(screen.queryByRole('menuitem', { name: 'Put away' })).toBeNull()
-      expect(screen.queryByRole('menuitem', { name: /^Snooze/ })).toBeNull()
       await userEvent.click(screen.getByRole('menuitem', { name: 'Unsnooze' }))
-      await userEvent.click(within(list).getByRole('button', { name: 'Unsnooze Napping' }))
-      expect(onUnsnooze.mock.calls).toEqual([['t1'], ['t1']])
+      expect(onUnsnooze.mock.calls).toEqual([['t1']])
     })
   })
 
@@ -298,14 +254,6 @@ describe('a session row', () => {
     show([session(1, { agent: 'claude', named: true, title: 'Asking', status: 'needs-you', archived: true })], { grouping: 'status' })
     expect(within(screen.getByRole('list', { name: 'Needs you' })).getByRole('button', { name: /^Asking,/ })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^Put away/ })).toBeNull()
-  })
-
-  it('starts renaming on a double-click', async () => {
-    const user = userEvent.setup()
-    const onRenameSession = vi.fn()
-    show([session(1, { agent: 'claude' })], { onRenameSession })
-    await user.dblClick(screen.getByRole('button', { name: /^claude,/ }))
-    expect(onRenameSession).toHaveBeenCalledWith('t1')
   })
 
   it('offers no Get a file on a session of this computer', () => {
@@ -329,14 +277,15 @@ describe('a session row', () => {
     expect(screen.getByRole('menuitem', { name: 'Get a file…' })).toHaveAttribute('aria-disabled', 'true')
   })
 
-  it('types the name in place while renaming, Enter saves and Escape cancels', async () => {
-    const user = userEvent.setup()
-    const onSetName = vi.fn()
+  it('asks for the rename dialog from the menu, and a double click renames nothing in place', async () => {
     const onRenameSession = vi.fn()
-    show([session(1, { agent: 'claude' })], { renamingId: 't1', onSetName, onRenameSession })
-    const field = screen.getByRole('textbox', { name: 'Session name' })
-    await user.type(field, 'Login fix{Enter}')
-    expect(onSetName).toHaveBeenCalledWith('t1', 'Login fix')
+    show([session(1, { agent: 'claude', named: true, title: 'Growth' })], { onRenameSession })
+    fireEvent.doubleClick(screen.getByRole('button', { name: /^Growth,/ }))
+    expect(onRenameSession).not.toHaveBeenCalled()
+    expect(screen.queryByRole('textbox', { name: 'Session name' })).toBeNull()
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^Growth,/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Rename…' }))
+    expect(onRenameSession).toHaveBeenCalledWith('t1')
   })
 
   it('shows a card beside a row the pointer rests on, and puts it away when the pointer leaves', () => {
@@ -384,17 +333,9 @@ describe('a session row', () => {
     show([session(1, { agent: 'claude', named: true, title: 'Growth' }), session(2)], { focusedId: 't2', onEndSession })
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Growth,/ }))
     const menu = screen.getByRole('menu', { name: 'Growth' })
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Open', 'Open in split right', 'Open in split down', 'Show changes', 'Rename…F2', 'Copy folder path', 'Put away', 'Snooze 1 hour', 'Snooze until tomorrow 9:00', 'Stop session'])
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Open', 'Open in split right', 'Open in split down', 'Show changes', 'Rename…F2', 'Copy folder path', 'Stop session'])
     await user.click(within(menu).getByRole('menuitem', { name: 'Stop session' }))
     expect(onEndSession).toHaveBeenCalledWith('t1')
-  })
-
-  it("offers this computer's sessions a read-only list of their specialist agents", async () => {
-    const onSpecialists = vi.fn()
-    show([session(1, { agent: 'claude', named: true, title: 'Growth' })], { onSpecialists })
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^Growth,/ }))
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Specialist agents…' }))
-    expect(onSpecialists).toHaveBeenCalledWith('t1')
   })
 
   it('offers Close shell, not Stop, for a shell', () => {
@@ -428,20 +369,17 @@ describe('a machine heading', () => {
   })
 })
 
-describe('closing a session from its row', () => {
-  it('has a close button on every row that asks to end that session, and a shell says Close', async () => {
-    const user = userEvent.setup()
+describe('closing a session', () => {
+  it('has no close button on a row: it is in the right-click menu, where a shell says Close and an agent Stop', async () => {
     const onEndSession = vi.fn()
-    show([session(1, { agent: 'claude', named: true, title: 'Growth' }), session(2, { cwd: '/home/me/a', folder: '/home/me/a' })], { onEndSession })
-
-    await user.click(screen.getByRole('button', { name: 'Stop Growth' }))
+    show([session(1, { agent: 'claude', named: true, title: 'Growth' }), session(2, { named: true, title: 'Shell' })], { onEndSession })
+    expect(screen.queryByRole('button', { name: /^(Stop|Close) / })).toBeNull()
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^Growth,/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Stop session/ }))
     expect(onEndSession).toHaveBeenLastCalledWith('t1')
-    expect(screen.getByRole('button', { name: /^Close / })).toBeTruthy()
-  })
-
-  it('is off while the daemon is not reachable', () => {
-    show([session(1, { agent: 'claude', named: true, title: 'Growth' })], { online: false })
-    expect(screen.getByRole('button', { name: 'Stop Growth' })).toBeDisabled()
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^Shell,/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Close shell/ }))
+    expect(onEndSession).toHaveBeenLastCalledWith('t2')
   })
 })
 
@@ -516,10 +454,10 @@ describe('grouped by status', () => {
     expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Idle'])
   })
 
-  it('lists shells under Terminals, after the agents', () => {
+  it('lists a shell with the agents by its status, with no section of its own', () => {
     show([session(9, { named: true, title: 'Dev server', status: 'working' }), ...mixed()], { grouping: 'status' })
-    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Finished', 'Idle', 'Terminals'])
-    expect(within(screen.getByRole('list', { name: 'Terminals' })).getByRole('button', { name: /^Dev server,/ })).toBeTruthy()
+    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Finished', 'Idle'])
+    expect(within(screen.getByRole('list', { name: 'Working' })).getByRole('button', { name: /^Dev server,/ })).toBeTruthy()
   })
 
   it('says which other machine a row runs on, since no heading does', () => {
@@ -596,7 +534,7 @@ describe('the top of the sidebar', () => {
     const onShowSession = vi.fn()
     const sessions = [session(1, { agent: 'claude', named: true, title: 'Waiting', status: 'needs-you' }), session(2, { agent: 'claude', named: true, title: 'Busy', status: 'working' })]
     show(sessions, { mode: 'rail', onShowSession, focusedId: sessions[0]?.id ?? null })
-    for (const name of ['Expand sidebar', 'Search', 'New terminal', 'New session', 'Settings']) expect(screen.getByRole('button', { name })).toBeTruthy()
+    for (const name of ['Expand sidebar', 'Search', 'New session', 'Settings']) expect(screen.getByRole('button', { name })).toBeTruthy()
     // No tile, no initials, no connection dot and no Recent sessions button (it is in the palette).
     expect(screen.queryByRole('button', { name: 'Recent sessions' })).toBeNull()
     expect(document.querySelector('.mx-daemon-dot, .mx-app-icon')).toBeNull()
@@ -610,26 +548,19 @@ describe('the top of the sidebar', () => {
     expect(await screen.findByRole('menuitem', { name: 'Open' })).toBeTruthy()
   })
 
-  it('has a New terminal button between the filter and New session that starts the existing shell action', async () => {
+  it('has one plus button, in the header and the rail, that starts a terminal; no second terminal button', async () => {
     const user = userEvent.setup()
-    const onNewShell = vi.fn()
-    show([], { onNewShell })
-    const names = screen.getAllByRole('button').map((button) => button.getAttribute('aria-label')).filter((name) => name !== null)
-    const terminal = names.findIndex((name) => name === 'New terminal')
-    expect(names[terminal - 1]).toMatch(/^Filter and group/)
-    expect(names[terminal + 1]).toBe('New session')
-    await user.click(screen.getByRole('button', { name: 'New terminal' }))
-    expect(onNewShell).toHaveBeenCalledWith(0)
-  })
-
-  it('has the same New terminal button in the rail, off while nothing can start', async () => {
-    const user = userEvent.setup()
-    const onNewShell = vi.fn()
-    const view = show([], { mode: 'rail', onNewShell })
-    await user.click(screen.getByRole('button', { name: 'New terminal' }))
-    expect(onNewShell).toHaveBeenCalledWith(0)
-    view.again({ mode: 'rail', canStart: false, onNewShell })
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'New terminal' }).disabled).toBe(true)
+    const onNewSession = vi.fn()
+    const view = show([], { onNewSession })
+    expect(screen.queryByRole('button', { name: 'New terminal' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'New session' }))
+    expect(onNewSession).toHaveBeenCalledWith(0)
+    view.again({ mode: 'rail', onNewSession })
+    expect(screen.queryByRole('button', { name: 'New terminal' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'New session' }))
+    expect(onNewSession).toHaveBeenCalledTimes(2)
+    view.again({ mode: 'rail', canStart: false, onNewSession })
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'New session' }).disabled).toBe(true)
   })
 
   it('offers a terminal and a remote machine from a right-click on New session', async () => {
@@ -695,68 +626,32 @@ describe('the top of the sidebar', () => {
     expect(onGrouping).toHaveBeenCalledWith('project')
   })
 
-  it('lists every terminal in one Terminals section stuck under the scrolling list, whatever the grouping', () => {
+  it('has no Terminals section under any grouping: a shell is a row like the others', () => {
     for (const grouping of ['machine', 'project', 'status'] as const) {
-      show([session(1, { agent: 'claude', named: true, title: 'Agent' }), session(2, { named: true, title: 'Shell' }), session(3, { named: true, title: 'Other shell', cwd: '/home/me/else' })], { grouping })
-      const section = screen.getByRole('region', { name: 'Terminals' })
-      expect(section.closest('.mx-sidebar-list')).toBeNull()
-      expect(within(section).getAllByRole('button', { name: /^(Shell|Other shell),/ })).toHaveLength(2)
-      expect(within(section).queryByRole('button', { name: /^Agent,/ })).toBeNull()
-      expect(within(section).getByRole('button', { name: /^Terminals/, expanded: true })).toHaveTextContent('2')
+      show([session(1, { agent: 'claude', named: true, title: 'Agent' }), session(2, { named: true, title: 'Shell' })], { grouping })
+      expect(screen.queryByRole('region', { name: 'Terminals' })).toBeNull()
+      expect(screen.getByRole('button', { name: /^Shell,/ })).toBeTruthy()
       cleanup()
     }
   })
 
-  it('has no Terminals section without a terminal, and keeps a chat out of it', () => {
-    show([session(1, { agent: 'claude', named: true, title: 'Agent' })])
-    expect(screen.queryByRole('region', { name: 'Terminals' })).toBeNull()
+  it('shows a shell in the rail like any other session, with no terminal glyph', () => {
+    show([session(1, { agent: 'claude', named: true, title: 'Agent' }), session(2, { named: true, title: 'Shell' })], { mode: 'rail' })
+    expect(screen.getAllByRole('button', { name: /^(Agent|Shell)/ })).toHaveLength(2)
+    expect(screen.queryByRole('button', { name: /^Terminals/ })).toBeNull()
   })
+})
 
-  it('folds the Terminals section from its heading, which has no plus of its own', async () => {
+describe('New worktree', () => {
+  it('is in a session\'s menu, asks the window to make one from it, and is off outside a repository', async () => {
     const user = userEvent.setup()
-    show([session(1, { named: true, title: 'Shell' })])
-    const section = screen.getByRole('region', { name: 'Terminals' })
-    await user.click(within(section).getByRole('button', { name: /^Terminals/ }))
-    expect(within(section).getByRole('button', { name: /^Terminals/ })).toHaveAttribute('aria-expanded', 'false')
-    expect(within(section).queryByRole('button', { name: 'New terminal' })).toBeNull()
-  })
-
-  it('hides the Terminals section unless a terminal is open', () => {
-    show([session(1, { agent: 'claude', named: true, title: 'Agent' })])
-    expect(screen.queryByRole('region', { name: 'Terminals' })).toBeNull()
-  })
-
-  it('closes a terminal from its row, as an agent row stops', async () => {
-    const user = userEvent.setup()
-    const onEndSession = vi.fn()
-    show([session(1, { named: true, title: 'Shell' })], { onEndSession })
-    await user.click(within(screen.getByRole('region', { name: 'Terminals' })).getByRole('button', { name: 'Close Shell' }))
-    expect(onEndSession).toHaveBeenCalledWith('t1')
-  })
-
-  it('keeps a terminal that asks something with the sessions that need you, not in Terminals', () => {
-    show([session(1, { named: true, title: 'Asking shell', status: 'needs-you' })])
-    expect(screen.queryByRole('region', { name: 'Terminals' })).toBeNull()
-    expect(screen.getByRole('button', { name: /^Asking shell,/ })).toBeTruthy()
-  })
-
-  it('shows the rail one terminal glyph with their count, and opens the next terminal each press', async () => {
-    const user = userEvent.setup()
-    const onShowSession = vi.fn()
-    show([session(1, { agent: 'claude', named: true, title: 'Agent' }), session(2, { named: true, title: 'Shell' }), session(3, { named: true, title: 'Shell two' })], { mode: 'rail', onShowSession })
-    expect(screen.queryByRole('button', { name: /^Shell/ })).toBeNull()
-    expect(screen.getAllByRole('button', { name: /^(Agent|Shell)/ })).toHaveLength(1)
-    const glyph = screen.getByRole('button', { name: 'Terminals · 2' })
-    expect(glyph).toHaveTextContent('2')
-    await user.click(glyph)
-    expect(onShowSession).toHaveBeenCalledWith('t2')
-  })
-
-  it('lists a plain shell under Terminals, last', () => {
-    show([session(1, { agent: 'claude', named: true, title: 'Agent' }), session(2, { named: true, title: 'Shell' })], { grouping: 'status' })
-    const heads = screen.getAllByRole('button', { expanded: true }).map((button) => button.querySelector('.mx-section-name')?.textContent).filter((name) => name !== undefined)
-    expect(heads).toEqual(['Idle', 'Terminals'])
-    expect(screen.getByRole('region', { name: 'Terminals' })).toBeTruthy()
+    const onNewWorktree = vi.fn()
+    show([session(1, { named: true, title: 'In repo', repo: 'app', branch: 'dev', folder: '/home/me/app', cwd: '/home/me/app' }), session(2, { named: true, title: 'At home' })], { onNewWorktree })
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^In repo,/ }))
+    await user.click(screen.getByRole('menuitem', { name: 'New worktree…' }))
+    expect(onNewWorktree).toHaveBeenCalledWith('t1')
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^At home,/ }))
+    expect(screen.getByRole('menuitem', { name: 'New worktree…' })).toHaveAttribute('aria-disabled', 'true')
   })
 })
 
@@ -787,7 +682,6 @@ describe('one name for starting an agent', () => {
   it('is New session on the header button, its right-click menu, the rail and a machine\'s menu, never New chat or New agent chat', () => {
     const view = show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX] })
     expect(screen.getByRole('button', { name: 'New session' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'New terminal' })).toBeTruthy()
     fireEvent.contextMenu(screen.getByRole('button', { name: 'New session' }))
     for (const item of screen.getAllByRole('menuitem')) expect(item.textContent).not.toMatch(OLD)
     expect(screen.getByRole('menuitem', { name: /^New session/ })).toBeTruthy()

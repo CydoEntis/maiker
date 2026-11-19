@@ -1,31 +1,17 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { TreePine } from 'lucide-react'
-import { attachSpinner, currentGlyph, isWebSpinner, isWideSpinner, spinnerFrames, useSpinnerStyle } from '@/lib/spinner-clock'
-import { WebSpinner } from '@/components/WebSpinner'
+import { StatusIcon } from '@/components/ui/status-icon'
 import { SHELL_PROCESS, type SessionStatus } from '../model/session'
-import { CLAUDE_MARK, CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
+import { CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
 import { FOLDER_PATH } from './paths'
-import { useReducedMotion } from './motion'
 
-/** The working spinner: the Maiker TUI's text frames or a web SVG spinner, whichever was picked in Settings. */
-export function Spinner({ className = 'mx-spin', frozen = false }: { className?: string; frozen?: boolean }) {
-  const reduced = useReducedMotion()
-  const style = useSpinnerStyle()
-  const still = reduced || frozen
-  if (isWebSpinner(style)) return <WebSpinner kind={style} className={className} still={still} />
-  return <TextSpinner className={className} still={still} />
+/** The one working spinner: a ring with a lit arc running round it, round or square with the corners (more can be added later). */
+export function Spinner({ className = 'mx-spin' }: { className?: string; frozen?: boolean }) {
+  return <StatusIcon status="working" size={SPINNER_PX} className={className} />
 }
 
-/** The shared clock writes each frame into the element itself, so a tick never re-renders React. */
-function TextSpinner({ className, still }: { className: string; still: boolean }) {
-  const element = useRef<HTMLSpanElement>(null)
-  useEffect(() => {
-    if (still || !element.current) return
-    return attachSpinner(element.current)
-  }, [still])
-  const classes = [className, isWideSpinner() && 'is-wide'].filter(Boolean).join(' ')
-  return <span ref={element} className={classes} aria-hidden="true">{still ? spinnerFrames()[0] : currentGlyph()}</span>
-}
+/** The one spinner's size beside text. */
+const SPINNER_PX = 12
 
 type SvgProps = { size: number; strokeWidth?: number; children: ReactNode; className?: string; fill?: string; stroke?: string }
 
@@ -145,8 +131,17 @@ function Mark({ d }: { d: string }) {
   )
 }
 
+/** Claude Code's pixel crab on a 16 by 10 grid: body, two eye gaps, arms out to the sides, four legs. It takes the icon's colour. */
+function ClaudeCrab() {
+  return (
+    <svg viewBox="0 0 16 10" width={MARK_SIZE} height={MARK_SIZE} fill="currentColor" shapeRendering="crispEdges" aria-hidden="true" focusable="false">
+      <path d="M2 0h12v2H2zM2 2h2v2H2zM5 2h6v2H5zM12 2h2v2h-2zM0 4h16v2H0zM2 6h12v2H2zM3 8h1v2H3zM5 8h1v2H5zM10 8h1v2h-1zM12 8h1v2h-1z" />
+    </svg>
+  )
+}
+
 const ICONS: Record<string, IconKind> = {
-  claude: { kind: 'claude', glyph: <Mark d={CLAUDE_MARK} /> },
+  claude: { kind: 'claude', glyph: <ClaudeCrab /> },
   codex: { kind: 'codex', glyph: <Mark d={CODEX_MARK} /> },
   deepseek: { kind: 'deepseek', glyph: <Mark d={DEEPSEEK_MARK} /> },
   gemini: { kind: 'gemini', glyph: <Mark d={GEMINI_MARK} /> },

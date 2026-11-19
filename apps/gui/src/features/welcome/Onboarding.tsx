@@ -6,7 +6,6 @@ import { FieldError, fieldErrorProps } from '@/components/ui/feedback'
 import { errorMessage } from '@/lib/error-message'
 import { AddMachinePanel } from '@/features/settings/components/AddMachinePanel'
 import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
-import type { PaneView } from '@/features/workspace/model/chatView'
 import { useInstalledAgents } from '@/features/workspace/model/newChatHost'
 import { folderNameOf, LAST_STEP, nextLabel, SETUP_AGENTS, SETUP_STEPS, type StartChoice } from './setup'
 import './onboarding.css'
@@ -17,7 +16,6 @@ const MACHINE_PANEL = '.mx-rm-add'
 
 type Props = {
   /** What a new session opens in is chosen here; the window saves it. */
-  onOpenSessionsIn: (view: PaneView) => void
   /** The folder new sessions start in. */
   onStartFolder: (path: string) => void
   validateFolder: (path: string) => Promise<boolean>
@@ -38,11 +36,10 @@ const DEMO_ROWS = [
   { glyph: '✓', tone: 'done', name: 'Update the API docs', where: 'docs-site · main', word: 'done', on: false },
 ] as const
 
-/** The first-run setup: what this is, how you like to work, and where to start. Full screen, three steps. */
-export function Onboarding({ onOpenSessionsIn, onStartFolder, validateFolder, onChooseFolder, machines, reducedMotion, portalContainer, onClose }: Props) {
+/** The first-run setup: what this is and where to start. Full screen, two steps. */
+export function Onboarding({ onStartFolder, validateFolder, onChooseFolder, machines, reducedMotion, portalContainer, onClose }: Props) {
   const [step, setStep] = useState(0)
   const [back, setBack] = useState(false)
-  const [mode, setMode] = useState<PaneView | null>(null)
   const [start, setStart] = useState<StartChoice | null>(null)
   const [path, setPath] = useState('')
   const [missing, setMissing] = useState(false)
@@ -64,7 +61,6 @@ export function Onboarding({ onOpenSessionsIn, onStartFolder, validateFolder, on
     setBack(to < step)
     setStep(to)
   }
-  const chooseMode = (view: PaneView) => { setMode(view) }
 
   const startInFolder = async () => {
     const typed = path.trim()
@@ -77,10 +73,9 @@ export function Onboarding({ onOpenSessionsIn, onStartFolder, validateFolder, on
     onClose(true)
   }
 
-  const canNext = step === 0 || (step === 1 && mode !== null) || (step === LAST_STEP && start === 'folder' && folderName !== null && !checking)
+  const canNext = step === 0 || (step === LAST_STEP && start === 'folder' && folderName !== null && !checking)
   const next = () => {
     if (!canNext) return
-    if (step === 1 && mode !== null) onOpenSessionsIn(mode)
     if (step < LAST_STEP) go(step + 1)
     else void startInFolder()
   }
@@ -108,7 +103,7 @@ export function Onboarding({ onOpenSessionsIn, onStartFolder, validateFolder, on
   }
 
   useEffect(() => { nextRef.current = next })
-  const label = nextLabel(step, mode, start, folderName)
+  const label = nextLabel(step, start, folderName)
   const machineOpen = step === LAST_STEP && start === 'machine'
   const live = `Step ${String(step + 1)} of ${String(SETUP_STEPS.length)}: ${SETUP_STEPS[step] ?? ''}`
 
@@ -180,34 +175,6 @@ export function Onboarding({ onOpenSessionsIn, onStartFolder, validateFolder, on
               </>
             )}
 
-            {step === 1 && (
-              <>
-                <div>
-                  <h2 id="mx-onb-h" tabIndex={-1} ref={heading}>How do you like to work?</h2>
-                  <p className="mx-onb-lead">Pick how new chats open. Both run the same agents.</p>
-                </div>
-                <RadioGroup className="mx-onb-cards" aria-labelledby="mx-onb-h" value={mode ?? ''} onValueChange={(value) => { if (value === 'terminal' || value === 'chat') chooseMode(value) }}>
-                  <ModeCard view="terminal" title="Terminal"
-                    detail="Every chat opens as a real terminal, running the agent's own CLI.">
-                    <span className="mx-onb-tl"><span className="mx-onb-dim">~/code/acme-store main $ </span>claude</span>
-                    <span className="mx-onb-tl"><span className="mx-onb-working">⏺ </span>Read <span className="mx-onb-dim">src/api/checkout.ts</span></span>
-                    <span className="mx-onb-tl"><span className="mx-onb-working">⏺ </span>Edit <span className="mx-onb-dim">src/api/checkout.ts </span><span className="mx-onb-ok">+18 </span><span className="mx-onb-danger">−2</span></span>
-                    <span className="mx-onb-tl">  Run pnpm test? <span className="mx-onb-accent">❯ Yes </span><span className="mx-onb-dim"> No</span></span>
-                  </ModeCard>
-                  <ModeCard view="chat" title="Chat"
-                    detail="Every chat opens as a chat view, with approvals and diffs as cards.">
-                    <span className="mx-onb-bub">Add rate limits to the checkout API</span>
-                    <span className="mx-onb-tool"><span className="mx-onb-ok">✓</span>Read checkout.ts</span>
-                    <span className="mx-onb-ans">I&apos;ll add a token bucket per IP: 20 requests a minute, then a 429.</span>
-                    <span className="mx-onb-tool"><span className="mx-onb-ok">✓</span>Edited checkout.ts <span className="mx-onb-ok">+18</span> <span className="mx-onb-danger">−2</span></span>
-                    <span className="mx-onb-ask"><span className="mx-onb-askq">Run <span className="mx-onb-mono">pnpm test</span>?</span><span className="mx-onb-allow">Allow</span><span className="mx-onb-deny">Deny</span></span>
-                  </ModeCard>
-                </RadioGroup>
-                <p className="mx-onb-note">You can change this any time in Settings.</p>
-                <p className="mx-onb-small">Gemini has no chat view, so it always opens in Terminal.</p>
-              </>
-            )}
-
             {step === LAST_STEP && (
               <>
                 <div>
@@ -270,18 +237,6 @@ export function Onboarding({ onOpenSessionsIn, onStartFolder, validateFolder, on
 
 function Fact({ tone, mark, children }: { tone: 'needs' | 'plain' | 'working'; mark: string; children: ReactNode }) {
   return <div className="mx-onb-fact"><span className="mx-onb-k" data-tone={tone}>{mark}</span><span>{children}</span></div>
-}
-
-function ModeCard({ view, title, detail, children }: { view: PaneView; title: string; detail: string; children: ReactNode }) {
-  return (
-    <RadioGroupItem value={view} className="mx-onb-card">
-      <span className="mx-onb-top">
-        <span className="mx-onb-tx"><b>{title}</b><span>{detail}</span></span>
-        <span className="mx-onb-rd" />
-      </span>
-      <span className="mx-onb-pv" aria-hidden="true"><span className="mx-onb-pvl">Preview</span>{children}</span>
-    </RadioGroupItem>
-  )
 }
 
 function StartOption({ value, title, detail }: { value: StartChoice; title: string; detail: string }) {

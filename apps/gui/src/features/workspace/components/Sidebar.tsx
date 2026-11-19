@@ -1,7 +1,7 @@
 import { Fragment, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectSections, rowTitle, sectionOf, sortedBy, splitPutAway, splitTerminals, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
+import { DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
 import { AppIcon, Icon } from './glyphs'
@@ -9,7 +9,6 @@ import { StatusIcon } from '@/components/ui/status-icon'
 import { Collapse } from './Collapse'
 import { useReducedMotion } from './motion'
 import { useFlip } from './useFlip'
-import { snoozeChoices } from '../model/snooze'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
 import { SidebarFilterMenu } from './SidebarFilterMenu'
@@ -36,7 +35,6 @@ export type SidebarProps = {
   online: boolean
   canStart: boolean
   /** The session whose name is being typed in its row; the window starts it from a menu, F2 or a double-click. */
-  renamingId: string | null
   /** Where portalled menus mount, so they read the theme's colours. */
   portalContainer: HTMLElement | null
   /** Collapses the docked sidebar to the rail, or expands the rail (over the window when it is narrow). */
@@ -56,7 +54,6 @@ export type SidebarProps = {
   onUpdateMachine: (name: string, action: UpdateAction) => void
   onShowSession: (id: string) => void
   onRenameSession: (id: string | null) => void
-  onSetName: (id: string, name: string) => void
   /** Shows a session beside the pane that has focus. */
   onSplitSession: (id: string, direction: 'right' | 'down') => void
   /** Opens a shell in an agent's folder, beside it. */
@@ -75,6 +72,8 @@ export type SidebarProps = {
   /** The pointer or keyboard is on this session's row (`null`: it left), so its chat can be read ahead of a click. */
   onHoverSession?: ((id: string | null) => void) | undefined
   /** Lists the specialist agent files a session of this computer can see. */
+  /** Makes a worktree off this session's repository, with a session open in it. */
+  onNewWorktree?: (id: string) => void
   onSpecialists?: (id: string) => void
   onEndSession: (id: string) => void
   onOpenSettings: () => void
@@ -95,21 +94,6 @@ export type DraftChat = { machine: number; process: string; /** Opens the draft 
 
 type OpenMenu = { title: string; at: { x: number; y: number }; items: MenuEntry[] }
 
-/** The button at a row's right, shown on hover and focus: Bring back a put-away session, Unsnooze a snoozed one, else stop or close it. A sibling of the row, not inside it (a button cannot hold a button). */
-function RowButton({ session, online, onBringBack, onUnsnooze, onEnd }: { session: SessionView; online: boolean; onBringBack: (id: string) => void; onUnsnooze: (id: string) => void; onEnd: (id: string) => void }) {
-  const title = rowTitle(session)
-  if (session.archived) return <button type="button" className="mx-row-close is-bring-back" aria-label={`Bring back ${title}`} title="Bring back" disabled={!online} onClick={() => { onBringBack(session.id) }}><Icon name="arrowUp" size={12} /></button>
-  if (session.snoozedUntil !== null) return <button type="button" className="mx-row-close is-bring-back" aria-label={`Unsnooze ${title}`} title="Unsnooze" disabled={!online} onClick={() => { onUnsnooze(session.id) }}><Icon name="arrowUp" size={12} /></button>
-  const shell = isShell(session)
-  return <button type="button" className="mx-row-close" aria-label={`${shell ? 'Close' : 'Stop'} ${title}`} title={shell ? 'Close shell' : 'Stop session'} disabled={!online} onClick={() => { onEnd(session.id) }}><Icon name="close" size={12} /></button>
-}
-
-/** The menu's Snooze entries, worked out when the menu opens: they name times from now. */
-function snoozeEntries(session: SessionView, online: boolean, onSnooze: (id: string, until: number) => void): MenuEntry[] {
-  if (!canSnooze(session)) return []
-  return snoozeChoices(Date.now(), session.resumeAt).map((choice) => ({ label: choice.label, disabled: !online, run: () => { onSnooze(session.id, choice.until) } }))
-}
-
 /** A session's right-click menu, the same in the full list and in the rail. */
 function sessionMenuEntries(props: SidebarProps, session: SessionView): MenuEntry[] {
   const agent = !isShell(session)
@@ -121,13 +105,12 @@ function sessionMenuEntries(props: SidebarProps, session: SessionView): MenuEntr
     'separator',
     { label: 'Rename…', hint: 'F2', run: () => { props.onRenameSession(session.id) } },
     { label: 'Copy folder path', run: () => { props.onCopyPath(session.id) } },
+    // A worktree is made from a repository, so a session that has not gone into one yet cannot start it; the worktrees are this computer's.
+    ...(props.onNewWorktree === undefined ? [] : [{ label: 'New worktree…', disabled: !props.online || session.machineName !== null || session.branch === null, run: () => { props.onNewWorktree?.(session.id) } }]),
     ...(session.machineName === null ? [] : [{ label: 'Rename machine…', run: () => { props.onRenameMachine(session.machineName ?? '') } }]),
     ...(session.machineName === null ? [] : [{ label: 'Get a file…', disabled: !props.online, run: () => { props.onGetFile(session.id) } }]),
-    ...(session.machineName === null && session.pane > 0 && props.onSpecialists !== undefined ? [{ label: 'Specialist agents…', disabled: !props.online, run: () => { props.onSpecialists?.(session.id) } }] : []),
     // A finished agent waits under Finished until you look; this files it under Idle without opening it.
     ...(session.status === 'done' ? [{ label: 'Mark as done', disabled: !props.online, run: () => { props.onMarkDone(session.id) } }] : []),
-    ...(canPutAway(session) ? [{ label: 'Put away', disabled: !props.online, run: () => { props.onPutAway(session.id) } }] : []),
-    ...snoozeEntries(session, props.online, props.onSnooze),
     ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
     ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),
     'separator',
@@ -148,7 +131,6 @@ export function Sidebar(props: SidebarProps) {
 }
 
 const PUT_AWAY_SECTION = 'put-away'
-const TERMINALS_SECTION = 'terminals'
 
 /** Which headings are folded. */
 function useMachineViews() {
@@ -181,9 +163,7 @@ function Expanded(props: SidebarProps) {
   // A project whose last session closed is no longer a choice, so the list goes back to all of them.
   const project = projects.some((choice) => choice.name === pickedProject) ? pickedProject : null
   const { listed, putAway } = splitPutAway(inProject(props.sessions, project))
-  // Terminals have a section of their own, stuck at the bottom, whatever the grouping.
-  const { terminals: unsorted, others: sessions } = splitTerminals(listed)
-  const terminals = sortedBy(unsorted, sort)
+  const sessions = listed
   // The session on screen keeps the status section it was picked in until another is picked (`statusSections`).
   const [hold, setHold] = useState<{ for: string | null; row: HeldRow | null }>({ for: null, row: null })
   if (hold.for !== props.focusedId) {
@@ -238,15 +218,11 @@ function Expanded(props: SidebarProps) {
           selected={selected}
           showProject={showProject}
           machine={showMachine ? session.machineName : null}
-          renaming={props.renamingId === session.id}
           onShow={() => { props.onShowSession(session.id) }}
           onRename={() => { props.onRenameSession(session.id) }}
-          onSetName={(name) => { props.onSetName(session.id, name) }}
-          onCancelRename={() => { props.onRenameSession(null) }}
           onContextMenu={(event) => { openMenu(event, rowTitle(session), sessionMenu(session)) }}
         />
         {/* A sibling of the row, not inside it (a button cannot hold a button): it shows on hover and focus. */}
-        <RowButton session={session} online={props.online} onBringBack={props.onBringBack} onUnsnooze={props.onUnsnooze} onEnd={props.onEndSession} />
       </div>
     )
   }
@@ -259,8 +235,7 @@ function Expanded(props: SidebarProps) {
         <span className="mx-spacer" />
         <button type="button" className="mx-head-button" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={14} /></button>
         <SidebarFilterMenu grouping={props.grouping} onGrouping={props.onGrouping} sort={sort} onSort={setSort} projects={projects} project={project} onProject={setPickedProject} />
-        <button type="button" className="mx-head-button" aria-label="New terminal" title={tip('New terminal', 'new-terminal')} disabled={!props.canStart} onClick={() => { props.onNewShell(localMachine) }}><Icon name="terminal" size={14} /></button>
-        <button type="button" className="mx-head-button" aria-label="New session" title={tip('New session', 'new-session')} disabled={!props.canStart} onClick={() => { props.onNewSession(localMachine) }} onContextMenu={(event) => { openMenu(event, 'Start', startMenu()) }}><Icon name="plus" size={15} /></button>
+        <button type="button" className="mx-head-button" aria-label="New session" title={tip('New terminal', 'new-session')} disabled={!props.canStart} onClick={() => { props.onNewSession(localMachine) }} onContextMenu={(event) => { openMenu(event, 'Start', startMenu()) }}><Icon name="plus" size={15} /></button>
       </div>
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
         {props.grouping !== 'machine' && (
@@ -306,11 +281,6 @@ function Expanded(props: SidebarProps) {
           </section>
         )}
       </div>
-      {terminals.length > 0 && (
-        <TerminalsSection count={terminals.length} open={views.isOpen(TERMINALS_SECTION)} onToggle={() => { views.toggle(TERMINALS_SECTION) }}>
-          {terminals.map((session) => renderRow(session, true, true))}
-        </TerminalsSection>
-      )}
       <div className="mx-sidebar-foot">
         {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
         <span className="mx-foot-slot">{props.updateSlot}</span>
@@ -319,29 +289,6 @@ function Expanded(props: SidebarProps) {
       <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
-  )
-}
-
-/**
- * The Terminals section: stuck over the foot, never scrolled away with the list, and at most a third of the sidebar's height
- * (past that its rows scroll inside it). Its heading folds it. It is only there while a terminal is open, and New terminal
- * lives in the sidebar's header. Each row keeps its × to close it.
- */
-function TerminalsSection({ count, open, onToggle, children }: { count: number; open: boolean; onToggle: () => void; children: ReactNode }) {
-  return (
-    <section aria-label="Terminals" className="mx-terminals" data-section={TERMINALS_SECTION}>
-      <div className="mx-terminals-head">
-        <button type="button" className="mx-section-head is-terminals" aria-expanded={open} onClick={onToggle}>
-          <span className={`mx-caret-wrap${open ? ' is-open' : ''}`}><Icon name="caret" /></span>
-          <span className="mx-section-name">Terminals</span>
-          <span className="mx-section-count mono">{count}</span>
-          <span className="mx-spacer" />
-        </button>
-      </div>
-      <Collapse open={open}>
-        <div className="mx-terminals-rows mx-rows" role="list" aria-label="Terminals">{children}</div>
-      </Collapse>
-    </section>
   )
 }
 
@@ -367,13 +314,14 @@ function ListSection({ id, name, label, count, open, onToggle, children, tone, c
   return (
     <div className="mx-section" data-section={id}>
       <button type="button" className={`mx-section-head${tone === undefined ? '' : ` is-${tone}`}`} data-flip={`head:${id}`} aria-expanded={open} onClick={onToggle}>
-        {color !== undefined && <span className="mx-project-square" style={{ background: color }} aria-hidden="true" />}
+        {color !== undefined && <span className="mx-project-square" style={{ background: color }} aria-hidden="true">{name.charAt(0).toUpperCase()}</span>}
         <span className="mx-section-name">{name}</span>
         {machine !== null && <span className="mx-section-machine">· {machineTitle(machine)}</span>}
         {machine !== null && <span className={`mx-machine-dot${machine.down ? ' is-offline' : ''}`} role="img" aria-label={machine.down ? `${machineTitle(machine)} is ${machine.chip?.word ?? 'not reachable'}` : `${machineTitle(machine)} is connected`} />}
-        <span className="mx-section-count mono">{count}</span>
+        {color === undefined && <span className="mx-section-count mono">{count}</span>}
         {needs > 0 && <span className="mx-project-needs" aria-label={`${String(needs)} need you`}>{needs}</span>}
         <span className="mx-spacer" />
+        {color !== undefined && <span className={`mx-section-caret${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevronDown" size={12} /></span>}
       </button>
       <Collapse open={open}>
         <div className="mx-rows" role="list" aria-label={label}>{children}</div>
@@ -491,18 +439,13 @@ function Rail(props: SidebarProps) {
   const endHover = () => { hover.leave() }
   const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
   const [menu, setMenu] = useState<OpenMenu | null>(null)
-  const { terminals, others } = splitTerminals(splitPutAway(props.sessions).listed)
-  const sections = statusSections(others, null, DEFAULT_SIDEBAR_SORT)
-  // One glyph for all of them: each press opens the next terminal after the one on screen.
-  const nextTerminal = terminals.length === 0 ? undefined : terminals[(terminals.findIndex((session) => session.id === props.focusedId) + 1) % terminals.length]
-  const terminalOpen = terminals.some((session) => session.id === props.focusedId)
+  const sections = statusSections(splitPutAway(props.sessions).listed, null, DEFAULT_SIDEBAR_SORT)
   return (
     <div className="mx-rail">
       <div className="mx-rail-top">
         <button type="button" className="mx-head-button is-rail" aria-label="Expand sidebar" title={tip('Expand sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="expand" /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="New session" title={tip('New session', 'new-session')} disabled={!props.canStart} onClick={() => { props.onNewSession(props.machines[0]?.machine ?? 0) }}><Icon name="plus" size={15} /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={15} /></button>
-        <button type="button" className="mx-head-button is-rail" aria-label="New terminal" title={tip('New terminal', 'new-terminal')} disabled={!props.canStart} onClick={() => { props.onNewShell(props.machines[0]?.machine ?? 0) }}><Icon name="terminal" size={15} /></button>
       </div>
       <div className="mx-rail-rule" aria-hidden="true" />
       <div className="mx-rail-list mx-no-scrollbar" role="list" aria-label="Sessions">
@@ -531,14 +474,6 @@ function Rail(props: SidebarProps) {
           </Fragment>
         ))}
       </div>
-      {nextTerminal !== undefined && (
-        <div className={`mx-rail-terminals${terminalOpen ? ' is-selected' : ''}`}>
-          <button type="button" className="mx-rail-session" aria-label={`Terminals · ${String(terminals.length)}`} title={`Terminals · ${String(terminals.length)}`} aria-current={terminalOpen ? 'page' : undefined} onClick={() => { endHover(); props.onShowSession(nextTerminal.id) }}>
-            <Icon name="terminal" size={15} />
-            <span className="mx-rail-count mono" aria-hidden="true">{terminals.length}</span>
-          </button>
-        </div>
-      )}
       <div className="mx-rail-bottom">
         {props.railUpdateSlot}
         <button type="button" className="mx-head-button is-rail" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></button>

@@ -332,7 +332,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-waiting-steps { display: flex; align-items: stretch; gap: 16px; min-width: 0; padding: 0 12px 0 34px; border-bottom: 1px solid var(--line); overflow: hidden; }
 .mx-waiting-step { flex: 0 1 auto; min-width: 0; height: 30px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .mx-waiting-step:hover { color: var(--fg); }
-.mx-waiting-step.is-on { color: var(--fg); box-shadow: inset 0 -2px 0 var(--needs); }
+.mx-waiting-step.is-on { color: var(--fg); box-shadow: inset 0 -1px 0 var(--needs); }
 .mx-waiting-step-mark { flex: none; font: 600 11px var(--mono); color: var(--dim); }
 .mx-waiting-step.is-on .mx-waiting-step-mark { color: var(--fg); }
 .mx-waiting-step.is-done .mx-waiting-step-mark { color: var(--done); }
@@ -356,11 +356,11 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-option.is-own { align-items: center; min-height: 34px; padding: 0 8px 0 0; cursor: text; }
 .mx-option.is-own:hover { background: transparent; }
 .mx-option-input { flex: 1; min-width: 0; height: 28px; padding: 0; border: 0; background: transparent; font-size: 13px; color: var(--fg); outline: none; box-shadow: inset 0 -1px 0 var(--line); }
-.mx-option-input:focus { box-shadow: inset 0 -2px 0 var(--needs); }
+.mx-option-input:focus { box-shadow: inset 0 -1px 0 var(--needs); }
 .mx-option-input::placeholder { color: var(--dim); font-weight: 400; }
 .mx-waiting-input { width: 100%; height: 30px; padding: 0; border: 0; background: transparent; font-size: 13px; color: var(--fg); outline: none; box-shadow: inset 0 -1px 0 var(--line); }
 .mx-waiting-input::placeholder { color: var(--dim); }
-.mx-waiting-input:focus { box-shadow: inset 0 -2px 0 var(--needs); }
+.mx-waiting-input:focus { box-shadow: inset 0 -1px 0 var(--needs); }
 .mx-waiting-form > .mx-waiting-foot { border-top: 0; padding: 4px 8px 4px 34px; min-height: 42px; }
 .mx-waiting-form > .mx-waiting-foot .mx-waiting-note { font-size: 11.5px; color: var(--dim); }
 @media (prefers-reduced-motion: reduce) { .mx-waiting { animation: none; } }
@@ -541,7 +541,7 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 /* ---- Replies and quotes (docs/DESIGN.md, "Replies and quotes" and "Quick reply"). Every hidden control keeps its room and
    shows by opacity alone, so hovering or focusing moves nothing. ---- */
 .mx-msg-agent { position: relative; }
-.mx-chat-scroller [data-key].is-flash { box-shadow: inset 0 0 0 2px var(--focus-line); }
+.mx-chat-scroller [data-key].is-flash { box-shadow: inset 0 0 0 1px var(--focus-line); }
 /* The quote action of a message: floats over the gap above the agent's reply, sits in the meta line of the person's. */
 .mx-msg-quote { position: absolute; top: -13px; right: 0; z-index: 1; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border: 1px solid var(--line2); border-radius: var(--r-control); background: var(--main); color: var(--muted); cursor: pointer; opacity: 0; transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-msg-agent:hover > .mx-msg-quote, .mx-msg-agent:focus-within > .mx-msg-quote, .mx-msg-user:hover .mx-msg-quote.is-own, .mx-msg-user:focus-within .mx-msg-quote.is-own { opacity: 1; }
@@ -562,7 +562,7 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 /* A quote above words: a 2px left edge, who it quotes, one line of what was said. */
 .mx-bubble.has-quotes { display: flex; flex-direction: column; gap: 6px; white-space: normal; }
 .mx-said-words { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.mx-quote-stub { display: flex; align-items: baseline; gap: 8px; width: 100%; min-width: 0; margin: 0; padding: 2px 0 2px 8px; border: 0; border-left: 2px solid color-mix(in srgb, var(--fg) 28%, transparent); background: none; text-align: left; font-size: 12.5px; line-height: 1.5; color: var(--muted); cursor: default; transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
+.mx-quote-stub { display: flex; align-items: baseline; gap: 8px; width: 100%; min-width: 0; margin: 0; padding: 2px 0 2px 8px; border: 0; border-left: 1px solid color-mix(in srgb, var(--fg) 28%, transparent); background: none; text-align: left; font-size: 12.5px; line-height: 1.5; color: var(--muted); cursor: default; transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
 button.mx-quote-stub { cursor: pointer; }
 button.mx-quote-stub:hover { color: var(--fg2); border-left-color: var(--muted); }
 button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-underline); }

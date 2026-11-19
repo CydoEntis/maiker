@@ -59,7 +59,7 @@
   :where(.mx-app) button { font: inherit; color: inherit; background: none; border: 0; margin: 0; padding: 0; cursor: pointer; text-align: inherit; }
   :where(.mx-app) button:disabled { cursor: default; }
 }
-/* Focus is a 2px accent underline on buttons, fields, rows and menu items, never a ring (design rule 10; docs/UI.md). A field
+/* Focus is a 1px accent underline on buttons, fields, rows and menu items, never a ring (design rule 10; docs/UI.md). A field
    whose input sits in a wrapper draws it on the wrapper and lists the input here. The message box is the one exception: its
    whole border turns accent (the terminal's own focus is the pane's line, not a box). */
 .mx-app :focus-visible { outline: none; box-shadow: var(--focus-underline); }
@@ -186,24 +186,25 @@
    for every one (docs/PERFORMANCE.md). Every loop below rests while the window is hidden. */
 @keyframes mxSq { to { stroke-dashoffset: -100; } }
 @keyframes mxStatusPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-.mx-status-icon { position: relative; flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; font: 800 13px/1 var(--mono); color: var(--dim); }
+.mx-status-icon { position: relative; flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; color: var(--dim); }
+/* The dot: a filled mark in the status colour, inset so it reads as a dot beside text and not as a tile. */
+.mx-status-icon:not(.is-working, .is-unknown)::before { content: ''; position: absolute; inset: 3px; background: currentColor; border-radius: 50%; }
 .mx-status-icon.is-needs { color: var(--warn); animation: mxStatusPulse 1.6s ease-in-out infinite; }
 .mx-status-icon.is-done { color: var(--ok); }
 .mx-status-icon.is-error { color: var(--danger); }
 .mx-status-icon.is-limited { color: var(--muted); }
 .mx-status-icon.is-idle { opacity: .45; }
-/* The tile is tinted in the running colour so a working session reads at 14px, not only by its moving light. */
-.mx-status-icon.is-working { border-color: color-mix(in srgb, var(--working) 40%, var(--line2)); background: color-mix(in srgb, var(--working) 14%, transparent); }
-.mx-status-icon.is-unknown { border: 1px dashed var(--dim); }
+.mx-status-icon.is-unknown { border: 1px dashed var(--dim); border-radius: 50%; }
+:root[data-corners="square"] .mx-status-icon::before, :root[data-corners="square"] .mx-status-icon.is-unknown { border-radius: 0; }
+/* Working: an empty tile with a light running round it, the same shape as the dots. */
+/* The spinner: a dim ring with a lit arc running round it; a square one under Square corners. */
+.mx-status-icon.is-working { border-radius: 50%; border-color: var(--line2); }
+:root[data-corners="square"] .mx-status-icon.is-working { border-radius: 0; }
 .mx-status-light { position: absolute; left: -1px; top: -1px; width: calc(100% + 2px); height: calc(100% + 2px); overflow: visible; }
-.mx-status-light .mx-sq, .mx-status-light .mx-fold, .mx-status-light .mx-round { stroke: var(--working); animation: mxSq 1.1s steps(16) infinite; }
-.mx-status-light .mx-fold, .mx-status-light .mx-round { display: none; }
-:root[data-corners="folded"] .mx-status-light .mx-sq { display: none; }
-:root[data-corners="folded"] .mx-status-light .mx-fold { display: inline; }
-/* Rounded corners get a round light, and the tile it runs round is round too. */
-:root[data-corners="rounded"] .mx-status-light .mx-sq { display: none; }
-:root[data-corners="rounded"] .mx-status-light .mx-round { display: inline; }
-:root[data-corners="rounded"] .mx-status-icon.is-working { border-radius: 50%; }
+.mx-status-light .mx-sq, .mx-status-light .mx-round { stroke: var(--working); animation: mxSq 1.1s linear infinite; }
+.mx-status-light .mx-sq { display: none; }
+:root[data-corners="square"] .mx-status-light .mx-sq { display: inline; }
+:root[data-corners="square"] .mx-status-light .mx-round { display: none; }
 :root[data-reduced-motion="true"] .mx-status-icon, :root[data-reduced-motion="true"] .mx-status-light * { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-status-icon, .mx-status-light * { animation: none; } }
 .mx-badge { position: absolute; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--card-ring); }

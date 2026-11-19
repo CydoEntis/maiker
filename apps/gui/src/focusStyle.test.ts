@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { contrastRatio } from './features/workspace/theme/color'
 import { THEMES } from './features/workspace/theme/themes'
 
-// docs/UI.md, *Focus is one style*: a 2px accent underline drawn inside the control, never a box, ring, glow or outline.
+// docs/UI.md, *Focus is one style*: a 1px accent underline drawn inside the control, never a box, ring, glow or outline.
 // Vitest hands every stylesheet to a test as an empty string, so the globs only name the files and their text is read from disk.
 const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
 const SHEETS: Record<string, string> = Object.fromEntries(Object.keys(import.meta.glob('./**/*.css')).map((path) => [path, read(path)]))
@@ -36,7 +36,7 @@ const OUTLINE_ALLOWED: ReadonlyArray<readonly [RegExp, string]> = [
   [/\.toast-position-option\.is-selected/, 'the picked corner in Settings (App.css), not focus'],
 ]
 /** The needs card's own answer field takes its underline in the needs colour, as the prototype's Needs Card draws it (`style-focus`). */
-const NEEDS_UNDERLINE = /^inset 0 -2px 0 var\(--needs\)$/
+const NEEDS_UNDERLINE = /^inset 0 -1px 0 var\(--needs\)$/
 /** The comma-separated layers of a box-shadow value, ignoring the commas inside `rgba(...)`, `var(...)` and `calc(...)`. */
 const splitLayers = (value: string): string[] => {
   const layers: string[] = []
@@ -62,7 +62,7 @@ describe('focus is one underline', () => {
   })
 
   it('defines the one token', () => {
-    expect(SHEETS['./tokens.css']).toMatch(/--focus-underline:\s*inset 0 -2px 0 var\(--focus-line\)/)
+    expect(SHEETS['./tokens.css']).toMatch(/--focus-underline:\s*inset 0 -1px 0 var\(--focus-line\)/)
   })
 
   it('never sets an outline in a focus rule, only removes it', () => {

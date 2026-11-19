@@ -99,19 +99,19 @@ describe('a pane of another machine and the features that need its files', () =>
     daemon.suggestProjectFolders.mockResolvedValue([])
   })
 
-  it('shows Changes and Files in the header of the session in front, and History and Checks in its ⋯ menu', async () => {
+  it('shows Changes and Files in the header of the session in front, and none of the four views in its ⋯ menu', async () => {
     const user = await openRemotePane()
     expect(screen.queryByRole('navigation', { name: 'Tools' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Changes' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Files' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    for (const name of ['Changes', 'Files', 'History', 'Checks']) expect(await screen.findByRole('menuitem', { name: new RegExp(`^${name}`) })).toBeInTheDocument()
+    await screen.findByRole('menuitem', { name: /^Split right/ })
+    for (const name of ['Changes', 'Files', 'History', 'Checks']) expect(screen.queryByRole('menuitem', { name: new RegExp(`^${name}`) })).toBeNull()
   })
 
-  it('opens the side panel on the machine\'s changes, lists its files for markdown (ADR 0014), and says its history is local-only', async () => {
+  it('opens the side panel on the machine\'s changes and lists its files for markdown (ADR 0014)', async () => {
     const user = await openRemotePane()
-    await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: /^Changes/ }))
+    await user.click(screen.getByRole('button', { name: 'Changes' }))
     const panel = within(await screen.findByRole('complementary', { name: 'Side panel' }))
     expect(panel.getByRole('heading', { name: 'Changes' })).toBeInTheDocument()
     expect(screen.queryByText(REFUSAL('Inspect'))).toBeNull()
@@ -119,10 +119,6 @@ describe('a pane of another machine and the features that need its files', () =>
     // Files is no longer refused: it lists the machine's folders and opens its markdown documents.
     expect(await panel.findByRole('navigation', { name: 'Files' })).toBeInTheDocument()
     expect(panel.queryByText(REFUSAL('Files'))).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: /^History/ }))
-    await user.click(panel.getByRole('radio', { name: 'Snapshots' }))
-    expect(await panel.findByText(REFUSAL('History'))).toBeInTheDocument()
   })
 
   it('says Worktrees is local-only and opens no dialog', async () => {

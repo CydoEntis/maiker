@@ -23,11 +23,11 @@ const DEFAULTS: SettingsPreferences = {
   darkTheme: 'Maiker Dark',
   lightTheme: 'Maiker Day',
   cursorStyle: 'block',
-  scrollback: 10000, scrollSpeed: 1,
+  scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.6,
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -113,17 +113,19 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().restoreLayout).toBe(true)
   })
 
-  it('starts a fresh install with folded corners and keeps saved corners', () => {
-    expect(readSettingsPreferences()).toMatchObject({ corners: 'folded' })
-    for (const corners of ['square', 'rounded', 'folded']) {
+  it('starts a fresh install with rounded corners and keeps saved corners', () => {
+    expect(readSettingsPreferences()).toMatchObject({ corners: 'rounded' })
+    for (const corners of ['square', 'rounded']) {
       localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners, cornersEra: 2 }))
       expect(readSettingsPreferences()).toMatchObject({ corners })
     }
   })
 
-  it('reads corners saved before folded became the default (no era stamp) as the default, not as a choice', () => {
+  it('reads corners saved before the era stamp as the default, not as a choice', () => {
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners: 'square' }))
-    expect(readSettingsPreferences().corners).toBe('folded')
+    expect(readSettingsPreferences().corners).toBe('rounded')
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners: 'folded', cornersEra: 2 }))
+    expect(readSettingsPreferences().corners).toBe('rounded')
   })
 
   it('reads the Claude view saved before there was one setting as the one setting, and a pre-redesign Terminal as Chat', () => {
@@ -139,7 +141,7 @@ describe('settings preferences', () => {
       return readSettingsPreferences().corners
     }
     expect(['glass', 'console', 'flat', 'tiled', 'minimal', 'expressive', 'frosted'].map(corners)).toEqual(Array(7).fill('rounded'))
-    expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'folded'])
+    expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'rounded'])
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square', cornersEra: 2 }))
     expect(readSettingsPreferences().corners).toBe('square')
   })

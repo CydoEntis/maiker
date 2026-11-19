@@ -48,6 +48,14 @@ const SCROLL_TRIPLE = 3
 const SCROLL_FASTEST = 5
 export const SCROLL_SPEED_CHOICES = [SCROLL_NORMAL, SCROLL_DOUBLE, SCROLL_TRIPLE, SCROLL_FASTEST] as const
 export type ScrollSpeed = (typeof SCROLL_SPEED_CHOICES)[number]
+/** The terminal's row height as a multiple of the font size. Pixel art drawn in block characters (an agent's banner) joins up at 1 to 1.2. */
+const LINE_TIGHT = 1
+const LINE_SNUG = 1.2
+const LINE_EASY = 1.4
+const LINE_AIRY = 1.6
+export const LINE_HEIGHT_CHOICES = [LINE_TIGHT, LINE_SNUG, LINE_EASY, LINE_AIRY] as const
+export type TerminalLineHeight = (typeof LINE_HEIGHT_CHOICES)[number]
+export const DEFAULT_LINE_HEIGHT: TerminalLineHeight = LINE_AIRY
 
 export type SettingsPreferences = {
   accent: 'teal' | 'blue' | 'violet'
@@ -84,6 +92,7 @@ export type SettingsPreferences = {
   /** Lines each pane keeps; the daemon keeps the full history. */
   scrollback: ScrollbackLines
   scrollSpeed: ScrollSpeed
+  terminalLineHeight: TerminalLineHeight
   /** Mirror the terminal's text into the page for screen readers. It makes every pane much heavier to draw. */
   terminalScreenReader: boolean
   density: Density
@@ -189,6 +198,7 @@ function defaults(): SettingsPreferences {
     cursorStyle: 'block',
     scrollback: SCROLLBACK_DEFAULT,
     scrollSpeed: SCROLL_NORMAL,
+    terminalLineHeight: DEFAULT_LINE_HEIGHT,
     terminalScreenReader: false,
     corners: DEFAULT_CORNERS,
     density: 'comfortable',
@@ -290,6 +300,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       cursorStyle: isCursorStyle(preferences.cursorStyle) ? preferences.cursorStyle : fallback.cursorStyle,
       scrollback: isScrollback(preferences.scrollback) ? preferences.scrollback : fallback.scrollback,
       scrollSpeed: isScrollSpeed(preferences.scrollSpeed) ? preferences.scrollSpeed : fallback.scrollSpeed,
+      terminalLineHeight: LINE_HEIGHT_CHOICES.find((choice) => choice === preferences.terminalLineHeight) ?? fallback.terminalLineHeight,
       terminalScreenReader: bool(preferences.terminalScreenReader, fallback.terminalScreenReader),
       density: isDensity(preferences.density) ? preferences.density : fallback.density,
       sidebarTextSize: clampNumber(preferences.sidebarTextSize, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, fallback.sidebarTextSize),

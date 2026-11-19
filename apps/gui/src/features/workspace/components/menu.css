@@ -6,17 +6,19 @@
   color: var(--fg); font-family: "Geist Variable", Geist, system-ui, sans-serif;
   animation: mx-pop .14s ease-out;
 }
+/* The menu itself holds focus while it is open; the rows show where you are, so the menu draws no focus underline of its own. */
+.mx-ctx:focus, .mx-ctx:focus-visible, .mx-ctx [role="menu"]:focus-visible { outline: none; box-shadow: none; }
 @keyframes mx-pop { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
 .mx-ctx-title { max-width: 260px; padding: 6px 10px 5px; font-size: 11px; font-weight: 600; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-ctx-heading { padding: 6px 10px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
 .mx-ctx-sep { height: 1px; margin: 4px 8px; background: var(--pane-line); }
 .mx-ctx-item { height: 30px; display: flex; align-items: center; gap: 16px; padding: 0 10px; border-radius: 7px; font-size: 13px; text-align: left; color: var(--fg2); outline: none; }
-.mx-ctx-item:focus-visible { outline: none; }
-/* The item the keys are on (the first, as the menu opens) is drawn exactly as a hovered one. `:focus`, not
-   `:focus-visible`: the menu focuses its first item itself after a right-click, which is not a keyboard focus. */
-.mx-ctx-item:not(:disabled):hover, .mx-ctx-item:focus { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
+.mx-ctx-item:focus-visible { outline: none; box-shadow: none; }
+/* One highlighted item at a time: Radix moves `data-highlighted` with the pointer and the arrow keys, so a hovered row and a
+   keyboard row can never both be lit, and the global focus underline is switched off above. */
+.mx-ctx-item:not(:disabled)[data-highlighted] { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
 .mx-ctx-item.is-danger { color: var(--danger); }
-.mx-ctx-item.is-danger:not(:disabled):hover { color: var(--danger); }
+.mx-ctx-item.is-danger:not(:disabled)[data-highlighted] { color: var(--danger); }
 .mx-ctx-item:disabled { opacity: .4; cursor: default; }
 .mx-ctx-label { flex: 1; white-space: nowrap; }
 .mx-ctx-hint { font-family: var(--mono); font-size: 11px; color: var(--dim); }

@@ -122,24 +122,11 @@ export function isTerminal(session: Pick<SessionView, 'conversation' | 'status'>
   return !session.conversation.agent && session.status !== 'needs'
 }
 
-/**
- * A row of the Terminals section: a terminal that is not a chat. It sits in that one section under every grouping, so a shell
- * an agent left behind (or one the person opened) never mixes in with the agents' rows.
- */
-export function inTerminals(session: Pick<SessionView, 'conversation' | 'status'>): boolean {
-  return isTerminal(session) && !isChatSession(session.conversation)
-}
-
-/** The terminals in creation order (a new one lands last, so nothing moves), and the sessions the grouping lists. */
-export function splitTerminals(sessions: readonly SessionView[]): { terminals: SessionView[]; others: SessionView[] } {
-  return { terminals: inCreationOrder(sessions.filter(inTerminals)), others: sessions.filter((session) => !inTerminals(session)) }
-}
-
 export function isSidebarGrouping(value: unknown): value is SidebarGrouping {
   return SIDEBAR_GROUPINGS.some(([grouping]) => grouping === value)
 }
 
-export type StatusSectionKey = 'needs' | 'working' | 'done' | 'idle' | 'terminals'
+export type StatusSectionKey = 'needs' | 'working' | 'done' | 'idle'
 
 /** The status sections in the order they are listed, each with the few words that say what it means. */
 const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint: string }> = [
@@ -147,16 +134,13 @@ const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint
   { key: 'working', name: 'Working', hint: 'running now' },
   { key: 'done', name: 'Finished', hint: 'ready to review' },
   { key: 'idle', name: 'Idle', hint: 'nothing to do' },
-  { key: 'terminals', name: 'Terminals', hint: 'shells and programs, no agent' },
 ]
 
 /** The section a session is listed in. An agent that stopped, or one held by its plan limit, is yours to look at, so it sits with what needs you. */
 export function sectionOf(session: SessionView): StatusSectionKey {
-  // A terminal with nothing to ask sits in its own section, whatever its shell is doing.
-  if (isTerminal(session)) return 'terminals'
   switch (session.status) {
     case 'needs': return 'needs'
-    // A shell that exited is a terminal (above); only an agent that stopped lands here.
+    // A shell that exited is just idle; only an agent that stopped needs a look.
     case 'error': return session.conversation.agent ? 'needs' : 'idle'
     case 'limited': return 'needs'
     case 'working': return 'working'
@@ -175,8 +159,7 @@ export type HeldRow = { readonly id: string; readonly section: StatusSectionKey 
 const stays = (section: StatusSectionKey): boolean => section === 'done' || section === 'idle'
 
 /**
- * The sessions under the status each has, in `sort` order within a section; a section with nothing in it is left out. Terminals
- * (no agent, nothing asking) are the last section. The `held` row stays where it was picked: looking at a finished agent makes it
+ * The sessions under the status each has, in `sort` order within a section; a section with nothing in it is left out. The `held` row stays where it was picked: looking at a finished agent makes it
  * idle, and a row that jumps away from under the pointer the moment it is clicked reads as the app fighting you. Its
  * mark still shows its status. Only that shift between finished and idle is held: a row that starts working, or asks, goes
  * to its own section at once, or an agent at work would be listed as idle until the person looked away.

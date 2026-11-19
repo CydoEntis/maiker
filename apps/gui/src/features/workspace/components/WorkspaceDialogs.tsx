@@ -32,7 +32,7 @@ import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, renameInline, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate } = useWorkspace()
   const serviceFinishing = useServiceFinishing()
   // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
   const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding } }
@@ -48,7 +48,6 @@ export function WorkspaceDialogs() {
                 portalContainer={root}
                 validateFolder={folderExists}
                 onChooseFolder={chooseStartFolder}
-                onOpenSessionsIn={(view) => { setPreferences((current) => ({ ...current, openSessionsIn: view })) }}
                 onStartFolder={(path) => { setPreferences((current) => ({ ...current, startFolder: path })) }}
                 machines={machinesInfo}
                 onClose={(startSession) => { markWelcomed(); setWelcomeOpen(false); if (startSession) newSession(focusedMachineNumber) }}
@@ -125,7 +124,7 @@ export function WorkspaceDialogs() {
                 locked={!canStart} onPick={resumeSaved} onCancel={() => { setSavedOpen(false) }} />
             )}
             {recentOpen && <RecentSessionsDialog home={home} onPick={reopenSession} onReopened={() => { setRecentOpen(false) }} onCancel={() => { setRecentOpen(false) }} />}
-            {renameId !== null && !renameInline && sessionMap.get(renameId) && (
+            {renameId !== null && sessionMap.get(renameId) && (
               <RenameDialog session={sessionMap.get(renameId) as SessionView} onSave={(name) => { saveName(renameId, name) }} onCancel={() => { setRenameId(null) }} />
             )}
             {settingsSection && (

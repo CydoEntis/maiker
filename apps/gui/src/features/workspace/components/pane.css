@@ -31,28 +31,43 @@
 }
 /* While a pane is dragged it dims, and the pane under the pointer says what letting go does. */
 .mx-pane.is-dragging { opacity: .6; }
-.mx-pane-drop { position: absolute; inset: 6px; z-index: 29; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 2px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; color: var(--accent-text); pointer-events: none; animation: v7scrim .12s ease-out; }
-.mx-pane-ring { position: absolute; inset: 0; z-index: 30; pointer-events: none; border-radius: var(--r14); box-shadow: inset 0 2px 0 var(--focus-line); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
-.mx-pane.is-focused .mx-pane-ring { opacity: 1; }
+.mx-pane-drop { position: absolute; inset: 6px; z-index: 29; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; color: var(--accent-text); pointer-events: none; animation: v7scrim .12s ease-out; }
 
-/* The session header (52px, two lines): the status icon and the name, and under the name where the chat works (folder,
-   project / branch, machine). Right: the Chat | Terminal toggle, Changes, Files and the ⋯ menu. */
-.mx-pane-head { flex: none; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--line); cursor: default; container: pane-head / inline-size; }
+/* The session header, one thin line: the agent's mark, the name, the path (folder, project / branch, machine). Right:
+   Changes, Files and the ⋯ menu. Its bottom edge is the status (`.mx-pane-status`), not a plain border. */
+.mx-pane-head { position: relative; flex: none; height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; cursor: default; container: pane-head / inline-size; }
 .mx-pane-head.is-draggable { cursor: grab; }
 .mx-pane-show-sidebar { flex: none; width: 28px; height: 28px; margin-left: -4px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
 .mx-pane-show-sidebar:hover { background: var(--m-hover); color: var(--fg); }
-.mx-pane-id { flex: 0 1 auto; min-width: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 10px; row-gap: 1px; align-items: center; }
+.mx-pane-id { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .mx-pane-id.is-shell { align-items: center; }
 .mx-pane-icon { flex: none; display: inline-flex; width: 14px; height: 14px; }
+
+/* The header's bottom edge. Idle (and anything else without a signal of its own) is the line the header always had.
+   Working lights the whole edge in the working colour, with a brighter light that bounces back and forth along it.
+   Needs you lights the whole edge in the needs colour. Both layers are always there and only fade (opacity, and the
+   colour of the lit edge), so a change of status fades in and out instead of switching; the bounce never stops on a status
+   change, so the light keeps moving while it fades out instead of freezing mid-edge, and it is paused only while the window
+   is in the background ([PERFORMANCE](docs/PERFORMANCE.md)). */
+.mx-pane-status { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; background: var(--line); pointer-events: none; }
+.mx-pane-status::before, .mx-pane-status::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; opacity: 0; transition: opacity var(--t-slow) var(--ease), background-color var(--t-slow) var(--ease); }
+.mx-pane-status::before { right: 0; background-color: var(--working); }
+.mx-pane-status::after { width: 26%; background-color: var(--working); animation: mx-pane-bounce 1.3s ease-in-out infinite alternate; }
+.mx-pane-status[data-status="working"]::before { opacity: .4; }
+.mx-pane-status[data-status="working"]::after { opacity: 1; }
+.mx-pane-status[data-status="needs"]::before, .mx-pane-status[data-status="limited"]::before { background-color: var(--needs); opacity: 1; }
+.mx-pane-status[data-status="error"]::before { background-color: var(--danger); opacity: 1; }
+/* 26% wide, so 285% of itself is the rest of the edge. */
+@keyframes mx-pane-bounce { from { transform: translateX(0); } to { transform: translateX(285%); } }
+:root[data-window="inactive"] .mx-pane-status::after { animation-play-state: paused; }
+:root[data-reduced-motion="true"] .mx-pane-status::after { animation: none; opacity: 0; }
 .mx-pane-title { min-width: 0; display: flex; }
 .mx-pane-title .mx-inline-name { flex: 0 1 auto; min-width: 120px; height: 22px; padding: 0 6px; margin-left: -6px; border-radius: 0; font: 600 14px var(--ui); color: var(--fg); background: transparent; border: 0; outline: none; box-shadow: var(--focus-underline); }
 .mx-pane-name { flex: 0 1 auto; min-width: 0; height: 22px; display: flex; align-items: center; padding: 0 4px; margin-left: -4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; letter-spacing: -.005em; color: var(--fg); }
-.mx-pane-name.is-editable { cursor: text; }
-.mx-pane-name.is-editable:hover { background: var(--m-hover); }
 
 /* Line two: the folder, the project, the branch, the machine. The project goes first as the pane narrows, then the
    branch's name, leaving its mark. */
-.mx-crumbs { grid-column: 2; flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+.mx-crumbs { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
 .mx-crumb-folder { flex: none; display: inline-flex; color: var(--muted); }
 .mx-crumb-sep, .mx-crumb-dot { flex: none; color: var(--line2); }
 .mx-crumb-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; }
@@ -64,8 +79,8 @@
 .mx-crumb-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); color: inherit; }
 .mx-crumb-branch-icon { flex: none; display: inline-flex; color: inherit; }
 .mx-crumb-branch-icon svg { stroke: currentColor; }
-@container pane-head (max-width: 700px) { .mx-crumb-project, .mx-crumb-folder + .mx-crumb-project + .mx-crumb-sep { display: none; } }
-@container pane-head (max-width: 560px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child, .mx-crumb-dot, .mx-crumb-machine { display: none; } }
+@container pane-head (max-width: 420px) { .mx-crumb-project, .mx-crumb-folder + .mx-crumb-project + .mx-crumb-sep { display: none; } }
+@container pane-head (max-width: 300px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child, .mx-crumb-dot, .mx-crumb-machine { display: none; } }
 .mx-pane-controls { flex: none; display: flex; align-items: center; gap: 4px; margin-left: auto; height: 100%; }
 .mx-pane-control { position: relative; width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--dim); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-pane-control:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
@@ -88,7 +103,7 @@
 .mx-pane.is-terminal { background: var(--main); }
 /* Two or more panes are separate cards on the window's ground with a gap between them, not boxes inside one big card. */
 /* A pane with terminals pinned under it is a card too, so the two read as a pair. */
-.mx-pane.is-card { background: var(--main); border: 1px solid var(--line); }
+.mx-pane.is-card { background: var(--main); border: 1px solid var(--main); transition: border-color var(--t-base) var(--ease); }
 .mx-main:has(> .mx-pane-stack > .mx-panes.is-split:not(.is-kept)) { background: none; border-color: transparent; box-shadow: none; overflow: visible; }
 .mx-panes.is-split { padding: 0; }
 

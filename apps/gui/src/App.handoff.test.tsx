@@ -134,21 +134,18 @@ describe('desktop terminal multiplexer', () => {
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 59, canRestart: false, sessionCount: 2, activeTurnCount: 1 })
   })
 
-  it('is the New session draft when no session is running: a chat view with its message box, no dialog and nothing to close', async () => {
+  it('shows the empty state when no session is running: no draft page, nothing in a dialog', async () => {
     renderDesktopApp()
 
-    const page = await screen.findByRole('region', { name: 'New session' })
-    expect(within(page).getByRole('heading', { name: 'What should we build?' })).toBeInTheDocument()
-    await waitFor(() => { expect(within(page).getByRole('textbox', { name: 'What should we work on?' })).toHaveFocus() })
-    expect(within(page).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'No sessions running' })).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('status', { name: /^New session, waiting/ })).toBeInTheDocument()
   })
 
   it('starts a plain shell in the home folder from New terminal and shows it', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
-    await screen.findByRole('region', { name: 'New session' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
     daemon.loadConversations.mockResolvedValue([term(5, HOME)])
 
     await user.keyboard('{Control>}{Alt>}{Shift>}t{/Shift}{/Alt}{/Control}')
@@ -159,38 +156,18 @@ describe('desktop terminal multiplexer', () => {
     expect(screen.getByRole('region', { name: /^Terminal 1: ~/ })).toBeInTheDocument()
   })
 
-  it('opens the New session draft with Ctrl+Shift+T, as a chat view and not a dialog, and Escape goes back to the panes', async () => {
+  it('starts a plain shell from New session (Ctrl+Shift+T): there is no draft page and no chat', async () => {
     const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
     renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/a' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
+    daemon.loadConversations.mockResolvedValue([term(5, HOME)])
 
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
-    const page = await screen.findByRole('region', { name: 'New session' })
-    expect(screen.queryByRole('dialog', { name: 'New session' })).not.toBeInTheDocument()
-    // The model button sits in the box's foot, as in a chat; it opens on the start folder, ready to type.
-    expect(within(page).getByRole('button', { name: /^Agent, model and reasoning/ })).toBeInTheDocument()
-    expect(daemon.startShellSession).not.toHaveBeenCalled()
 
-    await waitFor(() => { expect(within(page).getByRole('textbox', { name: 'What should we work on?' })).toHaveFocus() })
-    await user.keyboard('{Escape}')
-    await waitFor(() => { expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument() })
-    expect(screen.getByRole('region', { name: 'Shell in ~/a' })).toBeInTheDocument()
-  })
-
-  it('keeps the window’s shortcuts in the New session draft, and not the ones for the pane under it', async () => {
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/a' })
-    await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
-    await screen.findByRole('region', { name: 'New session' })
-
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
-    expect(daemon.startShellSession).not.toHaveBeenCalled()
-
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
-    expect(await screen.findByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
+    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(HOME) })
+    expect(daemon.startChatSession).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Shell in ~' })).toBeInTheDocument()
   })
 
   it('applies the saved density, text sizes and sidebar width, and a drag of the edge changes and saves the width', async () => {
@@ -285,12 +262,13 @@ describe('desktop terminal multiplexer', () => {
     expect(within(sidebar).getByRole('button', { name: /, shell, / })).toBeInTheDocument()
   })
 
-  it('shows a pane its status as the badge on its icon, with no chip in a corner', async () => {
+  it('shows a pane its status as the header\'s bottom edge, with no chip in a corner', async () => {
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { status: 'working', agent: 'codex' })])
     renderDesktopApp()
 
     const pane = await screen.findByRole('region', { name: /^Terminal 1: / })
-    expect(pane.querySelector('.mx-pane-id [data-slot="status-icon"][data-status="working"]')).not.toBeNull()
+    expect(pane.querySelector('.mx-pane-head .mx-pane-status[data-status="working"]')).not.toBeNull()
+    expect(pane.querySelector('.mx-pane-id [data-slot="status-icon"]')).toBeNull()
     expect(screen.queryByRole('button', { name: /^Status:/ })).not.toBeInTheDocument()
   })
 
@@ -323,14 +301,14 @@ describe('desktop terminal multiplexer', () => {
     fireEvent.contextMenu(pane)
 
     const menu = await screen.findByRole('menu', { name: 'a' })
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.querySelector('.mx-ctx-label')?.textContent)).toEqual(['Changes', 'Files', 'History', 'Checks', 'Terminal', 'Split right', 'Split down', 'Start a Claude chat here', 'Start a Codex chat here', 'Start Gemini here', 'Rename…', 'Maximize pane', 'Clear', 'Copy folder path', 'Close pane · ends its session'])
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.querySelector('.mx-ctx-label')?.textContent)).toEqual(['Split right', 'Split down', 'Rename…', 'Maximize pane', 'Clear', 'Copy folder path', 'Close pane · ends its session'])
     daemon.startShellSession.mockResolvedValue(undefined)
     await user.click(within(menu).getByRole('menuitem', { name: /^Split right/ }))
     // A split opens a new shell beside this one.
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalled() })
   })
 
-  it('renames a session in place from its row menu, and the name shows on the row and the pane', async () => {
+  it('renames a session in a dialog from its row menu, and the name shows on the row and the pane', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
     renderDesktopApp()
@@ -338,38 +316,38 @@ describe('desktop terminal multiplexer', () => {
     fireEvent.contextMenu(await within(sidebar).findByRole('button', { name: /, shell, / }))
     await user.click(await screen.findByRole('menuitem', { name: /^Rename…/ }))
 
-    // The row's own title becomes the field, with the cursor in it and the folder as its placeholder.
-    const field = await within(sidebar).findByRole('textbox', { name: 'Session name' })
+    // The name is asked for in a dialog ; nothing on the row turns into a field.
+    const dialog = await screen.findByRole('dialog', { name: 'Rename session' })
+    const field = within(dialog).getByRole('textbox', { name: 'Session name' })
     await waitFor(() => { expect(field).toHaveFocus() })
-    expect(field).toHaveAttribute('placeholder', 'a')
+    expect(within(sidebar).queryByRole('textbox')).not.toBeInTheDocument()
     // Once saved, the daemon reports the name, and every place that shows the session uses it.
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { named: true, title: 'Login fix' })])
     await user.keyboard('Login fix{Enter}')
 
     await waitFor(() => { expect(daemon.renameConversationOnDaemon).toHaveBeenCalledWith({ id: 't2' }, 'Login fix') })
-    expect(within(sidebar).queryByRole('textbox', { name: 'Session name' })).not.toBeInTheDocument()
     await within(sidebar).findByRole('button', { name: /^Login fix, shell, / })
     expect(document.querySelector('.mx-pane-name')).toHaveTextContent('Login fix')
   })
 
-  it('cancels an in-place rename with Escape and sends nothing, and an empty name clears it', async () => {
+  it('cancels the rename dialog and sends nothing, and an empty name clears it', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { named: true, title: 'Login fix' })])
     renderDesktopApp()
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
     fireEvent.contextMenu(await within(sidebar).findByRole('button', { name: /^Login fix, shell, / }))
     await user.click(await screen.findByRole('menuitem', { name: /^Rename…/ }))
-    const field = await within(sidebar).findByRole('textbox', { name: 'Session name' })
+    const field = await within(await screen.findByRole('dialog', { name: 'Rename session' })).findByRole('textbox', { name: 'Session name' })
     expect(field).toHaveValue('Login fix')
     await waitFor(() => { expect(field).toHaveFocus() })
 
-    await user.keyboard('{Escape}')
-    expect(within(sidebar).queryByRole('textbox', { name: 'Session name' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument() })
     expect(daemon.renameConversationOnDaemon).not.toHaveBeenCalled()
 
     fireEvent.contextMenu(within(sidebar).getByRole('button', { name: /^Login fix, shell, / }))
     await user.click(await screen.findByRole('menuitem', { name: /^Rename…/ }))
-    await user.clear(await within(sidebar).findByRole('textbox', { name: 'Session name' }))
+    await user.clear(await screen.findByRole('textbox', { name: 'Session name' }))
     await user.keyboard('{Enter}')
     await waitFor(() => { expect(daemon.renameConversationOnDaemon).toHaveBeenCalledWith({ id: 't2' }, '') })
   })
@@ -441,7 +419,7 @@ describe('desktop terminal multiplexer', () => {
     const user = userEvent.setup()
     window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ startFolder: '~/code' }))
     renderDesktopApp()
-    await screen.findByRole('region', { name: 'New session' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
 
     await user.keyboard('{Control>}{Alt>}{Shift>}t{/Shift}{/Alt}{/Control}')
 
@@ -1067,7 +1045,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
   it('applies a theme from the browser to the whole window and keeps it', async () => {
     const user = userEvent.setup()
     const app = renderDesktopApp()
-    await screen.findByRole('region', { name: 'New session' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
     const root = () => document.querySelector<HTMLElement>('.mx-app')
     expect(root()?.style.getPropertyValue('--bg')).toBe('#0c0d0f')
 
@@ -1082,7 +1060,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(root()?.style.getPropertyValue('--accent')).toBe('#7DCFFF')
     app.unmount()
     renderDesktopApp()
-    await screen.findByRole('region', { name: 'New session' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
     expect(root()?.style.getPropertyValue('--accent')).toBe('#7DCFFF')
   })
 })
@@ -1139,7 +1117,7 @@ describe('desktop overlays and pane tools', () => {
   it('offers themes in the palette only once something is typed, and applies the one picked', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
-    await screen.findByRole('region', { name: 'New session' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
     await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
     const dialog = await screen.findByRole('dialog', { name: 'Command palette' })
     expect(within(dialog).queryByRole('option', { name: /Tokyo/ })).not.toBeInTheDocument()
@@ -1226,8 +1204,6 @@ describe('desktop overlays and pane tools', () => {
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
 
     await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
-    await user.click(within(dialog).getByRole('radio', { name: /Terminal/ }))
-    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
     await user.click(within(dialog).getByRole('radio', { name: /Add a project folder/ }))
 
     await user.type(within(dialog).getByRole('textbox', { name: 'Folder' }), '/definitely/not/here')
@@ -1239,12 +1215,12 @@ describe('desktop overlays and pane tools', () => {
     await user.type(within(dialog).getByRole('textbox', { name: 'Folder' }), '/home/casey/code/api')
     await user.click(within(dialog).getByRole('button', { name: 'Start in api' }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
-    await screen.findByRole('region', { name: 'New session' })
-    expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api', openSessionsIn: 'terminal' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
+    expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api' })
 
     app.unmount()
     renderDesktopApp({ firstRun: true })
-    await screen.findByRole('region', { name: 'New session' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
   })
 
@@ -1263,14 +1239,14 @@ describe('desktop overlays and pane tools', () => {
     window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ accent: 'blue' }))
     cleanup()
     renderDesktopApp({ firstRun: true })
-    await screen.findByRole('region', { name: 'New session' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
   })
 
   it('shows every shortcut from the keymap on Ctrl+/, ignores other shortcuts while it is open, and closes with the key or Esc', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
-    await screen.findByRole('region', { name: 'New session' })
+    await screen.findByRole('heading', { name: 'No sessions running' })
 
     await user.keyboard('{Control>}/{/Control}')
     const dialog = await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })

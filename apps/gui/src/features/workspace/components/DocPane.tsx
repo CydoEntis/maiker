@@ -21,7 +21,6 @@ export function DocPane({ shown, pane, kept }: { shown: Arrangement; pane: PaneS
       data-pane={pane.id}
       onMouseDown={() => { setLayout((current) => focusPane(current, pane.id)) }}
     >
-      <span className="mx-pane-ring" aria-hidden="true" />
       {term === null ? (
         <p className="mx-docview-note is-error" role="alert">This file cannot be read while its session is not here.</p>
       ) : (

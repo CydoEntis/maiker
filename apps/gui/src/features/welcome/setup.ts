@@ -1,6 +1,4 @@
-import type { PaneView } from '@/features/workspace/model/chatView'
-
-export const SETUP_STEPS = ['Welcome', 'How you work', 'Get started'] as const
+export const SETUP_STEPS = ['Welcome', 'Get started'] as const
 export const LAST_STEP = SETUP_STEPS.length - 1
 
 export type StartChoice = 'folder' | 'machine'
@@ -15,9 +13,8 @@ export const SETUP_AGENTS: ReadonlyArray<{ program: string; label: string }> = [
 ]
 
 /** What the primary button says for the step and what is picked so far. */
-export function nextLabel(step: number, mode: PaneView | null, start: StartChoice | null, folderName: string | null): string {
+export function nextLabel(step: number, start: StartChoice | null, folderName: string | null): string {
   if (step === 0) return 'Get started'
-  if (step === 1) return mode === null ? 'Pick one to continue' : 'Continue'
   if (start === 'folder') return folderName === null ? 'Pick a folder' : `Start in ${folderName}`
   return 'Pick one to continue'
 }

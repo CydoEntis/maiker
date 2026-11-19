@@ -27,6 +27,8 @@ echo "own service: $(printenv "${prefix}_SOCKET")  data: $(printenv "${prefix}_D
 cd "$root/apps/gui"
 [ -d node_modules ] || pnpm install --frozen-lockfile
 node scripts/bundle-daemon.ts
-# NVIDIA under Wayland can die with a protocol error; this is the documented workaround (docs/ENVIRONMENT.md).
-export WEBKIT_DISABLE_DMABUF_RENDERER="${WEBKIT_DISABLE_DMABUF_RENDERER:-1}"
+# The web view's drawing is left to the app (`linux_gpu.rs`): on WebKitGTK 2.54 and later it draws on the GPU by
+# itself, and setting WEBKIT_DISABLE_DMABUF_RENDERER here turns the app's own GPU fix off, which leaves the page
+# drawn on the CPU (docs/PERFORMANCE.md, "The page was drawn on the CPU"). If an older WebKitGTK on NVIDIA under
+# Wayland dies with a protocol error (docs/ENVIRONMENT.md), export WEBKIT_DISABLE_DMABUF_RENDERER=1 yourself.
 exec pnpm desktop:dev

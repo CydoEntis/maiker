@@ -26,7 +26,7 @@ import { throttleTrailing, type Throttled } from '@/lib/throttle'
 
 const DEFAULT_SCROLLBACK_LINES = 10000
 const DEFAULT_SCROLL_SPEED = 1
-const LINE_HEIGHT = 1.6
+const DEFAULT_LINE_HEIGHT = 1.6
 const CONNECT_RETRY_MS = 250
 /** How often the grid is fitted while its pane keeps changing size (a sliding sidebar or drawer); the last size is always fitted. */
 const FIT_WHILE_ANIMATING_MS = 90
@@ -105,6 +105,8 @@ export type TerminalLook = {
   scrollback?: number
   /** Lines per wheel notch as a multiple of xterm's default. */
   scrollSpeed?: number
+  /** Row height as a multiple of the font size. */
+  lineHeight?: number
   /** xterm's own cursor blink, for the focused pane only. Off unless asked for. */
   cursorBlink?: boolean
   /** Draw with the DOM renderer even where WebGL 2 exists (Settings › Performance). Read when the view opens. */
@@ -360,7 +362,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
           fontWeight: lookRef.current.fontWeight ?? DEFAULT_FONT_WEIGHT,
           fontWeightBold: lookRef.current.fontWeightBold ?? DEFAULT_FONT_WEIGHT_BOLD,
           fontSize: fontSizeRef.current,
-          lineHeight: LINE_HEIGHT,
+          lineHeight: lookRef.current.lineHeight ?? DEFAULT_LINE_HEIGHT,
           scrollback: lookRef.current.scrollback ?? DEFAULT_SCROLLBACK_LINES,
           scrollSensitivity: lookRef.current.scrollSpeed ?? DEFAULT_SCROLL_SPEED,
           screenReaderMode: lookRef.current.screenReader ?? false,
@@ -693,6 +695,10 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     }
     if (look.scrollback && emulator.options.scrollback !== look.scrollback) emulator.options.scrollback = look.scrollback
     if (look.scrollSpeed && emulator.options.scrollSensitivity !== look.scrollSpeed) emulator.options.scrollSensitivity = look.scrollSpeed
+    if (look.lineHeight && emulator.options.lineHeight !== look.lineHeight) {
+      emulator.options.lineHeight = look.lineHeight
+      refitTerminal.current?.()
+    }
     if (look.screenReader !== undefined && emulator.options.screenReaderMode !== look.screenReader) emulator.options.screenReaderMode = look.screenReader
     if (look.theme) emulator.options.theme = look.theme
     const minimumContrast = look.minimumContrast ?? NO_MINIMUM_CONTRAST

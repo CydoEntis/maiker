@@ -38,7 +38,7 @@ export function EmptyState({ hasSessions, listed, startFolderLabel, canStart, on
           {hasSessions ? (
             <p>Your sessions keep running in the sidebar. Pick one to show it here, or start a new one.</p>
           ) : (
-            <p>A new session starts an agent in a project you pick, from <span className="mono">{startFolderLabel}</span> if you pick none. An agent you start from any shell shows up in the sidebar too.</p>
+            <p>A new session opens a terminal in <span className="mono">{startFolderLabel}</span>. Type an agent's command in it, like <span className="mono">claude</span> or <span className="mono">codex</span>, and it shows up in the sidebar.</p>
           )}
         </div>
         <div className="mx-empty-actions">

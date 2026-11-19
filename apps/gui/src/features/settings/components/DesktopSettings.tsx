@@ -1,5 +1,4 @@
 import { ApprovedCommands } from './ApprovedCommands'
-import type { PaneView } from '@/features/workspace/model/chatView'
 import { toast } from '@/lib/toast'
 import type { UpdaterState } from '@/features/updates/useUpdater'
 import type { Transfer } from '@/features/updates/downloadEta'
@@ -31,7 +30,7 @@ import type { Added, Grant, HostChoice, HostKeyReport, MachineActivity } from '@
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
-import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
+import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
 
 export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'usage' | 'performance'
 
@@ -134,14 +133,15 @@ type DesktopSettingsProps = {
 
 type NavItem = { id: DesktopSettingsSection; label: string; key: string; path: string }
 
-/** The nav (the whole-app mock): what the window does, how agents run, and which computers. Usage & cost and Performance
-    have no item: they open from their own keys, the palette and the usage meters, and leave the nav with none current. */
+/** The nav (the whole-app mock): what the window does, how agents run, and which computers. Usage & cost has no item: it opens
+    from its own key, the palette and the usage meters, and leaves the nav with none current. */
 const NAV: Array<{ label: string; items: NavItem[] }> = [
   {
     label: 'APP',
     items: [
       { id: 'general', label: 'General', key: 'G', path: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4' },
       { id: 'appearance', label: 'Appearance', key: 'A', path: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-.9-.8-1.3-.8-2.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.4-4-7.6-9-7.6zM7.5 11.5h.01M10.5 7.5h.01M15.5 8.5h.01' },
+      { id: 'performance', label: 'Performance', key: 'P', path: 'M3 12h4l3-8 4 16 3-8h4' },
       { id: 'notifications', label: 'Notifications', key: 'N', path: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' },
       { id: 'keys', label: 'Hotkeys', key: '?', path: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8' },
     ],
@@ -186,10 +186,10 @@ const keepForOpenList = (event: globalThis.KeyboardEvent) => {
 }
 
 /** The report pages, which hide the nav and fill the dialog. */
-const NAVLESS: readonly DesktopSettingsSection[] = ['usage', 'performance']
+const NAVLESS: readonly DesktopSettingsSection[] = ['usage']
 
-/** The pages a search looks through, in nav order, then Performance. Usage is figures, not settings. */
-const SEARCHED: readonly DesktopSettingsSection[] = [...NAV.flatMap((group) => group.items.map((item) => item.id)), 'performance']
+/** The pages a search looks through, in nav order. Usage is figures, not settings. */
+const SEARCHED: readonly DesktopSettingsSection[] = [...NAV.flatMap((group) => group.items.map((item) => item.id))]
 
 function foundLine(rows: number, query: string): string {
   return `${String(rows)} ${rows === 1 ? 'setting matches' : 'settings match'} “${query}”`
@@ -279,7 +279,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
   }
 
   const [title, subtitle] = searching ? ['Search', foundLine(found.rows, query.trim())] : PAGE[section]
-  // Usage & cost and Performance are reports opened from their own keys: they take the whole dialog, without the nav.
+  // Usage & cost is a report opened from its own key: it takes the whole dialog, without the nav.
   const report = !searching && NAVLESS.includes(section)
   return (
     <Panel label="Settings" onClose={props.onClose} scrimClassName="mx-settings-scrim" className="mx-settings" onKeyDown={onKeyDown} onOpenAutoFocus={focusSection} onEscapeKeyDown={onEscape}>
@@ -437,31 +437,8 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
   const home = preferences.startFolder === ''
   const [saved, flashSaved] = useSavedFlash()
   const setStart = (folder: string) => { update('startFolder', folder); flashSaved() }
-  const searching = useContext(SettingsSearch) !== null
-  // Said once after a change, with the way back: the change moves every open session, so it must not pass unnoticed.
-  const [moved, setMoved] = useState<{ from: PaneView; to: PaneView } | null>(null)
-  const openIn = preferences.openSessionsIn
-  const changeView = (to: PaneView) => {
-    if (to === openIn) return
-    setMoved({ from: openIn, to })
-    update('openSessionsIn', to)
-  }
   return (
     <>
-      <Card title="How you work">
-        <Row label="Open sessions in" detail="Chat shows a conversation; Terminal shows the agent's own CLI. It is one setting for the whole app, so every open session follows it. Gemini has no chat view, so it always opens in Terminal.">
-          <SegmentedChoice label="Open sessions in" value={openIn} options={CHAT_VIEW_OPTIONS} onChange={changeView} />
-        </Row>
-        {moved !== null && moved.to === openIn && !searching && (
-          <div className="mx-scard-row" role="status">
-            <div className="mx-scard-text">
-              <span>{`All sessions now open in ${VIEW_WORD[openIn]}`}</span>
-              <span>Gemini always opens in Terminal.</span>
-            </div>
-            <button type="button" className="mx-scard-button" onClick={() => { update('openSessionsIn', moved.from); setMoved(null) }}>Undo</button>
-          </div>
-        )}
-      </Card>
       <Card
         title="Start folder"
         meta={saved ? <span className="mx-scard-meta" role="status">Saved</span> : undefined}
@@ -525,8 +502,6 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
   )
 }
 
-const CHAT_VIEW_OPTIONS = [['chat', 'Chat'], ['terminal', 'Terminal']] as const
-const VIEW_WORD: Readonly<Record<PaneView, string>> = { chat: 'Chat', terminal: 'Terminal' }
 const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as const
 const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creation', 'Creation'], ['priority', 'Priority']]
 const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
@@ -547,6 +522,7 @@ const BOLD_WEIGHTS = weightOptions([WEIGHT_SEMIBOLD, WEIGHT_BOLD, WEIGHT_EXTRA_B
 const CURSORS: ReadonlyArray<readonly [CursorStyle, string]> = [['block', 'Block'], ['bar', 'Bar'], ['underline', 'Underline']]
 const THOUSAND = 1000
 const SCROLLBACKS: ReadonlyArray<readonly [ScrollbackLines, string]> = SCROLLBACK_CHOICES.map((lines) => [lines, `${String(lines / THOUSAND)}k`] as const)
+const LINE_HEIGHTS: ReadonlyArray<readonly [TerminalLineHeight, string]> = LINE_HEIGHT_CHOICES.map((height) => [height, String(height)] as const)
 const SCROLL_SPEEDS: ReadonlyArray<readonly [ScrollSpeed, string]> = SCROLL_SPEED_CHOICES.map((speed) => [speed, speed === 1 ? 'Normal' : `${String(speed)}×`] as const)
 
 /** The font picker: Geist Mono (saved as empty) and the monospace families installed here, each set in its own face. */
@@ -603,6 +579,9 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         </Row>
         <Row label="Scroll speed" detail="How many lines one turn of the mouse wheel scrolls. Normal is the terminal's default, which can feel slow.">
           <SegmentedChoice label="Scroll speed" value={preferences.scrollSpeed} options={SCROLL_SPEEDS} onChange={(value) => { update('scrollSpeed', value) }} />
+        </Row>
+        <Row label="Line height" detail="Row height as a multiple of the font size. Lower it (1 to 1.2) if an agent's pixel-art banner looks torn apart; higher is airier to read. It applies to open terminals at once.">
+          <SegmentedChoice label="Line height" value={preferences.terminalLineHeight} options={LINE_HEIGHTS} onChange={(value) => { update('terminalLineHeight', value) }} />
         </Row>
         <Row label="Screen reader support" detail="Mirrors each terminal's text into the page so a screen reader can read it. It makes every pane much heavier to draw, so leave it off unless you use one.">
           <Switch aria-label="Screen reader support" checked={preferences.terminalScreenReader} onCheckedChange={(value) => { update('terminalScreenReader', value) }} />

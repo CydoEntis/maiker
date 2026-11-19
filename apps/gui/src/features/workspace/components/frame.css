@@ -8,6 +8,8 @@
 .title-bar-fill { flex: 1; align-self: stretch; }
 .mx-tbar-logo { display: inline-flex; height: 28px; align-items: center; gap: 7px; padding: 0 8px 0 4px; border-radius: var(--r-control); outline: none; }
 .mx-tbar-logo svg { pointer-events: none; }
+/* Changes and Files for the focused pane, before the window buttons. */
+.mx-tbar-panels { display: flex; align-items: center; gap: 2px; margin-right: 8px; }
 .mx-tbar-word { font-size: 13px; font-weight: 600; color: var(--fg); }
 .title-bar[data-platform="windows"] [data-testid="window-controls"] > button { height: 38px; }
 
@@ -67,5 +69,7 @@
 .mx-app .mx-main { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: none; }
 .mx-panes:not(.is-split) { padding: 0; }
 .mx-app .mx-pane { border-radius: var(--r-panel); }
-.mx-app .mx-pane.is-card { background: var(--card); border-color: var(--line); box-shadow: none; }
+/* A card's own border is its ground colour until it is focused, then it fades to the focus colour: one edge, not a ring over another. */
+.mx-app .mx-pane.is-card { background: var(--card); border-color: var(--card); box-shadow: none; }
+.mx-app .mx-pane.is-card.is-focused { border-color: var(--focus-line); }
 

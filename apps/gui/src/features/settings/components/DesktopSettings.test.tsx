@@ -1,13 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 import { DAEMON_NAME } from '@/brand'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.6, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -110,7 +109,7 @@ describe('desktop settings', () => {
   it('groups the sections the way the design does', () => {
     renderSettings('general')
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(nav).toHaveTextContent('APPGeneralGAppearanceANotificationsNHotkeys?AGENTSChatCPermissionsETerminalTExtensionsXMACHINESRemote machinesM')
+    expect(nav).toHaveTextContent('APPGeneralGAppearanceAPerformancePNotificationsNHotkeys?AGENTSChatCPermissionsETerminalTExtensionsXMACHINESRemote machinesM')
     expect(within(nav).getByRole('button', { name: /General/ })).toHaveAttribute('aria-current', 'page')
   })
 
@@ -159,37 +158,6 @@ describe('desktop settings', () => {
 
     expect(within(screen.getByRole('region', { name: 'Start folder' })).getByText('Your home folder')).toBeInTheDocument()
     expect(onChange).not.toHaveBeenCalled()
-  })
-
-  it('sets the one view the whole app is in, under How you work, with no per-agent choice', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('general')
-
-    const how = screen.getByRole('region', { name: 'How you work' })
-    const opens = within(how).getByRole('radiogroup', { name: 'Open sessions in' })
-    expect(within(opens).getByRole('radio', { name: 'Terminal' })).toBeChecked()
-    expect(how).toHaveTextContent('every open session follows it')
-    expect(how).toHaveTextContent('Gemini has no chat view, so it always opens in Terminal')
-    await user.click(within(opens).getByRole('radio', { name: 'Chat' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ openSessionsIn: 'chat' }))
-    expect(screen.queryByRole('radiogroup', { name: 'Claude sessions open in' })).toBeNull()
-  })
-
-  it('says every session moved, and undoes it', async () => {
-    const user = userEvent.setup()
-    function Held() {
-      const [preferences, setPreferences] = useState(PREFS)
-      return <QueryClientProvider client={new QueryClient()}><DesktopSettings usage={{ budget: null, onBudget: vi.fn(), sessionForTerm: () => null, onOpenSession: vi.fn() }} section="general" onSection={vi.fn()} preferences={preferences} onChange={setPreferences} systemReducedMotion={false} systemDark onPreviewTheme={vi.fn()} onShowWelcome={vi.fn()} platform="linux" daemon={{ online: true, sessionCount: 3 }} machines={info()} appVersion="0.64.0" onClose={vi.fn()} /></QueryClientProvider>
-    }
-    render(<Held />)
-
-    expect(screen.queryByRole('status')).toBeNull()
-    await user.click(screen.getByRole('radio', { name: 'Chat' }))
-    expect(screen.getByRole('status')).toHaveTextContent('All sessions now open in Chat')
-    expect(screen.getByRole('status')).toHaveTextContent('Gemini always opens in Terminal')
-    await user.click(screen.getByRole('button', { name: 'Undo' }))
-    expect(screen.getByRole('radio', { name: 'Terminal' })).toBeChecked()
-    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('chooses the default agent and what a new session opens as', async () => {
@@ -474,7 +442,7 @@ describe('desktop settings', () => {
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, corners: 'square' } })
     const corners = screen.getByRole('radiogroup', { name: 'Corners' })
 
-    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded', 'Folded'])
+    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded'])
     expect(within(corners).getByRole('radio', { name: 'Square' })).toHaveAttribute('aria-checked', 'true')
 
     await user.click(within(corners).getByRole('radio', { name: 'Rounded' }))

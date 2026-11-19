@@ -1,14 +1,14 @@
 import type { StyleLook, ThemeEntry } from './themes'
 
 /**
- * The desktop has one look (the design's flat panels, Inter with JetBrains Mono) and one shape choice: folded corners
- * (the default; the M icon's diagonal cuts on the top-left and bottom-right corners), rounded ones, or square ones. Corners are tokens only (`--r-*` in `tokens.css`, keyed by `data-corners` on the root);
+ * The desktop has one look (the design's flat panels, Inter with JetBrains Mono) and one shape choice: rounded corners
+ * (the default) or square ones. Corners are tokens only (`--r-*` in `tokens.css`, keyed by `data-corners` on the root);
  * nothing else about the window changes with them. The ids are what is saved.
  */
-export const CORNERS = ['square', 'rounded', 'folded'] as const
+export const CORNERS = ['square', 'rounded'] as const
 export type Corners = (typeof CORNERS)[number]
-export const DEFAULT_CORNERS: Corners = 'folded'
-export const CORNER_NAMES: Record<Corners, string> = { square: 'Square', rounded: 'Rounded', folded: 'Folded' }
+export const DEFAULT_CORNERS: Corners = 'rounded'
+export const CORNER_NAMES: Record<Corners, string> = { square: 'Square', rounded: 'Rounded' }
 
 export const isCorners = (value: unknown): value is Corners => CORNERS.some((id) => id === value)
 
