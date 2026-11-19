@@ -138,6 +138,14 @@ describe('a file name in a message', () => {
     expect(container.querySelector('button')).toBeNull()
   })
 
+  it("carries its type's colour, and a name of no known type carries none", () => {
+    const { container } = render(<Markdown text="Edit `src/app.ts` and `notes.xyz` now." />)
+
+    expect(container.querySelectorAll('.mx-file-name')).toHaveLength(1)
+    expect(container.querySelector('.mx-file-name')).toHaveAttribute('style', expect.stringContaining('--tone: var(--tag-ts)'))
+    expect(container.querySelectorAll('[data-slot="code-chip"]:not(.mx-file-name)')).toHaveLength(1)
+  })
+
   it('opens the file at its line when the chat can open files, still without a badge', async () => {
     const open = vi.fn()
     const user = userEvent.setup()

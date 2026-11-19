@@ -1,13 +1,16 @@
-import { memo, useContext, useMemo, type ReactNode } from 'react'
+import { memo, useContext, useEffect, useMemo, type ReactNode } from 'react'
 import { Quote as QuoteIcon } from 'lucide-react'
 import { Icon } from '@/features/workspace/components/glyphs'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import type { TurnSpan } from '@/features/inspect/turnRange'
-import { dividerText, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
+import { dividerText, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
 import type { ItemStatus } from '../chatEvents'
+import { KnownRowsContext } from '../knownRows'
 import { isWaitingStep } from '../stepInfo'
+import { useTypedText } from '../useTypedText'
 import { WorkingMark } from './WorkingMark'
 import { LiveBox } from './LiveBox'
+import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { parseAttachmentMessage } from '../attachmentMessage'
 import { parseQuoteMessage } from '../quoteMessage'
 import { askablesOf, type Askable } from '../plainQuestions'
@@ -110,18 +113,26 @@ function sameProps(a: RowProps, b: RowProps): boolean {
 }
 
 /**
- * An agent's reply, drawn as fast as the history brings it: a reply still arriving grows in place. It is read in its
- * finished form (`streamingParagraphs`), so a half-written mark or table does not flash; each block is parsed and drawn
- * again only when its own text changed (`Markdown`).
+ * An agent's reply. One that arrives while the person is looking is typed in a few words at a time (`useTypedText`), so
+ * a reply the history brings whole still appears the way a streamed one does; one that was already there shows whole. What
+ * shows is read in its finished form (`streamingParagraphs`), so a half-written mark or table does not flash; each block is
+ * parsed and drawn again only when its own text changed (`Markdown`).
  */
 function AgentMessage({ rowKey, paragraphs, status, agent }: { rowKey: string; paragraphs: readonly string[]; status: ItemStatus; agent: ChatAgent }) {
   const actions = useContext(ChatActionsContext)
+  const reduced = useContext(ReducedMotionContext)
+  const known = useContext(KnownRowsContext)
   const running = status === 'running'
-  const shown = running ? streamingParagraphs(paragraphs) : paragraphs
+  const finished = running ? streamingParagraphs(paragraphs) : paragraphs
+  const target = finished.join('\n\n')
+  const typed = useTypedText(target, !reduced, known !== null && !known.has(rowKey))
+  // Typed once: drawn again, this row shows whole.
+  useEffect(() => { known?.add(rowKey) }, [known, rowKey])
+  const shown = typed === target ? finished : streamingParagraphs(paragraphsOf(typed))
   const { lead, rest } = splitLead(shown)
   const empty = shown.join('').trim() === ''
-  // Questions asked in plain words are offered a Reply only once the message is whole: never while it is still written.
-  const whole = !running && actions !== null && actions.canReply
+  // Questions asked in plain words are offered a Reply only once the message is whole: never while it is still written or typed in.
+  const whole = !running && typed === target && actions !== null && actions.canReply
   const restText = rest.join('\n\n')
   const leadAsked = useMemo(() => (whole ? askablesOf(lead).map((one): Askable => ({ ...one, key: `lead.${one.key}` })) : []), [whole, lead])
   const restAsked = useMemo(() => (whole ? askablesOf(restText) : []), [whole, restText])

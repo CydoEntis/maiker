@@ -1,4 +1,4 @@
-import { memo, useContext, useId, useState, type ReactNode } from 'react'
+import { memo, useContext, useId, useState, type CSSProperties, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Fold } from '@/components/ui/fold'
@@ -12,7 +12,7 @@ import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBloc
 import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
 import { copyBlock, saveBlock } from '../saveBlock'
-import { TypeTag } from '@/components/ui/tag'
+import { TypeTag, typeTone } from '@/components/ui/tag'
 import { Block as BlockBox, BlockHead } from './Block'
 import type { Askable } from '../plainQuestions'
 
@@ -35,8 +35,8 @@ function LinkButton({ href, children }: { href: string; children: ReactNode }) {
 
 /**
  * Inline code. A web address opens like a link, still set as code: agents often quote the address to visit that way.
- * A file's name stays plain code, with no icon, so a sentence that names files reads straight through; where the chat can
- * open files it is a button that opens the file (and its line), still set as code.
+ * A file's name stays code with no icon, so a sentence that names files reads straight through; it is tinted in its type's
+ * colour (a setting) and, where the chat can open files, is a button that opens the file (and its line).
  */
 function InlineCode({ text }: { text: string }) {
   const open = useContext(OpenFileContext)
@@ -44,9 +44,13 @@ function InlineCode({ text }: { text: string }) {
   if (href !== null) return <LinkButton href={href}><CodeChip className="text-(--link)">{text}</CodeChip></LinkButton>
   const named = FILE_NAME.exec(text)
   const path = named?.[1]
-  if (open === null || path === undefined || fileTag(path) === null) return <CodeChip>{text}</CodeChip>
+  const tag = path === undefined ? null : fileTag(path)
+  if (path === undefined || tag === null) return <CodeChip>{text}</CodeChip>
+  // The name is the badge: its type's colour is set here and drawn by `[data-file-colours]` (a setting).
+  const chip = <CodeChip className="mx-file-name" style={{ '--tone': typeTone(tag) } as CSSProperties}>{text}</CodeChip>
+  if (open === null) return chip
   const line = named?.[2] === undefined ? null : Number(named[2])
-  return <button type="button" title={`Open ${path}`} className="cursor-pointer border-0 bg-transparent p-0 text-left hover:underline" onClick={() => { open(path, line) }}><CodeChip>{text}</CodeChip></button>
+  return <button type="button" title={`Open ${path}`} className="cursor-pointer border-0 bg-transparent p-0 text-left hover:underline" onClick={() => { open(path, line) }}>{chip}</button>
 }
 
 function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {

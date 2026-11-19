@@ -178,7 +178,7 @@ pub enum Ev {
     Scan(Vec<scan::Found>),
     Git(Vec<(WsId, Option<GitInfo>)>),
     /// Lines added and removed per checkout, read beside the git poll.
-    Diffs(HashMap<PathBuf, (u32, u32)>),
+    Diffs(HashMap<PathBuf, (u32, u32, u32)>),
     Prs(Vec<(pr::Place, pr::Read)>),
     WorktreeCreated {
         client: ClientId,
@@ -461,7 +461,7 @@ struct Daemon {
     last_secret_files: Instant,
     git_busy: bool,
     /// Lines added and removed against HEAD, by checkout (`git::diff_counts`).
-    diff_counts: HashMap<PathBuf, (u32, u32)>,
+    diff_counts: HashMap<PathBuf, (u32, u32, u32)>,
     last_git: Instant,
     last_save: Instant,
     last_output_save: Instant,
@@ -1812,7 +1812,7 @@ impl Daemon {
                 }
             }
             let _ = tx.blocking_send(Ev::Git(res));
-            let diffs: HashMap<PathBuf, (u32, u32)> = checkouts
+            let diffs: HashMap<PathBuf, (u32, u32, u32)> = checkouts
                 .into_iter()
                 .filter_map(|dir| git::diff_counts(&dir).map(|counts| (dir, counts)))
                 .collect();
@@ -3635,13 +3635,14 @@ impl Daemon {
         snap
     }
 
-    /// Lines added and removed in the checkout `t` is in; zero outside git or before the first read.
-    fn diff_of(&self, t: &Term) -> (u32, u32) {
+    /// Lines added, lines removed and files changed in the checkout `t` is in; zero outside git or
+    /// before the first read.
+    fn diff_of(&self, t: &Term) -> (u32, u32, u32) {
         t.head
             .as_ref()
             .and_then(|h| self.diff_counts.get(&h.top))
             .copied()
-            .unwrap_or((0, 0))
+            .unwrap_or((0, 0, 0))
     }
 
     fn snapshot(&self) -> Snapshot {
@@ -3690,6 +3691,7 @@ impl Daemon {
                         last_lines: t.last_lines.clone(),
                         branch: t.head.as_ref().map(|h| h.branch.clone()),
                         diff_added: self.diff_of(t).0,
+                        diff_files: self.diff_of(t).2,
                         diff_removed: self.diff_of(t).1,
                         linked: t.head.as_ref().is_some_and(|h| h.linked),
                         root: t.head.as_ref().map(|h| h.main_root.clone()),

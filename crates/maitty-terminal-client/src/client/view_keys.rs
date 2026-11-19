@@ -54,6 +54,11 @@ impl App {
 
     /// Returns false when the view closes.
     pub(super) fn on_changes_key(&mut self, v: &mut views::ChangesView, k: &KeyEvent) -> bool {
+        // The key that opens Changes closes it again, unless it is typing into a box.
+        let writing = v.extra.message.is_some() || v.extra.commenting.is_some();
+        if !writing && k.modifiers == KeyModifiers::CONTROL && k.code == KeyCode::Char('g') {
+            return false;
+        }
         if let Some(stay) = self.changes_more_key(v, k) {
             return stay;
         }
@@ -150,7 +155,7 @@ impl App {
                     self.open_in_editor(&p);
                 }
             }
-            KeyCode::Char('m') if v.linked => {
+            KeyCode::Char('B') if v.linked => {
                 v.confirm = Some((
                     format!(
                         "Merge {} into {}, then close it and remove its worktree and branch?",
@@ -526,7 +531,7 @@ impl App {
     ) -> bool {
         use modal::{Cat, Kind};
         let cat = Cat::ALL[v.cat.min(Cat::ALL.len() - 1)];
-        let rows = design::settings_rows(cat);
+        let rows = self.settings_page_rows(cat);
         let row = rows.get(v.sel).cloned();
         // Waiting for a key: the new leader, or a new key for a shortcut.
         if v.capturing {
@@ -601,6 +606,12 @@ impl App {
             }
             return true;
         }
+        if !v.in_rows {
+            return self.on_settings_page_key(v, k);
+        }
+        if self.settings_update_key(k) {
+            return true;
+        }
         let theme_row = match &row {
             Some(design::SRow::Setting(s)) if super::modal::is_theme_row(s.path) => {
                 Some(s.path == "theme_light")
@@ -648,7 +659,8 @@ impl App {
             }
         };
         match k.code {
-            KeyCode::Esc => return false,
+            // Back to the list of pages; Esc there closes Settings.
+            KeyCode::Esc => v.in_rows = false,
             KeyCode::Tab => {
                 v.cat = (v.cat + 1) % Cat::ALL.len();
                 v.sel = 0;
@@ -666,7 +678,10 @@ impl App {
             KeyCode::Char('o') => {
                 self.open_outside(crate::config::config_path(), "config.toml".into());
             }
-            KeyCode::Char('u') => self.act(Action::CheckUpdate),
+            KeyCode::Char('u') => match &row {
+                Some(design::SRow::Machine(Some(name))) => self.update_machine_named(name),
+                _ => self.act(Action::CheckUpdate),
+            },
             KeyCode::Char('R') => self.ask_restart(),
             KeyCode::Enter | KeyCode::Char(' ') => match &row {
                 Some(design::SRow::Setting(s)) => match s.kind {
@@ -709,6 +724,11 @@ impl App {
                 }
                 Some(design::SRow::Version) => self.act(Action::CheckUpdate),
                 Some(design::SRow::Agent(_)) | None => {}
+                // A machine's connection is managed in the Machines dialog.
+                Some(design::SRow::Machine(name)) => match name.as_deref().and_then(|n| self.machine_named(n)) {
+                    Some(id) => self.open_machines_on(id),
+                    None => self.open_machines(),
+                },
             },
             _ => {}
         }

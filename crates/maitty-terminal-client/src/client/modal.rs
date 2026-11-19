@@ -9,6 +9,9 @@ use anyhow::{Context, Result};
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Kind {
     Bool,
+    /// A switch that reads the other way round: on means the stored flag is false (Reduce
+    /// motion over the stored `motion`).
+    BoolOff,
     Choice(&'static [&'static str]),
     #[allow(dead_code)]
     Number {
@@ -104,31 +107,43 @@ pub struct Setting {
 pub enum Cat {
     General,
     Appearance,
-    Sessions,
     Alerts,
+    /// The configured machines, one row each; not a list of settings.
+    Machines,
     Agents,
+    /// The version and its update: not a list of settings.
+    About,
+    // The pages below the design's six: kept so no setting becomes unreachable.
+    Sessions,
     Check,
     Keys,
 }
 
 impl Cat {
-    pub const ALL: [Cat; 7] = [
+    pub const ALL: [Cat; 9] = [
         Cat::General,
         Cat::Appearance,
-        Cat::Sessions,
         Cat::Alerts,
+        Cat::Machines,
         Cat::Agents,
+        Cat::About,
+        Cat::Sessions,
         Cat::Check,
         Cat::Keys,
     ];
+
+    /// How many pages the design lists; the rest follow under a rule.
+    pub const DESIGNED: usize = 6;
 
     pub fn label(self) -> &'static str {
         match self {
             Cat::General => "General",
             Cat::Sessions => "Sessions",
             Cat::Appearance => "Appearance",
-            Cat::Alerts => "Alerts",
+            Cat::Alerts => "Notifications",
+            Cat::Machines => "Machines",
             Cat::Agents => "Agents",
+            Cat::About => "About",
             Cat::Check => "Check",
             Cat::Keys => "Keys",
         }
@@ -184,8 +199,8 @@ pub const SETTINGS: &[Setting] = &[
         path: "ui.mouse",
         label: "Mouse",
         kind: Kind::Bool,
-        cat: Cat::General,
-        help: "Click, hover, scroll and drag. Hold Shift to select text with your terminal instead.",
+        cat: Cat::Appearance,
+        help: "Click, right-click and scroll. Every action keeps its key too. Hold Shift to select text with your terminal.",
     },
     Setting {
         path: "ui.alt_keys",
@@ -253,7 +268,7 @@ pub const SETTINGS: &[Setting] = &[
     // Appearance
     Setting {
         path: "appearance",
-        label: "Appearance",
+        label: "Theme",
         kind: Kind::Choice(crate::config::APPEARANCES),
         cat: Cat::Appearance,
         help: "Which theme shows: your dark one or your light one. Pick each below.",
@@ -299,10 +314,10 @@ pub const SETTINGS: &[Setting] = &[
     },
     Setting {
         path: "ui.motion",
-        label: "Motion",
-        kind: Kind::Bool,
+        label: "Reduce motion",
+        kind: Kind::BoolOff,
         cat: Cat::Appearance,
-        help: "Slides, glides and fades (under 150 ms). Always off over SSH.",
+        help: "Holds slides, glides and fades still. Always on over SSH.",
     },
     Setting {
         path: "ui.gap",
@@ -313,10 +328,10 @@ pub const SETTINGS: &[Setting] = &[
     },
     Setting {
         path: "ui.rounded",
-        label: "Rounded",
+        label: "Corners",
         kind: Kind::Choice(crate::config::Rounding::NAMES),
         cat: Cat::Appearance,
-        help: "Corners round every box; full also makes chips, tabs and rows pills (needs a Nerd Font).",
+        help: "Pills also rounds chips and rows (needs a Nerd Font). Folded is GUI only; a GUI set to Folded uses Rounded here.",
     },
     Setting {
         path: "ui.dim",
@@ -363,14 +378,10 @@ pub const SETTINGS: &[Setting] = &[
     // Sessions
     Setting {
         path: "sessions.agent",
-        label: "Agent",
+        label: "Default agent",
         kind: Kind::Choice(crate::config::NEW_AGENTS),
-        cat: Cat::Sessions,
-        help: concat!(
-            "Which agent leader s starts. last used is the last one you started from ",
-            env!("APP_NAME"),
-            "."
-        ),
+        cat: Cat::General,
+        help: concat!("Used for new chats. You can still pick per chat. last used is the last one you started from ", env!("APP_NAME"), "."),
     },
     Setting {
         path: "sessions.where",
@@ -388,10 +399,10 @@ pub const SETTINGS: &[Setting] = &[
     },
     Setting {
         path: "worktree.per_agent",
-        label: "Own worktree per agent",
+        label: "Own worktree for new chats",
         kind: Kind::Bool,
-        cat: Cat::Sessions,
-        help: "An agent started in a repo's main folder gets its own branch and folder.",
+        cat: Cat::General,
+        help: "Each new chat gets its own branch folder, so two chats never edit the same files.",
     },
     Setting {
         path: "worktree.base_on_default",
@@ -420,14 +431,10 @@ pub const SETTINGS: &[Setting] = &[
     },
     Setting {
         path: "restore.enabled",
-        label: "Bring sessions back after restart",
+        label: "Restore chats when Maiker starts",
         kind: Kind::Bool,
-        cat: Cat::Sessions,
-        help: concat!(
-            "Agents keep going in the background; after a reboot ",
-            env!("APP_COMMAND"),
-            " rebuilds your sessions."
-        ),
+        cat: Cat::General,
+        help: "Reopens every chat that was open, at the same place.",
     },
     Setting {
         path: "restore.agents",
@@ -643,6 +650,14 @@ pub fn current(cfg: &Config, path: &str) -> Option<toml::Value> {
     Some(v)
 }
 
+/// Whether a switch setting reads as on (the flag, or its opposite for `BoolOff`).
+pub fn is_on(cfg: &Config, s: &Setting) -> bool {
+    let flag = current(cfg, s.path)
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    flag != (s.kind == Kind::BoolOff)
+}
+
 pub fn display(cfg: &Config, s: &Setting) -> String {
     if s.kind == Kind::Spinner {
         return crate::config::spinner_name(&cfg.ui.spinner).into();
@@ -652,7 +667,9 @@ pub fn display(cfg: &Config, s: &Setting) -> String {
             .parse::<crate::keys::KeySpec>()
             .map(|k| k.to_string())
             .unwrap_or(k),
-        (Kind::Bool, Some(toml::Value::Boolean(b))) => (if b { "on" } else { "off" }).into(),
+        (Kind::Bool | Kind::BoolOff, Some(toml::Value::Boolean(_))) => {
+            (if is_on(cfg, s) { "on" } else { "off" }).into()
+        }
         (Kind::Number { .. }, Some(toml::Value::Float(f))) => format!("{f:.2}"),
         (Kind::Text, Some(toml::Value::String(t))) if t.is_empty() => "(shell)".into(),
         (_, Some(toml::Value::String(t))) => t,
@@ -665,7 +682,7 @@ pub fn display(cfg: &Config, s: &Setting) -> String {
 pub fn step(cfg: &Config, s: &Setting, dir: i64) -> Option<toml_edit::Value> {
     let cur = current(cfg, s.path)?;
     Some(match s.kind {
-        Kind::Bool => (!cur.as_bool()?).into(),
+        Kind::Bool | Kind::BoolOff => (!cur.as_bool()?).into(),
         Kind::Choice(opts) => {
             let i = opts
                 .iter()
@@ -827,7 +844,7 @@ mod tests {
         // SAFETY: this existing config-save test owns <APP>_CONFIG; all prior jobs have completed.
         unsafe { std::env::set_var(concat!(env!("APP_ENV"), "_CONFIG"), &file) };
         app.open_spinners();
-        app.spinner_pick(2);
+        app.spinner_pick(3);
         app.on_key(super::super::KeyEvent::new(
             super::super::KeyCode::Enter,
             super::super::KeyModifiers::NONE,

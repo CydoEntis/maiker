@@ -68,7 +68,7 @@ fn broadcast_types_into_every_pane_of_the_tab_and_the_bar_says_so() {
     app.act(Action::Broadcast);
     let rows = text(&mut app, 140, 36);
     show(&rows, "broadcasting");
-    assert!(rows.last().unwrap().contains("BROADCAST · 2 PANES"), "{}", rows.last().unwrap());
+    assert!(rows.last().unwrap().contains("broadcast · 2 panes"), "{}", rows.last().unwrap());
     let _ = std::iter::from_fn(|| rx.try_recv().ok()).count();
     key(&mut app, KeyCode::Char('l'));
     let typed: Vec<u32> = std::iter::from_fn(|| rx.try_recv().ok())

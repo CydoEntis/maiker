@@ -257,6 +257,7 @@ impl App {
                     self.daemon_restart_requested = false;
                     self.daemon_restart_reconnect = false;
                     if daemon_matches_install {
+                        self.updated_to(&self.snap.daemon_version.clone());
                         self.notify(
                             concat!(
                                 "The ",
@@ -604,20 +605,11 @@ impl App {
         if self.focused() == Some(term) || !opts.notices {
             return;
         }
-        let who = self.describe_term(term);
-        let what = if status == Status::Blocked {
-            "needs you"
+        if status == Status::Blocked {
+            self.toast_needs(term);
         } else {
-            "finished"
-        };
-        let told = format!("{who} {what}");
-        let told = if term.machine == MachineId::LOCAL {
-            told
-        } else {
-            remote_policy::tagged(self.machine_name(term.machine), &told)
-        };
-        self.notify(told, false);
-        self.notice_term = Some(term);
+            self.toast_done(term);
+        }
     }
 
     /// When a machine connects with toasts off, as every machine is until you turn them on: say so once per run, so

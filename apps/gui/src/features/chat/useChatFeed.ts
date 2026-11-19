@@ -106,6 +106,10 @@ export function useChatFeed({ conversation, generation, provider, paused = false
     setForGeneration(generation)
     setFeed(createFeed(provider, conversation))
   }
+  // How many reads brought what the person was not there to watch arrive: the first since the chat opened (before it
+  // the feed is the one this window remembered) and each one after the window was hidden. The chat shows what such a
+  // read holds whole, and types in only what comes while it is being looked at.
+  const [unwatchedReads, setUnwatchedReads] = useState(0)
   const latest = useRef(feed)
   const wake = useRef<() => void>(() => undefined)
 
@@ -123,6 +127,7 @@ export function useChatFeed({ conversation, generation, provider, paused = false
     let again: 'now' | 'soon' | null = null
     let told = false
     let lastReadAt = 0
+    let unwatched = true
     let failures = 0
     latest.current = startFeed(provider, conversation, generation)
     const read: ReadPage = (cursor) => readConversationPage(conversation, cursor)
@@ -135,6 +140,7 @@ export function useChatFeed({ conversation, generation, provider, paused = false
         return
       }
       if (document.hidden) {
+        unwatched = true
         timer = window.setTimeout(() => { void tick() }, IDLE_POLL_MS)
         return
       }
@@ -146,6 +152,10 @@ export function useChatFeed({ conversation, generation, provider, paused = false
         latest.current = next
         remember(next)
         if (!unchanged) setFeed(next)
+        if (unwatched) {
+          unwatched = false
+          setUnwatchedReads((count) => count + 1)
+        }
         failures = 0
         setOffline(false)
         setReadError(null)
@@ -208,5 +218,5 @@ export function useChatFeed({ conversation, generation, provider, paused = false
   }, [])
 
   const events = useMemo(() => selectChatEvents(feed.projection), [feed.projection])
-  return { feed, events, offline, readError, refresh, recordAnswer }
+  return { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads }
 }

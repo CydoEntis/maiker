@@ -36,13 +36,13 @@ pub(in crate::client) struct Glyphs {
 
 pub(in crate::client) const UNICODE: Glyphs = Glyphs {
     ring: ["◜", "◝", "◞", "◟"],
-    needs: "●",
+    needs: "!",
     done: "✓",
-    failed: "✕",
+    failed: "×",
     over: "⊘",
     couldnt: "?",
     stale: "◷",
-    idle: "○",
+    idle: "–",
     asleep: "z",
     pend: "…",
     bar: "▎",
@@ -57,6 +57,8 @@ pub(in crate::client) const UNICODE: Glyphs = Glyphs {
 /// Unicode, with a session marked by a coloured dot: `●` for every state that wants you or says
 /// something, `○` for idle and asleep; working and checking keep their moving marks.
 pub(in crate::client) const DOTS: Glyphs = Glyphs {
+    needs: "●",
+    idle: "○",
     dots: true,
     ..UNICODE
 };
@@ -154,7 +156,7 @@ impl Kind {
     /// not a failure, so neither borrows those colours.
     pub fn color(self, t: &Theme) -> Color {
         match self {
-            Kind::Working => t.accent,
+            Kind::Working => t.working,
             Kind::Checking => t.sky(),
             Kind::Needs | Kind::Approve => t.blocked,
             Kind::Done | Kind::Passed => t.done,
@@ -214,7 +216,7 @@ mod tests {
                 false,
                 Kind::Working,
                 ["⠹", "⠹", "⠹"],
-                t.accent,
+                t.working,
                 "working",
             ),
             (
@@ -231,7 +233,7 @@ mod tests {
                 None,
                 false,
                 Kind::Needs,
-                ["●", "!", "\u{f0f3}"],
+                ["!", "!", "\u{f0f3}"],
                 t.blocked,
                 "needs you",
             ),
@@ -240,7 +242,7 @@ mod tests {
                 Some(CheckState::NeedsApproval),
                 false,
                 Kind::Approve,
-                ["●", "!", "\u{f0f3}"],
+                ["!", "!", "\u{f0f3}"],
                 t.blocked,
                 "needs you",
             ),
@@ -276,7 +278,7 @@ mod tests {
                 Some(CheckState::Failed),
                 false,
                 Kind::Failed,
-                ["✕", "x", "\u{f00d}"],
+                ["×", "x", "\u{f00d}"],
                 t.err,
                 "failed",
             ),
@@ -312,7 +314,7 @@ mod tests {
                 None,
                 false,
                 Kind::Idle,
-                ["○", "o", "\u{f10c}"],
+                ["–", "o", "\u{f10c}"],
                 t.muted,
                 "idle",
             ),
@@ -393,7 +395,7 @@ mod tests {
         );
         assert_eq!(
             DOTS.done, UNICODE.done,
-            "a check's own ✓ and ✕ keep their shapes"
+            "a check's own ✓ and × keep their shapes"
         );
         assert_eq!(DOTS.failed, UNICODE.failed);
     }

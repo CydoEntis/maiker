@@ -199,8 +199,10 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
     )
     document.documentElement.dataset.sidebarActivity =
       settingsPreferences.animateSidebarActivity ? 'on' : 'off'
+    document.documentElement.dataset.fileColours = settingsPreferences.colourFileNames ? 'on' : 'off'
     setSpinnerStyle(settingsPreferences.spinner)
   }, [
+    settingsPreferences.colourFileNames,
     settingsPreferences.spinner,
     settingsPreferences.accent,
     settingsPreferences.animateSidebarActivity,
