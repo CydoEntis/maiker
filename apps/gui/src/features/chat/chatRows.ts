@@ -265,13 +265,36 @@ export function streamingParagraphs(paragraphs: readonly string[]): string[] {
   return shown.trim() === '' ? earlier : [...earlier, shown]
 }
 
+/** An abbreviation's full stop is not the end of a sentence. */
+const ABBREVIATION = /\b(?:e\.g|i\.e|etc|vs|approx|cf)\.$/i
+const SENTENCE_END = /[.!?](?=\s|$)/g
+
+const PAIR = 2
+
+/** Whether every inline code span and bold mark in `text` is closed: a lead cut inside one would show a bare mark. */
+function marksClosed(text: string): boolean {
+  const isEven = (pattern: RegExp) => (text.match(pattern)?.length ?? 0) % PAIR === 0
+  return isEven(/`/g) && isEven(/\*\*/g)
+}
+
+/** The first sentence of a paragraph: its first full stop that is not an abbreviation's, or the whole paragraph. */
+function firstSentence(first: string): string {
+  for (const match of first.matchAll(SENTENCE_END)) {
+    const end = match.index + 1
+    if (!ABBREVIATION.test(first.slice(0, end))) return first.slice(0, end)
+  }
+  return first
+}
+
 export function splitLead(paragraphs: readonly string[]): { lead: string; rest: readonly string[] } {
   const [first, ...others] = paragraphs
   if (first === undefined) return { lead: '', rest: [] }
   const [firstLine = '', secondLine] = first.split('\n')
   if (BLOCK_START.test(first) || startsTable(firstLine, secondLine)) return { lead: '', rest: paragraphs }
-  const sentence = /^[\s\S]*?[.!?](?=\s|$)/.exec(first)?.[0] ?? first
+  const sentence = firstSentence(first)
   const lead = sentence.length > LEAD_LIMIT ? first.slice(0, LEAD_LIMIT) : sentence
+  // A cut inside `code` or **bold** would leave the mark bare in the lead and unmatched in the rest, so the paragraph stays whole.
+  if (!marksClosed(lead)) return { lead: first, rest: others }
   const remainder = first.slice(lead.length).trim()
   return { lead, rest: remainder === '' ? others : [remainder, ...others] }
 }
