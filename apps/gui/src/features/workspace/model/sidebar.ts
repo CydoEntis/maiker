@@ -170,15 +170,22 @@ export type StatusSection = { key: StatusSectionKey; name: string; hint: string;
 /** A session kept in the section it was in when it was picked, whatever its status says since. */
 export type HeldRow = { readonly id: string; readonly section: StatusSectionKey }
 
+/** The two sections a row moves between when the person looks at it: a finished agent turns idle. */
+const stays = (section: StatusSectionKey): boolean => section === 'done' || section === 'idle'
+
 /**
  * The sessions under the status each has, in `sort` order within a section; a section with nothing in it is left out. Terminals
  * (no agent, nothing asking) are the last section. The `held` row stays where it was picked: looking at a finished agent makes it
  * idle, and a row that jumps away from under the pointer the moment it is clicked reads as the app fighting you. Its
- * mark still shows its status.
+ * mark still shows its status. Only that shift between finished and idle is held: a row that starts working, or asks, goes
+ * to its own section at once, or an agent at work would be listed as idle until the person looked away.
  */
 export function statusSections(sessions: readonly SessionView[], held: HeldRow | null = null, sort: SidebarSort = 'oldest'): StatusSection[] {
   const ordered = sortedBy(sessions, sort)
-  const placed = (session: SessionView): StatusSectionKey => (session.id === held?.id ? held.section : sectionOf(session))
+  const placed = (session: SessionView): StatusSectionKey => {
+    const actual = sectionOf(session)
+    return session.id === held?.id && stays(held.section) && stays(actual) ? held.section : actual
+  }
   return STATUS_SECTIONS
     .map((section) => ({ ...section, sessions: ordered.filter((session) => placed(session) === section.key) }))
     .filter((section) => section.sessions.length > 0)
