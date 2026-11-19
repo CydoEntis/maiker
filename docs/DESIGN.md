@@ -655,12 +655,19 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   edge; with two or more the shared card goes and each pane is a card of its own (the same `--card` and hairline) and the
   focused one gets a 2px accent line along its top edge, drawn above its content (as the focused terminal split does). A pane's status is the
   badge on its icon; there is no status chip in a corner. While broadcasting, the header says "◉ Broadcast".
-- **First-run welcome.** On the first launch (no saved settings and no earlier welcome) a 560px dialog opens
-  over a blurred scrim with a progress bar per step: **Welcome** (the same sessions as the TUI, closing never
-  stops an agent, and the **New sessions start in** folder, checked before it continues) and **You're set**
-  (six keycaps, then **Start a session**). Skip and Esc leave it; global shortcuts are ignored while it is
-  open. A window that already has settings is never greeted. Settings › General › **Show the welcome again**
-  replays it. The "Bring your TUI setup" step comes with the shared config.
+- **First-run setup.** On the first launch (no saved settings and no earlier welcome) a full-screen, three-step
+  flow covers the window (`features/welcome/Onboarding.tsx`), with a numbered progress row on top and a footer of
+  **Back**, the keys line (Enter continues, Esc goes back), **Skip for now** and the primary button. **Welcome**:
+  a mini sidebar of the three states (needs you, working, done), three facts, and **Agents on this computer** chips
+  from `agents_installed` (missing ones dashed). **How do you like to work?**: two radio cards, Terminal and Chat,
+  with no default and a still preview each; the button reads "Pick one to continue" until one is picked, and a note
+  says Gemini always opens in Terminal. The pick sets `openSessionsIn`. **Get started**: **Add a project folder**
+  (a path field and **Browse…**; the path is checked, saved as the start folder, and a session opens) or **Connect
+  a remote machine** (the Add a machine panel from Settings, embedded without its breadcrumb; once the machine is
+  added the setup ends). Skip and finishing both mark it welcomed; Esc steps back and is left to the machine panel
+  while a field in it has focus. Global shortcuts are ignored while it is open. Under reduced motion the slide-in
+  and spinner stop; the previews are always still. A window that already has settings is never greeted. Settings
+  › General › **Show the welcome again** replays it. The "Bring your TUI setup" step comes with the shared config.
 - **Interface size.** Settings › Appearance › Interface size sets the sidebar icon size (Small 0.8, Medium 1,
   Large 1.2 times the session icons), the density (Compact 0.8,
   Comfortable 1, Spacious 1.25 times the row and pane spacing), the sidebar text size and the

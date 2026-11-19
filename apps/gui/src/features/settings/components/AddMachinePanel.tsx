@@ -22,10 +22,12 @@ type Props = {
   onClose: () => void
   /** The machine is added: the list is where the person sees it. */
   onAdded: (name: string) => void
+  /** Shown inside the first-run setup, which has its own steps: no breadcrumb back to the list. */
+  embedded?: boolean
 }
 
 /** Settings › Remote machines › Add a machine: one field, one status block, and the hosts of ~/.ssh/config. */
-export function AddMachinePanel({ machines, onClose, onAdded }: Props) {
+export function AddMachinePanel({ machines, onClose, onAdded, embedded = false }: Props) {
   const { add, list } = machines
   const [typed, setTyped] = useState('')
   // The message waits for Enter or Connect, and editing the field hides it again.
@@ -122,11 +124,13 @@ export function AddMachinePanel({ machines, onClose, onAdded }: Props) {
 
   return (
     <section className="mx-rm-add" aria-label="Add a machine">
-      <nav aria-label="Breadcrumb" className="mx-rm-crumbs">
-        <button type="button" onClick={onClose}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={BACK_PATH} /></svg>Remote machines</button>
-        <span aria-hidden="true">/</span>
-        <span className="mx-rm-here">Add a machine</span>
-      </nav>
+      {!embedded && (
+        <nav aria-label="Breadcrumb" className="mx-rm-crumbs">
+          <button type="button" onClick={onClose}><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={BACK_PATH} /></svg>Remote machines</button>
+          <span aria-hidden="true">/</span>
+          <span className="mx-rm-here">Add a machine</span>
+        </nav>
+      )}
       <p className="mx-rm-lead-text">{LEAD}</p>
       <form className="mx-rm-address" onSubmit={(event) => { event.preventDefault(); submit() }}>
         <input

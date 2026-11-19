@@ -1545,6 +1545,21 @@ Host terminal tab: the client writes the focused session's state mark (the worki
 
 A line starting with `!` in a Claude or Gemini chat that follows a terminal is typed into that terminal, not pasted: the `!` first, then the command and Enter after a short gap (`typeMessage`, `isBangLine`), so the agent switches to its own shell mode, runs it and keeps the output in its context. The box says it runs in the terminal, where anything it asks (a login code) is answered. A chat with no terminal, and Codex, send it as an ordinary message. A row whose status is unknown (its machine is out of reach, or a list just missed it) fades to half and says `offline` in place of the time.
 
+## Project-specific: first-run setup (desktop)
+
+`features/welcome/Onboarding.tsx` is the first-run flow (look: the First-run setup entry in [DESIGN](DESIGN.md)). It owns no
+state outside itself and no host calls: `WorkspaceDialogs` hands it what to save (`onOpenSessionsIn`,
+`onStartFolder`), the folder picker and check, and the same `MachinesInfo` Settings gets.
+
+- Reuse, do not copy: the machine step embeds `AddMachinePanel` (`features/settings/components/`, with `embedded`), the
+  same panel Settings › Remote machines opens; the agent chips use `useInstalledAgents`.
+- Terminal and Chat are a radio group with no default; step 2 does not continue until one is picked and then sets
+  `openSessionsIn` (Gemini opens in Terminal whichever is picked, as everywhere).
+- Keys: arrows move inside a radio group, Enter continues (and picks a focused card first), Esc goes back a step. A
+  field or button inside the machine panel keeps its own Enter and Esc.
+- Each step moves focus to its heading and announces "Step n of 3" in a polite live region.
+- Pure rules (step names, button labels, path name) live in `welcome/setup.ts`.
+
 ## Project-specific: markdown documents
 
 A `.md`, `.markdown` or `.mdx` file of the Files tab opens as a document (`features/documents/DocumentView.tsx`) instead of
