@@ -39,6 +39,8 @@ export type PaneCardProps = {
   onViewChange?: (view: PaneView) => void
   /** The chat that covers the terminal while `view` is `chat`. */
   chat?: ReactNode
+  /** The strip under the terminal while it shows: an agent's session bar, or a shell's hint. Absent for neither. */
+  bar?: ReactNode
   /** What floats over the top of the body in either view: the agent's running subagents. */
   overlay?: ReactNode
   /** The view the side panel shows for this pane; null while it is closed or shows another pane. */
@@ -237,6 +239,7 @@ export function PaneCard(props: PaneCardProps) {
         {shown === 'chat' && props.chat}
         {props.overlay}
       </div>
+      {shown === 'terminal' && props.bar}
       {session.helperAsk.length > 0 && props.onAnswerHelpers && (
         <div className="mx-pane-ended is-ask" role="alert" aria-label="Wants to start helpers">
           <span className="mx-pane-ended-text">

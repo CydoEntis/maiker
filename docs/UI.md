@@ -473,6 +473,19 @@ says so instead.
 
 **New sessions** (`client/screen/newsession.rs`). Leader `n` and leader `t` start a plain shell with no form (`Action::PickSession` and `Action::ShellHere` both reach `new_ship`): in the folder you are working in in that workspace (else where it last was, else the workspace's own), with the toast `New shell · <folder>`; with no workspace it starts the Scratch one, and an offline machine says so. You type the agent in the shell (see *Agent launchers*); a just-started agent's row shows its name and idle mark with no words under it. A new tab (leader `t`) takes only the shell that answers it: it waits ten seconds at most, takes only a pane that did not exist when the tab was asked for and that no agent started (another pane taking the focus leaves it waiting), and starting any other session before it arrives cancels the tab, so that session gets its own row and tab bar rather than becoming a tab of the one you were in.
 
+## Project-specific: terminal bar and shell hint (desktop)
+
+- A pane that shows an agent's terminal ends in `TerminalBar` (`features/terminal/TerminalBar.tsx`), drawn by `PaneCard`'s `bar` slot
+  only while the terminal shows (the chat's composer row carries the same facts). `terminalBarOf(session)` builds its facts from the
+  daemon's session (machine, project, branch, worktree, usage, limits, agent) and returns null for a plain shell, an ended session and a
+  chat with no terminal. The bar is read-only: it never derives status, and the model and permission mode appear only when the caller
+  passes them (they come from the agent's structured events, which a terminal pane does not read; until then the model button names the agent
+  and the shield is left out). A click on a meter opens Settings › Usage.
+- A live plain shell gets `ShellHint` instead: one dashed line with the agents it can start (`claude`, `codex`, `gemini`), typed into the
+  shell the way the chat's start card types them (same bypass setting). Both are disabled while the connection is down.
+- Not built: editing machine, folder and branch before a first message (the desktop starts a session from the New session dialog, where those are
+  chosen), and a draft terminal page.
+
 ## Project-specific: pane focus
 
 Only the area with the keyboard is lit: the focused pane's whole border, or the open sheet. Unfocused panes fade by the Dim setting (off, light, normal or heavy; normal by default, and an older config's "subtle", "30%" and "60%" read as light, normal and heavy). Do not reserve a full-width bottom row for global hints; the mode bar is the one exception. The pane has no status line: its branch is in the sidebar's folder header.
