@@ -12,6 +12,8 @@ import type { SubagentView } from '@/features/workspace/model/subagents'
 import { FULL_ACCESS_LABEL, FULL_ACCESS_WARNING } from '../fullAccess'
 import { AGENT_LABEL } from '../modelName'
 import { ChatSession, type WindowActions } from './ChatSession'
+import type { SessionPlace } from './SessionBar'
+import type { EndedActions } from './Composer'
 import type { SessionUsage } from '../usageStrip'
 import type { ChatProblem } from '../problem'
 import { StartingChat } from './StartingChat'
@@ -79,6 +81,10 @@ export type ChatPaneProps = {
   windowActions?: WindowActions | undefined
   /** The pane is in a tab kept out of sight: its chat stays mounted but reads nothing. */
   paused?: boolean
+  /** Where the session runs, for the row under the message box. */
+  place?: SessionPlace | undefined
+  /** Set once the session has ended: the message box gives way to a read-only line with Resume and New session here. */
+  ended?: EndedActions | undefined
 }
 
 /**
@@ -111,6 +117,8 @@ export function ChatPane(props: ChatPaneProps) {
             {...(props.hasTerminal === false ? {} : { onShowTerminal: props.onBackToTerminal })}
             {...(props.onBackToMain === undefined ? {} : { onBackToMain: props.onBackToMain })}
             problem={props.problem ?? null}
+            place={props.place}
+            ended={props.ended}
             effort={props.effort ?? null}
             hideSuccessfulTools={props.hideSuccessfulTools ?? false}
             {...(props.rewind === undefined ? {} : { rewind: props.rewind })}
