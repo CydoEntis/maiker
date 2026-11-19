@@ -736,3 +736,13 @@ Open: **Step B**, one `ChatPane` per slot that swaps content (the keys removed),
 error boundary with `resetKeys`, and tests that fail if a draft, queue, question or handler of session A is visible or
 usable in session B (rapid A to B to A, a switch mid-stream). **Step C**, a content-keyed cache of rendered markdown for
 finished messages.
+
+Step B audit (2026-11-18): removing the two keys would let about twenty pieces of state of the chat just left reach the next
+one. The dangerous ones are `useEditFromHere` (a pending restore of the wrong checkout), the mode, model and effort loops
+in `ChatSession` and the `RESUBMIT_AFTER_MS` timer in `useChatComposer` (keys typed into the wrong agent's terminal), the
+echo, held-mode and approval-answer state, `QuestionTray` request ids (numeric, so two conversations collide), and
+`PaneErrorBoundary`'s fault. Per-conversation stores (`composerStore`, `agentChoice`, the feed cache) are already safe. The
+state body of `ChatSession` is cheap to rebuild from the feed cache; what costs is re-measuring rows and scroll in
+`VirtualList`. So the plan is not to remove the keys: keep `VirtualList`'s shell mounted and reset it explicitly when the
+conversation changes (heights, follow, scroll), and keep the stateful body keyed by `conversation:generation`. Do that only
+if the measurement in MAITTY-432, with Step A in, still shows a delay the rebuild explains.
