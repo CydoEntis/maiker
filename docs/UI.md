@@ -478,9 +478,8 @@ says so instead.
 - A pane that shows an agent's terminal ends in `TerminalBar` (`features/terminal/TerminalBar.tsx`), drawn by `PaneCard`'s `bar` slot
   only while the terminal shows (the chat's composer row carries the same facts). `terminalBarOf(session)` builds its facts from the
   daemon's session (machine, project, branch, worktree, usage, limits, agent) and returns null for a plain shell, an ended session and a
-  chat with no terminal. The bar is read-only: it never derives status, and the model and permission mode appear only when the caller
-  passes them (they come from the agent's structured events, which a terminal pane does not read; until then the model button names the agent
-  and the shield is left out). A click on a meter opens Settings › Usage.
+  chat with no terminal. The bar is read-only: it never derives status. It names the agent; the model and permission mode are not shown
+  (they come from the agent's structured events, which a terminal pane does not read). A click on a meter opens Settings › Usage.
 - A live plain shell gets `ShellHint` instead: one dashed line with the agents it can start (`claude`, `codex`, `gemini`), typed into the
   shell the way the chat's start card types them (same bypass setting). Both are disabled while the connection is down.
 - Not built: editing machine, folder and branch before a first message (the desktop starts a session from the New session dialog, where those are

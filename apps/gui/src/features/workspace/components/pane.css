@@ -224,8 +224,6 @@
 .mx-tbar-tag { flex: none; font-size: 11px; color: var(--dim); }
 .mx-tbar-spacer { flex: 1; min-width: 8px; }
 .mx-tbar-model { flex: none; display: inline-flex; align-items: center; height: 26px; padding: 0 6px; white-space: nowrap; }
-.mx-tbar-mode { flex: none; display: inline-flex; align-items: center; padding: 0 6px; color: var(--muted); }
-.mx-tbar-mode.is-danger { color: var(--danger); }
 /* A plain shell has no session to describe, so it gets a dashed one-line hint of how to start one. */
 .mx-shint { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 18px; border-top: 1px dashed var(--line2); background: var(--main); font-size: 12.5px; color: var(--muted); }
 .mx-shint-agent { height: 24px; padding: 0 10px; font: 500 12px var(--mono); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); }

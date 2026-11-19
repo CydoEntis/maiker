@@ -23,20 +23,15 @@ export type TerminalBarFacts = {
   usage: SessionUsage
   /** True when the agent reports its context from the start (a 0% meter before the first turn). */
   contextAlways: boolean
-  /** The agent the daemon sees; names the model button while the model is unknown. */
+  /** The agent the daemon sees. */
   agent: string
-  /** The model from the agent's own file; null when it has not been reported. */
-  model: string | null
-  /** The permission mode's key; null when it has not been reported. */
-  mode: string | null
 }
 
 /**
  * The bar's facts for a session, or null when it gets no bar: a plain shell (it gets the hint) or a program that is no agent (`ssh`, `vim`), a session whose
- * shell has gone, or a chat with no terminal. The model and mode come from the agent's structured events, which a
- * terminal pane does not read, so they are only passed on when the caller has them.
+ * shell has gone, or a chat with no terminal.
  */
-export function terminalBarOf(session: SessionView, meta: { model?: string | null; mode?: string | null } = {}): TerminalBarFacts | null {
+export function terminalBarOf(session: SessionView): TerminalBarFacts | null {
   const agent = session.conversation.agent
   if (!agent || session.ended || isChatSession(session.conversation)) return null
   return {
@@ -47,8 +42,6 @@ export function terminalBarOf(session: SessionView, meta: { model?: string | nul
     usage: { context: session.usage.context, limits: session.limits },
     contextAlways: CONTEXT_AGENTS.includes(agent),
     agent,
-    model: meta.model ?? null,
-    mode: meta.mode ?? null,
   }
 }
 

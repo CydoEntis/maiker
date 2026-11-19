@@ -1,6 +1,5 @@
-import { FolderOpen, GitBranch, Monitor, Shield } from 'lucide-react'
+import { FolderOpen, GitBranch, Monitor } from 'lucide-react'
 import { usageItems, type SessionUsage } from '@/features/chat/usageStrip'
-import { DANGER_MODES, modeLabel, modelLabel } from '@/features/chat/chatMeta'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
 import { HINT_AGENTS, type HintAgent, type TerminalBarFacts } from './terminalBar'
 
@@ -17,8 +16,8 @@ const meterName = (item: { window: string | null }): string => (item.window === 
 
 /**
  * The 38px bar under an agent's terminal: where it runs (machine, project, branch, a worktree tag) at the left, and
- * its usage meters, model and permission mode at the right. Only read here: where a session runs is set when it
- * starts, and its model and mode are changed in the agent's own terminal. It uses the chat's meter styles
+ * its usage meters and the agent's name at the right. Only read here: where a session runs is set when it starts. The
+ * model and permission mode are not shown: a terminal pane does not read them. It uses the chat's meter styles
  * (`mx-usage*`), so the two rows read alike; it can be unified with the chat's `SessionBar` later.
  */
 export function TerminalBar({ facts, onOpenUsage }: { facts: TerminalBarFacts; onOpenUsage?: () => void }) {
@@ -43,18 +42,8 @@ export function TerminalBar({ facts, onOpenUsage }: { facts: TerminalBarFacts; o
       </span>
       <span className="mx-tbar-spacer" />
       <TerminalMeters usage={facts.usage} always={facts.contextAlways} onOpen={onOpenUsage} />
-      <span className="mx-tbar-model" title="The model, from the agent's own file. Change it in the terminal with /model.">{modelLabel(facts.model) ?? facts.agent}</span>
-      {facts.mode !== null && <ModeMark mode={facts.mode} />}
+      <span className="mx-tbar-model" title="The agent running in this terminal.">{facts.agent}</span>
     </div>
-  )
-}
-
-function ModeMark({ mode }: { mode: string }) {
-  const name = modeLabel(mode) ?? mode
-  return (
-    <span className={`mx-tbar-mode${DANGER_MODES.includes(mode) ? ' is-danger' : ''}`} role="img" aria-label={`Permission mode: ${name}`} title={`Permissions: ${name}. Cycle it in the terminal with Shift+Tab.`}>
-      <Shield size={GLYPH_SIZE} />
-    </span>
   )
 }
 

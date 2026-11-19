@@ -39,7 +39,7 @@ describe('terminalBarOf', () => {
 })
 
 describe('TerminalBar', () => {
-  it('shows where it runs, the context meter and the agent name when no model is reported', () => {
+  it('shows where it runs, the context meter and the agent name', () => {
     const facts = terminalBarOf(session({ details: usage(42) }))
     if (facts === null) throw new Error('no bar')
     render(<TerminalBar facts={facts} />)
@@ -47,17 +47,14 @@ describe('TerminalBar', () => {
     expect(screen.getByText('dev')).toBeTruthy()
     expect(screen.getByRole('meter', { name: 'Context' }).getAttribute('aria-valuenow')).toBe('42')
     expect(screen.getByText('claude')).toBeTruthy()
-    expect(screen.queryByRole('img', { name: /Permission mode/ })).toBeNull()
   })
 
-  it('tags a worktree, names the machine, and reddens a mode that asks about nothing', () => {
-    const facts = terminalBarOf(session({ machine: 4, machineName: 'devbox', linked: true }), { model: 'claude-sonnet-5-5', mode: 'bypassPermissions' })
+  it('tags a worktree, and names the machine', () => {
+    const facts = terminalBarOf(session({ machine: 4, machineName: 'devbox', linked: true }))
     if (facts === null) throw new Error('no bar')
     render(<TerminalBar facts={facts} />)
     expect(screen.getByText('worktree')).toBeTruthy()
     expect(screen.getByText('devbox')).toBeTruthy()
-    expect(screen.getByText('sonnet 5.5')).toBeTruthy()
-    expect(screen.getByRole('img', { name: /Permission mode/ }).className).toContain('is-danger')
   })
 
   it('opens Usage & cost from a meter', async () => {

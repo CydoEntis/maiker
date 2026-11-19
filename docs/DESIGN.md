@@ -362,8 +362,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   12.5px `--muted` text, 18px left and 14px right padding. At the left the machine (only for another computer), the project
   (the repository, else the `~` path; 180px at most, ellipsised), then `/` in `--line2` and the branch (12px mono, `--branch`; `--link`
   with a dim 11px `worktree` tag in a linked worktree). At the right the usage meters (the chat's `mx-usage` meters, so the two rows read
-  alike), the model (the agent's name while its model is unknown) and a shield for the permission mode, red in a mode that asks
-  about nothing. The bar only says: where a session runs is set when it starts. A plain shell has no bar but a dashed one-line hint
+  alike), and the agent's name (the model and permission mode are not shown: a terminal pane does not read them). The bar only says: where a session runs is set when it starts. A plain shell has no bar but a dashed one-line hint
   (`ShellHint`) that offers `claude`, `codex` and `gemini`.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   52px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
