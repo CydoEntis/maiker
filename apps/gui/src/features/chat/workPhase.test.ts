@@ -54,6 +54,11 @@ describe('telling a message just sent from the same words said before', () => {
     expect(countUserMessages(events, 'farewell')).toBe(0)
   })
 
+  it('counts a message whose spacing came back different from what was typed', () => {
+    const events = [user('a', 'first\nsecond  third')]
+    expect(countUserMessages(events, 'first\r\nsecond\t\tthird')).toBe(1)
+  })
+
   it('counts a message the agent took as part of one sent before it', () => {
     const events = [user('a', 'set it up\nthen go over the integrations')]
     expect(countUserMessages(events, 'then go over the integrations')).toBe(1)
