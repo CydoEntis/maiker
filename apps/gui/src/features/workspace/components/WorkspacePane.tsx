@@ -28,6 +28,9 @@ import { guardLocal } from '@/lib/localOnly'
 import type { RewindPlace } from '@/features/chat/editFromHere'
 import { fileSearchOf } from '@/features/chat/fileMention'
 import { ShowSidebarButton } from './ShowSidebarButton'
+import { placeOf } from '@/features/chat/sessionPlace'
+import type { EndedActions } from '@/features/chat/components/Composer'
+import { endedResume } from '../model/recentSessions'
 import { checksNeedingYou } from '@/features/inspect/checks'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 
@@ -49,7 +52,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, inspectView, diffStat, terminalShown, canDock, toggleTerminal } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , resumeEnded, moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, inspectView, diffStat, terminalShown, canDock, toggleTerminal } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -87,6 +90,12 @@ export function WorkspacePane({ shown, pane, kept }: {
         : fullPercent !== null && typeInto !== undefined
           ? { kind: 'context', agent: session.process, percent: fullPercent, onNewWithSummary: (summary) => { newChatWithSummary(session, summary) }, onCompact: () => { void typeInto('/compact').then(() => new Promise((resolve) => { window.setTimeout(resolve, COMMAND_SUBMIT_GAP_MS) })).then(() => typeInto('\r')).catch((error: unknown) => { toast.failed('Could not compact', error) }) } }
           : null
+  // An ended chat is read-only: it offers to reopen its conversation or to start a fresh session in the same folder.
+  const resumeRefusal = endedResume(session)
+  const endedActions: EndedActions = {
+    ...(resumeRefusal.kind === 'request' ? { onResume: () => { resumeEnded(session) } } : { resumeWhy: resumeRefusal.why }),
+    onNewSession: () => { newChatWithSummary(session, '') },
+  }
   const terminals = ownsTerminals(session)
   // Restoring reads and writes the checkout, so it is this computer's only, like Inspect.
   const rewindTerm = repoPaneOf(session)
@@ -134,6 +143,8 @@ export function WorkspacePane({ shown, pane, kept }: {
           asking={session.asking}
           sessionId={session.id}
           problem={problem}
+          place={placeOf(session)}
+          ended={session.ended ? endedActions : undefined}
           effort={session.agentEffort ?? null}
           rewind={rewind}
           {...(fileSearch === null ? {} : { fileSearch })}

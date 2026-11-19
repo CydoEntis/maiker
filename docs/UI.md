@@ -1121,6 +1121,12 @@ needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin
 
 ## Project-specific: desktop chat view
 
+The message box's controls (usage meters, model, permissions) and the session's place (machine, project, branch) live in
+one row under the box, drawn by `features/chat/components/SessionBar.tsx`. It takes `place` and its controls as props and
+imports nothing from the chat, so the terminal view reuses it; the place is built from the session list
+(`features/chat/sessionPlace.ts`), never by running git in the view. An ended session shows the read-only line with Resume
+and New session here (`EndedActions` on `Composer`) in place of the box; see DESIGN.md, *The message box*.
+
 The desktop app's chat view is a second view of a Claude Code or Codex session, never a second session
 ([chat view plan](features/chat-gui/chat-view-plan.md), ADR 0006). Rules:
 

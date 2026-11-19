@@ -610,9 +610,14 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   "↳ Set model to Haiku 5.5" line, never as a shell step, and a turn that was only that gets no divider. What the
   agent then says it runs (`/model`, `/effort`) replaces the model and effort picked in the chat.
 - **The message box** is one box (layout 2h): the text, with attach (+) at its top right, a plan strip while Plan
-  mode is on (`PLAN MODE` in mono blue, then what it means), and a bottom row: the model picker, the permission mode
-  as a shield and a chevron (`ModeControl`; the mode's name is in its tooltip, and the shield is `--danger` in a mode
-  that asks about nothing), a spacer, the usage meters and send. Its focus is the border turning accent (the one bordered focus). The meters
+  mode is on (`PLAN MODE` in mono blue, then what it means), and a bottom row that keeps only send, at the right. The rest
+  sits in **Under the box**, one row below it (`SessionBar`, `data-screen-label="Under the box"`): at the left the machine
+  (a monitor mark, and its name only when it is not this computer), the project (a folder mark and the repository's name,
+  or the folder outside git), `/` and the branch in mono with a `worktree` tag when the session works in a linked
+  worktree (all from what the session list already holds, `sessionPlace.ts`; the view runs no git); at the right the
+  usage meters, the model picker and the permissions button (`ModeControl`: a shield, the mode's name, a chevron when it
+  opens, and a `▲` in `--danger` in a mode that asks about nothing). `SessionBar` takes the place and the controls as
+  props and knows nothing of chat internals, so the terminal view draws the same row. An **ended** session (`session.ended`) swaps the box for a read-only line in a `--well` panel, "This session has ended. The chat is read-only.", with **Resume** (reopens the saved conversation in its folder through the new-chat resume start, `endedResume`; greyed with its reason in the tooltip for another machine, an agent that cannot resume, or a conversation with no saved id) and **New session here** (the New session page on the same machine and folder); Under the box keeps the place and drops the controls. Its focus is the border turning accent (the one bordered focus). The meters
   (`UsageMeters`, `usageStrip.ts`) are the context, then each plan limit, each a short name (`Context`, `5h`, `Week`, which
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
@@ -855,7 +860,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   follows another agent (Codex, Gemini) draws its model label from the start, with just the agent's name until it says its
   model. The "agent has not reported" hint of a starting chat floats over the conversation and moves nothing. Placeholders: "Message the agent, or type / for commands" ("Reply to the plan…" in Plan mode), "Queue a
   message for when claude finishes" while it works, "Answer the request above first" (and off, with the focus on the question
-  when it takes keys, never on one answered only by a click) while a question waits, "The daemon is offline" (still typeable) while it is. **3. The bottom row** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar and the helpers line do. Queued messages sit above in the dock (see *Queued messages*). The box's whole border turns `--accent` on focus, with no second ring; attach (top right) and send are both 32px and share the box's right edge; the meters at the right are neutral (`--fg2` ring, `--muted` mono figure, never a status colour), 12px, square under Square and Folded and a circle under Rounded.
+  when it takes keys, never on one answered only by a click) while a question waits, "The daemon is offline" (still typeable) while it is. **3. The bottom row and Under the box** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar and the helpers line do. Queued messages sit above in the dock (see *Queued messages*). The box's whole border turns `--accent` on focus, with no second ring; attach (top right) and send are both 32px and share the box's right edge; the meters at the right are neutral (`--fg2` ring, `--muted` mono figure, never a status colour), 12px, square under Square and Folded and a circle under Rounded.
 - **Esc ladder.** Esc closes the topmost open layer and reaches the terminal only when none is
   open (`model/escLadder.ts`): What's new, palette, Settings, the sidebar drawer,
   Focus mode. A new dialog adds its id there.

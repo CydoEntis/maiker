@@ -15,6 +15,7 @@ import { AgentPicker } from './AgentPicker'
 import { modelName } from '../modelName'
 import { PLAN_MODE } from '../chatMeta'
 import { PermissionMenu } from './PermissionMenu'
+import { SessionBar, type SessionPlace } from './SessionBar'
 import { QueuedMessages } from './QueuedMessages'
 import { MAX_SHOWN, SlashPicker } from './SlashPicker'
 import { FilePicker } from './FilePicker'
@@ -113,6 +114,19 @@ type Props = {
   dock?: DockState
   /** A quiet line under the queue, for a session that stopped or failed with messages still waiting. */
   queueNote?: string | null
+  /** Where the session runs, for the row under the box; without it the row holds the controls alone. */
+  place?: SessionPlace | undefined
+  /** Set once the session has ended: the box gives way to a read-only line with these ways on. */
+  ended?: EndedActions | undefined
+}
+
+/** What an ended session offers in place of the box. */
+export type EndedActions = {
+  /** Reopens the conversation; absent when it cannot be reopened from here, with `resumeWhy` saying why. */
+  onResume?: (() => void) | undefined
+  resumeWhy?: string | undefined
+  /** Starts a new session in the same folder. */
+  onNewSession: () => void
 }
 
 /** The dock above the box has one thing open at a time: the helpers list or the queue's list. */
@@ -136,7 +150,7 @@ const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
  * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
  * offline the box still takes typing but does not send.
  */
-export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null }: Props) {
+export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null, place, ended }: Props) {
   const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
@@ -380,7 +394,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
           note={queueNote}
         />
         <QuoteStrip quotes={quotes} onRemove={(id) => { removeQuote(composer.conversationKey ?? NO_CONVERSATION, id) }} onClear={() => { clearQuotes(composer.conversationKey ?? NO_CONVERSATION) }} />
-        <div className={`mx-box${off ? ' is-locked' : ''}`}>
+        <div className={`mx-box${off ? ' is-locked' : ''}${ended === undefined ? '' : ' is-ended'}`}>
           {picking && (
             <SlashPicker agent={agent} typed={draft.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={run} onHover={(index) => { setCursor({ query, index }) }} />
           )}
@@ -416,19 +430,6 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             </p>
           )}
           <div className="mx-box-row">
-            {facts.agentChips !== undefined ? (
-              conversation !== undefined
-                ? <ModelPicker remote={facts.agentChips.remote === true} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={facts.agentChips.pickerLocked === undefined ? facts.agentChips.locked : facts.agentChips.pickerLocked} />
-                : <AgentPicker agent={agent} choice={facts.agentChips.start ?? defaultChoice()} onChange={NO_CHANGE} locked={facts.agentChips.locked ?? undefined} />
-            ) : (
-              <>
-                {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={null} />}
-                {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} onOpenMenu={facts.onOpenModelMenu} locked={facts.modelMenuLocked ?? null} />}
-              </>
-            )}
-            <ModeControl facts={facts} />
-            <span className="mx-spacer" />
-            {facts.usage !== undefined && <UsageMeters usage={facts.usage} onOpen={facts.onOpenUsage} />}
             {stopping ? (
               <button type="button" className="mx-send is-stop" aria-label={`Stop ${agentLabel(agent)}`} title={`${agentLabel(agent)} is working. Stop it (Esc)`} onClick={stop}><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : busy ? (
@@ -441,6 +442,25 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             )}
           </div>
         </div>
+        {ended !== undefined && <EndedLine ended={ended} />}
+        <SessionBar place={place}>
+          {ended === undefined && (
+            <>
+              {facts.usage !== undefined && <UsageMeters usage={facts.usage} onOpen={facts.onOpenUsage} />}
+              {facts.agentChips !== undefined ? (
+                conversation !== undefined
+                  ? <ModelPicker remote={facts.agentChips.remote === true} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={facts.agentChips.pickerLocked === undefined ? facts.agentChips.locked : facts.agentChips.pickerLocked} />
+                  : <AgentPicker agent={agent} choice={facts.agentChips.start ?? defaultChoice()} onChange={NO_CHANGE} locked={facts.agentChips.locked ?? undefined} />
+              ) : (
+                <>
+                  {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={null} />}
+                  {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} onOpenMenu={facts.onOpenModelMenu} locked={facts.modelMenuLocked ?? null} />}
+                </>
+              )}
+              <ModeControl facts={facts} />
+            </>
+          )}
+        </SessionBar>
         {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Open the terminal to answer anything it asks.</p>}
         {restoreNote !== null && composer.conversationKey !== undefined && (
           <p className="mx-composer-note">
@@ -450,6 +470,19 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
         )}
         {error !== null && <p role="alert" className="mx-composer-error">{error}. Your message is kept; send it again to retry.</p>}
       </div>
+    </div>
+  )
+}
+
+/** The read-only line an ended session shows where the box was, with the two ways on. */
+function EndedLine({ ended }: { ended: EndedActions }) {
+  const resumable = ended.onResume !== undefined
+  return (
+    <div className="mx-ended-line" role="status">
+      <span className="mx-ended-text">This session has ended. The chat is read-only.</span>
+      {/* aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point. */}
+      <button type="button" className="mx-ended-button is-primary" aria-disabled={!resumable} title={resumable ? 'Open this conversation again' : ended.resumeWhy} onClick={resumable ? ended.onResume : undefined}>Resume</button>
+      <button type="button" className="mx-ended-button" onClick={ended.onNewSession}>New session here</button>
     </div>
   )
 }
@@ -497,6 +530,18 @@ function UsageMeters({ usage, onOpen }: { usage: SessionUsage; onOpen: (() => vo
   )
 }
 
+/** The permissions button's face: a shield, a warning mark when the mode asks about nothing, the mode's name, and a chevron when it opens. */
+function ModeFace({ facts, chevron = false }: { facts: ComposerFacts; chevron?: boolean }) {
+  return (
+    <>
+      <Icon name="shield" size={13} />
+      {facts.modeDanger && <span className="mx-mode-warn" aria-hidden="true">▲</span>}
+      <span className="mx-mode-name">{facts.mode ?? 'Permissions'}</span>
+      {chevron && <Icon name="chevronDown" size={10} />}
+    </>
+  )
+}
+
 /**
  * The permission mode, as a shield and a chevron in the box's bottom row: the mode's name is in its tooltip, and the
  * shield turns red in a mode that asks about nothing. It opens the agent's modes when they can be picked from here.
@@ -508,14 +553,14 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
     // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.
     return (
       <button type="button" aria-disabled="true" className={`mx-mode-button is-locked${danger}`} title={`Permissions: ${name}. ${modeLockedWhy(facts)}`} aria-label={`Permission mode: ${name}. ${modeLockedWhy(facts)}`}>
-        <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />
+        <ModeFace facts={facts} chevron />
       </button>
     )
   }
   if (facts.onPickMode === undefined) {
     return (
       <span className={`mx-mode-button is-static${danger}`} role="img" aria-label={`Permission mode: ${name}`} title={facts.mode === null ? 'Permissions: not reported by the agent yet' : `Permissions: ${name}. Cycle it in the terminal with Shift+Tab.`}>
-        <Icon name="shield" size={13} />
+        <ModeFace facts={facts} />
       </span>
     )
   }
@@ -529,7 +574,7 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
       bypassOff={facts.bypassAllowed === true ? undefined : { note: 'needs a new session', why: 'Claude only allows this when it starts with Bypass Permissions on (Settings › Permissions). This session started without it: turn the setting on and start a new session.' }}
     >
       <button type="button" className={`mx-mode-button${danger}`} title={`Permissions: ${name}`} aria-label={`Permission mode: ${name}. Pick another.`}>
-        <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />
+        <ModeFace facts={facts} chevron />
       </button>
     </PermissionMenu>
   )

@@ -38,7 +38,8 @@ import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
 import { DEFAULT_PICK, noteAgentSaid, writeChoice } from '../agentChoice'
-import { Composer, type DockOpen } from './Composer'
+import { Composer, type DockOpen, type EndedActions } from './Composer'
+import type { SessionPlace } from './SessionBar'
 import { HelpersDock } from './HelpersDock'
 import { dockHelpers, HelpersLiveContext, liveAgentsRow, type HelpersLive } from '../helpersDock'
 import { ChatItem, type ChatItemContext } from './ChatItems'
@@ -170,6 +171,10 @@ type Props = {
   hideSuccessfulTools?: boolean
   /** The window's own screens a command opens instead of Claude Code's menu (`windowCommands.ts`); absent where there are none. */
   windowActions?: WindowActions | undefined
+  /** Where the session runs, for the row under the message box. */
+  place?: SessionPlace | undefined
+  /** Set once the session has ended: the message box gives way to a read-only line. */
+  ended?: EndedActions | undefined
   /** The chat is mounted out of sight, behind the tab showing: it keeps what it shows but reads nothing until it is shown. */
   paused?: boolean
 }
@@ -184,7 +189,7 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, paused = false }: Props) {
+export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent, paused })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
@@ -833,6 +838,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         files={fileSearch}
         facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
+        place={place}
+        ended={ended}
       />
       {problemView.alert}
     </div>

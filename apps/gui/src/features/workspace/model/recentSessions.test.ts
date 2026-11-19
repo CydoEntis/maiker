@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ClosedSession } from '@/api/daemon'
-import { reopenRefusal, reopenRequest } from './recentSessions'
+import { endedResume, reopenRefusal, reopenRequest } from './recentSessions'
 
 const closed = (over: Partial<ClosedSession> = {}): ClosedSession => ({
   agent: 'claude',
@@ -44,5 +44,20 @@ describe('reopening a closed session', () => {
   it('refuses an agent it cannot resume', () => {
     expect(reopenRefusal(closed({ agent: 'gemini' }))).toBe('cannot be reopened here')
     expect(reopenRequest(closed({ agent: 'gemini' }))).toBeNull()
+  })
+})
+
+describe('endedResume', () => {
+  const ended = { process: 'claude', machine: 0, cwd: '/dev/app', agentSession: '6f1c2a9e-1b2c-4d5e-8f90-123456789abc' }
+
+  it('resumes the ended conversation in its folder', () => {
+    const resume = endedResume(ended)
+    expect(resume).toMatchObject({ kind: 'request', request: { folder: '/dev/app', agent: 'claude', resume: ended.agentSession } })
+  })
+
+  it('says why not: another machine, an agent that cannot resume, or no conversation id', () => {
+    expect(endedResume({ ...ended, machine: 2 })).toMatchObject({ kind: 'refused' })
+    expect(endedResume({ ...ended, process: 'gemini' })).toMatchObject({ kind: 'refused' })
+    expect(endedResume({ ...ended, agentSession: null })).toEqual({ kind: 'refused', why: 'No conversation was saved to resume' })
   })
 })
