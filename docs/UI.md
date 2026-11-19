@@ -973,6 +973,19 @@ choice does), `client/machine_config.rs` (where `config.local.toml` is; the `[[m
 
 Not applicable: the Hairline look was removed; Floating is the only look.
 
+## Project-specific: desktop side panel parity
+
+The desktop References tab (`apps/gui/src/features/inspect/ReferencesTab.tsx`, opened from the **References**
+row in Files, which carries a tooltip) lists `.maiker/references` newest first. It always says the files are seen
+by every agent on the project and kept on this computer, not in git; when empty it explains what references are
+for. It only lists: adding (Ctrl O, drop), renaming and removing need a Tauri command that does not exist (the
+TUI does them through `maitty-terminal-client/src/references.rs`).
+
+Already in the desktop panel, so not follow-ups: the commit bar (`CommitBar.tsx`), the branch menu and
+ahead/behind with fetch, pull and push (`ChangesBar.tsx`, `remoteAction.ts`), per-line comments on a diff
+(`PatchView.tsx`) and the History tab. Not built: a dedicated Branches view (the branch menu lists branches only).
+An on-screen check is still owed.
+
 ## Project-specific: features that need a pane's files
 
 Files, Changes, Find, Branches, References, connecting an agent, worktree
