@@ -142,34 +142,58 @@ fn changes_on_another_machine_are_asked_of_it_and_never_read_here() {
     assert!(bg.try_recv().is_err(), "nothing was read with git here");
 }
 
+fn ctrl_enter(app: &mut App) {
+    app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::CONTROL));
+}
+
 #[test]
-fn a_ticked_commit_goes_to_that_machine_with_the_message_written() {
+fn a_commit_takes_the_picked_files_with_the_message_shown() {
     let (mut app, mut rx, _bg) = open_with_diff();
-    press(&mut app, KeyCode::Down);
-    press(&mut app, KeyCode::Char('t'));
-    press(&mut app, KeyCode::Char('c'));
-    assert_eq!(view(&app).extra.message.as_deref(), Some("Update a.rs"));
-    let shown = frame(&mut app, "commit message for one ticked file");
-    assert!(shown.contains("Commit 1 ticked file on") && shown.contains("Update a.rs"), "{shown}");
-    for _ in 0.."Update a.rs".len() {
+    assert_eq!(view(&app).picked(), ["src/a.rs", "docs/b.md"], "every changed file starts in the commit");
+    // The list is in path order, so the chosen file is docs/b.md.
+    press(&mut app, KeyCode::Char(' '));
+    assert_eq!(view(&app).picked(), ["src/a.rs"], "space leaves the chosen file out");
+    let shown = frame(&mut app, "the changes panel with one file left out");
+    assert!(shown.contains("1 of 2 in the next commit") && shown.contains("[ ]") && shown.contains("[x]"), "{shown}");
+    assert!(shown.contains("Commit 1 of 2") && shown.contains("Message written by"), "{shown}");
+    press(&mut app, KeyCode::Char('m'));
+    assert!(view(&app).extra.message.is_some(), "m edits the message");
+    for _ in 0..view(&app).message_text().len() {
         press(&mut app, KeyCode::Backspace);
     }
-    press(&mut app, KeyCode::Enter);
+    ctrl_enter(&mut app);
     assert!(git_asks(&sent(&mut rx)).is_empty(), "an empty message commits nothing");
     type_text(&mut app, "Use new()");
     press(&mut app, KeyCode::Enter);
+    type_text(&mut app, "and more");
+    assert_eq!(view(&app).message_text(), "Use new()\nand more", "enter is a new line");
+    press(&mut app, KeyCode::Esc);
+    assert!(view(&app).extra.message.is_none() && view(&app).extra.draft.is_some(), "esc stops editing and keeps the text");
+    ctrl_enter(&mut app);
     let asks = git_asks(&sent(&mut rx));
     assert_eq!(asks.len(), 1);
     assert_eq!(asks[0].0, THERE);
     assert_eq!(
         asks[0].1,
-        GitRequest::Commit { message: "Use new()".into(), paths: Some(vec!["src/a.rs".into()]) }
+        GitRequest::Commit { message: "Use new()\nand more".into(), paths: Some(vec!["src/a.rs".into()]) }
     );
-    assert!(view(&app).extra.ticked.is_empty() && view(&app).extra.busy.is_some());
-    app.on_machine_server(THERE, ServerMsg::Reply(Reply::GitDone { tag: asks[0].2, outcome: Ok("1a2b3c Use new()".into()) }));
+    assert!(view(&app).extra.busy.is_some() && view(&app).extra.draft.is_none());
+    app.on_machine_server(THERE, ServerMsg::Reply(Reply::GitDone { tag: asks[0].2, outcome: Ok("Committed 1 file on main".into()) }));
     assert!(view(&app).extra.busy.is_none());
-    assert_eq!(app.notice.as_ref().map(|(m, _, e)| (m.as_str(), *e)), Some(("1a2b3c Use new()", false)));
+    assert_eq!(app.notice.as_ref().map(|(m, _, e)| (m.as_str(), *e)), Some(("Committed 1 file on main", false)));
     assert_eq!(diff_asks(&sent(&mut rx)).len(), 1, "read again after the commit");
+}
+
+#[test]
+fn a_commit_with_no_file_picked_asks_for_one_in_the_warning_colour() {
+    let (mut app, mut rx, _bg) = open_with_diff();
+    press(&mut app, KeyCode::Char(' '));
+    press(&mut app, KeyCode::Down);
+    press(&mut app, KeyCode::Char(' '));
+    ctrl_enter(&mut app);
+    assert!(git_asks(&sent(&mut rx)).is_empty());
+    assert_eq!(app.notice.as_ref().map(|(m, _, e)| (m.as_str(), *e)), Some(("Pick at least one file to commit", false)));
+    assert!(app.notice_warn, "yellow, not red");
 }
 
 #[test]
@@ -246,4 +270,66 @@ fn a_refusal_or_no_answer_from_that_machine_says_so() {
     app.changes_tick();
     let why = view(&app).error.clone().unwrap_or_default();
     assert!(why.contains("build did not answer"), "{why}");
+}
+
+fn draw_at(app: &mut App, w: u16, h: u16) {
+    app.screen_fresh();
+    let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(w, h)).unwrap();
+    term.draw(|f| render::draw(app, f)).unwrap();
+}
+
+#[test]
+fn changes_sit_beside_the_pane_at_52_columns_and_take_its_place_when_narrow() {
+    let (mut app, _rx, _bg) = open_with_diff();
+    draw_at(&mut app, 200, 50);
+    assert_eq!(app.screen.sheet_rect.width, 52, "the panel is 52 columns");
+    let pane = app.pane_frames.iter().map(|(_, r)| *r).next().expect("the pane is still drawn");
+    assert!(pane.right() <= app.screen.sheet_rect.x, "beside the pane, not over it: {pane:?} {:?}", app.screen.sheet_rect);
+    draw_at(&mut app, 120, 40);
+    assert!(app.screen.sheet_rect.width > 52 && app.pane_frames.is_empty(), "under 140 columns it replaces the pane");
+}
+
+#[test]
+fn ctrl_g_opens_and_closes_changes_from_the_sidebar_but_a_pane_keeps_the_key() {
+    let (mut app, mut rx, _bg) = on_build();
+    sent(&mut rx);
+    let ctrl_g = || KeyEvent::new(KeyCode::Char('g'), KeyModifiers::CONTROL);
+    app.on_key(ctrl_g());
+    assert!(app.view.is_none(), "in a pane ctrl+g belongs to the agent");
+    app.mode = Mode::Side;
+    app.on_key(ctrl_g());
+    assert!(matches!(app.view, Some(View::Changes(_))), "from the sidebar it opens Changes");
+    app.on_key(ctrl_g());
+    assert!(app.view.is_none(), "and the same key closes it");
+}
+
+#[test]
+fn a_click_on_a_files_box_picks_or_unpicks_it() {
+    let (mut app, _rx, _bg) = open_with_diff();
+    draw_at(&mut app, 200, 50);
+    let tick = app
+        .hits
+        .iter()
+        .find_map(|(_, h)| match h {
+            Hit::Button(Btn::Tick(_)) => Some(*h),
+            _ => None,
+        })
+        .expect("a box to click");
+    assert!(app.on_button(tick, false));
+    assert_eq!(view(&app).picked().len(), 1, "one file is out of the commit");
+    draw_at(&mut app, 200, 50);
+    assert!(app.on_button(tick, false));
+    assert_eq!(view(&app).picked().len(), 2, "clicking again puts it back");
+}
+
+#[test]
+fn no_changes_says_so_with_the_branch() {
+    let (mut app, mut rx, _bg) = on_build();
+    sent(&mut rx);
+    app.act(Action::Changes);
+    let asks = diff_asks(&sent(&mut rx));
+    let none = RepoReply::Diff(ConversationDiff { additions: 0, deletions: 0, total_files: 0, truncated: false, files: Vec::new() });
+    app.on_machine_server(THERE, ServerMsg::Reply(Reply::Repo { tag: asks[0].1, reply: none }));
+    let shown = frame(&mut app, "no changes");
+    assert!(shown.contains("No changes on fix-footer."), "{shown}");
 }

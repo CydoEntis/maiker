@@ -43,6 +43,9 @@ impl App {
     /// The daemon's list: it opens the menu that waits for it, and is dropped once that menu closed.
     pub(super) fn closed_sessions_arrived(&mut self, mut list: Vec<ClosedSession>) {
         let Mode::ScreenMenu(m) = &self.mode else {
+            if let Some(term) = self.screen.restart_asked.take() {
+                self.restart_from_closed(term, &list);
+            }
             return;
         };
         if m.title != TITLE || !matches!(m.items.as_slice(), [(_, menu::Act::Waiting)]) {

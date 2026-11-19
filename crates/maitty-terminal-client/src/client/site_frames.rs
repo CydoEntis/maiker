@@ -457,6 +457,7 @@ fn changes(app: &mut App) {
         added,
         removed,
         untracked: false,
+        deleted: false,
     };
     let review = tasks::Review {
         task: tasks::TaskRow {
@@ -473,6 +474,7 @@ fn changes(app: &mut App) {
             root,
         },
         merge_base: String::new(),
+        to_push: Some(2),
         files: vec![
             changed("src/checkout/total.ts", 6, 2),
             changed("src/checkout/codes.ts", 14, 3),

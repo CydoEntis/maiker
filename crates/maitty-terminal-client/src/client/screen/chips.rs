@@ -10,8 +10,6 @@ pub(in crate::client) enum Chip {
     Title { focused: bool },
     /// A button.
     Action,
-    /// Information, not a button.
-    Quiet,
 }
 
 /// `text` as a chip over `outer` (the ground under its ends). Its width is `segs_width` of the
@@ -30,7 +28,6 @@ pub(in crate::client) fn chip(
         }
         Chip::Title { focused: false } => (t.btn, Style::default().fg(t.strong).add_modifier(bold)),
         Chip::Action => (t.btn, Style::default().fg(t.accent).add_modifier(bold)),
-        Chip::Quiet => (t.btn, Style::default().fg(t.muted)),
     };
     pill(Look::of(&app.cfg.ui), vec![seg(text, style)], bg, outer)
 }

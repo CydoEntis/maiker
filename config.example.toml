@@ -39,7 +39,7 @@ replay_bytes = 2097152      # output kept per pane by the daemon, replayed on re
 [ui]
 start_dir = ""              # where plain `maiker` opens, e.g. "~/code" (empty: where you run it)
 sidebar_tabs = "all"        # all | busy | off: a session's tabs as lines under its row
-alt_keys = true             # Alt+n shell, Alt+a session, Alt+x close, Alt+s / Alt+d split side by side / down, without the leader
+alt_keys = false            # Alt+n shell, Alt+a session, Alt+x close, Alt+s / Alt+d split side by side / down, without the leader
 sidebar = true              # <leader> z collapses it
 sidebar_position = "left"   # left | right
 # new_session_view = "chat"  # chat | terminal: what a new session opens as (the desktop app's choice)
