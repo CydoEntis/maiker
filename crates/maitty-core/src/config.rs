@@ -2784,16 +2784,17 @@ layout = 'cards'",
     }
 
     #[test]
-    fn alt_arrows_move_between_panes_unless_turned_off() {
+    fn alt_arrows_move_between_panes_only_when_turned_on() {
         let alt_left = "alt+left".parse().unwrap();
-        assert_eq!(
-            Config::default().keymap().global[&alt_left],
-            Action::Focus(crate::layout::Dir::Left)
-        );
-        let off: Config = toml::from_str("[ui]\nalt_arrows = false").unwrap();
         assert!(
-            !off.keymap().global.contains_key(&alt_left),
-            "off: the program gets them"
+            !Config::default().keymap().global.contains_key(&alt_left),
+            "off by default: the program gets them"
+        );
+        let on: Config = toml::from_str("[ui]
+alt_arrows = true").unwrap();
+        assert_eq!(
+            on.keymap().global[&alt_left],
+            Action::Focus(crate::layout::Dir::Left)
         );
     }
 
