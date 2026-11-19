@@ -1,6 +1,7 @@
 import type { ChatRow } from './chatRows'
 import { MODE_FACTS, modeLabel } from './chatMeta'
 import { usageItems, type SessionUsage } from './usageStrip'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /**
  * What the window itself says for a command that Claude Code or Codex would draw in its terminal (`/status`,
@@ -9,10 +10,8 @@ import { usageItems, type SessionUsage } from './usageStrip'
  */
 
 const NOT_REPORTED = 'not reported yet'
-const AGENT_NAMES: Readonly<Record<string, string>> = { claude: 'Claude', codex: 'Codex' }
-
 /** The agent's name as a person says it; an agent not listed is shown as it was written. */
-export const agentName = (agent: string): string => AGENT_NAMES[agent] ?? agent
+export const agentName = agentLabel
 
 export type StatusFacts = {
   readonly agent: string
@@ -39,7 +38,7 @@ export function statusCard(facts: StatusFacts): string {
     `- **Model:** ${model}`,
     `- **Permissions:** ${modeLabel(facts.mode) ?? NOT_REPORTED}`,
     `- **Folder:** ${facts.folder === null ? NOT_REPORTED : code(facts.folder)}`,
-    `- **Now:** ${facts.online ? (facts.working ? 'working' : 'waiting for you') : 'the daemon is offline'}`,
+    `- **Now:** ${facts.online ? (facts.working ? 'working' : 'waiting for you') : 'the Maiker service is offline'}`,
   ]
   if (facts.usage !== undefined) {
     for (const item of usageItems(facts.usage, facts.now, true)) {

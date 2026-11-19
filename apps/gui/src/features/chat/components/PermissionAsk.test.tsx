@@ -90,7 +90,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
   it('points the composer at the card, which holds the answer', async () => {
     await open('Blocked', WRITE_ASK)
 
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
   })
 
   it('offers no allow button for a prompt whose answer key is not known, only the keys to answer it in the terminal', async () => {
@@ -120,7 +120,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     await user.click(screen.getByRole('button', { name: /Postgres/ }))
 
     expect(typeInto).toHaveBeenCalledExactlyOnceWith('2')
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
   })
 
   it('shows several questions one at a time, and answers them all at once: a key each in order, then the one that submits', async () => {
@@ -136,7 +136,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(screen.queryByRole('group', { name: 'Which language?' })).not.toBeInTheDocument()
     expect(screen.queryByText(/1 SQLite · 2 Postgres/)).not.toBeInTheDocument()
     expect(screen.queryByText('Answer in the terminal.')).not.toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
 
     // Nothing is typed until every question has an answer, so one can be changed first.
     await user.click(screen.getByRole('radio', { name: 'SQLite' }))
@@ -227,8 +227,8 @@ describe('the chat of an agent stopped on a permission prompt', () => {
   it("picks a choice of a question with its number key, as the agent's own menu does", async () => {
     const { typeInto } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which database?', answerable: false, choices: ['SQLite', 'Postgres'] })
 
-    fireEvent.keyDown(screen.getByRole('region', { name: 'claude needs your permission' }), { key: '2' })
-    fireEvent.keyDown(screen.getByRole('region', { name: 'claude needs your permission' }), { key: '7' })
+    fireEvent.keyDown(screen.getByRole('region', { name: 'Claude needs your permission' }), { key: '2' })
+    fireEvent.keyDown(screen.getByRole('region', { name: 'Claude needs your permission' }), { key: '7' })
 
     expect(typeInto).toHaveBeenCalledExactlyOnceWith('2')
   })
@@ -248,7 +248,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     render(<ChatSession link={LINK} agent="claude" online typeInto={typeInto} ask={{ tool: 'ExitPlanMode', detail: '', answerable: true }} asking={PLAN_ASKING} />)
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
-    const card = screen.getByRole('region', { name: 'claude needs your permission' })
+    const card = screen.getByRole('region', { name: 'Claude needs your permission' })
     expect(within(card).getByText('Approve this plan?')).toBeInTheDocument()
     expect(within(card).getByRole('heading', { name: 'Refunds' })).toBeInTheDocument()
     const menu = within(card).getByRole('group', { name: "Claude's plan menu" })
@@ -269,7 +269,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     render(<ChatSession link={LINK} agent="claude" online typeInto={typeInto} ask={{ tool: 'ExitPlanMode', detail: '', answerable: true }} />)
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
-    const card = screen.getByRole('region', { name: 'claude needs your permission' })
+    const card = screen.getByRole('region', { name: 'Claude needs your permission' })
     expect(within(card).queryByRole('group', { name: "Claude's plan menu" })).not.toBeInTheDocument()
     expect(within(card).getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
     fireEvent.keyDown(card, { key: 'y' })
@@ -284,7 +284,7 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
     // The card above carries the terminal's keys, so the box points at it and never sends the person to the terminal.
     expect(screen.getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
   })
 
   it('shows no card while the agent is not stopped on a prompt', async () => {
@@ -321,7 +321,7 @@ describe("Claude's own \"don't ask again\" choice", () => {
 
   it('is not picked by its number, and Enter still means only the first choice, Yes once', async () => {
     const { typeInto } = await openWith(BASH_ASK, MENU)
-    const card = screen.getByRole('region', { name: 'claude needs your permission' })
+    const card = screen.getByRole('region', { name: 'Claude needs your permission' })
 
     fireEvent.keyDown(card, { key: '2' })
     expect(typeInto).not.toHaveBeenCalled()

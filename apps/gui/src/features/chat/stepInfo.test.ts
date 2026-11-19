@@ -7,10 +7,10 @@ describe('elapsedMs', () => {
   const timed = { ...fields('b'), timing: { startedAtMs: 1_000, completedAtMs: 3_500 } }
 
   it.each([
-    ['a running item counts from the daemon start', { ...running, timing: { startedAtMs: 2_000, completedAtMs: null } }, null, 10_000, 8_000],
+    ['a running item counts from the Maiker service start', { ...running, timing: { startedAtMs: 2_000, completedAtMs: null } }, null, 10_000, 8_000],
     ['a running item with no daemon start counts from when it was first seen', running, null, 10_000, 6_000],
     ['a finished item prefers the provider\'s own duration', timed, 1_500, 99_999, 1_500],
-    ['a finished item otherwise uses the daemon times', timed, null, 99_999, 2_500],
+    ['a finished item otherwise uses the Maiker service times', timed, null, 99_999, 2_500],
     ['a finished item from saved history has no time', fields('c'), null, 99_999, null],
   ])('%s', (_name, item, duration, now, expected) => {
     expect(elapsedMs(item, duration, now)).toBe(expected)

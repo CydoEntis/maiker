@@ -17,6 +17,7 @@ import { Markdown } from './Markdown'
 import { UserInputForm } from './UserInputForm'
 import { TerminalPrompt } from './TerminalPrompt'
 import { WaitingCard } from './WaitingCard'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** The number keys that pick a choice: 1 to 9. */
 const MAX_DIGIT_KEYS = 9
@@ -61,8 +62,8 @@ export function ScreenMenuTray({ agent, menu, send }: { agent: string; menu: Scr
   const pick = (index: number) => { RUN(() => send(keysToPick(menu, index)), setBusy) }
   return (
     <WaitingCard
-      label={`${agent} is asking`}
-      title={`${agent} is asking`}
+      label={`${agentLabel(agent)} is asking`}
+      title={`${agentLabel(agent)} is asking`}
       foot={menu.options.map((option, index) => (
         <Button key={`${String(index)}-${option}`} variant={index === 0 ? 'needs' : 'soft'} disabled={busy} onClick={() => { pick(index) }}>{option}</Button>
       ))}
@@ -91,10 +92,10 @@ export function TrustFolderTray({ agent, trust, send }: { agent: string; trust: 
         </>
       )}
     >
-      <p className="mx-waiting-text">{agent} was started in a folder it has not seen before:</p>
+      <p className="mx-waiting-text">{agentLabel(agent)} was started in a folder it has not seen before:</p>
       <pre className="mx-waiting-command">{trust.folder}</pre>
       <p className="mx-waiting-text">
-        Trusting it lets {agent} read and change the files there, and run commands, hooks and tools that the folder asks for. Trust it only if you know where it came from. Don’t trust closes {agent} without opening the folder.
+        Trusting it lets {agentLabel(agent)} read and change the files there, and run commands, hooks and tools that the folder asks for. Trust it only if you know where it came from. Don’t trust closes {agent} without opening the folder.
       </p>
     </WaitingCard>
   )
@@ -116,7 +117,7 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
   const label = `Approval: ${TITLE[event.approvalKind]}`
   if (event.approvalKind === 'UserInput') {
     return (
-      <WaitingCard label={label} title={agent === undefined ? TITLE.UserInput : `${agent} needs your input`}>
+      <WaitingCard label={label} title={agent === undefined ? TITLE.UserInput : `${agentLabel(agent)} needs your input`}>
         {reason}
         {actions !== null && event.questions.length > 0
           ? <UserInputForm questions={event.questions} busy={actions.busy} onSubmit={(answers) => { actions.answerInput(event.requestId, answers) }} />
@@ -425,7 +426,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
   const sendAll = questions.length > 0 && online ? pickAll : undefined
   const canAnswer = ask !== null && ask.answerable && online && answer !== undefined
   const isQuestion = ask?.tool === QUESTION_TOOL
-  const label = `${agent} needs your permission`
+  const label = `${agentLabel(agent)} needs your permission`
   const mirror = sendKeys !== undefined && online ? sendKeys : undefined
   // Claude's own "don't ask again" choices, read off its menu; never offered for a question or from another agent.
   const always = canAnswer && pick !== undefined && agent === 'claude' && !isQuestion ? alwaysAllowChoices(asking) : []
@@ -466,7 +467,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
 
   if (!canAnswer && mirror !== undefined) {
     return (
-      <WaitingCard label={label} title={title} aside={agent} flush>
+      <WaitingCard label={label} title={title} aside={agentLabel(agent)} flush>
         {shownDetail}
         <TerminalPrompt readScreen={readScreen} sendKeys={mirror} />
       </WaitingCard>

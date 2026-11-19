@@ -77,7 +77,7 @@ describe('the confirm before a restore', () => {
     const body = confirmBody(2, 'claude', false)
     expect(body).toContain('2 files change back')
     expect(body).toContain('"before a restore" snapshot')
-    expect(body).toContain("claude's conversation is not rewound")
+    expect(body).toContain("Claude's conversation is not rewound")
   })
 
   it('says where a draft already in the box goes', () => {

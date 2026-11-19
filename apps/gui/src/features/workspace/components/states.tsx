@@ -1,7 +1,6 @@
 import { useAppearsAfter } from '@/lib/useAppearsAfter'
 import { useShortcutText } from '@/features/shortcuts/platform'
 import { Icon } from './glyphs'
-import { DAEMON_NAME } from '@/brand'
 
 /** Before the daemon's first list: says it is looking, once the wait is long enough to notice. */
 function LookingForSessions() {
@@ -12,7 +11,7 @@ function LookingForSessions() {
         <span className="mx-empty-tile"><Icon name="prompt" /></span>
         <div className="mx-empty-copy">
           <h1>Looking for your sessions…</h1>
-          <p>Asking {DAEMON_NAME} what is running.</p>
+          <p>Asking the Maiker service what is running.</p>
         </div>
       </div>
     </div>
@@ -46,7 +45,7 @@ export function EmptyState({ hasSessions, listed, startFolderLabel, canStart, on
           <button type="button" className="mx-primary" disabled={!canStart} onClick={onNewSession}>New session<kbd>{shortcutText('new-session')}</kbd></button>
           <button type="button" className="mx-quiet" onClick={onChangeStartFolder}>Change start folder</button>
         </div>
-        <span className="mx-empty-note-small">Sessions live in {DAEMON_NAME}. Closing this window never stops them, and the Maiker TUI sees the same sessions.</span>
+        <span className="mx-empty-note-small">Sessions live in the Maiker service. Closing this window never stops them, and the Maiker TUI sees the same sessions.</span>
       </div>
     </div>
   )

@@ -12,8 +12,7 @@ import type { WorkStep } from '../workSummary'
 import { documentOf } from '../writtenDocument'
 import { Fold } from '@/components/ui/fold'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { copyText as writeClipboard } from '@/lib/clipboard'
-import { toast } from '@/lib/toast'
+import { useCopied } from '@/lib/useCopied'
 import { Block, BlockHead } from './Block'
 import { ChangePill, FileBadge, StepRow, type MetaTone } from './cardParts'
 import { diffRows, type DiffRow } from './diffRows'
@@ -117,11 +116,10 @@ type CommandStepProps = {
   waiting?: boolean
 }
 
-function copyCommand(command: string): void {
-  writeClipboard(command).then(
-    () => { toast.info('Copied') },
-    () => { toast.error('Could not copy the command') },
-  )
+/** Copy on a command, which says Copied for a moment where it was pressed. */
+function CopyCommand({ command }: { command: string }) {
+  const { copied, copy } = useCopied('Could not copy the command')
+  return <button type="button" className="mx-block-action" aria-label="Copy command" onClick={() => { copy(command) }}>{copied ? 'Copied' : 'Copy'}</button>
 }
 
 /** The command's output on the well: every line, scrolling inside 320px, and what the daemon hid. */
@@ -164,7 +162,7 @@ export function CommandStep({ event, alone = false, waiting = false, control }: 
         <BlockHead
           open={open}
           onToggle={toggle}
-          actions={open && event.command !== '' ? <button type="button" className="mx-block-action" aria-label="Copy command" onClick={() => { copyCommand(event.command) }}>Copy</button> : undefined}
+          actions={open && event.command !== '' ? <CopyCommand command={event.command} /> : undefined}
         >
           <span className="mx-block-prompt" aria-hidden="true">$</span>
           <code className="mx-block-title">{short}</code>

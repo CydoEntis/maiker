@@ -26,9 +26,10 @@ import { terminalOnlyNote, typedCommand, windowRouteOf, withWindowRoutes, type W
 import { CODEX_COMMANDS } from '../codexCommands'
 import { GEMINI_COMMANDS, geminiRouteOf, withGeminiRoutes } from '../geminiCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
-import { usageItems, type SessionUsage } from '../usageStrip'
+import { METER_SHOWN_FROM, usageItems, type SessionUsage } from '../usageStrip'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
 import { useKeepTyping } from '../useKeepTyping'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** A key with nothing stored under it, for a composer whose view holds its own draft. */
 const NO_CONVERSATION = -1
@@ -186,7 +187,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
   }
   const attachLabel = off ? `Attach files: ${disabledReason}` : 'Attach files'
   const planning = facts.modeKey === PLAN_MODE
-  const placeholder = disabledReason ?? (running ? `Queue a message for when ${agent} finishes` : planning ? 'Reply to the plan…' : 'Message the agent, or type / for commands')
+  const placeholder = disabledReason ?? (running ? `Queue a message for when ${agentLabel(agent)} finishes` : planning ? 'Reply to the plan…' : 'Message the agent, or type / for commands')
   const empty = draft.trim() === '' && attachments.length === 0
   // With nothing typed while a turn runs, the round button stops the agent instead of sending.
   const stopping = running && empty && !off
@@ -248,7 +249,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
       return
     }
     if (route.kind === 'confirm' && running) {
-      toast.info(`${agent} is working. Run ${typed} when it finishes.`)
+      toast.info(`${agentLabel(agent)} is working. Run ${typed} when it finishes.`)
       return
     }
     setDraft('')
@@ -269,7 +270,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
     if (command.terminal === true && inTerminal !== undefined) {
       // Its menu is the terminal's to show, and its keys would land in a running turn.
       if (running) {
-        toast.info(`${agent} is working. Run /${command.name} when it finishes.`)
+        toast.info(`${agentLabel(agent)} is working. Run /${command.name} when it finishes.`)
         return
       }
       setDraft('')
@@ -300,7 +301,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
       return
     }
     if (running && !runsMidTurn(commandsFrom?.agent, typed)) {
-      toast.info(`${agent} is working. Run /${command.name} when it finishes.`)
+      toast.info(`${agentLabel(agent)} is working. Run /${command.name} when it finishes.`)
       return
     }
     setDraft('')
@@ -389,7 +390,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
           <DraftAttachments attachments={attachments} onRemove={attach.remove} />
           <textarea
             ref={text}
-            aria-label={`Message ${agent}`}
+            aria-label={`Message ${agentLabel(agent)}`}
             {...(picking && matches.length > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-slash-list', 'aria-activedescendant': `mx-slash-${String(active)}` } : {})}
             {...(mention.open && (mention.found?.paths.length ?? 0) > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-file-list', 'aria-activedescendant': `mx-file-${String(mention.active)}` } : {})}
             rows={2}
@@ -427,12 +428,12 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             )}
             <ModeControl facts={facts} />
             <span className="mx-spacer" />
-            {facts.usage !== undefined && <UsageMeters usage={facts.usage} always={agent === 'claude' || agent === 'codex'} onOpen={facts.onOpenUsage} />}
+            {facts.usage !== undefined && <UsageMeters usage={facts.usage} onOpen={facts.onOpenUsage} />}
             {stopping ? (
-              <button type="button" className="mx-send is-stop" aria-label={`Stop ${agent}`} title={`${agent} is working. Stop it (Esc)`} onClick={stop}><span className="mx-stop-square" aria-hidden="true" /></button>
+              <button type="button" className="mx-send is-stop" aria-label={`Stop ${agentLabel(agent)}`} title={`${agentLabel(agent)} is working. Stop it (Esc)`} onClick={stop}><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : busy ? (
               // Sent, and not yet a turn to stop: the same square, off until there is one.
-              <button type="button" className="mx-send is-stop is-off is-busy" aria-label={`${agent} is working`} aria-busy="true" title={`${agent} is working`} disabled><span className="mx-stop-square" aria-hidden="true" /></button>
+              <button type="button" className="mx-send is-stop is-off is-busy" aria-label={`${agentLabel(agent)} is working`} aria-busy="true" title={`${agentLabel(agent)} is working`} disabled><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : (
               <button type="button" className={`mx-send${off || empty ? ' is-off' : ''}`} aria-label={running ? 'Queue message' : 'Send message'} disabled={off || sending || empty} onClick={send}>
                 <Icon name="arrowUp" size={15} strokeWidth={2.2} />
@@ -443,7 +444,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
         {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Open the terminal to answer anything it asks.</p>}
         {restoreNote !== null && composer.conversationKey !== undefined && (
           <p className="mx-composer-note">
-            Your next message starts with a line telling {agent} the files were restored.{' '}
+            Your next message starts with a line telling {agentLabel(agent)} the files were restored.{' '}
             <button type="button" className="mx-composer-note-action" onClick={() => { updateComposer(composer.conversationKey ?? NO_CONVERSATION, (state) => ({ ...state, note: null })) }}>Leave it out</button>
           </p>
         )}
@@ -458,7 +459,7 @@ function modeLockedWhy(facts: Pick<ComposerFacts, 'modeLocked' | 'agentChips'>):
 }
 
 /** The short name a meter wears beside its figure. */
-const usageName = (item: { window: string | null }): string => (item.window === null ? 'Ctx' : item.window === 'week' ? 'Wk' : item.window)
+const usageName = (item: { window: string | null }): string => (item.window === null ? 'Context' : item.window === 'week' ? 'Week' : item.window)
 /** The meter's ring, square as the window's corners are: a path round a 12px box, starting at the top middle. */
 const METER_PATH = 'M6 1H11V11H1V1H6'
 /** The same ring under Rounded corners: a circle from the same start point. */
@@ -466,12 +467,11 @@ const METER_ROUND = 'M6 1A5 5 0 1 1 6 11A5 5 0 1 1 6 1'
 
 /**
  * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
- * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. For an agent that
- * reports its context (`always`) the context shows from the start, 0% before its first turn; a plan limit shows once
- * the agent has reported it (`usageItems`). A click opens Usage & cost.
+ * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. A meter shows once it is
+ * at least half used (`METER_SHOWN_FROM`), when it is worth a look; below that Usage & cost has it. A click opens it.
  */
-function UsageMeters({ usage, always, onOpen }: { usage: SessionUsage; always: boolean; onOpen: (() => void) | undefined }) {
-  const items = usageItems(usage, nowSeconds(), always)
+function UsageMeters({ usage, onOpen }: { usage: SessionUsage; onOpen: (() => void) | undefined }) {
+  const items = usageItems(usage, nowSeconds()).filter((item) => item.percent >= METER_SHOWN_FROM)
   if (items.length === 0) return null
   return (
     <span className="mx-usage" role="group" aria-label="Usage">
@@ -558,7 +558,7 @@ function ModelLabel({ agent, model, onOpenMenu, locked }: { agent: ChatAgent; mo
       className={`mx-model-button${locked === null ? '' : ' is-locked'}`}
       aria-disabled={locked === null ? undefined : 'true'}
       aria-label={`Model: ${name}. Open its menu.${locked === null ? '' : ` ${locked}`}`}
-      title={locked ?? `The model, from the agent's own file. Opens ${agent}'s /model menu here.`}
+      title={locked ?? `The model, from the agent's own file. Opens ${agentLabel(agent)}'s /model menu here.`}
       onClick={locked === null ? onOpenMenu : undefined}
     >
       {face}

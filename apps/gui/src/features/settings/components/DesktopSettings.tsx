@@ -31,7 +31,6 @@ import type { MachineHead, UpdateAction } from '@/features/workspace/model/machi
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
 import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type SettingsPreferences } from '../preferences'
-import { DAEMON_NAME } from '@/brand'
 
 export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'usage' | 'performance'
 
@@ -499,7 +498,7 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
         <Row label="Reopen layout on launch" detail="Restore the panes and splits you had last time.">
           <Switch aria-label="Reopen layout on launch" checked={preferences.restoreLayout} onCheckedChange={(value) => { update('restoreLayout', value) }} />
         </Row>
-        <Row label="Closing the window" detail={`Sessions are owned by ${DAEMON_NAME} and keep running.`}>
+        <Row label="Closing the window" detail="Sessions are owned by the Maiker service and keep running.">
           <span style={{ fontSize: 12, color: 'var(--dim)' }}>Keeps running</span>
         </Row>
         <Row label="Welcome" detail="Replay the short intro: where sessions start and the keys to know.">
@@ -559,10 +558,9 @@ function FontFamilyField({ value, onCommit }: { value: string; onCommit: (family
 }
 
 function TerminalSection({ preferences, update }: { preferences: SettingsPreferences; update: Update }) {
-  const family = preferences.terminalFontFamily === '' ? BUNDLED_FONT_NAME : preferences.terminalFontFamily
   return (
     <>
-      <Card title="Text" meta={<span className="mx-scard-meta">{family} · {preferences.terminalFontSize}px</span>}>
+      <Card title="Text">
         <Row label="Font family" detail="The font every terminal pane uses.">
           <FontFamilyField value={preferences.terminalFontFamily} onCommit={(next) => { update('terminalFontFamily', next) }} />
         </Row>
@@ -583,10 +581,10 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         </Row>
       </Card>
       <Card title="Scrollback">
-        <Row label="Lines kept per pane" detail={`Older output is dropped from the GUI. ${DAEMON_NAME} keeps the full history.`}>
+        <Row label="Lines kept per pane" detail="Older output is dropped from this window. The Maiker service keeps the full history.">
           <SegmentedChoice label="Lines kept per pane" value={preferences.scrollback} options={SCROLLBACKS} onChange={(value) => { update('scrollback', value) }} />
         </Row>
-        <Row label="Scroll speed" detail="Lines per wheel notch. Normal is xterm's own pace, which feels slow at this line height.">
+        <Row label="Scroll speed" detail="How many lines one turn of the mouse wheel scrolls. Normal is the terminal's default, which can feel slow.">
           <SegmentedChoice label="Scroll speed" value={preferences.scrollSpeed} options={SCROLL_SPEEDS} onChange={(value) => { update('scrollSpeed', value) }} />
         </Row>
         <Row label="Screen reader support" detail="Mirrors each terminal's text into the page so a screen reader can read it. It makes every pane much heavier to draw, so leave it off unless you use one.">
@@ -751,9 +749,12 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
         <Row label="Group sessions by" detail="Status lists what needs you first, then what is working, finished and idle. Project and Machine put each under its own heading.">
           <SegmentedChoice label="Group sessions by" value={preferences.sidebarGroup} options={GROUP_OPTIONS} onChange={(value) => { update('sidebarGroup', value) }} />
         </Row>
-        <Row label="Session order" detail="Creation keeps every row where it was put. Priority moves a session that needs you to the top. Used when the sidebar is grouped by machine.">
-          <SegmentedChoice label="Session order" value={preferences.sidebarOrder} options={ORDER_OPTIONS} onChange={(value) => { update('sidebarOrder', value) }} />
-        </Row>
+        {/* The order applies only to the machine grouping, so the choice is offered only there. */}
+        {preferences.sidebarGroup === 'machine' && (
+          <Row label="Session order" detail="Creation keeps every row where it was put. Priority moves a session that needs you to the top.">
+            <SegmentedChoice label="Session order" value={preferences.sidebarOrder} options={ORDER_OPTIONS} onChange={(value) => { update('sidebarOrder', value) }} />
+          </Row>
+        )}
         <Row label="Sidebar position" detail="Which side of the window the sidebar sits on. Inspect opens from the other side.">
           <SegmentedChoice label="Sidebar position" value={preferences.sidebarSide} options={SIDE_OPTIONS} onChange={(value) => { update('sidebarSide', value) }} />
         </Row>

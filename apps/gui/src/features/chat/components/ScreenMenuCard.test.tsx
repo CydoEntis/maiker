@@ -69,9 +69,9 @@ describe('a menu Claude draws on its screen with no hook behind it', () => {
   it('picks by number key, but not while typing in the message box', async () => {
     const { typeInto } = await open(SWITCH)
 
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message claude' }), { key: '2' })
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message Claude' }), { key: '2' })
     expect(typeInto).not.toHaveBeenCalled()
-    fireEvent.keyDown(screen.getByRole('region', { name: 'claude needs your permission' }), { key: '2' })
+    fireEvent.keyDown(screen.getByRole('region', { name: 'Claude needs your permission' }), { key: '2' })
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
     expect(typeInto.mock.calls.map(([keys]) => keys)).toEqual([DOWN, ENTER])
   })
@@ -79,7 +79,7 @@ describe('a menu Claude draws on its screen with no hook behind it', () => {
   it('ignores a number with no such choice', async () => {
     const { typeInto } = await open(SWITCH)
 
-    fireEvent.keyDown(screen.getByRole('region', { name: 'claude needs your permission' }), { key: '3' })
+    fireEvent.keyDown(screen.getByRole('region', { name: 'Claude needs your permission' }), { key: '3' })
     expect(typeInto).not.toHaveBeenCalled()
   })
 

@@ -57,7 +57,7 @@ function WithPaneQueue({ agent, typeInto }: { agent: 'claude' | 'codex'; typeInt
   return (
     <>
       <ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }} agent={agent} online typeInto={typeInto} paneQueue={paneQueue} sessionId="s1" />
-      <output aria-label="The daemon holds">{paneQueue.queued.join(' | ')}</output>
+      <output aria-label="The Maiker service holds">{paneQueue.queued.join(' | ')}</output>
     </>
   )
 }

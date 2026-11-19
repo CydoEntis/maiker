@@ -37,7 +37,7 @@ export function useEditFromHere({ place, conversation, events, agent, busy }: In
     if (term === null) return
     const turn = turnSpanOf(eventsNow(), message.turnId)
     if (turn === null) {
-      refused("this message's turn has no times from the daemon to find its snapshot by")
+      refused("this message's turn has no times from the Maiker service to find its snapshot by")
       return
     }
     const prepare = async () => {

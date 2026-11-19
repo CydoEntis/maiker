@@ -68,7 +68,7 @@ async function open(fileSearch: typeof PLACE | typeof REMOTE | null = PLACE) {
   const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
   render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1 }} agent="claude" online {...(fileSearch === null ? {} : { fileSearch })} />)
   await settle()
-  return { user, box: screen.getByRole('textbox', { name: 'Message claude' }) }
+  return { user, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
 const listed = () => within(screen.getByRole('listbox', { name: 'Files' })).getAllByRole('option').map((option) => option.textContent)

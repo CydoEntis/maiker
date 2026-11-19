@@ -66,7 +66,7 @@ async function open(setup: (daemon: FakeDaemonHistory) => void = () => undefined
   const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
   render(<ChatSession link={LINK} agent="claude" online={online} />)
   await settle()
-  return { daemon, user, box: screen.getByRole('textbox', { name: 'Message claude' }) }
+  return { daemon, user, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
 describe('the usage strip', () => {
@@ -74,26 +74,33 @@ describe('the usage strip', () => {
     const soon = Math.floor(Date.now() / 1000) + 3 * 3600 + 30
     const daemon = new FakeDaemonHistory()
     fake.current = daemon
-    render(<ChatSession link={LINK} agent="claude" online usage={{ context: 9, limits: [{ name: '5h', used: 12, resetsAt: soon }] }} />)
+    render(<ChatSession link={LINK} agent="claude" online usage={{ context: 59, limits: [{ name: '5h', used: 62, resetsAt: soon }] }} />)
     await settle()
 
     const strip = screen.getByRole('group', { name: 'Usage' })
-    expect(within(strip).getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '9')
-    expect(within(strip).getByRole('meter', { name: '5-hour limit' })).toHaveAttribute('aria-valuenow', '12')
-    expect(strip).toHaveTextContent('Ctx9%5h12%')
+    expect(within(strip).getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '59')
+    expect(within(strip).getByRole('meter', { name: '5-hour limit' })).toHaveAttribute('aria-valuenow', '62')
+    expect(strip).toHaveTextContent('Context59%5h62%')
     // When a limit starts over is in its tooltip, not on the line.
-    expect(within(strip).getByRole('meter', { name: '5-hour limit' }).parentElement).toHaveAttribute('title', '5-hour limit: 12% used · resets in 3h')
+    expect(within(strip).getByRole('meter', { name: '5-hour limit' }).parentElement).toHaveAttribute('title', '5-hour limit: 62% used · resets in 3h')
   })
 
-  it('shows Claude’s context at 0% before it reports one, and no 5-hour meter for a plan that has none', async () => {
+  it('shows a meter only once it is half used: a new chat has none', async () => {
+    fake.current = new FakeDaemonHistory()
+    render(<ChatSession link={LINK} agent="claude" online usage={{ context: 12, limits: [{ name: 'week', used: 70, resetsAt: 0 }] }} />)
+    await settle()
+
+    const meters = within(screen.getByRole('group', { name: 'Usage' }))
+    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Weekly limit'])
+    expect(screen.getByRole('group', { name: 'Usage' })).toHaveTextContent('Week70%')
+  })
+
+  it('draws no meters for a chat that has used little', async () => {
     fake.current = new FakeDaemonHistory()
     render(<ChatSession link={LINK} agent="claude" online usage={{ context: null, limits: [{ name: 'week', used: 0, resetsAt: 0 }] }} />)
     await settle()
 
-    const meters = within(screen.getByRole('group', { name: 'Usage' }))
-    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context', 'Weekly limit'])
-    expect(meters.getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '0')
-    expect(meters.getByRole('meter', { name: 'Weekly limit' })).toHaveAttribute('aria-valuenow', '0')
+    expect(screen.queryByRole('group', { name: 'Usage' })).not.toBeInTheDocument()
   })
 
   it('is not drawn for an agent that reports nothing of the kind', async () => {
@@ -149,10 +156,10 @@ describe('sending', () => {
 
   it('keeps the message when the send fails and retries it with the same operation number', async () => {
     const { user, box } = await open()
-    fake.submitMessage.mockRejectedValueOnce(new Error('the daemon went away'))
+    fake.submitMessage.mockRejectedValueOnce(new Error('the Maiker service went away'))
 
     await user.type(box, 'please retry{Enter}')
-    expect(await screen.findByRole('alert')).toHaveTextContent('the daemon went away')
+    expect(await screen.findByRole('alert')).toHaveTextContent('the Maiker service went away')
     expect(box).toHaveValue('please retry')
 
     await user.type(box, '{Enter}')
@@ -168,9 +175,9 @@ describe('sending', () => {
 
     await user.type(box, 'first{Enter}')
     await user.type(box, 'second')
-    act(() => { fail(new Error('the daemon went away')) })
+    act(() => { fail(new Error('the Maiker service went away')) })
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('the daemon went away')
+    expect(await screen.findByRole('alert')).toHaveTextContent('the Maiker service went away')
     expect(box).toHaveValue('first\n\nsecond')
   })
 
@@ -178,7 +185,7 @@ describe('sending', () => {
     const { user, box } = await open(() => undefined, false)
 
     expect(box).toBeEnabled()
-    expect(box).toHaveAttribute('placeholder', 'The daemon is offline')
+    expect(box).toHaveAttribute('placeholder', 'The Maiker service is offline')
     await user.type(box, 'for later{Enter}')
     expect(box).toHaveValue('for later')
     expect(fake.submitMessage).not.toHaveBeenCalled()
@@ -244,7 +251,7 @@ describe('while the agent works', () => {
     const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
     daemonQueues(daemon)
 
-    expect(box).toHaveAttribute('placeholder', 'Queue a message for when claude finishes')
+    expect(box).toHaveAttribute('placeholder', 'Queue a message for when Claude finishes')
     await user.type(box, 'and then lint it{Enter}')
     await settle()
 
@@ -544,7 +551,7 @@ describe('while the agent works', () => {
   it('interrupts with Stop and with Esc', async () => {
     const { user, box } = await open((daemon) => { daemon.status = 'Working' })
 
-    await user.click(screen.getByRole('button', { name: 'Stop claude' }))
+    await user.click(screen.getByRole('button', { name: 'Stop Claude' }))
     expect(fake.cancelTurn).toHaveBeenCalledWith(TARGET)
 
     await user.click(box)

@@ -85,7 +85,7 @@ async function open({ online = true, readOnly = false, typeInto, prepare = () =>
   const user = userEvent.setup({ advanceTimers: (ms) => vi.advanceTimersByTime(ms) })
   render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1, ...(readOnly ? { readOnly: true } : {}) }} agent="claude" online={online} {...(typeInto === undefined ? {} : { typeInto })} />)
   await settle()
-  return { daemon, user, box: screen.getByRole('textbox', { name: 'Message claude' }) }
+  return { daemon, user, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
 /** The part of a paste's clipboard the composer reads; jsdom has no DataTransfer. */
@@ -186,7 +186,7 @@ describe('a drop on the composer', () => {
     act(() => { dropOnComposer(['/d/a.png'], composerEl(box)) })
     await settle()
 
-    expect(error).toHaveBeenCalledWith('The daemon is offline')
+    expect(error).toHaveBeenCalledWith('The Maiker service is offline')
     expect(fake.attachLocalFile).not.toHaveBeenCalled()
   })
 })
@@ -286,13 +286,13 @@ describe('sending', () => {
 
   it('gives the files back with the text when the send fails, and retries the same message', async () => {
     fake.chooseFilesToAttach.mockResolvedValue(['/home/me/log.txt'])
-    fake.submitMessage.mockRejectedValueOnce(new Error('the daemon went away'))
+    fake.submitMessage.mockRejectedValueOnce(new Error('the Maiker service went away'))
     const { user, box } = await open()
 
     await user.click(paperclip())
     await settle()
     await user.type(box, 'see log{Enter}')
-    expect(await screen.findByRole('alert')).toHaveTextContent('the daemon went away')
+    expect(await screen.findByRole('alert')).toHaveTextContent('the Maiker service went away')
 
     expect(box).toHaveValue('see log')
     expect(screen.getByText('log.txt')).toBeInTheDocument()
@@ -392,7 +392,7 @@ describe('when files cannot be attached', () => {
     const error = vi.spyOn(toast, 'error')
     const { user } = await open({ online: false })
 
-    expect(paperclip()).toHaveAccessibleName('Attach files: The daemon is offline')
+    expect(paperclip()).toHaveAccessibleName('Attach files: The Maiker service is offline')
     await user.click(paperclip())
 
     expect(fake.chooseFilesToAttach).not.toHaveBeenCalled()

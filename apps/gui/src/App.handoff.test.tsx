@@ -842,10 +842,10 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(await screen.findByText('Reconnecting…')).toBeInTheDocument()
     expect(screen.queryByRole('alertdialog')).toBeNull()
     // The row says only that it is unknown; "last seen working" now lives in its tooltip and hover card.
-    expect(screen.getByRole('button', { name: 'codex, codex, unknown' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'codex, codex, offline' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).toHaveAttribute('data-input-disabled', 'true')
     expect(screen.getByRole('button', { name: 'New session' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'codex, codex, unknown' })).not.toHaveClass('mx-fx-working')
+    expect(screen.getByRole('button', { name: 'codex, codex, offline' })).not.toHaveClass('mx-fx-working')
     // The sidebar's foot never says it a second time.
     expect(screen.queryByText(`Reconnecting to ${DAEMON_NAME}…`)).toBeNull()
 
@@ -917,6 +917,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     const card = await screen.findByRole('alertdialog', { name: `Update ${APP_NAME} to reconnect` })
     expect(within(card).getByText(/The service behind this app is newer than the app\./)).toBeInTheDocument()
     expect(within(card).getByText('protocol 76 → 77')).toBeInTheDocument()
+    // The card shows while the update check is still running; the button says Check again once it finds none.
     expect(await within(card).findByRole('button', { name: 'Check again' })).toBeEnabled()
     expect(screen.queryByRole('alertdialog', { name: `Restart ${APP_NAME} to finish updating` })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Service in use' })).not.toBeInTheDocument()
@@ -1185,7 +1186,7 @@ describe('desktop overlays and pane tools', () => {
 
       const card = (await screen.findByText(/needs you$/)).closest('.mx-toast')
       expect(card).not.toBeNull()
-      expect(card).toHaveTextContent('Bash · git push origin main')
+      expect(card).toHaveTextContent('Wants to run git push origin main')
       await user.click(within(card as HTMLElement).getByRole('button', { name: 'Allow' }))
       expect(daemon.sendTerminalInput).toHaveBeenCalledWith(expect.objectContaining({ id: 't3' }), '1')
     } finally {

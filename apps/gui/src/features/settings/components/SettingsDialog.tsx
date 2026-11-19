@@ -5,7 +5,6 @@ import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { ThemePreference } from '@/data/themePreference'
 import { TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, type SettingsPreferences } from '../preferences'
-import { DAEMON_NAME } from '@/brand'
 
 type SettingsSection = 'general' | 'appearance' | 'notifications' | 'daemon' | 'keyboard'
 type SettingsNavOrientation = 'horizontal' | 'vertical'
@@ -96,7 +95,7 @@ function SettingsDialog({ open, onClose, theme, onThemeChange, preferences, onPr
               <button type="button" className={!preferences.restoreLayout ? 'is-selected' : ''} aria-pressed={!preferences.restoreLayout} onClick={() => { updatePreference('restoreLayout', false) }}>Start empty</button>
             </div></div>
             <label className="settings-row"><span><strong>Start folder</strong><small>New sessions open a shell here. Leave empty for your home folder, then cd anywhere.</small></span><input type="text" className="settings-text-input" placeholder="Home folder" value={preferences.startFolder} onChange={(event) => { updatePreference('startFolder', event.target.value) }} /></label>
-            <div className="settings-row"><span><strong>Closing this window</strong><small>Conversations belong to {DAEMON_NAME}, so closing the window or a tab never stops an agent.</small></span><span className="settings-value">Always keeps running</span></div>
+            <div className="settings-row"><span><strong>Closing this window</strong><small>Conversations belong to the Maiker service, so closing the window or a tab never stops an agent.</small></span><span className="settings-value">Always keeps running</span></div>
           </>}
           {section === 'appearance' && <>
             <div className="settings-section-title"><h3>Appearance</h3><p>Choose the color theme for this device.</p></div>

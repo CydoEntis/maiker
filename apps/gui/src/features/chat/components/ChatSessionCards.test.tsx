@@ -85,7 +85,7 @@ describe('a long mixed conversation', () => {
     await settle()
     await settle()
 
-    const list = screen.getByRole('region', { name: 'Conversation with claude' })
+    const list = screen.getByRole('region', { name: 'Conversation with Claude' })
     expect(list.querySelectorAll('[data-key]').length).toBeLessThan(40)
     // The last item (index 1499, 1499 % 7 = 1) is an agent message with a code block.
     expect(within(list).getByText(/Done 1499/)).toBeInTheDocument()

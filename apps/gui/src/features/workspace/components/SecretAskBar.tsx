@@ -54,7 +54,7 @@ export function SecretAskBar({ ask, machine, online }: Props) {
         )
         : (
           <>
-            <button type="button" className="mx-pane-ended-button is-primary" disabled={!online || machine !== 0} title={machine === 0 ? 'Type the value; it goes to the daemon only' : 'Secrets are only taken for this computer’s sessions'} onMouseDown={stop} onClick={() => { setOpen(true) }}>Provide…</button>
+            <button type="button" className="mx-pane-ended-button is-primary" disabled={!online || machine !== 0} title={machine === 0 ? 'Type the value; it goes to the Maiker service only' : 'Secrets are only taken for this computer’s sessions'} onMouseDown={stop} onClick={() => { setOpen(true) }}>Provide…</button>
             <button type="button" className="mx-pane-ended-button" disabled={!online || machine !== 0} title="The agent is told no" onMouseDown={stop} onClick={() => { send(null) }}>Decline</button>
           </>
         )}

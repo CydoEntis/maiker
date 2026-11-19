@@ -16,6 +16,6 @@ export function isOmitted(text: string): boolean {
 export function redactionNote(...texts: readonly (string | null)[]): string | null {
   const joined = texts.filter((text) => text !== null).join('\n')
   if (joined.includes(OMITTED_MARKER)) return 'The content of a secret file is not kept in the history, so it is not shown.'
-  if (joined.includes(REDACTED_MARKER)) return 'Some of this looked like a secret (a token or a key), so the daemon hid it.'
+  if (joined.includes(REDACTED_MARKER)) return 'Some of this looked like a secret (a token or a key), so the Maiker service hid it.'
   return null
 }

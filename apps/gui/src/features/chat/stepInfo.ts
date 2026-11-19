@@ -87,17 +87,24 @@ export function agentsSummary(agents: readonly SubagentEvent[]): string {
 }
 
 /**
- * How a command that is no longer running ended, in the row's few words: "exit 0 · 4s". A provider that
- * reports no exit code is said to have reported none, so a finished command never reads as one that passed.
+ * A finished command's few words on its row: how it ended when that is worth a look, and how long it took ("exit 2 ·
+ * 4s", "4s"). Null when there is neither.
  */
-export function commandMeta(event: CommandEvent): string {
-  const took = commandTook(event)
-  return took === null ? commandEnded(event) : `${commandEnded(event)} · ${took}`
+export function commandMeta(event: CommandEvent): string | null {
+  const said = [commandEnded(event), commandTook(event)].filter((part) => part !== null)
+  return said.length === 0 ? null : said.join(' · ')
 }
 
-/** How a finished command ended, in words: its exit code where the history kept one. */
-export function commandEnded(event: CommandEvent): string {
-  return foundNothing(event) ? 'no matches' : event.status === 'interrupted' ? 'stopped' : event.exitCode !== null ? `exit ${String(event.exitCode)}` : event.status === 'failed' ? 'failed' : 'exit code not reported'
+/**
+ * How a finished command ended, only when it did not simply succeed: a failure, a stop, or a search that found
+ * nothing. A success, or an end the agent did not report, says nothing, so the rows that need a look stand out;
+ * the row's check mark already says it finished, and a failure's status mark is red.
+ */
+export function commandEnded(event: CommandEvent): string | null {
+  if (foundNothing(event)) return 'no matches'
+  if (event.status === 'interrupted') return 'stopped'
+  if (event.exitCode !== null && event.exitCode !== 0) return `exit ${String(event.exitCode)}`
+  return event.status === 'failed' ? 'failed' : null
 }
 
 /**

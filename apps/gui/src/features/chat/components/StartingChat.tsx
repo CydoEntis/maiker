@@ -20,6 +20,7 @@ import { ScreenMenuTray, TrustFolderTray } from './QuestionTray'
 import { parseScreenMenu } from '../screenMenu'
 import { parseTrustPrompt } from '../trustPrompt'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
+import { agentLabel } from '@/features/workspace/model/session'
 
 type StartingChatProps = {
   agent: ChatAgent
@@ -89,8 +90,8 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, h
       : hookProblem === null ? connectAgent(agent) : connectAgent(agent, configFolderOf(hookProblem.file))
     connected
       .then(() => reloadAgentOnDaemon({ id: sessionId }))
-      .then(() => { toast.success(`${agent} is connected and restarted to load the hooks.`) })
-      .catch((failure: unknown) => { toast.failed(`Could not connect ${agent}`, failure) })
+      .then(() => { toast.success(`${agentLabel(agent)} is connected and restarted to load the hooks.`) })
+      .catch((failure: unknown) => { toast.failed(`Could not connect ${agentLabel(agent)}`, failure) })
       .finally(() => { setConnecting(false) })
   }
 
@@ -141,22 +142,22 @@ export function StartingChat({ agent, sessionId, onBackToTerminal, paneStatus, h
           <span role="note" className="is-warn">{waiting ? waitingInTerminalHint(agent) : hookProblem !== null && hooked !== true ? hookProblemHint(agent, hookProblem) : hooked === true ? noConversationHint(agent) : noEventsHint(agent)}</span>
           <span className="mx-spacer" />
           <button type="button" className="mx-sub-back" onClick={onBackToTerminal}>Open terminal</button>
-          {!waiting && hooked !== true && <button type="button" className="mx-sub-back" disabled={connecting} onClick={connect}>{connecting ? 'Connecting…' : hookProblem === null ? `Connect ${agent}` : hookProblem.repaired ? `Restart ${agent}` : `Repair ${agent} hooks`}</button>}
+          {!waiting && hooked !== true && <button type="button" className="mx-sub-back" disabled={connecting} onClick={connect}>{connecting ? 'Connecting…' : hookProblem === null ? `Connect ${agentLabel(agent)}` : hookProblem.repaired ? `Restart ${agentLabel(agent)}` : `Repair ${agentLabel(agent)} hooks`}</button>}
         </div>
       )}
       {held === null ? (
         // Never a blank screen or a raw terminal: the session is an agent session, and this says it is on its way.
         <div className="mx-chat-empty" role="status">
           <div className="mx-chat-starting">
-            <span className="mx-chat-starting-title"><WorkingMark agent={agent} />Starting {AGENT_LABEL[agent]}…</span>
-            <p>{late ? stuckChatLine(agent) : `Type below: it is sent as soon as ${agent} is ready.`}</p>
+            <span className="mx-chat-starting-title"><WorkingMark agent={agent} />Starting {agentLabel(agent)}…</span>
+            <p>{late ? stuckChatLine(agent) : `Type below: it is sent as soon as ${agentLabel(agent)} is ready.`}</p>
           </div>
         </div>
       ) : (
         // The same list the real chat uses, so the message and the line under it are already where they will stay.
         <div className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto">
           <div className="mx-chat-row"><div className="mx-msg-user is-echo" aria-label="Sending">{echoed(held)}</div></div>
-          <div className="mx-chat-row"><div className="mx-working"><WorkingMark agent={agent} /><span>{agent} is starting…</span></div></div>
+          <div className="mx-chat-row"><div className="mx-working"><WorkingMark agent={agent} /><span>{agentLabel(agent)} is starting…</span></div></div>
         </div>
       )}
       <Composer

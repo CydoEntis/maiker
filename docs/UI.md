@@ -1274,8 +1274,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   changed since, so a 1,000-entry conversation costs one small read per poll. A page that says `reset` (the history was
   rebuilt, or the conversation started over) replaces what the feed held. A failed read, or a daemon that predates
   `resume`, falls back to the old way: ask again for the last page read, or read from the start when that cursor is
-  stale. A failed read is tried again after 500 ms (`RETRY_READ_MS`); the chat says "Reconnecting to the daemon" with
-  the reason only when that one fails too, since one failure is usually a stale kept line, not a lost daemon. A history
+  stale. A failed read is tried again after 500 ms (`RETRY_READ_MS`); the chat says "Could not load the latest messages"
+  with the reason only when that one fails too, since one failure is usually a stale kept line, and only while the
+  service is up: a lost service is the window's news, said once by its bar. A history
   the daemon marks incomplete (`completeness`, such as a long transcript of which it reads only the last 16 MB) shows
   no notice: the chat shows what it has. Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
   objects. A new generation shows a fresh projection. Pending approvals come with every page and go to `applyApprovals`,
@@ -1371,7 +1372,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     40–88", "Search `pattern` in src", "Fetch example.com/docs", "Skill review:pr" and its arguments, an extension's server
     and tool. Nothing the input does not hold (hit counts, a status code) is shown. Click opens the input and the
     result, bounded.
-  - *Edit step:* the file as a badge, Added / Modified / Deleted where the history says, `+N` `−N`; it opens to the
+  - *Edit step:* the file as a badge, Added / Deleted where the history says (Modified only on a Write, or on the
+    edit card that shows no verb; after "Edit" it would repeat it), `+N` `−N`; it opens to the
     diff, folded past 12 lines with "Show all N lines" / "Show less", and "Open in side panel" (the Inspect panel's
     Changes view). A diff too large, one the history did not keep and a secret file each say so. A finished Write of a
     Markdown file whose text the history kept is a document card instead (`writtenDocument.ts`).

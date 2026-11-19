@@ -452,8 +452,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   so the draft is never missing from the sidebar; it goes when the chat starts and the chat's own row takes its place.
   Grouped by project inside a machine, each project is a folding heading (its colour square, name, needs-you count,
   count). A row whose status changes glides to its new place over 420ms, and the headings and rows it passes glide with it, so
-  nothing in the list snaps (`useFlip`); a new row slides in from the left; Reduce motion turns both off. A status change tints
-  nothing: the row's icon and its new place are the whole signal.
+  nothing in the list snaps (`useFlip`); a new row slides in from the left; Reduce motion turns both off. A row is never tinted or flashed when its
+  status changes: its badge says the new status, and a flash on every finished turn read as noise.
   **Put away** (`splitPutAway`) is the last heading of the scrolling list in every grouping, folded until opened, with
   its count and "still running": the sessions put away from their menu, terminals included, as created. A row there has
   an arrow (**Bring back**) in place of the hover ×; a put-away session that needs you is listed under Needs you instead.
@@ -611,13 +611,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   mode is on (`PLAN MODE` in mono blue, then what it means), and a bottom row: the model picker, the permission mode
   as a shield and a chevron (`ModeControl`; the mode's name is in its tooltip, and the shield is `--danger` in a mode
   that asks about nothing), a spacer, the usage meters and send. Its focus is the border turning accent (the one bordered focus). The meters
-  (`UsageMeters`, `usageStrip.ts`) are the context, then each plan limit, each a short name (`Ctx`, `5h`, `Wk`, which
+  (`UsageMeters`, `usageStrip.ts`) are the context, then each plan limit, each a short name (`Context`, `5h`, `Week`, which
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
-  under 50%, `--m-or` under 75%, `--m-hi` from there). They always show, and each opens Settings › Usage & cost. When
-  a limit starts over is in its tooltip. For Claude and Codex the context always shows, at 0% before the first turn
-  has reported one (a chat that has run nothing has used none of it). A plan limit shows only once the agent has
-  reported it, in the order context, 5-hour, weekly, then any other: a plan without a 5-hour window (an API key, some
+  under 50%, `--m-or` under 75%, `--m-hi` from there). A meter shows once it is at least half used
+  (`METER_SHOWN_FROM`), when it is worth a look; below that Settings › Usage & cost has it. Each opens that page. When
+  a limit starts over is in its tooltip. A plan limit shows only once the agent has reported it, in the order context, 5-hour, weekly, then any other: a plan without a 5-hour window (an API key, some
   Codex plans) never reports one, and a meter that only ever said "–" was noise. Other agents show only what they reported; a chat session with no pane has none yet. Where the chat works is in the pane header's crumbs, not in the box.
 - **Codex's commands.** A Codex chat has the same picker. Codex cannot be asked what it takes, so its commands are a
   list the window keeps (`codexCommands.ts`: names from OpenAI's command reference, descriptions from the Codex CLI

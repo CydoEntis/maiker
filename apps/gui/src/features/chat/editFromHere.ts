@@ -1,6 +1,7 @@
 import type { TurnSpan } from '@/features/inspect/turnRange'
 import { parseAttachmentMessage } from './attachmentMessage'
 import type { ChatEvent, TurnEvent } from './chatEvents'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** Where a chat's files can be restored from: the pane whose checkout holds them, or why they cannot be. */
 export type RewindPlace = { readonly term: number } | { readonly refusal: string }
@@ -57,5 +58,5 @@ export function confirmBody(count: number, agent: string, hasDraft: boolean): st
     ? 'No files change: they already match how they were before this message.'
     : `${files} change back to how they were before this message. What is there now is kept as a "before a restore" snapshot.`
   const box = hasDraft ? ' The message goes in the box above what you have typed.' : ' The message goes back in the box.'
-  return `${change}${box} ${agent}'s conversation is not rewound; your next message tells it the files were restored.`
+  return `${change}${box} ${agentLabel(agent)}'s conversation is not rewound; your next message tells it the files were restored.`
 }

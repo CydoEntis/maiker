@@ -32,7 +32,7 @@ function view(extra: Partial<Conversation> = {}) {
 describe('what the hover card says', () => {
   it('names the project, the branch, the line changes and where the agent runs', () => {
     const text = hoverCardText({ ...view(), diffAdded: 12, diffRemoved: 3 }, 'Upgrade to React 19')
-    expect(text).toMatchObject({ title: 'Upgrade to React 19', activity: 'Upgrade React', folder: { text: 'app', mono: false, ownWorktree: false }, branch: 'feat/x', changes: { added: 12, removed: 3 }, pr: null, who: 'claude · This computer' })
+    expect(text).toMatchObject({ title: 'Upgrade to React 19', activity: 'Upgrade React', folder: { text: 'app', mono: false, ownWorktree: false }, branch: 'feat/x', changes: { added: 12, removed: 3 }, pr: null, who: 'Claude · This computer' })
   })
 
   it('tags a branch that has a worktree of its own', () => {

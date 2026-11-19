@@ -107,7 +107,7 @@ describe('a message typed while the agent was starting', () => {
     open('Idle')
     await settle()
 
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveValue('half a thou')
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveValue('half a thou')
   })
 })
 
@@ -160,7 +160,7 @@ describe('a chat whose agent has not said what it is doing yet', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const { typeInto } = open('None')
     await settle()
-    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
     expect(box).not.toBeDisabled()
 
     await user.type(box, 'start on the parser{Enter}')
@@ -176,7 +176,7 @@ describe('a chat whose agent has not said what it is doing yet', () => {
     open('Idle')
     await settle()
 
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveFocus()
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveFocus()
   })
 
   it('leaves the cursor where it is when something else has it', async () => {
@@ -219,7 +219,7 @@ describe('a message written while a terminal agent works', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const { typeInto } = open('Working')
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'stop, use the other branch{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'stop, use the other branch{Enter}')
     await settle(1)
     expect(typeInto).not.toHaveBeenCalled()
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('stop, use the other branch')
@@ -242,7 +242,7 @@ describe('a message written while a terminal agent works', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const { typeInto } = open('Working')
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), '/btw which file is that?{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), '/btw which file is that?{Enter}')
     await settle(1000)
 
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/btw which file is that?', '\r'])
@@ -254,7 +254,7 @@ describe('a message written while a terminal agent works', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const { typeInto } = open('None')
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), '/btw hi{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), '/btw hi{Enter}')
     await settle(10)
     expect(typeInto).not.toHaveBeenCalled()
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('/btw hi')
@@ -264,7 +264,7 @@ describe('a message written while a terminal agent works', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const { typeInto } = open('Working')
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), '/compact{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), '/compact{Enter}')
     await settle(10)
     expect(typeInto).not.toHaveBeenCalled()
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('/compact')
@@ -277,7 +277,7 @@ describe('a message written while a terminal agent works', () => {
     act(() => {
       updateComposer(FAKE_CONVERSATION, (state) => ({ ...state, attachments: [{ id: 'f1', path: '/tmp/notes.txt', name: 'notes.txt', size: 3, kind: 'file', preview: null }] }))
     })
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), '/btw look{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), '/btw look{Enter}')
     await settle(10)
     expect(typeInto).not.toHaveBeenCalled()
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('/btw look')
@@ -287,7 +287,7 @@ describe('a message written while a terminal agent works', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const { typeInto } = open('Working')
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'stop, use the other branch{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'stop, use the other branch{Enter}')
     await settle(1)
     typeInto.mockRejectedValueOnce(new Error('terminal closed'))
 
@@ -295,7 +295,7 @@ describe('a message written while a terminal agent works', () => {
     await user.click(screen.getByRole('button', { name: 'Send now' }))
     await settle(PASTE_SUBMIT_GAP_MS + 10)
 
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveValue('stop, use the other branch')
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveValue('stop, use the other branch')
   })
 
   it('is left with the daemon and shown in the queue, and drawn as sent when the daemon types it in', async () => {
@@ -303,7 +303,7 @@ describe('a message written while a terminal agent works', () => {
     const { typeInto } = open('Working')
     await settle()
 
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'and then add tests')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'and then add tests')
     await user.click(screen.getByRole('button', { name: 'Queue message' }))
     await settle(1)
     expect(typeInto).not.toHaveBeenCalled()
@@ -329,7 +329,7 @@ describe('a message written while a terminal agent works', () => {
     const paneQueue = { queued: [], add, drop: () => Promise.resolve() }
     render(<ChatSession link={LINK} agent="claude" online typeInto={vi.fn()} paneQueue={paneQueue} sessionId="s1" />)
     await settle()
-    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
 
     await user.type(box, 'and then add tests{Enter}')
     await settle(1)
@@ -354,7 +354,7 @@ describe('a message written while a terminal agent works', () => {
     const add = vi.fn<(text: string, first: boolean, operation: number) => Promise<void>>(() => new Promise<void>(() => undefined))
     render(<ChatSession link={LINK} agent="claude" online typeInto={vi.fn()} paneQueue={{ queued: [], add, drop: () => Promise.resolve() }} sessionId="s1" />)
     await settle()
-    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
 
     await user.type(box, 'and then add tests{Enter}')
     await settle(1)
@@ -374,7 +374,7 @@ describe('a message written while a terminal agent works', () => {
       .mockRejectedValue(new Error('the local daemon did not answer within 5 seconds'))
     render(<ChatSession link={LINK} agent="claude" online typeInto={vi.fn()} paneQueue={{ queued: [], add, drop: () => Promise.resolve() }} sessionId="s1" />)
     await settle()
-    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
 
     await user.type(box, 'and then add tests{Enter}')
     await settle(1)
@@ -394,7 +394,7 @@ describe('a message written while a terminal agent works', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     open('Working')
     await settle()
-    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
     await user.type(box, 'and then add tests{Enter}')
     await settle(1)
 

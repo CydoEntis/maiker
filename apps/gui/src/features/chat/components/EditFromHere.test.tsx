@@ -114,7 +114,7 @@ async function editFromHere(message: string) {
   await click(screen.getByRole('menuitem', { name: 'Edit from here' }))
 }
 
-const box = () => screen.getByRole('textbox', { name: 'Message claude' })
+const box = () => screen.getByRole('textbox', { name: 'Message Claude' })
 const confirmButton = (name: string) => within(screen.getByRole('alertdialog')).getByRole('button', { name })
 
 describe('Edit from here on a message the person sent', () => {
@@ -231,7 +231,7 @@ describe('Edit from here on a message the person sent', () => {
 
     await settle()
     expect(screen.getByRole('menuitem', { name: 'Edit from here' })).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByRole('menuitem', { name: 'Edit from here' })).toHaveAccessibleDescription('claude is working. Edit from here when it finishes.')
+    expect(screen.getByRole('menuitem', { name: 'Edit from here' })).toHaveAccessibleDescription('Claude is working. Edit from here when it finishes.')
   })
 
   it('is greyed out with the local-only refusal for a session on another machine', async () => {

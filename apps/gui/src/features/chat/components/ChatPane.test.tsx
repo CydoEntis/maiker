@@ -19,7 +19,7 @@ describe('the chat card of a shell pane', () => {
     render(<ChatPane availability={shell} process="shell" online onBackToTerminal={noop} onStartAgent={onStartAgent} onStartChat={onStartChat} />)
     const user = userEvent.setup()
 
-    await user.click(screen.getByRole('button', { name: 'Start claude here' }))
+    await user.click(screen.getByRole('button', { name: 'Start Claude here' }))
     expect(onStartAgent).toHaveBeenCalledWith('claude')
     expect(onStartChat).not.toHaveBeenCalled()
 
@@ -40,7 +40,7 @@ describe('the chat card of a shell pane', () => {
 
   it('offers neither start while the daemon is offline', () => {
     render(<ChatPane availability={shell} process="shell" online={false} onBackToTerminal={noop} onStartAgent={noop} onStartChat={noop} />)
-    for (const name of ['Start claude here', 'Start a Claude chat', 'Start a Codex chat', 'Start a Gemini chat']) {
+    for (const name of ['Start Claude here', 'Start a Claude chat', 'Start a Codex chat', 'Start a Gemini chat']) {
       expect(screen.getByRole('button', { name })).toBeDisabled()
     }
   })
@@ -70,8 +70,8 @@ describe('the chat of a session whose agent has not reported in yet', () => {
 
   it('is the chat with its message box at once, not a card that says there is nothing', () => {
     render(<ChatPane availability={starting} process="claude" online sessionId="s1" onBackToTerminal={noop} onStartAgent={noop} />)
-    expect(screen.getByText(/Type below: it is sent as soon as claude is ready/)).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toBeEnabled()
+    expect(screen.getByText(/Type below: it is sent as soon as Claude is ready/)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toBeEnabled()
     expect(screen.queryByText('Chat view is for agent sessions')).not.toBeInTheDocument()
   })
 

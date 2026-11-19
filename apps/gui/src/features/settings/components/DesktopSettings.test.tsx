@@ -316,7 +316,6 @@ describe('desktop settings', () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('terminal')
 
-    expect(screen.getByText('Geist Mono · 13px')).toBeInTheDocument()
     expect(within(screen.getByRole('radiogroup', { name: 'Terminal text size' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['11', '12', '13', '14', '15', '16'])
     await user.click(screen.getByRole('radio', { name: '15' }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, terminalFontSize: 15 })

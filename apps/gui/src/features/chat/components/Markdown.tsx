@@ -11,7 +11,8 @@ import { listBullets, parseMarkdown, parseInline, safeHref, type Block, type Inl
 import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBlock'
 import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
-import { copyBlock, saveBlock } from '../saveBlock'
+import { saveBlock } from '../saveBlock'
+import { useCopied } from '@/lib/useCopied'
 import { TypeTag, typeTone } from '@/components/ui/tag'
 import { Block as BlockBox, BlockHead } from './Block'
 import type { Askable } from '../plainQuestions'
@@ -110,7 +111,7 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
         onToggle={() => { setOpen((current) => !current) }}
         actions={(
           <>
-            <button type="button" className="mx-block-action" onClick={() => { copyBlock(text, 'Could not copy the code') }}>Copy</button>
+            <CopyAction text={text} failed="Could not copy the code" />
             <button type="button" className="mx-block-action" title="Save as a file in your export folder" onClick={() => { saveBlock(language === '' ? 'code' : language, codeExtension(language), text) }}>Save</button>
           </>
         )}
@@ -130,6 +131,12 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
   )
 }
 
+/** Copy on a block, which says Copied for a moment where it was pressed. */
+function CopyAction({ text, failed }: { text: string; failed: string }) {
+  const { copied, copy } = useCopied(failed)
+  return <button type="button" className="mx-block-action" onClick={() => { copy(text) }}>{copied ? 'Copied' : 'Copy'}</button>
+}
+
 type TableBlock = Extract<Block, { kind: 'table' }>
 
 /**
@@ -145,7 +152,7 @@ function TableCard({ block }: { block: TableBlock }) {
       <div className="mx-md-tableacts" role="group" aria-label="Copy or save this table">
         <span className="mx-md-tabletitle">{rows} {rows === 1 ? 'row' : 'rows'}</span>
         <span className="mx-spacer" />
-        <button type="button" className="mx-block-action" onClick={() => { copyBlock(tableMarkdown(block), 'Could not copy the table') }}>Copy</button>
+        <CopyAction text={tableMarkdown(block)} failed="Could not copy the table" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="mx-block-action">Save as<ChevronDown className="size-3" aria-hidden="true" /></button>

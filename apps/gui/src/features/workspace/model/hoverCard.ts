@@ -1,6 +1,6 @@
 import { machineLabel } from '@/data/machineNicknames'
 import { messagePreview } from '@/features/chat/messagePreview'
-import { SHELL_PROCESS, type SessionStatus, type SessionView } from './session'
+import { agentLabel, askWords, SHELL_PROCESS, STATUS_WORD, type SessionView } from './session'
 import { projectOf } from './sidebar'
 import { pullRequestHeadline, pullRequestTone, type PullRequestTone } from './pullRequest'
 
@@ -14,15 +14,8 @@ const SAID_CHARS = 140
 const HALF = 2
 
 /** The words that stand in for an activity line when the session reported none. */
-const WORD: Record<SessionStatus, string> = {
-  needs: 'Needs you',
-  limited: 'Limited',
-  working: 'Working',
-  done: 'Finished',
-  error: 'Stopped',
-  idle: 'Idle',
-  unknown: 'Not known',
-}
+/** A status word as the card's line: "needs you" is "Needs you". */
+const sentence = (word: string): string => word.charAt(0).toUpperCase() + word.slice(1)
 
 function clipped(text: string): string {
   // One plain line: the paste tags and the attached-files block are transport, not what was said.
@@ -41,7 +34,7 @@ export type HoverCardText = {
   /** Lines added and removed; null when nothing changed. */
   changes: { added: number; removed: number } | null
   pr: { number: string; state: string; tone: PullRequestTone } | null
-  /** The agent and where it runs: `claude · This computer`. */
+  /** The agent and where it runs: `Claude · This computer`. */
   who: string
 }
 
@@ -51,7 +44,7 @@ export type HoverCardText = {
  * for an activity the session did not report.
  */
 export function hoverCardText(session: SessionView, title: string): HoverCardText {
-  const asked = session.ask === null ? session.asking : `${session.ask.tool}: ${session.ask.detail}`
+  const asked = session.ask === null ? session.asking : askWords(session.ask)
   const said = session.status === 'needs' ? asked : session.status === 'working' ? session.lastPrompt : ''
   const shell = session.process === SHELL_PROCESS
   const pr = session.pr
@@ -59,12 +52,12 @@ export function hoverCardText(session: SessionView, title: string): HoverCardTex
   return {
     title,
     activity: shell || clipped(said) === '' ? null : clipped(said),
-    word: WORD[session.status],
+    word: sentence(STATUS_WORD[session.status]),
     folder: { text: shell ? session.cwdLabel : projectOf(session), mono: shell, ownWorktree: session.worktree },
     branch: shell ? null : session.branch,
     changes: session.diffAdded + session.diffRemoved > 0 ? { added: session.diffAdded, removed: session.diffRemoved } : null,
     pr: pr === null ? null : { number, state: pullRequestHeadline(pr).slice(number.length).trim() || pr.state.toLowerCase(), tone: pullRequestTone(pr) },
-    who: `${session.process} · ${session.machineName === null ? 'This computer' : machineLabel(session.machineName)}`,
+    who: `${agentLabel(session.process)} · ${session.machineName === null ? 'This computer' : machineLabel(session.machineName)}`,
   }
 }
 
