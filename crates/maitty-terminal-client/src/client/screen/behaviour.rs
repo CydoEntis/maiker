@@ -460,6 +460,7 @@ impl App {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: false,
         }));
     }
 
@@ -868,6 +869,10 @@ impl App {
             self.toggle_changes();
             return;
         }
+        if k.modifiers == KeyModifiers::CONTROL && k.code == KeyCode::Char(',') {
+            self.act(Action::Settings);
+            return;
+        }
         // A key that needs no leader acts here as it does over a pane, on the sidebar's row
         // where it has one (Alt+x closes the selected session), instead of being typed.
         if let Some(a) = self.keymap.global.get(&spec).cloned() {
@@ -1113,6 +1118,7 @@ impl App {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
     }
 
@@ -2142,6 +2148,7 @@ impl App {
                 if let Mode::ScreenSettings(v) = &mut self.mode {
                     v.cat = i;
                     v.sel = 0;
+                    v.in_rows = false;
                     v.editing = None;
                     v.capturing = false;
                 }
@@ -2172,11 +2179,12 @@ impl App {
                 let Mode::ScreenSettings(v) = &mut self.mode else {
                     return;
                 };
-                let again = v.sel == i;
+                let again = v.in_rows && v.sel == i;
                 v.sel = i;
+                v.in_rows = true;
                 let cat = crate::client::modal::Cat::ALL
                     [v.cat.min(crate::client::modal::Cat::ALL.len() - 1)];
-                let row = crate::client::design::settings_rows(cat).get(i).cloned();
+                let row = self.settings_page_rows(cat).get(i).cloned();
                 let enter = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
                 match (h, row) {
                     (ScreenHit::SetVal(_, vi), Some(row @ SRow::Setting(_)))

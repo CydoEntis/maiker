@@ -707,6 +707,10 @@ pub struct App {
     window_focused: bool,
     /// The background we told the terminal to use (OSC 11), so its padding matches.
     osc_bg: Option<ratatui::style::Color>,
+    /// The first frame has set the sidebar for the window's width (`start_for_width`).
+    started_for_width: bool,
+    /// The smallest window drawn; under it one line asks for a bigger one.
+    min_window: (u16, u16),
     /// Panes in the middle of a synchronized update (mode 2026): since when. Not drawn
     /// until it ends (or 100 ms pass), so redraws don't flicker.
     sync_hold: HashMap<ClientTerm, Instant>,
@@ -966,6 +970,10 @@ impl App {
             screen: screen::Screen::load(),
             window_focused: true,
             osc_bg: None,
+            // Tests draw at every size and expect the sidebar they set up, so they begin with
+            // both window-size rules off; the rules have tests of their own that switch them on.
+            started_for_width: cfg!(test),
+            min_window: if cfg!(test) { (40, 10) } else { render::MIN_WINDOW },
             sync_hold: HashMap::new(),
             focus_report: HashSet::new(),
             focus_sent: None,

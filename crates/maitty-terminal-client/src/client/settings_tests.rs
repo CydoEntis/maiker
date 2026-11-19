@@ -171,6 +171,7 @@ fn open_settings_row(app: &mut App, cat: modal::Cat, label: &str) {
         editing: None,
         capturing: false,
         scroll: 0,
+        in_rows: true,
     }));
 }
 

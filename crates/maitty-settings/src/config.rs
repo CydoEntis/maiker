@@ -731,7 +731,7 @@ impl Serialize for Rounding {
 
 impl Rounding {
     /// Settings' choices, in its order.
-    pub const NAMES: &[&str] = &["full", "corners", "off"];
+    pub const NAMES: &[&str] = &["off", "corners", "full"];
 
     /// Cards draw `╭╮╰╯`.
     pub fn corners(self) -> bool {

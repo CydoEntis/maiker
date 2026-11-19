@@ -144,12 +144,13 @@ groups* and *check evidence sheet*.
 
 ## Modals and popovers
 
-Everything that floats over the screen (menus, Settings, the keys help, confirms) is a box in the accent
+Everything that floats over the screen (menus, the keys help, confirms) is a box in the accent
 on the panel ground, corners by `ui.rounded`; what sits on its top border stands on the ground
-behind. Deciding is a modal: centred, its title as an accent chip on the top border (` settings `), a ` × `
-chip on `btn` a cell in from the corner, no shadow. Settings has its sections down the left and the
-chosen section's rows at the right (label, then the value bold in the accent with `‹ ›` and `2/3`), and a
-footer with its keys and where it is saved. The keys help is three columns of keys. A menu has no title:
+behind. Deciding is a modal: centred, its title as an accent chip on the top border, a ` × `
+chip on `btn` a cell in from the corner, no shadow. Settings is not a modal but a full window:
+a 20-column list of pages down the left, the rows at the right (a label and a dim description at
+the left, the control at the right; a switch is `━━● on` or `●━━ off`, a choice is segments, the
+chosen one filled with the border colour and bold). The keys help is a box listing every key. A menu has no title:
 one row per item, the leader key at the right in the accent, the item that ends something last in red.
 Small explanations (why, the message and helpers popovers) open beside their row with a `◂` pointer.
 See UI › *UI conventions*, *Menus* and *check modals and settings*.

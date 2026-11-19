@@ -442,66 +442,6 @@ fn draw_panel_body(app: &mut App, buf: &mut Buffer, body: Rect, kind: SheetKind,
     }
 }
 
-/// The Settings modal's size at most: the redesign's 96 columns and a little more, since real
-/// values (a hooks state, the version line) run longer than its examples.
-const SETTINGS_W: u16 = 110;
-const SETTINGS_H: u16 = 32;
-
-/// Settings is a modal so it does not take width away from the workspace.
-pub(in crate::client) fn draw_settings_modal(
-    app: &mut App,
-    buf: &mut Buffer,
-    area: Rect,
-    t: &Theme,
-) {
-    let Mode::ScreenSettings(view) = &app.mode else {
-        return;
-    };
-    let view = (**view).clone();
-    let max_width = area.width.saturating_sub(4).min(SETTINGS_W);
-    let max_height = area.height.saturating_sub(2).min(SETTINGS_H);
-    let r = Rect {
-        x: area.x + area.width.saturating_sub(max_width) / 2,
-        y: area.y + area.height.saturating_sub(max_height) / 2,
-        width: max_width,
-        height: max_height,
-    };
-    super::dim_all(app, buf, area, t);
-    hit(app, area, ScreenHit::Noop);
-    let r = panel_at(app, buf, r, "settings", &[], t);
-    let inside = Rect {
-        x: r.x + 1,
-        y: r.y + 1,
-        width: r.width.saturating_sub(2),
-        height: r.height.saturating_sub(2),
-    };
-    if inside.width < 44 {
-        put(
-            buf,
-            inside.x + 2,
-            inside.y + 2,
-            &[seg(
-                "Make the window wider",
-                Style::default().fg(t.muted).bg(t.card),
-            )],
-            inside.right(),
-        );
-    } else if inside.height < 18 {
-        put(
-            buf,
-            inside.x + 2,
-            inside.y + 2,
-            &[seg(
-                "Make the window taller",
-                Style::default().fg(t.muted).bg(t.card),
-            )],
-            inside.right(),
-        );
-    } else {
-        crate::client::screen::draw_settings(app, buf, inside, t, &view);
-    }
-}
-
 /// The sheet's last row: its key hints in an action bar, and a note at the right when there's room.
 pub(in crate::client) fn status_bar(
     buf: &mut Buffer,

@@ -719,89 +719,60 @@ pub(in crate::client) fn draw_keymap(
     }
     match km.view {
         KeyView::Search => super::search::draw_search(app, buf, area, t, km),
-        KeyView::All => draw_keys_help(app, buf, area, t),
+        KeyView::All => draw_keys_help(app, buf, area, t, km),
         KeyView::Map => draw_grid(app, buf, area, t, km, false),
     }
 }
 
-/// The Keys dialog's widest, and the cells a key takes before its words.
-const HELP_W: u16 = 92;
-const HELP_KEY_W: u16 = 13;
+/// The help box's widest and tallest.
+const HELP_W: u16 = 104;
+const HELP_H: u16 = 40;
+/// A box this wide lays the keys out in two columns, else one.
+const TWO_COLUMNS_FROM: u16 = 90;
+/// The widest a key's own column gets; a longer one is cut.
+const HELP_KEY_MAX: usize = 12;
 const HELP_NOTE: &str = "Keys only work in key mode ({lead}). Everything else goes to the pane.";
 
-/// A column of the keys help: its title, then each row's words and the actions its key runs.
-type HelpColumn = (&'static str, Vec<(&'static str, Vec<Action>)>);
-
-/// The keys help's three columns. `1–9` stands for the nine session keys, `j / k` for the pair.
-fn help_columns() -> [HelpColumn; 3] {
-    use Action as A;
-    [
-        (
-            "sessions",
-            vec![
-                ("new session", vec![A::PickSession]),
-                ("next / previous", vec![A::NextSession, A::PrevSession]),
-                ("jump to session", vec![A::SelectTab(1), A::SelectTab(9)]),
-                ("rename", vec![A::RenameWorkspace]),
-                ("filter", vec![A::FilterSessions]),
-                ("inbox", vec![A::Jump]),
-            ],
-        ),
-        (
-            "panes",
-            vec![
-                ("split right", vec![A::SplitRight]),
-                ("split down", vec![A::SplitDown]),
-                ("focus next pane", vec![A::FocusNext]),
-                ("zoom pane", vec![A::ZoomPane]),
-                ("close pane", vec![A::ClosePane]),
-                ("move pane", vec![A::SwapNext]),
-            ],
-        ),
-        (
-            "window",
-            vec![
-                ("files", vec![A::Files]),
-                ("changes", vec![A::Changes]),
-                ("usage and cost", vec![A::Usage]),
-                ("settings", vec![A::Settings]),
-                ("toggle sidebar", vec![A::ToggleSidebar]),
-                ("this help", vec![A::Help]),
-            ],
-        ),
-    ]
+/// A line of the help: a group's name, a key with what it does, or a gap between groups.
+enum HelpLine {
+    Head(String),
+    Key(String, String),
+    Gap,
 }
 
-/// A row's key as bound now: `j / k` for a pair, `1–9` for the jump keys; empty when unbound.
-fn help_key(app: &App, acts: &[Action]) -> String {
-    let keys: Vec<String> = acts
-        .iter()
-        .filter_map(|a| {
-            app.keymap
-                .prefixed_order
-                .iter()
-                .find(|k| app.keymap.prefixed.get(k) == Some(a))
-                .map(super::mode_bar::short_key)
-        })
-        .collect();
-    match (acts.first(), keys.as_slice()) {
-        (Some(Action::SelectTab(_)), [first, last]) => format!("{first}–{last}"),
-        (_, [one]) => one.clone(),
-        (_, [a, b]) => format!("{a} / {b}"),
-        _ => String::new(),
+/// Every key as bound now, grouped as the key map groups them: the keys after the leader, then
+/// the ones that need none. Read from the keymap, so a rebound key shows where it is now.
+fn help_lines(app: &App) -> Vec<HelpLine> {
+    let mut groups: Vec<(String, Vec<Entry>)> = Vec::new();
+    let keyed = leader_entries(app)
+        .into_iter()
+        .chain(direct_entries(app))
+        .filter(|e| !e.keys.is_empty());
+    for e in keyed {
+        match groups.iter_mut().find(|(g, _)| *g == e.group) {
+            Some((_, rows)) => rows.push(e),
+            None => groups.push((e.group.clone(), vec![e])),
+        }
     }
+    let mut lines = Vec::new();
+    for (group, rows) in groups {
+        if !lines.is_empty() {
+            lines.push(HelpLine::Gap);
+        }
+        lines.push(HelpLine::Head(group));
+        lines.extend(rows.into_iter().map(|e| HelpLine::Key(e.keys, e.label)));
+    }
+    lines
 }
 
-/// `?`: the keys that matter, three columns (sessions, panes, window) of each key as bound and
-/// what it does, on the panel ground in an accent box; `keys` on the top border at the left and
-/// `esc close` at the right. Search commands (Ctrl+K) holds every other command.
-fn draw_keys_help(app: &mut App, buf: &mut Buffer, area: Rect, t: &Theme) {
+/// `?`: a box listing every key with what it does, in an accent box on the panel ground; `keys`
+/// on the top border at the left and `esc close` at the right. Esc, `?` or a click closes it.
+fn draw_keys_help(app: &mut App, buf: &mut Buffer, area: Rect, t: &Theme, km: &KeyMap) {
     dim_all(app, buf, area, t);
+    // Anywhere, the box included, a click closes.
     hit(app, area, ScreenHit::Close);
-    let columns = help_columns();
-    let rows = columns.iter().map(|(_, r)| r.len()).max().unwrap_or(0) as u16;
     let w = HELP_W.min(area.width.saturating_sub(4));
-    let h = (rows + 6).min(area.height.saturating_sub(2));
+    let h = HELP_H.min(area.height.saturating_sub(2));
     let r = Rect {
         x: area.x + (area.width - w) / 2,
         y: area.y + area.height.saturating_sub(h) / 2,
@@ -812,41 +783,47 @@ fn draw_keys_help(app: &mut App, buf: &mut Buffer, area: Rect, t: &Theme) {
     c.bg = t.sidebar_bg;
     let inside = card(app, buf, r, &c, t);
     fill(buf, inside, t.sidebar_bg);
-    hit(app, r, ScreenHit::Noop);
     let ground = Style::default().bg(t.sidebar_bg);
     let title = [seg(" keys ", ground.fg(t.strong).add_modifier(Modifier::BOLD))];
     put(buf, r.x + 2, r.y, &title, r.right().saturating_sub(2));
     let close = " esc close ";
     let cx = r.right().saturating_sub(2 + close.width() as u16);
     put(buf, cx, r.y, &[seg(close, ground.fg(t.muted))], r.right().saturating_sub(2));
-    hit(app, Rect { x: cx, y: r.y, width: close.width() as u16, height: 1 }, ScreenHit::Close);
+    let lines = help_lines(app);
     let (x0, end) = (inside.x + 2, inside.right().saturating_sub(2));
+    let cols = if w >= TWO_COLUMNS_FROM { 2 } else { 1 };
     let gap = 4u16;
-    let col_w = end.saturating_sub(x0).saturating_sub(2 * gap) / 3;
-    // As wide as the design's key column, or as the widest key and a cell where room is short.
-    let widest = columns
+    let col_w = end.saturating_sub(x0).saturating_sub(gap * (cols - 1)) / cols;
+    let rows = inside.height.saturating_sub(3) as usize;
+    let page = rows * cols as usize;
+    let scroll = km.scroll.min(lines.len().saturating_sub(page));
+    let key_w = lines
         .iter()
-        .flat_map(|(_, rows)| rows.iter().map(|(_, acts)| help_key(app, acts).width() as u16))
+        .filter_map(|l| if let HelpLine::Key(k, _) = l { Some(k.width()) } else { None })
         .max()
-        .unwrap_or(1);
-    let key_w = if col_w >= HELP_KEY_W + 16 { HELP_KEY_W } else { widest + 1 };
-    for (i, (label, items)) in columns.iter().enumerate() {
-        let x = x0 + i as u16 * (col_w + gap);
-        let col_end = x + col_w;
-        put(buf, x, inside.y + 1, &[seg(*label, ground.fg(t.muted))], col_end);
-        for (j, (words, acts)) in items.iter().enumerate() {
-            let y = inside.y + 2 + j as u16;
-            if y >= inside.bottom() {
-                break;
+        .unwrap_or(1)
+        .min(HELP_KEY_MAX) as u16;
+    for (i, line) in lines.iter().skip(scroll).take(page).enumerate() {
+        let x = x0 + (i / rows) as u16 * (col_w + gap);
+        let y = inside.y + 1 + (i % rows) as u16;
+        match line {
+            HelpLine::Head(g) => {
+                put(buf, x, y, &[seg(g.to_lowercase(), ground.fg(t.muted))], x + col_w);
             }
-            put(buf, x, y, &[seg(help_key(app, acts), ground.fg(t.accent).add_modifier(Modifier::BOLD))], x + key_w);
-            put(buf, x + key_w + 1, y, &[seg(*words, ground.fg(t.text))], col_end);
+            HelpLine::Key(keys, words) => {
+                put(buf, x, y, &[seg(truncate(keys, key_w as usize), ground.fg(t.accent).add_modifier(Modifier::BOLD))], x + key_w);
+                put(buf, x + key_w + 2, y, &[seg(words.clone(), ground.fg(t.text))], x + col_w);
+            }
+            HelpLine::Gap => {}
         }
     }
     let note = HELP_NOTE.replace("{lead}", &long_key(&app.keymap.prefix));
-    let ny = inside.y + 3 + rows;
-    if ny < inside.bottom() {
-        put(buf, x0, ny, &[seg(note, ground.fg(t.muted))], end);
+    let ny = inside.bottom().saturating_sub(1);
+    put(buf, x0, ny, &[seg(note, ground.fg(t.muted))], end);
+    if lines.len() > page {
+        let more = " ↑↓ more ";
+        let mx = cx.saturating_sub(more.width() as u16 + 1);
+        put(buf, mx, r.y, &[seg(more, ground.fg(t.muted))], cx);
     }
 }
 
@@ -1348,6 +1325,11 @@ impl App {
                     }
                 },
                 KeyView::All => match k.code {
+                    // The key that opened the help closes it again.
+                    KeyCode::Char('?') => {
+                        self.mode = Mode::Normal;
+                        return;
+                    }
                     KeyCode::Up => km.scroll = km.scroll.saturating_sub(1),
                     KeyCode::Down => km.scroll = km.scroll.saturating_add(1),
                     KeyCode::PageUp => km.scroll = km.scroll.saturating_sub(PAGE * 2),

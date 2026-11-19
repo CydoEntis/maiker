@@ -13,8 +13,7 @@ use ratatui::widgets::{Paragraph, Widget};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 /// The smallest window the app draws into (below it, a note to make it bigger).
-const MIN_WIDTH: u16 = 40;
-const MIN_HEIGHT: u16 = 10;
+pub(super) const MIN_WINDOW: (u16, u16) = (80, 24);
 
 pub fn draw(app: &mut App, f: &mut Frame) {
     app.hits.clear();
@@ -47,11 +46,13 @@ pub fn draw(app: &mut App, f: &mut Frame) {
         app.osc_bg = None;
     }
 
+    app.start_for_width(area.width);
     // Smaller than this, nothing fits: say so instead of drawing a broken screen.
-    if area.width < MIN_WIDTH || area.height < MIN_HEIGHT {
+    let (min_w, min_h) = app.min_window;
+    if area.width < min_w || area.height < min_h {
         let buf = f.buffer_mut();
         super::design::fill(buf, area, t.bg);
-        let msg = "make the window bigger";
+        let msg = format!("make the window bigger: {min_w}×{min_h} at least");
         let x = area.x + area.width.saturating_sub(msg.width() as u16) / 2;
         super::design::put(
             buf,
@@ -265,7 +266,7 @@ fn draw_overlays(app: &mut App, f: &mut Frame, area: Rect, t: &crate::theme::The
             super::screen::draw_new_pane(app, f, area, &t, &np);
         }
         Mode::ScreenSettings(_) => {
-            super::screen::draw_settings_modal(app, f.buffer_mut(), area, &t)
+            super::screen::draw_settings_screen(app, f.buffer_mut(), area, &t)
         }
         Mode::Approve(a) => {
             let a = (**a).clone();

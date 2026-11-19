@@ -39,9 +39,13 @@ fn frame(app: &mut App, w: u16, h: u16) -> String {
     let mut term = Terminal::new(TestBackend::new(w, h)).unwrap();
     term.draw(|f| render::draw(app, f)).unwrap();
     let buf = term.backend().buffer().clone();
-    (0..h)
+    let text: String = (0..h)
         .map(|y| (0..w).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>().trim_end().to_string() + "\n")
-        .collect()
+        .collect();
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
+        println!("{text}");
+    }
+    text
 }
 
 #[test]
@@ -235,4 +239,54 @@ fn a_command_row_runs_on_enter_and_a_chat_row_goes_to_its_chat() {
     press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
     let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
     assert!(sent.iter().any(|o| matches!(o.msg, ClientMsg::Command(Command::FocusPane { .. }))), "{sent:?}");
+}
+
+fn help_open() -> App {
+    let (mut app, _rx) = app_with_channel();
+    press(&mut app, KeyCode::Char('?'), KeyModifiers::SHIFT);
+    app.mode = Mode::KeyMap(Box::new(KeyMap::new(KeyView::All, None)));
+    app
+}
+
+#[test]
+fn the_help_lists_every_bound_key_and_follows_a_rebinding() {
+    let mut app = help_open();
+    let shown = frame(&mut app, 140, 45);
+    assert!(shown.contains("New shell here") && shown.contains("Split right"), "{shown}");
+    let rows = super::keyoverlay::keymap_all_rows(&app);
+    let bound: Vec<_> = rows.iter().filter(|(_, keys)| !keys.is_empty()).collect();
+    assert!(bound.len() > 18, "more than the few keys the old box listed: {}", bound.len());
+    app.cfg.keys.replace_defaults = true;
+    app.keymap = app.cfg.keymap();
+    let shown = frame(&mut app, 140, 45);
+    assert!(!shown.contains("Split right"), "a key that is no longer bound is not listed: {shown}");
+}
+
+#[test]
+fn the_help_closes_on_esc_on_the_question_mark_and_on_a_click() {
+    for close in [KeyCode::Esc, KeyCode::Char('?')] {
+        let mut app = help_open();
+        press(&mut app, close, KeyModifiers::NONE);
+        assert_eq!(app.mode, Mode::Normal, "{close:?}");
+    }
+    let mut app = help_open();
+    frame(&mut app, 140, 45);
+    let r = app.screen.modal_rects.first().copied().unwrap_or_default();
+    let (x, y) = (r.x.max(1) + 2, r.y.max(1) + 2);
+    app.on_mouse(crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    });
+    assert_eq!(app.mode, Mode::Normal, "a click inside the box closes it");
+}
+
+#[test]
+fn a_long_help_scrolls_and_says_so() {
+    let mut app = help_open();
+    let shown = frame(&mut app, 80, 24);
+    assert!(shown.contains("↑↓ more"), "{shown}");
+    press(&mut app, KeyCode::PageDown, KeyModifiers::NONE);
+    assert!(matches!(&app.mode, Mode::KeyMap(km) if km.scroll > 0));
 }

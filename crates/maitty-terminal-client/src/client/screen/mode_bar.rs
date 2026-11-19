@@ -253,15 +253,21 @@ fn keys_holder(app: &App) -> Option<Holder> {
             ("Esc", "cancel"),
         ),
         Mode::ScreenSettings(v)
-            if crate::client::modal::Cat::ALL.get(v.cat)
-                == Some(&crate::client::modal::Cat::Check) =>
+            if v.in_rows
+                && crate::client::modal::Cat::ALL.get(v.cat)
+                    == Some(&crate::client::modal::Cat::Check) =>
         {
             check_page_holder(app)
         }
+        Mode::ScreenSettings(v) if !v.in_rows => holder(
+            "SETTINGS",
+            &[("↑↓", "page"), ("Enter", "open")],
+            ("Esc", "close"),
+        ),
         Mode::ScreenSettings(_) => holder(
             "SETTINGS",
-            &[("↑↓", "move"), ("Tab", "section"), ("Enter", "change")],
-            ("Esc", "close"),
+            &[("↑↓", "move"), ("Space", "toggle"), ("←→", "change")],
+            ("Esc", "back"),
         ),
         // A merge or throw-away asked in a finished row: Enter does it, Esc only drops the question.
         Mode::GoTo { .. } => match app.screen.inbox_confirm {

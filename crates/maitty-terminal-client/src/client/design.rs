@@ -1098,9 +1098,11 @@ pub(super) enum SRow {
     },
     /// A line of the Agents page that is not a setting: what the app can tell about an agent.
     Agent(AgentRow),
-    /// General's UPDATES: which version this is, whether it is current, and the way to check
+    /// About's version line: which version this is, whether it is current, and the way to check
     /// again or install what was found.
     Version,
+    /// A line of the Machines page: a configured machine by name, or `None` for this computer.
+    Machine(Option<String>),
 }
 
 /// The AGENT STATUS rows of Settings > Agents.
@@ -1150,7 +1152,9 @@ impl AgentRow {
 }
 
 /// The settings' headings in the order they come, each tab's in turn.
-const GROUP_ORDER: [&str; 20] = [
+/// The design's own rows come first, under no heading.
+const GROUP_ORDER: [&str; 21] = [
+    "",
     "UPDATES",
     "STARTUP",
     "INPUT",
@@ -1173,9 +1177,37 @@ const GROUP_ORDER: [&str; 20] = [
     "AGENTS TALKING TO AGENTS",
 ];
 
+/// The settings the design lists on its pages, in its order. They lead their page under no
+/// heading; every other setting follows under the heading it had.
+const FEATURED: [&str; 8] = [
+    "worktree.per_agent",
+    "restore.enabled",
+    "sessions.agent",
+    "appearance",
+    "ui.rounded",
+    "ui.spinner",
+    "ui.motion",
+    "ui.mouse",
+];
+
+/// Where a row stands among the design's own rows (`usize::MAX` for any other).
+fn featured_rank(row: &SRow) -> usize {
+    match row {
+        SRow::Setting(s) => FEATURED.iter().position(|p| *p == s.path),
+        SRow::Agent(AgentRow::Claude) => Some(FEATURED.len()),
+        SRow::Agent(AgentRow::Codex) => Some(FEATURED.len() + 1),
+        _ => None,
+    }
+    .unwrap_or(usize::MAX)
+}
+
 /// The small caps heading a settings row sits under.
 pub(super) fn settings_group(row: &SRow) -> &'static str {
+    if featured_rank(row) != usize::MAX {
+        return "";
+    }
     match row {
+        SRow::Machine(_) => "",
         SRow::Bind { direct: true, .. } => DIRECT_GROUP,
         SRow::Bind { label, .. } => key_rows()
             .into_iter()
@@ -1184,7 +1216,7 @@ pub(super) fn settings_group(row: &SRow) -> &'static str {
             .unwrap_or("KEYS"),
         SRow::Agent(AgentRow::Approved) => PERMISSIONS_GROUP,
         SRow::Agent(_) => AGENT_STATUS_GROUP,
-        SRow::Version => "UPDATES",
+        SRow::Version => "",
         SRow::Setting(s) => match s.path {
             "ui.update_check" | "updates.machines" => "UPDATES",
             "ui.splash" | "ui.splash_animation" => "STARTUP",
@@ -1232,18 +1264,18 @@ pub(super) fn settings_rows(cat: super::modal::Cat) -> Vec<SRow> {
     if cat == super::modal::Cat::Agents {
         rows.extend([AgentRow::Claude, AgentRow::Codex, AgentRow::SetUp, AgentRow::Approved].map(SRow::Agent));
     }
-    // Updates first, so a waiting one is in your face: the version row heads General.
-    if cat == super::modal::Cat::General {
+    if cat == super::modal::Cat::About {
         rows.push(SRow::Version);
     }
     rows.extend(super::modal::in_cat(cat).into_iter().map(SRow::Setting));
     // Grouped under their headings, in `GROUP_ORDER` (a heading not there goes last); rows keep
     // their order within a group.
     rows.sort_by_key(|r| {
-        GROUP_ORDER
+        let group = GROUP_ORDER
             .iter()
             .position(|g| *g == settings_group(r))
-            .unwrap_or(usize::MAX)
+            .unwrap_or(usize::MAX);
+        (group, featured_rank(r))
     });
     if cat == super::modal::Cat::Keys {
         for (_, items) in key_rows() {
@@ -1276,6 +1308,8 @@ pub(crate) struct SettingsView {
     /// Waiting for a key: the leader, or a new key for this row's action.
     pub capturing: bool,
     pub scroll: u16,
+    /// The keys are in the page's rows; false while they are on the list of pages.
+    pub in_rows: bool,
 }
 
 pub(super) fn control(
@@ -1311,6 +1345,8 @@ pub(super) fn control(
         }
         SRow::Agent(row) => agent_control(app, t, *row),
         SRow::Version => version_control(app, t),
+        // The Machines page draws its own rows (screen/settings_page.rs).
+        SRow::Machine(_) => Vec::new(),
         SRow::Setting(s) => {
             if super::modal::is_theme_row(s.path) {
                 let name = if s.path == "theme_light" {
@@ -1347,25 +1383,7 @@ pub(super) fn control(
                     ),
                     seg("←→ change  Enter browse", Style::default().fg(t.accent)),
                 ],
-                Kind::Bool => {
-                    if cur.and_then(|v| v.as_bool()).unwrap_or(false) {
-                        super::screen::chip(
-                            "● on ",
-                            Style::default()
-                                .bg(t.accent)
-                                .fg(t.acc_ink)
-                                .add_modifier(Modifier::BOLD),
-                        )
-                    } else {
-                        super::screen::chip(
-                            "○ off",
-                            Style::default()
-                                .bg(t.btn)
-                                .fg(t.muted)
-                                .add_modifier(Modifier::BOLD),
-                        )
-                    }
-                }
+                Kind::Bool | Kind::BoolOff => switch(t, super::modal::is_on(cfg, s)),
                 Kind::Number { min, max, .. } => {
                     let val = cur.and_then(|v| v.as_float()).unwrap_or(min);
                     let filled = (((val - min) / (max - min)) * 10.0).round() as usize;
@@ -1413,6 +1431,33 @@ pub(super) fn control(
     }
 }
 
+/// A switch: `━━● on` in the strong text colour, or `●━━ off` dim.
+pub(super) fn switch(t: &Theme, on: bool) -> Vec<Seg> {
+    if on {
+        vec![seg("━━● on ", Style::default().fg(t.strong).add_modifier(Modifier::BOLD))]
+    } else {
+        vec![seg("●━━ off", Style::default().fg(t.muted))]
+    }
+}
+
+/// Choices side by side: the chosen one filled with the border colour and bold, the rest plain.
+pub(super) fn segmented(t: &Theme, opts: &[String], chosen: Option<usize>) -> Vec<Seg> {
+    opts.iter()
+        .enumerate()
+        .map(|(i, o)| {
+            let style = if Some(i) == chosen {
+                Style::default()
+                    .bg(t.border)
+                    .fg(t.strong)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(t.text)
+            };
+            seg(format!(" {o} "), style)
+        })
+        .collect()
+}
+
 /// The Version row's value: this version, then what was found and Update now, or `up to date`
 /// and `u check now`; the daemon's version when it differs from this window's.
 fn version_control(app: &App, t: &Theme) -> Vec<Seg> {
@@ -1429,17 +1474,19 @@ fn version_control(app: &App, t: &Theme) -> Vec<Seg> {
         seg("  ·  ", dot),
     ];
     match (&app.update_available, app.updating, app.update_checking) {
-        (Some(new), updating, _) => {
-            out.push(seg(format!("{new} is out"), accent));
+        _ if app.restart_needed() => {
+            out.push(seg("restart to finish", accent));
             out.push(seg("  ·  ", dot));
-            out.push(seg(
-                if updating {
-                    "updating…"
-                } else {
-                    "Enter to update"
-                },
-                accent,
-            ));
+            out.extend([seg("r", accent), seg(" restart", dot)]);
+        }
+        (Some(new), updating, _) => {
+            out.push(seg(format!("{new} is ready"), accent));
+            out.push(seg("  ·  ", dot));
+            if updating {
+                out.push(seg("updating…", accent));
+            } else {
+                out.extend([seg("i", accent), seg(" install", dot)]);
+            }
         }
         (None, _, true) => out.push(seg("checking…", dot)),
         (None, ..) => {

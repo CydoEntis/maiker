@@ -26,6 +26,24 @@ pub(in crate::client) fn full_side_w(app: &App, area: Rect) -> u16 {
         .min(area.width / 2)
 }
 
+/// A window narrower than this starts with the sidebar collapsed to its rail.
+const SIDE_COLLAPSED_BELOW: u16 = 110;
+
+impl App {
+    /// The first frame fits the sidebar to the window: under `SIDE_COLLAPSED_BELOW` columns it
+    /// starts collapsed, so the pane keeps the room. It is the one time this is decided; the
+    /// sidebar is the user's to open after.
+    pub(in crate::client) fn start_for_width(&mut self, width: u16) {
+        if self.started_for_width {
+            return;
+        }
+        self.started_for_width = true;
+        if width < SIDE_COLLAPSED_BELOW {
+            self.sidebar = false;
+        }
+    }
+}
+
 /// Below this many columns a docked sheet (a check's evidence, both diffs) takes the sidebar's
 /// room as well as the panes'.
 const SHEET_OVER_SIDE_BELOW: u16 = 100;
@@ -988,6 +1006,63 @@ fn toast_rect(area: Rect, width: u16, height: u16, slide: f32) -> Option<Rect> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::client::reference_fixture::{Stage, world};
+    use ratatui::{Terminal, backend::TestBackend};
+
+    fn first_frame(app: &mut App, w: u16, h: u16) -> String {
+        let mut term = Terminal::new(TestBackend::new(w, h)).expect("a test terminal");
+        term.draw(|f| crate::client::render::draw(app, f)).expect("a frame");
+        let buf = term.backend().buffer().clone();
+        (0..h)
+            .map(|y| (0..w).map(|x| buf[(x, y)].symbol()).collect::<String>())
+            .collect::<Vec<_>>()
+            .join("
+")
+    }
+
+    #[test]
+    fn a_window_under_110_columns_starts_with_the_sidebar_collapsed_and_it_is_decided_once() {
+        for (width, collapsed) in [(100, true), (109, true), (110, false), (160, false)] {
+            let mut app = world(Stage::None);
+            app.started_for_width = false;
+            app.sidebar = true;
+            first_frame(&mut app, width, 40);
+            assert_eq!(!app.sidebar, collapsed, "{width} columns");
+        }
+        let mut app = world(Stage::None);
+        app.started_for_width = false;
+        first_frame(&mut app, 100, 40);
+        app.sidebar = true;
+        first_frame(&mut app, 100, 40);
+        assert!(app.sidebar, "opening it again is the user's to do, and sticks");
+    }
+
+    #[test]
+    fn a_window_under_80_by_24_shows_one_line_asking_for_a_bigger_one() {
+        for (w, h, small) in [(79, 24, true), (80, 23, true), (80, 24, false), (120, 40, false)] {
+            let mut app = world(Stage::None);
+            app.min_window = crate::client::render::MIN_WINDOW;
+            let shown = first_frame(&mut app, w, h);
+            assert_eq!(shown.contains("make the window bigger"), small, "{w}x{h}");
+            if small {
+                assert_eq!(shown.lines().filter(|l| !l.trim().is_empty()).count(), 1, "{w}x{h}: one line");
+            }
+        }
+    }
+
+    #[test]
+    fn changes_sits_beside_the_pane_from_140_columns_and_replaces_it_below() {
+        let look = Look { rounded: true, gap: 1, dim: 0.0, caps: false, round_tabs: false };
+        let col = Rect::new(34, 0, 105, 30);
+        let (sheet, _) = split_for_sheet(139, col, look, 1.0, 52);
+        assert_eq!(sheet.width, col.width, "under 140 it takes the pane's place");
+        let col = Rect::new(34, 0, 126, 30);
+        let (sheet, panes) = split_for_sheet(160, col, look, 1.0, 52);
+        assert_eq!(sheet.width, 52, "from 140 it docks at its own width");
+        assert!(panes.width > 0 && panes.right() <= sheet.x, "beside the pane, not over it");
+    }
+
     use super::toast_rect;
     use ratatui::layout::Rect;
 

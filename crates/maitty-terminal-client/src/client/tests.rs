@@ -3,6 +3,16 @@
 use super::*;
 use crate::brand::APP_COMMAND;
 
+/// Settings on `cat`, with the keys in its rows.
+fn open_settings_on(app: &mut App, cat: modal::Cat) {
+    app.act(Action::Settings);
+    let Mode::ScreenSettings(v) = &mut app.mode else {
+        panic!("Settings is open")
+    };
+    v.cat = modal::Cat::ALL.iter().position(|c| *c == cat).expect("a page");
+    v.in_rows = true;
+}
+
 mod secret_prompt_tests {
     use super::*;
     use crate::protocol::SecretRequest;
@@ -447,12 +457,12 @@ mod screen_tests {
                 o.contains("run it") && o.contains("show all") && !o.contains("[Esc]"),
                 "{o}"
             );
-            // ? is the keys help: three columns of the keys that matter, as bound now.
+            // ? is the keys help: every key as bound now, with what it does.
             key(&mut app, KeyCode::Char('?'));
             assert!(matches!(&app.mode, Mode::KeyMap(km) if km.view == screen::KeyView::All));
             let o = draw(&mut app, w, h);
             show(&o);
-            for words in ["keys", "esc close", "sessions", "panes", "window", "new session", "split right", "files"] {
+            for words in ["keys", "esc close", "sessions", "panes", "New shell here", "Split right"] {
                 assert!(o.contains(words), "{w}x{h}: the keys help has {words}\n{o}");
             }
             if w >= 100 {
@@ -810,7 +820,7 @@ mod screen_tests {
         let (_, mut app) = super::design_tests::render_with(100, 30);
         app.installed_version = Some(Ok("9.9.9".into()));
         app.snap.daemon_version = "0.20.0".into();
-        app.act(Action::Settings);
+        open_settings_on(&mut app, modal::Cat::About);
         let output = draw(&mut app, 100, 30);
         show(&output);
         assert!(output.contains("Installed here: 9.9.9") && output.contains("This window:"));
@@ -2193,6 +2203,7 @@ mod screen_tests {
                 editing: None,
                 capturing: false,
                 scroll: 0,
+                in_rows: true,
             }));
             let o = draw(app, 160, 45);
             show(&o);
@@ -2599,6 +2610,8 @@ mod screen_tests {
     fn settings_grouped_like_the_redesign() {
         let (_, mut app) = super::design_tests::render_with(160, 45);
         app.act(Action::Settings);
+        // The pages first; Enter goes into the chosen page's rows.
+        app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         let o = draw(&mut app, 160, 45);
         show(&o);
         for g in ["UPDATES", "STARTUP", "INPUT"] {
@@ -2620,11 +2633,13 @@ mod screen_tests {
             "UPDATES, then STARTUP, then INPUT"
         );
         assert!(
-            o.contains("Version"),
-            "the first row is the version"
+            o.contains("Own worktree for new chats") && o.contains("Default agent"),
+            "the design's own rows lead the page, under no heading"
         );
-        // Appearance, the next tab, has the dark/light switch and a theme control for each, which open the searchable browser.
-        app.on_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::NONE));
+        // Appearance, the next page, has the dark/light switch and a theme control for each, which open the searchable browser.
+        app.on_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         let o = draw(&mut app, 160, 45);
         show(&o);
         assert!(
@@ -2632,7 +2647,7 @@ mod screen_tests {
                 && o.contains("Appearance")
                 && o.contains("Dark theme")
                 && o.contains("Light theme")
-                && !o.contains("Corners")
+                && o.contains("Corners")
                 && !o.contains("PREVIEW"),
             "the theme settings first; no preview in the narrower modal"
         );
@@ -3520,9 +3535,9 @@ mod screen_tests {
             y: row.y,
         };
         let focused = app.focused().unwrap();
-        for modal in ["Updates", "Settings", "Message"] {
+        // Settings is a screen of its own now, with nothing of the workspace behind it.
+        for modal in ["Updates", "Message"] {
             match modal {
-                "Settings" => app.act(Action::Settings),
                 "Message" => app.act(Action::Message),
                 _ => app.act(Action::Updates),
             }
@@ -4729,7 +4744,17 @@ second line
         app.act(Action::Settings);
         let o = draw(&mut app, 160, 45);
         // The sections column: each name, then the line beside it.
-        for name in ["General", "Appearance", "Sessions", "Alerts", "Agents", "Check", "Keys"] {
+        for name in [
+            "General",
+            "Appearance",
+            "Notifications",
+            "Machines",
+            "Agents",
+            "About",
+            "Sessions",
+            "Check",
+            "Keys",
+        ] {
             let row = o
                 .lines()
                 .find(|l| l.contains(&format!(" {name} ")))
@@ -4741,23 +4766,23 @@ second line
                 "the release chip and the splash say so; the sections do not: {section}"
             );
         }
-        let version_row = design::settings_rows(modal::Cat::General)
+        let about = modal::Cat::ALL.iter().position(|c| *c == modal::Cat::About).unwrap();
+        let version_row = design::settings_rows(modal::Cat::About)
             .iter()
             .position(|r| matches!(r, design::SRow::Version))
             .unwrap();
         app.mode = Mode::ScreenSettings(Box::new(design::SettingsView {
-            cat: 0,
+            cat: about,
             sel: version_row,
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         let o = draw(&mut app, 160, 45);
         assert!(
-            o.lines().any(|l| l.contains("Version")
-                && l.contains("9.9.9 is out")
-                && l.contains("Enter to update")),
-            "General's Version row offers the update: {o}"
+            o.lines().any(|l| l.contains("9.9.9 is ready") && l.contains("i install")),
+            "About's version row offers the update: {o}"
         );
     }
 
@@ -5169,23 +5194,25 @@ second line
             app.palette_commands().contains(&Action::CheckUpdate),
             "in the palette"
         );
-        // Settings: General's Version row, when no newer one is known; no other tab shows it.
-        let version_row = design::settings_rows(modal::Cat::General)
+        // Settings: About's version row, when no newer one is known; no other page shows it.
+        let about = modal::Cat::ALL.iter().position(|c| *c == modal::Cat::About).unwrap();
+        let version_row = design::settings_rows(modal::Cat::About)
             .iter()
             .position(|r| matches!(r, design::SRow::Version))
-            .expect("General has a Version row");
+            .expect("About has a Version row");
         app.mode = Mode::ScreenSettings(Box::new(design::SettingsView {
-            cat: 0,
+            cat: about,
             sel: version_row,
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         let o = draw(&mut app, 160, 45);
         show(&o);
         let line = o
             .lines()
-            .find(|l| l.contains("Version"))
+            .find(|l| l.contains(concat!(env!("APP_COMMAND"), " ", env!("APP_VERSION"))))
             .unwrap_or_else(|| {
                 panic!(
                     "the Version row
@@ -5200,7 +5227,6 @@ second line
                 && line.contains("u check now"),
             "{line}"
         );
-        assert!(o.contains("UPDATES"), "under UPDATES");
         let keys = modal::Cat::ALL
             .iter()
             .position(|c| *c == modal::Cat::Keys)
@@ -5211,6 +5237,7 @@ second line
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         assert!(
             !draw(&mut app, 160, 45).contains("up to date"),
@@ -5218,17 +5245,18 @@ second line
         );
         // While it's asking, the row says so.
         app.mode = Mode::ScreenSettings(Box::new(design::SettingsView {
-            cat: 0,
+            cat: about,
             sel: version_row,
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         app.update_checking = true;
         let o = draw(&mut app, 160, 45);
         assert!(
             o.lines()
-                .any(|l| l.contains("Version") && l.contains("checking…")),
+                .any(|l| l.contains(env!("APP_COMMAND")) && l.contains("checking…")),
             "{o}"
         );
         // Nothing newer: you asked, so it says so. A check the app made itself stays quiet.
@@ -5270,12 +5298,10 @@ second line
         let o = draw(&mut app, 160, 45);
         let line = o
             .lines()
-            .find(|l| l.contains("Version"))
+            .find(|l| l.contains("9.9.9 is ready"))
             .unwrap_or_else(|| panic!("{o}"));
         assert!(
-            line.contains("9.9.9 is out")
-                && line.contains("Enter to update")
-                && !line.contains("check now"),
+            line.contains("i install") && !line.contains("check now"),
             "{line}"
         );
     }
@@ -5487,6 +5513,7 @@ second line
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         app.on_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         let Mode::ScreenSettings(v) = &app.mode else { panic!("Up closed Settings: {:?}", app.mode) };
@@ -5509,6 +5536,7 @@ second line
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         let o = draw(&mut app, 160, 45);
         show(&o);
@@ -5534,6 +5562,7 @@ second line
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         let o = draw(&mut app, 160, 45);
         show(&o);
@@ -5558,6 +5587,7 @@ second line
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
         assert!(
@@ -5861,6 +5891,7 @@ second line
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         let o = draw(&mut app, 160, 45);
         show(&o);
@@ -5873,19 +5904,17 @@ second line
             "no version line over the tabs' pages: {top}"
         );
         let rows_here = design::settings_rows(modal::Cat::General);
-        let version = rows_here
-            .iter()
-            .position(|r| matches!(r, design::SRow::Version))
-            .expect("a Version row");
-        assert_eq!(design::settings_group(&rows_here[version]), "UPDATES");
+        assert!(
+            !rows_here.iter().any(|r| matches!(r, design::SRow::Version)),
+            "the version shows on About only"
+        );
         let check = rows_here
             .iter()
             .position(|r| matches!(r, design::SRow::Setting(s) if s.path == "ui.update_check"))
             .expect("Check for updates");
         assert_eq!(
-            (version, check),
-            (0, 1),
-            "Updates head General: the version, then Check for updates"
+            check, 3,
+            "the design's three rows, then Check for updates under UPDATES"
         );
         assert!(
             !o.contains("Installed here") && !o.contains("This window"),
@@ -5913,8 +5942,7 @@ second line
             "updates, then startup, then input"
         );
         assert!(
-            pos("Leader key") < pos("Mouse")
-                && pos("Mouse") < pos("Leader waits for next key")
+            pos("Leader key") < pos("Leader waits for next key")
                 && pos("Leader waits for next key") < pos("Shell"),
             "input, then the shell"
         );
@@ -5934,7 +5962,7 @@ second line
                 _ => None,
             })
             .collect();
-        for label in ["Padding", "Background", "Sidebar side", "Motion"] {
+        for label in ["Padding", "Background", "Sidebar side"] {
             assert!(
                 looks.iter().any(|(g, l)| *l == label && *g == "LAYOUT"),
                 "{label} is on the Appearance page"
@@ -6035,13 +6063,7 @@ second line
             (true, false),
             "the pane has the keys: its edge is lit"
         );
-        app.mode = Mode::ScreenSettings(Box::new(design::SettingsView {
-            cat: 0,
-            sel: 1,
-            editing: None,
-            capturing: false,
-            scroll: 0,
-        }));
+        app.mode = Mode::Updates;
         assert_eq!(
             lit_edges(&mut app),
             (true, false),
@@ -6720,12 +6742,12 @@ second line
         (
             "settings",
             true,
-            "SETTINGS  · ↑↓ move · Tab section · Enter change · shortcut mode waits · Esc close",
+            "SETTINGS  · ↑↓ page · Enter open · shortcut mode waits · Esc close",
         ),
         (
             "settings",
             false,
-            "SETTINGS  · ↑↓ move · Tab section · Enter change · Esc close",
+            "SETTINGS  · ↑↓ page · Enter open · Esc close",
         ),
         (
             "files",
@@ -6923,6 +6945,7 @@ second line
                     .iter()
                     .position(|c| *c == Cat::Check)
                     .expect("a Check page");
+                v.in_rows = true;
                 let draft = CheckDraft::new(project);
                 app.screen.check_page = match what {
                     "check page timeout" => Some(CheckDraft {
@@ -8112,6 +8135,7 @@ mod settings_splash_tests {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         let settings = draw(&mut app);
         app.mode = Mode::ScreenSettings(Box::new(design::SettingsView {
@@ -8123,6 +8147,7 @@ mod settings_splash_tests {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
         let keys = draw(&mut app);
         if maitty_shared::brand::env_var("SHOW").is_ok() {
@@ -8137,9 +8162,11 @@ mod settings_splash_tests {
         for page in [
             "General",
             "Appearance",
-            "Sessions",
-            "Alerts",
+            "Notifications",
+            "Machines",
             "Agents",
+            "About",
+            "Sessions",
             "Keys",
         ] {
             assert!(settings.contains(page), "page {page}");
@@ -8185,6 +8212,7 @@ mod settings_v8_tests {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
     }
 
@@ -8200,16 +8228,18 @@ mod settings_v8_tests {
     }
 
     #[test]
-    fn the_tabs_are_general_appearance_sessions_alerts_agents_check_keys() {
+    fn the_pages_are_the_designs_six_then_sessions_check_keys() {
         let names: Vec<&str> = Cat::ALL.iter().map(|c| c.label()).collect();
         assert_eq!(
             names,
             [
                 "General",
                 "Appearance",
-                "Sessions",
-                "Alerts",
+                "Notifications",
+                "Machines",
                 "Agents",
+                "About",
+                "Sessions",
                 "Check",
                 "Keys"
             ]
@@ -8281,8 +8311,6 @@ mod settings_v8_tests {
         let o = draw(&mut app, 160, 45);
         for want in [
             "NEW SESSIONS",
-            "Agent",
-            "last used",
             "Where",
             "new worktree",
             "SIDEBAR",
@@ -8293,10 +8321,7 @@ mod settings_v8_tests {
         }
         let rows = design::settings_rows(Cat::Sessions);
         let groups: Vec<&str> = rows.iter().map(design::settings_group).collect();
-        assert_eq!(
-            &groups[..4],
-            ["NEW SESSIONS", "NEW SESSIONS", "SIDEBAR", "WORKTREES"]
-        );
+        assert_eq!(&groups[..3], ["NEW SESSIONS", "SIDEBAR", "WORKTREES"]);
         assert!(
             !o.contains("+ starts"),
             "the + chips start shells, so there is nothing to choose: {o}"
@@ -8453,10 +8478,9 @@ mod settings_v8_tests {
             .find(|s| s.path == "ui.subagent_count")
             .unwrap()
             .help;
-        let lines = screen::wrap_two(help, screen::settings_help_cols(94) as usize);
         assert!(
-            lines.iter().all(|l| o.contains(l.as_str())),
-            "{lines:?} in {o}"
+            help.split_whitespace().all(|w| o.contains(w)),
+            "{help:?} in {o}"
         );
     }
 
@@ -8467,7 +8491,7 @@ mod settings_v8_tests {
             (Cat::General, "Alt+arrows move between panes"),
             (Cat::General, "Leader waits for next key"),
             (Cat::Agents, "Sessions may start helpers"),
-            (Cat::Sessions, "Bring sessions back after restart"),
+            (Cat::General, "Restore chats when Maiker starts"),
             (Cat::Alerts, "Phone: say what it's doing"),
             (Cat::Agents, "Subagents in the sidebar"),
         ] {
@@ -8480,9 +8504,7 @@ mod settings_v8_tests {
                 .unwrap()
                 .help;
             assert!(
-                screen::wrap_two(help, screen::settings_help_cols(74) as usize)
-                    .iter()
-                    .all(|l| o.contains(l.as_str())),
+                help.split_whitespace().all(|w| o.contains(w)),
                 "its help is whole at 80x24: {o}"
             );
         }
@@ -10375,6 +10397,7 @@ mod check_settings_tests {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
     }
 
@@ -10511,6 +10534,7 @@ mod check_settings_tests {
                     editing: None,
                     capturing: false,
                     scroll: 0,
+                    in_rows: true,
                 }));
                 (normal, draw(&mut app, 100, 30))
             };
@@ -11676,6 +11700,7 @@ mod check_wiring_tests {
             editing: None,
             capturing: false,
             scroll: 0,
+            in_rows: true,
         }));
     }
 
@@ -11874,7 +11899,7 @@ mod restart_tests {
         for layout in LAYOUTS {
             for (w, h) in SIZES {
                 let (mut app, mut rx) = scene(w, h, layout);
-                app.act(Action::Settings);
+                open_settings_on(&mut app, modal::Cat::About);
                 let out = draw(&mut app, w, h);
                 assert!(out.contains("Restart now"), "{layout:?} {w}x{h}\n{out}");
                 let r = restart_hit(&app, h)
@@ -11897,7 +11922,7 @@ mod restart_tests {
     fn settings_has_no_restart_button_when_the_daemon_is_current() {
         let (mut app, _rx) = scene(100, 30, LAYOUTS[0]);
         app.snap.daemon_version = INSTALLED.into();
-        app.act(Action::Settings);
+        open_settings_on(&mut app, modal::Cat::About);
         let out = draw(&mut app, 100, 30);
         assert!(!out.contains("Restart now") && restart_hit(&app, 30).is_none());
         app.snap.daemon_version = OLD_DAEMON.into();
@@ -12328,7 +12353,7 @@ mod restart_tests {
     #[test]
     fn the_settings_button_shows_its_key() {
         let (mut app, _rx) = scene(100, 30, LAYOUTS[0]);
-        app.act(Action::Settings);
+        open_settings_on(&mut app, modal::Cat::About);
         assert!(draw(&mut app, 100, 30).contains("Restart now R"));
     }
 }

@@ -1,7 +1,7 @@
 //! The app's layout: projects (git repos) in the sidebar, each
 //! project's worktrees with the sessions running in them, and the focused session full size
 //! (optionally split with a second). Most tools are centred overlays over a dimmed
-//! screen: jump, new pane, talk and keys. Settings uses a centred modal; review uses a right-hand sheet
+//! screen: jump, new pane, talk and keys. Settings is a full window; review uses a right-hand sheet
 //! beside the panes.
 //!
 //! Sidebar rows identify panes or durable conversations; terminal topology stays pane-owned.
@@ -1690,6 +1690,7 @@ pub(in crate::client) mod machines;
 #[cfg(test)]
 mod machines_tests;
 mod service;
+mod settings_page;
 #[cfg(test)]
 mod chat_menu_tests;
 mod side_keys;
@@ -1745,7 +1746,7 @@ mod clone_repo;
 mod specialists;
 #[cfg(test)]
 mod repos_tests;
-pub(in crate::client) use self::{clone_repo::*, specialists::*};
+pub(in crate::client) use self::{clone_repo::*, settings_page::draw_settings_screen, specialists::*};
 pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,
