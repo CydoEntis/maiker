@@ -505,8 +505,8 @@ fn blocks(sm: &SideModel) -> Vec<Block> {
         if m.folded {
             continue;
         }
-        for ri in 0..m.rows.len() {
-            if !m.rows[ri].hidden {
+        for (ri, row) in m.rows.iter().enumerate() {
+            if !row.hidden {
                 out.push(Block::Session(mi, ri));
             }
         }
