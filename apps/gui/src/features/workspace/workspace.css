@@ -799,6 +799,19 @@
 .mx-mach-hostrow.is-on .mx-mach-radio { border-color: var(--accent); background: var(--accent); }
 .mx-mach-hostname { font-size: 13px; font-weight: 600; color: var(--fg); }
 .mx-mach-hostaddr { flex: 1; min-width: 0; font-family: var(--mono); font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Add machine: the stepper, the heading, an address problem and the collapsed Advanced options. */
+.mx-mach-stepper { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; font-size: 12px; color: var(--dim); }
+.mx-mach-stepper li { display: flex; align-items: center; gap: 7px; }
+.mx-mach-stepper li.is-now { color: var(--fg); font-weight: 600; }
+.mx-mach-stepper li.is-done { color: var(--fg2); }
+.mx-mach-stepper-mark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line2); font-size: 11px; }
+.mx-mach-stepper li.is-now .mx-mach-stepper-mark { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.mx-mach-stepper li.is-done .mx-mach-stepper-mark { border-color: var(--ok); color: var(--ok); }
+.mx-mach-h { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
+.mx-mach-note.is-bad { color: var(--danger); }
+.mx-mach-field input[aria-invalid="true"] { box-shadow: inset 0 0 0 1px var(--danger-line); }
+.mx-mach-more { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.mx-mach-more .mx-mach-quiet { border-color: transparent; padding-left: 0; }
 .mx-mach-formfoot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
 .mx-mach-formfoot > span { flex: 1 1 220px; min-width: 0; font-size: 11.5px; color: var(--dim); }
 .mx-mach-run { display: flex; flex-direction: column; gap: 10px; padding: 14px; }

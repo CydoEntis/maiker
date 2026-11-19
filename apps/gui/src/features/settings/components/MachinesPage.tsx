@@ -3,8 +3,8 @@ import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { errorMessage } from '@/lib/error-message'
 import { exportDaemonLog, openDaemonLog } from '@/api/daemon'
-import { LOCAL_MACHINE, type Added, type HostChoice, type MachineActivity } from '@/api/machines'
-import { RadioGroup, RadioGroupItem, Segmented, SegmentedItem } from '@/components/ui/radio-group'
+import { LOCAL_MACHINE, type Added, type MachineActivity } from '@/api/machines'
+import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { DisconnectedSince } from '@/features/workspace/components/times'
 import { installNote, UPDATE_WORDS, updateVerb, updateWarning, type MachineHead, type UpdateAction } from '@/features/workspace/model/machines'
@@ -13,7 +13,8 @@ import { Card, Row, type DaemonInfo, type MachinesInfo } from './DesktopSettings
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
 import { HOST_KEY_WORDS, HostKeyCard } from './HostKeyCard'
 import { KeyLoginCard, PASSWORD_OFFERED } from './KeyLoginCard'
-import { hostProblem, portOf, targetOf, userOf, userProblem } from '../model/machineTarget'
+import { userOf, userProblem } from '../model/machineTarget'
+import { AddMachineChoose, type ChooseHosts, type Chosen } from './AddMachineChoose'
 import { DAEMON_NAME } from '@/brand'
 
 /** A computer: this one, and the tile of a remote one. The window does not know a machine's kind, so every remote is a server. */
@@ -22,9 +23,6 @@ const SERVER_PATH = 'M3 4h18v6H3zM3 14h18v6H3zM7 7h.01M7 17h.01'
 const PLUS_PATH = 'M12 5v14M5 12h14'
 const SEARCH_PATH = 'm20 20-4.2-4.2'
 const BACK_PATH = 'm15 18-6-6 6-6'
-
-/** The id that ties the host list to its label. */
-const HOSTS_LABEL = 'mx-mach-hosts-label'
 
 /** The selection that shows this computer's card rather than a remote's. */
 const LOCAL = 'local'
@@ -396,8 +394,7 @@ function RemoveCard({ name, onRemove }: { name: string; onRemove: () => void }) 
   )
 }
 
-type HostsState = { status: 'loading' } | { status: 'ready'; hosts: readonly HostChoice[] } | { status: 'failed'; message: string }
-type AddMode = 'ssh' | 'address'
+type HostsState = ChooseHosts
 /** Where the add flow is: filling in the form, looking at the machine over ssh, or how that went. */
 type AddStep =
   | { step: 'form'; note: string | null }
@@ -435,12 +432,6 @@ function doneWords(added: Done): { text: string; good: boolean } {
 function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onClose: () => void; onOpen: (name: string) => void }) {
   const { add } = machines
   const [hosts, setHosts] = useState<HostsState>({ status: 'loading' })
-  const [mode, setMode] = useState<AddMode>('ssh')
-  const [host, setHost] = useState<string | null>(null)
-  const [user, setUser] = useState('')
-  const [hostText, setHostText] = useState('')
-  const [port, setPort] = useState('')
-  const [name, setName] = useState('')
   const [state, setState] = useState<AddStep>({ step: 'form', note: null })
   const { loadHosts } = add
   useEffect(() => {
@@ -452,16 +443,10 @@ function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onC
     return () => { gone = true }
   }, [loadHosts])
 
-  const typedUser = user.trim()
-  const typedHost = hostText.trim()
-  const portNumber = portOf(port.trim())
-  const fieldProblem = mode === 'address' ? (userProblem(typedUser) ?? hostProblem(typedHost) ?? (portNumber === undefined ? 'A port is a number from 1 to 65535.' : null)) : null
-  const target = mode === 'ssh' ? host ?? '' : fieldProblem === null && typedHost !== '' ? targetOf(typedUser, typedHost) : ''
-  const typedName = name.trim()
-  const connect = () => {
-    if (target === '') return
+  const connect = (chosen: Chosen) => {
+    const { target, name: typedName, port } = chosen
     setState({ step: 'checking', target })
-    add.onAdd(target, typedName === '' ? undefined : typedName, mode === 'address' ? portNumber ?? undefined : undefined).then(
+    add.onAdd(target, typedName, port).then(
       (result) => {
         if (result.outcome === 'needs-name') { setState({ step: 'form', note: `Give ${target} a name in Maiker to add it.` }); return }
         if (result.outcome === 'cancelled') { setState({ step: 'form', note: 'Cancelled. Nothing was added.' }); return }
@@ -471,7 +456,7 @@ function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onC
       (error: unknown) => { setState({ step: 'failed', target, message: errorMessage(error, 'Could not add the machine') }) },
     )
   }
-  const again = () => { setHost(null); setUser(''); setHostText(''); setPort(''); setName(''); setState({ step: 'form', note: null }) }
+  const again = () => { setState({ step: 'form', note: null }) }
 
   return (
     <section className="mx-mach-addflow" aria-label="Add a machine">
@@ -481,47 +466,7 @@ function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onC
         <span className="mx-mach-crumb-here">Add a machine</span>
       </nav>
       <div className="mx-mach-addbox">
-        {state.step === 'form' && (
-          <form className="mx-mach-form" onSubmit={(event) => { event.preventDefault(); connect() }}>
-            <p className="mx-mach-note">Maiker reaches another machine over ssh and talks to its own Maiker there. It needs a way in that works without typing anything (an ssh key or agent), and Maiker installed on it; if it is not, you can install it from the machine's settings once it is added. Adding does three things: reach the machine, log in, and check Maiker on it.</p>
-            {add.windows && <p className="mx-mach-note">Windows: use ssh keys or an agent. Password prompts work in the session but are not remembered.</p>}
-            <Segmented aria-label="How" value={mode} onValueChange={(next) => { if (next === 'ssh' || next === 'address') setMode(next) }}>
-              <SegmentedItem value="ssh">From ~/.ssh/config</SegmentedItem>
-              <SegmentedItem value="address">By address</SegmentedItem>
-            </Segmented>
-            {mode === 'address' && (
-              <div className="mx-mach-fields">
-                <label className="mx-mach-field">
-                  <span>User</span>
-                  <input className="mono" aria-label="User" value={user} placeholder="the user you log in as" spellCheck={false} autoCapitalize="none" onChange={(event) => { setUser(event.target.value) }} />
-                </label>
-                <label className="mx-mach-field">
-                  <span>Host</span>
-                  <input className="mono" aria-label="Host" value={hostText} placeholder="10.0.0.5 or box.example" spellCheck={false} autoFocus autoCapitalize="none" onChange={(event) => { setHostText(event.target.value) }} />
-                </label>
-                <label className="mx-mach-field">
-                  <span>Port</span>
-                  <input className="mono mx-mach-port" aria-label="Port" value={port} placeholder="22" inputMode="numeric" spellCheck={false} onChange={(event) => { setPort(event.target.value) }} />
-                </label>
-              </div>
-            )}
-            {mode === 'address' && fieldProblem !== null && <p className="mx-mach-note" role="alert">{fieldProblem}</p>}
-            {mode === 'address' && typedUser === '' && typedHost !== '' && fieldProblem === null && (
-              <p className="mx-mach-warn" role="note">No user: ssh will connect as {machines.localUser ?? "this computer's user"}, which is usually wrong on another machine. Type the user you log in as there.</p>
-            )}
-            {mode === 'ssh' && <HostChoices hosts={hosts} picked={host} onPick={(alias) => { setHost(alias) }} />}
-            <label className="mx-mach-field">
-              <span>Name in Maiker</span>
-              <input aria-label="Name in Maiker" value={name} placeholder={target === '' ? 'e.g. homelab' : target} spellCheck={false} onChange={(event) => { setName(event.target.value) }} />
-            </label>
-            {state.note !== null && <p className="mx-mach-note" role="status">{state.note}</p>}
-            <div className="mx-mach-formfoot">
-              <span>Nothing is added unless the machine answers over ssh.</span>
-              <button type="button" className="mx-mach-quiet" onClick={onClose}>Cancel</button>
-              <button type="submit" className="mx-mach-go" disabled={target === ''}>Connect {typedName === '' ? (target === '' ? 'machine' : target) : typedName}</button>
-            </div>
-          </form>
-        )}
+        {state.step === 'form' && <AddMachineChoose hosts={hosts} taken={machines.list.flatMap((head) => (head.name === null ? [] : [head.name]))} note={state.note} windows={add.windows} onConnect={connect} onCancel={onClose} />}
         {state.step !== 'form' && (
           <div className="mx-mach-run">
             <span className="mx-mach-target">{state.target}</span>
@@ -583,26 +528,6 @@ function DoneFoot({ added, machines, onAgain, onOpen }: { added: Done; machines:
       )}
       <button type="button" className="mx-mach-quiet" onClick={onAgain}>Add another</button>
       <button type="button" className="mx-mach-go" onClick={() => { onOpen(added.name) }}>Open its settings</button>
-    </div>
-  )
-}
-
-function HostChoices({ hosts, picked, onPick }: { hosts: HostsState; picked: string | null; onPick: (alias: string) => void }) {
-  if (hosts.status === 'loading') return <SkeletonLines label="Reading hosts from ~/.ssh/config" className="mx-mach-note" />
-  if (hosts.status === 'failed') return <p className="mx-mach-note" role="alert">{hosts.message}</p>
-  if (hosts.hosts.length === 0) return <p className="mx-mach-note">No new hosts in ~/.ssh/config. Choose By address to type one.</p>
-  return (
-    <div className="mx-mach-hosts">
-      <span className="mx-mach-label" id={HOSTS_LABEL}>Hosts in your ssh config</span>
-      <RadioGroup aria-labelledby={HOSTS_LABEL} value={picked ?? ''} onValueChange={onPick} className="mx-mach-hostlist">
-        {hosts.hosts.map((choice) => (
-          <RadioGroupItem key={choice.alias} value={choice.alias} className={`mx-mach-hostrow${picked === choice.alias ? ' is-on' : ''}`}>
-            <span className="mx-mach-radio" aria-hidden="true" />
-            <span className="mx-mach-hostname">{choice.alias}</span>
-            <span className="mx-mach-hostaddr">{choice.detail}</span>
-          </RadioGroupItem>
-        ))}
-      </RadioGroup>
     </div>
   )
 }

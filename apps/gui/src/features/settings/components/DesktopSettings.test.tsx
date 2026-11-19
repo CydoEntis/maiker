@@ -719,10 +719,9 @@ describe('adding a machine', () => {
     await user.click(screen.getByRole('button', { name: 'Add machine' }))
     return user
   }
-  /** Switches the flow to typing an address, and types it. */
+  /** Types an address into the one field for it. */
   const byAddress = async (user: ReturnType<typeof userEvent.setup>, text: string) => {
-    await user.click(screen.getByRole('radio', { name: 'By address' }))
-    await user.type(screen.getByRole('textbox', { name: 'Host' }), text)
+    await user.type(screen.getByRole('textbox', { name: 'Type its address' }), text)
   }
 
   it('says it is loading the hosts, then lists them', async () => {
@@ -730,14 +729,9 @@ describe('adding a machine', () => {
     await startAdding({ loadHosts: () => new Promise((resolve) => { answer = resolve }) })
     expect(screen.getByRole('status', { name: /Reading hosts/ })).toBeInTheDocument()
     answer(hosts)
-    const list = await screen.findByRole('radiogroup', { name: 'Hosts in your ssh config' })
+    const list = await screen.findByRole('radiogroup', { name: 'Computers you already use with SSH' })
     expect(within(list).getByRole('radio', { name: /build/ })).toBeInTheDocument()
     expect(within(list).getByRole('radio', { name: /lab/ })).toBeInTheDocument()
-  })
-
-  it('says so when there are no hosts', async () => {
-    await startAdding()
-    expect(await screen.findByText(/No new hosts in ~\/\.ssh\/config/)).toBeInTheDocument()
   })
 
   it('shows why the hosts could not be read', async () => {
@@ -745,49 +739,57 @@ describe('adding a machine', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('config unreadable')
   })
 
-  it('connects nothing until a host is picked, then adds it and says what answered', async () => {
+  it('connects nothing until a computer is picked, then adds it and says what answered', async () => {
     const onAdd = vi.fn().mockResolvedValue(added('build'))
     const user = await startAdding({ loadHosts: () => Promise.resolve(hosts), onAdd })
-    expect(screen.getByRole('button', { name: 'Connect machine' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Pick a computer first' })).toBeDisabled()
     await user.click(await screen.findByRole('radio', { name: /build/ }))
-    await user.click(screen.getByRole('button', { name: 'Connect build' }))
-    expect(onAdd).toHaveBeenCalledWith('build', undefined, undefined)
+    expect(screen.getByRole('textbox', { name: 'What should Maiker call it?' })).toHaveValue('build')
+    await user.click(screen.getByRole('button', { name: 'Connect to build' }))
+    expect(onAdd).toHaveBeenCalledWith('build', 'build', undefined)
     expect(await screen.findByText(/build is added and connecting\./)).toHaveClass('is-good')
     expect(screen.getByText(/Maiker answered there \(maiker 1\.2\.3\)/)).toBeInTheDocument()
   })
 
-  it('builds the destination from user, host and port, under the name given', async () => {
-    const onAdd = vi.fn().mockResolvedValue(added('box'))
-    const user = await startAdding({ onAdd })
-    await byAddress(user, 'box.example')
-    await user.type(screen.getByRole('textbox', { name: 'User' }), 'me')
-    await user.type(screen.getByRole('textbox', { name: 'Port' }), '2222')
-    await user.type(screen.getByRole('textbox', { name: 'Name in Maiker' }), 'box{Enter}')
-    expect(onAdd).toHaveBeenCalledWith('me@box.example', 'box', 2222)
+  it('clears the typed address when a computer is picked, and the pick when an address is typed', async () => {
+    const user = await startAdding({ loadHosts: () => Promise.resolve(hosts) })
+    await byAddress(user, 'me@box.example')
+    await user.click(await screen.findByRole('radio', { name: /build/ }))
+    expect(screen.getByRole('textbox', { name: 'Type its address' })).toHaveValue('')
+    await byAddress(user, 'me@box.example')
+    expect(screen.getByRole('radio', { name: /build/ })).not.toBeChecked()
   })
 
-  it('warns, with the local user, when no user is given, and connects as the bare host', async () => {
+  it('builds the destination from a typed address, with its port, under the name given', async () => {
     const onAdd = vi.fn().mockResolvedValue(added('box'))
     const user = await startAdding({ onAdd })
-    await byAddress(user, '100.78.214.15')
-    expect(screen.getByRole('note')).toHaveTextContent('No user: ssh will connect as vox, which is usually wrong on another machine')
-    await user.type(screen.getByRole('textbox', { name: 'User' }), 'dev')
-    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    await byAddress(user, 'me@box.example:2222')
+    expect(screen.getByText('Maiker will log in to me@box.example using your SSH key.')).toBeInTheDocument()
+    const called = screen.getByRole('textbox', { name: 'What should Maiker call it?' })
+    expect(called).toHaveValue('box')
+    await user.clear(called)
+    await user.type(called, 'workshop{Enter}')
+    expect(onAdd).toHaveBeenCalledWith('me@box.example', 'workshop', 2222)
   })
 
-  it('refuses a user, host or port that ssh would read as something else, and sends nothing', async () => {
+  it('takes a port from Advanced when the address has none', async () => {
+    const onAdd = vi.fn().mockResolvedValue(added('server-5'))
+    const user = await startAdding({ onAdd })
+    await byAddress(user, 'me@10.0.0.5')
+    await user.click(screen.getByRole('button', { name: /Advanced/ }))
+    await user.type(screen.getByRole('textbox', { name: 'Port' }), '2200')
+    await user.click(screen.getByRole('button', { name: 'Connect to server-5' }))
+    expect(onAdd).toHaveBeenCalledWith('me@10.0.0.5', 'server-5', 2200)
+  })
+
+  it('says what is wrong with an address once the field is left, and sends nothing', async () => {
     const onAdd = vi.fn()
     const user = await startAdding({ onAdd })
-    await byAddress(user, '-oProxyCommand=x')
-    expect(screen.getByRole('alert')).toHaveTextContent('cannot start with a dash')
-    expect(screen.getByRole('button', { name: /^Connect/ })).toBeDisabled()
-    await user.clear(screen.getByRole('textbox', { name: 'Host' }))
-    await user.type(screen.getByRole('textbox', { name: 'Host' }), 'box')
-    await user.type(screen.getByRole('textbox', { name: 'User' }), 'a b')
-    expect(screen.getByRole('button', { name: /^Connect/ })).toBeDisabled()
-    await user.clear(screen.getByRole('textbox', { name: 'User' }))
-    await user.type(screen.getByRole('textbox', { name: 'Port' }), '99999')
-    expect(screen.getByRole('button', { name: /^Connect/ })).toBeDisabled()
+    await byAddress(user, 'cydo@10.0.4')
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    await user.tab()
+    expect(screen.getByRole('alert')).toHaveTextContent('An IP address has 4 numbers separated by dots, like 192.168.1.20. This one has 3.')
+    expect(screen.getByRole('button', { name: 'Pick a computer first' })).toBeDisabled()
     expect(onAdd).not.toHaveBeenCalled()
   })
 
@@ -797,13 +799,15 @@ describe('adding a machine', () => {
     await byAddress(user, 'nope.example{Enter}')
     expect(await screen.findByRole('alert')).toHaveTextContent('nope.example: could not resolve')
     await user.click(screen.getByRole('button', { name: 'Edit and try again' }))
-    expect(screen.getByRole('textbox', { name: 'Host' })).toHaveValue('nope.example')
+    expect(screen.getByRole('textbox', { name: 'Type its address' })).toHaveValue('')
   })
 
   it('asks for a name when none can be made', async () => {
     const onAdd = vi.fn().mockResolvedValueOnce({ outcome: 'needs-name' })
     const user = await startAdding({ onAdd })
-    await byAddress(user, '10.0.0.5{Enter}')
+    await byAddress(user, '10.0.0.5')
+    await user.clear(screen.getByRole('textbox', { name: 'What should Maiker call it?' }))
+    await user.keyboard('{Enter}')
     expect(await screen.findByText('Give 10.0.0.5 a name in Maiker to add it.')).toBeInTheDocument()
   })
 
@@ -871,9 +875,10 @@ describe('adding a machine', () => {
     expect(trust).not.toHaveBeenCalled()
   })
 
-  it('explains what a remote machine needs before anything is typed', async () => {
+  it('says what will happen before anything is typed, and that nothing changes until the person says so', async () => {
     await startAdding()
-    expect(screen.getByText(/over ssh and talks to its own Maiker there/)).toBeInTheDocument()
+    expect(screen.getByText('Which computer do you want to use?')).toBeInTheDocument()
+    expect(screen.getByText('Nothing is changed on that computer until you say so.')).toBeInTheDocument()
   })
 
   it('says that Windows wants keys or an agent, on Windows only', async () => {
