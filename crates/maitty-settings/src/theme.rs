@@ -48,6 +48,8 @@ pub struct Theme {
     pub acc_ink: Color,
     /// Discard, failures.
     pub err: Color,
+    /// A caution that is neither needs you nor a failure (context almost full, an empty commit).
+    pub warning: Color,
     /// Project colours (violet, sky, pink, teal), when the theme has its own.
     pub ws: Option<[Color; 4]>,
     /// Terminal colours for agent output (red, green, yellow, blue, magenta, cyan, gray),
@@ -72,14 +74,42 @@ pub struct SplashColors {
 #[serde(default)]
 pub struct ThemeOverrides(pub BTreeMap<String, String>);
 
-/// How much of the accent a selected row's ground carries (a share of 1): enough to be seen on a dark ground, little enough that
-/// the text on it keeps its contrast.
-const SELECTED_ACCENT: f32 = 0.24;
+/// How much of the strongest text a selected row's ground carries (a share of 1): enough to be seen on a dark ground and on a
+/// light one, little enough that the text on it keeps its contrast. A selection is neutral; the accent is for the update dot.
+const SELECTED_TINT: f32 = 0.17;
+
+/// The caution colour for a ground: the design's yellow on a dark one, its darker brass-yellow on a light one.
+fn warning_for(bg: Color) -> Color {
+    if contrast(bg, Color::Rgb(255, 255, 255)) < contrast(bg, Color::Rgb(0, 0, 0)) {
+        Color::Rgb(0x8a, 0x61, 0x00)
+    } else {
+        Color::Rgb(0xe8, 0xc2, 0x5a)
+    }
+}
 
 /// The theme when none is chosen.
 pub const DEFAULT: &str = "night";
 /// The light theme when none is chosen.
 pub const DEFAULT_LIGHT: &str = "day";
+
+/// The Maiker themes' ids before the rename from Maitty: each still names its theme, and a config that says one is
+/// rewritten to the new id on load (`renamed`). `canonical` follows them too, so a name read anywhere else still resolves.
+pub const RENAMED: &[(&str, &str)] = &[
+    ("maitty-abyss", "maiker-abyss"),
+    ("maitty-dusk", "maiker-dusk"),
+    ("maitty-ember", "maiker-ember"),
+    ("maitty-dark", "maiker-dark"),
+    ("maitty-light", "maiker-light"),
+    ("maitty-moss", "maiker-moss"),
+    ("maitty-paper", "maiker-paper"),
+    ("maitty-retro-dark", "maiker-retro-dark"),
+    ("maitty-retro-light", "maiker-retro-light"),
+];
+
+/// The id a Maiker theme went by before the rename, now spelled as it is today; `None` for any other name.
+pub fn renamed(name: &str) -> Option<&'static str> {
+    RENAMED.iter().find(|(old, _)| *old == name).map(|(_, new)| *new)
+}
 
 /// Where a theme that is no longer built in went: each removed id, and the two Maiker long names, name the surviving theme
 /// nearest to it on the same side (dark to a dark one, light to a light one, by the colour of the ground), so a config that
@@ -92,24 +122,24 @@ const ALIASES: &[(&str, &str)] = &[
     ("melange", "melange-dark"),
     ("apprentice", "gruvbox"),
     ("aquarium", "catppuccin-mocha"),
-    ("arcade", "maitty-dark"),
+    ("arcade", "maiker-dark"),
     ("archery", "gruvbox"),
     ("ash", "catppuccin-latte"),
     ("ashen", "github-dark"),
     ("atelier-cave-dark", "tokyo-night"),
-    ("atelier-cave-light", "maitty-light"),
+    ("atelier-cave-light", "maiker-light"),
     ("atelier-dune-dark", "tokyo-night"),
     ("atelier-dune-light", "solarized-light"),
     ("atelier-estuary-dark", "gruvbox"),
     ("atelier-estuary-light", "catppuccin-latte"),
     ("atelier-forest-dark", "tokyo-night"),
-    ("atelier-forest-light", "maitty-light"),
+    ("atelier-forest-light", "maiker-light"),
     ("atelier-heath-dark", "tokyo-night"),
     ("atelier-heath-light", "catppuccin-latte"),
     ("atelier-lakeside-dark", "tokyo-night"),
     ("atelier-lakeside-light", "catppuccin-latte"),
     ("atelier-plateau-dark", "tokyo-night"),
-    ("atelier-plateau-light", "maitty-light"),
+    ("atelier-plateau-light", "maiker-light"),
     ("atelier-savanna-dark", "tokyo-night"),
     ("atelier-savanna-light", "day"),
     ("atelier-seaside-dark", "github-dark"),
@@ -139,10 +169,10 @@ const ALIASES: &[(&str, &str)] = &[
     ("dogrun", "catppuccin-mocha"),
     ("duskfox", "catppuccin-mocha"),
     ("edge", "one-dark"),
-    ("eldar", "maitty-dark"),
+    ("eldar", "maiker-dark"),
     ("embark", "catppuccin-mocha"),
     ("ember", "github-dark"),
-    ("falcon", "maitty-dark"),
+    ("falcon", "maiker-dark"),
     ("fluoromachine", "catppuccin-mocha"),
     ("github-dark-dimmed", "gruvbox"),
     ("goodwolf", "github-dark"),
@@ -165,19 +195,19 @@ const ALIASES: &[(&str, &str)] = &[
     ("koda-glade", "one-light"),
     ("koda-light", "one-light"),
     ("koda-moss", "github-dark"),
-    ("lackluster", "maitty-dark"),
+    ("lackluster", "maiker-dark"),
     ("lucario", "one-dark"),
-    ("luna", "maitty-dark"),
+    ("luna", "maiker-dark"),
     ("mellifluous", "tokyo-night"),
     ("mellow", "github-dark"),
     ("mellow-light", "one-light"),
     ("miasma", "gruvbox"),
     ("miramare", "gruvbox"),
     ("modus-operandi", "github-light"),
-    ("mono", "maitty-dark"),
+    ("mono", "maiker-dark"),
     ("monokai", "gruvbox"),
     ("monokai-pro", "one-dark"),
-    ("moonfly", "maitty-dark"),
+    ("moonfly", "maiker-dark"),
     ("moonlit", "github-dark"),
     ("moss", "github-dark"),
     ("moss-day", "catppuccin-latte"),
@@ -197,7 +227,7 @@ const ALIASES: &[(&str, &str)] = &[
     ("rose-pine-moon", "rose-pine"),
     ("selenized-light", "solarized-light"),
     ("shades-of-purple", "catppuccin-mocha"),
-    ("simple-dark", "maitty-dark"),
+    ("simple-dark", "maiker-dark"),
     ("solarized-osaka", "night"),
     ("solarized-osaka-light", "solarized-light"),
     ("sonokai", "one-dark"),
@@ -208,25 +238,26 @@ const ALIASES: &[(&str, &str)] = &[
     ("terafox", "solarized-dark"),
     ("text-to-colorscheme", "gruvbox"),
     ("tinkery", "github-dark"),
-    ("tinkery-light", "maitty-light"),
+    ("tinkery-light", "maiker-light"),
     ("token", "gruvbox"),
     ("tokyo-night-moon", "catppuccin-mocha"),
     ("tokyo-night-storm", "one-dark"),
-    ("tomorrow-night-bright", "maitty-dark"),
+    ("tomorrow-night-bright", "maiker-dark"),
     ("tomorrow-night-eighties", "one-dark"),
     ("turtles", "tokyo-night"),
     ("vague", "github-dark"),
     ("vim", "github-light"),
     ("vscode", "tokyo-night"),
     ("yui-dark", "catppuccin-mocha"),
-    ("yui-light", "maitty-light"),
+    ("yui-light", "maiker-light"),
     ("zephyr", "one-dark"),
 ];
 
 /// The built-in theme a configured name means: itself, or the theme its old name became.
 pub fn canonical(name: &str) -> &str {
-    ALIASES
+    RENAMED
         .iter()
+        .chain(ALIASES)
         .find(|(old, _)| *old == name)
         .map_or(name, |(_, new)| new)
 }
@@ -239,7 +270,7 @@ pub fn is_light(name: &str) -> bool {
 /// Every built-in theme, kept in alphabetical order of its display name: the theme browser,
 /// the Theme setting's cycling and the unknown-theme warning all list it as written.
 pub const BUILTIN: &[&str] = &[
-    "maitty-abyss",
+    "maiker-abyss",
     "alucard",
     "ayu-dark",
     "ayu-light",
@@ -251,8 +282,8 @@ pub const BUILTIN: &[&str] = &[
     "doom-one",
     "doom-one-light",
     "dracula",
-    "maitty-dusk",
-    "maitty-ember",
+    "maiker-dusk",
+    "maiker-ember",
     "everforest-dark",
     "everforest-light",
     "flexoki-dark",
@@ -265,15 +296,15 @@ pub const BUILTIN: &[&str] = &[
     "gruvbox-material-light",
     "kanagawa-lotus",
     "kanagawa-wave",
-    "maitty-dark",
+    "maiker-dark",
     "day",
-    "maitty-light",
+    "maiker-light",
     "night",
-    "maitty-retro-dark",
-    "maitty-retro-light",
+    "maiker-retro-dark",
+    "maiker-retro-light",
     "melange-dark",
     "melange-light",
-    "maitty-moss",
+    "maiker-moss",
     "nightfox",
     "nord",
     "nord-light",
@@ -281,7 +312,7 @@ pub const BUILTIN: &[&str] = &[
     "one-half-dark",
     "one-half-light",
     "one-light",
-    "maitty-paper",
+    "maiker-paper",
     "papercolor-dark",
     "papercolor-light",
     "rose-pine",
@@ -298,7 +329,7 @@ pub const BUILTIN: &[&str] = &[
 
 /// The display names Settings shows; a theme missing here shows its config name in title case.
 pub const DESIGN: &[(&str, &str)] = &[
-    ("maitty-abyss", "Abyss"),
+    ("maiker-abyss", "Abyss"),
     ("alucard", "Alucard"),
     ("ayu-dark", "Ayu Dark"),
     ("ayu-light", "Ayu Light"),
@@ -310,8 +341,8 @@ pub const DESIGN: &[(&str, &str)] = &[
     ("doom-one", "Doom One"),
     ("doom-one-light", "Doom One Light"),
     ("dracula", "Dracula"),
-    ("maitty-dusk", "Dusk"),
-    ("maitty-ember", "Ember"),
+    ("maiker-dusk", "Dusk"),
+    ("maiker-ember", "Ember"),
     ("everforest-dark", "Everforest Dark"),
     ("everforest-light", "Everforest Light"),
     ("flexoki-dark", "Flexoki Dark"),
@@ -324,15 +355,15 @@ pub const DESIGN: &[(&str, &str)] = &[
     ("gruvbox-material-light", "Gruvbox Material Light"),
     ("kanagawa-lotus", "Kanagawa Lotus"),
     ("kanagawa-wave", "Kanagawa Wave"),
-    ("maitty-dark", "Maiker Dark"),
+    ("maiker-dark", "Maiker Dark"),
     ("day", "Maiker Day"),
-    ("maitty-light", "Maiker Light"),
+    ("maiker-light", "Maiker Light"),
     ("night", "Maiker Night"),
-    ("maitty-retro-dark", "Maiker Retro Dark"),
-    ("maitty-retro-light", "Maiker Retro Light"),
+    ("maiker-retro-dark", "Maiker Retro Dark"),
+    ("maiker-retro-light", "Maiker Retro Light"),
     ("melange-dark", "Melange Dark"),
     ("melange-light", "Melange Light"),
-    ("maitty-moss", "Moss"),
+    ("maiker-moss", "Moss"),
     ("nightfox", "Nightfox"),
     ("nord", "Nord"),
     ("nord-light", "Nord Light"),
@@ -340,7 +371,7 @@ pub const DESIGN: &[(&str, &str)] = &[
     ("one-half-dark", "One Half Dark"),
     ("one-half-light", "One Half Light"),
     ("one-light", "One Light"),
-    ("maitty-paper", "Paper"),
+    ("maiker-paper", "Paper"),
     ("papercolor-dark", "PaperColor Dark"),
     ("papercolor-light", "PaperColor Light"),
     ("rose-pine", "Rosé Pine"),
@@ -545,6 +576,7 @@ impl Theme {
             strong,
             acc_ink,
             err: readable_on(ansi[0], ink, &[card], 3.0),
+            warning: warning_for(bg),
             ws: Some([ansi[4], ansi[3], ansi[0], ansi[5]]),
             ansi: Some(ansi),
             splash: None,
@@ -564,20 +596,20 @@ impl Theme {
         c
     }
 
-    /// The selected row's ground: the background tinted with the theme's accent, so a selection is
-    /// the accent's colour and is seen on any ground, dark or light.
+    /// The selected row's ground: the background tinted with the strongest text, so a selection is
+    /// neutral and is seen on any ground, dark or light.
     /// Tree lines and line numbers: half way from the quiet text to the ground.
     pub fn faint(&self) -> Color {
         mix(self.muted, self.bg, 0.5)
     }
 
     pub fn sel_bg(&self) -> Color {
-        mix(self.bg, self.accent, SELECTED_ACCENT)
+        mix(self.bg, self.strong, SELECTED_TINT)
     }
 
-    /// The selected row's ground on a raised surface (a sheet, a popup): `ground` tinted with the accent.
+    /// The selected row's ground on a raised surface (a sheet, a popup): `ground` tinted with the strongest text.
     pub fn sel_on(&self, ground: Color) -> Color {
-        mix(ground, self.accent, SELECTED_ACCENT)
+        mix(ground, self.strong, SELECTED_TINT)
     }
 
     /// A pointed-at row on a raised surface.
@@ -655,6 +687,7 @@ impl Theme {
             strong: fg,
             acc_ink: bg,
             err: hex(c[11]),
+            warning: warning_for(bg),
             ws: None,
             ansi: None,
             splash: None,
@@ -690,6 +723,7 @@ impl Theme {
             strong: h(8),
             acc_ink: h(10),
             err: h(13),
+            warning: warning_for(h(0)),
             ws: Some(ws.map(hex)),
             ansi: Some(a.map(hex)),
             splash: None,
@@ -782,10 +816,10 @@ impl Theme {
     pub fn named(name: &str) -> Theme {
         let name = canonical(name);
         let mut theme = Theme::base(name);
-        // The row the keys are on is the accent tinted into the ground, in every theme: a theme's own hover colour was often a step
+        // The row the keys are on is the strongest text tinted into the ground, in every theme: a theme's own hover colour was often a step
         // from the card too small to see on a dark ground.
         theme.hov = theme.sel_on(theme.card);
-        if matches!(name, "night" | "day" | "maitty-dark" | "maitty-light") {
+        if matches!(name, "night" | "day" | "maiker-dark" | "maiker-light") {
             return theme;
         }
         theme.with_distinct_needs()
@@ -797,8 +831,8 @@ impl Theme {
             // means working, coral only means needs you, brass is the accent, the AI in the wordmark is gold.
             "night" => Theme::maiker("night"),
             "day" => Theme::maiker("day"),
-            "maitty-dark" => Theme::maiker("dark"),
-            "maitty-light" => Theme::maiker("light"),
+            "maiker-dark" => Theme::maiker("dark"),
+            "maiker-light" => Theme::maiker("light"),
             "tokyo-night" => Theme::design(
                 [
                     "#1a1b26", "#c0caf5", "#16161e", "#1f2335", "#292e42", "#292e42", "#7a82ad",
@@ -840,13 +874,13 @@ impl Theme {
                     "#cf222e", "#116329", "#4d2d00", "#0969da", "#8250df", "#1b7c83", "#57606a",
                 ],
             ),
-            "maitty-retro-dark" => Theme::palette(
+            "maiker-retro-dark" => Theme::palette(
                 ["#222538", "#e0f8cf", "#94a98a", "#a7f070"],
                 [
                     "#ff004d", "#a7f070", "#ffec27", "#29adff", "#ef7d57", "#73eff7", "#7f92a8",
                 ],
             ),
-            "maitty-retro-light" => Theme::palette(
+            "maiker-retro-light" => Theme::palette(
                 ["#ffffff", "#1a1c2c", "#4d5670", "#2e8b1e"],
                 [
                     "#d0003c", "#2e8b1e", "#b05a00", "#1868c8", "#c24a24", "#1868c8", "#566c86",
@@ -854,31 +888,31 @@ impl Theme {
             ),
             // The desktop design's own themes (themes.json has their full palettes): ground, text, dim, accent;
             // then red, green, yellow, blue, magenta, cyan and grey, with cyan the working teal.
-            "maitty-abyss" => Theme::palette(
+            "maiker-abyss" => Theme::palette(
                 ["#0f1422", "#e3e7f2", "#8d96ae", "#7aa2ff"],
                 [
                     "#f7768e", "#9ece6a", "#e8c25a", "#7aa2ff", "#bb9af7", "#5fd4e8", "#8d96ae",
                 ],
             ),
-            "maitty-dusk" => Theme::palette(
+            "maiker-dusk" => Theme::palette(
                 ["#18141f", "#e8e3ef", "#978ea8", "#c792ea"],
                 [
                     "#ff7a93", "#a3e48f", "#e8c25a", "#82aaff", "#c792ea", "#89ddff", "#978ea8",
                 ],
             ),
-            "maitty-ember" => Theme::palette(
+            "maiker-ember" => Theme::palette(
                 ["#1b1512", "#ece2d6", "#9d9080", "#e0823d"],
                 [
                     "#f0766c", "#a8c97f", "#e8c25a", "#8fb3d9", "#d6a2c8", "#d9b45c", "#9d9080",
                 ],
             ),
-            "maitty-moss" => Theme::palette(
+            "maiker-moss" => Theme::palette(
                 ["#121a15", "#e1ebe3", "#8e9f93", "#8fcf7a"],
                 [
                     "#f08a7e", "#8fcf7a", "#e8c25a", "#86b8e0", "#c6a6e8", "#6fd3b8", "#8e9f93",
                 ],
             ),
-            "maitty-paper" => Theme::palette(
+            "maiker-paper" => Theme::palette(
                 ["#faf6ee", "#1f1b14", "#5c5446", "#b5552b"],
                 [
                     "#b3261e", "#2f6b3a", "#9a6b00", "#2b5aa8", "#7a3fa8", "#2c6e63", "#5c5446",
@@ -1429,6 +1463,19 @@ mod audit {
         }
     }
 
+    #[test]
+    fn a_theme_saved_under_its_maitty_id_still_loads_and_migrates() {
+        for (old, new) in super::RENAMED {
+            assert!(super::BUILTIN.contains(new), "{new} is built in");
+            assert!(!super::BUILTIN.contains(old), "{old} is no longer a theme id");
+            assert_eq!(super::renamed(old), Some(*new));
+            assert_eq!(super::canonical(old), *new);
+            assert_eq!(super::renamed(new), None, "a current id is left alone");
+            assert_eq!(Theme::named(old).bg, Theme::named(new).bg, "{old} loads {new}");
+            assert_eq!(super::is_light(old), super::is_light(new), "{old} keeps its side");
+        }
+    }
+
     fn lum(c: Color) -> Option<f64> {
         let Color::Rgb(r, g, b) = c else { return None };
         let ch = |v: u8| {
@@ -1673,7 +1720,7 @@ mod maiker {
 
     #[test]
     fn the_tui_night_and_day_are_the_tokens_files_colours() {
-        for (name, side) in [("night", "night"), ("day", "day"), ("maitty-dark", "dark"), ("maitty-light", "light")] {
+        for (name, side) in [("night", "night"), ("day", "day"), ("maiker-dark", "dark"), ("maiker-light", "light")] {
             let theme = Theme::named(name);
             assert_eq!(theme.bg, hex(&maitty_token(side, "bg.page")), "{name} ground");
             assert_eq!(theme.fg, hex(&maitty_token(side, "text.body")), "{name} text");
@@ -1685,13 +1732,13 @@ mod maiker {
         // The accent is the brass on the dark ground, and its darker text colour on the light one.
         assert_eq!(Theme::named("night").accent, hex(&maitty_token("night", "accent.brass")));
         assert_eq!(Theme::named("day").accent, hex(&maitty_token("day", "accent.brassText")));
-        assert_eq!(Theme::named("maitty-dark").accent, hex(&maitty_token("dark", "accent.brass")));
-        assert_eq!(Theme::named("maitty-light").accent, hex(&maitty_token("light", "accent.brassText")));
+        assert_eq!(Theme::named("maiker-dark").accent, hex(&maitty_token("dark", "accent.brass")));
+        assert_eq!(Theme::named("maiker-light").accent, hex(&maitty_token("light", "accent.brassText")));
     }
 
     #[test]
     fn working_and_needs_you_are_two_different_colours_and_neither_is_the_error_red() {
-        for name in ["night", "day", "maitty-dark", "maitty-light"] {
+        for name in ["night", "day", "maiker-dark", "maiker-light"] {
             let t = Theme::named(name);
             assert_ne!(t.working, t.blocked, "{name}");
             assert_ne!(t.err, t.blocked, "{name}: an error must not read as needs-you");
@@ -1704,26 +1751,26 @@ mod maiker {
         let label = |id: &str| super::DESIGN.iter().find(|(name, _)| *name == id).map(|(_, shown)| *shown);
         assert_eq!(label("night"), Some("Maiker Night"));
         assert_eq!(label("day"), Some("Maiker Day"));
-        assert_eq!(label("maitty-dark"), Some("Maiker Dark"));
-        assert_eq!(label("maitty-light"), Some("Maiker Light"));
+        assert_eq!(label("maiker-dark"), Some("Maiker Dark"));
+        assert_eq!(label("maiker-light"), Some("Maiker Light"));
         assert_eq!(super::canonical("maitty-night"), "night");
         assert_eq!(super::canonical("maitty-day"), "day");
     }
 
     #[test]
     fn maitty_dark_is_a_dark_ground_and_maitty_light_a_light_one_and_the_defaults_are_unchanged() {
-        assert!(!super::is_light("maitty-dark") && !Theme::named("maitty-dark").is_light());
-        assert!(super::is_light("maitty-light") && Theme::named("maitty-light").is_light());
+        assert!(!super::is_light("maiker-dark") && !Theme::named("maiker-dark").is_light());
+        assert!(super::is_light("maiker-light") && Theme::named("maiker-light").is_light());
         assert_eq!(super::DEFAULT, "night");
         assert_eq!(super::DEFAULT_LIGHT, "day");
-        for id in ["maitty-dark", "maitty-light"] {
+        for id in ["maiker-dark", "maiker-light"] {
             assert!(super::BUILTIN.contains(&id), "{id} is a built-in theme");
         }
     }
 
     #[test]
     fn a_selected_row_is_seen_on_every_ground_and_keeps_its_text_readable() {
-        for id in ["night", "day", "maitty-dark", "maitty-light", "dracula", "gruvbox-light"] {
+        for id in ["night", "day", "maiker-dark", "maiker-light", "dracula", "gruvbox-light"] {
             let t = Theme::named(id);
             for ground in [t.bg, t.card] {
                 let on = t.sel_on(ground);

@@ -137,6 +137,8 @@ export function WorkspacePane({ shown, pane, kept }: {
           rewind={rewind}
           {...(fileSearch === null ? {} : { fileSearch })}
           paneStatus={session.status}
+          {...(session.hooked === undefined ? {} : { hooked: session.hooked })}
+          hookProblem={session.hookProblem ?? null}
           helpersOnly={session.helpersOnly}
           usage={{ context: session.usage.context, limits: session.limits }}
           process={session.process}

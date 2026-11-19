@@ -57,7 +57,7 @@ export function useChatProblem(problem: ChatProblem | null, summarize: () => str
           reason={words.line}
           actions={context === null ? undefined : (
             <>
-              <FeedbackButton kind="text" onClick={() => { context.onNewWithSummary(summarize()) }}>New chat with summary</FeedbackButton>
+              <FeedbackButton kind="text" onClick={() => { context.onNewWithSummary(summarize()) }}>New session with summary</FeedbackButton>
               <FeedbackButton kind="primary" onClick={context.onCompact}>Compact</FeedbackButton>
             </>
           )}

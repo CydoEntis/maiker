@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
 import { useLatest } from '@/lib/useLatest'
-import type { NewChatRequest } from './components/NewSessionDialog'
+import type { NewChatRequest } from './components/NewChatPage'
 
 /** What a chat would start as, without its first message: enough to start its agent ahead of it. */
-export type WarmSpec = Pick<NewChatRequest, 'folder' | 'agent' | 'model' | 'reasoning' | 'mode'>
+export type WarmSpec = Pick<NewChatRequest, 'folder' | 'agent' | 'model' | 'reasoning' | 'mode' | 'bypass'>
 
 /** Asks for the agent kept warm, or with `null` says none is wanted any more. */
 export type WarmAgent = (spec: WarmSpec | null) => void

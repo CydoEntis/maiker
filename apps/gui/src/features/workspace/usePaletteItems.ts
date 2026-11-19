@@ -43,7 +43,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
   setLayout: Dispatch<SetStateAction<Layout>>
   startAgent: (program: string) => void
   setRecentOpen: Dispatch<SetStateAction<boolean>>
-  /** Picks a folder in the system's dialog and opens the New session dialog on it. */
+  /** Picks a folder in the system's dialog and opens the New session draft on it. */
   openFolder: () => void
   setSavedOpen: Dispatch<SetStateAction<boolean>>
 }) {
@@ -74,14 +74,13 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
     const items: PaletteItem[] = [
       ...sessionItems,
       ...projectItems,
-      action('new-session', 'New agent chat…', () => { newSession(focusedMachineNumber) }, keys('new-session')),
+      action('new-session', 'New session…', () => { newSession(focusedMachineNumber) }, keys('new-session')),
       action('open-folder', 'Open a folder…', openFolder),
       action('recent-sessions', 'Recent sessions…', () => { setRecentOpen(true) }),
       action('resume-saved', 'Resume a saved chat…', () => { setSavedOpen(true) }),
-      action('new-terminal', 'New shell', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
+      action('new-terminal', 'New terminal', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
       ...(focusedSession && !isShell(focusedSession) ? [action('open-terminal', 'New terminal for this agent', () => { addAgentTerminal(focusedSession.id) })] : []),
-      action('new-agent-chat', 'New agent chat', () => { runShortcut('new-agent-chat') }, keys('new-agent-chat')),
-      ...heads.filter((head) => head.name !== null && head.chip?.tone === 'ok' && online).map((head) => action(`new-on-${head.key}`, `New shell on ${head.label}…`, () => { newTerminal(head.machine) })),
+      ...heads.filter((head) => head.name !== null && head.chip?.tone === 'ok' && online).flatMap((head) => [action(`new-on-${head.key}`, `New session on ${head.label}…`, () => { newSession(head.machine) }), action(`new-terminal-on-${head.key}`, `New terminal on ${head.label}…`, () => { newTerminal(head.machine) })]),
       action('sidebar-side', preferences.sidebarSide === 'left' ? 'Move sidebar to the right' : 'Move sidebar to the left', () => { setPreferences((current) => ({ ...current, sidebarSide: current.sidebarSide === 'left' ? 'right' : 'left' })) }),
       ...(focusedSession && focusedSession.machineName === null ? [action('open-readme', 'Open README', () => { openReadme('files') }), action('open-readme-beside', 'Open README beside the chat', () => { openReadme('beside') })] : []),
       action('split-right', 'Split right', () => { split(null, 'right') }, keys('split-right')),

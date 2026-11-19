@@ -11,7 +11,7 @@ const CURSORS: [char; 3] = ['❯', '›', '>'];
 /// The numbered choices on a screen and the question above them.
 pub fn prompt_on(screen: &str) -> (String, Vec<(u32, String)>) {
     let lines: Vec<&str> = screen.lines().collect();
-    let (opts, first) = options_in(&lines);
+    let (opts, first, _) = options_in(&lines);
     let question = lines[first.saturating_sub(QUESTION_LINES)..first].join(" ");
     (question, opts)
 }
@@ -21,8 +21,7 @@ pub fn prompt_on(screen: &str) -> (String, Vec<(u32, String)>) {
 /// Empty when the screen shows no numbered choices.
 pub fn asking(screen: &str) -> String {
     let lines: Vec<&str> = screen.lines().collect();
-    let (mut opts, mut first) = options_in(&lines);
-    let mut cursor = None;
+    let (mut opts, mut first, mut cursor) = options_in(&lines);
     if opts.is_empty() {
         // Claude's newer menus (trust this folder) have no numbers, only a cursor and an `Enter to confirm` line.
         let Some((menu, at, picked)) = cursor_menu_in(&lines) else {
@@ -95,25 +94,31 @@ fn cursor_menu_in(lines: &[&str]) -> Option<CursorMenu> {
     Some((opts, start, picked))
 }
 
-fn options_in(lines: &[&str]) -> (Vec<(u32, String)>, usize) {
+/// The numbered choices, the line the first is on, and which one the cursor mark is on, when one is marked.
+fn options_in(lines: &[&str]) -> (Vec<(u32, String)>, usize, Option<usize>) {
     let mut opts = Vec::new();
+    let mut marked = None;
     let mut first = lines.len();
     for (i, l) in lines.iter().enumerate().rev().take(OPTION_LOOKBACK_LINES) {
-        let t = l
-            .trim()
-            .trim_matches(|c: char| BOX_CHARS.contains(c))
+        let boxless = l.trim().trim_matches(|c: char| BOX_CHARS.contains(c));
+        let t = boxless
             .trim_start_matches(|c: char| c == ' ' || CURSORS.contains(&c))
             .trim();
         let mut ch = t.chars();
         if let (Some(d), Some('.')) = (ch.next(), ch.next())
             && let Some(n) = d.to_digit(10)
         {
+            if boxless.starts_with(CURSORS) {
+                marked = Some(opts.len());
+            }
             opts.push((n, ch.as_str().trim().to_string()));
             first = i;
         }
     }
     opts.reverse();
-    (opts, first)
+    // Counted from the bottom while walking up, so it is turned around with the list.
+    let cursor = marked.map(|from_bottom| opts.len() - 1 - from_bottom);
+    (opts, first, cursor)
 }
 
 #[cfg(test)]
@@ -150,6 +155,7 @@ mod tests {
     #[test]
     fn asking_keeps_the_exact_command_and_the_choices_without_the_box() {
         let text = asking(CLAUDE_BASH_PROMPT);
+        assert!(text.contains("\n❯ 1. Yes"), "{text}");
         assert!(text.contains("rm -rf target/debug"), "{text}");
         assert!(text.contains("3. No, and tell Claude what to do"), "{text}");
         assert!(!text.contains('│'), "{text}");
@@ -177,7 +183,7 @@ mod tests {
         let screen = "> You are in /home/vox/app\n\n  Do you trust the contents of this directory? Working with untrusted contents comes with higher risk of prompt injection.\n\n\u{203a} 1. Yes, continue\n  2. No, quit\n\n  Press enter to continue";
         let text = asking(screen);
         assert!(text.starts_with("> You are in /home/vox/app"), "{text}");
-        assert!(text.contains("\n1. Yes, continue"), "{text}");
+        assert!(text.contains("\n❯ 1. Yes, continue"), "{text}");
         assert!(text.ends_with("\n2. No, quit"), "{text}");
     }
 }

@@ -97,6 +97,8 @@ type PickerProps = {
    * the agent list, the models and the efforts as a segmented control (none when the agent has no effort setting). Enter closes it.
    */
   compact?: boolean
+  /** Which side of the button the menu opens on (it flips when there is no room). The message box in a chat is at the foot of the window, so up; the draft's is mid-page and keeps the box clear by opening down. */
+  side?: 'top' | 'bottom'
 }
 
 /**
@@ -106,7 +108,7 @@ type PickerProps = {
  * What is picked goes to the agent with the next message; the account's default model and a level
  * that was never picked send nothing, so the chat keeps what it started with.
  */
-export function AgentPicker({ agent, choice, onChange, currentModel = null, currentEffort = null, onAgent, live, locked, fixedModels = false, compact = false }: PickerProps) {
+export function AgentPicker({ agent, choice, onChange, currentModel = null, currentEffort = null, onAgent, live, locked, fixedModels = false, compact = false, side = 'top' }: PickerProps) {
   const [open, setOpen] = useState(false)
   const [allModels, setAllModels] = useState(false)
   useDiscoveredModels(agent)
@@ -163,7 +165,7 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
           <Icon name="chevronDown" />
         </button>
       </Popover.Trigger>
-      <PopupContent side="top" align={compact ? 'start' : 'end'} aria-label="Model and effort" className="mx-mm" onKeyDown={compact ? closeOnEnter : undefined}>
+      <PopupContent side={side} align={compact ? 'start' : 'end'} aria-label="Model and effort" className="mx-mm" onKeyDown={compact ? closeOnEnter : undefined}>
         {onAgent !== undefined && (compact ? <><p className="mx-mm-head">Agent</p><AgentList agent={agent} onAgent={onAgent} /><p className="mx-mm-head">Model</p></> : <AgentSelect agent={agent} onAgent={onAgent} />)}
         <RadioGroup aria-label="Model" value={modelId} onValueChange={(value) => { const option = rows.find((row) => row.id === value); if (option) pickModel(option) }} className="mx-mm-models">
           {shown.map((option) => (

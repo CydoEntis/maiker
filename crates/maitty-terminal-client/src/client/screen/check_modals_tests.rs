@@ -698,7 +698,7 @@ fn several_checkpoints_switch_with_the_arrows_on_their_row() {
         "{text}"
     );
     assert!(
-        text.contains("✕ failed on fix-footer 14:22 · exit 1"),
+        text.contains("× failed on fix-footer 14:22 · exit 1"),
         "the selected checkpoint's own result\n{text}"
     );
 }

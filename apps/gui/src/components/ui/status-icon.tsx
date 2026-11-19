@@ -15,7 +15,7 @@ const GLYPH: Record<Exclude<StatusIconKind, "working" | "unknown">, string> = {
 /** The running light's path round the folded tile: the same outline `corner-shape: bevel` cuts (top-left and bottom-right). */
 const FOLDED_OUTLINE = "M3 .5H9.5V7L7 9.5H.5V3Z"
 /** Share of the outline the light covers, and the gap after it (the dash pattern adds up to the 100 of `pathLength`). */
-const LIGHT_LENGTH = 24
+const LIGHT_LENGTH = 40
 const PATH_LENGTH = 100
 const LIGHT_GAP = PATH_LENGTH - LIGHT_LENGTH
 /** The two sizes the design uses: rows and the pane header are 14px, the live box's own light 12px. */
@@ -39,7 +39,7 @@ function StatusIcon({ status, size = DEFAULT_SIZE, className }: { status: Status
         <svg viewBox="0 0 10 10" preserveAspectRatio="none" className="mx-status-light" focusable="false">
           <rect className="mx-sq" x=".5" y=".5" width="9" height="9" fill="none" strokeWidth="1.5" vectorEffect="non-scaling-stroke" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
           <circle className="mx-round" cx="5" cy="5" r="4.5" fill="none" strokeWidth="1.5" vectorEffect="non-scaling-stroke" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
-          <path className="mx-fold" d={FOLDED_OUTLINE} fill="none" strokeWidth=".95" strokeLinecap="square" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
+          <path className="mx-fold" d={FOLDED_OUTLINE} fill="none" strokeWidth="1.5" strokeLinecap="square" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
         </svg>
       ) : status === "unknown" ? null : (
         GLYPH[status]

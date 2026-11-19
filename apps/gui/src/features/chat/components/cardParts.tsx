@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { fileTag } from '@/features/inspect/fileTag'
 import { FileBadge as UiFileBadge, Tag } from '@/components/ui/tag'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { StatusIcon } from '@/components/ui/status-icon'
@@ -72,14 +71,11 @@ type FileBadgeProps = {
   line?: number | null
   /** Opens the file; without it the badge is text, as inside a row that is itself a button. */
   onOpen?: (() => void) | undefined
-  /** No type tag: in a step row the verb and the file's own name already say what it is, and a tag there is noise. */
-  bare?: boolean
 }
 
-/** A file in the chat (`FileBadge`): its type tag, or a folder icon for a folder, then its path shortened from the front. */
-export function FileBadge({ path, line = null, onOpen, bare = false }: FileBadgeProps) {
-  const name = path.replace(/\\/g, '/').replace(/\/$/, '').split('/').pop() ?? path
-  const tag = bare ? undefined : path.endsWith('/') ? <span className="flex w-[22px] flex-none justify-center text-(--dim)"><Icon name="files" size={FOLDER_ICON_SIZE} /></span> : fileTag(name) ?? undefined
+/** A file in the chat (`FileBadge`): its path shortened from the front, with no type icon (the extension is in the name); a folder keeps its folder icon. */
+export function FileBadge({ path, line = null, onOpen }: FileBadgeProps) {
+  const tag = path.endsWith('/') ? <span className="flex w-[22px] flex-none justify-center text-(--dim)"><Icon name="files" size={FOLDER_ICON_SIZE} /></span> : undefined
   return <UiFileBadge path={path} tag={tag} line={line} onOpen={onOpen} />
 }
 

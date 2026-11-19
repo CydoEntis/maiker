@@ -1,5 +1,5 @@
 /** Where the theme's ground is kept for `public/boot-ground.js`, which paints it before the app's code loads. */
-export const GROUND_KEY = 'maitty.gui.ground.v1'
+export const GROUND_KEY = 'maiker.gui.ground.v1'
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{3,8}$/
 

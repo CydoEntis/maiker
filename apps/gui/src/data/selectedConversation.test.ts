@@ -18,7 +18,7 @@ describe('selected conversation preference', () => {
   })
 
   it('ignores an empty saved ID', () => {
-    localStorage.setItem('maitty.gui.selection.v1', '')
+    localStorage.setItem('maiker.gui.selection.v1', '')
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     expect(readSelectedConversation()).toBeNull()

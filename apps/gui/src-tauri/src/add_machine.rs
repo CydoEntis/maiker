@@ -5,11 +5,11 @@
 
 use maitty_machines::MachineDef;
 use maitty_machines::link_failure::FailureClass;
-use maitty_machines::machine_config::{refusal, suggest_name};
+use maitty_machines::machine_config::{refusal_with, suggest_name};
 use maitty_machines::machine_probe::Probe;
 use maitty_machines::ssh_hosts::SshHost;
 use maitty_machines::Machine;
-use maitty_machines::machine_config::add_machine as write_entry;
+use maitty_machines::machine_config::add_machine_with as write_entry;
 use maitty_machines::machine_probe;
 use maitty_machines::local_machines::{config_path, machines_beside};
 use serde::Serialize;
@@ -58,7 +58,8 @@ pub enum How {
     /// Dial it now. `version` is what the app there said, when it answered.
     Connect { version: Option<String> },
     /// ssh needs a person: write the entry and open ssh where prompts can be answered.
-    Login,
+    /// `said` is ssh's own last line, why it could not log in.
+    Login { said: String },
 }
 
 #[derive(Debug, PartialEq)]
@@ -76,10 +77,11 @@ pub fn prepare(
     existing: &[MachineDef],
     target: &str,
     name: Option<&str>,
+    ssh_args: &[String],
     probe: &dyn Fn(&MachineDef) -> Probe,
 ) -> Result<Prepare, String> {
     let target = target.trim();
-    if let Some(why) = refusal(existing, SPARE_NAME, target) {
+    if let Some(why) = refusal_with(existing, SPARE_NAME, target, ssh_args) {
         return Err(why);
     }
     let name = match name.map(str::trim).filter(|name| !name.is_empty()) {
@@ -92,12 +94,19 @@ pub fn prepare(
             }
         }
     };
-    if let Some(why) = refusal(existing, &name, target) {
+    if let Some(taken) = existing.iter().find(|m| m.name.eq_ignore_ascii_case(&name)) {
+        return Err(format!(
+            "You already have a machine called {}. Remove it in Remote machines, or pick another name.",
+            taken.name
+        ));
+    }
+    if let Some(why) = refusal_with(existing, &name, target, ssh_args) {
         return Err(why);
     }
     let def = MachineDef {
         name,
         target: target.to_owned(),
+        ssh_args: ssh_args.to_vec(),
         ..MachineDef::default()
     };
     match probe(&def) {
@@ -108,9 +117,9 @@ pub fn prepare(
                 version: Some(version).filter(|v| !v.is_empty()),
             },
         }),
-        Probe::Failed(FailureClass::Login) => Ok(Prepare::Ready {
+        Probe::Failed(FailureClass::Login(said)) => Ok(Prepare::Ready {
             def,
-            how: How::Login,
+            how: How::Login { said },
         }),
         Probe::Failed(FailureClass::Unreachable(why)) => Err(format!("{}: {why}", def.target)),
         // Reached, but the app is missing, old or not running: the connection's own state says
@@ -134,10 +143,10 @@ pub struct AddProbe(Mutex<Option<Arc<AtomicBool>>>);
 pub enum Outcome {
     /// Written and dialling. `version` is what the app there answered, when it did.
     Added { name: String, version: Option<String> },
-    /// Written, and ssh is open in a session on this computer where its prompts can be answered.
-    Login { name: String },
-    /// Written, but ssh could not be opened for the person: they run it once themselves.
-    LoginManual { name: String, target: String, why: String },
+    /// Written and dialling, but ssh could not log in without a person. Nothing is opened: the
+    /// window shows `said` (ssh's own words), and the way forward (the host key card, or the
+    /// user to fix). `command` is the same login to run in any terminal, when the machine has one.
+    Login { name: String, target: String, said: String, command: Option<String> },
     /// No name could be made from the target.
     NeedsName,
     Cancelled,
@@ -158,19 +167,22 @@ pub async fn list_ssh_hosts() -> Result<Vec<HostChoice>, String> {
 /// Nothing is written when the machine cannot be reached or the look is cancelled.
 #[tauri::command]
 pub async fn add_machine(
-    app: tauri::AppHandle,
     wire: tauri::State<'_, crate::terminal_stream::Wire>,
     probing: tauri::State<'_, AddProbe>,
     target: String,
     name: Option<String>,
+    port: Option<u16>,
 ) -> Result<Outcome, String> {
+    // The window checks these too; this is the boundary, so they are checked again here.
+    maitty_machines::machine_target::check_target(target.trim())?;
+    let ssh_args = maitty_machines::machine_target::port_args(port)?;
     let handle = wire.handle()?.clone();
     let cancel = Arc::new(AtomicBool::new(false));
     *probing.0.lock().map_err(|_| "Adding is busy".to_string())? = Some(cancel.clone());
     let file = config_path().with_file_name("config.local.toml");
     let looked = {
         let cancel = cancel.clone();
-        tauri::async_runtime::spawn_blocking(move || look_and_write(&file, &target, name.as_deref(), &cancel))
+        tauri::async_runtime::spawn_blocking(move || look_and_write(&file, &target, name.as_deref(), &ssh_args, &cancel))
             .await
             .map_err(|error| format!("Could not look at the machine: {error}"))
     };
@@ -185,7 +197,12 @@ pub async fn add_machine(
     handle.add(def.clone());
     match how {
         How::Connect { version } => Ok(Outcome::Added { name: def.name, version }),
-        How::Login => Ok(open_login(&app, &def).await),
+        How::Login { said } => Ok(Outcome::Login {
+            command: Machine::from_def(&def, maitty_machines::SSH_PROGRAM).first_login_command().ok(),
+            name: def.name,
+            target: def.target,
+            said,
+        }),
     }
 }
 
@@ -204,6 +221,7 @@ fn look_and_write(
     file: &std::path::Path,
     target: &str,
     name: Option<&str>,
+    ssh_args: &[String],
     cancel: &AtomicBool,
 ) -> Result<Prepare, String> {
     let listed = machines_beside(&config_path());
@@ -214,34 +232,38 @@ fn look_and_write(
         let machine = Machine::from_def(def, maitty_machines::SSH_PROGRAM);
         machine_probe::probe(&machine, PROBE_LIMIT, cancel)
     };
-    let prepared = prepare(&listed.machines, target, name, &look)?;
+    let prepared = prepare(&listed.machines, target, name, ssh_args, &look)?;
     if let Prepare::Ready { def, .. } = &prepared {
-        write_entry(file, &def.name, &def.target)
+        write_entry(file, &def.name, &def.target, &def.ssh_args)
             .map_err(|error| format!("Could not add {}: {error:#}", def.name))?;
     }
     Ok(prepared)
 }
 
-/// Open ssh in a session on this computer so a person can answer its prompts. The machine is
-/// dialling already; it connects once the login has worked.
-async fn open_login(app: &tauri::AppHandle, def: &MachineDef) -> Outcome {
-    let manual = |why: String| Outcome::LoginManual {
-        name: def.name.clone(),
-        target: def.target.clone(),
-        why,
-    };
-    let command = match Machine::from_def(def, maitty_machines::SSH_PROGRAM).first_login_command() {
-        Ok(command) => command,
-        Err(error) => return manual(format!("{error:#}")),
-    };
-    let executable = match crate::daemon_executable(app) {
-        Ok(executable) => executable,
-        Err(error) => return manual(error),
-    };
-    match maitty_desktop_client::start_command_session(command, format!("ssh {}", def.name), executable).await {
-        Ok(_) => Outcome::Login { name: def.name.clone() },
-        Err(error) => manual(format!("{error:#}")),
-    }
+async fn start_login_session(app: &tauri::AppHandle, name: &str, command: String) -> Result<(), String> {
+    let executable = crate::daemon_executable(app)?;
+    maitty_desktop_client::start_command_session(command, format!("ssh {name}"), executable)
+        .await
+        .map(|_| ())
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// Open ssh in a session on this computer for a machine that needs a login, so a person can
+/// answer its prompts. The machine's own dial carries on; it connects once the login has worked.
+#[tauri::command]
+pub async fn open_machine_login(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, crate::terminal_stream::Wire>,
+    machine: u16,
+) -> Result<(), String> {
+    let handle = wire.handle()?.clone();
+    let id = maitty_machines::MachineId(machine);
+    let route = handle
+        .route(id)
+        .ok_or_else(|| "That machine is no longer in the list".to_string())?;
+    let command = route.first_login_command().map_err(|error| format!("{error:#}"))?;
+    let name = handle.name_of(id).unwrap_or_else(|| format!("machine {machine}"));
+    start_login_session(&app, &name, command).await
 }
 
 #[cfg(test)]
@@ -280,7 +302,7 @@ mod tests {
 
     fn look(mode: &str) -> Result<Prepare, String> {
         let sandbox = Sandbox::new();
-        prepare(&[], "build.example", None, &through_shim(&sandbox, mode))
+        prepare(&[], "build.example", None, &[], &through_shim(&sandbox, mode))
     }
 
     #[test]
@@ -297,10 +319,10 @@ mod tests {
 
     #[test]
     fn a_login_ssh_cannot_do_is_added_and_left_to_a_person() {
-        assert!(matches!(
-            look("auth-fail"),
-            Ok(Prepare::Ready { how: How::Login, .. })
-        ));
+        let Ok(Prepare::Ready { how: How::Login { said }, .. }) = look("auth-fail") else {
+            panic!("login");
+        };
+        assert!(said.contains("Permission denied"), "ssh's own words reach the window: {said:?}");
     }
 
     #[test]
@@ -322,16 +344,19 @@ mod tests {
     #[test]
     fn a_target_ssh_would_read_as_an_option_is_refused_before_anything_runs() {
         let never = |_: &MachineDef| -> Probe { panic!("nothing is to run") };
-        assert!(prepare(&[], "-oProxyCommand=x", None, &never).is_err());
-        assert!(prepare(&[], "a b", None, &never).is_err());
+        assert!(prepare(&[], "-oProxyCommand=x", None, &[], &never).is_err());
+        assert!(prepare(&[], "a b", None, &[], &never).is_err());
     }
 
     #[test]
     fn a_name_that_is_taken_is_refused_and_a_suggestion_steps_around_it() {
         let ok = |_: &MachineDef| Probe::Ready { version: "v".into() };
         let existing = [def("build", "other.example")];
-        assert!(prepare(&existing, "x.example", Some("BUILD"), &ok).is_err());
-        let Ok(Prepare::Ready { def, .. }) = prepare(&existing, "build", None, &ok) else {
+        let Err(why) = prepare(&existing, "x.example", Some("BUILD"), &[], &ok) else {
+            panic!("refused");
+        };
+        assert!(why.starts_with("You already have a machine called build."), "{why}");
+        let Ok(Prepare::Ready { def, .. }) = prepare(&existing, "build", None, &[], &ok) else {
             panic!("ready");
         };
         assert_eq!(def.name, "build-2");
@@ -340,9 +365,9 @@ mod tests {
     #[test]
     fn a_target_nothing_can_name_asks_for_a_name() {
         let ok = |_: &MachineDef| Probe::Ready { version: String::new() };
-        assert_eq!(prepare(&[], "me@", None, &ok), Ok(Prepare::NeedsName));
+        assert_eq!(prepare(&[], "me@", None, &[], &ok), Ok(Prepare::NeedsName));
         assert!(matches!(
-            prepare(&[], "me@", Some("lab"), &ok),
+            prepare(&[], "me@", Some("lab"), &[], &ok),
             Ok(Prepare::Ready { .. })
         ));
     }
@@ -350,7 +375,7 @@ mod tests {
     #[test]
     fn a_cancelled_look_adds_nothing() {
         let cancelled = |_: &MachineDef| Probe::Cancelled;
-        assert_eq!(prepare(&[], "build", None, &cancelled), Ok(Prepare::Cancelled));
+        assert_eq!(prepare(&[], "build", None, &[], &cancelled), Ok(Prepare::Cancelled));
     }
 
     #[test]

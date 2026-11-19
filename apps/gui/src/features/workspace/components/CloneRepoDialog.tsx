@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { errorMessage } from '@/lib/error-message'
+import { explainCloneFailure, type CloneProblem } from '../model/repoAddress'
 import { GitHubRepoPicker, type GitHubRepoSource } from './GitHubRepoPicker'
 import { InlineNote } from '@/components/ui/feedback'
 
@@ -13,6 +14,10 @@ type Props = {
   where: string
   /** The folder the destination starts as. */
   startIn: string
+  /** An address already filled in, for a clone that goes on after a folder was taken. */
+  initialAddress?: string
+  /** The machine's repositories come before the address box. */
+  reposFirst?: boolean
   /** A folder picker for that machine, whose answer is null when it is cancelled. */
   chooseFolder: (() => Promise<string | null>) | null
   /** Clones `address` into a new folder inside `parent` and gives that folder; rejects with the machine's reason. */
@@ -31,11 +36,11 @@ type Props = {
  * found there; what it says when it will not clone is shown as it said it. Picking one of the
  * machine's GitHub repositories fills in its address.
  */
-export function CloneRepoDialog({ where, startIn, chooseFolder, clone, github, accountFor, onCloned, onCancel }: Props) {
-  const [address, setAddress] = useState('')
+export function CloneRepoDialog({ where, startIn, initialAddress = '', reposFirst = false, chooseFolder, clone, github, accountFor, onCloned, onCancel }: Props) {
+  const [address, setAddress] = useState(initialAddress)
   const [parent, setParent] = useState(startIn)
   const [cloning, setCloning] = useState(false)
-  const [failure, setFailure] = useState<string | null>(null)
+  const [failure, setFailure] = useState<CloneProblem | null>(null)
   const ready = address.trim() !== '' && parent.trim() !== '' && !cloning
   const account = parent.trim() === '' ? null : accountFor?.(parent.trim()) ?? null
 
@@ -47,7 +52,7 @@ export function CloneRepoDialog({ where, startIn, chooseFolder, clone, github, a
     clone(address.trim(), into).then(
       (folder) => { onCloned(folder, into) },
       (error: unknown) => {
-        setFailure(errorMessage(error, 'The repository could not be cloned'))
+        setFailure(explainCloneFailure(errorMessage(error, 'The repository could not be cloned')))
         setCloning(false)
       },
     )
@@ -71,8 +76,9 @@ export function CloneRepoDialog({ where, startIn, chooseFolder, clone, github, a
           }}
         >
           <DialogTitle asChild><h2>Clone a repository to {where}</h2></DialogTitle>
+          {reposFirst && github !== undefined && <GitHubRepoPicker where={where} source={github} disabled={cloning} onPick={(repo) => { setAddress(repo.cloneUrl) }} />}
           <input
-            autoFocus
+            autoFocus={!reposFirst}
             aria-label="Repository address"
             placeholder="https://github.com/owner/name.git or git@github.com:owner/name.git"
             value={address}
@@ -81,7 +87,7 @@ export function CloneRepoDialog({ where, startIn, chooseFolder, clone, github, a
             disabled={cloning}
             onChange={(event) => { setAddress(event.target.value) }}
           />
-          {github !== undefined && <GitHubRepoPicker where={where} source={github} disabled={cloning} onPick={(repo) => { setAddress(repo.cloneUrl) }} />}
+          {!reposFirst && github !== undefined && <GitHubRepoPicker where={where} source={github} disabled={cloning} onPick={(repo) => { setAddress(repo.cloneUrl) }} />}
           <p>It goes in a new folder, named after the repository, inside:</p>
           <div className="mx-clone-into">
             <input aria-label={`Folder on ${where} to clone into`} value={parent} maxLength={MOST_PATH_CHARS} spellCheck={false} disabled={cloning} onChange={(event) => { setParent(event.target.value) }} />
@@ -89,7 +95,19 @@ export function CloneRepoDialog({ where, startIn, chooseFolder, clone, github, a
           </div>
           {account !== null && <p>Will use {account}</p>}
           {cloning && <p role="status">Cloning… A large repository can take a few minutes.</p>}
-          {failure !== null && <InlineNote title="Could not clone the repository" reason={failure} />}
+          {failure !== null && (
+            <InlineNote
+              title="Could not clone the repository"
+              reason={failure.message}
+              actions={(
+                <>
+                  {failure.kind === 'exists' && failure.folder !== undefined && <button type="button" className="mx-text-button" onClick={() => { onCloned(failure.folder ?? '', parent.trim()) }}>Use it</button>}
+                  {(failure.kind === 'exists' || failure.kind === 'no-folder') && chooseFolder !== null && <button type="button" className="mx-text-button" onClick={choose}>Pick another folder</button>}
+                  {failure.kind === 'auth' && github !== undefined && <button type="button" className="mx-text-button" onClick={github.onOpenSettings}>Open GitHub settings</button>}
+                </>
+              )}
+            />
+          )}
           <div className="mx-rename-actions">
             <button type="button" className="mx-text-button" disabled={cloning} onClick={onCancel}>Cancel</button>
             <button type="submit" className="mx-text-button is-primary" disabled={!ready}>{cloning ? 'Cloning…' : 'Clone'}</button>

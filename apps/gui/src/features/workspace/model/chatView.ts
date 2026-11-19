@@ -19,7 +19,20 @@ export type StructuredAgent = Exclude<ChatAgent, 'gemini'>
 /** A per-agent choice of the view a session opens in. An agent opens as its chat unless the user changes it. */
 export type ChatViewDefaults = Readonly<Record<ChatAgent, PaneView>>
 
-export const DEFAULT_CHAT_VIEWS: ChatViewDefaults = { claude: 'chat', codex: 'chat', gemini: 'chat' }
+export const DEFAULT_CHAT_VIEWS: ChatViewDefaults = { claude: 'chat', codex: 'chat', gemini: 'terminal' }
+
+/**
+ * The view a new session of `agent` opens in: what Settings › Open sessions in says, except Gemini, which has no chat
+ * events to show and so always opens in its terminal. The other view is one click away on the pane header.
+ */
+export function openViewFor(agent: ChatAgent, openIn: PaneView): PaneView {
+  return agent === 'gemini' ? 'terminal' : openIn
+}
+
+/** `openViewFor` for every agent, as `effectiveView` reads it. */
+export function viewDefaultsFor(openIn: PaneView): ChatViewDefaults {
+  return { claude: openViewFor('claude', openIn), codex: openViewFor('codex', openIn), gemini: openViewFor('gemini', openIn) }
+}
 
 /** The daemon conversation that carries a session's structured events. */
 export type ChatLink = {
@@ -91,6 +104,24 @@ export const NO_EVENTS_HINT_AFTER_MS = 10_000
 
 /** Shown once a session has stayed empty past `NO_EVENTS_HINT_AFTER_MS`: the usual cause is hooks from another version. */
 export const noEventsHint = (agent: ChatAgent): string => `Still nothing. ${agent} may be waiting for you in the terminal, or its status hooks are not connected or are from another version. Check the terminal, connect them here, or run "maiker integrate ${agent}".`
+
+/**
+ * Shown once a session has stayed empty past `NO_EVENTS_HINT_AFTER_MS` while its hooks HAVE reported in: Maiker hears
+ * from the agent, so the hooks are not the problem, but it has not found the conversation to show yet.
+ */
+export const noConversationHint = (agent: ChatAgent): string => `${agent} is reporting in, but Maiker has not found its conversation yet, so there is nothing to show here. The terminal has everything ${agent} has said; the chat takes over once the conversation is found.`
+
+/** The daemon looked at the agent's settings file and knows why its hooks never report: said in plain words, with the file. */
+export const hookProblemHint = (agent: ChatAgent, problem: { file: string; why: string; repaired: boolean }): string =>
+  problem.repaired
+    ? `${agent}'s status hooks were out of date (${problem.file}) and have been fixed, but ${agent} only loads them when it starts. Restart it to get the chat.`
+    : `${agent}'s status hooks never reported in, so there is no chat. In ${problem.file}: ${problem.why}.`
+
+/** The folder a settings file is in: the agent's config folder, which is what has to be repaired. */
+export const configFolderOf = (file: string): string => file.replace(/[\\/][^\\/]*$/, '')
+
+/** What the empty chat says once it has waited too long, in place of promising that a message is sent when the agent is ready. */
+export const stuckChatLine = (agent: ChatAgent): string => `No conversation to show yet. Open the terminal to see what ${agent} is doing.`
 
 /** Shown instead when the daemon already knows the agent is stopped for an answer (a trust-this-folder question, a login). */
 export const waitingInTerminalHint = (agent: ChatAgent): string => `${agent} is waiting for you in the terminal, for example to trust this folder. Answer it there and the chat takes over.`

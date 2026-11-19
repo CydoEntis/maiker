@@ -3,7 +3,7 @@
  * terminal, so its pane does not turn into the chat by itself; the view switch still shows the chat.
  * Kept in this window's storage so it holds after a restart, as the sessions themselves do.
  */
-const KEY = 'maitty.gui.shellStarts.v1'
+const KEY = 'maiker.gui.shellStarts.v1'
 
 /** The most sessions kept; older ones are long closed. */
 const KEEP = 200

@@ -249,11 +249,11 @@ mod tests {
     fn a_login_ssh_could_not_do_is_needs_login() {
         assert_eq!(
             finished(Some(255), "", "box: Permission denied (publickey).\n"),
-            Probe::Failed(FailureClass::Login)
+            Probe::Failed(FailureClass::Login("box: Permission denied (publickey).".into()))
         );
         assert_eq!(
             finished(Some(255), "", "Host key verification failed.\n"),
-            Probe::Failed(FailureClass::Login)
+            Probe::Failed(FailureClass::Login("Host key verification failed.".into()))
         );
     }
 
@@ -279,7 +279,7 @@ mod tests {
         assert_eq!(path, "/bin/[31mmaitty");
         assert_eq!(
             located_from(Some(255), "", "box: Permission denied (publickey).\n"),
-            Located::Failed(FailureClass::Login)
+            Located::Failed(FailureClass::Login("box: Permission denied (publickey).".into()))
         );
     }
 

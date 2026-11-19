@@ -2019,6 +2019,17 @@ pub struct TabInfo {
     pub focus: TermId,
 }
 
+/// What is wrong with the hooks of an agent that never reports in: its settings file, in words.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HookProblem {
+    /// The settings file whose hooks are wrong; its folder is the agent's config folder.
+    pub file: PathBuf,
+    pub why: String,
+    /// The daemon pointed them at this build already: only a restart of the agent loads the fix.
+    #[serde(default)]
+    pub repaired: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TermInfo {
     #[serde(default)]
@@ -2042,6 +2053,10 @@ pub struct TermInfo {
     /// hooks were installed never does, which is what `Command::ReloadAgent` is for.
     #[serde(default)]
     pub hooked: bool,
+    /// Why an agent's hooks never report, when the daemon looked and knows. An older daemon sends
+    /// none, which reads as nothing known.
+    #[serde(default)]
+    pub hook_problem: Option<HookProblem>,
     pub status: Status,
     pub cwd: PathBuf,
     /// What the agent is on: the last prompt it was given (one line), if known.
@@ -2088,6 +2103,9 @@ pub struct TermInfo {
     pub diff_added: u32,
     #[serde(default)]
     pub diff_removed: u32,
+    /// Files changed in that checkout against HEAD (the number on the pane's `changes` chip).
+    #[serde(default)]
+    pub diff_files: u32,
     /// Subagents running right now (their kinds).
     pub subagents: Vec<String>,
     /// Persistent lifecycle records reported by the runtime.
@@ -3543,6 +3561,9 @@ mod tests {
         assert_eq!((old.diff_added, old.diff_removed), (0, 0));
         let new = pane_from(serde_json::json!({"diff_added": 7, "diff_removed": 2}));
         assert_eq!((new.diff_added, new.diff_removed), (7, 2));
+        assert_eq!(old.diff_files, 0, "a peer from before the file count sends none");
+        let counted = pane_from(serde_json::json!({"diff_files": 3}));
+        assert_eq!(counted.diff_files, 3);
     }
 
     /// A daemon from before `began_as_agent` sends none: the pane reads as a terminal, which is

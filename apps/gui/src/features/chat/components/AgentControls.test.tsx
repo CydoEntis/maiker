@@ -184,12 +184,12 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     await settle(IDLE_POLL_MS)
     expect(button()).toHaveAccessibleName(/Opus 5.5 · Low/)
     // No pick of its own is kept, so nothing can later disagree with the terminal.
-    expect(window.localStorage.getItem('maitty.gui.agentChoice.v1')).toBeNull()
+    expect(window.localStorage.getItem('maiker.gui.agentChoice.v1')).toBeNull()
   })
 
   it('ignores a pick this window kept for an earlier chat of the same number', async () => {
     // Numbers start again when the daemon restarts; the earlier chat's agent had said what this one says.
-    window.localStorage.setItem('maitty.gui.agentChoice.v1', JSON.stringify({ [String(FAKE_CONVERSATION)]: { model: 'claude-opus-5-5', reasoning: 'max', saidModel: 'claude-sonnet-5-5', saidEffort: 'medium' } }))
+    window.localStorage.setItem('maiker.gui.agentChoice.v1', JSON.stringify({ [String(FAKE_CONVERSATION)]: { model: 'claude-opus-5-5', reasoning: 'max', saidModel: 'claude-sonnet-5-5', saidEffort: 'medium' } }))
     const daemon = new FakeDaemonHistory()
     daemon.meta = { mode: 'auto', model: 'claude-sonnet-5-5' }
     fake.current = daemon

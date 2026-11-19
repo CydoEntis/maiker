@@ -62,8 +62,6 @@ jobs:
       matrix:
         include:
           - { os: windows-latest, target: x86_64-pc-windows-msvc, archive: zip }
-          - { os: macos-15, target: aarch64-apple-darwin, archive: tar.gz }
-          - { os: macos-15, target: x86_64-apple-darwin, archive: tar.gz }
           # Static (musl) builds run on any Linux: Ubuntu, Fedora, Arch / Omarchy, Alpine.
           - {
               os: ubuntu-latest,
@@ -138,8 +136,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Nothing is built for macOS: nobody uses or tests it, and its runners often never start,
+          # which held whole releases back.
           - { os: windows-latest, platform: windows-x64 }
-          - { os: macos-latest, platform: macos }
           - { os: ubuntu-latest, platform: linux-x64 }
     steps:
       - uses: actions/checkout@v7
@@ -183,12 +182,6 @@ jobs:
           ver=$(node -p "JSON.parse(require('fs').readFileSync('apps/gui/src-tauri/tauri.conf.json', 'utf8')).version")
           case "${{ runner.os }}" in
             Windows) find target/release/bundle -type f \( -iname '*.msi' -o -iname '*.exe' -o -iname '*.sig' \) -exec cp {} dist/ \; ;;
-            macOS)
-              find target/release/bundle -type f -iname '*.dmg' -exec cp {} dist/ \;
-              # The update bundle is named after the app only; give it the version and arch.
-              cp target/release/bundle/macos/Maiker.app.tar.gz "dist/Maiker_${ver}_aarch64.app.tar.gz"
-              cp target/release/bundle/macos/Maiker.app.tar.gz.sig "dist/Maiker_${ver}_aarch64.app.tar.gz.sig"
-              ;;
             Linux) find target/release/bundle -type f \( -iname '*.deb' -o -iname '*.rpm' -o -iname '*.appimage' -o -iname '*.sig' \) -exec cp {} dist/ \; ;;
           esac
           test -n "$(find dist -maxdepth 1 -type f -print -quit)" \
@@ -255,19 +248,16 @@ jobs:
           fi
           ver=${TAG#v}
           win="Maiker_${ver}_x64-setup.exe"
-          mac="Maiker_${ver}_aarch64.app.tar.gz"
           lin="Maiker_${ver}_amd64.AppImage"
-          for f in "$win" "$mac" "$lin"; do
+          for f in "$win" "$lin"; do
             test -f "dist/$f" && test -f "dist/$f.sig" || { echo "Missing update bundle or signature: $f" >&2; exit 1; }
           done
           jq -n --arg version "$ver" --rawfile notes notes.md --arg date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg base "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG" \
             --arg win "$win" --arg winsig "$(cat "dist/$win.sig")" \
-            --arg mac "$mac" --arg macsig "$(cat "dist/$mac.sig")" \
             --arg lin "$lin" --arg linsig "$(cat "dist/$lin.sig")" \
             '{version: $version, notes: $notes, pub_date: $date, platforms: {
               "windows-x86_64": {signature: $winsig, url: "\($base)/\($win)"},
-              "darwin-aarch64": {signature: $macsig, url: "\($base)/\($mac)"},
               "linux-x86_64": {signature: $linsig, url: "\($base)/\($lin)"}}}' > dist/latest.json
           # An install made by another kind of installer asks for its own kind first
           # (`<os>-<arch>-<installer>`) and only then for the entry above, which would put a second
@@ -325,7 +315,6 @@ jobs:
       matrix:
         include:
           - { os: ubuntu-latest, shell: sh }
-          - { os: macos-15, shell: sh }
           - { os: windows-latest, shell: pwsh }
           - { os: windows-latest, shell: powershell }
     # A step's own `shell:` takes no expressions (GitHub rejects the whole file, and every push then shows a failed
@@ -400,7 +389,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
+        os: [ubuntu-latest, windows-latest]
     # The installers as users get them: the public one-liners, no GitHub CLI sign-in.
     steps:
       - uses: actions/checkout@v7

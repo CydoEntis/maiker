@@ -1,6 +1,6 @@
 import type { Conversation } from '@/data/preview'
 
-const STORAGE_KEY = 'maitty.gui.sidebar.v1'
+const STORAGE_KEY = 'maiker.gui.sidebar.v1'
 
 export type SidebarPreferences = {
   pinnedIds: string[]

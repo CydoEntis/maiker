@@ -111,8 +111,11 @@ export function useInstalledAgents(): readonly string[] | null {
   return installed
 }
 
-/** A folder's branches and worktrees (null when it is not a git repository or is still being read), and a way to read them again. */
-export function useFolderBranches(folder: string): [FolderBranches | null, () => void] {
+/**
+ * A folder's branches and worktrees (null when it is not a git repository or is still being read), a way to read them again,
+ * and whether the answer for this folder is in (`false` while it is being read, so "not a repository" is never guessed).
+ */
+export function useFolderBranches(folder: string): [FolderBranches | null, () => void, boolean] {
   const [read, setRead] = useState<{ folder: string; data: FolderBranches | null }>({ folder: '', data: null })
   const [again, setAgain] = useState(0)
   useEffect(() => {
@@ -130,7 +133,8 @@ export function useFolderBranches(folder: string): [FolderBranches | null, () =>
     return () => { stop.abort() }
   }, [folder, again])
   const reload = useCallback(() => { setAgain((count) => count + 1) }, [])
-  return [read.folder === folder ? read.data : null, reload]
+  const settled = folder === '' || read.folder === folder
+  return [read.folder === folder ? read.data : null, reload, settled]
 }
 
 /** What is known of a folder's saved conversations: not asked yet, the list, a service too old to say, or a failed read. */

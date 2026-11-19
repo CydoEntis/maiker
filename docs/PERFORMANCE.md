@@ -580,7 +580,7 @@ A new chat used to wait on five steps one after another: start a shell, list the
 `maiker integrate <agent>` (a process), type the agent's name into the shell once it was ready, then
 wait for the agent's first report. Now the agent is the new session's first command
 (`start_agent_session`, which accepts only a known agent and plain flag words), the status hooks are
-connected once per run of the window and ahead of time (when the New session dialog opens), and an open
+connected once per run of the window and ahead of time (when the New session draft opens), and an open
 chat that is working asks the daemon for news every 300 ms (`ACTIVE_POLL_MS`), not every second.
 The daemon also says when a conversation changed (`ServerMsg::ConversationChanged`), so the chat
 reads then and, once told, polls only every second (`TOLD_ACTIVE_POLL_MS`); its reads go out on a

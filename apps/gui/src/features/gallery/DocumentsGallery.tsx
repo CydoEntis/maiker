@@ -75,7 +75,7 @@ function Beside({ width }: { width: number }) {
     <div className="flex flex-col gap-2" style={{ width }} data-sample={`beside ${String(width)}`}>
       <span className="font-(family-name:--mono) text-[11px] font-medium text-(--dim)">Beside the chat, {width}px</span>
       <div className={`mx-panes is-split${width < NARROW_PX ? ' is-narrow-sample' : ''}`} style={{ flex: 'none', height: width < NARROW_PX ? NARROW_HEIGHT : SAMPLE_HEIGHT, flexDirection: width < NARROW_PX ? 'column' : 'row', padding: 0 }}>
-        <div className="mx-pane-column"><div className="mx-pane-cell"><section className="mx-pane is-card"><div className="mx-pane-head"><span className="mx-pane-name">Claude · maitty</span></div><p className="m-4 text-[13px] text-(--muted)">The chat sits here.</p></section></div></div>
+        <div className="mx-pane-column"><div className="mx-pane-cell"><section className="mx-pane is-card"><div className="mx-pane-head"><span className="mx-pane-name">Claude · maiker</span></div><p className="m-4 text-[13px] text-(--muted)">The chat sits here.</p></section></div></div>
         <div className="mx-pane-column"><div className="mx-pane-cell"><section className="mx-pane is-doc is-card is-focused"><span className="mx-pane-ring" aria-hidden="true" /><Doc mode="drawn" beside={false} /></section></div></div>
       </div>
     </div>

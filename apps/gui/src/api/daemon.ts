@@ -48,6 +48,24 @@ const ConversationSummarySchema = z.object({
   // The helpers a chat session's provider reported starting (ADR 0010); empty from an older daemon.
   helpers: z.array(SubagentActivitySchema).default([]),
 })
+// What links a terminal pane to its chat: nothing else in a summary may take the chat away (a field this window does
+// not know yet, another agent's name). The full summary below is only for the list.
+const ConversationLinkSchema = z.object({
+  id: z.number().int().nonnegative(),
+  generation: z.number().int().nonnegative(),
+  execution: z.enum(['Native', 'Structured']),
+  native_term: z.number().int().nonnegative().nullable(),
+})
+const unreadableSummaries = new Set<string>()
+
+/** Says once, in the log, that a conversation the daemon listed could not be read, and why: a chat that goes missing has a reason. */
+function reportUnreadable(what: string, error: z.ZodError): void {
+  const said = `${what}: ${error.issues.map((issue) => `${issue.path.join('.')} ${issue.message}`).join('; ')}`
+  if (unreadableSummaries.has(said)) return
+  unreadableSummaries.add(said)
+  console.warn(`The daemon listed a conversation this window could not read (${said})`)
+}
+
 const WorkspaceSummarySchema = z.object({
   cwd: z.string(),
   git: z.object({ branch: z.string(), dirty: z.number().int().nonnegative() }).nullable(),
@@ -69,6 +87,8 @@ const TerminalSessionSchema = z.object({
   pinned: z.boolean().default(false),
   // Whether the agent's hooks have reported in; an agent started before they were installed never does.
   hooked: z.boolean().default(false),
+  // Why the agent's hooks never report, when the daemon looked (`TermInfo.hook_problem`): the settings file and what is wrong with it.
+  hook_problem: z.object({ file: z.string(), why: z.string(), repaired: z.boolean().default(false) }).nullable().default(null),
   archived: z.boolean().default(false),
   conversation_id: z.number().nullable().default(null),
   // The agent's own conversation id (the daemon's `TermInfo.session`), which its resume command takes.
@@ -464,12 +484,18 @@ function conversationsOf(snapshot: DaemonSnapshot, machine?: SnapshotMachine): C
   }
   const summaries = snapshot.conversations.flatMap((raw) => {
     const parsed = ConversationSummarySchema.safeParse(raw)
+    if (!parsed.success) reportUnreadable('conversation', parsed.error)
+    return parsed.success ? [parsed.data] : []
+  })
+  const links = snapshot.conversations.flatMap((raw) => {
+    const parsed = ConversationLinkSchema.safeParse(raw)
+    if (!parsed.success) reportUnreadable('conversation link', parsed.error)
     return parsed.success ? [parsed.data] : []
   })
   // A terminal session has a chat when the daemon holds a conversation whose native terminal is that pane.
   // The daemon only follows an agent the user started there, so that chat is read-only (ADR 0003). Another
   // machine's chat is named by a key that holds the machine too, so its number never meets this computer's.
-  const chatOf = new Map(summaries.flatMap((summary) => {
+  const chatOf = new Map(links.flatMap((summary) => {
     const key = machine === undefined ? summary.id : conversationKey(machine.id, summary.id)
     if (summary.native_term === null || key === null) return []
     return [[summary.native_term, { conversation: key, generation: summary.generation, ...(summary.execution === 'Native' ? { readOnly: true } : {}), ...(machine === undefined ? {} : { machine: machine.name }) }] as const]
@@ -1179,8 +1205,9 @@ export async function startChatSession(folder: string, agent: 'claude' | 'codex'
 }
 
 /** Connects an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works, needs you or is done. */
-export async function connectAgent(agent: 'claude' | 'codex' | 'gemini'): Promise<void> {
-  await invokeParsed('connect_agent', NullSchema, { agent })
+export async function connectAgent(agent: 'claude' | 'codex' | 'gemini', configDir?: string): Promise<void> {
+  // `configDir` is the folder of one pane's agent: without it the app's own environment decides which folder is repaired.
+  await invokeParsed('connect_agent', NullSchema, { agent, configDir: configDir ?? null })
 }
 
 const AgentModelsSchema = z.array(z.object({ id: z.string(), label: z.string(), blurb: z.string(), isDefault: z.boolean().optional(), efforts: z.array(z.string()).nullish(), more: z.boolean().optional() }))
@@ -1418,6 +1445,8 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       ask: term.ask,
       interrupted: term.interrupted,
       agentSession: term.session,
+      hooked: term.hooked,
+      hookProblem: term.hook_problem,
       agentEffort: term.effort,
       exit: term.exit,
       since: term.since,

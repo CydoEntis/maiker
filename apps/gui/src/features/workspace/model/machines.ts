@@ -82,6 +82,12 @@ export type MachineHead = {
   label: string
   chip: MachineChip | null
   why: string | null
+  /** On needs-login: ssh's own last line, why it could not log in; null otherwise. */
+  said: string | null
+  /** On needs-login: the line to run in a terminal to log in by hand; null otherwise. */
+  loginCommand: string | null
+  /** How it is reached over ssh (`user@host`, a host, or an alias); null when it is not known. */
+  target: string | null
   /** True once a line that was wanted is not up (not while it is still the first dial). */
   down: boolean
   /** Since when, in ms since the epoch; null when the host did not say. */
@@ -179,7 +185,7 @@ export function isDown(state: MachineState): boolean {
 export const THIS_COMPUTER = 'this computer'
 
 /** This computer's header, which the sidebar shows even when there is no other machine. */
-export const LOCAL_HEAD: MachineHead = { key: 'machine-0', machine: LOCAL_MACHINE, name: null, label: THIS_COMPUTER, chip: null, why: null, down: false, downSince: null, grants: { clipboard: false, notices: false }, updateCommand: null, updateAction: null }
+export const LOCAL_HEAD: MachineHead = { key: 'machine-0', machine: LOCAL_MACHINE, name: null, label: THIS_COMPUTER, chip: null, why: null, said: null, loginCommand: null, target: null, down: false, downSince: null, grants: { clipboard: false, notices: false }, updateCommand: null, updateAction: null }
 
 function nicknameOf(nicknames: Readonly<Record<string, string>>, name: string): { nickname: string } | Record<string, never> {
   const nickname = nicknames[name.toLowerCase()]
@@ -196,6 +202,39 @@ export function machineTitle(head: MachineHead): string {
  * order of their ids, which only changes when the machine list does (the sidebar never reorders
  * itself). Nothing while there is no other machine, so one machine looks as it always did.
  */
+const NOT_STARTED_WHY = 'Maiker has not started connecting to it. Restart Maiker to try again, or remove it.'
+
+/**
+ * A machine the config names but the host never reported, so it is still in the list and can be
+ * removed. Its number is negative: the host's are not, so the two never meet.
+ */
+function unconnectedMachine(id: number, name: string): RemoteMachine {
+  return { state: { machine: id, name, state: 'unreachable', why: NOT_STARTED_WHY, attempt: null }, conversations: [], heard: false, listedAt: 0 }
+}
+
+/** `machines` plus a placeholder for each configured name that has no entry, in any case. */
+export function withUnconnected(machines: ReadonlyMap<number, RemoteMachine>, configured: readonly string[]): ReadonlyMap<number, RemoteMachine> {
+  const known = new Set([...machines.values()].map((machine) => machine.state.name.toLowerCase()))
+  const missing = configured.filter((name) => !known.has(name.toLowerCase()))
+  if (missing.length === 0) return machines
+  const next = new Map(machines)
+  let id = Math.min(0, ...machines.keys())
+  for (const name of missing) {
+    id -= 1
+    next.set(id, unconnectedMachine(id, name))
+  }
+  return next
+}
+
+/** `machines` without the placeholder for `name`, once the host reports it or it is removed. */
+export function withoutUnconnected(machines: ReadonlyMap<number, RemoteMachine>, name: string): ReadonlyMap<number, RemoteMachine> {
+  const stale = [...machines].filter(([id, machine]) => id < 0 && machine.state.name.toLowerCase() === name.toLowerCase())
+  if (stale.length === 0) return machines
+  const next = new Map(machines)
+  for (const [id] of stale) next.delete(id)
+  return next
+}
+
 /** The longest name you can give a machine in the sidebar. */
 export const MAX_MACHINE_NICKNAME_LENGTH = 40
 
@@ -203,7 +242,7 @@ export function machineHeads(machines: ReadonlyMap<number, RemoteMachine>, nickn
   if (machines.size === 0) return []
   const others = [...machines.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([id, machine]): MachineHead => ({ key: `machine-${String(id)}`, machine: id, name: machine.state.name, ...nicknameOf(nicknames, machine.state.name), label: machine.state.name, chip: machineChip(machine.state), why: machine.state.why, down: isDown(machine.state), downSince: machine.state.since ?? null, grants: { clipboard: machine.state.clipboard === true, notices: machine.state.notices === true }, updateCommand: updateCommandOf(machine.state), updateAction: updateActionOf(machine.state) }))
+    .map(([id, machine]): MachineHead => ({ key: `machine-${String(id)}`, machine: id, name: machine.state.name, ...nicknameOf(nicknames, machine.state.name), label: machine.state.name, chip: machineChip(machine.state), why: machine.state.why, said: machine.state.said ?? null, loginCommand: machine.state.login_command ?? null, target: machine.state.target ?? null, down: isDown(machine.state), downSince: machine.state.since ?? null, grants: { clipboard: machine.state.clipboard === true, notices: machine.state.notices === true }, updateCommand: updateCommandOf(machine.state), updateAction: updateActionOf(machine.state) }))
   return [LOCAL_HEAD, ...others]
 }
 

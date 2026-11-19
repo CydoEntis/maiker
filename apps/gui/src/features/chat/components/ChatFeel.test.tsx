@@ -32,6 +32,9 @@ afterEach(() => {
   fake.current = null
 })
 
+/** Long enough for any reply in these tests to be typed in: the reply catches up within a few seconds. */
+const TYPED_IN_MS = 3_000
+
 const LINK = { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }
 
 async function settle(ms = 0) {
@@ -142,12 +145,12 @@ describe('how the chat feels while it waits', () => {
     daemon.status = 'Idle'
     await settle(ACTIVE_POLL_MS + 1)
     daemon.upsert(daemon.message('t1', 'a1', 'Assistant', 'the answer'))
-    await settle(700)
+    await settle(700 + TYPED_IN_MS)
 
     expect(screen.getByText('the answer')).toBeInTheDocument()
   })
 
-  it('draws the running turn as it streams in: its steps and its reply growing in place, over one working line', async () => {
+  it('draws the running turn as it streams in: its steps at once and its reply typed in, over one working line', async () => {
     const { daemon } = open('Working')
     daemon.upsert(daemon.message('t2', 'u2', 'User', 'fix the build'))
     await settle()
@@ -157,16 +160,16 @@ describe('how the chat feels while it waits', () => {
 
     daemon.upsert(daemon.tool('t2', 'c1', 'pnpm build', 'error: lockfile', 'Running'))
     daemon.upsert(daemon.message('t2', 'a1', 'Assistant', 'The build fails because', 'Running'))
-    await settle(ACTIVE_POLL_MS + 1)
+    await settle(ACTIVE_POLL_MS + 1 + TYPED_IN_MS)
 
     expect(screen.getByText('The build fails because')).toBeInTheDocument()
     expect(document.querySelector('[data-key="t2:c1"]')).not.toBeNull()
     expect(document.querySelector('.mx-sk')).toBeNull()
     expect(screen.getByText('Esc to stop')).toBeInTheDocument()
 
-    // More of the same message: no timer stands between the read and the words.
+    // More of the same message: typed on from where it was.
     daemon.upsert(daemon.message('t2', 'a1', 'Assistant', 'The build fails because the lockfile is stale.', 'Running'))
-    await settle(ACTIVE_POLL_MS + 1)
+    await settle(ACTIVE_POLL_MS + 1 + TYPED_IN_MS)
     expect(screen.getByText('The build fails because the lockfile is stale.')).toBeInTheDocument()
     expect(document.querySelectorAll('[data-key="t2:a1"]')).toHaveLength(1)
   })

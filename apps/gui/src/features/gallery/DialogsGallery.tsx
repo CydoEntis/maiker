@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { DesktopSettings, type DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { CommandPalette } from '@/features/workspace/components/CommandPalette'
-import { NewSessionDialog } from '@/features/workspace/components/NewSessionDialog'
+import { NewChatPage } from '@/features/workspace/components/NewChatPage'
 import { PickFolderDialog } from '@/features/workspace/components/PickFolderDialog'
 import { RecentSessionsDialog } from '@/features/workspace/components/RecentSessionsDialog'
 import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDialog'
@@ -21,7 +21,7 @@ import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night&corners=folded`.
- * `show` is new, new-long, new-terminal, new-fail (a start that fails with a long reason), picker, picker-empty, picker-loading, palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), picker, picker-empty, picker-loading, palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -78,9 +78,9 @@ function DockBox({ what }: { what: string }) {
   )
 }
 
-const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
+const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'folded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
 const CLIENT = new QueryClient()
-const SETTINGS_MACHINES = { known: true, list: [], onRetry: SAME, onRemove: SAME, onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve(null), onCopyCommand: SAME, add: { windows: false, loadHosts: () => Promise.resolve([]), onAdd: SAME, onCancel: SAME } }
+const SETTINGS_MACHINES = { known: true, list: [], onRetry: SAME, onRemove: SAME, onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve(null), onCopyCommand: SAME, onOpenLogin: SAME, localUser: 'you', onSetUser: () => Promise.resolve(), hostKey: { inspect: () => Promise.reject(new Error('Not in the gallery')), trust: () => Promise.resolve() }, keyLogin: { inspect: () => Promise.reject(new Error('Not in the gallery')), setUp: () => Promise.reject(new Error('Not in the gallery')) }, add: { windows: false, loadHosts: () => Promise.resolve([]), onAdd: SAME, onCancel: SAME } }
 
 function Settings({ section }: { section: DesktopSettingsSection }) {
   const [prefs, setPrefs] = useState(PREFS)
@@ -102,7 +102,7 @@ function typeInto(input: HTMLInputElement, text: string) {
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-/** For the new-folder states: opens the field, and types a bad name or a good one, once the dialog has read its folder. */
+/** For the new-folder states: opens the field, and types a bad name or a good one, once the page has read its folder. */
 function ScriptedPicker({ what, children }: { what: string; children: ReactNode }) {
   useEffect(() => {
     if (!what.startsWith('picker-new') && what !== 'picker-denied') return undefined
@@ -125,20 +125,20 @@ function ScriptedPicker({ what, children }: { what: string; children: ReactNode 
 const FAILED_START = 'The agent could not be started in that worktree: the branch name is already taken by another worktree on this computer, so nothing was created and your checkout was left as it was.'
 const STATE_READ_MS = 500
 
-/** For the New session states: Terminal picked, or a message typed and a start that fails, once the dialog has read its folder. */
+/** For the New session states: More options open, or a message typed and a start that fails, once the page has read its folder. */
 function ScriptedNew({ what, children }: { what: string; children: ReactNode }) {
   useEffect(() => {
-    if (what !== 'new-terminal' && what !== 'new-fail') return undefined
+    if (what !== 'new-more' && what !== 'new-fail') return undefined
     const timer = window.setTimeout(() => {
-      if (what === 'new-terminal') {
-        document.querySelector<HTMLElement>('[role="radio"][value="terminal"]')?.click()
+      if (what === 'new-more') {
+        document.querySelector<HTMLElement>('.mx-nsd-more-toggle')?.click()
         return
       }
-      const box = document.querySelector<HTMLTextAreaElement>('.mx-nsd-input')
+      const box = document.querySelector<HTMLTextAreaElement>('.mx-newchat .mx-box-text')
       if (box === null) return
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(box, 'Fix the failing test')
       box.dispatchEvent(new Event('input', { bubbles: true }))
-      window.setTimeout(() => { document.querySelector<HTMLButtonElement>('.mx-nsd-start')?.click() }, FIELD_OPEN_MS)
+      window.setTimeout(() => { document.querySelector<HTMLButtonElement>('.mx-newchat .mx-send')?.click() }, FIELD_OPEN_MS)
     }, STATE_READ_MS)
     return () => { window.clearTimeout(timer) }
   }, [what])
@@ -150,7 +150,7 @@ function Show({ what }: { what: string }): ReactNode {
   const long = what === 'new-long'
   if (what === 'new' || what.startsWith('new-')) {
     const start = what === 'new-fail' ? () => Promise.reject(new Error(FAILED_START)) : NOTHING
-    return <ScriptedNew what={what}><NewSessionDialog machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onNewShell={() => undefined} onCancel={() => undefined} /></ScriptedNew>
+    return <ScriptedNew what={what}><div style={{ position: 'relative', height: '100vh' }}><NewChatPage machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onCancel={() => undefined} /></div></ScriptedNew>
   }
   if (what.startsWith('picker')) {
     const listing = what === 'picker-old' ? { ...LISTING, can_create: false } : what === 'picker-empty' ? { ...LISTING, entries: [] } : LISTING

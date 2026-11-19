@@ -6,7 +6,10 @@ import { chatFindOf } from '@/features/chat/chatSearch'
 import { chooseProjectFolder } from '@/api/folderPicker'
 import { useCloneRepo } from './useCloneRepo'
 import { busyBranchesOf, machineProjects } from '../model/newSession'
-import { NewSessionDialog } from './NewSessionDialog'
+import { NewChatPage } from './NewChatPage'
+import { ShowSidebarButton } from './ShowSidebarButton'
+import { useTipWithKeys } from '@/features/shortcuts/platform'
+import { discardDraft } from '../model/newSessionDraft'
 import { useFolderPick } from './useFolderPick'
 import { EmptyState } from './states'
 import { useUpdateReadyToast } from './useUpdateReadyToast'
@@ -21,9 +24,12 @@ import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
 import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
-/** The middle of the window: the New session dialog, find, the service's state, and the panes of each mounted tab. */
+/** The middle of the window: the New session draft, find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, newTerminal } = useWorkspace()
+  const { sessionsListed, newChatOpen, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, sessions, focusedSession, preferences, home, startNewChat, warmNewChat, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, sidebarSessions, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const tip = useTipWithKeys()
+  // With no session at all the window is the draft: there is nothing else to show. A start in flight keeps it until its pane is placed, in the same update.
+  const noSessions = sidebarSessions.length === 0 && !tab && online && sessionsListed
   useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
   const reduced = useReducedMotion()
   const terminal = usePresence(terminalShown, TERMINAL_DOCK_EXIT_MS, reduced)
@@ -38,33 +44,33 @@ export function WorkspaceMain() {
   const newChatStartFolder = newChatMachine === LOCAL_MACHINE ? resolveStartFolder(preferences.startFolder, home) : '~'
   // Cloning picks where the clone goes: the system's folder dialog here, the window's own picker on another machine.
   const chooseCloneFolder = newChatMachine === LOCAL_MACHINE ? chooseProjectFolder : () => folderPick.pick(newChatMachine).then((picked) => picked?.folder ?? null)
-  const cloneRepo = useCloneRepo({ machine: newChatMachine, where: newChatMachine === LOCAL_MACHINE ? 'this computer' : sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine', startIn: newChatStartFolder, chooseFolder: chooseCloneFolder, onOpenGitHubSettings: () => { setSettingsSection('machines') } })
+  const cloneRepo = useCloneRepo({ machine: newChatMachine, where: newChatMachine === LOCAL_MACHINE ? 'this computer' : sidebarMachineHeads.find((head) => head.machine === newChatMachine)?.label ?? 'that machine', chooseFolder: chooseCloneFolder, onOpenGitHubSettings: () => { setSettingsSection('machines') } })
   return (
     <div className="mx-main-wrap">
               {cloneRepo.dialog}
               {folderPick.dialog}
               <div className="mx-termwrap" data-dock={dock ?? undefined} data-leaving={terminal.leaving ? 'true' : undefined}>
               <main className="mx-main" aria-label="Terminals" onPointerDownCapture={() => { setDockFocused(false) }}>
-                {newChatOpen && (
-                  <NewSessionDialog
+                {(newChatOpen || noSessions) && (
+                  <NewChatPage
                     key={newChatSeed?.folder ?? ''}
+                    leading={sidebarMode === 'hidden' && !focusMode ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
                     seed={newChatSeed}
                     machine={newChatMachine}
-                    machines={sidebarMachineHeads.filter((head) => head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok').map((head) => ({ machine: head.machine, label: head.label, local: head.machine === LOCAL_MACHINE }))}
+                    machines={sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, local: head.machine === LOCAL_MACHINE, down: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok' ? null : head.why ?? head.chip?.word ?? 'not reachable' }))}
                     onOtherMachine={setNewChatMachine}
                     projects={machineProjects(sessions, newChatMachine, focusedSession, newChatStartFolder)}
                     busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}
-                    viewDefaults={preferences.chatViewDefault}
+                    openIn={preferences.openSessionsIn}
                     defaultAgent={preferences.defaultAgent}
                     bypassOff={preferences.bypassOff}
                     pickFolder={folderPick.pick}
-                    clone={cloneRepo.open}
+                    cloner={{ parent: cloneRepo.parent, run: cloneRepo.run, remember: cloneRepo.remember, open: cloneRepo.open, onOpenGitHubSettings: () => { setNewChatOpen(false); setSettingsSection('machines') } }}
                     onStart={startNewChat}
                     onWarm={warmNewChat}
                     onAgentChange={setNewChatAgent}
                     onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}
-                    onNewShell={(machine) => { setNewChatOpen(false); setNewChatSeed(null); newTerminal(machine) }}
-                    onCancel={() => { setNewChatOpen(false); setNewChatSeed(null) }}
+                    onCancel={noSessions ? undefined : () => { discardDraft(); setNewChatOpen(false); setNewChatSeed(null) }}
                   />
                 )}
                 {findOpen && (
@@ -88,7 +94,7 @@ export function WorkspaceMain() {
                   />
                 )}
                 {tab ? (
-                  <div className="mx-pane-stack">
+                  <div className="mx-pane-stack" inert={newChatOpen}>
                   {mountedTabs.map((tab) => {
                   const kept = tab.id !== layout.activeId
                   return (

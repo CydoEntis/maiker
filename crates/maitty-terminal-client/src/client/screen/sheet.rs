@@ -23,7 +23,7 @@ pub(in crate::client) enum SheetKind {
     References,
 }
 
-/// Its width beside the panes, before you size it (Changes takes half the screen).
+/// Its width beside the panes, before you size it.
 pub(super) const SHEET_W: u16 = 72;
 /// The Inbox's width: a panel over the workspace, from the sidebar's side. Fixed.
 pub(super) const INBOX_W: u16 = 62;
@@ -41,7 +41,8 @@ const FILES_BOTH_FROM: u16 = 60;
 /// and Changes (the diffs) start at the design's widths.
 pub(super) const DRAWER_W: u16 = 60;
 const FILES_DRAWER_W: u16 = 96;
-const CHANGES_DRAWER_W: u16 = 54;
+/// Changes docks beside the panes, 52 columns, and under `NARROW` takes their place.
+const CHANGES_W: u16 = 52;
 /// The widest it floats, and the columns of the terminal it always leaves.
 const DRAWER_MAX: u16 = 110;
 const OVERLAY_KEEP: u16 = 12;
@@ -69,7 +70,7 @@ impl SheetKind {
     fn default_w(self, screen_w: u16) -> u16 {
         match self {
             SheetKind::Inbox => INBOX_W,
-            SheetKind::Changes => screen_w / 2,
+            SheetKind::Changes => CHANGES_W,
             SheetKind::Files => (u32::from(screen_w) * FILES_SHARE / 100) as u16,
             SheetKind::Branch => screen_w * 3 / 10,
             SheetKind::References => screen_w * 2 / 5,
@@ -88,7 +89,7 @@ pub(in crate::client) fn wanted_w(app: &App, kind: SheetKind, screen_w: u16) -> 
     };
     app.screen.saved.sheet_w.get(key).copied().unwrap_or_else(|| match kind {
         SheetKind::Files => FILES_DRAWER_W,
-        SheetKind::Changes => CHANGES_DRAWER_W,
+        SheetKind::Changes => CHANGES_W,
         _ if overlaid(app, kind) => DRAWER_W,
         _ => kind.default_w(screen_w),
     })
@@ -99,11 +100,11 @@ pub(in crate::client) fn widest(col: Rect, look: Look) -> u16 {
     col.width.saturating_sub(look.gap + PANES_KEEP)
 }
 
-/// Whether `kind` floats over the panes: every tool of the drawer does (the Project menu's
+/// Whether `kind` floats over the panes: the drawer's tools do, bar Changes (the Project menu's
 /// panel, 60 columns by default). The terminal is then never resized by opening, closing or
-/// sizing it.
+/// sizing it. Changes docks, so the agent's lines reflow beside it.
 pub(in crate::client) fn overlaid(_app: &App, kind: SheetKind) -> bool {
-    drawer_tab(kind).is_some()
+    kind != SheetKind::Changes && drawer_tab(kind).is_some()
 }
 
 /// The widest a floating drawer gets over `col`: the terminal keeps `OVERLAY_KEEP` columns.
@@ -320,6 +321,11 @@ pub(in crate::client) fn draw_sheet(
         draw_panel_body(app, buf, body, kind, t);
         return;
     }
+    if kind == SheetKind::Changes {
+        let body = draw_panel_frame(app, buf, r, kind, t);
+        draw_panel_body(app, buf, body, kind, t);
+        return;
+    }
     let (title, sub, close) = match kind {
         SheetKind::Inbox => (
             "INBOX".to_string(),
@@ -417,7 +423,7 @@ fn draw_panel_body(app: &mut App, buf: &mut Buffer, body: Rect, kind: SheetKind,
     let ground = t.sidebar_bg;
     match (kind, app.view.take()) {
         (SheetKind::Changes, Some(crate::client::View::Changes(v))) => {
-            crate::client::design::draw_changes(app, buf, body, t, &v);
+            super::changes_panel::draw_changes(app, buf, body, t, &v);
             app.view = Some(crate::client::View::Changes(v));
         }
         (SheetKind::Files, Some(crate::client::View::Files(mut v))) => {
@@ -433,66 +439,6 @@ fn draw_panel_body(app: &mut App, buf: &mut Buffer, body: Rect, kind: SheetKind,
             app.view = Some(crate::client::View::References(v));
         }
         (_, view) => app.view = view,
-    }
-}
-
-/// The Settings modal's size at most: the redesign's 96 columns and a little more, since real
-/// values (a hooks state, the version line) run longer than its examples.
-const SETTINGS_W: u16 = 110;
-const SETTINGS_H: u16 = 32;
-
-/// Settings is a modal so it does not take width away from the workspace.
-pub(in crate::client) fn draw_settings_modal(
-    app: &mut App,
-    buf: &mut Buffer,
-    area: Rect,
-    t: &Theme,
-) {
-    let Mode::ScreenSettings(view) = &app.mode else {
-        return;
-    };
-    let view = (**view).clone();
-    let max_width = area.width.saturating_sub(4).min(SETTINGS_W);
-    let max_height = area.height.saturating_sub(2).min(SETTINGS_H);
-    let r = Rect {
-        x: area.x + area.width.saturating_sub(max_width) / 2,
-        y: area.y + area.height.saturating_sub(max_height) / 2,
-        width: max_width,
-        height: max_height,
-    };
-    super::dim_all(app, buf, area, t);
-    hit(app, area, ScreenHit::Noop);
-    let r = panel_at(app, buf, r, "settings", &[], t);
-    let inside = Rect {
-        x: r.x + 1,
-        y: r.y + 1,
-        width: r.width.saturating_sub(2),
-        height: r.height.saturating_sub(2),
-    };
-    if inside.width < 44 {
-        put(
-            buf,
-            inside.x + 2,
-            inside.y + 2,
-            &[seg(
-                "Make the window wider",
-                Style::default().fg(t.muted).bg(t.card),
-            )],
-            inside.right(),
-        );
-    } else if inside.height < 18 {
-        put(
-            buf,
-            inside.x + 2,
-            inside.y + 2,
-            &[seg(
-                "Make the window taller",
-                Style::default().fg(t.muted).bg(t.card),
-            )],
-            inside.right(),
-        );
-    } else {
-        crate::client::screen::draw_settings(app, buf, inside, t, &view);
     }
 }
 

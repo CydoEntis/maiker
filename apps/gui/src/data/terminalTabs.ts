@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'maitty.gui.terminal-tabs.v1'
+const STORAGE_KEY = 'maiker.gui.terminal-tabs.v1'
 
 /** One tab of the terminal dock: columns of terminal ids (`features/workspace/model/terminalTabs.ts`). */
 type SavedTab = readonly (readonly string[])[]

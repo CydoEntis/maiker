@@ -23,6 +23,7 @@ pub mod sync;
 pub mod tidy;
 pub mod version;
 
+pub use daemon::hook_repair::{HookTools, install_hook_tools};
 pub use daemon::run as run_daemon;
 pub use daemon::{first_failing_line, forget_session};
 pub use maitty_machines::link_failure;

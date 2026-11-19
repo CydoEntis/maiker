@@ -15,6 +15,8 @@ pub(super) const CLONE_LIMIT: Duration = Duration::from_secs(crate::protocol::CL
 /// The address forms git fetches over a network. Anything else (a local path, `file://`, `ext::`)
 /// would read this machine's own disk or run a program, and is refused.
 const SCHEMES: [&str; 3] = ["https://", "ssh://", "git://"];
+/// The folder under the home folder that a clone makes when it is not there yet: the default destination clients offer.
+pub(super) const DEFAULT_PROJECTS_DIR: &str = "Projects";
 /// Characters no folder name may hold on at least one of the systems this runs on.
 const NOT_IN_A_NAME: [char; 9] = ['/', '\\', ':', '*', '?', '"', '<', '>', '|'];
 
@@ -75,7 +77,12 @@ pub(super) fn clone(address: &str, parent: &str, home: Option<&Path>, limit: Dur
     let name = folder_name(address).ok_or("That address does not end in a repository name")?;
     let parent = folders::resolve(parent, home).ok_or("Choose the folder to clone into by its full path")?;
     if !parent.is_dir() {
-        return Err(format!("There is no folder {}", shown(&parent)));
+        // Only the default `~/Projects` is made for the person; any other missing folder is a typo worth saying.
+        let default = home.map(|home| home.join(DEFAULT_PROJECTS_DIR));
+        if default.as_deref() != Some(parent.as_path()) || parent.symlink_metadata().is_ok() {
+            return Err(format!("There is no folder {}", shown(&parent)));
+        }
+        std::fs::create_dir_all(&parent).map_err(|error| format!("Could not make {}: {error}", shown(&parent)))?;
     }
     let target = parent.join(&name);
     // Also true for a link that points nowhere, which git would refuse to clone over.
@@ -229,6 +236,20 @@ mod tests {
         assert!(missing.starts_with("There is no folder "), "{missing}");
         assert_eq!(relative, "Choose the folder to clone into by its full path");
         assert_eq!(std::fs::read_dir(root.path().join("widgets")).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn the_default_projects_folder_is_made_on_first_use_and_no_other() {
+        let root = crate::daemon::persist::scratch_dir();
+        std::fs::create_dir_all(root.path()).unwrap();
+        let home = root.path();
+        let projects = home.join(DEFAULT_PROJECTS_DIR);
+        let _ = clone("https://example.invalid/o/widgets.git", &projects.to_string_lossy(), Some(home), CLONE_LIMIT);
+        assert!(projects.is_dir(), "~/Projects is made for the first clone");
+        let other = home.join("elsewhere");
+        let refused = clone("https://example.invalid/o/widgets.git", &other.to_string_lossy(), Some(home), CLONE_LIMIT).unwrap_err();
+        assert!(refused.starts_with("There is no folder "), "{refused}");
+        assert!(!other.exists());
     }
 
     #[test]

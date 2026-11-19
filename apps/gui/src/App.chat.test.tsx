@@ -113,7 +113,7 @@ const claude = (pane: number, extra: Partial<Conversation> = {}) =>
   term(pane, { provider: 'Claude', agent: 'claude', process: 'claude', chat: { conversation: 40 + pane, generation: 1 }, ...extra })
 
 function renderDesktopApp() {
-  window.localStorage.setItem('maitty.gui.welcomed.v1', '1')
+  window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
 }
@@ -127,7 +127,7 @@ describe('the Terminal | Chat view of a pane', () => {
     forgetChatFeeds()
     forgetComposers()
     // These tests switch a pane between its views, so agents start in the terminal here; the default (the chat) has its own test.
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'terminal' } }))
+    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'terminal' } }))
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 59, canRestart: false, sessionCount: 1, activeTurnCount: 0 })
   })
@@ -199,7 +199,7 @@ describe('the Terminal | Chat view of a pane', () => {
   })
 
   it('opens a Claude session in the chat when Settings says so, and never opens a shell there', async () => {
-    window.localStorage.setItem('maitty.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'chat', codex: 'terminal' } }))
+    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'chat', codex: 'terminal' } }))
     daemon.loadConversations.mockResolvedValue([claude(2), term(3)])
     renderDesktopApp()
 

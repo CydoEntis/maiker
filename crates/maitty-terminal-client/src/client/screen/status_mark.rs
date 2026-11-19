@@ -2,8 +2,8 @@
 //! collapsed column and the pane's title. The state is the daemon's (`Status`, `TermInfo.exit`)
 //! and whether the machine is reachable; this file only chooses how to draw it.
 //!
-//! By default a state differs by colour only (`●`); `ui.glyphs = "unicode"` ("Status glyphs:
-//! unicode" in Settings) gives each state a shape of its own for colour-blind users.
+//! By default each state has a shape of its own (`!` needs you, `✓` done, `×` failed, `–` idle) and
+//! colour backs it; `ui.glyphs = "dots"` ("Status glyphs: dots" in Settings) draws a coloured dot instead.
 
 use super::*;
 
@@ -53,10 +53,10 @@ impl State {
 }
 
 /// The `unicode` set: a shape per state.
-const SHAPE_NEEDS: &str = "●";
+const SHAPE_NEEDS: &str = "!";
 const SHAPE_DONE: &str = "✓";
-const SHAPE_PROBLEM: &str = "✕";
-const SHAPE_IDLE: &str = "○";
+const SHAPE_PROBLEM: &str = "×";
+const SHAPE_IDLE: &str = "–";
 /// The same dot for every state, told apart by colour.
 const DOT: &str = "●";
 /// An unreachable session's mark, in the set either way.
@@ -68,6 +68,8 @@ const PACE_BRAILLE_MS: u128 = 80;
 const PACE_SNAKE_MS: u128 = 90;
 const PACE_BARS_MS: u128 = 85;
 const PACE_DEFAULT_MS: u128 = 90;
+/// The TUI design holds each frame of its spinners this long.
+const PACE_DESIGN_MS: u128 = 120;
 
 /// How long a frame of the chosen spinner is held. "Dots" is the design's Braille spinner.
 pub(in crate::client) fn pace_ms(frames: &[String]) -> u128 {
@@ -75,6 +77,7 @@ pub(in crate::client) fn pace_ms(frames: &[String]) -> u128 {
         "Dots" => PACE_BRAILLE_MS,
         "Snake" => PACE_SNAKE_MS,
         "Bars" => PACE_BARS_MS,
+        "Blocks" => PACE_DESIGN_MS,
         _ => PACE_DEFAULT_MS,
     }
 }
@@ -112,10 +115,10 @@ impl App {
 
     /// The mark for a session in `state`.
     pub(in crate::client) fn state_mark(&self, state: State, t: &Theme) -> Mark {
-        let shapes = self.cfg.ui.glyphs == "unicode";
+        let shapes = self.cfg.ui.glyphs != "dots";
         let (glyph, color) = match state {
-            State::Working => (self.working_frame(), t.accent),
-            State::Needs => (SHAPE_NEEDS.to_string(), t.blocked),
+            State::Working => (self.working_frame(), t.working),
+            State::Needs => (if shapes { SHAPE_NEEDS } else { DOT }.to_string(), t.blocked),
             State::Done => (if shapes { SHAPE_DONE } else { DOT }.to_string(), t.done),
             State::Problem => (if shapes { SHAPE_PROBLEM } else { DOT }.to_string(), t.err),
             State::Idle => (if shapes { SHAPE_IDLE } else { DOT }.to_string(), t.idle),

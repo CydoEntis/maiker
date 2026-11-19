@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isDesktop, openLink } from '@/api/daemon'
 import { copyText } from '@/lib/clipboard'
+import { OpenFileContext } from '../openFile'
 import { Markdown } from './Markdown'
 
 vi.mock('@/api/daemon', async (importOriginal) => ({
@@ -124,5 +125,35 @@ describe('a task list', () => {
     render(<Markdown text="Use [ ] to mean open." />)
     expect(screen.queryByRole('checkbox')).toBeNull()
     expect(screen.getByText('Use [ ] to mean open.')).toBeInTheDocument()
+  })
+})
+
+describe('a file name in a message', () => {
+  it('is plain inline code with no file badge or type tag', () => {
+    const { container } = render(<Markdown text="Edit `README.md` and `docs/DESIGN-SYSTEM.md:12` now." />)
+
+    expect(container.querySelector('[data-slot="file-badge"]')).toBeNull()
+    expect(container.querySelector('[data-slot="type-tag"]')).toBeNull()
+    expect(container.querySelectorAll('[data-slot="code-chip"]')).toHaveLength(2)
+    expect(container.querySelector('button')).toBeNull()
+  })
+
+  it("carries its type's colour, and a name of no known type carries none", () => {
+    const { container } = render(<Markdown text="Edit `src/app.ts` and `notes.xyz` now." />)
+
+    expect(container.querySelectorAll('.mx-file-name')).toHaveLength(1)
+    expect(container.querySelector('.mx-file-name')).toHaveAttribute('style', expect.stringContaining('--tone: var(--tag-ts)'))
+    expect(container.querySelectorAll('[data-slot="code-chip"]:not(.mx-file-name)')).toHaveLength(1)
+  })
+
+  it('opens the file at its line when the chat can open files, still without a badge', async () => {
+    const open = vi.fn()
+    const user = userEvent.setup()
+    const { container } = render(<OpenFileContext.Provider value={open}><Markdown text="See `src/tax.js:42`." /></OpenFileContext.Provider>)
+
+    await user.click(screen.getByRole('button', { name: 'src/tax.js:42' }))
+
+    expect(open).toHaveBeenCalledExactlyOnceWith('src/tax.js', 42)
+    expect(container.querySelector('[data-slot="file-badge"]')).toBeNull()
   })
 })

@@ -673,7 +673,7 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
     ("n", "pick-session"),
     ("t", "shell-here"),
     ("j", "next-session"),
-    ("k", "prev-session"),
+    ("p", "prev-session"),
     ("1", "select-tab-1"),
     ("2", "select-tab-2"),
     ("3", "select-tab-3"),
@@ -720,7 +720,8 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
     // Project tools
     ("f", "files"),
     ("c", "changes"),
-    ("g", "branch"),
+    ("g", "changes"),
+    ("v", "branch"),
     ("h", "history"),
     ("e", "references"),
     ("o", "find-file"),
@@ -728,6 +729,7 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
     ("y", "copy-mode"),
     // The app
     ("space", "palette"),
+    ("k", "palette"),
     (".", "menu"),
     ("u", "usage"),
     (",", "settings"),
@@ -742,25 +744,11 @@ pub const DEFAULT_PREFIX_KEYS: &[(&str, &str)] = &[
 /// Bindings active without the prefix. Inside a pane these are the only keys taken from the
 /// program: everything else (Ctrl+C, Ctrl+D, Ctrl+Z, Ctrl+L, Ctrl+R, arrows, Tab, Esc) goes to it.
 /// Ctrl+Shift+F (find in pane) is matched in the client, where the shift state is known.
-/// Alt+1-9 go to a tab of the session.
+/// Everything else goes to the agent, so Ctrl+K, Ctrl+T, F2 and the rest reach it; the TUI design's key routing.
 pub const DEFAULT_GLOBAL_KEYS: &[(&str, &str)] = &[
-    ("ctrl+t", "shell-here"),
-    ("ctrl+tab", "next-tab"),
-    ("ctrl+shift+tab", "prev-tab"),
-    ("ctrl+k", "palette"),
-    ("ctrl+j", "jump"),
     ("alt+down", "next-session"),
     ("alt+up", "prev-session"),
-    ("f2", "rename-workspace"),
-    ("alt+1", "select-tab-1"),
-    ("alt+2", "select-tab-2"),
-    ("alt+3", "select-tab-3"),
-    ("alt+4", "select-tab-4"),
-    ("alt+5", "select-tab-5"),
-    ("alt+6", "select-tab-6"),
-    ("alt+7", "select-tab-7"),
-    ("alt+8", "select-tab-8"),
-    ("alt+9", "select-tab-9"),
+    ("alt+j", "jump"),
 ];
 
 /// The everyday actions without the leader (`ui.alt_keys`), on no key an agent uses: Claude
@@ -1057,13 +1045,18 @@ mod tests {
         &[("?", "help"), ("_", "split-up"), ("S", "split-down")];
 
     #[test]
-    fn default_shortcuts_are_one_key_each_and_none_but_all_keys_needs_shift() {
+    fn default_shortcuts_are_one_key_each_bar_two_aliases_and_none_but_all_keys_needs_shift() {
+        // Second keys for an action, on purpose: `g` is Changes beside `c`, and `k` is search beside `space`.
+        const ALIASES: &[(&str, &str)] = &[("g", "changes"), ("k", "palette")];
         let mut keys = std::collections::HashSet::new();
         let mut actions = std::collections::HashSet::new();
         for (key, action) in DEFAULT_PREFIX_KEYS {
             let spec: KeySpec = key.parse().unwrap();
             assert!(keys.insert(spec), "{key} is bound twice");
-            assert!(actions.insert(*action), "{action} has two keys");
+            assert!(
+                actions.insert(*action) || ALIASES.contains(&(*key, *action)),
+                "{action} has two keys"
+            );
             assert!(
                 !spec.mods.contains(KeyModifiers::SHIFT),
                 "{key} needs Shift"

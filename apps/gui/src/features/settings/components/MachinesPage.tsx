@@ -11,6 +11,10 @@ import { installNote, UPDATE_WORDS, updateVerb, updateWarning, type MachineHead,
 import { SettingsSearch } from '../settingsSearch'
 import { Card, Row, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
+import { HOST_KEY_WORDS, HostKeyCard } from './HostKeyCard'
+import { KeyLoginCard, PASSWORD_OFFERED } from './KeyLoginCard'
+import { hostProblem, portOf, targetOf, userOf, userProblem } from '../model/machineTarget'
+import { DAEMON_NAME } from '@/brand'
 
 /** A computer: this one, and the tile of a remote one. The window does not know a machine's kind, so every remote is a server. */
 const MONITOR_PATH = 'M3 4h18v12H3zM8 20h8M12 16v4'
@@ -104,7 +108,7 @@ export function MachinesPage({ daemon, machines, github, appVersion }: Props) {
   if (adding) {
     return (
       <AddMachine
-        add={machines.add}
+        machines={machines}
         onClose={() => { setAdding(false) }}
         onOpen={(name) => {
           setAdding(false)
@@ -188,7 +192,9 @@ function MachineTile({ head, sessions, on, onPick }: { head: MachineHead; sessio
         <MachineIcon path={SERVER_PATH} health={health} />
         <span className="mx-mach-names">
           <span className="mx-mach-name">{head.label}</span>
-          {head.name !== null && head.name !== head.label && <span className="mx-mach-host">{head.name}</span>}
+          {head.target !== null
+            ? <span className="mx-mach-host" title={head.target.includes('@') ? undefined : 'No user set: ssh connects as this computer\'s user'}>{head.target}{head.target.includes('@') ? '' : ' · no user'}</span>
+            : head.name !== null && head.name !== head.label && <span className="mx-mach-host">{head.name}</span>}
         </span>
       </span>
       <span className={`mx-mach-state is-${health}`}>
@@ -224,8 +230,8 @@ function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSi
       >
         {daemon.version && <ValueRow label="Version" detail="Shared by the GUI and the Maiker TUI.">{daemon.version}</ValueRow>}
         {daemon.socket && <ValueRow label="Socket" detail="Where clients connect.">{daemon.socket}</ValueRow>}
-        <ValueRow label="Sessions" detail="Owned by the Maiker service. The GUI only attaches.">{daemon.sessionCount}</ValueRow>
-        <Row label="Service log" detail="What the service did lately, for working out a problem. Save a copy puts it in your Downloads folder as maitty-log.txt. It names your folders and repositories, so look before you share it.">
+        <ValueRow label="Sessions" detail="Owned by the daemon. The GUI only attaches.">{daemon.sessionCount}</ValueRow>
+        <Row label="Service log" detail="What the service did lately, for working out a problem. Save a copy puts it in your Downloads folder as maiker-log.txt. It names your folders and repositories, so look before you share it.">
           <span className="mx-mach-buttons">
             <button type="button" className="mx-scard-button" onClick={saveLog}>Save a copy</button>
             <button type="button" className="mx-scard-button" onClick={showLog}>Show in folder</button>
@@ -241,19 +247,42 @@ function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSi
 function MachineDetail({ head, sessions, machines, github, onRemoved }: { head: MachineHead; sessions: number | null; machines: MachinesInfo; github: GitHubSignIn | undefined; onRemoved: () => void }) {
   const name = head.label
   const health = healthOf(head)
-  const down = DOWN_WORDS.has(head.chip?.word ?? '') || head.chip?.word === LOGIN_WORD
+  const login = head.chip?.word === LOGIN_WORD
+  const down = DOWN_WORDS.has(head.chip?.word ?? '') || login
   return (
     <>
       <Card title="Connection">
-        {health === 'ok' && <ValueRow label="Link" detail="Over ssh, through its own Maiker service.">connected</ValueRow>}
-        {health === 'quiet' && <ValueRow label="Link" detail="Over ssh, through its own Maiker service.">{head.chip?.word ?? 'connecting'}</ValueRow>}
-        {down && (
+        {health === 'ok' && <ValueRow label="Link" detail={`Over ssh, through its own ${DAEMON_NAME}.`}>connected</ValueRow>}
+        {health === 'quiet' && <ValueRow label="Link" detail={`Over ssh, through its own ${DAEMON_NAME}.`}>{head.chip?.word ?? 'connecting'}</ValueRow>}
+        {login && (
+          <>
+            <Row label="Needs login" detail={head.why ?? 'ssh could not log in by itself.'}>
+              <span className="mx-mach-buttons">
+                <button type="button" className="mx-scard-button is-primary" aria-label={`Retry ${name}`} onClick={() => { machines.onRetry(name) }}>Retry now</button>
+              </span>
+            </Row>
+            {head.said !== null && <ValueRow label="ssh said" detail="Its last line, as ssh printed it.">{<span className="mono">{head.said}</span>}</ValueRow>}
+            {head.said !== null && PASSWORD_OFFERED.test(head.said) && <KeyLoginCard name={name} inspect={machines.keyLogin.inspect} setUp={machines.keyLogin.setUp} onOpenTerminal={() => { machines.onOpenLogin(head.machine) }} />}
+            {head.said !== null && HOST_KEY_WORDS.test(head.said)
+              ? <HostKeyCard name={name} inspect={machines.hostKey.inspect} trust={machines.hostKey.trust} onOpenTerminal={() => { machines.onOpenLogin(head.machine) }} />
+              : (
+                <Row label="Still stuck?" detail="Check the user above first: ssh logs in as it. If a password or a key passphrase is needed, log in once in a terminal and this machine connects on its own.">
+                  <span className="mx-mach-buttons">
+                    <button type="button" className="mx-mach-quiet" aria-label={`Open a terminal for ${name}`} onClick={() => { machines.onOpenLogin(head.machine) }}>Open a terminal</button>
+                    {head.loginCommand !== null && <button type="button" className="mx-mach-quiet" aria-label={`Copy the ssh command for ${name}`} onClick={() => { if (head.loginCommand !== null) machines.onCopyCommand(head.loginCommand) }}>Copy command</button>}
+                  </span>
+                </Row>
+              )}
+          </>
+        )}
+        {down && !login && (
           <Row label={capitalised(head.chip?.word ?? 'unreachable')} detail={head.why ?? 'Maiker keeps trying to reach it.'}>
             <span className="mx-mach-buttons">
               <button type="button" className="mx-scard-button is-primary" aria-label={`Retry ${name}`} onClick={() => { machines.onRetry(name) }}>Retry now</button>
             </span>
           </Row>
         )}
+        {head.target !== null && <UserRow key={head.target} name={name} target={head.target} machines={machines} />}
         {head.down && <ValueRow label="Since" detail="When the line went down.">{<DisconnectedSince at={head.downSince} />}</ValueRow>}
         <ValueRow label="Sessions" detail={health === 'ok' ? 'Running there, shown in your sidebar.' : 'Its sessions come back when it does.'}>{sessions === null ? '—' : health === 'ok' ? String(sessions) : `${String(sessions)} shown`}</ValueRow>
       </Card>
@@ -269,6 +298,33 @@ function MachineDetail({ head, sessions, machines, github, onRemoved }: { head: 
       {health === 'ok' && <GitHubSection machines={[head]} signIn={github} only={head.machine} />}
       <RemoveCard name={name} onRemove={() => { machines.onRemove(name); onRemoved() }} />
     </>
+  )
+}
+
+/** The user a machine connects as: never hidden, a warning when there is none, and changed in place. */
+function UserRow({ name, target, machines }: { name: string; target: string; machines: MachinesInfo }) {
+  const stored = userOf(target)
+  const [user, setUser] = useState(stored)
+  const [saving, setSaving] = useState(false)
+  const typed = user.trim()
+  const problem = userProblem(typed)
+  const detail = stored === ''
+    ? `No user is set, so ssh connects as ${machines.localUser ?? "this computer's user"}, which is usually wrong on another machine. Type the user you log in as on ${name}.`
+    : `ssh logs in to ${name} as ${stored}.`
+  const save = () => {
+    setSaving(true)
+    machines.onSetUser(name, typed).then(
+      () => { toast.success(`${name} will connect as ${typed === '' ? 'the local user' : typed}`) },
+      (error: unknown) => { toast.failed(`Could not change the user of ${name}`, error) },
+    ).finally(() => { setSaving(false) })
+  }
+  return (
+    <Row label="Connects as" detail={problem ?? detail}>
+      <span className="mx-mach-buttons">
+        <input className="mono mx-mach-userinput" aria-label={`User for ${name}`} value={user} placeholder="user" spellCheck={false} onChange={(event) => { setUser(event.target.value) }} />
+        <button type="button" className="mx-scard-button" aria-label={`Save the user of ${name}`} disabled={saving || problem !== null || typed === stored} onClick={save}>Save</button>
+      </span>
+    </Row>
   )
 }
 
@@ -347,23 +403,43 @@ type AddStep =
   | { step: 'form'; note: string | null }
   | { step: 'checking'; target: string }
   | { step: 'failed'; target: string; message: string }
-  | { step: 'done'; target: string; added: Exclude<Added, { outcome: 'needs-name' | 'cancelled' }> }
+  | { step: 'done'; target: string; added: Done }
 
-/** What the done step says the machine came to. */
-function doneWords(added: Exclude<Added, { outcome: 'needs-name' | 'cancelled' }>): { text: string; good: boolean } {
+type Done = Exclude<Added, { outcome: 'needs-name' | 'cancelled' }>
+type Mark = 'spin' | 'ok' | 'warn' | 'bad' | 'wait'
+type Step = { mark: Mark; text: string }
+
+const MARK_GLYPH: Readonly<Record<Mark, string>> = { spin: '', ok: '✓', warn: '!', bad: '✕', wait: '–' }
+
+/** The three things adding a machine does, each with how it really went: reach it, log in, and check Maiker there. */
+function stepsOf(state: Exclude<AddStep, { step: 'form' }>): Step[] {
+  const where = state.target
+  if (state.step === 'checking') return [{ mark: 'spin', text: `Reaching ${where} over ssh…` }, { mark: 'wait', text: 'Log in with your ssh keys' }, { mark: 'wait', text: 'Check Maiker on it' }]
+  if (state.step === 'failed') return [{ mark: 'bad', text: `Reach ${where} over ssh` }, { mark: 'wait', text: 'Log in with your ssh keys' }, { mark: 'wait', text: 'Check Maiker on it' }]
+  const { added } = state
+  if (added.outcome === 'added') {
+    return [{ mark: 'ok', text: `Reached ${where} over ssh` }, { mark: 'ok', text: 'Logged in with your ssh keys' }, added.version ? { mark: 'ok', text: `Maiker answered there (${added.version})` } : { mark: 'warn', text: 'Maiker is not ready there yet: it may be missing, old, or not running. Open its settings for the fix.' }]
+  }
+  return [{ mark: 'ok', text: `Reached ${where} over ssh` }, { mark: 'bad', text: 'ssh could not log in by itself' }, { mark: 'wait', text: 'Check Maiker on it: after you have logged in' }]
+}
+
+/** What the done step says the machine came to, and whether that is all well. */
+function doneWords(added: Done): { text: string; good: boolean } {
   switch (added.outcome) {
-    case 'added': return { text: `${added.name} is added and connecting.${added.version ? ` ${added.version} answered there.` : ''} Its sessions will show in your sidebar.`, good: true }
-    case 'login': return { text: `${added.name} is added. ssh needs you to log in: use the session named “ssh ${added.name}”.`, good: true }
-    case 'login-manual': return { text: `${added.name} is added. Run “ssh ${added.target}” once in a terminal to log in, then retry it (${added.why}).`, good: false }
+    case 'added': return { text: `${added.name} is added and connecting. Its sessions will show in your sidebar.`, good: true }
+    case 'login': return { text: `${added.name} is added but not connected yet: it needs a login.`, good: false }
   }
 }
 
 /** The add-a-machine flow: pick a host of ~/.ssh/config or type an address, name it, and connect. */
-function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClose: () => void; onOpen: (name: string) => void }) {
+function AddMachine({ machines, onClose, onOpen }: { machines: MachinesInfo; onClose: () => void; onOpen: (name: string) => void }) {
+  const { add } = machines
   const [hosts, setHosts] = useState<HostsState>({ status: 'loading' })
   const [mode, setMode] = useState<AddMode>('ssh')
   const [host, setHost] = useState<string | null>(null)
-  const [address, setAddress] = useState('')
+  const [user, setUser] = useState('')
+  const [hostText, setHostText] = useState('')
+  const [port, setPort] = useState('')
   const [name, setName] = useState('')
   const [state, setState] = useState<AddStep>({ step: 'form', note: null })
   const { loadHosts } = add
@@ -376,12 +452,16 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
     return () => { gone = true }
   }, [loadHosts])
 
-  const target = mode === 'ssh' ? host ?? '' : address.trim()
+  const typedUser = user.trim()
+  const typedHost = hostText.trim()
+  const portNumber = portOf(port.trim())
+  const fieldProblem = mode === 'address' ? (userProblem(typedUser) ?? hostProblem(typedHost) ?? (portNumber === undefined ? 'A port is a number from 1 to 65535.' : null)) : null
+  const target = mode === 'ssh' ? host ?? '' : fieldProblem === null && typedHost !== '' ? targetOf(typedUser, typedHost) : ''
   const typedName = name.trim()
   const connect = () => {
     if (target === '') return
     setState({ step: 'checking', target })
-    add.onAdd(target, typedName === '' ? undefined : typedName).then(
+    add.onAdd(target, typedName === '' ? undefined : typedName, mode === 'address' ? portNumber ?? undefined : undefined).then(
       (result) => {
         if (result.outcome === 'needs-name') { setState({ step: 'form', note: `Give ${target} a name in Maiker to add it.` }); return }
         if (result.outcome === 'cancelled') { setState({ step: 'form', note: 'Cancelled. Nothing was added.' }); return }
@@ -391,7 +471,7 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
       (error: unknown) => { setState({ step: 'failed', target, message: errorMessage(error, 'Could not add the machine') }) },
     )
   }
-  const again = () => { setHost(null); setAddress(''); setName(''); setState({ step: 'form', note: null }) }
+  const again = () => { setHost(null); setUser(''); setHostText(''); setPort(''); setName(''); setState({ step: 'form', note: null }) }
 
   return (
     <section className="mx-mach-addflow" aria-label="Add a machine">
@@ -403,17 +483,31 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
       <div className="mx-mach-addbox">
         {state.step === 'form' && (
           <form className="mx-mach-form" onSubmit={(event) => { event.preventDefault(); connect() }}>
+            <p className="mx-mach-note">Maiker reaches another machine over ssh and talks to its own Maiker there. It needs a way in that works without typing anything (an ssh key or agent), and Maiker installed on it; if it is not, you can install it from the machine's settings once it is added. Adding does three things: reach the machine, log in, and check Maiker on it.</p>
             {add.windows && <p className="mx-mach-note">Windows: use ssh keys or an agent. Password prompts work in the session but are not remembered.</p>}
             <Segmented aria-label="How" value={mode} onValueChange={(next) => { if (next === 'ssh' || next === 'address') setMode(next) }}>
               <SegmentedItem value="ssh">From ~/.ssh/config</SegmentedItem>
               <SegmentedItem value="address">By address</SegmentedItem>
             </Segmented>
             {mode === 'address' && (
-              <label className="mx-mach-field">
-                <span>Address</span>
-                <input className="mono" aria-label="Address" value={address} placeholder="user@host or user@10.0.0.5" spellCheck={false} autoFocus onChange={(event) => { setAddress(event.target.value) }} />
-                <span className="mx-mach-help">Uses your ssh keys.</span>
-              </label>
+              <div className="mx-mach-fields">
+                <label className="mx-mach-field">
+                  <span>User</span>
+                  <input className="mono" aria-label="User" value={user} placeholder="the user you log in as" spellCheck={false} autoCapitalize="none" onChange={(event) => { setUser(event.target.value) }} />
+                </label>
+                <label className="mx-mach-field">
+                  <span>Host</span>
+                  <input className="mono" aria-label="Host" value={hostText} placeholder="10.0.0.5 or box.example" spellCheck={false} autoFocus autoCapitalize="none" onChange={(event) => { setHostText(event.target.value) }} />
+                </label>
+                <label className="mx-mach-field">
+                  <span>Port</span>
+                  <input className="mono mx-mach-port" aria-label="Port" value={port} placeholder="22" inputMode="numeric" spellCheck={false} onChange={(event) => { setPort(event.target.value) }} />
+                </label>
+              </div>
+            )}
+            {mode === 'address' && fieldProblem !== null && <p className="mx-mach-note" role="alert">{fieldProblem}</p>}
+            {mode === 'address' && typedUser === '' && typedHost !== '' && fieldProblem === null && (
+              <p className="mx-mach-warn" role="note">No user: ssh will connect as {machines.localUser ?? "this computer's user"}, which is usually wrong on another machine. Type the user you log in as there.</p>
             )}
             {mode === 'ssh' && <HostChoices hosts={hosts} picked={host} onPick={(alias) => { setHost(alias) }} />}
             <label className="mx-mach-field">
@@ -422,7 +516,7 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
             </label>
             {state.note !== null && <p className="mx-mach-note" role="status">{state.note}</p>}
             <div className="mx-mach-formfoot">
-              <span>Connects over ssh. If Maiker isn't on the machine yet, you can install it from its settings once it is added.</span>
+              <span>Nothing is added unless the machine answers over ssh.</span>
               <button type="button" className="mx-mach-quiet" onClick={onClose}>Cancel</button>
               <button type="submit" className="mx-mach-go" disabled={target === ''}>Connect {typedName === '' ? (target === '' ? 'machine' : target) : typedName}</button>
             </div>
@@ -431,10 +525,14 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
         {state.step !== 'form' && (
           <div className="mx-mach-run">
             <span className="mx-mach-target">{state.target}</span>
-            <span className={`mx-mach-stage is-${state.step}`}>
-              <span className="mx-mach-stage-mark" aria-hidden="true">{state.step === 'checking' ? <span className="mx-mach-spin" /> : state.step === 'failed' ? '✕' : '✓'}</span>
-              {state.step === 'checking' ? `Reaching ${state.target} over ssh…` : `Reach ${state.target} over ssh`}
-            </span>
+            <ol className="mx-mach-steps" aria-label="Steps">
+              {stepsOf(state).map((item, index) => (
+                <li key={index} className={`mx-mach-stage is-${item.mark}`}>
+                  <span className="mx-mach-stage-mark" aria-hidden="true">{item.mark === 'spin' ? <span className="mx-mach-spin" /> : MARK_GLYPH[item.mark]}</span>
+                  {item.text}
+                </li>
+              ))}
+            </ol>
             {state.step === 'checking' && (
               <div className="mx-mach-runfoot" data-owns-escape onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); add.onCancel() } }}>
                 <span role="status">Esc ends ssh and adds nothing.</span>
@@ -450,7 +548,7 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
                 </span>
               </div>
             )}
-            {state.step === 'done' && <DoneFoot added={state.added} onAgain={again} onOpen={onOpen} />}
+            {state.step === 'done' && <DoneFoot added={state.added} machines={machines} onAgain={again} onOpen={onOpen} />}
           </div>
         )}
       </div>
@@ -458,11 +556,31 @@ function AddMachine({ add, onClose, onOpen }: { add: MachinesInfo['add']; onClos
   )
 }
 
-function DoneFoot({ added, onAgain, onOpen }: { added: Exclude<Added, { outcome: 'needs-name' | 'cancelled' }>; onAgain: () => void; onOpen: (name: string) => void }) {
+function DoneFoot({ added, machines, onAgain, onOpen }: { added: Done; machines: MachinesInfo; onAgain: () => void; onOpen: (name: string) => void }) {
   const words = doneWords(added)
+  const login = added.outcome === 'login' ? added : null
+  const user = login === null ? '' : userOf(login.target)
   return (
     <div className="mx-mach-done">
-      <span className={words.good ? 'is-good' : 'is-bad'} role="status">{words.text}</span>
+      <span className={words.good ? 'is-good' : 'is-warn'} role="status">{words.text}</span>
+      {login !== null && (
+        <div className="mx-mach-warn">
+          <span>ssh said</span>
+          <span className="mono">{login.said}</span>
+          <span>It tried to log in as <strong>{user === '' ? (machines.localUser ?? "this computer's user") : user}</strong>{user === '' ? ' because no user was given' : ''}.</span>
+        </div>
+      )}
+      {login !== null && HOST_KEY_WORDS.test(login.said) && <HostKeyCard name={login.name} inspect={machines.hostKey.inspect} trust={machines.hostKey.trust} />}
+      {login !== null && PASSWORD_OFFERED.test(login.said) && <KeyLoginCard name={login.name} inspect={machines.keyLogin.inspect} setUp={machines.keyLogin.setUp} />}
+      {login !== null && !HOST_KEY_WORDS.test(login.said) && (
+        <span className="mx-mach-note">Open its settings to change the user, or to open a terminal if it needs a password or a key passphrase.{login.command !== null && ' Or run its ssh command yourself:'}</span>
+      )}
+      {login?.command != null && (
+        <span className="mx-mach-buttons">
+          <span className="mono">{login.command}</span>
+          <button type="button" className="mx-mach-quiet" onClick={() => { if (login.command !== null) machines.onCopyCommand(login.command) }}>Copy command</button>
+        </span>
+      )}
       <button type="button" className="mx-mach-quiet" onClick={onAgain}>Add another</button>
       <button type="button" className="mx-mach-go" onClick={() => { onOpen(added.name) }}>Open its settings</button>
     </div>

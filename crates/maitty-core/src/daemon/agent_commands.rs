@@ -102,7 +102,7 @@ mod tests {
             &script,
             concat!(
                 "#!/bin/sh\nread line\n",
-                r#"printf '%s\n' '{"type":"control_response","response":{"request_id":"maitty-models","subtype":"success","response":{"commands":[{"name":"compact","description":"Summarize"},{"name":"pdf","description":"Reads PDFs","argumentHint":"<file>"}]}}}'"#,
+                r#"printf '%s\n' '{"type":"control_response","response":{"request_id":"maiker-models","subtype":"success","response":{"commands":[{"name":"compact","description":"Summarize"},{"name":"pdf","description":"Reads PDFs","argumentHint":"<file>"}]}}}'"#,
                 "\nsleep 5\n"
             ),
         )
