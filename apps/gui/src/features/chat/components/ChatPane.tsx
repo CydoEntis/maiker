@@ -76,6 +76,8 @@ export type ChatPaneProps = {
   hideSuccessfulTools?: boolean
   /** The window's screens a command opens instead of Claude Code's menu. */
   windowActions?: WindowActions | undefined
+  /** The pane is in a tab kept out of sight: its chat stays mounted but reads nothing. */
+  paused?: boolean
 }
 
 /**
@@ -93,6 +95,7 @@ export function ChatPane(props: ChatPaneProps) {
             link={availability.link}
             agent={availability.agent}
             online={props.online}
+            paused={props.paused ?? false}
             hasTerminal={props.hasTerminal ?? true}
             root={props.root ?? null}
             onOpenDiff={props.onOpenDiff ?? null}
