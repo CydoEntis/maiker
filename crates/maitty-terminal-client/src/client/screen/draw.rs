@@ -779,6 +779,7 @@ pub(in crate::client) fn draw_toast(app: &mut App, buf: &mut Buffer, area: Rect,
         (_, _, Some(_)) => (t.done, "✓", "Done"),
         // A hint about keys (shortcut mode's dead key) is information, not a success.
         _ if app.notice_hint => (t.sky(), "i", "Hint"),
+        _ if app.notice_warn => (t.warning, "▲", "Warning"),
         _ => (t.accent, "✓", "Notice"),
     };
     let look = Look::of(&app.cfg.ui);

@@ -258,6 +258,8 @@ pub(super) enum Btn {
     ViewChord(KeyCode, KeyModifiers),
     /// A row of the current view's list.
     Row(usize),
+    /// The box of a row of the list: chooses the row and flips whether it is picked.
+    Tick(usize),
 }
 
 pub(super) enum Bg {
@@ -572,6 +574,8 @@ pub struct App {
     notice_restart: bool,
     /// The toast is a hint about keys, not news: it is marked `i`, not ✓.
     notice_hint: bool,
+    /// The notice is a warning (yellow): something the user can fix by choosing again.
+    notice_warn: bool,
     /// The file being sent to another machine, if any (ADR 0007).
     sending: Option<send_file::Sending>,
     /// The toast's second and third rows, when the notice has them.
@@ -899,6 +903,7 @@ impl App {
             updated: None,
             notice_restart: false,
             notice_hint: false,
+            notice_warn: false,
             sending: None,
             notice_card: None,
             copy_flash: None,
@@ -1302,8 +1307,15 @@ impl App {
         self.notice_term = None;
         self.notice_restart = false;
         self.notice_hint = false;
+        self.notice_warn = false;
         self.notice_card = None;
         self.dirty = true;
+    }
+
+    /// A notice in the warning colour: it was not an error, but nothing happened.
+    fn warn(&mut self, msg: String) {
+        self.notify(msg, false);
+        self.notice_warn = true;
     }
 
     /// A toast with a detail row and, optionally, a preview row under its title.

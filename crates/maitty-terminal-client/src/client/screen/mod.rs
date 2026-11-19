@@ -1665,6 +1665,7 @@ pub(super) fn k(app: &App, a: &Action) -> String {
 mod behaviour;
 mod branch_sheet;
 mod card;
+mod changes_panel;
 mod check;
 mod chips;
 mod check_actions;
@@ -1711,6 +1712,7 @@ mod fuzzy;
 mod popover;
 mod popups;
 mod references_sheet;
+mod search;
 mod secret_ask;
 mod session_find;
 #[cfg(test)]

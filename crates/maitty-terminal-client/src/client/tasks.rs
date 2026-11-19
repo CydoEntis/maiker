@@ -34,6 +34,8 @@ pub struct Changed {
     pub added: i64,
     pub removed: i64,
     pub untracked: bool,
+    /// Gone from the working tree: shown with a `D`.
+    pub deleted: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -41,6 +43,9 @@ pub struct Review {
     pub task: TaskRow,
     /// The commit the task branched from.
     pub merge_base: String,
+    /// Commits the branch has that its remote has not (its base's, when it has no remote
+    /// branch yet); None where it is not read, as for a pane on another machine.
+    pub to_push: Option<u32>,
     pub files: Vec<Changed>,
     pub sel: usize,
     pub diff: Vec<String>,
@@ -92,6 +97,7 @@ fn changed_since(dir: &std::path::Path, from: &str) -> Result<Vec<Changed>, Stri
             Some(Changed {
                 added,
                 removed,
+                deleted: false,
                 path: it.next()?.to_string(),
                 untracked: false,
             })
@@ -109,7 +115,11 @@ fn changed_since(dir: &std::path::Path, from: &str) -> Result<Vec<Changed>, Stri
             added,
             removed: 0,
             untracked: true,
+            deleted: false,
         });
+    }
+    for f in files.iter_mut().filter(|f| !f.untracked) {
+        f.deleted = !dir.join(&f.path).exists();
     }
     Ok(files)
 }
@@ -123,16 +133,24 @@ pub fn uncommitted_lines(dir: &std::path::Path) -> Result<(i64, i64), String> {
         .fold((0, 0), |(a, r), f| (a + f.added, r + f.removed)))
 }
 
+/// Commits `dir`'s branch has that its upstream has not; before it has an upstream, the ones
+/// past `base`.
+fn commits_to_push(dir: &std::path::Path, base: &str) -> Option<u32> {
+    let count = |range: &str| git(dir, &["rev-list", "--count", range]).ok()?.trim().parse().ok();
+    count("@{upstream}..HEAD").or_else(|| count(&format!("{base}..HEAD")))
+}
+
 /// Everything the task changed since it branched: commits plus uncommitted and new files.
 pub fn load_review(task: TaskRow) -> Result<Review, String> {
     let dir = &task.dir;
-    let merge_base = git(dir, &["merge-base", "HEAD", &task.base])?
-        .trim()
-        .to_string();
+    // What is not committed yet: committing a file takes it out of the review.
+    let merge_base = "HEAD".to_string();
     let files = changed_since(dir, &merge_base)?;
+    let to_push = commits_to_push(dir, &task.base);
     let mut r = Review {
         task,
         merge_base,
+        to_push,
         files,
         sel: 0,
         diff: Vec::new(),
@@ -198,7 +216,7 @@ pub fn commit_with(t: &TaskRow, paths: Option<&[String]>, message: &str) -> Resu
         }
         git(&t.dir, &["add", "-A"])?;
         git(&t.dir, &["commit", "-m", message])?;
-        return Ok(format!("committed every change on {}", t.branch));
+        return Ok(format!("Committed every change on {}", t.branch));
     };
     // A path git would read as an option, or one leading out of the checkout, is refused.
     if paths
@@ -215,7 +233,7 @@ pub fn commit_with(t: &TaskRow, paths: Option<&[String]>, message: &str) -> Resu
     git(&t.dir, &commit)?;
     let n = paths.len();
     Ok(format!(
-        "committed {n} file{} on {}",
+        "Committed {n} file{} on {}",
         if n == 1 { "" } else { "s" },
         t.branch
     ))
@@ -258,10 +276,16 @@ pub fn pull_request(t: &TaskRow) -> Result<String, String> {
             .unwrap_or("gh pr create failed")
             .to_string());
     }
-    Ok(format!(
-        "opened {}",
-        text.lines().last().unwrap_or("the pull request")
-    ))
+    Ok(pull_request_notice(text.lines().last().unwrap_or(""), t))
+}
+
+/// "Opened PR #301 · branch → main" from the address `gh` printed.
+pub fn pull_request_notice(url: &str, t: &TaskRow) -> String {
+    let number = url.trim().rsplit('/').next().filter(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()));
+    match number {
+        Some(n) => format!("Opened PR #{n} · {} → {}", t.branch, t.base),
+        None => format!("Opened a pull request · {} → {}", t.branch, t.base),
+    }
 }
 
 /// What the Branch view's keys do with the remote.
@@ -418,13 +442,13 @@ mod tests {
         };
         let ticked = ["a.txt".to_string(), "new.txt".to_string()];
         assert_eq!(super::commit_with(&task, Some(&ticked), "  "), Err("a commit needs a message".into()));
-        assert_eq!(super::commit_with(&task, Some(&ticked), "Tick two"), Ok("committed 2 files on main".into()));
+        assert_eq!(super::commit_with(&task, Some(&ticked), "Tick two"), Ok("Committed 2 files on main".into()));
         assert_eq!(git(&["log", "-1", "--format=%s"]).trim(), "Tick two");
         let shown = git(&["show", "--name-only", "--format=", "HEAD"]);
         assert_eq!(shown.split_whitespace().collect::<Vec<_>>(), ["a.txt", "new.txt"]);
         assert!(git(&["status", "--porcelain"]).contains("M  b.txt"), "b.txt still staged, not committed");
         assert!(super::commit_with(&task, Some(&["../x".to_string()]), "m").is_err());
-        assert_eq!(super::commit_with(&task, None, "The rest"), Ok("committed every change on main".into()));
+        assert_eq!(super::commit_with(&task, None, "The rest"), Ok("Committed every change on main".into()));
         assert_eq!(super::commit_with(&task, None, "Again"), Ok("nothing to commit".into()));
         let _ = std::fs::remove_dir_all(&repo);
     }
@@ -474,5 +498,62 @@ mod tests {
         git(&mine, &["checkout", "-q", "--detach"]);
         assert!(super::sync(&mine, super::Sync::Push).is_err_and(|e| e.contains("no branch")));
         let _ = std::fs::remove_dir_all(&root);
+    }
+}
+
+#[cfg(test)]
+mod notice_tests {
+    use super::*;
+
+    fn task(branch: &str, base: &str) -> TaskRow {
+        TaskRow {
+            ws: 0,
+            name: branch.into(),
+            branch: branch.into(),
+            base: base.into(),
+            stage: Stage::Ready,
+            summary: String::new(),
+            dirty: 0,
+            ahead: 0,
+            agent: None,
+            dir: Default::default(),
+            root: Default::default(),
+        }
+    }
+
+    #[test]
+    fn a_file_gone_from_the_checkout_is_marked_deleted_and_how_far_ahead_is_counted() {
+        let repo = std::env::temp_dir().join(format!("{}-deleted-{}", crate::brand::APP_COMMAND, std::process::id()));
+        let _ = std::fs::remove_dir_all(&repo);
+        std::fs::create_dir_all(&repo).unwrap();
+        let git = |args: &[&str]| crate::proc::git(&repo, args).unwrap();
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(repo.join("gone.txt"), "x
+").unwrap();
+        std::fs::write(repo.join("kept.txt"), "x
+").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-qm", "one"]);
+        git(&["checkout", "-qb", "work"]);
+        std::fs::write(repo.join("kept.txt"), "y
+").unwrap();
+        git(&["commit", "-qam", "two"]);
+        std::fs::remove_file(repo.join("gone.txt")).unwrap();
+        std::fs::write(repo.join("new.txt"), "z
+").unwrap();
+        let files = changed_since(&repo, "HEAD").unwrap();
+        let flags: Vec<(&str, bool, bool)> = files.iter().map(|f| (f.path.as_str(), f.deleted, f.untracked)).collect();
+        assert_eq!(flags, [("gone.txt", true, false), ("new.txt", false, true)], "what is committed is no longer a change");
+        assert_eq!(commits_to_push(&repo, "main"), Some(1), "one commit past the branch it started from");
+        let _ = std::fs::remove_dir_all(&repo);
+    }
+
+    #[test]
+    fn a_pull_request_notice_names_its_number_and_where_it_goes() {
+        let t = task("gui-pass", "main");
+        assert_eq!(pull_request_notice("https://github.com/o/r/pull/301\n", &t), "Opened PR #301 · gui-pass → main");
+        assert_eq!(pull_request_notice("created", &t), "Opened a pull request · gui-pass → main");
     }
 }

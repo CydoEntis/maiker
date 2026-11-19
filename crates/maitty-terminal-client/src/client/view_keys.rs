@@ -54,6 +54,11 @@ impl App {
 
     /// Returns false when the view closes.
     pub(super) fn on_changes_key(&mut self, v: &mut views::ChangesView, k: &KeyEvent) -> bool {
+        // The key that opens Changes closes it again, unless it is typing into a box.
+        let writing = v.extra.message.is_some() || v.extra.commenting.is_some();
+        if !writing && k.modifiers == KeyModifiers::CONTROL && k.code == KeyCode::Char('g') {
+            return false;
+        }
         if let Some(stay) = self.changes_more_key(v, k) {
             return stay;
         }
@@ -150,7 +155,7 @@ impl App {
                     self.open_in_editor(&p);
                 }
             }
-            KeyCode::Char('m') if v.linked => {
+            KeyCode::Char('B') if v.linked => {
                 v.confirm = Some((
                     format!(
                         "Merge {} into {}, then close it and remove its worktree and branch?",

@@ -469,7 +469,7 @@ mod screen_tests {
             let o = draw(&mut app, w, h);
             show(&o);
             assert!(
-                o.contains("Collapse sidebar") && o.contains("Hide sidebar") && o.contains("Sidebar"),
+                o.contains("Collapse sidebar") && o.contains("Hide sidebar"),
                 "{w}x{h}\n{o}"
             );
             key(&mut app, KeyCode::Tab);
@@ -530,8 +530,8 @@ mod screen_tests {
         let o = draw(&mut app, 160, 45);
         show(&o);
         assert!(
-            o.contains("COMMANDS") && o.contains("Inbox"),
-            "nothing typed shows the recent commands\n{o}"
+            o.contains("Commands") && o.contains("New chat"),
+            "nothing typed shows the short list of commands\n{o}"
         );
         // Every command the old palette listed can be found by name.
         for a in app.palette_commands() {
@@ -556,7 +556,7 @@ mod screen_tests {
         let o = draw(&mut app, 160, 45);
         show(&o);
         assert!(
-            o.contains("Clean up worktrees") && o.contains("RESULTS"),
+            o.contains("Clean up worktrees") && o.contains("Commands"),
             "{o}"
         );
         app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
@@ -5437,11 +5437,11 @@ second line
         let o = draw(&mut app, 160, 45);
         show(&o);
         assert!(
-            o.contains("Search commands")
-                && o.contains("COMMANDS")
-                && o.contains("Inbox")
+            o.contains("Search chats and commands")
+                && o.contains("Commands")
+                && o.contains("New chat")
                 && !o.contains("workspace ·"),
-            "commands only, with the latest first"
+            "chats, then the short list of commands"
         );
         for c in "split".chars() {
             app.on_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
@@ -5449,12 +5449,11 @@ second line
         let o = draw(&mut app, 160, 45);
         show(&o);
         assert!(
-            o.contains("RESULTS")
+            o.contains("Commands")
                 && o.contains("Split right")
                 && o.contains("Split down")
-                && o.contains("Panes")
                 && !o.contains("Settings"),
-            "typing narrows it, each with its group"
+            "typing narrows it"
         );
         app.mode = Mode::KeyMap(Box::new(screen::KeyMap::new(screen::KeyView::Map, None)));
         let o = draw(&mut app, 160, 45);
@@ -6746,12 +6745,12 @@ second line
         (
             "changes",
             true,
-            "CHANGES  · ↑↓ file · c commit · t tick · l diff · x reviewed · shortcut mode waits · Esc close",
+            "CHANGES  · ↑↓ file · space pick · m message · ctrl+enter commit · p PR · shortcut mode waits · Esc close",
         ),
         (
             "changes",
             false,
-            "CHANGES  · ↑↓ file · c commit · t tick · l diff · x reviewed · Esc close",
+            "CHANGES  · ↑↓ file · space pick · m message · ctrl+enter commit · p PR · Esc close",
         ),
         (
             "branch",
@@ -12401,22 +12400,22 @@ mod side_panel_width_tests {
     #[test]
     fn brackets_narrow_and_widen_the_sheet_and_equals_puts_its_default_back() {
         let mut app = inbox_open(200, 50);
-        assert_eq!(app.screen.sheet_rect.width, 54, "Changes starts 54 wide");
+        assert_eq!(app.screen.sheet_rect.width, 52, "Changes starts 52 wide");
         key(&mut app, '[');
         draw(&mut app, 200, 50);
-        assert_eq!(app.screen.sheet_rect.width, 50, "[ narrows it 4");
+        assert_eq!(app.screen.sheet_rect.width, 48, "[ narrows it 4");
         key(&mut app, ']');
         key(&mut app, ']');
         draw(&mut app, 200, 50);
-        assert_eq!(app.screen.sheet_rect.width, 58, "] widens it 4 each");
+        assert_eq!(app.screen.sheet_rect.width, 56, "] widens it 4 each");
         assert_eq!(
-            app.screen.saved.sheet_w.get("drawer"),
-            Some(&58),
+            app.screen.saved.sheet_w.get("changes"),
+            Some(&56),
             "kept in the saved UI state"
         );
         key(&mut app, '=');
         draw(&mut app, 200, 50);
-        assert_eq!(app.screen.sheet_rect.width, 54, "= puts the default back");
+        assert_eq!(app.screen.sheet_rect.width, 52, "= puts the default back");
     }
 
     #[test]
@@ -12479,7 +12478,7 @@ mod side_panel_width_tests {
         // Mid-slide, or left from another view: the drawn rectangle says nothing about the width.
         app.screen.sheet_rect.width = 22;
         key(&mut app, '[');
-        assert_eq!(app.screen.saved.sheet_w.get("drawer"), Some(&50));
+        assert_eq!(app.screen.saved.sheet_w.get("changes"), Some(&48));
     }
 
     #[test]
@@ -15002,38 +15001,36 @@ mod drawer_tab_tests {
     }
 
     #[test]
-    fn c_in_changes_asks_for_the_message_and_enter_commits_with_it() {
+    fn ctrl_enter_in_changes_commits_the_picked_files_with_the_message_shown() {
         let (mut app, dir, mut rx) = changes_with_a_new_file("commit");
-        key(&mut app, KeyCode::Char('c'), KeyModifiers::NONE);
-        let written = match &app.view {
-            Some(View::Changes(v)) => v.extra.message.clone().unwrap_or_default(),
+        let shown = text(&draw(&mut app));
+        let suggested = match &app.view {
+            Some(View::Changes(v)) => v.message_text(),
             _ => String::new(),
         };
-        assert!(!written.is_empty(), "c opens the message, written for you");
-        let shown = text(&draw(&mut app));
+        assert!(!suggested.is_empty(), "the message is written for you");
         assert!(
-            shown.contains("Commit all 1 file on ") && shown.contains(&written),
+            shown.contains("Commit 1 of 1") && shown.contains(&suggested),
             "the message and what it commits are on screen: {shown}"
         );
-        assert!(
-            rx.try_recv().is_err() && commits(&dir) == 1,
-            "nothing is committed yet"
-        );
+        key(&mut app, KeyCode::Char('m'), KeyModifiers::NONE);
         key(&mut app, KeyCode::Char('!'), KeyModifiers::NONE);
-        key(&mut app, KeyCode::Enter, KeyModifiers::NONE);
+        assert!(rx.try_recv().is_err() && commits(&dir) == 1, "nothing is committed yet");
+        key(&mut app, KeyCode::Enter, KeyModifiers::CONTROL);
         let b = next_bg(&mut rx);
         app.on_bg(b);
-        assert_eq!(commits(&dir), 2, "Enter commits");
+        assert_eq!(commits(&dir), 2, "Ctrl+Enter commits");
         let subject = crate::proc::git(&dir, &["log", "-1", "--format=%s"]).unwrap();
-        assert_eq!(subject.trim(), format!("{written}!"), "with the message as written");
+        assert_eq!(subject.trim(), format!("{suggested}!"), "with the message as written");
+        assert_eq!(app.notice.as_ref().map(|(m, ..)| m.starts_with("Committed 1 file on ")), Some(true));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn tab_answers_no_to_a_changes_question_instead_of_switching() {
         let (mut app, dir, mut rx) = changes_with_a_new_file("ask-tab");
-        // Writing the message, Tab is not a drawer key; Esc drops the message.
-        key(&mut app, KeyCode::Char('c'), KeyModifiers::NONE);
+        // Writing the message, Tab is not a drawer key; Esc stops editing.
+        key(&mut app, KeyCode::Char('m'), KeyModifiers::NONE);
         key(&mut app, KeyCode::Tab, KeyModifiers::NONE);
         assert!(
             matches!(&app.view, Some(View::Changes(v)) if v.extra.message.is_some()),

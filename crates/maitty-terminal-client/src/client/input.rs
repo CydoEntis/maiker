@@ -3,6 +3,8 @@
 use super::*;
 
 /// One line this long, arriving in a single burst, was pasted: nobody types it that fast.
+/// Lines a wheel notch moves the Changes diff.
+const WHEEL_ROWS: u16 = 3;
 const PASTE_MIN_CHARS: usize = 16;
 
 /// What shortcut mode says when a key does nothing, and how often at most.
@@ -1119,6 +1121,14 @@ impl App {
                     ));
                     return;
                 }
+                if self.screen.sheet_rect.contains(pos)
+                    && let Some(View::Changes(v)) = &mut self.view
+                    && let Some(r) = v.review.as_mut()
+                {
+                    r.scroll = if up { r.scroll.saturating_sub(WHEEL_ROWS) } else { r.scroll.saturating_add(WHEEL_ROWS) };
+                    self.dirty = true;
+                    return;
+                }
                 if self.screen.preview_rect.contains(pos)
                     && let Some(View::Files(v)) = &mut self.view
                 {
@@ -1413,6 +1423,10 @@ impl App {
                     self.on_view_key(&KeyEvent::new(code, KeyModifiers::NONE));
                 }
                 Btn::ViewChord(code, mods) => self.on_view_key(&KeyEvent::new(code, mods)),
+                Btn::Tick(i) => {
+                    self.on_button(Hit::Button(Btn::Row(i)), false);
+                    self.on_view_key(&KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+                }
                 Btn::Row(i) => match &mut self.view {
                     Some(View::Changes(v)) => {
                         let rows = v.rows();

@@ -576,9 +576,11 @@ fn view_holder(app: &App) -> Option<Holder> {
             ("Esc", "close"),
         ),
         View::Changes(v) if v.confirm.is_some() => holder("CHANGES", &[("y", "yes")], ("n", "no")),
-        View::Changes(v) if v.extra.message.is_some() => {
-            holder("COMMIT MESSAGE", &[("Enter", "commit")], ("Esc", "cancel"))
-        }
+        View::Changes(v) if v.extra.message.is_some() => holder(
+            "COMMIT MESSAGE",
+            &[("ctrl+enter", "commit"), ("Enter", "new line")],
+            ("Esc", "stop editing"),
+        ),
         View::Changes(v) if v.extra.commenting.is_some() => {
             holder("COMMENT", &[("Enter", "keep it")], ("Esc", "cancel"))
         }
@@ -591,10 +593,10 @@ fn view_holder(app: &App) -> Option<Holder> {
             "CHANGES",
             &[
                 ("↑↓", "file"),
-                ("c", "commit"),
-                ("t", "tick"),
-                ("l", "diff"),
-                ("x", "reviewed"),
+                ("space", "pick"),
+                ("m", "message"),
+                ("ctrl+enter", "commit"),
+                ("p", "PR"),
             ],
             ("Esc", "close"),
         ),

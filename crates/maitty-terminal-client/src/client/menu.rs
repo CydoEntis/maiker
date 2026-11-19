@@ -327,7 +327,7 @@ fn sidebar_hint(act: &Act) -> Option<&'static str> {
 const CLOSED_CHAT: &str = "Closed the chat. Its branch and history are kept.";
 
 /// The context use from which a chat's menu offers to compact it.
-const COMPACT_OFFERED_AT: f32 = 80.0;
+pub(in crate::client) const COMPACT_OFFERED_AT: f32 = 80.0;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScreenMenu {

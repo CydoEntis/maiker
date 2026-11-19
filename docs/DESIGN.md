@@ -124,15 +124,20 @@ UI › *the frame* and *pane focus*.
 
 ## Side panel
 
-Reading while you work happens in a panel that slides in from the pane's right edge, over
+Files, Branch and References are panels that slide in from the pane's right edge, over
 its box, the pane's top line, its chips and its own ` ✕ ` included, so the panel's ` ✕ ` is the only close
 at that corner (about 220 ms, eased out): the panel ground, a line down its left edge, its title chip
 (` files `, ` changes N `, ` branch `, ` references `, lit while it has the keys) and a ` ✕ ` that
 closes it (Esc too). Files starts 96 columns wide and at most 80% of the panes, a tree beside the
-open file (Markdown drawn); Changes 54 and at most 70%, the changed files and their diff; Branch the
+open file (Markdown drawn); Branch the
 branch, ahead/behind, recent commits, the last check and snapshots; References the project's
-screenshots and design files. The panes keep their size under it. The panels draw no key-hint row
-of their own; the status bar shows their keys. The check evidence sheet docks beside the panes
+screenshots and design files. The panes keep their size under them. The panels draw no key-hint row
+of their own; the status bar shows their keys. Changes is the exception: it docks beside the pane, 52 columns on the sidebar's ground with a line down
+its left edge, and replaces the pane under 140 columns. Top to bottom it holds the branch line, the
+files with their boxes and A/M/D letters, the diff (additions on a 9% green tint, removals on a 9% red
+one), the commit message in a bordered box and the `ctrl+enter` and `p` actions. Search is a box
+near the top with `⌕` and the typing, a Chats group and a Commands group, the lit row on the selected
+fill. The check evidence sheet docks beside the panes
 (and over the sidebar below 100 columns). The Inbox is a panel 62 columns wide over the
 workspace from the sidebar's side, with a card for each session that needs you, finished or exited. See UI › *the frame* (Sheet), *Inbox check
 groups* and *check evidence sheet*.

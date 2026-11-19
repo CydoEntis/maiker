@@ -809,6 +809,16 @@ impl App {
         true
     }
 
+    /// `ctrl+g` beside the panes: Changes opens for the chat on the cursor, or closes if it is open.
+    fn toggle_changes(&mut self) {
+        if matches!(self.view, Some(crate::client::View::Changes(_))) {
+            self.view = None;
+            self.view_set_aside = None;
+        } else {
+            self.act(Action::Changes);
+        }
+    }
+
     /// Two columns wider or narrower, within the sidebar's limits.
     fn resize_sidebar(&mut self, grow: bool) {
         let w = self
@@ -852,6 +862,10 @@ impl App {
                 since: Instant::now(),
                 acted: false,
             };
+            return;
+        }
+        if k.modifiers == KeyModifiers::CONTROL && k.code == KeyCode::Char('g') {
+            self.toggle_changes();
             return;
         }
         // A key that needs no leader acts here as it does over a pane, on the sidebar's row
