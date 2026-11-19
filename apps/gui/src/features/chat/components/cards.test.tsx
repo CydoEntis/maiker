@@ -87,17 +87,15 @@ describe('command step', () => {
     expect(group).toHaveTextContent('one two three four five six seven eight')
   })
 
-  it('on its own is a block with the command and how it ended in its head, and a Copy button once open', async () => {
+  it('on its own is a block that starts open with the command, how it ended and its output, and a Copy button', async () => {
     render(<CommandStep event={finished({ exitCode: 2, status: 'failed' })} alone />)
 
     const group = screen.getByRole('group', { name: 'Command pnpm test' })
     expect(within(group).getByText(/^exit 2/)).toBeInTheDocument()
-    expect(within(group).queryByRole('button', { name: 'Copy command' })).toBeNull()
-    expect(group).not.toHaveTextContent('three four five')
-    await userEvent.click(within(group).getByRole('button', { expanded: false }))
     expect(within(group).getByRole('button', { name: 'Copy command' })).toBeInTheDocument()
     expect(group).toHaveTextContent('three four five')
     await userEvent.click(within(group).getByRole('button', { expanded: true }))
+    expect(within(group).queryByRole('button', { name: 'Copy command' })).toBeNull()
     expect(group).not.toHaveTextContent('five')
   })
 
@@ -187,10 +185,9 @@ describe('edit step', () => {
 })
 
 describe('edit step on its own', () => {
-  it('is a card with the file in its head, its diff with line numbers, and the side panel a button', async () => {
+  it('is a card that starts open with the file in its head, its diff with line numbers, and the side panel a button', async () => {
     const onOpen = vi.fn()
     render(<EditStep event={editEvent('e', { file: '/repo/src/a.ts' })} root="/repo" onOpen={onOpen} alone />)
-    await openStep()
 
     const group = screen.getByRole('group', { name: 'Edit src/a.ts' })
     expect(group.querySelectorAll('.mx-diff-line.is-add .mx-diff-num')[1]?.textContent).toBe('1')
@@ -199,9 +196,8 @@ describe('edit step on its own', () => {
     expect(onOpen).toHaveBeenCalledWith('/repo/src/a.ts')
   })
 
-  it('says it is still writing instead of showing a diff while it runs', async () => {
+  it('says it is still writing instead of showing a diff while it runs', () => {
     render(<EditStep event={editEvent('e', { status: 'running' })} root={null} onOpen={null} alone />)
-    await openStep()
 
     expect(screen.getByText('Still writing…')).toBeInTheDocument()
   })

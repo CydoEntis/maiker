@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { ACTIVE_POLL_MS, forgetChatFeeds, IDLE_POLL_MS, RETRY_READ_MS } from '../useChatFeed'
@@ -233,9 +233,7 @@ describe('the chat history', () => {
     daemon.upsert({ source: { conversation: FAKE_CONVERSATION, turn: 't1', item: 'e' }, content: { Tool: { kind: 'commandExecution', label: 'Edit ', output: '' } }, state: 'Completed' })
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
-    // Steps start folded: open it as the person would.
-    fireEvent.click(within(screen.getByRole('group', { name: /^Edit/ })).getByRole('button', { expanded: false }))
-
+    // An edit on its own starts open.
     expect(screen.getByText(/didn.t keep this diff/)).toBeInTheDocument()
   })
 })
