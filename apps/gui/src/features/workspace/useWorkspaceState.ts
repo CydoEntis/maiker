@@ -91,7 +91,7 @@ export function useWorkspaceState() {
   const [welcomeOpen, setWelcomeOpen] = useState(isFirstRun)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [preferences, setPreferences] = useState(readSettingsPreferences)
-  const paneViews = usePaneViews()
+  const paneViews = usePaneViews(preferences.openSessionsIn)
   const [saved] = useState(readLayout)
   const [layout, setLayout] = useState<Layout>(() => (preferences.restoreLayout ? saved.layout : EMPTY_LAYOUT))
   // A tab layout from an older version was dropped: say so once.
