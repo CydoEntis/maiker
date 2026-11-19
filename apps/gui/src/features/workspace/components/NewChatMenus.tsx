@@ -37,17 +37,27 @@ type Props = {
   hint?: string
   /** The trigger's own class, for the token's look. */
   triggerClass?: string
+  /** Why what is typed cannot be used (a branch name git refuses); shown under the search box in place of a row made from it. */
+  queryError?: (query: string) => string | null
+  /** A control at the end of the search box (the branch list's fetch button). */
+  searchEnd?: ReactNode
+  /** Given, the list is opened and closed from outside (a failure's button that opens it). */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }
 
 /** One fact of the context row over the message box, as a small chip that opens a searchable list above it. */
-export function ChipMenu({ label, summary, title, icon, search, sections, footer, extra, below, fromQuery, width = 340, side = 'top', variant = 'chip', heading, hint, triggerClass }: Props) {
-  const [open, setOpen] = useState(false)
+export function ChipMenu({ label, summary, title, icon, search, sections, footer, extra, below, fromQuery, width = 340, side = 'top', variant = 'chip', heading, hint, triggerClass, queryError, searchEnd, open: openFromOutside, onOpenChange }: Props) {
+  const [openInside, setOpenInside] = useState(false)
+  const open = openFromOutside ?? openInside
+  const setOpen = (next: boolean) => { setOpenInside(next); onOpenChange?.(next) }
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const kept = sections
     .map((section) => ({ ...section, items: section.items.filter((item) => needle === '' || `${item.label} ${item.sub ?? ''}`.toLowerCase().includes(needle)) }))
     .filter((section) => section.items.length > 0)
   const made = needle === '' ? null : fromQuery?.(query.trim()) ?? null
+  const refused = needle === '' ? null : queryError?.(query) ?? null
   const total = sections.reduce((sum, section) => sum + section.items.length, 0)
   const pick = (item: ChipItem) => { setOpen(false); setQuery(''); item.onPick() }
   return (
@@ -64,8 +74,10 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
             <input autoFocus aria-label={search} placeholder={search} value={query} onChange={(event) => { setQuery(event.target.value) }}
               onKeyDown={(event) => { if (event.key === 'Enter' && made) { event.preventDefault(); pick(made) } }} />
             <span className="mx-chip-count">{total}</span>
+            {searchEnd}
           </label>
         )}
+        {refused !== null && <p role="alert" className="mx-chip-refused"><b aria-hidden="true">×</b><span>{refused}</span></p>}
         {extra}
         <ChoiceList className="mx-chip-list" aria-label={title} current={kept.flatMap((section) => section.items).find((item) => item.checked)?.key ?? null}>
           {made && <ChipRow item={made} onPick={pick} />}
@@ -75,7 +87,7 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
               {section.items.map((item) => <ChipRow key={item.key} item={item} onPick={pick} />)}
             </div>
           ))}
-          {kept.length === 0 && !made && <p className="mx-chip-none">{variant === 'token' ? 'Nothing matches.' : 'Nothing matches'}</p>}
+          {kept.length === 0 && !made && refused === null && <p className="mx-chip-none">{variant === 'token' ? 'Nothing matches.' : 'Nothing matches'}</p>}
         </ChoiceList>
         {below}
         {footer !== undefined && <div className="mx-chip-footer">{footer}</div>}

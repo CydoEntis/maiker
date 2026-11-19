@@ -1251,6 +1251,26 @@ export async function folderBranches(folder: string): Promise<FolderBranches | n
   return invokeParsed('git_branches', FolderBranchesSchema, { folder })
 }
 
+const SyncStateSchema = z.object({
+  branch: z.string().nullable(),
+  upstream: z.string().nullable(),
+  behind: z.number().int().nonnegative(),
+  ahead: z.number().int().nonnegative(),
+  dirty: z.boolean(),
+  fetched: z.boolean(),
+}).nullable()
+export type FolderSync = NonNullable<z.infer<typeof SyncStateSchema>>
+
+/** How a folder's checkout stands against its upstream, after asking the remote when `fetch` is set; null when it is not in a repository. */
+export async function folderSyncState(folder: string, fetch: boolean): Promise<FolderSync | null> {
+  return invokeParsed('git_sync_state', SyncStateSchema, { folder, fetch })
+}
+
+/** Fast-forwards a folder's checkout to its upstream (`pull --ff-only`); it refuses over uncommitted changes. */
+export async function pullFolder(folder: string): Promise<void> {
+  await invokeParsed('git_pull', NullSchema, { folder })
+}
+
 const SavedConversationSchema = z.object({ id: z.string(), first_message: z.string(), last_active: z.number().int().nonnegative() })
 export type SavedConversation = z.infer<typeof SavedConversationSchema>
 const SavedConversationsSchema = z.union([z.null(), z.literal('NotSupported'), z.object({ Listed: z.array(SavedConversationSchema) })])

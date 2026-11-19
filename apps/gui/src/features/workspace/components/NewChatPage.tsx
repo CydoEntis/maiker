@@ -12,18 +12,19 @@ import { DraftAttachments } from '@/features/chat/components/Attachments'
 import { useKeepTyping } from '@/features/chat/useKeepTyping'
 import { WorkingMark } from '@/features/chat/components/WorkingMark'
 import { Switch } from '@/components/ui/switch'
-import { explainError, type ExplainedError } from '@/lib/error-message'
+import { explainError, explainStartFailure, PICK_ANOTHER_BRANCH, type ExplainedError } from '@/lib/error-message'
 import { DEFAULT_PICK, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { BYPASS_MODE, CODEX_FULL_MODE, DANGER_MODES, modeLabel, START_MODE } from '@/features/chat/chatMeta'
 import { AgentPicker } from '@/features/chat/components/AgentPicker'
 import { MAX_SHOWN, SlashPicker } from '@/features/chat/components/SlashPicker'
 import { commandText, matchCommands, slashQuery, useSlashCommands, type SlashCommand } from '@/features/chat/slashCommands'
-import { openAgentDocs } from '@/api/daemon'
+import { openAgentDocs, pullFolder } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { chatAgentOf, openViewFor, type ChatAgent, type PaneView } from '../model/chatView'
 import { abilitiesOf } from '../model/agentAbilities'
-import { useFolderBranches, useInstalledAgents } from '../model/newChatHost'
+import { useFolderBranches, useFolderSync, useInstalledAgents } from '../model/newChatHost'
+import { branchNameError, BRANCH_NAME } from '../model/branchName'
 import type { BusyBranches, NewSessionProject } from '../model/newSession'
 import { suggestBranchName } from '../model/worktreeName'
 import { carriesCredentials, cloneTargetOf, explainCloneFailure, parseRepoAddress, type CloneProblem, type RepoAddress } from '../model/repoAddress'
@@ -112,8 +113,6 @@ const lastPart = (path: string): string => path.split(/[\\/]/).filter(Boolean).a
 const isPath = (text: string): boolean => /^(~|\/|[A-Za-z]:[\\/])/.test(text)
 /** The keys that start a session in the background, as this platform writes them. */
 const BACKGROUND_KEY = isMacPlatform(navigator.userAgent) ? '⌘ ⇧ ↵' : 'Ctrl Shift ↵'
-/** A name git takes for a new branch. */
-const BRANCH_NAME = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
 /** The width of a token's list, as the design draws it. */
 const TOKEN_LIST_WIDTH = 320
 const NO_BUSY: BusyBranches = new Map()
@@ -214,6 +213,13 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const folderName = current?.name ?? (folder === '' ? 'Choose a project' : lastPart(folder))
   const installed = useInstalledAgents()
   const [branches, reloadBranches, branchesRead] = useFolderBranches(remote ? '' : folder)
+  const { sync, read: syncRead, fetch: fetchState, fetchAgain, reload: reloadSync } = useFolderSync(remote ? '' : folder)
+  // Only the folder that was read is known to be no repository; the others are not read until they are picked.
+  const notRepo = !remote && folder !== '' && syncRead && sync === null
+  // Updating the checkout from origin (Update first), for the folder it was asked on.
+  const [pull, setPull] = useState<{ folder: string; state: 'running' | 'done' } | null>(null)
+  // The branch list is opened from outside by the failure that asks for another branch.
+  const [branchOpen, setBranchOpen] = useState(false)
   // A branch chosen for one folder means nothing in another.
   const explicit = branchPick?.folder === folder ? branchPick.pick : null
   const here = branches?.current ?? null
@@ -280,8 +286,14 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     onStart(request)
       // Another machine's branches are not read again, so the name it took is kept here and the next start gets another.
       .then(() => { const made = request.branch; if (remote && made !== null) setTakenNames((now) => new Set([...now, made.name])) })
-      .catch((failure: unknown) => { parkDraft(task); setError(explainError(failure, 'Could not start the session')) })
-      .finally(() => { setStarting(false); setSent(null); reloadBranches() })
+      .catch((failure: unknown) => {
+        parkDraft(task)
+        const explained = explainStartFailure(failure, 'Could not start the session', request.branch)
+        // A branch whose worktree folder is in the way is not offered again as the next suggestion.
+        if (explained.fix !== undefined && request.branch !== null) { const taken = request.branch.name; setTakenNames((now) => new Set([...now, taken])) }
+        setError(explained)
+      })
+      .finally(() => { setStarting(false); setSent(null); reloadBranches(); reloadSync() })
   }
   // The box is emptied for the next session and every other choice stays. A new branch's name is taken, so the next start
   // gets another. Another machine's session is typed into a shell there and opened to do it, so there it is a plain start.
@@ -418,7 +430,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const folderItem = (project: NewSessionProject): ChipItem => ({
     key: project.folder,
     label: project.name,
-    sub: project.folder,
+    sub: project.folder === folder && notRepo ? `${project.folder} \u00b7 not a git repo` : project.folder,
     icon: dot(project.color),
     checked: project.folder === folder,
     onPick: () => { setPicked({ machine, folder: project.folder }) },
@@ -441,17 +453,24 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   }
   const branchRows: ChipItem[] = (branches?.branches ?? []).map((entry) => {
     const who = busyHere?.get(entry.name) ?? null
+    const behind = sync?.branch === entry.name ? sync.behind : 0
     return {
       key: `branch:${entry.name}`,
       label: entry.name,
       mono: true,
-      right: who === null ? undefined : <span className="mx-nc-in-use" title={`${who} is working on it`}>in use</span>,
+      ...(who === null ? {} : { sub: `Open in \u201c${who}\u201d` }),
+      right: who === null && behind === 0 ? undefined : (
+        <>
+          {who !== null && <span className="mx-nc-in-use" title={`${who} is working on it`}>in use</span>}
+          {behind > 0 && <span className="mx-nc-behind" title="Commits on origin this branch does not have yet">{`${String(behind)} behind`}</span>}
+        </>
+      ),
       checked: (explicit?.name ?? here) === entry.name && explicit?.create !== true,
       onPick: () => { setBranchPick({ folder, pick: { name: entry.name, create: false, worktree: treeMode } }) },
     }
   })
   const fromBranchName = (typed: string): ChipItem | null => {
-    if (!BRANCH_NAME.test(typed) || (branches?.branches ?? []).some((entry) => entry.name === typed)) return null
+    if (!BRANCH_NAME.test(typed) || branchNameError(typed) !== null || (branches?.branches ?? []).some((entry) => entry.name === typed)) return null
     return { key: 'new-branch', label: `+ Create ${typed} from ${here ?? 'here'}`, checked: false, onPick: () => { setBranchPick({ folder, pick: { name: typed, create: true, worktree: treeMode } }) } }
   }
   const branchLabel = branch?.create === true ? branch.name : onBranch ?? 'detached'
@@ -459,11 +478,30 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     ? `${busyWith} is already working on ${onBranch} here, so this session gets its own worktree. Your checkout stays untouched.`
     : null
   const treeLine = busyLine ?? (treeMode && branch !== null ? `A copy of the repository on its own branch, ${branch.name}. Your checkout stays untouched.` : null)
-  const TREE_WHAT = 'Work in a separate copy of the repository on its own branch, so your checkout stays untouched.'
-  const worktreeTip = canTree
-    ? `${TREE_WHAT} ${busyLine !== null ? 'Another session is on this branch, so a separate worktree is safer.' : workIn === 'auto' && !remote ? 'Auto makes one only when another session is on this branch.' : ''}`.trim()
-    : folder === '' ? 'Pick a project first.' : branchesRead ? `${folderName} is not a git repository, so a worktree cannot be made. Pick a project folder that is, or clone one.` : 'Reading the folder…'
-  const treeState = workIn === 'tree' ? 'On' : workIn === 'folder' ? 'Off' : treeMode ? 'Auto: on' : 'Auto'
+  const modeLabel = treeMode ? 'New worktree' : 'This folder'
+  const modeRows: ChipItem[] = [
+    { key: 'mode:folder', label: 'This folder', sub: onBranch === null ? 'Edits your checkout directly.' : `Edits your checkout of ${onBranch} directly.`, checked: !treeMode, onPick: () => { setWorkIn('folder') } },
+    { key: 'mode:tree', label: 'New worktree', sub: 'Its own copy on a new branch. Your checkout stays untouched.', checked: treeMode, onPick: () => { setWorkIn('tree') } },
+  ]
+  // Why the mode list is out of reach, said in the chip's tooltip.
+  const modeTip = folder === '' ? 'Pick a project first.' : branchesRead ? `${folderName} is not a git repository, so a worktree cannot be made. Pick a project folder that is, or clone one.` : 'Reading the folder\u2026'
+  // The checkout is judged only when the session would edit it, on the branch it is on: another branch is switched to, a new one is made from here.
+  const editsCheckout = !remote && !treeMode && sync?.branch != null && sync.branch === onBranch && explicit?.create !== true
+  const behindOrigin = editsCheckout ? sync.behind : 0
+  const pulled = pull?.folder === folder ? pull.state : null
+  const syncNote: SyncNote | null = !editsCheckout ? null
+    : pulled === 'running' ? { kind: 'running', branch: sync.branch ?? '' }
+    : pulled === 'done' && behindOrigin === 0 ? { kind: 'done', branch: sync.branch ?? '' }
+    : behindOrigin > 0 ? { kind: sync.dirty ? 'dirty' : 'behind', branch: sync.branch ?? '', behind: behindOrigin }
+    : null
+  const updateFirst = () => {
+    const name = sync?.branch ?? 'the branch'
+    setPull({ folder, state: 'running' })
+    setError(null)
+    void pullFolder(folder)
+      .then(() => { setPull({ folder, state: 'done' }); reloadSync(); reloadBranches() })
+      .catch((failure: unknown) => { setPull(null); setError(explainError(failure, `Could not update ${name}`)) })
+  }
   // A chip with no branch list, said in words: the folder is not a repository, is still being read, or is on another machine.
   const branchNote = remote
     ? { label: 'not read here', tip: `${targetLabel}'s branches are not read from here, so the session starts on what is checked out there. Turn on Own worktree to start on a new branch instead.` }
@@ -483,27 +521,40 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
         icon={dot(current?.color ?? 'var(--dim)')} label={<span className="mx-nsd-token-text">{folderName}</span>}
         search={cloner === null ? 'Find a project or folder' : 'Find a project, or paste a GitHub link'} sections={[{ heading: 'Recent', items: shown.map(folderItem) }]} fromQuery={fromTyped}
         footer={(
+          <>
           <div className="mx-nc-menu-foot">
             {pickFolder !== null && <button type="button" className="mx-chip-action" onClick={openPicker}><span className="mx-nsd-foot-mark" aria-hidden="true"><Icon name="folder" size={12} /></span>Open folder…</button>}
             {cloner !== null && <button type="button" className="mx-chip-action" onClick={() => { openCloneWindow({ start: 'link' }) }}><span className="mx-nsd-foot-mark" aria-hidden="true"><Icon name="repo" size={12} /></span>Clone from link…</button>}
             {cloner !== null && <button type="button" className="mx-chip-action" onClick={() => { openCloneWindow({ start: 'repos' }) }}><span className="mx-nsd-foot-mark" aria-hidden="true"><Icon name="repo" size={12} /></span>My GitHub repos…</button>}
           </div>
+          <p className="mx-nsd-foot-hint">Type a path starting with ~ or / to open any folder.</p>
+          </>
         )} />
       <span className="mx-nsd-word">from</span>
       {branches !== null && !remote ? (
         <ChipMenu variant="token" triggerClass="mx-nsd-token is-branch" side="bottom" width={TOKEN_LIST_WIDTH} title="Branch" hint={`in ${folderName}`} summary={branchLabel}
           icon={<Icon name="branch" size={12} />} label={<span className="mx-nsd-token-text is-mono">{branchLabel}</span>}
-          search="Find or name a new branch" sections={[{ heading: 'Branches', items: branchRows }]} fromQuery={fromBranchName} />
+          search="Find or name a new branch" sections={[{ heading: 'Branches', items: branchRows }]} fromQuery={fromBranchName} queryError={branchNameError}
+          open={branchOpen} onOpenChange={setBranchOpen}
+          searchEnd={(
+            <button type="button" className="mx-chip-fetch" title="git fetch origin" disabled={fetchState === 'running'} onClick={fetchAgain}>
+              {fetchState === 'running' ? 'Fetching\u2026' : fetchState === 'done' ? 'Fetched just now \u21bb' : 'Fetch \u21bb'}
+            </button>
+          )} />
       ) : (
         // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.
         <button type="button" className="mx-nsd-token is-branch is-quiet" aria-disabled="true" aria-label={`Branch unavailable: ${branchNote.label}`} title={branchNote.tip}>
           <Icon name="branch" size={12} /><span className="mx-nsd-token-text">{branchNote.label}</span>
         </button>
       )}
-      <label className={`mx-nsd-tree${treeMode ? ' is-on' : ''}${canTree ? '' : ' is-quiet'}`} title={worktreeTip}>
-        <Switch aria-label="Own worktree" checked={treeMode} disabled={!canTree} onCheckedChange={(on) => { setWorkIn(on ? 'tree' : 'folder') }} />
-        <span className="mx-nsd-token-text">Own worktree</span><span className="mx-nsd-tree-state" aria-hidden="true">{canTree ? treeState : 'n/a'}</span>
-      </label>
+      {canTree ? (
+        <ChipMenu variant="token" triggerClass="mx-nsd-token is-mode" side="bottom" width={TOKEN_LIST_WIDTH} title="Work in" hint={`in ${folderName}`} summary={modeLabel} icon={<Icon name={treeMode ? 'branch' : 'folder'} size={12} />}
+          label={<span className="mx-nsd-token-text">{modeLabel}</span>} sections={[{ heading: 'Work in', items: modeRows }]} />
+      ) : (
+        <button type="button" className="mx-nsd-token is-mode is-quiet" aria-disabled="true" aria-label="Work in unavailable" title={modeTip}>
+          <Icon name="folder" size={12} /><span className="mx-nsd-token-text">n/a</span>
+        </button>
+      )}
     </div>
   )
   const permissionChip = (
@@ -580,7 +631,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
             <span className="mx-nc-works">{remote ? 'On another machine it starts and opens.' : folder === '' ? '' : `Works in ${folder}${branches === null ? '' : ` on ${branchLabel}`}`}</span>
             <span className="mx-nc-keys"><b>Enter</b> start · <b>Shift+Enter</b> new line{onCancel === undefined || remote ? '' : <>{' · '}<b>{BACKGROUND_KEY}</b> in the background</>}</span>
           </div>
-          <StartNotes error={error} treeLine={treeLine} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(explainError(failure, 'Could not open the setup page')) }) }}
+          <StartNotes error={error} treeLine={treeLine} syncNote={syncNote} onUpdate={updateFirst} onUseWorktree={() => { setWorkIn('tree') }} onFix={() => { setBranchOpen(true) }} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(explainError(failure, 'Could not open the setup page')) }) }}
             machineDown={targetDown === null ? null : { label: targetLabel, why: targetDown }}
             clone={cloning} onUseFolder={(path) => { setCloning(null); openFolder(path) }} onDismissClone={() => { setCloning(null) }}
             onPickAnotherFolder={cloner === null || cloning === null ? undefined : () => { const again = cloning; setCloning(null); openCloneWindow({ start: 'link', address: again.address, parent: again.parent }) }}
@@ -595,6 +646,11 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
 type NotesProps = {
   error: ExplainedError | null
   treeLine: string | null
+  syncNote: SyncNote | null
+  onUpdate: () => void
+  onUseWorktree: () => void
+  /** The button a failure offers (Pick another branch): opens the branch list. */
+  onFix: () => void
   background: ReturnType<typeof useBackgroundStarts>
   onPutBack: (key: number) => void
   agentMissing: ChatAgent | null
@@ -610,7 +666,7 @@ type NotesProps = {
 }
 
 /** What went wrong or is going on, under the boxes: a machine that is down, a clone, the start's own failure, the background starts that failed, a missing agent; and the worktree line. */
-function StartNotes({ error, treeLine, background, onPutBack, agentMissing, onSetUp, machineDown, clone, onUseFolder, onDismissClone, onPickAnotherFolder, onOpenGitHubSettings }: NotesProps) {
+function StartNotes({ error, treeLine, syncNote, onUpdate, onUseWorktree, onFix, background, onPutBack, agentMissing, onSetUp, machineDown, clone, onUseFolder, onDismissClone, onPickAnotherFolder, onOpenGitHubSettings }: NotesProps) {
   const problem = clone?.problem ?? null
   return (
     <>
@@ -632,8 +688,9 @@ function StartNotes({ error, treeLine, background, onPutBack, agentMissing, onSe
           />
         </div>
       )}
+      {syncNote !== null && <SyncLine note={syncNote} onUpdate={onUpdate} onUseWorktree={onUseWorktree} />}
       {treeLine !== null && <p className="mx-nsd-note">{treeLine}</p>}
-      {error !== null && <div className="mx-nsd-note"><InlineNote title={error.title} reason={error.reason} actions={error.details === null ? undefined : <CopyDetails text={`${error.title}\n${error.details}`} copy={copyText} />} /></div>}
+      {error !== null && <div className="mx-nsd-note"><InlineNote title={error.title} reason={error.reason} actions={error.fix === undefined && error.details === null ? undefined : <FixActions error={error} onFix={onFix} />} /></div>}
       {background.failed.map((failed) => (
         <div key={failed.key} className="mx-nsd-note">
           <InlineNote
@@ -641,6 +698,7 @@ function StartNotes({ error, treeLine, background, onPutBack, agentMissing, onSe
             reason={failed.error.reason}
             actions={(
               <>
+                {failed.error.fix === PICK_ANOTHER_BRANCH && <FeedbackButton kind="primary" onClick={onFix}>{failed.error.fix}</FeedbackButton>}
                 {failed.draft !== null && <FeedbackButton kind="primary" aria-label={`Put back ${failedStartLabel(failed)}`} onClick={() => { onPutBack(failed.key) }}>Put back</FeedbackButton>}
                 <FeedbackButton kind="text" aria-label={`Dismiss ${failedStartLabel(failed)}`} onClick={() => { background.dismiss(failed.key) }}>Dismiss</FeedbackButton>
                 {failed.error.details !== null && <CopyDetails text={`${failed.error.title}\n${failed.error.details}`} copy={copyText} />}
@@ -655,6 +713,36 @@ function StartNotes({ error, treeLine, background, onPutBack, agentMissing, onSe
           <button type="button" className="mx-text-button" onClick={onSetUp}>set it up</button>.
         </p>
       )}
+    </>
+  )
+}
+
+/** How the checkout stands against origin, when the session would edit it: being brought up to date, up to date, behind, or behind and holding uncommitted changes. */
+type SyncNote = { kind: 'running' | 'done'; branch: string } | { kind: 'behind' | 'dirty'; branch: string; behind: number }
+
+/** The banner under the message box about the checkout. A dirty checkout cannot be fast-forwarded, so it offers a worktree instead of an update. */
+function SyncLine({ note, onUpdate, onUseWorktree }: { note: SyncNote; onUpdate: () => void; onUseWorktree: () => void }) {
+  const name = <b className="mx-nsd-sync-name">{note.branch}</b>
+  return (
+    <p role="status" className="mx-nsd-note mx-nsd-sync">
+      <span>
+        {note.kind === 'running' && <>Updating {name}…</>}
+        {note.kind === 'done' && <>{name} is up to date with origin.</>}
+        {note.kind === 'behind' && <>{name} is {note.behind} behind origin.</>}
+        {note.kind === 'dirty' && <>{name} is {note.behind} behind origin, and it has changes that aren't committed, so it can't be updated cleanly.</>}
+      </span>
+      {note.kind === 'behind' && <button type="button" className="mx-text-button" onClick={onUpdate}>Update first</button>}
+      {note.kind === 'dirty' && <button type="button" className="mx-text-button" onClick={onUseWorktree}>Use a worktree</button>}
+    </p>
+  )
+}
+
+/** A failure's buttons: what can be done about it, and its own text to copy. */
+function FixActions({ error, onFix }: { error: ExplainedError; onFix: () => void }) {
+  return (
+    <>
+      {error.fix === PICK_ANOTHER_BRANCH && <FeedbackButton kind="primary" onClick={onFix}>{error.fix}</FeedbackButton>}
+      {error.details !== null && <CopyDetails text={`${error.title}\n${error.details}`} copy={copyText} />}
     </>
   )
 }

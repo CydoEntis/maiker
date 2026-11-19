@@ -6,6 +6,12 @@ const host = vi.hoisted(() => ({
   installed: ['claude', 'codex', 'gemini'] as string[],
   branches: null as null | { current: string | null; branches: { name: string; current: boolean; when: number | null }[]; worktrees: { path: string; branch: string | null; main: boolean; when: number | null }[] },
   openAgentDocs: vi.fn(() => Promise.resolve()),
+  /** What `git_sync_state` answers; null is a folder that is no repository. `fetch` asks tell whether the remote was asked. */
+  sync: null as null | { branch: string | null; upstream: string | null; behind: number; ahead: number; dirty: boolean; fetched: boolean },
+  syncCalls: [] as boolean[],
+  /** Holds the answer to a fetch ask until it is released. */
+  hold: null as null | Promise<void>,
+  pull: vi.fn<(folder: string) => Promise<void>>(() => Promise.resolve()),
 }))
 
 vi.mock('@/api/daemon', () => ({
@@ -14,6 +20,12 @@ vi.mock('@/api/daemon', () => ({
   folderBranches: () => Promise.resolve(host.branches),
   loadAgentCommands: () => Promise.resolve([]),
   openAgentDocs: host.openAgentDocs,
+  folderSyncState: async (_folder: string, fetch: boolean) => {
+    host.syncCalls.push(fetch)
+    if (fetch && host.hold !== null) await host.hold
+    return host.sync === null ? null : { ...host.sync, fetched: fetch }
+  },
+  pullFolder: (folder: string) => host.pull(folder),
 }))
 
 import { NewChatPage, type NewChatRequest } from './NewChatPage'
@@ -90,7 +102,14 @@ async function chooseAgent(name: string) {
 }
 const box = () => screen.getByRole('textbox', { name: 'What should we work on?' })
 const startButton = () => screen.getByRole('button', { name: 'Start session' })
-const worktree = () => screen.getByRole('switch', { name: 'Own worktree' })
+const modeToken = () => screen.getByRole('button', { name: /^Work in: / })
+/** Opens the Work in list and picks one of its two rows. */
+async function chooseMode(name: 'This folder' | 'New worktree') {
+  await userEvent.click(modeToken())
+  await userEvent.click(within(await lastPopup()).getByRole('radio', { name: new RegExp(`^${name}`) }))
+}
+const worktree = () => chooseMode('New worktree')
+const folderMode = () => chooseMode('This folder')
 /** The permission choice is under More options, folded until asked for. */
 async function openMore() {
   await userEvent.click(screen.getByRole('button', { name: 'More options' }))
@@ -100,6 +119,11 @@ beforeEach(() => {
   host.installed = ['claude', 'codex', 'gemini']
   host.branches = { current: 'dev', branches: [{ name: 'dev', current: true, when: 10 }, { name: 'feature/refunds', current: false, when: 20 }], worktrees: [{ path: '/dev/growth', branch: 'dev', main: true, when: 10 }] }
   host.openAgentDocs.mockClear()
+  host.sync = { branch: 'dev', upstream: 'origin/dev', behind: 0, ahead: 0, dirty: false, fetched: false }
+  host.syncCalls = []
+  host.hold = null
+  host.pull.mockClear()
+  host.pull.mockResolvedValue(undefined)
   window.localStorage.clear()
   discardDraft()
 })
@@ -116,12 +140,12 @@ describe('the New session draft', () => {
     expect(startButton()).toBeEnabled()
   })
 
-  it('says where the session works as one line: machine, project and branch, with Own worktree beside the branch', async () => {
+  it('says where the session works as one line: machine, project and branch, with Work in beside the branch', async () => {
     dialog()
     await pickedProject('growth')
     expect(screen.getByRole('button', { name: 'Machine: This computer' })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: 'Branch: dev' })).toBeInTheDocument()
-    expect(worktree()).not.toBeChecked()
+    expect(modeToken()).toHaveAttribute('aria-label', 'Work in: This folder')
     expect(screen.queryByRole('textbox', { name: 'Chat name' })).not.toBeInTheDocument()
   })
 
@@ -280,7 +304,7 @@ describe('the New session draft', () => {
     const { unmount } = dialog(undefined, { onWarm })
     await ready()
     await waitFor(() => { expect(onWarm).toHaveBeenLastCalledWith({ folder: '/dev/growth', agent: 'claude', model: 'default', reasoning: 'medium', mode: 'default', bypass: false }) })
-    await userEvent.click(worktree())
+    await worktree()
     await waitFor(() => { expect(onWarm).toHaveBeenLastCalledWith(null) })
     unmount()
     expect(onWarm).toHaveBeenLastCalledWith(null)
@@ -300,7 +324,7 @@ describe('the New session draft', () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     dialog(onStart, { busy: DEV_BUSY })
     await ready()
-    expect(worktree()).toBeChecked()
+    expect(modeToken()).toHaveAttribute('aria-label', 'Work in: New worktree')
     expect(screen.getByText('Fix login is already working on dev here, so this session gets its own worktree. Your checkout stays untouched.')).toBeInTheDocument()
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
@@ -308,12 +332,12 @@ describe('the New session draft', () => {
     expect(onStart.mock.calls[0]?.[0].branch).toMatchObject({ create: true, worktree: true, name: expect.stringMatching(TWO_WORDS) as unknown })
   })
 
-  it('lets the switch put a busy branch back to the folder as it is', async () => {
+  it('lets Work in put a busy branch back to the folder as it is', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     dialog(onStart, { busy: DEV_BUSY })
     await ready()
-    await userEvent.click(worktree())
-    expect(worktree()).not.toBeChecked()
+    await folderMode()
+    expect(modeToken()).toHaveAttribute('aria-label', 'Work in: This folder')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalled() })
@@ -329,7 +353,7 @@ describe('the New session draft', () => {
   it('names a new worktree\'s branch with two words and never copies the message into it', async () => {
     dialog()
     await ready()
-    await userEvent.click(worktree())
+    await worktree()
     const named = (await screen.findByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })).getAttribute('aria-label')
     await userEvent.type(box(), 'Fix the login bug')
     expect(screen.getByRole('button', { name: /^Branch: / })).toHaveAttribute('aria-label', named)
@@ -347,32 +371,32 @@ describe('the New session draft', () => {
     await waitFor(() => { expect(onStart.mock.calls[0]?.[0].branch).toEqual({ name: 'my-own', create: true, worktree: false }) })
   })
 
-  it('keeps the branch chip and Own worktree for a folder that is not a git repository, disabled, each with its reason', async () => {
+  it('keeps the branch chip and Work in for a folder that is not a git repository, out of reach, each with its reason', async () => {
     host.branches = null
+    host.sync = null
     dialog()
     await pickedProject('growth')
     const chip = await screen.findByRole('button', { name: 'Branch unavailable: no git repo' })
     expect(chip).toHaveAttribute('aria-disabled', 'true')
     expect(chip).toHaveAttribute('title', 'growth is not a git repository, so there is no branch to pick. Pick a project folder that is, or clone one.')
-    expect(worktree()).toBeDisabled()
-    expect(worktree()).not.toBeChecked()
-    expect(screen.getByTitle(/growth is not a git repository, so a worktree cannot be made/)).toBeInTheDocument()
+    const mode = screen.getByRole('button', { name: 'Work in unavailable' })
+    expect(mode).toHaveAttribute('aria-disabled', 'true')
+    expect(mode).toHaveAttribute('title', expect.stringMatching(/growth is not a git repository, so a worktree cannot be made/))
   })
 
-  it('shows Own worktree outside More options, with its state in words', async () => {
+  it('offers This folder and New worktree with a line under each, outside More options', async () => {
     dialog()
     await ready()
-    const chip = () => worktree().closest('label')
-    expect(within(screen.getByRole('group', { name: 'Where it works' })).getByRole('switch', { name: 'Own worktree' })).toBeInTheDocument()
-    expect(chip()).toHaveTextContent('Auto')
-    expect(screen.getByTitle(/Work in a separate copy of the repository on its own branch, so your checkout stays untouched\./)).toBeInTheDocument()
-    await userEvent.click(worktree())
-    expect(worktree()).toBeChecked()
-    expect(chip()).toHaveTextContent('On')
-    await userEvent.click(worktree())
-    expect(chip()).toHaveTextContent('Off')
+    expect(within(screen.getByRole('group', { name: 'Where it works' })).getByRole('button', { name: 'Work in: This folder' })).toBeInTheDocument()
+    await userEvent.click(modeToken())
+    const list = await lastPopup()
+    expect(within(list).getByRole('radio', { name: /^This folder/ })).toHaveTextContent('Edits your checkout of dev directly.')
+    expect(within(list).getByRole('radio', { name: /^This folder/ })).toBeChecked()
+    expect(within(list).getByRole('radio', { name: /^New worktree/ })).toHaveTextContent('Its own copy on a new branch. Your checkout stays untouched.')
+    await userEvent.click(within(list).getByRole('radio', { name: /^New worktree/ }))
+    expect(modeToken()).toHaveAttribute('aria-label', 'Work in: New worktree')
     await openMore()
-    expect(within(screen.getByRole('dialog', { name: 'More options' })).queryByRole('switch', { name: 'Own worktree' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('dialog', { name: 'More options' })).queryByText('New worktree')).not.toBeInTheDocument()
   })
 
   it('has no Opens as control: no Chat or Terminal switch, and no plain-shell path', async () => {
@@ -389,8 +413,8 @@ describe('the New session draft', () => {
     await ready()
     // Where is the line of chips in the header, What the box, Who the agent, the permission chip and More options in the box's foot.
     const where = screen.getByRole('group', { name: 'Where it works' })
-    expect(within(where).getAllByRole('button').map((chip) => chip.getAttribute('aria-label'))).toEqual(['Machine: This computer', 'Project: growth', 'Branch: dev'])
-    expect(within(where).getByRole('switch', { name: 'Own worktree' })).toBeInTheDocument()
+    expect(within(where).getAllByRole('button').map((chip) => chip.getAttribute('aria-label'))).toEqual(['Machine: This computer', 'Project: growth', 'Branch: dev', 'Work in: This folder'])
+    expect(within(where).getByRole('button', { name: 'Work in: This folder' })).toBeInTheDocument()
     expect(where.compareDocumentPosition(box()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(box().compareDocumentPosition(screen.getByRole('button', { name: /^Agent, model and reasoning/ })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('status', { name: /^Permissions: / })).toBeInTheDocument()
@@ -658,7 +682,7 @@ describe('starting a session and going on writing', () => {
     const onStart = vi.fn<Start>(() => new Promise(() => undefined))
     dialog(onStart)
     await ready()
-    await userEvent.click(worktree())
+    await worktree()
     await userEvent.type(box(), 'first task')
     await userEvent.keyboard('{Control>}{Shift>}{Enter}{/Shift}{/Control}')
     await userEvent.type(box(), 'second task')
@@ -714,7 +738,7 @@ describe('the New session draft on another machine', () => {
     const onStart = vi.fn<(request: { branch: unknown }) => Promise<void>>(() => Promise.resolve())
     remote(onStart)
     await pickedProject('app')
-    await userEvent.click(worktree())
+    await worktree()
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalledTimes(1) })
@@ -821,5 +845,161 @@ describe('the New session draft as a chat that has not been sent', () => {
     dialog(undefined, { machines: [...HERE, { machine: 2, label: 'devbox', local: false }] })
     await pickedProject('growth')
     expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument()
+  })
+})
+
+describe('starting from a checkout: sync with origin, branch names and worktree failures', () => {
+  const openBranches = async () => {
+    await userEvent.click(await screen.findByRole('button', { name: /^Branch: / }))
+    return lastPopup()
+  }
+  const started = () => vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+
+  it('asks origin once when it opens, and the branch list says so on a Fetch button that asks again', async () => {
+    dialog()
+    await ready()
+    const list = await openBranches()
+    expect(await within(list).findByRole('button', { name: /Fetched just now/ })).toBeEnabled()
+    expect(host.syncCalls.filter(Boolean)).toHaveLength(1)
+    await userEvent.click(within(list).getByRole('button', { name: /Fetched just now/ }))
+    await waitFor(() => { expect(host.syncCalls.filter(Boolean)).toHaveLength(2) })
+  })
+
+  it('says Fetching… while origin is being asked, then Fetched just now', async () => {
+    let release: () => void = () => undefined
+    host.hold = new Promise<void>((resolve) => { release = resolve })
+    dialog()
+    await ready()
+    const list = await openBranches()
+    const fetchButton = within(list).getByRole('button', { name: /Fetching/ })
+    expect(fetchButton).toBeDisabled()
+    release()
+    expect(await within(list).findByRole('button', { name: /Fetched just now/ })).toBeEnabled()
+  })
+
+  it('shows how far the checked-out branch is behind and who has a branch in use', async () => {
+    host.sync = { branch: 'dev', upstream: 'origin/dev', behind: 3, ahead: 0, dirty: false, fetched: false }
+    dialog(undefined, { busy: DEV_BUSY })
+    const list = await openBranches()
+    const row = await within(list).findByRole('radio', { name: /^dev/ })
+    await waitFor(() => { expect(row).toHaveTextContent('3 behind') })
+    expect(row).toHaveTextContent('in use')
+    expect(row).toHaveTextContent('Open in \u201cFix login\u201d')
+    expect(within(list).getByRole('radio', { name: /^feature\/refunds/ })).not.toHaveTextContent('behind')
+  })
+
+  it('says why a typed branch name is refused, in place of a row that would make it', async () => {
+    dialog()
+    const list = await openBranches()
+    await userEvent.type(within(list).getByRole('textbox', { name: 'Find or name a new branch' }), 'fix the login')
+    expect(within(list).getByRole('alert')).toHaveTextContent("Branch names can't have spaces. Try fix-the-login.")
+    expect(within(list).queryByText(/Create fix/)).not.toBeInTheDocument()
+    await userEvent.clear(within(list).getByRole('textbox', { name: 'Find or name a new branch' }))
+    await userEvent.type(within(list).getByRole('textbox', { name: 'Find or name a new branch' }), 'a..b')
+    expect(within(list).getByRole('alert')).toHaveTextContent("That isn't a valid branch name.")
+    await userEvent.clear(within(list).getByRole('textbox', { name: 'Find or name a new branch' }))
+    await userEvent.type(within(list).getByRole('textbox', { name: 'Find or name a new branch' }), 'feat/ok')
+    expect(within(list).queryByRole('alert')).not.toBeInTheDocument()
+    expect(within(list).getByText('+ Create feat/ok from dev')).toBeInTheDocument()
+  })
+
+  it('offers Update first when the checkout is behind origin, and says when it is done', async () => {
+    host.sync = { branch: 'dev', upstream: 'origin/dev', behind: 2, ahead: 0, dirty: false, fetched: false }
+    let finish: () => void = () => undefined
+    host.pull.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve }))
+    dialog()
+    await ready()
+    expect(await screen.findByText(/is 2 behind origin\./)).toHaveTextContent('dev is 2 behind origin.')
+    await userEvent.click(screen.getByRole('button', { name: 'Update first' }))
+    expect(host.pull).toHaveBeenCalledWith('/dev/growth')
+    expect(await screen.findByText(/Updating/)).toBeInTheDocument()
+    host.sync = { branch: 'dev', upstream: 'origin/dev', behind: 0, ahead: 0, dirty: false, fetched: false }
+    finish()
+    expect(await screen.findByText(/is up to date with origin\./)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Update first' })).not.toBeInTheDocument()
+  })
+
+  it('shows a refused update as the start\'s error line', async () => {
+    host.sync = { branch: 'dev', upstream: 'origin/dev', behind: 2, ahead: 0, dirty: false, fetched: false }
+    host.pull.mockRejectedValue('Not possible to fast-forward, aborting.')
+    dialog()
+    await ready()
+    await userEvent.click(await screen.findByRole('button', { name: 'Update first' }))
+    expect(await screen.findByText('Could not update dev')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Update first' })).toBeInTheDocument()
+  })
+
+  it('offers a worktree instead of an update when it is behind and holds uncommitted changes', async () => {
+    host.sync = { branch: 'dev', upstream: 'origin/dev', behind: 2, ahead: 0, dirty: true, fetched: false }
+    dialog()
+    await ready()
+    expect(await screen.findByText(/has changes that aren't committed, so it can't be updated cleanly\./)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Update first' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Use a worktree' }))
+    expect(modeToken()).toHaveAttribute('aria-label', 'Work in: New worktree')
+    expect(screen.queryByText(/behind origin/)).not.toBeInTheDocument()
+  })
+
+  it('says nothing about origin when the checkout is up to date', async () => {
+    dialog()
+    await ready()
+    await waitFor(() => { expect(host.syncCalls).toContain(true) })
+    expect(screen.queryByText(/behind origin/)).not.toBeInTheDocument()
+  })
+
+  it('does not judge the checkout when the session works in a worktree of its own', async () => {
+    host.sync = { branch: 'dev', upstream: 'origin/dev', behind: 4, ahead: 0, dirty: false, fetched: false }
+    dialog()
+    await ready()
+    expect(await screen.findByText(/is 4 behind origin\./)).toBeInTheDocument()
+    await worktree()
+    expect(screen.queryByText(/behind origin/)).not.toBeInTheDocument()
+  })
+
+  it('explains a worktree folder that is already there, with Pick another branch that opens the branch list', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockRejectedValue("fatal: '/srv/trees/quiet-otter' already exists")
+    dialog(onStart)
+    await ready()
+    await worktree()
+    await userEvent.type(box(), 'hello')
+    await userEvent.click(startButton())
+    const title = await screen.findByText(/^Could not make a worktree for branch [a-z]+-[a-z]+/)
+    expect(title).toBeInTheDocument()
+    expect(screen.getByText('Its folder /srv/trees/quiet-otter is already there. Remove that folder, or pick another branch name.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Copy details/ })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Pick another branch' }))
+    expect(await screen.findByRole('textbox', { name: 'Find or name a new branch' })).toBeInTheDocument()
+  })
+
+  it('keeps any other start failure as it was explained before', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockRejectedValue('Something else broke.')
+    dialog(onStart)
+    await ready()
+    await userEvent.type(box(), 'hello')
+    await userEvent.click(startButton())
+    expect(await screen.findByText('Could not start the session')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Pick another branch' })).not.toBeInTheDocument()
+  })
+
+  it('tells the project list how to open any folder, and tags the folder that is not a git repo', async () => {
+    host.branches = null
+    host.sync = null
+    dialog()
+    await pickedProject('growth')
+    await userEvent.click(screen.getByRole('button', { name: 'Project: growth' }))
+    const list = await lastPopup()
+    expect(within(list).getByText('Type a path starting with ~ or / to open any folder.')).toBeInTheDocument()
+    await waitFor(() => { expect(within(list).getByRole('radio', { name: /^growth/ })).toHaveTextContent('/dev/growth \u00b7 not a git repo') })
+    expect(within(list).getByRole('radio', { name: /^api/ })).not.toHaveTextContent('not a git repo')
+  })
+
+  it('starts in the checkout with no branch once it is up to date', async () => {
+    const onStart = started()
+    dialog(onStart)
+    await ready()
+    await userEvent.type(box(), 'hello')
+    await userEvent.click(startButton())
+    await waitFor(() => { expect(onStart).toHaveBeenCalled() })
+    expect(onStart.mock.calls[0]?.[0].branch).toBeNull()
   })
 })

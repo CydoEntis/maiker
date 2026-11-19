@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DraftAttachment } from '@/features/chat/composerStore'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { revokePreviews } from '@/features/chat/useAttachmentIntake'
-import { explainError, type ExplainedError } from '@/lib/error-message'
+import { explainStartFailure, type ExplainedError } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import { useLatest } from '@/lib/useLatest'
 import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
@@ -74,7 +74,7 @@ export function useBackgroundStarts(onStart: (request: NewChatRequest, options?:
             toast.failed(action, failure)
             return
           }
-          const error = explainError(failure, action)
+          const error = explainStartFailure(failure, action, request.branch)
           lastKey.current += 1
           const key = lastKey.current
           // Once another start of the prompt put it back, the box holds the draft: this one has nothing to give back.
