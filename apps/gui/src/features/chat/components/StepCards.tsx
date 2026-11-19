@@ -38,10 +38,12 @@ function RedactionNote({ texts }: { texts: readonly (string | null)[] }) {
 /**
  * Whether a step's detail is open, and how to flip it. Folded until the person opens it: a chat of many steps stays short,
  * and its lines say how each one went. A run of steps hands each one its `control`, so only one of them is open at a time.
+ * `startOpen` is for a step that stands alone between messages: it is one card, so showing its output or diff costs a few
+ * lines, where the same in every step of a long run would fill the screen.
  */
 export type OpenControl = { open: boolean; toggle: () => void }
-function useOpen(control?: OpenControl): [boolean, () => void] {
-  const [open, setOpen] = useState(false)
+function useOpen(control?: OpenControl, startOpen = false): [boolean, () => void] {
+  const [open, setOpen] = useState(startOpen)
   if (control !== undefined) return [control.open, control.toggle]
   return [open, () => { setOpen(!open) }]
 }
@@ -138,11 +140,11 @@ function CommandOutput({ event }: { event: CommandEvent }) {
 /**
  * A command the agent ran. In a run it is one line, the command's first line and how it ended, as the
  * agent's own terminal shows it; opened it is the whole command and its output. On its own it is a block with the
- * command in its head and, at the right, how it ended ("exit 1 · 2.9s", red when it failed). Every one starts
- * folded, a failed one too: its line says it failed, and opening it shows why.
+ * command in its head and, at the right, how it ended ("exit 1 · 2.9s", red when it failed). On its own it starts
+ * open, with the last lines of its output; as a row inside a run it starts folded, a failed one too.
  */
 export function CommandStep({ event, alone = false, waiting = false, control }: CommandStepProps) {
-  const [open, toggle] = useOpen(control)
+  const [open, toggle] = useOpen(control, alone)
   // A search that found nothing exits 1 but did not fail; how it shows is the one place that decides it.
   const status = shownCommandStatus(event)
   const intent = commandIntent(event.command)
@@ -282,7 +284,7 @@ type EditStepProps = {
 
 /** A file change: the file, what happened to it and its counts, opening to the first lines of its diff. */
 export function EditStep({ event, root, onOpen, alone = false, waiting = false, control }: EditStepProps) {
-  const [open, toggle] = useOpen(control)
+  const [open, toggle] = useOpen(control, alone)
   const file = event.file === null ? null : relativePath(event.file, root)
   const name = file ?? 'a file'
   const verb = event.tool === 'Write' ? 'Write' : 'Edit'

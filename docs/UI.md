@@ -1302,9 +1302,10 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   Two or more steps that follow each other (edits, commands, tools; never the to-do list) fold into one **work row**
   (`workSummary.ts`, `WorkCard`): a line such as "Read 2 files, edited 3, ran 1 command" with the daemon's own time for
   the run, a "N steps" chip and a chevron on one row that opens to every step, one open at a time. Every run and every
-  step starts folded, a failed one too (its line says so), so a long turn stays short; only a run whose pending request is
-  about one of its steps starts open. A command or an edit that stands alone is a card with its facts in
-  the head (`StepView` with `alone`); inside a run it stays a row.
+  step inside a run starts folded, a failed one too (its line says so), so a long turn stays short; only a run whose pending
+  request is about one of its steps starts open. A command or an edit that stands alone is a card with its facts in
+  the head (`StepView` with `alone`) and starts open, showing the command's last lines of output or the edit's diff;
+  inside a run it stays a folded row.
   The agent's reasoning (the daemon's `Reasoning` history items, Claude's thinking and Codex's reasoning summary) is one
   folded **Thought** row (`ThoughtRow`, a `thought` row of `buildRows`): reasoning that follows each other in a turn merge
   into one row, a Thought between two steps ends the run of steps before it, and a click or Enter opens its text. The text is
@@ -1383,7 +1384,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     that found nothing (exit 1, no output) reads "no matches" and counts as finished, not failed (`foundNothing`); it opens to the whole command
     and the last 3 lines of output with "Show all N lines". The elapsed time is the provider's duration, else the
     daemon's start and completion times; the exit code exists for Codex only, so for Claude it reads "exit code not
-    reported". Every one starts folded, a failed one too.
+    reported". One on its own starts open; one inside a run starts folded, a failed one too.
   - *Approval card:* see Approvals. *Helper agents:* consecutive helper calls are one card, "3 agents, 2 working",
     a row each (title, type, what it was asked, its time); a row opens what it was asked and its report. *Plan:*
     the agent's own to-do items, "N of M done" and a progress bar. *Live box:* a frameless line, the running light, "Working for 12s" and "Esc to stop", over a skeleton (the step is for screen readers only; a deliberate deviation from the prototype's bordered box); no token count,

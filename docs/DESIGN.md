@@ -806,7 +806,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   is a card: its mark, `$` and the command, an exit tag ("exit 0" in `--done`, "exit 1" in `--err`), the time and
   **Copy command** in the head, and the last 6 lines of output on `--well` with "Show all N lines"; a failed one has the
   `--err` edge. An **edit on its own** is a card: its mark, the file name, the change tag, +A −R and
-  **Open in side panel** in the head, and the diff below when opened (line numbers in a 36px gutter, a sign column, added lines
+  **Open in side panel** in the head, and the diff below (open from the start; line numbers in a 36px gutter, a sign column, added lines
   tinted `--done` at 13%, removed `--err` at 13%, syntax colours from `--code-*`, folded past 12 lines); a secret file,
   a diff too large to show and a file still being written each say so in the well instead. A Markdown file the agent
   wrote is a **document card** (the file name and "wrote N lines", **Read** and **Copy** in the head, its title and first
