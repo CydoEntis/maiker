@@ -143,7 +143,7 @@ function permissionWords(agent: ChatAgent, bypass: boolean): { text: string; dan
  * line of chips: machine, project and branch (the project chip opens one list: recent projects, a folder, a clone from a
  * link, the account's repositories; a pasted GitHub link becomes a Clone row). The box is What: Enter starts, Shift+Enter
  * is a new line. Under it are Who: the agent, its model and effort, the permission chip and More options (Skip permission prompts).
- * Branch and Own worktree are in the Where line: always there, disabled with the reason when the folder is no repository. It is always an agent session, one daemon-owned session with a chat view and a terminal view
+ * Branch and Work in (This folder / New worktree) are in the Where line: always there; when the folder is no repository, each shows a quiet "n/a" chip with the reason. It is always an agent session, one daemon-owned session with a chat view and a terminal view
  * (ADR 0003); Settings says which it opens in. While it starts, this same view shows the Starting card until the window
  * swaps in the session's pane in one update. Ctrl+Enter (⌘Enter on macOS) starts from anywhere, Ctrl+Shift+Enter starts it
  * in the background and keeps the draft for the next one, Esc discards it. A plain shell is "New terminal", not here.
@@ -504,7 +504,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   }
   // A chip with no branch list, said in words: the folder is not a repository, is still being read, or is on another machine.
   const branchNote = remote
-    ? { label: 'not read here', tip: `${targetLabel}'s branches are not read from here, so the session starts on what is checked out there. Turn on Own worktree to start on a new branch instead.` }
+    ? { label: 'not read here', tip: `${targetLabel}'s branches are not read from here, so the session starts on what is checked out there. Set Work in to New worktree to start on a new branch instead.` }
     : folder === '' ? { label: 'no project', tip: 'Pick a project first, then its branch.' }
     : !branchesRead ? { label: 'reading…', tip: `Reading ${folderName}'s branches…` }
     : { label: 'no git repo', tip: `${folderName} is not a git repository, so there is no branch to pick. Pick a project folder that is, or clone one.` }
