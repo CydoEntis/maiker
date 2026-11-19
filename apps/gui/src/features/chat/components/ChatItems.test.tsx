@@ -141,6 +141,32 @@ describe('a thought', () => {
   })
 })
 
+describe('the changed-files bar of a turn', () => {
+  const bar = (files: readonly string[], lines: { added: number; removed: number } | null, openDiff: ((file: string) => void) | null) => {
+    const row: ChatRow = { kind: 'changes', key: 'changes:t1', files, lines, turn: null }
+    return <ChatItem row={row} {...context} openDiff={openDiff} />
+  }
+
+  it('says how many files and lines changed, and Review opens the first file', async () => {
+    const open = vi.fn()
+    render(bar(['src/a.ts', 'src/b.ts'], { added: 186, removed: 41 }, open))
+
+    expect(screen.getByText('2 changed files')).toBeInTheDocument()
+    expect(screen.getByText('+186')).toBeInTheDocument()
+    expect(screen.getByText('−41')).toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Review' }))
+    expect(open).toHaveBeenCalledExactlyOnceWith('src/a.ts', null)
+  })
+
+  it('is singular for one file, shows no counts it does not know and offers no Review where it cannot open', () => {
+    render(bar(['src/a.ts'], null, null))
+
+    expect(screen.getByText('1 changed file')).toBeInTheDocument()
+    expect(screen.queryByText(/^\+/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Review' })).toBeNull()
+  })
+})
+
 describe('what a command reported', () => {
   it('draws its inline code as code, not as backticks', () => {
     const row: ChatRow = { kind: 'report', key: 'r1', text: 'Set model to `Opus 5.5` and saved as your default for new sessions' }
