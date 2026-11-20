@@ -27,7 +27,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   const props: SidebarProps = {
     sessions, listed: true, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, grouping: 'machine', onGrouping: none, onSearch: none,
-    onNewSession: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
+    onNewSession: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onFixMachine: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
     onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onPutAway: none, onBringBack: none, onSnooze: none, onUnsnooze: none, onGetFile: none,
     onEndSession: none, onOpenSettings: none, onRecentSessions: none, updateSlot: null, railUpdateSlot: null,
     ...more,
@@ -186,11 +186,12 @@ describe('a machine that needs maiker installed or updated', () => {
 })
 
 describe('a session row', () => {
-  it('puts the status icon at the right of the name and, under it, the time the window has known the session at the right of the place', () => {
-    show([session(1, { agent: 'claude', named: true, title: 'Timed' })])
+  it('puts the status icon at the right of the name and, under it, how long the agent has been in its state at the right of the place', () => {
+    const since = Math.floor(Date.now() / 1000) - 180
+    show([session(1, { agent: 'claude', named: true, title: 'Timed', details: { since } as NonNullable<Conversation['details']> })])
     const row = screen.getByRole('button', { name: /^Timed,/ })
     expect(row.querySelector('.mx-row-title .mx-row-status')).not.toBeNull()
-    expect(row.querySelector('.mx-row-sub .mx-row-when')).toHaveTextContent('now')
+    expect(row.querySelector('.mx-row-sub .mx-row-when')).toHaveTextContent('3m')
   })
 
   it('offers Mark as done on a finished agent only, and asks for that session', async () => {
@@ -258,7 +259,7 @@ describe('a session row', () => {
 
   it('offers no Get a file on a session of this computer', () => {
     show([session(1, { agent: 'claude' })])
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^claude,/ }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^app1,/ }))
     expect(screen.queryByRole('menuitem', { name: /Get a file/ })).toBeNull()
   })
 
@@ -347,18 +348,31 @@ describe('a session row', () => {
 })
 
 describe('a machine heading', () => {
-  it('starts a session or a terminal on that machine from its right-click menu, not from a +', async () => {
+  it('starts a session on that machine from a button under its sessions, and a session or a terminal from its right-click menu', async () => {
     const user = userEvent.setup()
     const onNewSession = vi.fn()
     const onNewShell = vi.fn()
     show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], onNewSession, onNewShell })
-    expect(screen.queryByRole('button', { name: /^New (session|agent chat) on / })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'New session on devbox' }))
+    expect(onNewSession).toHaveBeenCalledWith(4)
+    onNewSession.mockClear()
     fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
     await user.click(await screen.findByRole('menuitem', { name: 'New session here' }))
     expect(onNewSession).toHaveBeenCalledWith(4)
     fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
     await user.click(await screen.findByRole('menuitem', { name: 'New terminal here' }))
     expect(onNewShell).toHaveBeenCalledWith(4)
+  })
+
+  it('marks a machine that is not up with a red dot, Offline and a Fix button, the reason as its tooltip, and offers no new session on it', async () => {
+    const user = userEvent.setup()
+    const onFixMachine = vi.fn()
+    show([], { machines: [LOCAL_HEAD, { ...DEVBOX, down: true, why: 'connection refused', chip: { glyph: '✕', word: 'unreachable', tone: 'bad' } }], onFixMachine })
+    expect(screen.getByText('Offline')).toBeTruthy()
+    expect(screen.getByText('Offline').closest('.mx-machine-why')).toHaveAttribute('title', 'connection refused')
+    expect(screen.queryByRole('button', { name: 'New session on devbox' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Fix devbox' }))
+    expect(onFixMachine).toHaveBeenCalledWith(expect.objectContaining({ name: 'devbox' }))
   })
 
   it('collapses its sessions when the name is clicked', async () => {
@@ -561,6 +575,17 @@ describe('the top of the sidebar', () => {
     expect(onNewSession).toHaveBeenCalledTimes(2)
     view.again({ mode: 'rail', canStart: false, onNewSession })
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'New session' }).disabled).toBe(true)
+  })
+
+  it('has a + Remote machine button in the foot and in the rail', async () => {
+    const user = userEvent.setup()
+    const onAddMachine = vi.fn()
+    show([], { onAddMachine })
+    await user.click(screen.getByRole('button', { name: /Remote machine/ }))
+    cleanup()
+    show([], { onAddMachine, mode: 'rail' })
+    await user.click(screen.getByRole('button', { name: /Remote machine/ }))
+    expect(onAddMachine).toHaveBeenCalledTimes(2)
   })
 
   it('offers a terminal and a remote machine from a right-click on New session', async () => {

@@ -12,10 +12,11 @@ import { type EscLayer, topmostOpen } from './model/escLadder'
 import { jumpToast, nextNeedsYou, NOTHING_NEEDS_YOU } from '@/features/needs-you/model/needsYou'
 
 /** Listens for the keyboard: a shortcut runs its action, and Esc closes the topmost layer. */
-export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
+export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setAddMachineOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
   runShortcut: (action: ShortcutAction) => void
   canUndoClose: boolean
   dialogOpen: boolean
+  addMachineOpen: boolean
   onNewChatPage: boolean
   overlayOpen: boolean
   paletteOpen: boolean
@@ -24,6 +25,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
   welcomeOpen: boolean
   shortcutsOpen: boolean
   setPaletteOpen: Dispatch<SetStateAction<boolean>>
+  setAddMachineOpen: Dispatch<SetStateAction<boolean>>
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   setNewChatOpen: Dispatch<SetStateAction<boolean>>
   setDrawerOpen: Dispatch<SetStateAction<boolean>>
@@ -31,12 +33,14 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
   platform: Platform
   keyOverrides: KeyOverrides
 }) {
-  const shortcutState = useRef({ runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
-  useEffect(() => { shortcutState.current = { runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
+  const shortcutState = useRef({ runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
+  useEffect(() => { shortcutState.current = { runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
   useEffect(() => {
     // How each layer of the Esc ladder closes. A new dialog adds its closer here and its id to ESC_LADDER.
     const closers: Partial<Record<EscLayer, () => void>> = {
       palette: () => { setPaletteOpen(false) },
+      // Over everything else but the palette, and not the draft's discard: Esc closes just this dialog.
+      'add-machine': () => { setAddMachineOpen(false) },
       // The New session draft counts as a dialog here, so this layer is the one that closes it too; Esc discards it.
       settings: () => { setSettingsSection(null); discardDraft(); setNewChatOpen(false) },
       drawer: () => { setDrawerOpen(false) },
@@ -60,7 +64,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
       if (event.key === 'Escape') {
         // A menu or list that is open (the spinner picker in Settings) takes Esc itself.
         if (event.target instanceof Element && event.target.closest('[role="menu"], [role="combobox"][aria-expanded="true"], .mx-chip-menu, .mx-nsd-more-body')) return
-        const top = topmostOpen({ palette: state.paletteOpen, settings: state.settingsOpen, drawer: state.drawerShown, 'focus-mode': state.focusMode })
+        const top = topmostOpen({ palette: state.paletteOpen, 'add-machine': state.addMachineOpen, settings: state.settingsOpen, drawer: state.drawerShown, 'focus-mode': state.focusMode })
         if (top === null) return
         // What Esc closes is not also sent on to the terminal, where it would interrupt an agent.
         event.preventDefault()
@@ -86,7 +90,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, onNewCh
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => { window.removeEventListener('keydown', onKeyDown, true) }
-  }, [platform, setDrawerOpen, setFocusMode, setNewChatOpen, setPaletteOpen, setSettingsSection])
+  }, [platform, setDrawerOpen, setFocusMode, setNewChatOpen, setPaletteOpen, setAddMachineOpen, setSettingsSection])
 }
 
 /** What each shortcut does. The palette and the keyboard both go through it. */

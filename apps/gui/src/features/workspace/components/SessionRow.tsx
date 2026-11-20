@@ -20,16 +20,16 @@ type Props = {
 }
 
 /**
- * The line under a row's name, saying where the session is: a folder icon, its project, `/`, its branch (mono; the tree
- * icon when it runs in a worktree of its own), and the other machine it runs on at the right.
+ * The line under a row's name, saying where the session is: a folder icon, its project, `/`, its branch (mono) and the other
+ * machine it runs on. `project` is null when a project heading above the row already says it. How long the session has been in its state sits at the right.
  */
-function PlaceLine({ session, showProject, machine, children }: { session: SessionView; showProject: boolean; machine: string | null; children?: ReactNode }) {
+function PlaceLine({ session, project, machine, children }: { session: SessionView; project: string | null; machine: string | null; children?: ReactNode }) {
   const branch = session.branch
   return (
     <span className="mx-row-sub">
-      <span className="mx-row-folder" aria-hidden="true"><Icon name="folder" size={12} /></span>
-      {showProject && <span className="mx-row-project-name">{projectOf(session)}</span>}
-      {showProject && branch !== null && <span className="mx-row-slash" aria-hidden="true">/</span>}
+      <span className="mx-row-folder" aria-hidden="true"><Icon name={session.worktree ? 'worktree' : 'folder'} size={12} /></span>
+      {project !== null && <span className="mx-row-project-name">{project}</span>}
+      {project !== null && branch !== null && <span className="mx-row-slash" aria-hidden="true">/</span>}
       {branch !== null && <span className="mx-row-branch-name">{branch}</span>}
       {machine !== null && <span className="mx-row-machine">{machineLabel(machine)}</span>}
       {children}
@@ -37,21 +37,10 @@ function PlaceLine({ session, showProject, machine, children }: { session: Sessi
   )
 }
 
-const seenAt = new Map<string, number>()
-
-/** When this window first saw the session, kept for as long as the window lives. */
-function firstSeen(id: string): number {
-  const before = seenAt.get(id)
-  if (before !== undefined) return before
-  const now = Date.now()
-  seenAt.set(id, now)
-  return now
-}
-
 /**
  * One session in the sidebar: the agent's mark, its name with its status icon at the far right (and a word when it stopped or
- * is held by its plan limit), and under it where it is (folder, project, branch, machine) with how long the session has run at the far right.
- * An idle row is dimmed.
+ * is held by its plan limit), and under it where it is (project, branch, machine) with how long it has been in its state at the
+ * far right. An idle row is dimmed.
  */
 export function SessionRow({ session, selected, showProject, machine = null, onShow, onRename, onContextMenu }: Props) {
   const title = rowTitle(session)
@@ -60,8 +49,7 @@ export function SessionRow({ session, selected, showProject, machine = null, onS
   const className = `mx-row${session.status === 'idle' ? ' is-idle' : ''}${selected ? ' is-selected' : ''}${active ? ' is-active' : ''}${session.status === 'needs' ? ' is-needs' : ''}${isShell(session) ? ' is-shell' : ''}${session.status === 'unknown' ? ' is-offline' : ''}${session.status === 'limited' ? ' is-limited' : ''}`
   const icon = <span className="mx-row-agent"><AppIcon process={session.process} size={14} dimmed={session.status === 'idle' || session.status === 'unknown'} /></span>
   const status = <StatusIcon status={session.status} className="mx-row-status" />
-  // The daemon does not say when a session began, so it is timed from when this window first saw it.
-  const first = firstSeen(session.id)
+  const project = showProject ? projectOf(session) : null
   return (
     <button
       type="button"
@@ -80,8 +68,9 @@ export function SessionRow({ session, selected, showProject, machine = null, onS
           {word !== '' && <span className="mx-row-word">{word}</span>}
           {status}
         </span>
-        <PlaceLine session={session} showProject={showProject} machine={machine}>
-          <span className="mx-row-when"><Ago at={first} /></span>
+        <PlaceLine session={session} project={project} machine={machine}>
+          {/* How long the agent has been in this state; a shell has no state worth timing. */}
+          {!isShell(session) && session.statusSince !== null && <span className="mx-row-when"><Ago at={session.statusSince} /></span>}
         </PlaceLine>
       </span>
     </button>

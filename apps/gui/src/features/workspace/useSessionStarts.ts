@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
 import { everywhereModel } from '@/features/chat/agentChoice'
-import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
+import { addWorktree, archiveConversationOnDaemon, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
 import { LOCAL_MACHINE, startSessionOnMachine } from '@/api/machines'
 import { startGitHubSignIn } from '@/api/githubAccounts'
 import { useSessionsEnded } from './useSessionsEnded'
@@ -27,6 +27,7 @@ import { launchFlags, startsBypassed, withBypass } from './model/newChatHost'
 import { CODEX_FULL_MODE } from '@/features/chat/chatMeta'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
+import type { Conversation } from '@/data/preview'
 import { resolveStartFolder } from './model/startFolder'
 import { resumeWords } from './model/moveToWorktree'
 import { hasAbility } from './model/agentAbilities'
@@ -405,5 +406,29 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     )
   }, [setSettingsSection, watchSignIn, startOnMachine, runStart, home, setLayout])
 
-  return { signInAgent, signInGitHub, gitHubSignInsEnded, runStart, newSession, newTerminal, startAgentSession, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree }
+  // A plain shell on this computer with `line` typed at its prompt and not run, for a terminal shown inside a dialog: it is
+  // never placed in a pane, and the caller ends it with `endKeyTerminal`. Null when the shell did not start (said in a toast).
+  const startKeyTerminal = useCallback(async (line: string): Promise<Conversation | null> => {
+    const started: { session: Conversation | null } = { session: null }
+    const placed = await runStart(
+      async () => home || (await defaultSessionFolder()),
+      (id) => {
+        started.session = queryClient.getQueryData<Conversation[]>(['conversations'])?.find((item) => item.id === id) ?? null
+        sendTerminalInput({ id, generation: 0 }, line).catch((error: unknown) => { toast.failed('Could not type the command in the terminal', error) })
+      },
+    )
+    return placed ? started.session : null
+  }, [runStart, home, queryClient])
+
+  // Ending the shell closes it for good (no undo window): it was only ever a part of the dialog.
+  const endKeyTerminal = useCallback(async (session: Conversation): Promise<void> => {
+    try {
+      await archiveConversationOnDaemon(session, true)
+      await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    } catch (error) {
+      toast.failed('Could not close the terminal', error)
+    }
+  }, [queryClient])
+
+  return { startKeyTerminal, endKeyTerminal, signInAgent, signInGitHub, gitHubSignInsEnded, runStart, newSession, newTerminal, startAgentSession, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree }
 }

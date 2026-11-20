@@ -124,7 +124,7 @@ export function PaneCard(props: PaneCardProps) {
             <AppIcon process={session.process} size={14} />
           </span>
           <span className="mx-pane-title">
-            <span className="mx-pane-name">{shell ? `${session.name ?? shellProgram(session)} · ${session.cwdLabel}` : title}</span>
+            <span className="mx-pane-name">{shell ? `${session.name ?? shellProgram(session)} · ${session.cwdLabel}` : session.name ?? session.cwdLabel}</span>
           </span>
           {!shell && <PaneCrumbs session={session} branchMenu={props.branchMenu} />}
         </div>
@@ -199,13 +199,8 @@ function PaneCrumbs({ session, branchMenu }: { session: SessionView; branchMenu:
   const project = projectOf(session)
   return (
     <nav className="mx-crumbs" aria-label="Chat location">
-      <span className="mx-crumb-folder"><Icon name={session.worktree ? 'folderLocked' : 'folderPlain'} size={14} /></span>
-      <span className="mx-crumb-project">
-        <span className="mx-crumb-name">{project}</span>
-      </span>
       {session.branch !== null && (
         <>
-          <span className="mx-crumb-sep" aria-hidden="true">/</span>
           {branchMenu !== undefined ? (
             <BranchMenu spec={branchMenu} branch={session.branch} worktree={session.worktree} project={project} />
           ) : (

@@ -118,6 +118,7 @@ describe('Onboarding', () => {
     setup()
     await user.keyboard('{Enter}')
     await user.click(screen.getByRole('radio', { name: /Connect a remote machine/ }))
+    await user.click(await screen.findByRole('button', { name: 'Use a name instead' }))
     await user.click(await screen.findByRole('textbox', { name: 'Address' }))
     await user.keyboard('{Escape}')
     expect(screen.getByRole('heading', { name: 'Get started' })).toBeInTheDocument()

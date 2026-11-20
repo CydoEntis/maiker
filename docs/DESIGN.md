@@ -384,7 +384,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   Permissions. **Usage** and **Performance** have no nav item: Ctrl+Shift+U and Ctrl+Shift+P or the palette open them,
   and they take the whole dialog, with no nav (Usage's groups run full width).
   **Remote machines** (`MachinesPage.tsx`) is one list, a machine's page, or **Add a machine**, one at a time in the
-  same pane. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
+  same pane; the sidebar's **+ Remote machine** (foot or rail), its + menu and the palette open the same flow as a small dialog
+  (`AddMachineDialog`, a 520px `.mx-rename` card: the add panel and Close; Esc closes it and cancels a connect in progress),
+  so Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
   Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
   `user@host` in mono, the one line that matters (sessions, "Key rejected", "Can't reach it · 14 min", "N sessions ·
@@ -398,6 +400,23 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   Details. **Add a machine** is a breadcrumb, one address field with **Connect**, an error line after Enter, the status
   block (reaching, trust a new host key, install or update Maiker, or what failed) and **From your SSH config** rows
   that connect on a click. The design is in the handoff `maiker-remote-handoff-v2`; there is no stepper and no name field.
+  An outcome has one primary action and the rest is quiet: a failure shows **Try again** and a small **More** that opens
+  **Edit address** and **Details** (`MoreOptions.tsx`); a key the machine did not accept shows **Set up the key here**,
+  a quiet **Copy the command instead** and **More** (Try again, Edit address, Details), under the words "Maiker opens a
+  terminal here with the command typed. Press Enter and type the password in it. The terminal hands it to ssh like any
+  terminal does; Maiker never reads or keeps it." **Set up the key here** shows a terminal of this computer
+  (`KeyTerminal.tsx`) under the error, inside the dialog: the shell has the command typed and not run, takes keyboard
+  focus, and is a 120 to 200px tall well (30% of the window height, `.mx-key-term`) with a one-line hint under it. While it
+  shows, the dialog is 720px wide instead of 520px and the button gives way to the terminal; the machine is dialled every
+  5 seconds (up to 10 minutes) until it connects, and then the block reads "Connected to <name>." for 1.4 seconds and the
+  dialog closes with the toast "Connected to <name>". Esc goes to the terminal while it has focus and closes the dialog
+  anywhere else; Ctrl+Tab leaves the terminal for the Copy button, and the dialog's **Close** is always there. Whatever
+  closes the dialog ends the shell. On Windows the typed line is the PowerShell one. A machine that connects without
+  it closes the dialog with the toast "Connected to <name>"; Maiker installed on it closes it with "Maiker is on <name>".
+  **Fix this machine** is the same dialog opened from a down machine's red dot in the sidebar, titled "Fix <name>", with
+  no address field: a machine that needs a login opens on the key step above (a host key to trust keeps its block, and
+  **Edit address** reads **Open in Settings**); any other down state is one panel, "<name> is not connected." with the
+  host's reason, a primary **Try again** and a quiet **Open in Settings**, and it is the same words in every state.
   **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
   (not Usage, which holds figures): while it has text the body is the pages' groups, each titled "Page · Group", whole
   when the page name or the group title matches, else with only the rows whose label or detail match, and a group with
@@ -450,10 +469,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   one terminal glyph over the foot with its count; each press opens the next terminal after the one on screen. A row
   of another machine names the machine after its project (the nickname given to it, else its name); a row of this computer names no machine. **By project** (`projectSections`): one heading per project
   by name, with its colour square, count and needs-you count; a project on another machine gets its own heading,
-  `name · machine` with the line's dot. In both, a machine that needs the app is listed under the rows with its
-  **↑ Update** (or Install) button or its percentage, since no machine heading carries it, and a draft chat is the
+  `name · machine` with the line's dot. In both, a machine that needs the app, or is not up, is listed under the rows: its **↑ Update** (or Install) button or percentage, or that it is down (a red dot, "Offline" and a **Fix** button that opens the Add a remote machine dialog on that machine; the word never follows the line's retries, and the host's reason is the tooltip), since no machine heading carries it, and a draft chat is the
   first row of the list. **By machine**, this computer first: an uppercase 10.5px heading with a 12px caret (`--accent`; a project's caret is `--ansi-blue`), a laptop or server mark, the count and
-  the line's 5px dot (its tooltip gives the reason when the machine is down; a right-click opens the full menu); clicking the heading's name folds the group. There is no `+` on a machine and no group-by-project toggle: New session is one door. Within a
+  the line's 5px dot (its tooltip gives the reason when the machine is down; a right-click opens the full menu); clicking the heading's name folds the group. A machine that is down shows a red dot, "Offline" and **Fix** under its heading, always the same words whatever its line is doing, with the reason as the tooltip, and Fix opens the dialog on that machine; one that is up ends its sessions with **New session on <name>** (also in its right-click menu). There is no `+` in the heading and no group-by-project toggle. Within a
   machine the rows are in the **Session order** setting (`sidebarOrder`): as created, or with what needs you first.
   While the new-chat page is open, a draft row (**New session** in italics, a dim `draft` tag and the agent's tile at
   .75 opacity) is listed first (last on this computer when grouped by machine),
@@ -484,17 +502,17 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   time comes or the daemon clears it. Only that time makes a session limited, and only one the daemon calls idle or done: one that works, asks or failed keeps its status. A limited session is listed under the sidebar's Needs you and nowhere else that says needs you: the jump, the tray, the counts and the notices leave it out, because it waits on the limit and not on you, and its limit ending is not a new finish. Any other agent row has, at the right in 11px `--muted`, how long it has been in its state (`now`, `4m`, `3h`,
   `2d`; the daemon's `TermInfo.since`); it gives way to the close button once the pointer has rested on the row for 450ms (focus shows it at once). A finished agent's menu has **Mark as
   done**, which files it under Idle without opening it (`MarkSeen`). A shell's tile is a flat `--raise` square with a teal `>_`. The selected row is a raised pill. The row
-  is named by the name you gave it, else a shell's folder, else its agent. **Rename**: double-click, F2 or the menu
+  is named by the name you gave it, else the folder it was made in (the agent is the mark beside it). **Rename**: double-click, F2 or the menu
   turns the name into a field; Enter or leaving saves, Esc cancels, empty clears. Project colours are five tokens
   (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name, never amber or red.
   With nothing running the list says "Chats and shells you start appear here, sorted by what needs you."
-  The foot holds the update button (nothing while there is nothing to do: the version lives only in Settings; or "Reconnecting to maikerd…") and the Settings gear; Recent sessions is in the command palette.
+  The foot holds, at the left, a **+ Remote machine** button (12px `--muted`), then the update button (nothing while there is nothing to do: the version lives only in Settings; or "Reconnecting to maikerd…")  and, at the right, the Settings gear; **+ Remote machine** opens the small **Add a remote machine** dialog (`AddMachineDialog`) over the window, not Settings, and Recent sessions is in the command palette.
   Hidden (Ctrl+Shift+B, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
   sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (the collapsed sidebar, or a narrow
   window's; `Rail` in `Sidebar.tsx`) is 52px: expand, new session, search and new terminal (32px buttons) on top, then one 30px row per
   chat holding only its 14px `StatusIcon`, in the full list's order and groups with a 20px divider between groups; the
   open chat has the `--sel` fill and a 2px `--fg` bar on its left edge. Hovering a row shows the same hover card as the
-  full list, a click opens the chat and a right-click gives the same menu. The foot has the update button and Settings.
+  full list, a click opens the chat and a right-click gives the same menu. The foot has the update button, Remote machine (a `+` alone) and Settings.
   No agent logos, initials or connection dot (the service's state is the title-bar chip), and no Recent sessions button
   (it is in the command palette). The width eases on the drawers' timing.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
@@ -984,14 +1002,22 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   scrollback (Enter next, Shift+Enter previous), or, when the pane shows its chat, in the conversation:
   the row that holds the text is scrolled to and marked, starting from the newest; **All sessions** lists lines from every session's
   recent output, and a click shows that session.
-- **Worktrees (⌘⇧N).** The New worktree dialog names a branch and what to start it from (an
-  existing branch is checked out instead), then opens a session in the new folder in a new tab. A
+- **Worktrees (⌘⇧N).** The New worktree dialog has one job, making a worktree, and is a float (`.mx-rename.mx-wt`, 460px,
+  at most the window's height) of a fixed head, a body that scrolls and a fixed foot, so **Create worktree** (primary) and
+  **Cancel** (soft) are always on screen. The head is the title and one line, "A branch in its own folder next to <repo>, with a
+  session open in it". The body is the **Branch name** field (mono, a free two-word name offered and selected once the
+  branch lists arrive, a problem shown as a `FieldError` once the field is left or the form is sent) and **Start from**, the
+  themed Select (the current commit, then each branch; an existing branch is checked out instead and the picker gives way to a
+  line saying so). It opens a session in the new folder in a new tab. A
   project's right-click menu has a **Worktrees** submenu that opens a shell in any of the repo's
-  worktrees, and a **New worktree…** row. The dialog also lists the project's other worktrees with where each stands
-  ("merged, nothing uncommitted", "3 uncommitted changes", "not merged anywhere"), each with **Merge** (its committed
+  worktrees, and a **New worktree…** row. Under the fields, a folded **Other worktrees of <repo>** line with a count (collapsed
+  until opened; a line about two checkouts that changed one file stays visible) lists the project's other worktrees one line
+  each: the name in mono, a Tag for where it stands (`merged`, `unmerged`, `N changes`, `folder gone`), and its age
+  ("inactive 16 days", or the last commit's). **Merge** (its committed
   work into the main checkout's branch, no fast-forward; refused while either side has uncommitted changes, and a
-  conflict leaves the main checkout as it was) and **Remove** (removes the folder, but not one something still runs in, so close its sessions first;
-  it asks again first when that would lose changes or unmerged commits). This computer's worktrees only
+  conflict leaves the main checkout as it was) and **Remove** (removes the folder, but not one something still runs in, so close its sessions first)
+  are quiet row actions that show on hover or focus (always on a device with no hover); Remove that would lose changes or unmerged commits
+  turns the row into a second line, **Keep** and a danger **Lose … ? Remove**. This computer's worktrees only
   (`WorktreeManager.tsx`, `src-tauri/src/worktrees.rs`). Worktrees group under their parent repo. A folder's row shows
   only its name: a branch belongs to a session, and a worktree's branch is not the folder's.
 - **Branch or worktree.** A session in the project's own folder shows its branch in `--branch` (violet: #A78BFA on a dark ground, #6B46C1 on a light one, set by `themeStyle`; every branch name and icon uses it) with the branch mark;

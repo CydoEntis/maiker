@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { toSessionView, type SessionView } from './session'
-import { byUrgency, canPutAway, canSnooze, inProject, machineGroups, projectChoices, projectColor, projectGroups, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
+import { byUrgency, canPutAway, canSnooze, inProject, machineGroups, projectChoices, projectColor, projectGroups, placeLine, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(1)) }))
 
@@ -31,10 +31,17 @@ describe('the sidebar’s order', () => {
 })
 
 describe('a row', () => {
-  it('names a session by its name, a shell by its folder, an agent by its program', () => {
+  it('says where a session works for a toast: project, branch and a worktree', () => {
+    const plain = session(1, { repo: 'maiker', branch: 'gui-revive' })
+    expect(placeLine(plain)).toBe('maiker / gui-revive')
+    expect(placeLine({ ...plain, worktree: true })).toBe('maiker / gui-revive · worktree')
+    expect(placeLine({ ...plain, branch: null })).toBe('maiker')
+  })
+
+  it('names a session by its name, else by the folder it was made in, an agent or a program included', () => {
     expect(rowTitle(session(1, { named: true, title: 'Growth' }))).toBe('Growth')
     expect(rowTitle(session(2, { cwd: '/home/me/dev', folder: '/home/me/dev' }))).toBe('dev')
-    expect(rowTitle(session(3, { agent: 'codex' }))).toBe('codex')
+    expect(rowTitle(session(3, { agent: 'codex' }))).toBe('app3')
     expect(rowTitle(session(4, { cwd: '/home/me/dev', folder: '/home/me/dev', process: 'node-mainthread' }))).toBe('dev')
   })
 

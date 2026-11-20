@@ -3,13 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides } from './model/shortcuts'
 import { useShortcutKeys } from './useShortcuts'
 
-function listen(canUndoClose: boolean, keyOverrides: KeyOverrides = {}) {
+function listen(canUndoClose: boolean, keyOverrides: KeyOverrides = {}, open: { addMachineOpen?: boolean; setAddMachineOpen?: () => void } = {}) {
   const runShortcut = vi.fn()
   renderHook(() => {
     useShortcutKeys({
       runShortcut,
       canUndoClose,
-      dialogOpen: false,
+      dialogOpen: open.addMachineOpen === true,
+      addMachineOpen: open.addMachineOpen === true,
       onNewChatPage: false,
       overlayOpen: false,
       paletteOpen: false,
@@ -18,6 +19,7 @@ function listen(canUndoClose: boolean, keyOverrides: KeyOverrides = {}) {
       welcomeOpen: false,
       shortcutsOpen: false,
       setPaletteOpen: vi.fn(),
+      setAddMachineOpen: open.setAddMachineOpen ?? vi.fn(),
       setSettingsSection: vi.fn(),
       setNewChatOpen: vi.fn(),
       setDrawerOpen: vi.fn(),
@@ -83,5 +85,18 @@ describe('a key chosen in Settings', () => {
     press(field, 'K', { ctrlKey: true, shiftKey: true })
 
     expect(runShortcut).not.toHaveBeenCalled()
+  })
+})
+
+describe('the Add a remote machine dialog', () => {
+  afterEach(() => { document.body.replaceChildren() })
+
+  it('holds the app’s shortcuts while it is open, and Esc closes it', () => {
+    const close = vi.fn()
+    const runShortcut = listen(false, {}, { addMachineOpen: true, setAddMachineOpen: close })
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'T', code: 'KeyT', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true }))
+    expect(runShortcut).not.toHaveBeenCalled()
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+    expect(close).toHaveBeenCalledWith(false)
   })
 })

@@ -20,6 +20,7 @@
 .mx-head-button:disabled { opacity: .4; }
 .mx-head-button.is-rail { width: 32px; height: 32px; border-radius: var(--r-control); }
 .mx-settings-button { width: auto; height: 26px; padding: 0 8px; }
+.mx-sidebar .mx-head-button.mx-add-machine { width: auto; flex: none; gap: 6px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
 
 /* Which project, and what the headings are: two quiet buttons, each opening a short list. */
 .mx-sidebar-filters { flex: none; display: flex; align-items: center; gap: 6px; padding: 2px 8px 6px; }
@@ -65,7 +66,7 @@
 .mx-machine-name { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-machine-count { font-size: 11px; letter-spacing: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
 .mx-machine-dot { width: 5px; height: 5px; flex: none; border-radius: 50%; opacity: .8; background: var(--ok); }
-.mx-machine-dot.is-offline { background: transparent; border: 1.5px dashed var(--dim); }
+.mx-machine-dot.is-offline { background: var(--err); border: 0; opacity: 1; }
 /* A machine that needs the app: its state and the one-click fix, under the heading, lined up with its mark. */
 /* A machine that needs the app: an amber text button in its header, and its dot turns amber. */
 .mx-machine-update { flex: none; height: 20px; display: flex; align-items: center; gap: 3px; padding: 0 6px; border-radius: 6px; font-size: 11px; font-weight: 500; color: var(--warn); }
@@ -221,3 +222,15 @@
 .mx-grp-foot { display: flex; justify-content: flex-end; padding: 4px 6px; border-top: 1px solid var(--line); }
 .mx-grp-reset { height: 24px; padding: 0 8px; font-size: 12px; color: var(--fg2); }
 .mx-grp-reset:hover { background: var(--m-hover); color: var(--fg); }
+
+/* A machine that is not up: a red dot, "Offline" and a Fix button; the reason is the tooltip. */
+.mx-machine-why { display: flex; align-items: center; gap: 6px; margin: 0 8px 4px 26px; font-size: 11.5px; color: var(--muted); }
+.mx-machine-note .mx-machine-why { margin: 0 0 0 auto; }
+.mx-machine-why-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--err); flex: none; }
+.mx-machine-why-word { flex: 1; min-width: 0; }
+.mx-machine-fix { flex: none; height: 20px; padding: 0 8px; border-radius: var(--r-control); font-size: 11.5px; font-weight: 500; color: var(--fg); background: var(--m-hover); }
+.mx-machine-fix:hover { background: var(--m-sel); }
+/* A visible way to start a session on a machine; before it was only in the machine's right-click menu. */
+.mx-machine-new { display: flex; align-items: center; gap: 6px; width: calc(100% - 16px); margin: 2px 8px 4px; padding: 5px 10px; border-radius: var(--r-control); font-size: 12px; color: var(--muted); text-align: left; }
+.mx-machine-new:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
+.mx-machine-new:disabled { opacity: .5; }

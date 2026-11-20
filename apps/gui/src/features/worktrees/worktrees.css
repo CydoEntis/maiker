@@ -1,0 +1,41 @@
+/* The New worktree dialog: a fixed head and foot around a body that scrolls, so Create is always on screen. */
+.mx-rename.mx-wt { max-width: 460px; max-height: 100%; padding: 0; gap: 0; overflow: hidden; }
+.mx-wt-head { flex: none; display: flex; flex-direction: column; gap: 4px; padding: 16px 20px 14px; border-bottom: 1px solid var(--line); }
+.mx-wt-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 16px 20px; }
+.mx-wt-field { display: flex; flex-direction: column; gap: 6px; }
+.mx-wt-field > label, .mx-wt-field > span, .mx-wt-list-head { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.mx-wt-field input { font-family: var(--mono); font-size: 13px; }
+.mx-wt-field .mx-field-error { margin-top: 0; }
+.mx-wt-base.mx-picker-button { width: 100%; height: 38px; padding: 0 10px 0 12px; font-size: 13px; color: var(--fg); }
+.mx-wt-base.mx-picker-button > [data-slot="select-value"] { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-wt-base.mx-picker-button[data-state="open"] .mx-picker-chevron { transform: rotate(180deg); }
+.mx-wt-menu { z-index: 95; width: var(--radix-select-trigger-width); }
+.mx-wt-branch { font-family: var(--mono); font-size: 12.5px; }
+.mx-wt-note { margin: 0; }
+.mx-wt-foot { flex: none; display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
+
+/* The project's other worktrees: one line each, in a region of its own height. */
+.mx-wt-list { display: flex; flex-direction: column; gap: 6px; }
+.mx-wt-list-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; text-align: left; border-radius: var(--r-control); }
+.mx-wt-list-head:hover { color: var(--fg2); }
+.mx-wt-list-head:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-wt-chevron { flex: none; transition: transform var(--t-fast) var(--ease); }
+.mx-wt-list-head[aria-expanded="true"] .mx-wt-chevron { transform: rotate(90deg); }
+.mx-wt-count { font-family: var(--mono); font-weight: 400; letter-spacing: 0; }
+.mx-wt-overlap { margin: 0; font-size: 12px; color: var(--warn, var(--fg2)); }
+.mx-wt-rows { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.mx-wt-row { position: relative; display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; min-height: 34px; padding: 0 4px; border-bottom: 1px solid var(--line); }
+.mx-wt-row:hover, .mx-wt-row:focus-within { background: var(--m-hover); }
+.mx-wt-row > strong { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 500 12.5px var(--mono); color: var(--fg); }
+.mx-wt-tag { flex: none; width: 92px; display: flex; }
+.mx-wt-age { flex: none; min-width: 100px; font-size: 12px; color: var(--muted-text); white-space: nowrap; }
+.mx-wt-actions { position: absolute; top: 0; right: 4px; height: 34px; align-items: center; background: var(--m-hover); box-shadow: -12px 0 8px -4px var(--m-hover); display: flex; gap: 2px; opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.mx-wt-row:hover .mx-wt-actions, .mx-wt-row:focus-within .mx-wt-actions { opacity: 1; }
+.mx-wt-row.is-asking .mx-wt-actions { display: none; }
+@media (hover: none) { .mx-wt-actions { opacity: 1; } }
+.mx-wt-more { flex-basis: 100%; display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 2px 0 8px; font-size: 12px; color: var(--muted-text); }
+
+/* "Move this chat there": one line with its checkbox, above where the branch starts. */
+.mx-wt-move { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; color: var(--fg2); cursor: pointer; }
+.mx-wt-move input { margin-top: 2px; accent-color: var(--accent); }
+.mx-wt-move:has(input:disabled) { color: var(--muted); cursor: default; }

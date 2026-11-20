@@ -1,7 +1,7 @@
 import { BYPASS_FLAG } from './newChatHost'
 import { abilitiesOf } from './agentAbilities'
 import type { SessionView } from './session'
-import { suggestBranchName } from './worktreeName'
+import { nameForTask } from './worktreeName'
 
 /** The ids the daemon lists as saved; anything else is not typed into a shell. A letter or digit comes first, so an id is never read as a flag. */
 const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/
@@ -46,7 +46,7 @@ export function resumeLine(agent: 'claude' | 'codex', sessionId: string, folder:
   return `cd "${folder}" ${then} ${resume}`
 }
 
-/** A branch name for the new worktree that no existing branch or worktree uses. */
-export function worktreeBranch(taken: readonly string[]): string {
-  return suggestBranchName(new Set(taken))
+/** A branch name for the new worktree that no existing branch or worktree uses: from what the chat is working on, else made up. */
+export function worktreeBranch(taken: readonly string[], task = ''): string {
+  return nameForTask(task, new Set(taken))
 }

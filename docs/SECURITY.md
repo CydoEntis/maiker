@@ -164,7 +164,10 @@ in the home folder of this computer or of the machine named, whose first command
 `GITHUB_SIGN_IN_COMMAND` (`gh auth login --web --git-protocol https`, in `maitty-desktop-client`). The
 webview supplies the machine and nothing else, so it is not a way to run a program of the window's
 choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
-password or token from it.
+password or token from it. The key step of Add a remote machine shows a plain shell of this computer inside the
+dialog with `ssh-copy-id` typed and not run (`keySetupCommand` refuses a target that is not one plain word); the
+password is typed into that terminal and travels as any terminal input to ssh, and the window reads, stores, logs and
+prefills none of it. The shell is ended when the dialog goes.
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
 `maiker-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›

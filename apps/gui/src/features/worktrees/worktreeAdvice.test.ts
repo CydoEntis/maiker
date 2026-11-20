@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { lossOfRemoving, mergeBlock, overlapWords, standingWords } from './worktreeAdvice'
+import { ageWords, lossOfRemoving, mergeBlock, overlapWords, standingTag, standingTone, standingWords } from './worktreeAdvice'
 
 const clean = { dirty: 0, branch: 'task', merged: true, last_commit: '3 days ago', inactive_days: null, missing: false }
 
@@ -27,6 +27,17 @@ describe('what a worktree can lose', () => {
     expect(mergeBlock({ ...clean, merged: false, dirty: 1 })).toBe('Commit its changes first.')
     expect(mergeBlock(clean)).toBe('Its work is already on another branch.')
     expect(mergeBlock({ ...clean, branch: null, merged: false })).toBe('It is on no branch.')
+  })
+})
+
+describe('a worktree row', () => {
+  it('carries one word for what is on it and one for how long it has been quiet', () => {
+    expect([standingTag(clean), standingTone(clean)]).toEqual(['merged', 'done'])
+    expect([standingTag({ ...clean, merged: false }), standingTone({ ...clean, merged: false })]).toEqual(['unmerged', 'neutral'])
+    expect([standingTag({ ...clean, dirty: 3 }), standingTone({ ...clean, dirty: 3 })]).toEqual(['3 changes', 'working'])
+    expect([standingTag({ ...clean, missing: true }), standingTone({ ...clean, missing: true })]).toEqual(['folder gone', 'err'])
+    expect(ageWords(clean)).toBe('3 days ago')
+    expect(ageWords({ ...clean, inactive_days: 16 })).toBe('inactive 16 days')
   })
 })
 

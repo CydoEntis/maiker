@@ -9,7 +9,7 @@
 .is-edge-caution { --edge: var(--caution); }
 .is-edge-needs { --edge: var(--needs); }
 .is-edge-working { --edge: var(--working); }
-.is-edge-info { --edge: var(--line2); }
+.is-edge-info { --edge: var(--muted); }
 
 /* ---- buttons: outlined, a status-tinted primary, the needs answer, a quiet text button ---- */
 .mx-fb-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; padding: 0 10px; font: 500 12px var(--ui); color: var(--fg); white-space: nowrap; background: transparent; box-shadow: inset 0 0 0 1px var(--line2); --fold-line: var(--line2); }
@@ -38,14 +38,14 @@
 
 /* ---- toasts: bottom right, 360px, newest above the others ---- */
 .mx-toaster { position: fixed; right: 20px; bottom: 20px; z-index: 85; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-.mx-toast[data-float] { pointer-events: auto; display: flex; gap: 10px; padding: 12px 6px 10px 12px; color: var(--fg); background: var(--main); border: 1px solid var(--line2); box-shadow: inset 2px 0 0 var(--edge), var(--pop-sh); animation: mx-fb-rise .2s var(--ease); }
+.mx-toast[data-float] { pointer-events: auto; display: flex; gap: 10px; padding: 12px 6px 10px 12px; color: var(--fg); background: var(--main); border: 1px solid var(--line); box-shadow: inset 3px 0 0 var(--edge), var(--pop-sh); animation: mx-fb-rise .2s var(--ease); }
 /* In the window the float material (material.css) would set its own border and shadow; the toast keeps its edge. */
-.mx-app .mx-toast[data-float] { border-color: var(--line2); box-shadow: inset 2px 0 0 var(--edge), var(--pop-sh); }
+.mx-app .mx-toast[data-float] { border-color: var(--line); box-shadow: inset 3px 0 0 var(--edge), var(--pop-sh); }
 .mx-toast > .mx-fb-mark { align-self: flex-start; height: 18px; }
 .mx-toast-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .mx-toast-title { font-size: 13px; font-weight: 600; line-height: 18px; color: var(--fg); overflow-wrap: anywhere; }
 .mx-toast-count { margin-left: 6px; font: 500 11.5px var(--mono); color: var(--dim); }
-.mx-toast-reason { font-size: 12.5px; line-height: 1.5; color: var(--fg2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.mx-toast-reason { font-size: 12.5px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .mx-toast-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
 .mx-toast-x { flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; }
 .mx-toast-x:hover { background: var(--m-hover); color: var(--fg); }

@@ -96,6 +96,7 @@ function Toasts() {
     toast.warning('Back online, but 2 chats were interrupted', { action: { label: 'Restart both', onClick: SAME } })
     toast.failed('Could not open the link', new Error('xdg-open exited with code 3'))
     toast.failed('Could not open the link', new Error('xdg-open exited with code 3'))
+    toast.info('Closed claude', { description: 'maiker / gui-revive · worktree', action: { label: 'Undo', onClick: SAME } })
   }, [])
   return (
     <>

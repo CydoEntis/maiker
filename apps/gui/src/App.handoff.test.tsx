@@ -375,7 +375,7 @@ describe('desktop terminal multiplexer', () => {
     const named = await within(sidebar).findByRole('button', { name: /^Growth Tests, shell/ })
 
     expect(named.querySelector('.mx-row-name')).toHaveTextContent('Growth Tests')
-    expect(within(sidebar).getByRole('button', { name: /, claude, / }).querySelector('.mx-row-name')).toHaveTextContent('claude')
+    expect(within(sidebar).getByRole('button', { name: /, claude, / }).querySelector('.mx-row-name')).toHaveTextContent('a')
   })
 
   it('moves through a session menu with the arrow keys and gives focus back when it closes', async () => {
@@ -407,7 +407,7 @@ describe('desktop terminal multiplexer', () => {
 
     const row = await within(sidebar).findByRole('button', { name: /, claude, working/ })
 
-    expect(row).toHaveTextContent('claude')
+    expect(row).toHaveTextContent('maiker')
     expect(row).toHaveTextContent('agent/grow-028')
     expect(row).not.toHaveTextContent('+104')
     expect(row).not.toHaveTextContent('−61')
@@ -426,7 +426,7 @@ describe('desktop terminal multiplexer', () => {
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code`) })
   })
 
-  it('lists every session under what it is doing, what needs you first, each named by its folder or agent', async () => {
+  it('lists every session under what it is doing, what needs you first, each named by its folder', async () => {
     daemon.loadConversations.mockResolvedValue([
       term(9, `${HOME}/Downloads`),
       inRepo(3, `${HOME}/code/maiker`, `${HOME}/code/maiker/crates/maitty-core`, { agent: 'codex', status: 'working' }),
@@ -438,7 +438,7 @@ describe('desktop terminal multiplexer', () => {
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
     await within(sidebar).findByRole('button', { name: 'maiker, shell, idle' })
     const rows = within(sidebar).getAllByRole('button', { name: /, (shell|codex), / }).map((row) => row.getAttribute('aria-label'))
-    expect(rows).toEqual(['docs, shell, needs you', 'codex, codex, working', 'Downloads, shell, idle', 'maiker, shell, idle'])
+    expect(rows).toEqual(['docs, shell, needs you', 'maiker, codex, working', 'Downloads, shell, idle', 'maiker, shell, idle'])
     expect(sidebar).not.toHaveTextContent(`${DAEMON_NAME} ·`)
   })
 
@@ -683,7 +683,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
   it('asks before the row menu’s Stop session stops an agent', async () => {
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { agent: 'claude', status: 'idle' })])
     renderDesktopApp()
-    const row = await screen.findByRole('button', { name: /^claude, claude, / })
+    const row = await screen.findByRole('button', { name: /^a, claude, / })
 
     fireEvent.contextMenu(row)
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Stop session' }))
@@ -803,7 +803,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
     expect(screen.queryByText('Reconnecting…')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'codex, codex, working' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'a, codex, working' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).not.toHaveAttribute('data-input-disabled', 'true')
     await waitFor(() => { expect(daemon.loadConversations).toHaveBeenCalledTimes(3) }, { timeout: 3000 })
     expect(screen.queryByText('Reconnecting…')).not.toBeInTheDocument()
@@ -821,10 +821,10 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(await screen.findByText('Reconnecting…')).toBeInTheDocument()
     expect(screen.queryByRole('alertdialog')).toBeNull()
     // The row says only that it is unknown; "last seen working" now lives in its tooltip and hover card.
-    expect(screen.getByRole('button', { name: 'codex, codex, offline' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'a, codex, offline' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).toHaveAttribute('data-input-disabled', 'true')
     expect(screen.getByRole('button', { name: 'New session' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'codex, codex, offline' })).not.toHaveClass('mx-fx-working')
+    expect(screen.getByRole('button', { name: 'a, codex, offline' })).not.toHaveClass('mx-fx-working')
     // The sidebar's foot never says it a second time.
     expect(screen.queryByText(`Reconnecting to ${DAEMON_NAME}…`)).toBeNull()
 

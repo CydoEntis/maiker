@@ -1,6 +1,6 @@
 import { isChatSession } from './chatSession'
 import type { MachineHead } from './machines'
-import { folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView, STATUS_WORD } from './session'
+import { displayName, folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView, STATUS_WORD } from './session'
 
 /**
  * The most urgent first: what needs you, an agent that stopped, one held by its plan limit, what is
@@ -31,6 +31,22 @@ export function projectOf(session: SessionView): string {
   return session.repoName ?? folderNameOf(session)
 }
 
+/** Where a session works: `project / branch`, with `· worktree` when it has a checkout of its own. */
+export function placeLine(session: SessionView): string {
+  const where = session.branch === null ? projectOf(session) : `${projectOf(session)} / ${session.branch}`
+  return session.worktree ? `${where} · worktree` : where
+}
+
+/**
+ * What a toast about one session says: its name as the sidebar calls it (a shell by its path, which is its name) and, under
+ * it, where it works. The second line is left out when it would only say the name again.
+ */
+export function sessionWords(session: SessionView): { title: string; description?: string } {
+  const title = isShell(session) ? displayName(session) : rowTitle(session)
+  const place = placeLine(session)
+  return place === title ? { title } : { title, description: place }
+}
+
 /**
  * The square before a project's name: one of five colours, chosen from its name so a project is
  * always the same colour. They are CSS variables (`--proj-1` to `--proj-5`), never amber or red.
@@ -58,13 +74,12 @@ export function isShell(session: Pick<SessionView, 'process'>): boolean {
 }
 
 /**
- * What a row and a pane header call a session: the name you gave it, else the agent the daemon
- * detected, else the folder. A program running in a shell (`node`, `vim`) is not a name: it comes
- * and goes with each command, and a title that followed it would change under you.
+ * What a row and a pane header call a session: the name you gave it, else the folder it was made in. Neither the agent nor a
+ * program running in a shell (`node`, `vim`) is a name: the agent is the mark beside it, a program comes and goes with each
+ * command, and a title that followed either would change under you.
  */
 export function rowTitle(session: SessionView): string {
-  if (session.name !== null) return session.name
-  return session.conversation.agent ? session.process : folderNameOf(session)
+  return session.name ?? folderNameOf(session)
 }
 
 /** The words at the right of a row: only a stopped agent, an exited shell or a session held by its plan limit says anything. */

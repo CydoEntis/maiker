@@ -3,25 +3,35 @@ import { SkeletonLines } from '@/components/ui/skeleton'
 import { errorMessage } from '@/lib/error-message'
 import type { HostChoice } from '@/api/machines'
 import { checkAddress, suggestedName } from '../model/addressCheck'
+import { IpAddressInput } from './IpAddressInput'
+import { addressOfOctets, octetsOf } from '../model/ipAddress'
+import { keySetupCommand } from '../model/keyCommand'
 import { targetOf } from '../model/machineTarget'
 import { AddOutcome, type Stage } from './AddOutcome'
 import type { MachinesInfo } from './DesktopSettings'
 
 const BACK_PATH = 'm15 18-6-6 6-6'
+const IS_WINDOWS = /windows/i.test(typeof navigator === 'undefined' ? '' : navigator.userAgent)
 const LEAD = 'Maiker connects over SSH, using your keys. It never asks for or keeps passwords.'
-const PLACEHOLDER = 'user@host, or a name from your SSH config'
+/** How long "Connected" is shown after the key worked, before the dialog closes. */
+const CONNECTED_SHOWN_MS = 1400
+const USER_PLACEHOLDER = 'username'
+const HOST_PLACEHOLDER = 'IP address or name'
 
 type Hosts = { status: 'loading' } | { status: 'ready'; hosts: readonly HostChoice[] } | { status: 'failed'; message: string }
 
 /** What was last asked of the host, so Try again reruns the whole sequence from the start. */
 type Request = { target: string; name: string; port: number | null; host: string }
 
+/** How the machine came to be added: reached (`connected`), Maiker put on it (`installed`), or left as it is (`added`). */
+export type AddedHow = 'connected' | 'installed' | 'added'
+
 type Props = {
   machines: MachinesInfo
   /** The breadcrumb: back to the list. */
   onClose: () => void
   /** The machine is added: the list is where the person sees it. */
-  onAdded: (name: string) => void
+  onAdded: (name: string, how: AddedHow) => void
   /** Shown inside the first-run setup, which has its own steps: no breadcrumb back to the list. */
   embedded?: boolean
 }
@@ -29,7 +39,14 @@ type Props = {
 /** Settings › Remote machines › Add a machine: one field, one status block, and the hosts of ~/.ssh/config. */
 export function AddMachinePanel({ machines, onClose, onAdded, embedded = false }: Props) {
   const { add, list } = machines
-  const [typed, setTyped] = useState('')
+  const [user, setUser] = useState('')
+  // The host is four boxes for an IP address, or one field for a name (a computer's name, or one from the SSH config).
+  const [byName, setByName] = useState(false)
+  const [octets, setOctets] = useState<string[]>(['', '', '', ''])
+  const [host, setHost] = useState('')
+  const hostText = byName ? host.trim() : addressOfOctets(octets)
+  // The account and the host make one address, `user@host`; a host alone is a name from the SSH config.
+  const typed = user.trim() === '' ? hostText : `${user.trim()}@${hostText}`
   // The message waits for Enter or Connect, and editing the field hides it again.
   const [shown, setShown] = useState(false)
   const [stage, setStage] = useState<Stage | null>(null)
@@ -59,12 +76,14 @@ export function AddMachinePanel({ machines, onClose, onAdded, embedded = false }
   const address = typed.trim() === '' ? null : checkAddress(typed)
   const already = useMemo(() => {
     const text = typed.trim().toLowerCase()
-    return text === '' ? null : list.find((head) => head.name?.toLowerCase() === text || head.target?.toLowerCase() === text) ?? null
-  }, [list, typed])
+    // Once a connect has run the machine is saved, so it is in the list; the outcome box below says where it stands, and "already added" over it would contradict it.
+    if (text === '' || stage !== null) return null
+    return list.find((head) => head.name?.toLowerCase() === text || head.target?.toLowerCase() === text) ?? null
+  }, [list, typed, stage])
   const problem = already !== null ? `${typed.trim()} is already in Maiker.` : address !== null && !address.ok ? address.message : null
   const valid = address?.ok === true && already === null
 
-  const finish = useCallback((name: string) => { ticket.current += 1; onAdded(name) }, [onAdded])
+  const finish = useCallback((name: string, how: AddedHow) => { ticket.current += 1; onAdded(name, how) }, [onAdded])
 
   const connect = (request: Request) => {
     const run = ++ticket.current
@@ -75,14 +94,26 @@ export function AddMachinePanel({ machines, onClose, onAdded, embedded = false }
         if (run !== ticket.current) return
         if (result.outcome === 'cancelled') { setStage(null); return }
         if (result.outcome === 'needs-name') { setStage({ kind: 'no-name', target: request.target }); return }
-        if (result.outcome === 'added' && (result.reach === 'answered' || result.reach === 'newer-here')) { finish(result.name); return }
-        setStage({ kind: 'added', added: result, choice: 'ask' })
+        if (result.outcome === 'added' && (result.reach === 'answered' || result.reach === 'newer-here')) { finish(result.name, 'connected'); return }
+        setStage({ kind: 'added', added: result, choice: 'ask', port: request.port })
       },
       (error: unknown) => {
         if (run !== ticket.current) return
         setStage({ kind: 'failed', message: errorMessage(error, 'Could not add the machine'), host: request.host, port: request.port })
       },
     )
+  }
+
+  const changed = () => { setShown(false); if (!working) setStage(null) }
+  // A whole `user@host` typed or pasted: the account goes to its own field, an IP address to the four boxes, anything else stays a name.
+  const splitWhole = (text: string): string => {
+    const at = text.indexOf('@')
+    const account = at < 0 ? null : text.slice(0, at)
+    const rest = (at < 0 ? text : text.slice(at + 1).replace(/@/g, '')).trim()
+    if (account !== null) setUser(account.trim())
+    const ip = octetsOf(rest)
+    if (ip !== null) { setOctets(ip); setByName(false); return '' }
+    return rest
   }
 
   const submit = () => {
@@ -106,20 +137,40 @@ export function AddMachinePanel({ machines, onClose, onAdded, embedded = false }
   // A machine that needed a person (a key, a host key) or a restart is added; it counts as done once it connects.
   const waitingOn = stage?.kind === 'added' && (stage.added.outcome === 'login' || stage.added.reach === 'not-running') ? stage.added.name : null
   const connected = waitingOn !== null && list.some((head) => head.name === waitingOn && head.chip?.word === 'connected')
-  useEffect(() => { if (connected) finish(waitingOn) }, [connected, waitingOn, finish])
+  // The key terminal is the person's way of making it connect, so they are shown that it did before the screen goes.
+  // The stage the terminal was asked for: another stage (a new answer, an edit) is another object, so the terminal is gone with it.
+  const [settingUpFor, setSettingUpFor] = useState<Stage | null>(null)
+  const settingUp = settingUpFor !== null && settingUpFor === stage
+  const shownConnected = connected && settingUp ? waitingOn : null
+  useEffect(() => {
+    if (connected && !settingUp) { finish(waitingOn, 'connected'); return undefined }
+    if (shownConnected === null) return undefined
+    const timer = window.setTimeout(() => { finish(shownConnected, 'connected') }, CONNECTED_SHOWN_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [connected, settingUp, waitingOn, shownConnected, finish])
 
   const install = () => {
     if (stage?.kind !== 'added' || stage.added.outcome !== 'added') return
     const { added } = stage
     const run = ticket.current
-    setStage({ kind: 'added', added, choice: 'installing' })
+    setStage({ kind: 'added', added, choice: 'installing', port: stage.port })
     machines.onUpdate(added.name, added.reach === 'missing' ? 'install' : 'update', false).then(
-      () => { if (run === ticket.current) finish(added.name) },
-      () => { if (run === ticket.current) setStage({ kind: 'added', added, choice: 'ask' }) },
+      () => { if (run === ticket.current) finish(added.name, 'installed') },
+      () => { if (run === ticket.current) setStage({ kind: 'added', added, choice: 'ask', port: stage.port }) },
     )
   }
 
-  const filter = typed.trim().toLowerCase()
+  // The key is set up in a terminal of this computer shown right here: the person types the password there, and the machine
+  // is dialled again until it connects. The terminal goes with the error: any other stage unmounts it, which ends its shell.
+  const keyCommand = stage?.kind === 'added' && stage.added.outcome === 'login' ? keySetupCommand(stage.added.target, stage.port, IS_WINDOWS) : null
+  const keyTerminal = machines.keyTerminal
+  const offersKey = keyTerminal !== undefined && keyCommand !== null
+  const onSetUpKey = offersKey ? () => { setSettingUpFor(stage) } : null
+  const terminal = offersKey && settingUp ? { host: keyTerminal, onFailed: () => { setSettingUpFor(null) } } : null
+  const outcome: Stage | null = shownConnected === null ? stage : { kind: 'connected', name: shownConnected }
+
+  // Only a name typed for the SSH config narrows its list; the account and the IP boxes never do.
+  const filter = byName ? host.trim().toLowerCase() : ''
   const choices = hosts.status === 'ready' ? hosts.hosts.filter((host) => `${host.alias} ${host.detail}`.toLowerCase().includes(filter)) : []
 
   return (
@@ -132,26 +183,64 @@ export function AddMachinePanel({ machines, onClose, onAdded, embedded = false }
         </nav>
       )}
       <p className="mx-rm-lead-text">{LEAD}</p>
+      {terminal === null && (
       <form className="mx-rm-address" onSubmit={(event) => { event.preventDefault(); submit() }}>
         <input
-          ref={input}
-          className="mono"
-          aria-label="Address"
+          className="mono mx-rm-user"
+          aria-label="Username"
           aria-invalid={shown && problem !== null}
-          value={typed}
-          placeholder={PLACEHOLDER}
+          value={user}
+          placeholder={USER_PLACEHOLDER}
           spellCheck={false}
           autoCapitalize="none"
+          autoComplete="off"
           autoFocus
           readOnly={working}
-          onChange={(event) => { setTyped(event.target.value); setShown(false); if (!working) setStage(null) }}
+          onChange={(event) => {
+            const value = event.target.value
+            // A whole `user@host` typed or pasted here is split: the account stays, the host goes to its own field.
+            if (value.includes('@')) { const rest = splitWhole(value); if (rest !== '') { setHost(rest); setByName(true) } } else setUser(value)
+            changed()
+          }}
         />
+        <span className="mx-rm-at mono" aria-hidden="true">@</span>
+        {byName ? (
+          <input
+            ref={input}
+            className="mono mx-rm-host"
+            aria-label="Address"
+            aria-invalid={shown && problem !== null}
+            value={host}
+            placeholder={HOST_PLACEHOLDER}
+            spellCheck={false}
+            autoCapitalize="none"
+            autoComplete="off"
+            readOnly={working}
+            onChange={(event) => { setHost(event.target.value.includes('@') ? splitWhole(event.target.value) : event.target.value); changed() }}
+          />
+        ) : (
+          <IpAddressInput octets={octets} invalid={shown && problem !== null} readOnly={working} onChange={(next) => { setOctets(next); changed() }} onPasteOther={(text) => { const rest = splitWhole(text); if (rest !== '') { setHost(rest); setByName(true) } changed() }} />
+        )}
         <button type="submit" className="mx-rm-primary" aria-disabled={!valid || working}>Connect</button>
       </form>
+      )}
+      {stage === null && <p className="mx-rm-hint">The account you sign in with on that computer, then the IP address. </p>}
+      {stage === null && (
+        <p className="mx-rm-hint">
+          <button type="button" className="mx-rm-text" onClick={() => { setByName(!byName); changed() }}>{byName ? 'Use an IP address instead' : 'Use a name instead'}</button>
+          {byName ? '  A name from your SSH config works with no username.' : ''}
+        </p>
+      )}
       {shown && problem !== null && <p className="mx-rm-error" role="alert"><span aria-hidden="true">×</span> {problem}</p>}
-      {stage !== null && (
+      {shown && already?.name != null && (
+        <p className="mx-rm-hint">
+          <button type="button" className="mx-rm-primary" onClick={() => { machines.onRetry(already.name ?? '') }}>Retry {already.name}</button>
+          <button type="button" className="mx-rm-text" onClick={() => { machines.onRemove(already.name ?? '') }}>Remove {already.name}</button>
+        </p>
+      )}
+      {outcome !== null && (
         <div data-owns-escape onKeyDown={(event) => { if (working && event.key === 'Escape') { event.stopPropagation(); cancel() } }}>
-          <AddOutcome stage={stage} machines={machines} onTryAgain={() => { if (last.current !== null) connect(last.current) }} onEdit={edit} onCancel={cancel} onInstall={install} onSkip={() => { if (stage.kind === 'added') finish(stage.added.name) }} />
+          <AddOutcome stage={outcome} machines={machines} onTryAgain={() => { if (last.current !== null) connect(last.current) }} onEdit={edit} onCancel={cancel} onInstall={install} onSkip={() => { if (stage?.kind === 'added') finish(stage.added.name, 'added') }} keyCommand={keyCommand} onSetUpKey={onSetUpKey} terminal={terminal} />
         </div>
       )}
       {stage === null && <SshHosts hosts={hosts} choices={choices} onPick={(host) => { connect({ target: host.alias, name: suggestedName({ alias: host.alias }, taken), port: null, host: host.alias }) }} />}

@@ -26,7 +26,7 @@ import { abilitiesOf } from '../model/agentAbilities'
 import { useFolderBranches, useFolderSync, useInstalledAgents } from '../model/newChatHost'
 import { branchNameError, BRANCH_NAME } from '../model/branchName'
 import type { BusyBranches, NewSessionProject } from '../model/newSession'
-import { suggestBranchName } from '../model/worktreeName'
+import { nameForTask, slugFromTask, suggestBranchName } from '../model/worktreeName'
 import { carriesCredentials, cloneTargetOf, explainCloneFailure, parseRepoAddress, type CloneProblem, type RepoAddress } from '../model/repoAddress'
 import { readLastWho, rememberWho } from '../model/lastWho'
 import { discardDraft, parkDraft, parkedDraft } from '../model/newSessionDraft'
@@ -230,9 +230,10 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const canTree = folder !== '' && (remote || branches !== null)
   const treeMode = canTree && (workIn === 'tree' || (!remote && workIn === 'auto' && busyWith !== undefined))
   const takenBranches = useMemo(() => new Set([...(branches?.branches ?? []).map((entry) => entry.name), ...takenNames]), [branches, takenNames])
-  // In a worktree of its own with no branch chosen, the session gets a new branch with a two-word name. It is rolled once
-  // per list of names in use and never copies the message, which is no name for a branch.
-  const suggested = useMemo(() => (treeMode && (remote || branches !== null) ? suggestBranchName(takenBranches) : null), [treeMode, remote, branches, takenBranches])
+  // In a worktree of its own with no branch chosen, the session gets a new branch named for the task in the message
+  // (`fix-login-redirect`), or while there is none a two-word name, rolled once per list of names in use.
+  const rolled = useMemo(() => (treeMode && (remote || branches !== null) ? suggestBranchName(takenBranches) : null), [treeMode, remote, branches, takenBranches])
+  const suggested = rolled !== null && slugFromTask(message) !== '' ? nameForTask(message, takenBranches) : rolled
   const branch = useMemo<BranchChoice | null>(() => {
     if (explicit !== null) return { ...explicit, worktree: treeMode }
     return treeMode && suggested !== null ? { name: suggested, create: true, worktree: true } : null

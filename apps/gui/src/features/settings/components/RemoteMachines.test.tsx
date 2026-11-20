@@ -4,9 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Added, HostKeyReport } from '@/api/machines'
 import { machineHeads, type MachineHead, type RemoteMachine } from '@/features/workspace/model/machines'
+import type { Conversation } from '@/data/preview'
 import type { MachinesInfo } from './DesktopSettings'
+import type { KeyTerminalHost } from './KeyTerminal'
 import { MachinesPage } from './MachinesPage'
 
+vi.mock('@/TerminalView', () => ({ TerminalView: ({ conversation }: { conversation: { id: string } }) => <div data-testid="key-terminal">{conversation.id}</div> }))
+
+const session = { id: '7' } as Conversation
 type State = RemoteMachine['state']
 const OLDER = 'run `maiker machine update NAME`, then retry'
 const MISSING = 'run `maiker machine update NAME --install`, then retry'
@@ -328,15 +333,17 @@ describe('adding a machine', () => {
   const open = async (add: Partial<MachinesInfo['add']> = {}, rest: Partial<MachinesInfo> = {}) => {
     const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), ...rest, add: { ...info().add, ...add } }))
     await user.click(screen.getByRole('button', { name: '+ Add machine' }))
+    // Most of these are about names; the four-box IP address has its own tests below.
+    await user.click(screen.getByRole('button', { name: 'Use a name instead' }))
     return user
   }
   const address = () => screen.getByRole('textbox', { name: 'Address' })
 
-  it('says how it connects, in one field with a Connect button that waits for a valid address', async () => {
+  it('says how it connects, in a username and an address with a Connect button that waits for a valid address', async () => {
     await open()
     expect(screen.getByText('Maiker connects over SSH, using your keys. It never asks for or keeps passwords.')).toBeInTheDocument()
-    expect(address()).toHaveAttribute('placeholder', 'user@host, or a name from your SSH config')
-    expect(address()).toHaveFocus()
+    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveAttribute('placeholder', 'username')
+    expect(address()).toHaveAttribute('placeholder', 'IP address or name')
     expect(screen.getByRole('button', { name: 'Connect' })).toHaveAttribute('aria-disabled', 'true')
   })
 
@@ -393,9 +400,76 @@ describe('adding a machine', () => {
 
   it('shows the error when Connect is pressed on an invalid address', async () => {
     const user = await open()
-    await user.type(address(), 'you @host')
+    await user.type(address(), 'my host')
     await user.click(screen.getByRole('button', { name: 'Connect' }))
     expect(screen.getByRole('alert')).toHaveTextContent("An address can't have spaces.")
+  })
+
+  it('joins a username and an address with an @', async () => {
+    const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
+    const user = await open({ onAdd })
+    await user.type(screen.getByRole('textbox', { name: 'Username' }), 'dev')
+    await user.type(address(), '100.78.214.15{Enter}')
+    expect(onAdd).toHaveBeenCalledWith('dev@100.78.214.15', expect.any(String), undefined)
+  })
+
+  it('splits a whole user@ip pasted into the username box, and keeps the SSH config list whole while an IP is typed', async () => {
+    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), add: { ...info().add, loadHosts: () => Promise.resolve(hosts) } }))
+    await user.click(screen.getByRole('button', { name: '+ Add machine' }))
+    await user.click(screen.getByRole('textbox', { name: 'Username' }))
+    await user.paste('dev@100.78.214.15')
+    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('dev')
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Address, part 4 of 4' }).value).toBe('15')
+    expect(await screen.findByRole('button', { name: 'Connect to build' })).toBeInTheDocument()
+  })
+
+  it('takes an IP address as four boxes with the dots already there: it moves on by itself and connects as user@ip', async () => {
+    const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
+    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), add: { ...info().add, onAdd } }))
+    await user.click(screen.getByRole('button', { name: '+ Add machine' }))
+    await user.type(screen.getByRole('textbox', { name: 'Username' }), 'dev')
+    await user.click(screen.getByRole('textbox', { name: 'Address, part 1 of 4' }))
+    await user.keyboard('100785214') // three digits move on; the next box takes 78, then 5 and 214 land in the next ones
+    expect(screen.getByRole('textbox', { name: 'Address, part 1 of 4' })).toHaveValue('100')
+    expect(screen.getByRole('textbox', { name: 'Address, part 2 of 4' })).toHaveValue('785')
+    await user.clear(screen.getByRole('textbox', { name: 'Address, part 2 of 4' }))
+    await user.type(screen.getByRole('textbox', { name: 'Address, part 2 of 4' }), '78.214.15{Enter}')
+    expect(onAdd).toHaveBeenCalledWith('dev@100.78.214.15', expect.any(String), undefined)
+  })
+
+  it('fills all four boxes and the username from a pasted user@ip, and an IP alone, and keeps a pasted name as a name', async () => {
+    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')) }))
+    await user.click(screen.getByRole('button', { name: '+ Add machine' }))
+    await user.click(screen.getByRole('textbox', { name: 'Address, part 1 of 4' }))
+    await user.paste('ops@10.0.0.5')
+    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('ops')
+    expect(['1', '2', '3', '4'].map((n) => screen.getByRole<HTMLInputElement>('textbox', { name: `Address, part ${n} of 4` }).value)).toEqual(['10', '0', '0', '5'])
+    await user.click(screen.getByRole('textbox', { name: 'Address, part 1 of 4' }))
+    await user.paste('192.168.1.20')
+    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Address, part 3 of 4' }).value).toBe('1')
+    await user.click(screen.getByRole('textbox', { name: 'Address, part 1 of 4' }))
+    await user.paste('lab@box.example.com')
+    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveValue('box.example.com')
+    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('lab')
+  })
+
+  it('pasting user@ip into the name field moves the IP into its four boxes and the account into its own', async () => {
+    const user = await open()
+    await user.click(address())
+    await user.paste('ops@10.0.0.5')
+    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('ops')
+    expect(screen.getByRole('textbox', { name: 'Address, part 1 of 4' })).toHaveValue('10')
+  })
+
+  it('offers to retry or remove a machine that is already in Maiker', async () => {
+    const onRetry = vi.fn()
+    const onRemove = vi.fn()
+    const user = await open({}, { onRetry, onRemove })
+    await user.type(address(), 'devbox{Enter}')
+    await user.click(screen.getByRole('button', { name: 'Retry devbox' }))
+    expect(onRetry).toHaveBeenCalledWith('devbox')
+    await user.click(screen.getByRole('button', { name: 'Remove devbox' }))
+    expect(onRemove).toHaveBeenCalledWith('devbox')
   })
 
   it('says a machine that is already in Maiker is already there', async () => {
@@ -443,8 +517,21 @@ describe('adding a machine', () => {
     await user.type(address(), 'cydo@10.9.9.9{Enter}')
     expect(await screen.findByText("Can't reach 10.9.9.9.")).toBeInTheDocument()
     expect(screen.getByText("Check it's on, and on your network or VPN.")).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'More' }))
     await user.click(screen.getByRole('button', { name: 'Details' }))
     expect(screen.getByText('ssh: connect to host 10.9.9.9 port 22: Connection timed out')).toBeInTheDocument()
+  })
+
+  it('leaves Try again as the one button after a failure, with Edit address and Details under More', async () => {
+    const user = await open({ onAdd: vi.fn().mockRejectedValue(new Error('timed out')) })
+    await user.type(address(), 'cydo@10.9.9.9{Enter}')
+    await screen.findByText("Can't reach 10.9.9.9.")
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Edit address' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Details' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'More' }))
+    expect(screen.getByRole('button', { name: 'Edit address' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Details' })).toBeInTheDocument()
   })
 
   it('says a refused port and a name that does not resolve in their own words', async () => {
@@ -524,6 +611,52 @@ describe('adding a machine', () => {
     expect(await screen.findByText("server-50 didn't accept your key.")).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Copy the ssh-copy-id command' }))
     expect(onCopyCommand).toHaveBeenCalledWith('ssh-copy-id me@server-50.lan')
+  })
+
+  describe('a key that was refused, where a terminal can be opened for it', () => {
+    const refused = () => vi.fn().mockResolvedValue(login('server-50', 'me@10.0.4.50: Permission denied (publickey).'))
+    const terminalHost = (start: () => Promise<Conversation | null> = () => Promise.resolve(session)): KeyTerminalHost => ({ start: vi.fn(start), end: vi.fn(() => Promise.resolve()), watch: vi.fn(() => vi.fn()), fontSize: 13, look: {} })
+    const keyOpen = async (keyTerminal: KeyTerminalHost, rest: Partial<MachinesInfo> = {}) => {
+      const user = await open({ onAdd: refused() }, { keyTerminal, ...rest })
+      await user.type(address(), 'cydo@10.0.4.50{Enter}')
+      await screen.findByText("server-50 didn't accept your key.")
+      return user
+    }
+
+    it('offers one primary action, and says the password is typed in the terminal, not here', async () => {
+      await keyOpen(terminalHost())
+      expect(screen.getByRole('button', { name: 'Set up the key here' })).toBeInTheDocument()
+      expect(screen.getByText(/type the password in it\. The terminal hands it to ssh like any terminal does; Maiker never reads or keeps it/)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Edit address' })).toBeNull()
+    })
+
+    it('shows the terminal under the error with the command typed, and stays on this page', async () => {
+      const host = terminalHost()
+      const user = await keyOpen(host)
+      await user.click(screen.getByRole('button', { name: 'Set up the key here' }))
+      expect(await screen.findByTestId('key-terminal')).toBeInTheDocument()
+      expect(host.start).toHaveBeenCalledWith('ssh-copy-id me@server-50.lan')
+      expect(screen.queryByRole('button', { name: 'Set up the key here' })).toBeNull()
+    })
+
+    it('goes back to the button when the terminal did not start', async () => {
+      const user = await keyOpen(terminalHost(() => Promise.resolve(null)))
+      await user.click(screen.getByRole('button', { name: 'Set up the key here' }))
+      expect(await screen.findByRole('button', { name: 'Set up the key here' })).toBeInTheDocument()
+      expect(screen.queryByTestId('key-terminal')).toBeNull()
+    })
+
+    it('keeps copying the command as a quiet link, and the retry under More', async () => {
+      const onCopyCommand = vi.fn()
+      const onRetry = vi.fn()
+      const user = await keyOpen(terminalHost(), { onCopyCommand, onRetry })
+      await user.click(screen.getByRole('button', { name: 'Copy the command instead' }))
+      expect(onCopyCommand).toHaveBeenCalledWith('ssh-copy-id me@server-50.lan')
+      await user.click(screen.getByRole('button', { name: 'More' }))
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(onRetry).toHaveBeenCalledWith('server-50')
+    })
   })
 
   it('asks to trust a host key it has not seen, and shows the fingerprint', async () => {

@@ -48,6 +48,8 @@ export type SidebarProps = {
   onNewShell: (machine: number) => void
   onAddMachine: () => void
   onMachineSettings: () => void
+  /** Fix on a machine that is not up: mends it in the Add a remote machine dialog. */
+  onFixMachine: (head: MachineHead) => void
   /** Asks for a name of the user's own for another machine (by its real name). */
   onRenameMachine: (name: string) => void
   /** Installs or updates the app on a machine that needs it; the window asks first. */
@@ -252,7 +254,7 @@ function Expanded(props: SidebarProps) {
               </ListSection>
             ))}
             {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Chats and shells you start appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
-            <MachineNotes heads={props.machines} progress={props.updateProgress} onUpdate={props.onUpdateMachine} />
+            <MachineNotes heads={props.machines} progress={props.updateProgress} onUpdate={props.onUpdateMachine} onFix={props.onFixMachine} />
           </section>
         )}
         {props.grouping === 'machine' && (
@@ -268,6 +270,9 @@ function Expanded(props: SidebarProps) {
               onUpdate={props.onUpdateMachine}
               onContextMenu={(event) => { openMenu(event, machineTitle(group.head), machineMenu(group.head)) }}
               renderRow={renderRow}
+              canStart={props.canStart}
+              onNewSession={props.onNewSession}
+              onFix={props.onFixMachine}
             />
           ))}
           {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Chats and shells you start appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
@@ -283,6 +288,7 @@ function Expanded(props: SidebarProps) {
       </div>
       <div className="mx-sidebar-foot">
         {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
+        <button type="button" className="mx-head-button mx-add-machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={14} />Remote machine</button>
         <span className="mx-foot-slot">{props.updateSlot}</span>
         <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={15} /></button>
       </div>
@@ -334,8 +340,8 @@ function ListSection({ id, name, label, count, open, onToggle, children, tone, c
  * Machines that need the app, when the list is not grouped by machine: there is no machine heading
  * to carry the Update button then, and a machine that cannot run anything must still say so.
  */
-function MachineNotes({ heads, progress, onUpdate }: { heads: readonly MachineHead[]; progress: Readonly<Record<string, number>> | undefined; onUpdate: (name: string, action: UpdateAction) => void }) {
-  const waiting = heads.flatMap((head) => (head.name !== null && (head.updateAction !== null || progress?.[head.name] !== undefined) ? [{ head, name: head.name }] : []))
+function MachineNotes({ heads, progress, onUpdate, onFix }: { heads: readonly MachineHead[]; progress: Readonly<Record<string, number>> | undefined; onUpdate: (name: string, action: UpdateAction) => void; onFix: (head: MachineHead) => void }) {
+  const waiting = heads.flatMap((head) => (head.name !== null && (head.down || head.updateAction !== null || progress?.[head.name] !== undefined) ? [{ head, name: head.name }] : []))
   if (waiting.length === 0) return null
   return (
     <div className="mx-machine-notes" role="group" aria-label="Machines that need Maiker">
@@ -348,6 +354,7 @@ function MachineNotes({ heads, progress, onUpdate }: { heads: readonly MachineHe
             {done !== undefined
               ? <span className="mx-machine-pct mono">{String(done)}%</span>
               : head.updateAction !== null && <UpdateButton name={name} action={head.updateAction} onUpdate={onUpdate} />}
+            {head.down && <MachineWhy head={head} onFix={onFix} />}
           </div>
         )
       })}
@@ -355,7 +362,26 @@ function MachineNotes({ heads, progress, onUpdate }: { heads: readonly MachineHe
   )
 }
 
+/**
+ * A machine that is not up: a red dot, "Offline", and one **Fix** button. The word never changes with the line's retries
+ * (unreachable, needs login, reconnecting #3 all read the same here); the host's reason is the tooltip, and Fix opens the
+ * machine's page in Settings, where the reason is read in full and acted on.
+ */
+function MachineWhy({ head, onFix }: { head: MachineHead; onFix: (head: MachineHead) => void }) {
+  const reason = head.said ?? head.why
+  return (
+    <span className="mx-machine-why" title={reason === null || reason === '' ? undefined : reason}>
+      <span className="mx-machine-why-dot" aria-hidden="true" />
+      <span className="mx-machine-why-word">Offline</span>
+      <button type="button" className="mx-machine-fix" aria-label={`Fix ${head.label}`} onClick={() => { onFix(head) }}>Fix</button>
+    </span>
+  )
+}
+
 type SectionProps = {
+  canStart: boolean
+  onNewSession: (machine: number) => void
+  onFix: (head: MachineHead) => void
   /** The draft chat, listed first in this machine; null when it is not on this machine. */
   draft: DraftChat | null
   /** How far this machine's update has got, while one runs. */
@@ -369,7 +395,7 @@ type SectionProps = {
 }
 
 /** One machine: its heading (name, count, update, its line's dot) and its sessions as one list, most urgent first. */
-function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onContextMenu, renderRow }: SectionProps) {
+function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onContextMenu, renderRow, canStart, onNewSession, onFix }: SectionProps) {
   const { head, sessions } = group
   const title = machineTitle(head)
   return (
@@ -389,8 +415,12 @@ function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onCo
       {progress !== undefined && head.name !== null && (
         <span className="mx-machine-progress" role="progressbar" aria-label={`Updating ${head.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${String(progress)}%` }} /></span>
       )}
+      {head.down && head.name !== null && <MachineWhy head={head} onFix={onFix} />}
       <Collapse open={open}>
         <div className="mx-rows" role="list" aria-label={`Sessions on ${title}`}>{sessions.map((session) => renderRow(session, true))}</div>
+        {head.name !== null && !head.down && (
+          <button type="button" className="mx-machine-new" disabled={!canStart} onClick={() => { onNewSession(head.machine) }}><Icon name="plus" size={12} />New session on {title}</button>
+        )}
         {/* Last, where the new chat will be (sessions keep creation order), so it fills in without anything moving. */}
         {draft !== null && <DraftRow process={draft.process} onOpen={draft.onOpen} />}
       </Collapse>
@@ -476,6 +506,7 @@ function Rail(props: SidebarProps) {
       </div>
       <div className="mx-rail-bottom">
         {props.railUpdateSlot}
+        <button type="button" className="mx-head-button is-rail" aria-label="Remote machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={15} /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></button>
       </div>
       <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />

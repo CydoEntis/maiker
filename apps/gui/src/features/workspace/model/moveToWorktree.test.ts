@@ -61,4 +61,9 @@ describe('worktreeBranch', () => {
   it('avoids taken names', () => {
     expect(worktreeBranch(['main'])).not.toBe('main')
   })
+
+  it('is named for what the chat works on, and takes a number when that is taken', () => {
+    expect(worktreeBranch(['main'], 'Fix login redirect')).toBe('fix-login-redirect')
+    expect(worktreeBranch(['fix-login-redirect'], 'Fix login redirect')).toBe('fix-login-redirect-2')
+  })
 })

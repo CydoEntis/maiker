@@ -23,7 +23,7 @@ const DEFAULTS: SettingsPreferences = {
   darkTheme: 'Maiker Dark',
   lightTheme: 'Maiker Day',
   cursorStyle: 'block',
-  scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.6,
+  scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2,
   
   
   defaultAgent: 'claude',
@@ -104,6 +104,13 @@ describe('settings preferences', () => {
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
 
     expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, accent: 'blue', spinner: 'bars', compactSidebar: true, notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
+  })
+
+  it('reads a saved line height of 1.6, the old default, as the new default, and keeps one that is still offered', () => {
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ terminalLineHeight: 1.2 }))
+    expect(readSettingsPreferences().terminalLineHeight).toBe(DEFAULTS.terminalLineHeight)
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ terminalLineHeight: 1 }))
+    expect(readSettingsPreferences().terminalLineHeight).toBe(1)
   })
 
   it('reads the layout choice saved as restoreTabs before fleets, and prefers the new name', () => {

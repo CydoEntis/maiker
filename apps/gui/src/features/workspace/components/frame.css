@@ -39,7 +39,10 @@
 .mx-row.is-selected .mx-row-name { color: var(--fg); }
 .mx-row-when { font-family: var(--mono); color: var(--dim); }
 .mx-row-sub { gap: 6px; font-size: calc(11.5px * var(--sidebar-text, 1)); line-height: calc(15px * var(--sidebar-text, 1)); color: var(--dim); }
-.mx-row-sub .mx-row-project-name { flex: 1; }
+/* Project and branch sit side by side, `maiker / gui-revive`: the project gives way first (never to less than 6 characters), the time keeps the right edge. */
+.mx-row-sub { color: var(--muted); }
+.mx-row-sub .mx-row-project-name { flex: 0 1 auto; min-width: 6ch; max-width: 55%; }
+.mx-row-sub .mx-row-branch-name { flex: 0 1 auto; }
 .mx-row-machine { flex: none; max-width: 45%; }
 .mx-row-close { top: 7px; bottom: auto; right: 8px; border-radius: var(--r-control); background: transparent; }
 .mx-row-close:hover:not(:disabled) { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
@@ -69,7 +72,7 @@
 .mx-app .mx-main { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: none; }
 .mx-panes:not(.is-split) { padding: 0; }
 .mx-app .mx-pane { border-radius: var(--r-panel); }
-/* A card's own border is its ground colour until it is focused, then it fades to the focus colour: one edge, not a ring over another. */
-.mx-app .mx-pane.is-card { background: var(--card); border-color: var(--card); box-shadow: none; }
+/* A split pane's edge is the sidebar's hairline (`--line`) until it is focused, then it fades to the focus colour: one edge, not a ring over another. */
+.mx-app .mx-pane.is-card { background: var(--card); border-color: var(--line); box-shadow: none; }
 .mx-app .mx-pane.is-card.is-focused { border-color: var(--focus-line); }
 

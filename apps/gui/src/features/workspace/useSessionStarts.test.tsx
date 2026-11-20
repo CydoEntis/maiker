@@ -10,11 +10,17 @@ const daemon = vi.hoisted(() => ({
     listed.sessions.push({ id: String(pane), kind: 'terminal', nativePane: pane })
     return Promise.resolve()
   }),
+  startShellSession: vi.fn<(folder: string) => Promise<void>>(() => {
+    const pane = listed.sessions.length + 1
+    listed.sessions.push({ id: String(pane), kind: 'terminal', nativePane: pane })
+    return Promise.resolve()
+  }),
   addWorktree: vi.fn<(folder: string, branch: string) => Promise<string>>((folder: string, branch: string) => Promise.resolve(`${folder}-${branch}`)),
   switchBranch: vi.fn(() => Promise.resolve()),
   renameConversationOnDaemon: vi.fn<(session: { id: string }, name: string) => Promise<void>>(() => Promise.resolve()),
   sendWhenAgentReady: vi.fn(() => Promise.resolve()),
   sendTerminalInput: vi.fn(() => Promise.resolve()),
+  archiveConversationOnDaemon: vi.fn<(session: { id: string }, archived: boolean) => Promise<void>>(() => Promise.resolve()),
 }))
 // Another machine: a session started there shows in its next list.
 const remote = vi.hoisted(() => ({ machines: new Map<number, { conversations: { id: string; kind: 'terminal' }[] }>() }))
@@ -238,6 +244,26 @@ describe('what a start in the background says, and what it hides', () => {
     await starts({ setStartedFrom }).startNewChat(request({ message: 'open it' }))
     expect(seen[0]).toEqual(new Set(['old']))
     expect(seen.at(-1)).toBeNull()
+  })
+})
+
+describe('a terminal that lives inside a dialog', () => {
+  it('starts a shell in the home folder and types the line in it without pressing Enter, with no pane for it', async () => {
+    const setLayout = vi.fn()
+    const session = await starts({ setLayout }).startKeyTerminal('ssh-copy-id me@box')
+    expect(session).toMatchObject({ id: '1' })
+    expect(daemon.startShellSession).toHaveBeenCalledWith('/home/me')
+    expect(daemon.sendTerminalInput).toHaveBeenCalledTimes(1)
+    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: '1', generation: 0 }, 'ssh-copy-id me@box')
+    expect(setLayout).not.toHaveBeenCalled()
+  })
+
+  it('closes the shell for good when it is ended', async () => {
+    const hook = starts()
+    const session = await hook.startKeyTerminal('ssh-copy-id me@box')
+    if (session === null) throw new Error('the shell did not start')
+    await hook.endKeyTerminal(session)
+    expect(daemon.archiveConversationOnDaemon).toHaveBeenCalledWith(session, true)
   })
 })
 

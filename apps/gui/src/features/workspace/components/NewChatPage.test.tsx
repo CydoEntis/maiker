@@ -38,7 +38,6 @@ const PROJECTS = [{ folder: '/dev/growth', name: 'growth', color: 'teal', sessio
 const HERE = [{ machine: 0, label: 'This computer', local: true }]
 /** Another chat, "Fix login", already works on dev in growth. */
 const DEV_BUSY: BusyBranches = new Map([['/dev/growth', new Map([['dev', 'Fix login']])]])
-const TWO_WORDS = /^[a-z]+-[a-z]+(-[0-9]+)?$/
 
 type Extra = {
   busy?: BusyBranches
@@ -327,7 +326,7 @@ describe('the New session draft', () => {
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalled() })
-    expect(onStart.mock.calls[0]?.[0].branch).toMatchObject({ create: true, worktree: true, name: expect.stringMatching(TWO_WORDS) as unknown })
+    expect(onStart.mock.calls[0]?.[0].branch).toMatchObject({ create: true, worktree: true, name: 'hello' })
   })
 
   it('lets Work in put a busy branch back to the folder as it is', async () => {
@@ -348,13 +347,13 @@ describe('the New session draft', () => {
     expect(within(await lastPopup()).getByRole('radio', { name: /^dev/ })).toHaveTextContent('in use')
   })
 
-  it('names a new worktree\'s branch with two words and never copies the message into it', async () => {
+  it("names a new worktree's branch with two words until there is a message, then after what the message asks for", async () => {
     dialog()
     await ready()
     await worktree()
-    const named = (await screen.findByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })).getAttribute('aria-label')
+    await screen.findByRole('button', { name: /^Branch: [a-z]+-[a-z]+$/ })
     await userEvent.type(box(), 'Fix the login bug')
-    expect(screen.getByRole('button', { name: /^Branch: / })).toHaveAttribute('aria-label', named)
+    expect(screen.getByRole('button', { name: /^Branch: / })).toHaveAttribute('aria-label', 'Branch: fix-login-bug')
   })
 
   it('starts on a branch typed into the branch list, made from where the checkout is', async () => {
@@ -731,8 +730,8 @@ describe('the New session draft on another machine', () => {
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalledTimes(1) })
-    expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, folder: '/srv/app', branch: { name: expect.stringMatching(TWO_WORDS) as unknown, create: true, worktree: true } }))
-    await userEvent.type(box(), 'again')
+    expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, folder: '/srv/app', branch: { name: 'hello', create: true, worktree: true } }))
+    await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalledTimes(2) })
     const names = onStart.mock.calls.map(([request]) => (request.branch as { name: string }).name)
@@ -952,7 +951,7 @@ describe('starting from a checkout: sync with origin, branch names and worktree 
     await worktree()
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
-    const title = await screen.findByText(/^Could not make a worktree for branch [a-z]+-[a-z]+/)
+    const title = await screen.findByText(/^Could not make a worktree for branch hello/)
     expect(title).toBeInTheDocument()
     expect(screen.getByText('Its folder /srv/trees/quiet-otter is already there. Remove that folder, or pick another branch name.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Copy details/ })).toBeInTheDocument()

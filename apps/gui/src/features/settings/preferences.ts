@@ -48,14 +48,16 @@ const SCROLL_TRIPLE = 3
 const SCROLL_FASTEST = 5
 export const SCROLL_SPEED_CHOICES = [SCROLL_NORMAL, SCROLL_DOUBLE, SCROLL_TRIPLE, SCROLL_FASTEST] as const
 export type ScrollSpeed = (typeof SCROLL_SPEED_CHOICES)[number]
-/** The terminal's row height as a multiple of the font size. Pixel art drawn in block characters (an agent's banner) joins up at 1 to 1.2. */
+/**
+ * The terminal's row height as a multiple of the font size. Pixel art drawn in block characters (an agent's banner) joins up at 1
+ * to 1.2 and stretches past it. 1.6 was once offered and the default; it is gone, so a saved 1.6 reads as the new default.
+ */
 const LINE_TIGHT = 1
 const LINE_SNUG = 1.2
 const LINE_EASY = 1.4
-const LINE_AIRY = 1.6
-export const LINE_HEIGHT_CHOICES = [LINE_TIGHT, LINE_SNUG, LINE_EASY, LINE_AIRY] as const
+export const LINE_HEIGHT_CHOICES = [LINE_TIGHT, LINE_SNUG, LINE_EASY] as const
 export type TerminalLineHeight = (typeof LINE_HEIGHT_CHOICES)[number]
-export const DEFAULT_LINE_HEIGHT: TerminalLineHeight = LINE_AIRY
+export const DEFAULT_LINE_HEIGHT: TerminalLineHeight = LINE_SNUG
 
 export type SettingsPreferences = {
   accent: 'teal' | 'blue' | 'violet'
