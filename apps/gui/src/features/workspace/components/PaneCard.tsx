@@ -1,7 +1,7 @@
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { MAX_PANES, type PaneSlot, type SplitDirection } from '../model/layout'
 import type { SessionView } from '../model/session'
-import { isShell, keepsRunningUnseen, projectOf, rowTitle } from '../model/sidebar'
+import { isShell, projectOf, rowTitle } from '../model/sidebar'
 import { BranchMenu, type BranchMenuSpec } from '@/features/chat/components/BranchMenu'
 import { Icon } from './glyphs'
 import { beginPointerDrag } from './dragSession'
@@ -77,8 +77,6 @@ export function PaneCard(props: PaneCardProps) {
   const shown = view
   const title = rowTitle(session)
   const shell = isShell(session)
-  // One pane of several closes alone when its session has work in it (`useClosing`); otherwise closing ends the session.
-  const closeLabel = multi && keepsRunningUnseen(session) ? 'Close pane · its session keeps running' : 'Close pane · ends its session'
 
   const menuItems: MenuEntry[] = [
     { label: 'Split right', hint: shortcutText('split-right'), disabled: full, run: () => { props.onSplit(pane.id, 'right') } },
@@ -91,7 +89,7 @@ export function PaneCard(props: PaneCardProps) {
     { label: 'Copy folder path', run: props.onCopyPath },
     // The header has no close button; with the sidebar hidden this is the one close in reach, on the only pane too.
     'separator',
-    { label: closeLabel, danger: true, run: () => { props.onClose(pane.id) } },
+    { label: 'Close', danger: true, run: () => { props.onClose(pane.id) } },
   ]
 
   return (

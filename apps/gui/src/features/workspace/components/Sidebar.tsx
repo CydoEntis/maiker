@@ -1,18 +1,17 @@
 import { Fragment, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { folderNameOf, STATUS_WORD, type SessionView } from '../model/session'
-import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
-import { snoozeChoices } from '../model/snooze'
+import { DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
-import { AppIcon, Icon, MachineIcon } from './glyphs'
+import { AppIcon, FolderMark, Icon, MachineIcon } from './glyphs'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { Collapse } from './Collapse'
 import { useReducedMotion } from './motion'
 import { useFlip } from './useFlip'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
-import { StartMenu, type OpenableWorktree } from './StartMenu'
+import { StartMenu } from './StartMenu'
 import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { RowHoverHost } from './RowHoverHost'
 import { useHoverController } from './useHoverController'
@@ -69,11 +68,7 @@ export type SidebarProps = {
   onCopyText: (text: string, what: string) => void
   onShowChanges: (id: string) => void
   onMarkDone: (id: string) => void
-  /** Takes a finished or idle session out of the sections, still running; Bring back puts it back. */
-  onPutAway: (id: string) => void
   onBringBack: (id: string) => void
-  /** Snooze a session until `until`, in unix seconds. */
-  onSnooze: (id: string, until: number) => void
   onUnsnooze: (id: string) => void
   /** Asks for a file to pull from the machine of session `id`. */
   onGetFile: (id: string) => void
@@ -96,9 +91,7 @@ export type SidebarProps = {
 /** What the + menu needs from the window beyond the machines. */
 export type StartSupport = {
   installedAgents: readonly string[] | null
-  worktrees: readonly OpenableWorktree[]
   onAgent: (program: string, machine: number) => void
-  onOpenWorktree: (path: string) => void
 }
 
 /** The New session dialog's chat while it is unsent: where it will start, and the agent picked for it. */
@@ -130,19 +123,9 @@ function sessionMenuEntries(props: SidebarProps, session: SessionView, closeHint
     ...(session.machineName === null ? [] : [{ label: 'Get a file…', disabled: !props.online, run: () => { props.onGetFile(session.id) } }]),
     // A finished agent waits under Done until you look; this files it under Idle without opening it.
     ...(session.status === 'done' ? [{ label: 'Mark as done', disabled: !props.online, run: () => { props.onMarkDone(session.id) } }] : []),
-    ...(canPutAway(session) ? [{ label: 'Put away', disabled: !props.online, run: () => { props.onPutAway(session.id) } }] : []),
-    ...(canSnooze(session) ? snoozeChoices(Date.now(), session.resumeAt).map((choice) => ({ label: choice.label, disabled: !props.online, run: () => { props.onSnooze(session.id, choice.until) } })) : []),
     ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
     ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),
   ]
-}
-
-/** Why the + menu cannot make a worktree from `session`, or null when it can: worktrees are made from a repository on this computer. */
-function worktreeRefusal(props: SidebarProps, session: SessionView | undefined): string | null {
-  if (!props.online) return 'The Maiker service is not reachable'
-  if (session === undefined) return 'Open a session in the project first'
-  if (session.machineName !== null) return 'Worktrees are made on this computer'
-  return session.branch === null ? 'This folder is not in a git repository yet' : null
 }
 
 /**
@@ -152,23 +135,19 @@ function worktreeRefusal(props: SidebarProps, session: SessionView | undefined):
 function SidebarStartMenu({ sidebar, machine, windowOpens = false, children }: { sidebar: SidebarProps; machine: number; windowOpens?: boolean; children: ReactElement }) {
   const focused = sidebar.focusedId === null ? undefined : sidebar.sessions.find((session) => session.id === sidebar.focusedId)
   const here = focused !== undefined && focused.machine === machine ? focused : undefined
-  const { installedAgents, worktrees, onAgent, onOpenWorktree } = sidebar.start
+  const { installedAgents, onAgent } = sidebar.start
   return (
     <StartMenu
       machine={machine}
       machines={sidebar.machines}
       project={here === undefined ? null : folderNameOf(here)}
       installed={installedAgents}
-      worktrees={here === undefined ? [] : worktrees}
-      worktreeRefusal={worktreeRefusal(sidebar, here)}
       portalContainer={sidebar.portalContainer}
       open={windowOpens ? sidebar.startMenu !== null : undefined}
       onOpenChange={windowOpens ? (open) => { sidebar.onStartMenu(open ? machine : null) } : undefined}
       onTerminal={sidebar.onNewShell}
       onAgent={onAgent}
       onAddMachine={sidebar.onAddMachine}
-      onNewWorktree={() => { if (here !== undefined) sidebar.onNewWorktree?.(here.id) }}
-      onOpenWorktree={onOpenWorktree}
     >
       {children}
     </StartMenu>
@@ -359,7 +338,7 @@ type ListSectionProps = {
   children: ReactNode
   /** A status section: its colour. */
   tone?: string
-  /** A project section: its colour square, the other machine it is on, and how many of its sessions need you. */
+  /** A project section: its folder mark, the other machine it is on, and how many of its sessions need you. */
   color?: string
   machine?: MachineHead | null
   needs?: number
@@ -370,7 +349,7 @@ function ListSection({ id, name, label, count, open, onToggle, children, tone, c
   return (
     <div className="mx-section" data-section={id}>
       <button type="button" className={`mx-section-head${tone === undefined ? '' : ` is-${tone}`}`} data-tone={tone} data-flip={`head:${id}`} aria-expanded={open} onClick={onToggle}>
-        {color !== undefined && <span className="mx-project-square" style={{ background: color }} aria-hidden="true">{name.charAt(0).toUpperCase()}</span>}
+        {color !== undefined && <FolderMark size={15} />}
         <span className="mx-section-name">{name}</span>
         {machine !== null && <span className="mx-section-machine">· {machineTitle(machine)}</span>}
         {machine !== null && <span className={`mx-machine-dot${machine.down ? ' is-offline' : ''}`} role="img" aria-label={machine.down ? `${machineTitle(machine)} is ${machine.chip?.word ?? 'not reachable'}` : `${machineTitle(machine)} is connected`} />}

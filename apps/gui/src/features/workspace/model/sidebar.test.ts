@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { toSessionView, type SessionView } from './session'
-import { byUrgency, canPutAway, canSnooze, inProject, machineGroups, projectChoices, projectColor, projectGroups, placeLine, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
+import { byUrgency, inProject, machineGroups, projectChoices, projectColor, projectGroups, placeLine, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(1)) }))
 
@@ -88,20 +88,6 @@ describe('a snoozed session', () => {
     expect(splitPutAway([snoozed(1, { status: 'needs-you' })]).putAway).toEqual([])
   })
 
-  it('can be snoozed only when finished, idle or held by its plan limit, and not already away', () => {
-    expect(canSnooze(session(1, { agent: 'claude', status: 'done' }))).toBe(true)
-    expect(canSnooze(session(2, { agent: 'claude' }))).toBe(true)
-    expect(canSnooze(limited(3))).toBe(true)
-    expect(canSnooze(session(4, { agent: 'claude', status: 'working' }))).toBe(false)
-    expect(canSnooze(session(5, { agent: 'claude', status: 'needs-you' }))).toBe(false)
-    expect(canSnooze(session(6, { agent: 'claude', details: exited }))).toBe(false)
-    expect(canSnooze(session(7, { agent: 'claude', archived: true }))).toBe(false)
-    expect(canSnooze(snoozed(8))).toBe(false)
-    expect(canPutAway(snoozed(8))).toBe(false)
-    const terminal = session(9, { agent: 'claude', status: 'done' })
-    const chat = Object.fromEntries(Object.entries(terminal.conversation).filter(([key]) => key !== 'kind')) as Conversation
-    expect(canSnooze({ ...terminal, conversation: { ...chat, execution: 'Structured', chat: { conversation: 1, generation: 1 } } })).toBe(false)
-  })
 })
 
 describe('machine groups', () => {
@@ -207,14 +193,6 @@ describe('putting a session away', () => {
     expect(putAway.map((item) => item.id)).toEqual(['t2'])
   })
 
-  it('offers Put away for a finished or idle session that is not put away already', () => {
-    expect([session(1, { status: 'done' }), session(2), session(3, { status: 'working' }), session(4, { status: 'needs-you' }), away(5)].map(canPutAway)).toEqual([true, true, false, false, false])
-  })
-
-  it('does not offer Put away for a chat session, whose daemon archive closes it', () => {
-    const chat: Conversation = { id: '1', title: '', project: '', folder: '/home/me/app', cwd: '/home/me/app', branch: '', provider: 'Claude', status: 'done', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, execution: 'Structured', chat: { conversation: 1, generation: 1 } }
-    expect(canPutAway(toSessionView(chat, '/home/me'))).toBe(false)
-  })
 })
 
 describe('sorting a heading’s rows', () => {

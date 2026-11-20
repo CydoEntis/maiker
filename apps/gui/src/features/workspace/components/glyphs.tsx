@@ -1,9 +1,14 @@
 import type { ReactNode } from 'react'
-import { TreePine } from 'lucide-react'
+import { Folder, TreePine } from 'lucide-react'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { SHELL_PROCESS } from '../model/session'
 import { CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
 import { FOLDER_PATH } from './paths'
+
+/** The mark of a project or folder group (sidebar heading, filter list, project chip): a plain folder in the muted colour, never a coloured tile. */
+export function FolderMark({ size = 14 }: { size?: number }) {
+  return <Folder className="mx-folder-mark" size={size} strokeWidth={1.9} aria-hidden="true" />
+}
 
 /** The one working spinner: a ring with a lit arc running round it, round or square with the corners (more can be added later). */
 export function Spinner({ className = 'mx-spin' }: { className?: string; frozen?: boolean }) {

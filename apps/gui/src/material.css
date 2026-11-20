@@ -34,6 +34,10 @@
   --m-sel: var(--sel);
   --m-hover: var(--hover);
   --m-pane: var(--pane);
+  /* What a menu or popover is drawn on: the raised surface nudged toward the text colour, so it reads as one step lifted off the
+     window in a dark theme and a light one alike, with the stronger hairline as its ring. */
+  --pop-bg: color-mix(in srgb, var(--m-raise) 92%, var(--fg));
+  --pop-ring: var(--line2);
 }
 /* ---- component tokens ----
    The shared pieces every control reads, so one component serves every theme:
@@ -101,7 +105,12 @@
 .mx-app :is([data-radix-popper-content-wrapper] > *, [role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"], .open-project-dialog, .mx-pop, .mx-menu, .mx-picker-menu, .mx-tip, .mx-ctx, .mx-palette, .mx-find) {
   background-color: var(--main);
 }
-:root :is([data-radix-popper-content-wrapper] > *) { background-color: var(--main); }
+/* Menus and popovers are the lifted exception: one surface and one ring for every right-click menu, dropdown, picker and popover. */
+.mx-app :is([data-radix-popper-content-wrapper] > *, [role="menu"], [role="listbox"], .mx-pop, .mx-menu, .mx-picker-menu, .mx-ctx) {
+  background-color: var(--pop-bg);
+  border-color: var(--pop-ring);
+}
+:root :is([data-radix-popper-content-wrapper] > *) { background-color: var(--pop-bg); border-color: var(--pop-ring); }
 
 /* Popovers grow from the corner that touches their anchor: 160ms, from scale .9 (design rule 12). Radix publishes the
    anchor corner as `--radix-popper-transform-origin`. A dialog has no anchor, so it has no `data-side` and does not grow. */

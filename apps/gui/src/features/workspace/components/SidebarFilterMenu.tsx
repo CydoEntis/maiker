@@ -3,7 +3,7 @@ import { Popover } from 'radix-ui'
 import { PopupContent } from '@/components/ui/popup'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { DEFAULT_SIDEBAR_SORT, SIDEBAR_GROUPINGS, SIDEBAR_SORTS, type ProjectChoice, type SidebarGrouping, type SidebarSort } from '../model/sidebar'
-import { Icon } from './glyphs'
+import { FolderMark, Icon } from './glyphs'
 
 /** The project list shows this many rows before it scrolls; with more projects than this the search box says how many. */
 export const PROJECT_ROWS_SHOWN = 6
@@ -67,7 +67,7 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
         </label>
         <div className="mx-grp-projects" role="group" aria-label="Show projects">
           {needle === '' && <ProjectButton name="All projects" count={projects.reduce((total, choice) => total + choice.count, 0)} on={project === null} onPick={() => { onProject(null) }} />}
-          {matching.map((choice) => <ProjectButton key={choice.name} name={choice.name} color={choice.color} count={choice.count} on={project === choice.name} onPick={() => { onProject(choice.name); setQuery('') }} />)}
+          {matching.map((choice) => <ProjectButton key={choice.name} name={choice.name} count={choice.count} on={project === choice.name} onPick={() => { onProject(choice.name); setQuery('') }} />)}
           {matching.length === 0 && needle !== '' && <div className="mx-grp-none">No project matches.</div>}
         </div>
         {dirty && (
@@ -80,10 +80,10 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
   )
 }
 
-function ProjectButton({ name, color, count, on, onPick }: { name: string; color?: string; count: number; on: boolean; onPick: () => void }) {
+function ProjectButton({ name, count, on, onPick }: { name: string; count: number; on: boolean; onPick: () => void }) {
   return (
     <button type="button" className={`mx-grp-project${on ? ' is-on' : ''}`} aria-pressed={on} onClick={onPick}>
-      <span className="mx-grp-square" style={color === undefined ? undefined : { background: color }} aria-hidden="true" />
+      <FolderMark size={13} />
       <span className="mx-grp-name">{name}</span>
       <span className="mx-grp-count">{count}</span>
     </button>

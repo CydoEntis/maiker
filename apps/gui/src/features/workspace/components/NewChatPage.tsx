@@ -30,7 +30,7 @@ import { nameForTask, slugFromTask, suggestBranchName } from '../model/worktreeN
 import { carriesCredentials, cloneTargetOf, explainCloneFailure, parseRepoAddress, type CloneProblem, type RepoAddress } from '../model/repoAddress'
 import { readLastWho, rememberWho } from '../model/lastWho'
 import { discardDraft, parkDraft, parkedDraft } from '../model/newSessionDraft'
-import { Icon } from './glyphs'
+import { FolderMark, Icon } from './glyphs'
 import { ChipMenu, type ChipItem } from './NewChatMenus'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import { isMacPlatform } from '../model/shortcuts'
@@ -430,7 +430,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     key: project.folder,
     label: project.name,
     sub: project.folder === folder && notRepo ? `${project.folder} \u00b7 not a git repo` : project.folder,
-    icon: dot(project.color),
+    icon: <FolderMark />,
     checked: project.folder === folder,
     onPick: () => { setPicked({ machine, folder: project.folder }) },
   })
@@ -517,7 +517,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
         footer={onAddMachine === undefined ? undefined : <button type="button" className="mx-chip-action" onClick={onAddMachine}><span className="mx-nsd-foot-mark" aria-hidden="true">+</span>Add a machine…</button>} />
       <span className="mx-nsd-word">in</span>
       <ChipMenu variant="token" triggerClass="mx-nsd-token" side="bottom" width={TOKEN_LIST_WIDTH} title="Project" hint={`on ${targetLabel}`} summary={folderName}
-        icon={dot(current?.color ?? 'var(--dim)')} label={<span className="mx-nsd-token-text">{folderName}</span>}
+        icon={<FolderMark />} label={<span className="mx-nsd-token-text">{folderName}</span>}
         search={cloner === null ? 'Find a project or folder' : 'Find a project, or paste a GitHub link'} sections={[{ heading: 'Recent', items: shown.map(folderItem) }]} fromQuery={fromTyped}
         footer={(
           <>

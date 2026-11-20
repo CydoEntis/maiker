@@ -208,24 +208,6 @@ export function splitPutAway(sessions: readonly SessionView[]): { listed: Sessio
   }
 }
 
-/**
- * A finished or idle session in a terminal the daemon owns can be put away. A chat cannot: its daemon archive is how
- * a chat is closed, which stops its agent.
- */
-export function canPutAway(session: SessionView): boolean {
-  return !session.archived && session.snoozedUntil === null && !session.ended && (session.status === 'done' || session.status === 'idle') && !isChatSession(session.conversation)
-}
-
-/**
- * Snoozing (`TermInfo.snoozed_until`) puts a session away until a time. A finished, idle or limited session in a terminal the
- * daemon owns can be snoozed, once; one that works, asks or failed is not out of the way yet, and a chat cannot (the daemon
- * refuses it). The daemon wakes it by itself, and also when it comes to need you.
- */
-export function canSnooze(session: SessionView): boolean {
-  const resting = session.status === 'done' || session.status === 'idle' || session.status === 'limited'
-  return resting && !session.archived && session.snoozedUntil === null && !session.ended && !isChatSession(session.conversation)
-}
-
 export type ProjectChoice = { name: string; color: string; count: number }
 
 /** Every project that has a session, the busiest first, for the list that narrows the sidebar to one of them. */

@@ -8,9 +8,9 @@ const DEVBOX: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name:
 const DOWN: MachineHead = { ...DEVBOX, key: 'machine-5', machine: 5, name: 'attic', label: 'attic', down: true }
 
 function show(more: Partial<StartMenuProps> = {}) {
-  const calls = { onTerminal: vi.fn(), onAgent: vi.fn(), onAddMachine: vi.fn(), onNewWorktree: vi.fn(), onOpenWorktree: vi.fn() }
+  const calls = { onTerminal: vi.fn(), onAgent: vi.fn(), onAddMachine: vi.fn() }
   const props: StartMenuProps = {
-    machine: 0, machines: [LOCAL_HEAD, DEVBOX, DOWN], project: 'shop', installed: ['claude', 'codex', 'opencode'], worktrees: [], worktreeRefusal: null,
+    machine: 0, machines: [LOCAL_HEAD, DEVBOX, DOWN], project: 'shop', installed: ['claude', 'codex', 'opencode'],
     portalContainer: null, ...calls, children: <button type="button">New session</button>, ...more,
   }
   render(<StartMenu {...props} />)
@@ -117,23 +117,10 @@ describe('the + menu', () => {
     expect(calls.onAgent).toHaveBeenCalledWith('claude', 4)
   })
 
-  it('makes a worktree, refuses with the reason when it cannot, and opens one of the project\'s others', async () => {
-    const calls = show({ worktrees: [{ path: '/code/shop-wt', branch: 'agent/otter' }] })
-    const user = await open()
-    await user.click(screen.getByRole('menuitem', { name: /^New worktree…/ }))
-    expect(calls.onNewWorktree).toHaveBeenCalledTimes(1)
+  it('offers no worktree rows: a worktree needs a project, so it is started from a session', async () => {
+    show()
     await open()
-    await user.click(screen.getByRole('menuitem', { name: /^Open worktree…/ }))
-    expect(screen.getByText('Worktrees in shop')).toBeInTheDocument()
-    await user.click(screen.getByRole('menuitem', { name: 'agent/otter' }))
-    expect(calls.onOpenWorktree).toHaveBeenCalledWith('/code/shop-wt')
-  })
-
-  it('disables New worktree with its reason, and Open worktree when the project has no other', async () => {
-    show({ worktreeRefusal: 'This folder is not in a git repository yet' })
-    await open()
-    expect(screen.getByRole('menuitem', { name: /^New worktree…/ })).toHaveAttribute('aria-disabled', 'true')
-    expect(screen.getByRole('menuitem', { name: /^Open worktree…/ })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.queryByRole('menuitem', { name: /worktree/i })).toBeNull()
   })
 
   it('is open when the window says so, with no click, as Get started leaves it', async () => {

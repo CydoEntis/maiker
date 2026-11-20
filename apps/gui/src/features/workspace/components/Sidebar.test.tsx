@@ -34,8 +34,8 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   const props: SidebarProps = {
     sessions, listed: true, machines: [LOCAL_HEAD], order: 'creation', focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, grouping: 'machine', onGrouping: none, onSearch: none,
-    startMenu: null, onStartMenu: none, start: { installedAgents: ['claude', 'codex'], worktrees: [], onAgent: none, onOpenWorktree: none }, onNewShell: none, onAddMachine: none, onMachineSettings: none, onFixMachine: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
-    onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onPutAway: none, onBringBack: none, onSnooze: none, onUnsnooze: none, onGetFile: none,
+    startMenu: null, onStartMenu: none, start: { installedAgents: ['claude', 'codex'], onAgent: none }, onNewShell: none, onAddMachine: none, onMachineSettings: none, onFixMachine: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
+    onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onBringBack: none, onUnsnooze: none, onGetFile: none,
     onEndSession: none, onOpenSettings: none, onRecentSessions: none,
     ...more,
   }
@@ -365,7 +365,7 @@ describe('a session row', () => {
     const menu = screen.getByRole('menu', { name: 'Growth' })
     const items = within(menu).getAllByRole('menuitem').map((item) => item.textContent)
     expect(items.slice(0, 4)).toEqual(['RenameF2', 'Open in a new pane', 'Copy folder path', expect.stringMatching(/^Close session/)])
-    expect(items.slice(4)).toEqual(expect.arrayContaining(['Open', 'Open in split down', 'Show changes', 'Put away']))
+    expect(items.slice(4)).toEqual(expect.arrayContaining(['Open', 'Open in split down', 'Show changes']))
     expect(within(menu).getAllByRole('separator')).toHaveLength(2)
     await user.click(within(menu).getByRole('menuitem', { name: /^Close session/ }))
     expect(onEndSession).toHaveBeenCalledWith('t1')
@@ -379,16 +379,11 @@ describe('a session row', () => {
     expect(onSplitSession).toHaveBeenCalledWith('t1', 'right')
   })
 
-  it('keeps Put away and Snooze in the menu of a finished agent', async () => {
-    const onPutAway = vi.fn()
-    const onSnooze = vi.fn()
-    show([session(1, { agent: 'claude', named: true, title: 'Finished', status: 'done' })], { onPutAway, onSnooze })
+  it('does not offer Put away or Snooze in the menu of a finished agent', () => {
+    show([session(1, { agent: 'claude', named: true, title: 'Finished', status: 'done' })])
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Finished,/ }))
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Put away' }))
-    expect(onPutAway).toHaveBeenCalledWith('t1')
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^Finished,/ }))
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Snooze 1 hour' }))
-    expect(onSnooze).toHaveBeenCalledWith('t1', expect.any(Number))
+    const names = screen.getAllByRole('menuitem').map((item) => item.textContent)
+    expect(names.filter((name) => /^(Put away|Snooze)/.test(name))).toEqual([])
   })
 
   it('offers Close shell, not Stop, for a shell', () => {

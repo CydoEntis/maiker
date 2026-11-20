@@ -315,7 +315,7 @@ describe('desktop terminal multiplexer', () => {
     fireEvent.contextMenu(pane)
 
     const menu = await screen.findByRole('menu', { name: 'a' })
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.querySelector('.mx-ctx-label')?.textContent)).toEqual(['Split right', 'Split down', 'Rename…', 'Maximize pane', 'Clear', 'Copy folder path', 'Close pane · ends its session'])
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.querySelector('.mx-ctx-label')?.textContent)).toEqual(['Split right', 'Split down', 'Rename…', 'Maximize pane', 'Clear', 'Copy folder path', 'Close'])
     daemon.startShellSession.mockResolvedValue(undefined)
     await user.click(within(menu).getByRole('menuitem', { name: /^Split right/ }))
     // A split opens a new shell beside this one.
@@ -556,7 +556,7 @@ describe('desktop terminal multiplexer', () => {
     await screen.findByRole('region', { name: 'Shell in ~/a' })
 
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Close pane · ends its session' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close' }))
 
     await waitFor(() => { expect(daemon.closeSessionWithUndo).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' })) })
     expect((await screen.findAllByText('Closed ~/a')).length).toBeGreaterThan(0)
@@ -586,7 +586,7 @@ describe('desktop terminal multiplexer', () => {
     daemon.closeSessionWithUndo.mockReturnValue(new Promise<void>((resolve) => { ended = resolve }))
 
     await user.click(within(screen.getByRole('region', { name: 'Terminal 1: ~/a' })).getByRole('button', { name: 'More pane actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Close pane · ends its session' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close' }))
     await waitFor(() => { expect(daemon.closeSessionWithUndo).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' })) })
     await user.click(within(third).getByRole('button', { name: 'More pane actions' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Maximize pane' }))
@@ -611,7 +611,7 @@ describe('desktop terminal multiplexer', () => {
     expect(daemon.undoCloseSession).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Close pane · ends its session' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close' }))
     await screen.findAllByText('Closed ~/a')
     await user.keyboard('{Control>}{Shift>}z{/Shift}{/Control}')
 
@@ -659,7 +659,7 @@ describe('desktop terminal multiplexer', () => {
     await screen.findByRole('region', { name: 'Shell in ~/a' })
 
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Close pane · ends its session' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close' }))
     expect(daemon.closeSessionWithUndo).not.toHaveBeenCalled()
 await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop claude' }))
 
@@ -674,7 +674,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await screen.findByRole('region', { name: 'Shell in ~/a' })
 
     await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Close pane · ends its session' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close' }))
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop claude' }))
 
     await waitFor(() => { expect(daemon.closeSessionWithUndo.mock.calls.map(([conversation]) => conversation.id).sort()).toEqual(['t2', 't3']) })

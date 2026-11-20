@@ -1,8 +1,5 @@
 import { useCallback } from 'react'
 import { Panel } from '@/components/ui/panel'
-import { LOCAL_MACHINE } from '@/api/machines'
-import { repoWorktrees } from '@/features/inspect/api'
-import { useRepoQuery } from '@/features/inspect/useRepoQuery'
 import { useInstalledAgents } from '../model/newChatHost'
 import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
@@ -12,18 +9,12 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, startMenu, setStartMenu, startAgent, openWorktree, focusedSession, newTerminal, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, putAway, bringBack, snooze, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, startMenu, setStartMenu, startAgent, newTerminal, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const installedAgents = useInstalledAgents()
-  // The other worktrees of the project in front, for the + menu's Open worktree; only a repository on this computer has them.
-  const inRepo = online && focusedSession !== undefined && focusedSession.machine === LOCAL_MACHINE && focusedSession.branch !== null
-  const repoTerm = focusedSession?.pane ?? 0
-  const worktrees = useRepoQuery(repoTerm, ['worktrees'], () => repoWorktrees(repoTerm), false, inRepo)
   const start = {
     installedAgents,
-    worktrees: (worktrees.data ?? []).filter((entry) => !entry.main).map((entry) => ({ path: entry.path, branch: entry.branch })),
     onAgent: startAgent,
-    onOpenWorktree: openWorktree,
   }
 
   // The sidebar, as the docked column or the 60px rail, or the full one inside the overlay of a narrow window.
@@ -53,7 +44,7 @@ export function WorkspaceSidebars() {
       onHoverSession={warmChat}
       startMenu={holdsStartMenu ? startMenu : null}
       onStartMenu={setStartMenu}
-      start={{ ...start, onAgent: (program, machine) => { afterPick(); start.onAgent(program, machine) }, onOpenWorktree: (path) => { afterPick(); start.onOpenWorktree(path) } }}
+      start={{ ...start, onAgent: (program, machine) => { afterPick(); start.onAgent(program, machine) } }}
       onNewShell={(machine) => { afterPick(); newTerminal(machine) }}
       onAddMachine={() => { afterPick(); setAddMachineOpen(true) }}
       onMachineSettings={() => { afterPick(); setSettingsSection('machines') }}
@@ -67,9 +58,7 @@ export function WorkspaceSidebars() {
       onCopyText={copyText}
       onShowChanges={(id) => { afterPick(); showChangesOf(id) }}
       onMarkDone={markDone}
-      onPutAway={putAway}
       onBringBack={bringBack}
-      onSnooze={snooze}
       onUnsnooze={unsnooze}
       onGetFile={setGetFileId}
       onSpecialists={setSpecialistsId}

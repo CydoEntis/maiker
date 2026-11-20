@@ -63,10 +63,5 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
     })
   }, [focusedSession, setSettingsSection, runStart, startRemoteShell, preferences.startFolder, home, setLayout])
 
-  // "Open worktree" in the + menu: a terminal in that worktree's folder, shown in the window.
-  const openWorktree = useCallback((path: string) => {
-    setSettingsSection(null)
-    void runStart(() => Promise.resolve(path), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
-  }, [setSettingsSection, runStart, setLayout])
-  return { addAgentTerminal, closeAgentTerminal, startAgent, openWorktree }
+  return { addAgentTerminal, closeAgentTerminal, startAgent }
 }
