@@ -193,12 +193,11 @@ describe('the sync chip', () => {
 })
 
 describe('the folder chip', () => {
-  const onOpenProject = vi.fn()
   const openFolder = async (projects = [{ name: 'shop', folder: '/dev/shop' }], onNewSessionIn = vi.fn()) => {
     const user = userEvent.setup()
     render(
-      <PlaceActionsContext.Provider value={{ projects, onNewSessionIn, onOpenProject: vi.fn() }}>
-        <SessionBar place={PLACE} onOpenProject={onOpenProject} />
+      <PlaceActionsContext.Provider value={{ projects, onNewSessionIn }}>
+        <SessionBar place={PLACE} />
       </PlaceActionsContext.Provider>,
     )
     await user.click(screen.getByRole('button', { name: FOLDER_NAME }))
@@ -229,13 +228,10 @@ describe('the folder chip', () => {
     expect(onNewSessionIn).toHaveBeenCalledWith('/dev/shop')
   })
 
-  it('opens the Open a project dialog on its folder and clone tabs', async () => {
-    const { user } = await openFolder()
-    await user.click(screen.getByRole('radio', { name: /Open folder…/ }))
-    expect(onOpenProject).toHaveBeenLastCalledWith('folder')
-    await user.click(screen.getByRole('button', { name: FOLDER_NAME }))
-    await user.click(screen.getByRole('radio', { name: /Clone a repository…/ }))
-    expect(onOpenProject).toHaveBeenLastCalledWith('clone')
+  it('does not offer to change the folder of a session that has started', async () => {
+    await openFolder()
+    expect(screen.queryByRole('radio', { name: /Open folder…/ })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Clone a repository…/ })).toBeNull()
   })
 
   it('leaves Show in Explorer out for a folder on another machine', async () => {

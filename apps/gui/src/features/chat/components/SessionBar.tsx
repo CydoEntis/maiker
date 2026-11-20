@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { BranchChip } from '../place/BranchChip'
 import { FolderChip } from '../place/FolderChip'
-import { usePlaceActions, type OpenProjectTab } from '../place/placeActions'
+import { usePlaceActions } from '../place/placeActions'
 import { SyncChip } from '../place/SyncChip'
 import { useSessionSync } from '../place/useSessionSync'
 import '../place/place-chips.css'
@@ -32,8 +32,6 @@ type Props = {
   place?: SessionPlace | undefined
   /** The controls at the right (usage meters): the chat and the terminal each bring their own. */
   children?: ReactNode
-  /** The folder menu's Open folder… and Clone a repository…; the window's own handler (`PlaceActionsContext`) when absent. */
-  onOpenProject?: ((tab: OpenProjectTab) => void) | undefined
 }
 
 /**
@@ -41,17 +39,17 @@ type Props = {
  * right. It is never wider than the box, and the folder's text gives way first (its full path is on hover). It knows
  * nothing of chat or terminal internals, so both views draw the same row (docs/DESIGN.md, Under the box).
  */
-export function SessionBar({ place, children, onOpenProject }: Props) {
+export function SessionBar({ place, children }: Props) {
   return (
     <div className="mx-session-bar" data-screen-label="Under the box">
-      {place !== undefined && <Place place={place} onOpenProject={onOpenProject} />}
+      {place !== undefined && <Place place={place} />}
       <span className="mx-spacer" />
       {children}
     </div>
   )
 }
 
-function Place({ place, onOpenProject }: { place: SessionPlace; onOpenProject: ((tab: OpenProjectTab) => void) | undefined }) {
+function Place({ place }: { place: SessionPlace }) {
   const actions = usePlaceActions()
   const machine = place.machineId ?? LOCAL_MACHINE
   const folder = place.folder ?? ''
@@ -63,7 +61,7 @@ function Place({ place, onOpenProject }: { place: SessionPlace; onOpenProject: (
       {place.machine !== null && <span className="mx-session-machine">{place.machine}</span>}
       {folder === ''
         ? <span className="mx-place-chip is-folder"><span className="mx-place-text">{text}</span></span>
-        : <FolderChip folder={folder} text={text} machine={machine} projects={actions.projects} onNewSessionIn={actions.onNewSessionIn} onOpenProject={onOpenProject ?? actions.onOpenProject} />}
+        : <FolderChip folder={folder} text={text} machine={machine} projects={actions.projects} onNewSessionIn={actions.onNewSessionIn} />}
       {branch !== null && <BranchChip folder={folder} machine={machine} branch={branch} project={place.project} worktreeName={place.worktreeName ?? null} />}
       {sync !== null && branch !== null && <SyncChip state={sync} branch={branch} />}
     </span>
