@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { toSessionView, type SessionView } from './session'
-import { byUrgency, inProject, machineGroups, projectChoices, projectColor, projectGroups, placeLine, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
+import { byUrgency, inProject, isFreshSession, machineGroups, projectChoices, projectColor, projectGroups, placeLine, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(1)) }))
 
@@ -38,11 +38,21 @@ describe('a row', () => {
     expect(placeLine({ ...plain, branch: null })).toBe('maiker')
   })
 
-  it('names a session by its name, else by the folder it was made in, an agent or a program included', () => {
+  it('names a session by its name, else by the folder it was made in, a program included', () => {
     expect(rowTitle(session(1, { named: true, title: 'Growth' }))).toBe('Growth')
     expect(rowTitle(session(2, { cwd: '/home/me/dev', folder: '/home/me/dev' }))).toBe('dev')
-    expect(rowTitle(session(3, { agent: 'codex' }))).toBe('app3')
+    expect(rowTitle(session(3, { agent: 'codex', status: 'working' }))).toBe('app3')
     expect(rowTitle(session(4, { cwd: '/home/me/dev', folder: '/home/me/dev', process: 'node-mainthread' }))).toBe('dev')
+  })
+
+  it('names an agent that has been asked something by that, and one that has done nothing "New session"', () => {
+    expect(rowTitle(session(1, { agent: 'claude', summary: 'Fix the cart total\nthen run the tests' }))).toBe('Fix the cart total')
+    const fresh = session(2, { agent: 'claude' })
+    expect(rowTitle(fresh)).toBe('New session')
+    expect(isFreshSession(fresh)).toBe(true)
+    expect(isFreshSession(session(3, { agent: 'claude', status: 'working' }))).toBe(false)
+    expect(isFreshSession(session(4))).toBe(false)
+    expect(isFreshSession(session(5, { agent: 'claude', named: true, title: 'Growth' }))).toBe(false)
   })
 
   it('says stopped for an agent and exited for a shell, and nothing otherwise', () => {

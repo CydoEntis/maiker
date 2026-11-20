@@ -115,7 +115,8 @@ export function PaneCard(props: PaneCardProps) {
         {props.leading}
         <div className="mx-pane-id">
           <PaneHeadId session={session} />
-          {!shell && <PaneCrumbs session={session} branchMenu={props.branchMenu} />}
+          {/* In the chat the branch is a chip under the box, so the header says only where the session is. */}
+          {!shell && shown !== 'chat' && <PaneCrumbs session={session} branchMenu={props.branchMenu} />}
         </div>
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
         <span className="mx-pane-controls">

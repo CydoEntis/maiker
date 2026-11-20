@@ -85,22 +85,24 @@ describe('the usage strip', () => {
     expect(within(strip).getByRole('meter', { name: '5-hour limit' }).parentElement).toHaveAttribute('title', '5-hour limit: 62% used · resets in 3h')
   })
 
-  it('shows a meter only once it is half used: a new chat has none', async () => {
+  it('shows the context from the start and a plan limit only once it is half used', async () => {
     fake.current = new FakeDaemonHistory()
     render(<ChatSession link={LINK} agent="claude" online usage={{ context: 12, limits: [{ name: 'week', used: 70, resetsAt: 0 }] }} />)
     await settle()
 
     const meters = within(screen.getByRole('group', { name: 'Usage' }))
-    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Weekly limit'])
+    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context', 'Weekly limit'])
     expect(screen.getByRole('group', { name: 'Usage' })).toHaveTextContent('Week70%')
   })
 
-  it('draws no meters for a chat that has used little', async () => {
+  it('draws only the context ring, at 0%, for a chat that has used little', async () => {
     fake.current = new FakeDaemonHistory()
     render(<ChatSession link={LINK} agent="claude" online usage={{ context: null, limits: [{ name: 'week', used: 0, resetsAt: 0 }] }} />)
     await settle()
 
-    expect(screen.queryByRole('group', { name: 'Usage' })).not.toBeInTheDocument()
+    const meters = within(screen.getByRole('group', { name: 'Usage' }))
+    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context'])
+    expect(screen.getByRole('group', { name: 'Usage' })).toHaveTextContent('0%')
   })
 
   it('is not drawn for an agent that reports nothing of the kind', async () => {

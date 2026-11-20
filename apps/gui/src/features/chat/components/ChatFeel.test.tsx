@@ -274,7 +274,7 @@ describe('how the chat feels while it waits', () => {
 
     // The mode is a shield; its name is in the button's name and tooltip.
     expect(screen.getByRole('button', { name: /^Permission mode: Auto/ })).toHaveAttribute('title', expect.stringContaining('Auto'))
-    expect(screen.getByText('Claude Sonnet 5.5')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Claude · Sonnet 5.5')
   })
 
   it('marks a mode that asks about nothing, and shows nothing when the file said nothing', async () => {

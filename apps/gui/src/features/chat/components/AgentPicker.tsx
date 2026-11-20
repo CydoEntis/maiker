@@ -8,22 +8,12 @@ import { AppIcon, Icon } from '@/features/workspace/components/glyphs'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
 import { AGENT_LABEL, modelName } from '../modelName'
 import {
-  choiceFor, DEFAULT_PICK, effortAllowed, KNOWN_MODELS, effortBars, effortInUse, effortWord, leadingModels, menuModels, modelInUse, pickedModel, REASONING_LABEL, REASONING_LEVELS, useAgentModels, useDiscoveredModels,
+  choiceFor, DEFAULT_PICK, effortAllowed, KNOWN_MODELS, effortInUse, effortWord, leadingModels, menuModels, modelInUse, pickedModel, REASONING_LABEL, REASONING_LEVELS, useAgentModels, useDiscoveredModels,
   type AgentChoice, type ModelOption, type Reasoning, type ReasoningPick,
 } from '../agentChoice'
 
 /** The level a chat drops to when its new model does not take the one it had. */
 const FALLBACK_LEVEL: Reasoning = 'medium'
-
-/** The small strength meter on the button: four rising bars, filled up to the level in use. */
-function MiniMeter({ level }: { level: string }) {
-  const filled = effortBars(level)
-  return (
-    <span aria-hidden="true" className="mx-mm-mini">
-      {REASONING_LEVELS.map((name, index) => <span key={name} className={index < filled ? 'is-on' : undefined} />)}
-    </span>
-  )
-}
 
 /**
  * The agent, as a segmented control across the top of the menu (layout 2h): a column per agent with its icon and
@@ -129,10 +119,9 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
   // Only the levels this model takes get a stop, so the slider is as long as the agent's own list.
   const levels = REASONING_LEVELS.filter((level) => effortAllowed(agent, model, level)).map((level) => ({ value: level, label: REASONING_LABEL[level] }))
   const summary = `${AGENT_LABEL[agent]} · ${model?.label ?? ''} · ${effort.word ?? 'no effort setting'}`
-  // A chat's button names the agent too; the dialog's, beside the agent switch, only the model (the agent's own name when none was picked).
+  // The button names the agent, then the model (the agent's own name when none was picked) and the effort.
   const fullName = modelName(agent, choice.model === DEFAULT_PICK && currentModel !== null ? undefined : model, currentModel)
-  // The dialog's line already starts with the agent's name, so it carries only what follows it: the model, or "Default" while none is known.
-  const shownName = compact ? fullName.slice(AGENT_LABEL[agent].length).trim() || (model?.label ?? '') : fullName
+  const modelOnly = fullName.slice(AGENT_LABEL[agent].length).trim() || (model?.label ?? '')
   // Enter in the dialog's menu closes it, the way it does on a list; a button that opens more models keeps its own Enter.
   const closeOnEnter = (event: KeyboardEvent) => {
     if (event.key !== 'Enter' || (event.target instanceof HTMLElement && event.target.closest('.mx-mm-more') !== null)) return
@@ -154,18 +143,9 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
       <Popover.Trigger asChild>
         <button type="button" aria-label={`Agent, model and reasoning: ${summary}`} title={locked ?? 'Model and effort'} aria-disabled={locked !== undefined} className={`mx-model-button${locked === undefined ? '' : ' is-locked'}`}>
           <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>
-          {compact ? (
-            <span className="mx-model-line"><span className="mx-model-name">{AGENT_LABEL[agent]}</span><span className="mx-model-effort">{[shownName, inUseWord ?? ''].filter((part) => part !== '').map((part) => ` · ${part}`).join('')}</span></span>
-          ) : (
-            <>
-              <span className="mx-model-name">{/* With nothing picked, what the agent says it runs is the better name than the row that stands for it. */}
-                {shownName}</span>
-              {/* A fixed slot (the longest level's width) so a pick never moves what is beside it. */}
-              {takesEffort && <span className="mx-model-level">{effortWord(inUse)}</span>}
-              {takesEffort && <MiniMeter level={inUse ?? DEFAULT_PICK} />}
-            </>
-          )}
-          <Icon name="chevronDown" />
+          {/* One line, `Claude · Sonnet 5.5 · Medium`, in the dialog and in the chat's box alike. */}
+          <span className="mx-model-line"><span className="mx-model-name">{AGENT_LABEL[agent]}</span><span className="mx-model-effort">{[modelOnly, compact ? inUseWord ?? '' : takesEffort ? effortWord(inUse) ?? '' : ''].filter((part) => part !== '').map((part) => ` · ${part}`).join('')}</span></span>
+          {compact && <Icon name="chevronDown" />}
         </button>
       </Popover.Trigger>
       <PopupContent side={side} align={compact ? 'start' : 'end'} aria-label="Model and effort" className="mx-mm" onKeyDown={compact ? closeOnEnter : undefined}>

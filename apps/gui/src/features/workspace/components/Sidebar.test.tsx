@@ -61,11 +61,11 @@ describe('the sidebar', () => {
     show([
       session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'app2' }),
       session(1, { agent: 'claude', named: true, title: 'Here', repo: 'app1' }),
-    ], { machines: [LOCAL_HEAD, DEVBOX] })
+    ], { machines: [LOCAL_HEAD, DEVBOX], grouping: 'status' })
     const there = screen.getByRole('button', { name: /^There,/ }).querySelector('.mx-row-sub')
     const here = screen.getByRole('button', { name: /^Here,/ }).querySelector('.mx-row-sub')
     expect(there?.querySelector('.mx-row-machine')?.textContent).toBe('devbox')
-    expect(there?.textContent).toBe('devboxapp2')
+    expect(there?.textContent).toBe('devbox·app2')
     expect(there?.querySelectorAll('svg rect')).toHaveLength(2)
     expect(here?.querySelector('.mx-row-machine')).toBeNull()
     expect(here?.querySelectorAll('svg rect')).toHaveLength(1)
@@ -288,7 +288,7 @@ describe('a session row', () => {
 
   it('offers no Get a file on a session of this computer', () => {
     show([session(1, { agent: 'claude' })])
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^app1,/ }))
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^New session,/ }))
     expect(screen.queryByRole('menuitem', { name: /Get a file/ })).toBeNull()
   })
 
@@ -570,12 +570,38 @@ describe('grouped by status', () => {
     expect(Array.from(document.querySelectorAll('.mx-row-wrap'))[0]).toBe(draft)
   })
 
-  it('still offers Update for a machine that needs the app, under the list', () => {
+  it('still offers Update for a machine that needs the app, in its own card under the list', () => {
     const onUpdateMachine = vi.fn()
-    show(mixed(), { grouping: 'status', machines: [LOCAL_HEAD, { ...DEVBOX, updateAction: 'update' }], onUpdateMachine })
+    show([...mixed(), session(8, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { grouping: 'status', machines: [LOCAL_HEAD, { ...DEVBOX, updateAction: 'update' }], onUpdateMachine })
     const notes = screen.getByRole('group', { name: 'Machines that need Maiker' })
     fireEvent.click(within(notes).getByRole('button', { name: 'Update Maiker on devbox' }))
     expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'update')
+  })
+
+  it('keeps a saved machine with no sessions as a card of its own: Offline with Fix, and "No sessions yet"', () => {
+    const onFixMachine = vi.fn()
+    const down: MachineHead = { ...DEVBOX, down: true, chip: { glyph: '●', word: 'unreachable', tone: 'bad' } }
+    show(mixed(), { grouping: 'status', machines: [LOCAL_HEAD, down], onFixMachine })
+    const card = screen.getByRole('list', { name: 'Sessions on devbox' }).closest<HTMLElement>('.mx-machine') as HTMLElement
+    expect(within(card).getByText('Offline')).toBeTruthy()
+    expect(within(card).getByText('No sessions yet')).toBeTruthy()
+    fireEvent.click(within(card).getByRole('button', { name: 'Fix devbox' }))
+    expect(onFixMachine).toHaveBeenCalledWith(down)
+  })
+
+  it('lists the empty saved machine when grouped by project too, and not once it has a session', () => {
+    show(mixed(), { grouping: 'project', machines: [LOCAL_HEAD, DEVBOX] })
+    expect(screen.getByRole('list', { name: 'Sessions on devbox' })).toBeTruthy()
+    cleanup()
+    show([...mixed(), session(8, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { grouping: 'project', machines: [LOCAL_HEAD, DEVBOX] })
+    expect(screen.queryByRole('list', { name: 'Sessions on devbox' })).toBeNull()
+  })
+
+  it('shows a session that has done nothing as an italic "New session"', () => {
+    show([session(1, { agent: 'claude' })], { grouping: 'status' })
+    const row = screen.getByRole('button', { name: /^New session,/ })
+    expect(row).toHaveClass('is-fresh')
+    expect(row.querySelector('.mx-row-name')).toHaveTextContent('New session')
   })
 })
 

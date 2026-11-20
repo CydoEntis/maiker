@@ -132,10 +132,10 @@
   border: 1px solid var(--line2);
   box-shadow: none;
 }
-/* The message box (the chat's and the new-session draft's, one component) is lifted further: the raised surface nudged toward
-   the text colour, as menus are, so it stands off the chat in a dark theme and a light one alike, inside a visible hairline. */
+/* The message box (the chat's and the new-session draft's, one component) is a raised surface inside a visible hairline, a step
+   lighter than the pane (the design's `#202024` on `#151517`), so it stands off the chat in a dark theme and a light one alike. */
 .mx-app .mx-box {
-  background: var(--pop-bg);
+  background: var(--m-raise);
   border: 1px solid var(--line2);
   box-shadow: none;
 }

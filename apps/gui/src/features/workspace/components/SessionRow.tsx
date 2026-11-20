@@ -1,7 +1,7 @@
 import type { MouseEvent } from 'react'
 import { machineLabel } from '@/data/machineNicknames'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { isShell, projectOf, rowTitle, rowWord } from '../model/sidebar'
+import { isFreshSession, isShell, projectOf, rowTitle, rowWord } from '../model/sidebar'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { MachineIcon } from './glyphs'
 import { beginPointerDrag } from './dragSession'
@@ -28,8 +28,9 @@ function PlaceLine({ session, project, machine }: { session: SessionView; projec
   const worktree = session.worktree ? session.branch : null
   return (
     <span className="mx-row-sub">
-      <span className="mx-row-folder"><MachineIcon remote={machine !== null} size={12} /></span>
+      <span className="mx-row-folder"><MachineIcon remote={session.machineName !== null} size={12} /></span>
       {machine !== null && <span className="mx-row-machine">{machineLabel(machine)}</span>}
+      {machine !== null && project !== null && <span className="mx-row-slash" aria-hidden="true">·</span>}
       {project !== null && <span className="mx-row-project-name">{project}</span>}
       {project !== null && worktree !== null && <span className="mx-row-slash" aria-hidden="true">/</span>}
       {worktree !== null && <span className="mx-row-branch-name">{worktree}</span>}
@@ -46,7 +47,7 @@ export function SessionRow({ session, selected, showProject, machine = null, onS
   const title = rowTitle(session)
   const active = !isShell(session) && session.status !== 'idle'
   const word = rowWord(session)
-  const className = `mx-row${session.status === 'idle' ? ' is-idle' : ''}${selected ? ' is-selected' : ''}${active ? ' is-active' : ''}${session.status === 'needs' ? ' is-needs' : ''}${isShell(session) ? ' is-shell' : ''}${session.status === 'unknown' ? ' is-offline' : ''}${session.status === 'limited' ? ' is-limited' : ''}`
+  const className = `mx-row${session.status === 'idle' ? ' is-idle' : ''}${selected ? ' is-selected' : ''}${active ? ' is-active' : ''}${session.status === 'needs' ? ' is-needs' : ''}${session.status === 'working' ? ' is-working' : ''}${isShell(session) ? ' is-shell' : ''}${isFreshSession(session) ? ' is-fresh' : ''}${session.status === 'unknown' ? ' is-offline' : ''}${session.status === 'limited' ? ' is-limited' : ''}`
   const project = showProject ? projectOf(session) : null
   return (
     <button

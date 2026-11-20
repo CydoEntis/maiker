@@ -239,7 +239,7 @@ function Expanded(props: SidebarProps) {
     ]
   }
 
-  const renderRow = (session: SessionView, showProject: boolean) => {
+  const renderRow = (session: SessionView, showProject: boolean, showMachine = true) => {
     const selected = session.id === props.focusedId
     return (
       <div key={session.id} className="mx-row-wrap" role="listitem" data-flip={session.id} onMouseEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }} onMouseLeave={() => { endHover(); props.onHoverSession?.(null) }} onMouseDown={endHover} onFocus={() => { props.onHoverSession?.(session.id) }} onBlur={() => { props.onHoverSession?.(null) }}>
@@ -247,7 +247,7 @@ function Expanded(props: SidebarProps) {
           session={session}
           selected={selected}
           showProject={showProject}
-          machine={session.machineName}
+          machine={showMachine ? session.machineName : null}
           onShow={() => { props.onShowSession(session.id) }}
           onRename={() => { props.onRenameSession(session.id) }}
           onContextMenu={(event) => { openMenu(event, rowTitle(session), sessionMenu(session)) }}
@@ -257,6 +257,24 @@ function Expanded(props: SidebarProps) {
     )
   }
 
+  // A saved machine with nothing on it keeps its card in every grouping, so it never vanishes from the list that adds to it.
+  const emptyMachines: MachineGroup[] = props.machines.filter((head) => head.name !== null && !props.sessions.some((session) => session.machine === head.machine)).map((head) => ({ head, sessions: [] }))
+  const machineSection = (group: MachineGroup) => (
+    <MachineSection
+      key={group.head.key}
+      group={group}
+      open={views.isOpen(group.head.key) || draft?.machine === group.head.machine}
+      draft={draft?.machine === group.head.machine ? draft : null}
+      progress={group.head.name === null ? undefined : props.updateProgress?.[group.head.name]}
+      onToggle={() => { views.toggle(group.head.key) }}
+      onUpdate={props.onUpdateMachine}
+      onContextMenu={(event) => { openMenu(event, machineTitle(group.head), machineMenu(group.head)) }}
+      renderRow={renderRow}
+      canStart={props.canStart}
+      renderStart={(machine, button) => <SidebarStartMenu sidebar={props} machine={machine}>{button}</SidebarStartMenu>}
+      onFix={props.onFixMachine}
+    />
+  )
   return (
     <div className="mx-sidebar-expanded">
       <div className="mx-sidebar-top">
@@ -284,27 +302,13 @@ function Expanded(props: SidebarProps) {
               </ListSection>
             ))}
             {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Chats and shells you start appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
-            <MachineNotes heads={props.machines} progress={props.updateProgress} onUpdate={props.onUpdateMachine} onFix={props.onFixMachine} />
+            {emptyMachines.map(machineSection)}
+            <MachineNotes heads={props.machines.filter((head) => !emptyMachines.some((group) => group.head.key === head.key))} progress={props.updateProgress} onUpdate={props.onUpdateMachine} onFix={props.onFixMachine} />
           </section>
         )}
         {props.grouping === 'machine' && (
         <section aria-label="Agents" className="mx-machines">
-          {groups.map((group) => (
-            <MachineSection
-              key={group.head.key}
-              group={group}
-              open={views.isOpen(group.head.key) || draft?.machine === group.head.machine}
-              draft={draft?.machine === group.head.machine ? draft : null}
-              progress={group.head.name === null ? undefined : props.updateProgress?.[group.head.name]}
-              onToggle={() => { views.toggle(group.head.key) }}
-              onUpdate={props.onUpdateMachine}
-              onContextMenu={(event) => { openMenu(event, machineTitle(group.head), machineMenu(group.head)) }}
-              renderRow={renderRow}
-              canStart={props.canStart}
-              renderStart={(machine, button) => <SidebarStartMenu sidebar={props} machine={machine}>{button}</SidebarStartMenu>}
-              onFix={props.onFixMachine}
-            />
-          ))}
+          {groups.map(machineSection)}
           {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Chats and shells you start appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
         </section>
         )}
@@ -422,7 +426,8 @@ type SectionProps = {
   onToggle: () => void
   onUpdate: (name: string, action: UpdateAction) => void
   onContextMenu: (event: MouseEvent) => void
-  renderRow: (session: SessionView, showProject: boolean) => ReactNode
+  /** `showMachine` is false under a machine's own heading, which already says it. */
+  renderRow: (session: SessionView, showProject: boolean, showMachine?: boolean) => ReactNode
 }
 
 /** One machine: its heading (name, count, update, its line's dot) and its sessions as one list, most urgent first. */
@@ -450,7 +455,7 @@ function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onCo
       {head.down && head.name !== null && <MachineWhy head={head} onFix={onFix} />}
       {!head.down && head.name !== null && head.chip?.tone === 'quiet' && <span className="mx-machine-why"><span className="mx-machine-why-word">Connecting…</span></span>}
       <Collapse open={open}>
-        <div className="mx-rows" role="list" aria-label={`Sessions on ${title}`}>{sessions.map((session) => renderRow(session, true))}</div>
+        <div className="mx-rows" role="list" aria-label={`Sessions on ${title}`}>{sessions.map((session) => renderRow(session, true, false))}</div>
         {sessions.length === 0 && draft === null && <div className="mx-machine-empty">No sessions yet</div>}
         {/* Last, where the new chat will be (sessions keep creation order), so it fills in without anything moving. */}
         {draft !== null && <DraftRow process={draft.process} onOpen={draft.onOpen} />}

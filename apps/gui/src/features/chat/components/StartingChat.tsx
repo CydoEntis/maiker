@@ -150,7 +150,7 @@ export function StartingChat({ agent, sessionId, onShowLog, paneStatus, hooked, 
         // Never a blank screen or a raw terminal: the session is an agent session, and this says it is on its way.
         <div className="mx-chat-empty" role="status">
           <div className="mx-chat-starting">
-            <span className="mx-chat-starting-title">What are we building today?</span>
+            <span className="sr-only">What are we building today?</span>
             {late && <p>{stuckChatLine(agent)}</p>}
           </div>
         </div>

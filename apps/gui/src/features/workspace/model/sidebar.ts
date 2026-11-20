@@ -73,13 +73,27 @@ export function isShell(session: Pick<SessionView, 'process'>): boolean {
   return session.process === SHELL_PROCESS
 }
 
+/** What a row calls an agent session that has no name and has not been sent a message: nothing in it says more. */
+export const NEW_SESSION = 'New session'
+
+const LINE_BREAK = /\r?\n/
+const firstLine = (text: string): string => text.split(LINE_BREAK, 1)[0]?.trim() ?? ''
+
+/** An agent session with no name, no prompt and nothing happening: its row reads "New session", quietly. */
+export function isFreshSession(session: Pick<SessionView, 'name' | 'conversation' | 'lastPrompt' | 'status'>): boolean {
+  return session.name === null && Boolean(session.conversation.agent) && session.status === 'idle' && firstLine(session.lastPrompt) === ''
+}
+
 /**
- * What a row and a pane header call a session: the name you gave it, else the folder it was made in. Neither the agent nor a
- * program running in a shell (`node`, `vim`) is a name: the agent is the mark beside it, a program comes and goes with each
+ * What a row and a pane header call a session: the name you gave it, else (for an agent) the start of what it was last asked,
+ * else "New session" while it has done nothing, else the folder it was made in, which is also a shell's name. Neither the agent
+ * nor a program running in a shell (`node`, `vim`) is a name: the agent is the mark beside it, a program comes and goes with each
  * command, and a title that followed either would change under you.
  */
 export function rowTitle(session: SessionView): string {
-  return session.name ?? folderNameOf(session)
+  if (session.name !== null) return session.name
+  if (!session.conversation.agent) return folderNameOf(session)
+  return firstLine(session.lastPrompt) || (isFreshSession(session) ? NEW_SESSION : folderNameOf(session))
 }
 
 /** The words at the right of a row: only a stopped agent, an exited shell or a session held by its plan limit says anything. */

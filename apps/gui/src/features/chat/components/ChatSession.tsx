@@ -129,8 +129,6 @@ type Props = {
   agent: ChatAgent
   /** The daemon is connected: a message or an answer can be sent. */
   online: boolean
-  /** False for a chat session: the agent has no terminal to type in, so no text sends the reader there. */
-  hasTerminal?: boolean
   /** The session's folder, so file names read relative to it. */
   root?: string | null
   /** Opens a file's diff, or a turn's, in the Changes panel; absent where there is none. */
@@ -193,7 +191,7 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
+export function ChatSession({ link, agent, online, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent, paused })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
@@ -809,7 +807,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           <SubagentChat subagent={subagent} agent={agent} root={root} term={sessionId !== undefined && machineNameOf(sessionId) === null ? terminalOf(sessionId) : null} />
         </>
       ) : feed.loaded && rows.length === 0 ? (
-        <p className="mx-chat-empty">{hasTerminal ? 'No messages yet. Send one below, or type in the terminal.' : 'No messages yet. Send one below.'}</p>
+        // The design's empty chat is blank: the box below is the invitation. A screen reader still hears that there is nothing yet.
+        <div className="mx-chat-empty"><span className="sr-only">No messages yet.</span></div>
       ) : feed.loaded || rows.length > 0 ? (
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
         <KnownRowsContext.Provider value={known}>

@@ -177,13 +177,6 @@ export function effortWord(level: string | null | undefined): string | null {
   return Object.hasOwn(REASONING_LABEL, level) ? REASONING_LABEL[level as ReasoningPick] : `${level.charAt(0).toUpperCase()}${level.slice(1)}`
 }
 
-/** How many of the four bars a level fills: its place among the menu's, and all four for a level above them. */
-export function effortBars(level: string | null | undefined): number {
-  if (level === null || level === undefined || !PLAIN_LEVEL.test(level)) return 0
-  const place = REASONING_LEVELS.indexOf(level as Reasoning)
-  return place >= 0 ? place + 1 : REASONING_LEVELS.length
-}
-
 /** The level an agent runs at when nothing says otherwise: what Claude Code and Codex both start on. */
 export const DEFAULT_EFFORT: Reasoning = 'medium'
 

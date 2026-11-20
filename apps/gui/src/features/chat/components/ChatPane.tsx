@@ -93,7 +93,6 @@ export function ChatPane(props: ChatPaneProps) {
             agent={availability.agent}
             online={props.online}
             paused={props.paused ?? false}
-            hasTerminal={props.hasTerminal ?? true}
             root={props.root ?? null}
             onOpenDiff={props.onOpenDiff ?? null}
             onOpenFile={props.onOpenFile ?? null}

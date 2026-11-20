@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChatPane } from './ChatPane'
 
 vi.mock('./ChatSession', () => ({
-  ChatSession: ({ hasTerminal }: { hasTerminal?: boolean }) => <p>chat session, terminal: {String(hasTerminal)}</p>,
+  ChatSession: () => <p>chat session</p>,
 }))
 
 afterEach(cleanup)
@@ -28,14 +28,9 @@ describe('the card of a session that has no chat', () => {
 describe('the chat of a ready session', () => {
   const ready = { kind: 'ready', agent: 'claude', link: { conversation: 44, generation: 1 } } as const
 
-  it('tells the chat when the session has no terminal', () => {
-    render(<ChatPane availability={ready} process="claude" online hasTerminal={false} onShowLog={noop} />)
-    expect(screen.getByText('chat session, terminal: false')).toBeInTheDocument()
-  })
-
-  it('assumes a terminal unless told otherwise', () => {
+  it('shows the chat of a session that has one', () => {
     render(<ChatPane availability={ready} process="claude" online onShowLog={noop} />)
-    expect(screen.getByText('chat session, terminal: true')).toBeInTheDocument()
+    expect(screen.getByText('chat session')).toBeInTheDocument()
   })
 })
 

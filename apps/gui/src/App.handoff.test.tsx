@@ -393,7 +393,9 @@ describe('desktop terminal multiplexer', () => {
     const named = await within(sidebar).findByRole('button', { name: /^Growth Tests, shell/ })
 
     expect(named.querySelector('.mx-row-name')).toHaveTextContent('Growth Tests')
-    expect(within(sidebar).getByRole('button', { name: /, claude, / }).querySelector('.mx-row-name')).toHaveTextContent('a')
+    const fresh = within(sidebar).getByRole('button', { name: /, claude, / })
+    expect(fresh.querySelector('.mx-row-name')).toHaveTextContent('New session')
+    expect(fresh).toHaveClass('is-fresh')
   })
 
   it('moves through a session menu with the arrow keys and gives focus back when it closes', async () => {
@@ -703,7 +705,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
   it('asks before the row menu’s Close session stops an agent', async () => {
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { agent: 'claude', status: 'idle' })])
     renderDesktopApp()
-    const row = await screen.findByRole('button', { name: /^a, claude, / })
+    const row = await screen.findByRole('button', { name: /^New session, claude, / })
 
     fireEvent.contextMenu(row)
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Close session' }))
@@ -1067,7 +1069,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     const app = renderDesktopApp()
     await screen.findByRole('heading', { name: 'No sessions running' })
     const root = () => document.querySelector<HTMLElement>('.mx-app')
-    expect(root()?.style.getPropertyValue('--bg')).toBe('#0c0d0f')
+    expect(root()?.style.getPropertyValue('--bg')).toBe('#0c0c0d')
 
     await user.keyboard('{Control>},{/Control}')
     await user.keyboard('a')

@@ -50,7 +50,7 @@ type MeterProps = {
 export function UsageMeter({ item, onOpen, openLabel = 'Open Usage & cost', graded = false, lead, bar = false, className = '' }: MeterProps) {
   const level = graded ? levelOf(item.percent) : null
   const tip = meterTip(item)
-  const classes = `mx-usage-item is-${item.tone}${level === null ? '' : ` is-${level}`}${className === '' ? '' : ` ${className}`}`
+  const classes = `mx-usage-item is-${item.tone}${item.window === null ? ' is-context' : ''}${level === null ? '' : ` is-${level}`}${className === '' ? '' : ` ${className}`}`
   const body = (
     <>
       {lead}

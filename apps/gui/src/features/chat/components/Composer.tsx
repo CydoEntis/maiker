@@ -155,7 +155,7 @@ const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
  * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
  * offline the box still takes typing but does not send.
  */
-export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null, place, ended, hint = 'Message the agent, or type / for commands' }: Props) {
+export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null, place, ended, hint = 'Reply…' }: Props) {
   const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
@@ -453,7 +453,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
         </div>
         {ended !== undefined && <EndedLine ended={ended} />}
         <SessionBar place={place}>
-          {ended === undefined && facts.usage !== undefined && <UsageMeters usage={facts.usage} onOpen={facts.onOpenUsage} />}
+          {ended === undefined && facts.usage !== undefined && <UsageMeters usage={facts.usage} agent={agent} onOpen={facts.onOpenUsage} />}
         </SessionBar>
         {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Anything it asks can only be answered there.</p>}
         {restoreNote !== null && composer.conversationKey !== undefined && (
@@ -511,11 +511,12 @@ function modeLockedWhy(facts: Pick<ComposerFacts, 'modeLocked' | 'agentChips'>):
 
 /**
  * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
- * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. A meter shows once it is
+ * used, each a ring and the figure (a limit also a short name). The context shows from the start; a limit shows once it is
  * at least half used (`METER_SHOWN_FROM`), when it is worth a look; below that Usage & cost has it. A click opens it.
  */
-function UsageMeters({ usage, onOpen }: { usage: SessionUsage; onOpen: (() => void) | undefined }) {
-  const items = usageItems(usage, nowSeconds()).filter((item) => item.percent >= METER_SHOWN_FROM)
+function UsageMeters({ usage, agent, onOpen }: { usage: SessionUsage; agent: ChatAgent; onOpen: (() => void) | undefined }) {
+  // An agent that reports its context (the chat agents) has its ring from the start, a new chat reading 0%; a plan limit waits until it is worth a look.
+  const items = usageItems(usage, nowSeconds(), abilitiesOf(agent).structuredChat).filter((item) => item.window === null || item.percent >= METER_SHOWN_FROM)
   if (items.length === 0) return null
   return (
     <span className="mx-usage" role="group" aria-label="Usage">
@@ -524,20 +525,19 @@ function UsageMeters({ usage, onOpen }: { usage: SessionUsage; onOpen: (() => vo
   )
 }
 
-function ModeFace({ facts, chevron = false }: { facts: ComposerFacts; chevron?: boolean }) {
+function ModeFace({ facts }: { facts: ComposerFacts }) {
   return (
     <>
       <Icon name="shield" size={13} />
       <span className="mx-mode-name">{modeShortLabel(facts.mode) ?? 'Permissions'}</span>
       {facts.modeDanger && <span className="mx-mode-dot" aria-hidden="true" />}
-      {chevron && <Icon name="chevronDown" size={10} />}
     </>
   )
 }
 
 /**
- * The permission mode, as a shield and a chevron in the box's bottom row: the mode's name is in its tooltip, and the
- * shield turns red in a mode that asks about nothing. It opens the agent's modes when they can be picked from here.
+ * The permission mode, as a shield and its name in the box's bottom row, with no chevron: the shield
+ * turns red in a mode that asks about nothing. It opens the agent's modes when they can be picked from here.
  */
 function ModeControl({ facts }: { facts: ComposerFacts }) {
   const name = facts.mode ?? 'not reported yet'
@@ -546,7 +546,7 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
     // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.
     return (
       <button type="button" aria-disabled="true" className={`mx-mode-button is-locked${danger}`} title={`Permissions: ${name}. ${modeLockedWhy(facts)}`} aria-label={`Permission mode: ${name}. ${modeLockedWhy(facts)}`}>
-        <ModeFace facts={facts} chevron />
+        <ModeFace facts={facts} />
       </button>
     )
   }
@@ -567,7 +567,7 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
       bypassOff={facts.bypassAllowed === true ? undefined : { note: 'needs a new session', why: 'Claude only allows this when it starts with Bypass Permissions on (Settings › Permissions). This session started without it: turn the setting on and start a new session.' }}
     >
       <button type="button" className={`mx-mode-button${danger}`} title={`Permissions: ${name}`} aria-label={`Permission mode: ${name}. Pick another.`}>
-        <ModeFace facts={facts} chevron />
+        <ModeFace facts={facts} />
       </button>
     </PermissionMenu>
   )

@@ -432,13 +432,6 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-mm-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .mx-mm-effort-word { font-size: 11px; font-weight: 600; color: var(--dim); }
 .mx-mm-level { text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; }
-.mx-mm-mini { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; margin-left: 2px; }
-/* The bars of a level that was never picked are still drawn as bars: at half the old strength the meter read as missing. */
-.mx-mm-mini span { width: 2.5px; height: 4px; border-radius: 1px; background: rgba(var(--hl), calc(.34 * var(--hk))); }
-.mx-mm-mini span:nth-child(2) { height: 6px; }
-.mx-mm-mini span:nth-child(3) { height: 8px; }
-.mx-mm-mini span:nth-child(4) { height: 10px; }
-.mx-mm-mini span.is-on { background: var(--accent); }
 /* The permission menu: a row a mode, each with what it does. */
 .mx-pm { width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; padding: 8px; border-radius: var(--r-panel); }
 .mx-pm-head { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 8px; font-size: 11.5px; color: var(--muted); }
@@ -569,7 +562,7 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 /* The box row keeps only send; the location and the session's controls sit in one row under the box (docs/DESIGN.md, Under the box). */
 .mx-box-row { justify-content: flex-end; }
 /* The chat's box holds its controls in this row (docs/DESIGN.md, The message box); the new-session draft keeps its own. */
-.mx-composer .mx-box-text { width: 100%; }
+.mx-composer .mx-box-text { width: 100%; min-height: 68px; }
 .mx-composer .mx-box-row { justify-content: space-between; }
 .mx-composer .mx-box-attach { position: static; box-shadow: none; }
 .mx-box-controls { display: flex; min-width: 0; align-items: center; gap: 2px; }
@@ -577,10 +570,10 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
    so picking another model, effort or mode never moves what sits beside it. Attention is a dot, never louder text. */
 .mx-box-controls :is(.mx-model-button, .mx-mode-button) { flex: none; height: 26px; font: 400 12px/1 var(--ui); gap: 6px; }
 .mx-box-controls :is(.mx-model-name, .mx-model-level, .mx-mode-name) { display: inline-block; overflow: hidden; text-overflow: ellipsis; font-weight: 400; text-align: left; }
-.mx-box-controls .mx-model-name { color: var(--fg2); min-width: 17ch; max-width: 24ch; }
-.mx-box-controls .mx-model-level { min-width: 6ch; }
-.mx-box-controls .mx-mode-name { color: var(--fg2); min-width: 16ch; }
-.mx-box-controls .mx-mm-mini { margin-left: 0; width: 14.5px; }
+/* The model is one plain line, `Claude · Sonnet 5.5 · Medium`, and the mode a shield and its name; both quiet, neither a bar. */
+.mx-box-controls .mx-model-line { flex: none; max-width: 36ch; }
+.mx-box-controls :is(.mx-model-name, .mx-model-effort, .mx-mode-name) { display: inline; color: var(--muted); }
+.mx-box-controls .mx-model-button:not(.is-locked):hover :is(.mx-model-name, .mx-model-effort), .mx-box-controls .mx-mode-button:not(.is-static, .is-locked):hover .mx-mode-name { color: var(--fg); }
 .mx-box.is-ended { display: none; }
 .mx-session-bar { width: 100%; display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 6px 2px 0 6px; font-size: 12.5px; color: var(--muted); }
 .mx-mode-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }

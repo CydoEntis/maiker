@@ -1713,3 +1713,7 @@ Files tab on it) and **Open README beside the chat**.
   old to save shows Drawn and Source with the line "This machine's service is older: restart it to edit."; a text that
   had to be cleaned to be shown safely is read-only with a line that says so.
 - Not offered: Edit against a service older than this app (Drawn and Source only).
+
+## Chat and sidebar fidelity
+
+The sidebar, chat pane and message box follow the handoff as written in [DESIGN](DESIGN.md#chat-and-sidebar-fidelity-the-current-handoff): status cards (a saved empty machine keeps its card in every grouping), "New session" for an untouched agent, a blank empty chat, one plain model line and the context ring under the box. Rounded and Square both apply.
