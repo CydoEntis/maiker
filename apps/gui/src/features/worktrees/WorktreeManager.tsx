@@ -79,7 +79,7 @@ function WorktreeRow({ entry, main, machine, onChanged }: RowProps) {
 
 type Props = { worktrees: readonly RepoWorktree[]; machine: number; repoName: string; onChanged: () => void }
 
-/** The project's other worktrees, folded away until asked for: one line each with where it stands, Merge and Remove on hover or focus. */
+/** The project's other worktrees, folded away until asked for: one line each with name, status, age and Merge / Remove (shown on hover or focus in a column of their own, so they never cover the text). */
 export function WorktreeManager({ worktrees, machine, repoName, onChanged }: Props) {
   const [open, setOpen] = useState(false)
   const linked = worktrees.filter((entry) => !entry.main)
@@ -96,9 +96,10 @@ export function WorktreeManager({ worktrees, machine, repoName, onChanged }: Pro
     <section className="mx-wt-list" aria-label="Existing worktrees">
       <button type="button" className="mx-wt-list-head" aria-expanded={open} onClick={() => { setOpen((now) => !now) }}>
         <ChevronRight aria-hidden="true" size={12} className="mx-wt-chevron" />
-        <span>Other worktrees of {repoName}</span>
+        <span>Existing worktrees</span>
         <span className="mx-wt-count">{linked.length}</span>
       </button>
+      <p className="mx-wt-hint">Other worktrees of {repoName}</p>
       {(overlaps.data ?? []).length > 0 && (
         <p className="mx-wt-overlap" role="status">
           {overlapWords(overlaps.data ?? [])}

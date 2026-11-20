@@ -1,6 +1,7 @@
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { repoBranches, repoWorktrees } from '@/features/inspect/api'
 import { messageOf, useRepoQuery } from '@/features/inspect/useRepoQuery'
@@ -100,33 +101,40 @@ export function NewWorktreeDialog({ term, repoName, machine, task = '', fromBran
             <p>A branch in its own folder under .maiker, with a session open in it.</p>
           </header>
           <div className="mx-wt-body">
-            <div className="mx-wt-field">
-              <label htmlFor="mx-wt-branch">Branch name</label>
-              <input id="mx-wt-branch" ref={input} value={branch} placeholder="feat/my-change" spellCheck={false} autoComplete="off" {...fieldErrorProps(BRANCH_ERROR_ID, shown)} onBlur={() => { if (name !== '') setChecked(true) }} onChange={(event) => { setBranch(event.target.value); setTouched(true); setError(null) }} />
-              {shown !== null && <FieldError id={BRANCH_ERROR_ID}>{shown}</FieldError>}
-            </div>
-            {move !== undefined && (
-              <label className="mx-wt-move" title={move.blocked ?? undefined}>
-                <input type="checkbox" checked={moving} disabled={move.blocked !== null} onChange={(event) => { setMoving(event.target.checked) }} />
-                <span>Move this chat there instead of starting a new session{move.blocked === null ? '' : ` (${move.blocked})`}</span>
-              </label>
-            )}
-            {moving ? <p className="mx-wt-note">The chat restarts in the new folder and continues the same conversation. Edits not yet committed stay in the old folder.</p> : existing
-              ? <p className="mx-wt-note">That branch exists; the worktree checks it out.</p>
-              : (
-                <div className="mx-wt-field">
-                  <span id="mx-wt-base-label">Start from</span>
-                  <Select value={base} onValueChange={setBase}>
-                    <SelectTrigger aria-labelledby="mx-wt-base-label" className="mx-wt-base">
-                      <SelectValue>{base === CURRENT_COMMIT ? currentCommitLabel(fromBranch) : base}</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent container={document.querySelector<HTMLElement>('.mx-app')} className="mx-wt-menu">
-                      <SelectItem value={CURRENT_COMMIT} text={currentCommitLabel(fromBranch)} className="min-h-8" />
-                      {branches.data?.map((candidate) => <SelectItem key={candidate.name} value={candidate.name} text={candidate.name} className="mx-wt-branch min-h-8" />)}
-                    </SelectContent>
-                  </Select>
+            <section className="mx-wt-create" aria-label="Create">
+              <h3 className="mx-wt-section">Create</h3>
+              <div className="mx-wt-field">
+                <label htmlFor="mx-wt-branch">Branch name</label>
+                <input id="mx-wt-branch" ref={input} value={branch} placeholder="feat/my-change" spellCheck={false} autoComplete="off" {...fieldErrorProps(BRANCH_ERROR_ID, shown)} onBlur={() => { if (name !== '') setChecked(true) }} onChange={(event) => { setBranch(event.target.value); setTouched(true); setError(null) }} />
+                {shown !== null && <FieldError id={BRANCH_ERROR_ID}>{shown}</FieldError>}
+              </div>
+              {moving ? <p className="mx-wt-note">The chat restarts in the new folder and continues the same conversation. Edits not yet committed stay in the old folder.</p> : existing
+                ? <p className="mx-wt-note">That branch exists; the worktree checks it out.</p>
+                : (
+                  <div className="mx-wt-field">
+                    <span id="mx-wt-base-label">Start from</span>
+                    <Select value={base} onValueChange={setBase}>
+                      <SelectTrigger aria-labelledby="mx-wt-base-label" aria-describedby="mx-wt-base-hint" className="mx-wt-base">
+                        <SelectValue>{base === CURRENT_COMMIT ? currentCommitLabel(fromBranch) : base}</SelectValue>
+                      </SelectTrigger>
+                      <SelectContent container={document.querySelector<HTMLElement>('.mx-app')} className="mx-wt-menu">
+                        <SelectItem value={CURRENT_COMMIT} text={currentCommitLabel(fromBranch)} className="min-h-8" />
+                        {branches.data?.map((candidate) => <SelectItem key={candidate.name} value={candidate.name} text={candidate.name} className="mx-wt-branch min-h-8" />)}
+                      </SelectContent>
+                    </Select>
+                    <small id="mx-wt-base-hint" className="mx-wt-hint">The new branch starts from this commit.</small>
+                  </div>
+                )}
+              {move !== undefined && (
+                <div className="mx-wt-move">
+                  <div className="mx-wt-move-text">
+                    <label id="mx-wt-move-label" htmlFor="mx-wt-move">Move this chat into the worktree</label>
+                    <small id="mx-wt-move-hint" className="mx-wt-hint">{move.blocked ?? 'Off starts a new session there'}</small>
+                  </div>
+                  <Switch id="mx-wt-move" checked={moving} disabled={move.blocked !== null} aria-labelledby="mx-wt-move-label" aria-describedby="mx-wt-move-hint" onCheckedChange={setMoving} />
                 </div>
               )}
+            </section>
             {worktrees.data && worktrees.data.length > 1 && (
               <WorktreeManager worktrees={worktrees.data} machine={machine} repoName={repoName} onChanged={() => { void worktrees.refetch() }} />
             )}

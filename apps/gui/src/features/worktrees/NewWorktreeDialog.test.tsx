@@ -48,7 +48,7 @@ describe('the new worktree dialog', () => {
     const run = vi.fn<(branch: string) => Promise<void>>(() => Promise.resolve())
     const { field, onCreate } = await open(undefined, 'Add dark mode', { fromBranch: 'red-kite', move: { blocked: null, run } })
     expect(screen.getAllByText('The current commit of red-kite').length).toBeGreaterThan(0)
-    await user.click(screen.getByRole('checkbox', { name: /Move this chat there/ }))
+    await user.click(screen.getByRole('switch', { name: 'Move this chat into the worktree' }))
     await user.click(screen.getByRole('button', { name: 'Move chat' }))
     expect(run).toHaveBeenCalledWith((field as HTMLInputElement).value)
     expect(onCreate).not.toHaveBeenCalled()
@@ -56,7 +56,7 @@ describe('the new worktree dialog', () => {
 
   it('shows why a chat cannot move and keeps the box off', async () => {
     await open(undefined, undefined, { move: { blocked: 'Wait until the agent is idle', run: vi.fn(() => Promise.resolve()) } })
-    expect(screen.getByRole('checkbox', { name: /Move this chat there/ })).toBeDisabled()
+    expect(screen.getByRole('switch', { name: 'Move this chat into the worktree' })).toBeDisabled()
   })
 
   it('suggests a name made from what the session is working on, and uses the one you type instead', async () => {
@@ -134,7 +134,7 @@ describe('the new worktree dialog', () => {
 describe('the existing worktrees in the new worktree dialog', () => {
   it('stay folded away, so the Create button is never pushed off the screen', async () => {
     await open()
-    expect(screen.getByRole('button', { name: /Other worktrees of maitty/ })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByRole('button', { name: /Existing worktrees/ })).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByText('bright-owl')).toBeNull()
     expect(screen.getByRole('button', { name: 'Create worktree' })).toBeInTheDocument()
   })
@@ -142,7 +142,7 @@ describe('the existing worktrees in the new worktree dialog', () => {
   it('open to one line each: the name, one word for where it stands, and how long it has sat', async () => {
     const user = userEvent.setup()
     await open()
-    await user.click(screen.getByRole('button', { name: /Other worktrees of maitty/ }))
+    await user.click(screen.getByRole('button', { name: /Existing worktrees/ }))
     const owl = (await screen.findByText('bright-owl')).closest('li')
     const pike = screen.getByText('deep-pike').closest('li')
     expect(owl).not.toBeNull()
@@ -155,7 +155,7 @@ describe('the existing worktrees in the new worktree dialog', () => {
   it('ask before Remove throws away uncommitted changes, and remove nothing when you keep them', async () => {
     const user = userEvent.setup()
     await open()
-    await user.click(screen.getByRole('button', { name: /Other worktrees of maitty/ }))
+    await user.click(screen.getByRole('button', { name: /Existing worktrees/ }))
     const pike = (await screen.findByText('deep-pike')).closest('li') as HTMLElement
     await within(pike).findByText('3 changes')
     await user.click(within(pike).getByRole('button', { name: 'Remove' }))
