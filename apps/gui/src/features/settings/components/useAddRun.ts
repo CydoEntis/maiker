@@ -31,8 +31,13 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
   const saved = useRef<string | null>(null)
   const latest = useRef({ stage, onRemove: machines.onRemove, onCancel: add.onCancel })
   useEffect(() => { latest.current = { stage, onRemove: machines.onRemove, onCancel: add.onCancel } })
+  // The parent builds `add` and `request` again on every refresh of the machine list. A run that restarted with them would begin
+  // again every few seconds (an endless "connecting" that jumps back), so the run reads the newest ones without depending on them.
+  const inputs = useRef({ add, request })
+  useEffect(() => { inputs.current = { add, request } })
 
   const connect = useCallback((seen: HostResult, run: number) => {
+    const { add, request } = inputs.current
     setHost(seen)
     setStage({ kind: 'adding', helper: false, action: 'install', percent: null })
     add.onAdd(request.target, request.name, request.port ?? undefined, { keyFile: request.keyFile, installHelper: true }).then(
@@ -46,9 +51,10 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
       },
       (error: unknown) => { if (run === ticket.current) setStage(stageAfterFailure(errorMessage(error, 'Could not add the machine'))) },
     )
-  }, [add, request])
+  }, [])
 
   const begin = useCallback(() => {
+    const { add, request } = inputs.current
     const run = ++ticket.current
     setStage({ kind: 'checking' })
     // A host whose key cannot be fetched here (a jump host, say) is still added as before: ssh checks the key itself.
@@ -61,7 +67,7 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
       else if (report?.status === 'unknown') setStage({ kind: 'trust', report, trusting: false, problem: null })
       else connect(report === null ? 'unchecked' : 'known', run)
     })
-  }, [add, request, connect])
+  }, [connect])
 
   // Deferred so that the double mount of development builds asks the host once, not twice.
   useEffect(() => {
@@ -70,15 +76,16 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
   }, [begin])
 
   // The host says how far the helper's install has got, by the machine's name.
+  const { name: addedName } = request
   useEffect(() => {
     let gone = false
     let stop: (() => void) | null = null
-    add.onProgress((progress) => {
-      if (progress.name !== request.name) return
+    inputs.current.add.onProgress((progress) => {
+      if (progress.name !== addedName) return
       setStage((now) => (now.kind === 'adding' ? { ...now, helper: true, percent: progress.percent } : now))
     }).then((stopListening) => { if (gone) stopListening(); else stop = stopListening }, (error: unknown) => { console.warn('Could not follow the helper install', error) })
     return () => { gone = true; stop?.() }
-  }, [add, request.name])
+  }, [addedName])
 
   // A machine waiting on the person (a key, a restart) goes on by itself the moment it connects.
   const waitingName = stage.kind === 'key' ? stage.login.name : stage.kind === 'helper' && stage.reason === 'not-running' ? stage.added.name : null
