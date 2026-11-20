@@ -150,15 +150,15 @@ export function StartingChat({ agent, sessionId, onShowLog, paneStatus, hooked, 
         // Never a blank screen or a raw terminal: the session is an agent session, and this says it is on its way.
         <div className="mx-chat-empty" role="status">
           <div className="mx-chat-starting">
-            <span className="mx-chat-starting-title"><WorkingMark agent={agent} />Starting {agentLabel(agent)}…</span>
-            <p>{late ? stuckChatLine(agent) : `Type below: it is sent as soon as ${agentLabel(agent)} is ready.`}</p>
+            <span className="mx-chat-starting-title">What are we building today?</span>
+            {late && <p>{stuckChatLine(agent)}</p>}
           </div>
         </div>
       ) : (
         // The same list the real chat uses, so the message and the line under it are already where they will stay.
         <div className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto">
           <div className="mx-chat-row"><div className="mx-msg-user is-echo" aria-label="Sending">{echoed(held)}</div></div>
-          <div className="mx-chat-row"><div className="mx-working"><WorkingMark agent={agent} /><span>{agentLabel(agent)} is starting…</span></div></div>
+          <div className="mx-chat-row"><div className="mx-working"><WorkingMark agent={agent} /><span>Working…</span></div></div>
         </div>
       )}
       <Composer

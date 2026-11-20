@@ -587,7 +587,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
         <span className="mx-nc-mark" aria-hidden="true" />
         <h2 className="mx-nc-draft-name">New session</h2>
         <span className="mx-pane-controls">
-          <span className="mx-nc-state">{starting ? 'Starting…' : 'Draft · not started'}</span>
+          <span className="mx-nc-state">{starting ? 'Sending…' : 'Draft · not started'}</span>
           {onCancel !== undefined && <button type="button" className="mx-pane-control" aria-label="Close" title="Discard (Esc)" disabled={starting} onClick={discard}><Icon name="close" size={13} /></button>}
         </span>
       </header>
@@ -603,7 +603,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
           <div className="mx-chat-row"><div className="mx-msg-user is-echo" aria-label="Sending"><p>{sent}</p></div></div>
           <div className="mx-chat-row">
             <div className="mx-chat-starting">
-              <span className="mx-chat-starting-title"><WorkingMark agent={agent} />Starting {AGENT_LABEL[agent]}…</span>
+              <span className="mx-chat-starting-title"><WorkingMark agent={agent} />Working…</span>
               <p>{`Your message is sent as soon as ${agent} is ready.`}</p>
             </div>
           </div>

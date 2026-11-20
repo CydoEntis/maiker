@@ -44,7 +44,7 @@ describe('the chat of a session whose agent has not reported in yet', () => {
 
   it('is the chat with its message box at once, not a card that says there is nothing', () => {
     render(<ChatPane availability={starting} process="claude" online sessionId="s1" onShowLog={noop} />)
-    expect(screen.getByText(/Type below: it is sent as soon as Claude is ready/)).toBeInTheDocument()
+    expect(screen.getByText('What are we building today?')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Message Claude' })).toBeEnabled()
     expect(screen.queryByText('Chat view is for agent sessions')).not.toBeInTheDocument()
   })

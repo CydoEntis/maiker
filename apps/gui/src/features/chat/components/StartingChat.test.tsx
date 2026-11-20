@@ -81,17 +81,16 @@ describe('the chat of a session that is still starting', () => {
     expect(screen.queryByRole('button', { name: 'Connect claude' })).not.toBeInTheDocument()
   })
 
-  it('says Starting <agent>… as a card the moment the session exists, never a blank screen or a raw terminal', () => {
+  it('shows a calm empty chat the moment the session exists, never a blank screen or a raw terminal', () => {
     open()
     const card = screen.getByRole('status')
-    expect(card).toHaveTextContent('Starting Codex…')
-    expect(card).toHaveTextContent('Type below')
+    expect(card).toHaveTextContent('What are we building today?')
     expect(document.querySelector('.mx-terminal, .xterm')).toBeNull()
   })
 
   it('is there at once, with a message box for the agent that was chosen', () => {
     open()
-    expect(screen.getByText(/Type below: it is sent as soon as Codex is ready/)).toBeInTheDocument()
+    expect(screen.getByText('What are we building today?')).toBeInTheDocument()
     expect(screen.queryByText('Starting codex…')).not.toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Message Codex' })).toBeEnabled()
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
@@ -128,7 +127,7 @@ describe('the chat of a session that is still starting', () => {
     expect(heldFirstMessage('s1')).toBe('fix the build')
     expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Sending')).toHaveTextContent('fix the build')
-    expect(screen.getByText('Codex is starting…')).toBeInTheDocument()
+    expect(screen.getByText('Working…')).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Message Codex' })).toHaveValue('')
   })
 
