@@ -10,7 +10,6 @@
 .mx-tbar-logo svg { pointer-events: none; }
 /* Changes and Files for the focused pane, before the window buttons. */
 .mx-tbar-panels { display: flex; align-items: center; gap: 2px; margin-right: 8px; }
-.mx-tbar-view { display: flex; align-items: center; margin-right: 8px; }
 .mx-tbar-word { font-size: 13px; font-weight: 600; color: var(--fg); }
 .title-bar[data-platform="windows"] [data-testid="window-controls"] > button { height: 38px; }
 

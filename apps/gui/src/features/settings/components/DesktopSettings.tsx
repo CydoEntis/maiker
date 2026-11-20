@@ -9,6 +9,7 @@ import { CORNERS, CORNER_NAMES } from '@/features/workspace/theme/corners'
 import { Panel } from '@/components/ui/panel'
 import { PickerSelect, type PickerGroup, type PickerItem } from './PickerSelect'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
+import { ViewSwitch } from '@/features/workspace/components/ViewSwitch'
 import { Switch } from '@/components/ui/switch'
 import { PerformanceSection } from './PerformanceSection'
 import type { GitHubSignIn } from './GitHubSection'
@@ -450,6 +451,14 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
   const setStart = (folder: string) => { update('startFolder', folder); flashSaved() }
   return (
     <>
+      <Card
+        title="View"
+        foot="Every session opens in this view, and changing it moves all open sessions together. Gemini has no chat view and stays in its terminal."
+      >
+        <div className="mx-scard-body">
+          <ViewSwitch view={preferences.openSessionsIn} onChange={(view) => { update('openSessionsIn', view) }} />
+        </div>
+      </Card>
       <Card
         title="Start folder"
         meta={saved ? <span className="mx-scard-meta" role="status">Saved</span> : undefined}

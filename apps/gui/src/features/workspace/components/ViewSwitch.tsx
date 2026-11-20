@@ -3,7 +3,7 @@ import { Icon } from './glyphs'
 import type { PaneView } from '../model/chatView'
 
 /**
- * The window's one view, Chat or Terminal, always at hand in the title bar. It writes the same setting as Open sessions in,
+ * The window's one view, Chat or Terminal, set in Settings → General. It is the Open sessions in setting,
  * so every open session moves with it. Gemini has no chat view and stays in its terminal whatever this says.
  */
 export function ViewSwitch({ view, onChange }: { view: PaneView; onChange: (view: PaneView) => void }) {

@@ -1,8 +1,6 @@
 import { TitleBar } from '@/components/TitleBar'
 import { MaikerMark } from '@/components/ui/maiker-mark'
-import { useWorkspace } from '../workspaceContext'
 import { TitleBarPanelButtons } from './TitleBarPanelButtons'
-import { ViewSwitch } from './ViewSwitch'
 import { WindowServiceChip } from './WindowServiceStatus'
 
 /**
@@ -11,7 +9,6 @@ import { WindowServiceChip } from './WindowServiceStatus'
  * What the old menu started is in the command palette.
  */
 export function AppTitleBar() {
-  const { preferences, setPreferences } = useWorkspace()
   const start = (
     <>
       <span className="mx-tbar-logo" data-tauri-drag-region>
@@ -23,7 +20,6 @@ export function AppTitleBar() {
   )
   const end = (
     <>
-      <span className="mx-tbar-view"><ViewSwitch view={preferences.openSessionsIn} onChange={(view) => { setPreferences((current) => ({ ...current, openSessionsIn: view })) }} /></span>
       <TitleBarPanelButtons />
     </>
   )

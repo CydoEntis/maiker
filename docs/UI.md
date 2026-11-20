@@ -1286,8 +1286,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
 - **A chat that fails to draw** shows "This chat hit a problem" in its pane only (`PaneErrorBoundary`), with **Try
   again** and, for a terminal agent, **Show the terminal log**; the rest of the window and the session go on.
 - **One view for the whole app.** The app is in the chat view or the terminal view, set by the **Chat | Terminal** switch
-  in the title bar (`ViewSwitch`, a `Segmented`, always visible) or in Settings › General › **How you work › Open
-  sessions in** (`openSessionsIn`); there is no per-session or per-pane switch and no key for one.
+  in Settings › General › **View** (`ViewSwitch`, a `Segmented`; `openSessionsIn`), not in the title bar; there is no per-session or per-pane switch and no key for one.
   Changing it moves every open session at once and says "All sessions now open in X" with **Undo**. Gemini and a plain
   shell are always terminals (`effectiveView`, `chatOf`). The terminal stays mounted under the chat and keeps its size, and
   no daemon command is sent. The one exception is a view of the log, not a switch: when a chat cannot carry on (it
