@@ -4,6 +4,7 @@ import { SkeletonLines } from '@/components/ui/skeleton'
 import { errorMessage } from '@/lib/error-message'
 import type { HostChoice } from '@/api/machines'
 import { checkAddress, suggestedName, withPort } from '../model/addressCheck'
+import type { MachineHead } from '@/features/workspace/model/machines'
 import type { AddRequest } from '../model/addStage'
 import { targetOf } from '../model/machineTarget'
 import { AddMachineFrame, FrameBody, FrameFoot } from './AddMachineFrame'
@@ -22,12 +23,14 @@ type Props = {
   onClose: () => void
   /** Connect (or a host of the SSH config): the checklist takes over. */
   onConnect: (request: AddRequest) => void
+  /** A host of the SSH config that is already a machine was clicked: the machine's own status is shown instead of adding it again. */
+  onOpenAdded: (head: MachineHead) => void
   /** What was typed before, when the person came back with Change address. */
   entry?: AddRequest['entry'] | undefined
 }
 
 /** Add a remote machine's first step: one field, a closed Port and key row, and the hosts of ~/.ssh/config. */
-export function AddMachinePanel({ machines, onClose, onConnect, entry = { address: '', port: '', keyFile: '' } }: Props) {
+export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, entry = { address: '', port: '', keyFile: '' } }: Props) {
   const { add, list } = machines
   // One field takes `user@host`, an IP address or a name from the SSH config, as typed or pasted.
   const [text, setText] = useState(entry.address)
@@ -69,6 +72,11 @@ export function AddMachinePanel({ machines, onClose, onConnect, entry = { addres
   // The field is for typing an address and pressing Enter, not for searching: the SSH config's hosts are shortcuts that stay as they are.
   const choices = hosts.status === 'ready' ? hosts.hosts : []
   const pick = (host: HostChoice) => {
+    if (host.added) {
+      const head = headOf(list, host.alias)
+      if (head !== undefined) onOpenAdded(head)
+      return
+    }
     onConnect({ target: host.alias, name: suggestedName({ alias: host.alias }, taken), port: null, host: host.alias, keyFile, fromConfig: true, entry: kept })
   }
 
@@ -103,7 +111,7 @@ export function AddMachinePanel({ machines, onClose, onConnect, entry = { addres
             <Button variant="ghost" onClick={() => { void machines.onRemove(already.name ?? '') }}>Remove {already.name}</Button>
           </p>
         )}
-        <SshHosts hosts={hosts} choices={choices} onPick={pick} />
+        <SshHosts hosts={hosts} choices={choices} list={list} onPick={pick} />
       </FrameBody>
       <FrameFoot>
         <Button variant="ghost" onClick={onClose}>Cancel</Button>
@@ -112,7 +120,19 @@ export function AddMachinePanel({ machines, onClose, onConnect, entry = { addres
   )
 }
 
-function SshHosts({ hosts, choices, onPick }: { hosts: Hosts; choices: readonly HostChoice[]; onPick: (host: HostChoice) => void }) {
+/** The machine a host of the SSH config was added as: by its target, or by its name. */
+function headOf(list: readonly MachineHead[], alias: string): MachineHead | undefined {
+  const lower = alias.toLowerCase()
+  return list.find((head) => head.target?.toLowerCase() === lower || head.name?.toLowerCase() === lower)
+}
+
+/** What the right-hand end of a host row says: Connect, or that the machine is already there and how it stands. */
+function hostWords(host: HostChoice, head: MachineHead | undefined): string {
+  if (!host.added) return 'Connect'
+  return head?.chip === null || head?.chip === undefined || head.chip.word === 'connected' ? 'Already added' : `Already added · ${head.chip.word}`
+}
+
+function SshHosts({ hosts, choices, list, onPick }: { hosts: Hosts; choices: readonly HostChoice[]; list: readonly MachineHead[]; onPick: (host: HostChoice) => void }) {
   if (hosts.status === 'loading') return <SkeletonLines label="Reading hosts from ~/.ssh/config" className="mx-rm-hint" />
   if (hosts.status === 'failed') return <p className="mx-rm-hint" role="alert">{hosts.message}</p>
   if (choices.length === 0) return null
@@ -120,15 +140,18 @@ function SshHosts({ hosts, choices, onPick }: { hosts: Hosts; choices: readonly 
     <div className="mx-rm-hosts">
       <span className="mx-rm-label" id="mx-rm-hosts-label">From your SSH config</span>
       <div role="list" aria-labelledby="mx-rm-hosts-label">
-        {choices.map((host) => (
-          <div key={host.alias} role="listitem">
-            <button type="button" className="mx-rm-host" aria-label={`Connect to ${host.alias}`} onClick={() => { onPick(host) }}>
-              <span className="mx-rm-hostname">{host.alias}</span>
-              <span className="mx-rm-hostaddr mono">{host.detail}</span>
-              <span className="mx-rm-hostgo" aria-hidden="true">Connect</span>
-            </button>
-          </div>
-        ))}
+        {choices.map((host) => {
+          const words = hostWords(host, headOf(list, host.alias))
+          return (
+            <div key={host.alias} role="listitem">
+              <button type="button" className={host.added ? 'mx-rm-host is-added' : 'mx-rm-host'} aria-label={host.added ? `${host.alias}: ${words}` : `Connect to ${host.alias}`} onClick={() => { onPick(host) }}>
+                <span className="mx-rm-hostname">{host.alias}</span>
+                <span className="mx-rm-hostaddr mono">{host.detail}</span>
+                <span className="mx-rm-hostgo" aria-hidden={host.added ? undefined : 'true'}>{words}</span>
+              </button>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

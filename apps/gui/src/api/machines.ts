@@ -225,7 +225,7 @@ export function listenMachineRemoved(onRemoved: (machine: number) => void): Prom
   })
 }
 
-const HostChoiceSchema = z.object({ alias: z.string(), detail: z.string() })
+const HostChoiceSchema = z.object({ alias: z.string(), detail: z.string(), /** The host is already a machine's target. */ added: z.boolean().default(false) })
 export type HostChoice = z.infer<typeof HostChoiceSchema>
 
 /** The hosts of ~/.ssh/config that are not machines yet. */

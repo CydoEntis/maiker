@@ -37,18 +37,18 @@ const SPARE_NAME: &str = "machine-to-add";
 pub struct HostChoice {
     pub alias: String,
     pub detail: String,
+    /// The host is already a machine's target: it stays in the list, marked, so it never vanishes unexplained.
+    pub added: bool,
 }
 
-/// The hosts to offer: not one that is already a machine's target.
+/// The hosts to offer: all of them, those already a machine's target marked `added`.
 pub fn host_choices(hosts: &[SshHost], existing: &[MachineDef]) -> Vec<HostChoice> {
     hosts
         .iter()
-        .filter(|host| {
-            !existing
-                .iter()
-                .any(|machine| machine.target.eq_ignore_ascii_case(&host.alias))
-        })
         .map(|host| HostChoice {
+            added: existing
+                .iter()
+                .any(|machine| machine.target.eq_ignore_ascii_case(&host.alias)),
             alias: host.alias.clone(),
             detail: match (&host.user, &host.host_name) {
                 (Some(user), Some(name)) => format!("{user}@{name}"),
@@ -603,7 +603,7 @@ mod tests {
     }
 
     #[test]
-    fn the_hosts_offered_leave_out_machines_already_added() {
+    fn the_hosts_offered_keep_machines_already_added_marked() {
         let host = |alias: &str| SshHost {
             alias: alias.into(),
             host_name: Some(format!("{alias}.example")),
@@ -612,10 +612,18 @@ mod tests {
         let offered = host_choices(&[host("build"), host("box")], &[def("b", "BUILD")]);
         assert_eq!(
             offered,
-            [HostChoice {
-                alias: "box".into(),
-                detail: "me@box.example".into()
-            }]
+            [
+                HostChoice {
+                    alias: "build".into(),
+                    detail: "me@build.example".into(),
+                    added: true
+                },
+                HostChoice {
+                    alias: "box".into(),
+                    detail: "me@box.example".into(),
+                    added: false
+                }
+            ]
         );
     }
 }

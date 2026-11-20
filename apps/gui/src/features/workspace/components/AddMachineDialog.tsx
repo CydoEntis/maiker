@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { toast } from '@/lib/toast'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { AddMachineFlow } from '@/features/settings/components/AddMachineFlow'
@@ -23,7 +24,9 @@ type Props = {
 }
 
 /** Adds a remote machine over the window, or mends one that is not connected; Settings › Remote machines is where the ones added are managed. */
-export function AddMachineDialog({ machines, onClose, fixing = null, onOpenSettings = onClose, onStartSession = onClose, facts, appVersion = null }: Props) {
+export function AddMachineDialog({ machines, onClose, fixing: fixingFirst = null, onOpenSettings = onClose, onStartSession = onClose, facts, appVersion = null }: Props) {
+  // A machine to mend: the one the dialog was opened on, or an already-added host the person clicked in the SSH config list.
+  const [fixing, setFixing] = useState(fixingFirst)
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent
@@ -41,7 +44,7 @@ export function AddMachineDialog({ machines, onClose, fixing = null, onOpenSetti
           }}
         >
           {fixing === null
-            ? <AddMachineFlow machines={machines} onClose={onClose} onStartSession={onStartSession} facts={facts} appVersion={appVersion} />
+            ? <AddMachineFlow machines={machines} onClose={onClose} onStartSession={onStartSession} onMend={setFixing} onOpenSettings={onOpenSettings} facts={facts} appVersion={appVersion} />
             : <FixMachine head={fixing} machines={machines} onClose={onClose} onConnected={(name) => { toast.success(`Connected to ${name}`); onClose() }} onOpenSettings={onOpenSettings} />}
         </div>
       </DialogContent>

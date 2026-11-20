@@ -397,7 +397,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   server mark, the title, the address in mono and a close button; a scrolling body; a foot). The first step is one mono `Address`
   field with **Connect**, a hint line ("Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.")
   under the line that says Maiker connects with your keys and never asks for or keeps passwords, a closed **Port and key** row (a
-  Port box and a Key file box, placeholder `~/.ssh/id_ed25519`), and the `~/.ssh/config` hosts as rows; its foot is Cancel. After
+  Port box and a Key file box, placeholder `~/.ssh/id_ed25519`), and the `~/.ssh/config` hosts as rows (one already added is dimmed and says "Already added" where Connect would be); its foot is Cancel. After
   Connect the same card shows the checklist (`Steps`, `AddChecklist`): **Reach**, **Check it's the right computer**, **Sign in with
   your key**, **Set up the Maiker helper**, **Connected**, each ticking with its result ("Reached 100.78.214.15 · 38 ms", "Known
   computer", "Signed in with id_ed25519"); the foot is **← Change address** (back to what was typed) and **Cancel**. A step that

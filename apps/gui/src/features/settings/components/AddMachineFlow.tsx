@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from '@/lib/toast'
+import type { MachineHead } from '@/features/workspace/model/machines'
 import type { AddRequest, MachineFacts } from '../model/addStage'
 import { AddMachinePanel } from './AddMachinePanel'
 import { AddRun } from './AddRun'
@@ -10,6 +11,10 @@ type Props = {
   onClose: () => void
   /** Start a session on the machine just added (by its number). */
   onStartSession: (machine: number) => void
+  /** A host of the SSH config that is already a machine was clicked and the machine is not connected: mend it in this dialog. */
+  onMend: (head: MachineHead) => void
+  /** The same, for a machine that is connected: leave for where machines are managed. */
+  onOpenSettings: () => void
   /** What the machine's daemon can say about it, once the host reports that. */
   facts?: MachineFacts | undefined
   /** The running app's version, for the helper that is copied. */
@@ -21,7 +26,7 @@ type Props = {
  * address comes back to what was typed. Nothing is saved before the host adds the machine, so going back or cancelling early
  * leaves nothing behind.
  */
-export function AddMachineFlow({ machines, onClose, onStartSession, facts, appVersion }: Props) {
+export function AddMachineFlow({ machines, onClose, onStartSession, onMend, onOpenSettings, facts, appVersion }: Props) {
   const [request, setRequest] = useState<AddRequest | null>(null)
   const [entry, setEntry] = useState<AddRequest['entry'] | undefined>(undefined)
 
@@ -29,7 +34,7 @@ export function AddMachineFlow({ machines, onClose, onStartSession, facts, appVe
   const save = (name: string, label: string) => { if (label !== name) machines.onRename(name, label) }
 
   if (request === null) {
-    return <AddMachinePanel machines={machines} onClose={onClose} entry={entry} onConnect={(next) => { setEntry(next.entry); setRequest(next) }} />
+    return <AddMachinePanel machines={machines} onClose={onClose} entry={entry} onOpenAdded={(head) => { if (head.chip?.word === 'connected') onOpenSettings(); else onMend(head) }} onConnect={(next) => { setEntry(next.entry); setRequest(next) }} />
   }
   return (
     <AddRun

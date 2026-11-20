@@ -34,7 +34,7 @@ function info(overrides: Partial<MachinesInfo> = {}, add: Partial<MachinesInfo['
     onRename: vi.fn(),
     hostKey: { inspect: vi.fn(), trust: vi.fn(() => Promise.resolve()) },
     add: {
-      loadHosts: () => Promise.resolve([{ alias: 'build', detail: 'me@build.example' }]),
+      loadHosts: () => Promise.resolve([{ alias: 'build', detail: 'me@build.example', added: false }, { alias: 'kingdom', detail: 'dev@kingdom.lan', added: true }]),
       onAdd: vi.fn(() => Promise.resolve(added())),
       onCancel: vi.fn(),
       inspect: vi.fn(() => Promise.resolve(key('trusted'))),
@@ -97,6 +97,36 @@ describe('the address step', () => {
     render(<AddMachineDialog machines={machines} onClose={vi.fn()} />)
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Connect to build' }))
     await waitFor(() => { expect(machines.add.onAdd).toHaveBeenCalledWith('build', 'build', undefined, { keyFile: null, installHelper: true }) })
+  })
+
+  describe('a host of the SSH config that is already a machine', () => {
+    const kingdom = (word: string, tone: 'ok' | 'bad'): MachineHead => ({ ...connectedHead('kingdom', 5), target: 'kingdom', chip: { glyph: '●', word, tone } })
+
+    it('stays in the list, dimmed, saying Already added, and cannot be connected again', async () => {
+      render(<AddMachineDialog machines={info({ list: [kingdom('connected', 'ok')] })} onClose={vi.fn()} />)
+      const row = await screen.findByRole('button', { name: 'kingdom: Already added' })
+      expect(row).toHaveClass('is-added')
+      expect(screen.queryByRole('button', { name: 'Connect to kingdom' })).toBeNull()
+    })
+
+    it('opens where machines are managed when it is connected, and adds nothing', async () => {
+      const onOpenSettings = vi.fn()
+      const machines = info({ list: [kingdom('connected', 'ok')] })
+      render(<AddMachineDialog machines={machines} onClose={vi.fn()} onOpenSettings={onOpenSettings} />)
+      await userEvent.setup().click(await screen.findByRole('button', { name: 'kingdom: Already added' }))
+      expect(onOpenSettings).toHaveBeenCalled()
+      expect(machines.add.onAdd).not.toHaveBeenCalled()
+    })
+
+    it('says it is offline, and opens the Fix step for it', async () => {
+      const machines = info({ list: [{ ...kingdom('unreachable', 'bad'), why: 'connection refused' }] })
+      render(<AddMachineDialog machines={machines} onClose={vi.fn()} />)
+      const user = userEvent.setup()
+      await user.click(await screen.findByRole('button', { name: 'kingdom: Already added · unreachable' }))
+      expect(await screen.findByRole('dialog', { name: 'Fix kingdom' })).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(machines.onRetry).toHaveBeenCalledWith('kingdom')
+    })
   })
 
   it('says a machine that is already in Maiker is already there', async () => {

@@ -30,10 +30,10 @@ export const SAMPLE_HEADS = machineHeads(new Map(ENTRIES.map(([name, state, targ
 export const sampleSessions = (machine: number): number => ENTRIES.find(([name]) => name === SAMPLE_HEADS.find((head) => head.machine === machine)?.name)?.[3] ?? 0
 
 export const SAMPLE_HOSTS = [
-  { alias: 'homelab', detail: 'cydo@192.168.1.20' },
-  { alias: 'nas', detail: 'admin@nas.lan' },
-  { alias: 'work-vm', detail: 'cydo@work-vm.corp' },
-  { alias: 'media-pc', detail: 'cydo@media-pc.lan' },
+  { alias: 'homelab', detail: 'cydo@192.168.1.20', added: false },
+  { alias: 'nas', detail: 'admin@nas.lan', added: false },
+  { alias: 'work-vm', detail: 'cydo@work-vm.corp', added: false },
+  { alias: 'media-pc', detail: 'cydo@media-pc.lan', added: false },
 ]
 
 const added = (name: string, reach: Extract<Added, { outcome: 'added' }>['reach'], version: string | null = null, installed = false): Added => ({ outcome: 'added', name, version, reach, took_ms: 18, reach_ms: 38, key: 'id_ed25519', helper_install: installed ? { installed, said: 'Installed' } : null })
