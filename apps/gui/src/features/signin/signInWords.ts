@@ -1,7 +1,7 @@
 import type { SignInAgent, SignInFailure } from '@/api/agentSignIn'
 
 /** The names the sign-in card uses for each agent. */
-export const SIGN_IN_LABELS: Readonly<Record<SignInAgent, string>> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini' }
+export const SIGN_IN_LABELS: Readonly<Record<SignInAgent, string>> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', github: 'GitHub' }
 
 /** What the card says when a sign-in ended without the agent being signed in, in plain words. */
 export function failureWords(agent: SignInAgent, failure: SignInFailure): string {

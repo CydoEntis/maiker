@@ -771,6 +771,36 @@ later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays 115. It also add
 (defaulted to true, the setting's default; a test) and `SettingKey::UpdateMachines`, sent only from
 `UPDATE_MACHINES_SINCE`.
 
+Protocol 119 adds four things, none of which an older peer is ever sent, so `COMPATIBLE_SINCE` stays 115 (tests:
+`what_119_added_is_asked_and_sent_only_where_it_is_read`, `what_118_sent_about_clones_and_sign_in_still_decodes`):
+
+- `Reply::CloneProgress { tag, phase, percent }` (`CLONE_PROGRESS_SINCE`), sent any number of times before
+  `Reply::Cloned`. The daemon now runs `git clone --progress` and reads git's stderr, which rewrites its progress
+  lines with carriage returns: `phase` is `Counting`, `Compressing`, `Receiving`, `Resolving` or `CheckingOut` and
+  `percent` (0 to 100) is of that phase. A step is sent only when it changed. The daemon does not send it to a client
+  older than 119 (`ServerMsg::introduced_in`), which waits for `Cloned` as before. It is not an answer: the desktop host does not
+  count it against the machine's reply allowance, and `vet` caps it at 100. The host raises a `clone-progress` event
+  `{machine, tag, phase, percent}`; `cloneRepository(machine, address, parent, onProgress?)` filters it by tag.
+- `SignInAgent::Github` and `SignInRequest::SignOut` on the existing `Query::AgentSignIn` (`GITHUB_SIGN_IN_SINCE`; a
+  client does not send either to an older daemon, and an older client never asks for them, so the new enum values never
+  reach a peer that cannot read them). `Start` runs `gh auth login --web`: `Waiting { link, code }` carries the
+  address and one-time code `gh` printed; `SignedIn` is `gh auth status`'s exit. `SignOut` answers `Idle` or, when
+  another account remains, `SignedIn`. This computer only, as for the agents. See
+  [SECURITY](SECURITY.md#project-specific-signing-an-agent-in-from-the-desktop).
+- `Query::FolderGit { folder, request, tag }` with `Reply::FolderGit { tag, outcome }` (`FOLDER_GIT_SINCE`), asked of
+  a machine's own daemon so branches work for folders on another machine as for this computer. `request` is
+  `Branches` (local and remote-tracking branches, each newest first, and the worktrees; `outcome` `NotARepo` when the
+  folder is not in a repository), `Switch { branch }`, `Create { branch }` or `CheckoutRemote { remote_branch }` (a
+  local branch named after the part past the first `/`, following the remote one; refused when that name is taken
+  or the remote branch was never fetched). `outcome` is `Err(one line)` for a refusal, so the asker matches it by
+  `tag`. Not safe to ask twice. The host raises a flat `folder-git` event `{machine, tag, state, why, listing,
+  branch}`; `apps/gui/src/api/folderGit.ts` wraps it (`loadFolderBranches`, `switchFolderBranch`,
+  `createFolderBranch`, `checkoutRemoteBranch`). The older `git_branches` host command still reads this computer's
+  local branches directly. Rules: [SECURITY](SECURITY.md#project-specific-a-folders-branches-and-what-a-machine-is).
+- `Query::MachineFacts { tag }` with `Reply::MachineFacts { tag, facts }` (`MACHINE_FACTS_SINCE`): host name, system,
+  architecture, cores and the agent programs installed with their versions. Safe to ask twice. The host raises a
+  `machine-facts` event `{machine, tag, answer}`; `apps/gui/src/api/machineFacts.ts` wraps it.
+
 Protocol 76 adds `Provider::Gemini` (a conversation's provider on the wire). A Gemini CLI agent in a pane gets the same read-only, transcript-following conversation as Claude and Codex (`follow_transcript.rs`, `Format::Gemini`); the file is the one its hook's `transcript_path` names, and its name must start `session-` and end with the first 8 characters of the hook's session id. Gemini has no structured runtime: starting one is refused. A peer that predates the variant cannot decode it (a test decodes the old provider names).
 
 Protocol 75 adds `Command::NewFleet { name, cwd, colors }` and `Command::NewShip { ws, cwd, cmd }`. A fleet is a

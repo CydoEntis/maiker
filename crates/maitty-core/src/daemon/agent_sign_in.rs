@@ -37,6 +37,9 @@ enum StatusStyle {
     Json,
     /// `login status`: a line starting "Logged in", and a failing exit when signed out.
     Line,
+    /// `auth status`: only the exit says, success when signed in. Its text is never read, for it
+    /// names accounts and the way the token is kept.
+    Exit,
 }
 
 /// An agent's command line: what runs the login, and what asks whether it worked.
@@ -58,6 +61,10 @@ pub(super) fn cli_for(agent: SignInAgent) -> Result<Cli, SignInFailure> {
         SignInAgent::Codex => ("codex", &["login", "--device-auth"], &["login", "status"], StatusStyle::Line),
         // Gemini CLI has no sign-in command; it asks on its first run, inside its terminal.
         SignInAgent::Gemini => return Err(SignInFailure::Unsupported),
+        // Not interactive (nothing is typed to it), so `gh` prints the one-time code and the address
+        // instead of waiting for Enter and opening a browser itself. The host is named because
+        // `gh` would ask for it otherwise. `gh` keeps the token; this module never reads it.
+        SignInAgent::Github => ("gh", &["auth", "login", "--web", "--hostname", "github.com", "--git-protocol", "https"], &["auth", "status", "--hostname", "github.com"], StatusStyle::Exit),
     };
     let extensions: Vec<String> = if cfg!(windows) { vec![".exe".into(), ".cmd".into(), ".bat".into()] } else { Vec::new() };
     let path = crate::login_path::effective_path().ok_or(SignInFailure::NotInstalled)?;
@@ -94,6 +101,7 @@ impl Slot {
 pub(super) struct SignIns {
     claude: Slot,
     codex: Slot,
+    github: Slot,
 }
 
 impl SignIns {
@@ -101,6 +109,7 @@ impl SignIns {
         match agent {
             SignInAgent::Claude => Some(&self.claude),
             SignInAgent::Codex => Some(&self.codex),
+            SignInAgent::Github => Some(&self.github),
             SignInAgent::Gemini => None,
         }
     }
@@ -169,7 +178,8 @@ enum End {
 /// are), no colour, and no mark of an enclosing Claude Code session, which would refuse to run.
 fn base(cli: &Cli, words: &[&str]) -> std::process::Command {
     let mut command = std::process::Command::new(&cli.program);
-    command.args(words).env_remove("CLAUDECODE").env("NO_COLOR", "1");
+    // `GH_PROMPT_DISABLED` is `gh`'s own switch for never asking a question; the others ignore it.
+    command.args(words).env_remove("CLAUDECODE").env("NO_COLOR", "1").env("GH_PROMPT_DISABLED", "1");
     if let Some(path) = crate::login_path::resolved() {
         command.env("PATH", path);
     }
@@ -263,6 +273,7 @@ async fn finish(slot: &Slot, run: u64, cli: &Cli, end: End) {
 fn signed_in(style: StatusStyle, ran: &Ran) -> bool {
     let printed = if ran.stdout.trim().is_empty() { &ran.stderr } else { &ran.stdout };
     match style {
+        StatusStyle::Exit => ran.success,
         StatusStyle::Json => serde_json::from_str::<serde_json::Value>(printed.trim()).ok().and_then(|reply| reply.get("loggedIn")?.as_bool()).unwrap_or(false),
         StatusStyle::Line => ran.success && printed.lines().find(|line| !line.trim().is_empty()).is_some_and(|line| line.trim().to_lowercase().starts_with("logged in")),
     }
@@ -335,7 +346,13 @@ fn scan(output: &str) -> (Option<String>, Option<String>) {
     let clean = sanitize(&without_escapes(output), true);
     let link = clean.split_whitespace().find_map(|word| clean_link(word.trim_matches(|c: char| matches!(c, '<' | '>' | '(' | ')' | '"' | '\'' | ',' | '.'))));
     let mut lines = clean.lines();
-    let code = lines.by_ref().find(|line| line.to_lowercase().contains(CODE_MARKER)).and_then(|_| lines.find(|line| !line.trim().is_empty())).and_then(|line| clean_code(line.trim()));
+    // Codex puts the code on the line after the one that names it; `gh` puts it after a colon on that line.
+    let code = lines.by_ref().find(|line| line.to_lowercase().contains(CODE_MARKER)).and_then(|named| {
+        match named.rsplit_once(':') {
+            Some((_, after)) => clean_code(after.trim()),
+            None => lines.find(|line| !line.trim().is_empty()).and_then(|line| clean_code(line.trim())),
+        }
+    });
     (link, code)
 }
 
@@ -371,6 +388,28 @@ mod tests {
     #[test]
     fn codex_prints_a_link_and_a_code_through_colour_codes() {
         assert_eq!(scan(CODEX), (Some("https://auth.openai.com/codex/device".into()), Some("ABCD-EFGHI".into())));
+    }
+
+    /// What `gh auth login --web` prints when nothing can be typed to it: the code on the line that names it.
+    const GITHUB: &str = "! First copy your one-time code: 1A2B-3C4D\nOpen this URL to continue in your web browser: https://github.com/login/device\n";
+
+    #[test]
+    fn github_prints_its_code_after_a_colon_and_its_address_on_the_next_line() {
+        assert_eq!(scan(GITHUB), (Some("https://github.com/login/device".into()), Some("1A2B-3C4D".into())));
+        // Before it has printed the address, the code alone is what is known.
+        assert_eq!(scan("! First copy your one-time code: 1A2B-3C4D\n"), (None, Some("1A2B-3C4D".into())));
+    }
+
+    #[test]
+    fn a_word_after_the_colon_that_is_not_a_code_is_not_shown_as_one() {
+        assert_eq!(scan("! First copy your one-time code: not a code at all\n").1, None);
+    }
+
+    #[test]
+    fn github_is_signed_in_when_its_status_command_succeeds_whatever_it_prints() {
+        let ran = |success| Ran { success, stdout: "github.com\n  Logged in to github.com account x (keyring)\n".into(), stderr: String::new() };
+        assert!(signed_in(StatusStyle::Exit, &ran(true)));
+        assert!(!signed_in(StatusStyle::Exit, &ran(false)));
     }
 
     #[test]

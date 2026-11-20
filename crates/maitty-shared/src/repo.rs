@@ -10,6 +10,24 @@ pub const FIND_FILES_MAX_QUERY_CHARS: usize = 200;
 /// The most paths one `FindFiles` answer carries, whatever limit was asked for.
 pub const FIND_FILES_MAX_RESULTS: usize = 80;
 
+/// The longest branch name taken from a client, in bytes.
+pub const BRANCH_NAME_MAX_BYTES: usize = 200;
+
+/// Whether `name` is a branch name safe to put on git's command line: plain ref characters, and
+/// nothing git would read as an option or a revision expression.
+pub fn is_branch_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= BRANCH_NAME_MAX_BYTES
+        && !name.starts_with(['-', '/', '.'])
+        && !name.ends_with(['/', '.'])
+        && !name.ends_with(".lock")
+        && !name.contains("..")
+        && !name.contains("//")
+        && !name.contains("@{")
+        && name != "@"
+        && !name.chars().any(|c| c.is_whitespace() || c.is_control() || "~^:?*[\\".contains(c))
+}
+
 /// What to read. Paths are relative to the checkout root and may not climb out of it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RepoRequest {
@@ -138,4 +156,20 @@ pub struct RepoReference {
     pub bytes: u64,
     /// Unix seconds.
     pub modified: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_branch_name_is_plain_ref_characters_and_never_an_option() {
+        for good in ["main", "feature/x-1", "fix_2.0", "origin/main"] {
+            assert!(is_branch_name(good), "{good}");
+        }
+        for bad in ["", "-x", "--upload-pack=x", "/x", ".x", "x/", "x.", "x.lock", "a..b", "a//b", "a@{1}", "@", "a b", "a\nb", "a~1", "a^", "a:b", "a?", "a*", "a[", "a\\b"] {
+            assert!(!is_branch_name(bad), "{bad:?}");
+        }
+        assert!(!is_branch_name(&"a".repeat(BRANCH_NAME_MAX_BYTES + 1)));
+    }
 }

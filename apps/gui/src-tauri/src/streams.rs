@@ -116,6 +116,25 @@ pub enum Out {
         tag: u64,
         outcome: Result<String, String>,
     },
+    /// How far a machine's clone has got, already cleaned.
+    CloneProgress {
+        machine: MachineId,
+        tag: u64,
+        phase: maitty_shared::protocol::ClonePhase,
+        percent: u8,
+    },
+    /// What a machine found or did in a folder's branches, already cleaned.
+    FolderGit {
+        machine: MachineId,
+        tag: u64,
+        outcome: Result<maitty_shared::protocol::FolderGitAnswer, String>,
+    },
+    /// What a machine says it is, already cleaned.
+    MachineFacts {
+        machine: MachineId,
+        tag: u64,
+        facts: maitty_shared::protocol::MachineFacts,
+    },
     /// Where this computer's agent sign-in stands.
     AgentSignIn {
         tag: u64,
@@ -274,6 +293,15 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::Cloned { tag, outcome }) => {
                 out.push(Out::Cloned { machine, tag, outcome });
+            }
+            ServerMsg::Reply(Reply::CloneProgress { tag, phase, percent }) => {
+                out.push(Out::CloneProgress { machine, tag, phase, percent });
+            }
+            ServerMsg::Reply(Reply::FolderGit { tag, outcome }) => {
+                out.push(Out::FolderGit { machine, tag, outcome });
+            }
+            ServerMsg::Reply(Reply::MachineFacts { tag, facts }) => {
+                out.push(Out::MachineFacts { machine, tag, facts });
             }
             // This computer's only: a link and a code another machine's login printed are not for this window.
             ServerMsg::Reply(Reply::AgentSignIn { tag, agent, state }) if machine == MachineId::LOCAL => {

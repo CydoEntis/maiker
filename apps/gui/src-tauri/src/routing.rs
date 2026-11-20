@@ -25,6 +25,11 @@ const EXTENSION_REQUEST_LIMIT: Duration = Duration::from_secs(2 * 30);
 /// How long an extension request's answer is waited for: the daemon's limit, then the time the answer takes to cross.
 const EXTENSIONS_ANSWER_WINDOW: Duration = EXTENSION_REQUEST_LIMIT.saturating_add(CLONE_ANSWER_MARGIN);
 
+/// How long a folder's branches request is waited for: the daemon gives git its limit for each of the two commands a
+/// checkout of a remote branch runs, then the answer has to cross.
+const FOLDER_GIT_ANSWER_WINDOW: Duration =
+    Duration::from_secs(2 * maitty_shared::protocol::FOLDER_GIT_LIMIT_SECS).saturating_add(CLONE_ANSWER_MARGIN);
+
 /// How long a list of GitHub repositories or owners is waited for. The daemon gives `gh` 15 seconds
 /// to say who is signed in, then `GITHUB_LIST_LIMIT_SECS` to list, and the answer has to cross.
 const GITHUB_LIST_ANSWER_WINDOW: Duration = Duration::from_secs(15 + maitty_shared::protocol::GITHUB_LIST_LIMIT_SECS + 30);
@@ -85,6 +90,7 @@ pub fn answer_window(msg: &ClientMsg) -> Option<Duration> {
         ) => Some(GITHUB_LIST_ANSWER_WINDOW),
         ClientMsg::Query(maitty_shared::protocol::Query::Repositories { .. }) => Some(REPOSITORIES_ANSWER_WINDOW),
         ClientMsg::Query(maitty_shared::protocol::Query::Extensions { .. }) => Some(EXTENSIONS_ANSWER_WINDOW),
+        ClientMsg::Query(maitty_shared::protocol::Query::FolderGit { .. }) => Some(FOLDER_GIT_ANSWER_WINDOW),
         ClientMsg::Command(_) | ClientMsg::Query(_) => Some(ANSWER_WINDOW),
         _ => None,
     }

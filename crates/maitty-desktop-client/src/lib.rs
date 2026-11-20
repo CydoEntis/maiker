@@ -2498,6 +2498,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         Query::Git { .. }
         | Query::GitIdentityRule { .. }
         | Query::CloneRepo { .. }
+        | Query::FolderGit { .. }
         | Query::CreateFolder { .. }
         | Query::Extensions { .. }
         | Query::SideAnswer { .. } => false,
@@ -2516,6 +2517,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::UsageReport { .. }
         | Query::ListFolders { .. }
         | Query::AgentSignIn { .. }
+        | Query::MachineFacts { .. }
         | Query::GitHubAccounts { .. }
         | Query::GitHubRepos { .. }
         | Query::GitHubOwners { .. }

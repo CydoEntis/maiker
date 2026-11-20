@@ -892,6 +892,34 @@ person a link and a code (`daemon/agent_sign_in.rs`). What it may do:
   computer's output can never put a link in this window.
 - Claude's paste-a-code flow is not supported on purpose: a code typed into the window would be a credential
   in a text box (ADR 0006).
+- **GitHub** is one more `SignInAgent` (`Github`): the daemon runs the constant line `gh auth login --web
+  --hostname github.com --git-protocol https` with nothing on its input and `GH_PROMPT_DISABLED=1`, so `gh` prints
+  the one-time code and the `https://github.com/login/device` address instead of waiting for Enter and opening a
+  browser. The same scan keeps that code (the text after the colon on the line that names it) and that address
+  under the same checks, and drops everything else the command prints. `gh` keeps the token in its own store (the
+  system keyring, or its hosts file); the daemon never reads it, never asks for it and never logs the code. `SignedIn`
+  is the exit status of `gh auth status --hostname github.com`; its text, which names accounts and token sources,
+  is not read. Who is signed in stays `Query::GitHubAccounts` (logins only).
+- **GitHub sign-out** (`SignInRequest::SignOut`, GitHub only) runs `gh auth logout --hostname github.com --user
+  <login>` for the active account only, the login being one `gh` itself reported and `is_login` checked, so it can
+  never be an option on `gh`'s command line. It runs off the event loop with a 15-second limit and answers `Idle`, or
+  `SignedIn` when another account remains. A login still waiting is cancelled first.
+
+## Project-specific: a folder's branches and what a machine is
+
+`Query::FolderGit` (`daemon/folder_git.rs`) and `Query::MachineFacts` (`daemon/machine_facts.rs`) are human-client
+only; an agent's connection is refused. A reply from another machine is vetted like every other: names, paths and
+lines cleaned and capped (`remote_policy`), and an answer to nothing asked is dropped.
+
+- The folder is an absolute path or starts with `~`, at most 4 KiB, and must exist. Git runs as a program with
+  arguments, never through a shell, with `GIT_TERMINAL_PROMPT=0`, and each command is stopped after 15 seconds.
+- A branch name is checked before git sees it (`maitty_shared::repo::is_branch_name`): plain ref characters, no
+  leading dash, no `..`, no `@{`, at most 200 bytes. A remote branch to check out must also be a ref git has already
+  fetched (`refs/remotes/<name>` verifies); its local name is the part after the first `/` and is checked as well.
+  Nothing fetches, pushes or deletes, and a switch over uncommitted changes is git's own refusal, shown as it says it.
+- Machine facts are the system, architecture, core count, host name and, for each agent program on the login PATH,
+  what its `--version` printed on the first line (kept only when it is version-like). No path, environment, account
+  or token is read or sent. Each program runs once with a 5-second limit.
 
 ## Project-specific: installing an agent from the desktop
 

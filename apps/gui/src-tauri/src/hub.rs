@@ -629,7 +629,9 @@ impl Hub {
                 .or_default()
                 .awaiting(Instant::now());
         let vetted = vet(&opts, asked, &name, msg)?;
-        if !listed && matches!(vetted, ServerMsg::Reply(_) | ServerMsg::Error(_)) {
+        // Progress of a clone is not its answer: that is still to come.
+        let progress = matches!(vetted, ServerMsg::Reply(Reply::CloneProgress { .. }));
+        if !listed && !progress && matches!(vetted, ServerMsg::Reply(_) | ServerMsg::Error(_)) {
             lock(&self.handle.shared.allowance)
                 .entry(machine)
                 .or_default()

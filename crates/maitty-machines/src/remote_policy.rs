@@ -234,6 +234,18 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
                 owners
             }),
         }),
+        ServerMsg::Reply(Reply::CloneProgress { tag, phase, percent }) => {
+            ServerMsg::Reply(Reply::CloneProgress { tag, phase, percent: percent.min(100) })
+        }
+        ServerMsg::Reply(Reply::FolderGit { tag, outcome }) => ServerMsg::Reply(Reply::FolderGit {
+            tag,
+            outcome: outcome
+                .map(sanitize_folder_git)
+                .map_err(|why| sanitize(&cut_bytes(why, NAME_MAX), false)),
+        }),
+        ServerMsg::Reply(Reply::MachineFacts { tag, facts }) => {
+            ServerMsg::Reply(Reply::MachineFacts { tag, facts: sanitize_facts(facts) })
+        }
         // Another machine's agent's words: names and lines cleaned, the list capped.
         ServerMsg::Reply(Reply::AgentCommands { tag, answer }) => ServerMsg::Reply(Reply::AgentCommands {
             tag,
@@ -304,6 +316,50 @@ fn sanitize_github(mut report: maitty_shared::protocol::GitHubReport) -> maitty_
     report.accounts.retain(|account| is_login(&account.login));
     report.problem = report.problem.map(|why| sanitize(&cut_bytes(why, NAME_MAX), false));
     report
+}
+
+/// What another machine says about a folder's branches: every name and path one clean line, no
+/// more entries than an answer carries.
+fn sanitize_folder_git(answer: maitty_shared::protocol::FolderGitAnswer) -> maitty_shared::protocol::FolderGitAnswer {
+    use maitty_shared::protocol::{FOLDER_BRANCHES_MAX, FOLDER_WORKTREES_MAX, FolderGitAnswer};
+    let name = |text: String| sanitize(&cut_bytes(text, NAME_MAX), false);
+    match answer {
+        FolderGitAnswer::Branches(mut listing) => {
+            listing.current = listing.current.map(name);
+            listing.branches.truncate(FOLDER_BRANCHES_MAX * 2);
+            for branch in &mut listing.branches {
+                branch.name = name(std::mem::take(&mut branch.name));
+            }
+            listing.worktrees.truncate(FOLDER_WORKTREES_MAX);
+            for worktree in &mut listing.worktrees {
+                worktree.path = sanitize(&cut_bytes(std::mem::take(&mut worktree.path), PATH_MAX), false);
+                worktree.branch = worktree.branch.take().map(name);
+            }
+            FolderGitAnswer::Branches(listing)
+        }
+        FolderGitAnswer::Switched { branch } => FolderGitAnswer::Switched { branch: name(branch) },
+        FolderGitAnswer::NotARepo => FolderGitAnswer::NotARepo,
+    }
+}
+
+/// What another machine says it is: every word one clean, short line, only version-like text as a
+/// version, and no more agents than an answer carries.
+fn sanitize_facts(mut facts: maitty_shared::protocol::MachineFacts) -> maitty_shared::protocol::MachineFacts {
+    let line = |text: String, most: usize| sanitize(&text, false).chars().take(most).collect::<String>();
+    facts.host_name = facts.host_name.map(|name| line(name, 100));
+    facts.os = line(facts.os, 16);
+    facts.os_version = facts.os_version.map(|version| line(version, 100));
+    facts.arch = line(facts.arch, 16);
+    facts.agents.truncate(maitty_shared::protocol::MACHINE_FACTS_AGENTS_MAX);
+    for agent in &mut facts.agents {
+        agent.name = line(std::mem::take(&mut agent.name), 40);
+        agent.version = agent
+            .version
+            .take()
+            .map(|version| line(version, 40))
+            .filter(|version| version.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+' | '_')));
+    }
+    facts
 }
 
 /// A GitHub answer from another machine: its list cleaned by `clean`, or its reason one clean line.
@@ -638,6 +694,61 @@ mod tests {
         };
         assert!(!why.contains(['\u{7}', '\n']) && why.len() <= NAME_MAX, "{why:?}");
         assert!(vet(&nothing_on(), false, "box", cloned(Ok("/x".into()))).is_none());
+    }
+
+    #[test]
+    fn what_another_machine_says_of_its_branches_is_clean_and_capped() {
+        use maitty_shared::protocol::{FolderBranch, FolderBranches, FolderGitAnswer, FolderWorktree};
+        let listing = FolderBranches {
+            current: Some("main\u{1b}[31m\nx".into()),
+            branches: (0..FOLDER_BRANCHES_MAX_TWICE + 5).map(|n| FolderBranch { name: format!("b{n}\u{7}"), current: false, when: None, remote: false }).collect(),
+            worktrees: vec![FolderWorktree { path: "/srv/a\nb".into(), branch: Some("x\u{7}".into()), main: true, when: None }],
+        };
+        let sent = ServerMsg::Reply(Reply::FolderGit { tag: 2, outcome: Ok(FolderGitAnswer::Branches(listing)) });
+        let Some(ServerMsg::Reply(Reply::FolderGit { outcome: Ok(FolderGitAnswer::Branches(kept)), .. })) = vet(&nothing_on(), true, "box", sent.clone()) else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(kept.current.as_deref(), Some("main[31m x"));
+        assert_eq!(kept.branches.len(), FOLDER_BRANCHES_MAX_TWICE);
+        assert!(kept.branches.iter().all(|branch| !branch.name.contains('\u{7}')));
+        assert_eq!((kept.worktrees[0].path.as_str(), kept.worktrees[0].branch.as_deref()), ("/srv/a b", Some("x")));
+        assert!(vet(&nothing_on(), false, "box", sent).is_none(), "an answer to nothing is dropped");
+    }
+
+    /// Local and remote-tracking branches are each capped at `FOLDER_BRANCHES_MAX`.
+    const FOLDER_BRANCHES_MAX_TWICE: usize = maitty_shared::protocol::FOLDER_BRANCHES_MAX * 2;
+
+    #[test]
+    fn what_another_machine_says_it_is_is_clean_and_only_a_version_is_a_version() {
+        use maitty_shared::protocol::{AgentFact, MachineFacts};
+        let agent = |name: &str, version: &str| AgentFact { name: name.into(), version: Some(version.into()) };
+        let facts = MachineFacts {
+            host_name: Some("box\u{1b}[2J\nx".into()),
+            os: "linux".into(),
+            os_version: None,
+            arch: "x86_64".into(),
+            cpu_cores: 8,
+            agents: vec![agent("claude\u{7}", "2.1.0"), agent("codex", "<script>")],
+        };
+        let Some(ServerMsg::Reply(Reply::MachineFacts { facts: kept, .. })) =
+            vet(&nothing_on(), true, "box", ServerMsg::Reply(Reply::MachineFacts { tag: 1, facts }))
+        else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(kept.host_name.as_deref(), Some("box[2J x"));
+        assert_eq!((kept.agents[0].name.as_str(), kept.agents[0].version.as_deref()), ("claude", Some("2.1.0")));
+        assert_eq!(kept.agents[1].version, None);
+    }
+
+    #[test]
+    fn clone_progress_is_an_answer_and_never_past_a_hundred_percent() {
+        use maitty_shared::protocol::ClonePhase;
+        let sent = |percent| ServerMsg::Reply(Reply::CloneProgress { tag: 3, phase: ClonePhase::Receiving, percent });
+        let Some(ServerMsg::Reply(Reply::CloneProgress { percent, .. })) = vet(&nothing_on(), true, "box", sent(250)) else {
+            panic!("progress that was asked for is kept");
+        };
+        assert_eq!(percent, 100);
+        assert!(vet(&nothing_on(), false, "box", sent(10)).is_none(), "progress of nothing asked for is dropped");
     }
 
     #[test]

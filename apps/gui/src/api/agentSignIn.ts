@@ -2,11 +2,17 @@ import { invoke } from '@tauri-apps/api/core'
 import { z } from 'zod'
 import { taggedAnswers } from './taggedAnswers'
 
-/** An agent whose sign-in this computer's daemon can run. Gemini is named so the answer can say it has none. */
-export type SignInAgent = 'claude' | 'codex' | 'gemini'
+/**
+ * An account whose sign-in this computer's daemon can run. Gemini is named so the answer can say it has none.
+ * `github` is GitHub's own `gh auth login --web`: `gh` keeps the token, Maiker never reads or stores it.
+ */
+export type SignInAgent = 'claude' | 'codex' | 'gemini' | 'github'
 
-/** What a window asks of a sign-in: run it, stop it, or look at where it stands. */
-export type SignInRequest = 'start' | 'cancel' | 'read'
+/**
+ * What a window asks of a sign-in: run it, stop it, look at where it stands, or sign out. Only GitHub has a
+ * sign-out (the others answer `failed` / `unsupported`): it ends in `idle` when nobody is signed in any more.
+ */
+export type SignInRequest = 'start' | 'cancel' | 'read' | 'sign-out'
 
 /** Why a sign-in did not end signed in. */
 export type SignInFailure = 'not-installed' | 'unsupported' | 'could-not-start' | 'timed-out' | 'ended'
@@ -25,7 +31,7 @@ const FailureSchema = z.enum(['not-installed', 'unsupported', 'could-not-start',
 const AnswerSchema = z.object({
   machine: z.number().int(),
   tag: z.number().int(),
-  agent: z.enum(['claude', 'codex', 'gemini']),
+  agent: z.enum(['claude', 'codex', 'gemini', 'github']),
   state: z.enum(['idle', 'waiting', 'signed-in', 'failed']),
   link: z.string().nullable(),
   code: z.string().nullable(),
@@ -71,7 +77,14 @@ export const SIGN_IN_ANSWER_MS = 10_000
 
 const ask = taggedAnswers('agent-sign-in', AnswerSchema)
 
-/** Starts, stops or reads an agent's sign-in on this computer, and resolves with where it stands. */
+/**
+ * Starts, stops or reads an agent's sign-in on this computer, and resolves with where it stands. For `github`, `start`
+ * answers `waiting` with the web address and the one-time code to enter there once `gh` has printed them (poll with
+ * `read`), and ends `signed-in` when `gh` says so. `sign-out` signs the active GitHub account out and answers `idle`,
+ * or `signed-in` when another account remains. Who is signed in is `loadGitHubAccounts`.
+ *
+ * A service older than this build (protocol 119) never answers a `github` question: it ends in the timeout.
+ */
 export async function agentSignIn(agent: SignInAgent, request: SignInRequest): Promise<SignInState> {
   const answer = await ask((tag) => invoke('agent_sign_in', { agent, request, tag }), SIGN_IN_ANSWER_MS, 'The service did not answer in time')
   return signInStateOf(answer)

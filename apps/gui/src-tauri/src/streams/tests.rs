@@ -470,6 +470,26 @@ fn a_machines_github_report_is_given_with_its_machine_and_tag() {
 }
 
 #[test]
+fn a_machines_clone_progress_branches_and_facts_are_given_with_their_machine_and_tag() {
+    use maitty_shared::protocol::{ClonePhase, FolderGitAnswer, MachineFacts};
+    let mut streams = Streams::default();
+    let now = Instant::now();
+    let progress = ServerMsg::Reply(Reply::CloneProgress { tag: 5, phase: ClonePhase::Receiving, percent: 40 });
+    assert!(matches!(
+        &streams.on_message(BOX, progress, now)[..],
+        [Out::CloneProgress { machine, tag: 5, phase: ClonePhase::Receiving, percent: 40 }] if *machine == BOX
+    ));
+    let branches = ServerMsg::Reply(Reply::FolderGit { tag: 6, outcome: Ok(FolderGitAnswer::NotARepo) });
+    assert!(matches!(
+        &streams.on_message(BOX, branches, now)[..],
+        [Out::FolderGit { machine, tag: 6, outcome: Ok(FolderGitAnswer::NotARepo) }] if *machine == BOX
+    ));
+    let facts = MachineFacts { host_name: None, os: "linux".into(), os_version: None, arch: "x86_64".into(), cpu_cores: 2, agents: Vec::new() };
+    let said = streams.on_message(BOX, ServerMsg::Reply(Reply::MachineFacts { tag: 7, facts: facts.clone() }), now);
+    assert!(matches!(&said[..], [Out::MachineFacts { machine, tag: 7, facts: given }] if *machine == BOX && *given == facts));
+}
+
+#[test]
 fn only_this_computers_sign_in_is_given() {
     use maitty_shared::protocol::{SignInAgent, SignInState};
     let mut streams = Streams::default();

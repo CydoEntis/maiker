@@ -1813,6 +1813,8 @@ pub fn run() {
             terminal_stream::create_folder,
             terminal_stream::ask_machine_list,
             terminal_stream::clone_repository,
+            terminal_stream::folder_git,
+            terminal_stream::machine_facts,
             terminal_stream::agent_sign_in,
             terminal_stream::github_accounts,
             terminal_stream::github_repos,

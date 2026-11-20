@@ -92,6 +92,9 @@ impl Host {
                 | Reaction::AgentCommands { .. }
                 | Reaction::Repositories { .. }
                 | Reaction::Extensions { .. }
+                | Reaction::CloneProgress { .. }
+                | Reaction::FolderGit { .. }
+                | Reaction::MachineFacts { .. }
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),
                 Reaction::Sessions { machine, snapshot } => {
