@@ -1431,12 +1431,12 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     const draft = await screen.findByRole('region', { name: 'New session' })
     expect(within(draft).getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
     expect(within(draft).getByRole('button', { name: /^Agent, model and reasoning: Claude/ })).toBeInTheDocument()
-    expect(within(draft).getByRole('button', { name: `Project: ${HOME.split('/').at(-1) ?? ''}` })).toBeInTheDocument()
+    expect(within(draft).getByRole('button', { name: `${HOME}: ${HOME.split('/').at(-1) ?? ''}` })).toBeInTheDocument()
     expect(within(draft).queryByText(/Starting/)).not.toBeInTheDocument()
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
 
     daemon.loadConversations.mockResolvedValue([claude(5, HOME)])
-    await user.type(within(draft).getByRole('textbox', { name: 'What should we work on?' }), 'fix the cart{Enter}')
+    await user.type(within(draft).getByRole('textbox', { name: /^Message / }), 'fix the cart{Enter}')
 
     await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalledWith(HOME, 'claude', expect.any(Array)) })
     expect(daemon.startShellSession).not.toHaveBeenCalled()
@@ -1451,7 +1451,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     const draft = await screen.findByRole('region', { name: 'New session' })
     expect(within(draft).getByRole('button', { name: /^Agent, model and reasoning: Codex/ })).toBeInTheDocument()
 
-    await user.click(within(draft).getByRole('textbox', { name: 'What should we work on?' }))
+    await user.click(within(draft).getByRole('textbox', { name: /^Message / }))
     await user.keyboard('{Escape}')
 
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument() })

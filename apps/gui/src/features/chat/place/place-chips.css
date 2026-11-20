@@ -20,3 +20,8 @@ button.mx-place-chip:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-place-key { flex: none; font: 400 11px var(--mono); color: var(--dim); }
 @media (prefers-reduced-motion: reduce) { .mx-place-icon.is-spinning { animation: none; } }
 :root[data-reduced-motion="true"] .mx-place-icon.is-spinning { animation: none; }
+/* A draft's chips: the machine chip is its icon alone on this computer; a branch that cannot be picked says why, quietly. */
+.mx-place-chip.is-machine { flex: none; }
+.mx-place-chip.is-down { color: var(--warn); }
+button.mx-place-chip.is-quiet { color: var(--dim); cursor: default; }
+button.mx-place-chip.is-quiet:hover { background: none; color: var(--dim); }

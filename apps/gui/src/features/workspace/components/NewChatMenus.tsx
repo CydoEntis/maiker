@@ -93,7 +93,7 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
               {section.items.map((item) => <ChipRow key={item.key} item={item} onPick={pick} />)}
             </div>
           ))}
-          {kept.length === 0 && !made && refused === null && <p className="mx-chip-none">{variant === 'token' ? 'Nothing matches.' : 'Nothing matches'}</p>}
+          {kept.length === 0 && !made && refused === null && (total > 0 || search !== undefined) && <p className="mx-chip-none">{variant === 'token' ? 'Nothing matches.' : 'Nothing matches'}</p>}
         </ChoiceList>
         {below}
         {footer !== undefined && <div className="mx-chip-footer">{footer}</div>}

@@ -126,13 +126,13 @@ function ScriptedPicker({ what, children }: { what: string; children: ReactNode 
 const FAILED_START = 'The agent could not be started in that worktree: the branch name is already taken by another worktree on this computer, so nothing was created and your checkout was left as it was.'
 const STATE_READ_MS = 500
 
-/** For the New session states: More options open, or a message typed and a start that fails, once the page has read its folder. */
+/** For the New session states: the permission menu open (new-more), or a message typed and a start that fails, once the page has read its folder. */
 function ScriptedNew({ what, children }: { what: string; children: ReactNode }) {
   useEffect(() => {
     if (what !== 'new-more' && what !== 'new-fail') return undefined
     const timer = window.setTimeout(() => {
       if (what === 'new-more') {
-        document.querySelector<HTMLElement>('.mx-nsd-more-toggle')?.click()
+        document.querySelector<HTMLElement>('.mx-newchat .mx-mode-button')?.click()
         return
       }
       const box = document.querySelector<HTMLTextAreaElement>('.mx-newchat .mx-box-text')

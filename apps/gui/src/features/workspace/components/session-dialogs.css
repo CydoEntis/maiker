@@ -29,42 +29,18 @@
 .mx-nsd-dot { flex: none; width: 7px; height: 7px; background: var(--ok); }
 .mx-nsd-dot.is-asleep { background: var(--warn); }
 
-.mx-nsd-token { flex: 0 1 auto; min-width: 44px; height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 7px; font-size: 13px; color: var(--fg); white-space: nowrap; }
-.mx-nsd-token.is-machine { flex-shrink: 0; max-width: 156px; color: var(--fg2); }
 /* A branch name is the longest of the three and the one read last, so it gives up room first and the project keeps most of its name. Its width is its own and not its text's: the name changes with Own worktree, and nothing in the header may move for that. */
-.mx-nsd-token.is-branch { flex: 0 3 var(--nsd-branch-w); }
-.mx-newchat { --nsd-branch-w: 148px; }
-.mx-nsd-token > svg { flex: none; }
-.mx-nsd-token:hover { background: var(--m-hover); color: var(--fg); }
-.mx-nsd-token[data-state="open"] { background: var(--m-sel); color: var(--fg); }
-.mx-nsd-token-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mx-nsd-token-text.is-mono { font-family: var(--mono); font-size: 12.5px; }
-.mx-nsd-word { flex: none; padding: 0 4px; font-size: 13px; color: var(--muted); }
 
 .mx-nsd-note { margin: 0; padding: 0 16px 8px; font-size: 12px; line-height: 1.45; color: var(--dim); }
 .mx-nsd-note:has(> .mx-note) { padding-top: 2px; }
 .mx-nsd-note.is-error { color: var(--danger); }
 .mx-nsd-note .mx-text-button { height: 22px; padding: 0 8px; }
 
-.mx-newchat { --nsd-agent-w: 300px; --nsd-start-w: 172px; }
-.mx-nsd-agent { min-width: 0; width: var(--nsd-agent-w); max-width: 100%; display: flex; }
-/* Narrow windows: two rows, the same in Chat and in Terminal. The agent has the first, the view switch and Start share the second. */
-@media (max-width: 767px) {
-  .mx-newchat { --nsd-start-w: 120px; }
-  /* The row is too short for the key hint beside Open terminal, so it is left out in both modes. */
-  .mx-nsd-start-key { display: none; }
-  .mx-nsd-token.is-machine { flex-shrink: 1; }
-  .mx-nsd-foot { grid-template-columns: minmax(0, 1fr) auto; }
-  .mx-nsd-agent { grid-column: 1 / -1; }
-    .mx-nsd-start { grid-column: 2; }
-}
 /* An agent's mark here is the mark alone, in its own colour (Claude's orange, the others in the text colour): no tile, no ground behind it. */
-:is(.mx-newchat, .mx-rename) .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
+.mx-rename .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
 .mx-rename .mx-app-icon.size-20 { width: 16px; height: 16px; }
-:is(.mx-newchat, .mx-rename) .mx-app-icon svg { width: 100%; height: 100%; }
+.mx-rename .mx-app-icon svg { width: 100%; height: 100%; }
 /* The model and effort button, in the design's terms: a bordered 28px button with the model, a dim effort and a chevron. */
-.mx-newchat .mx-model-button { flex: 1; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--line); font-size: 12.5px; }
-.mx-newchat .mx-model-button > svg { margin-left: auto; flex: none; }
 .mx-model-line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 /* The dropdown's menu: a small head over each of its three parts, an agent's mark flat beside its name, the efforts as the one segmented control. */
 .mx-mm-head { margin: 0; padding: 8px 14px 4px; font-size: 11.5px; color: var(--dim); }
@@ -73,7 +49,6 @@
 .mx-mm-agent-list .mx-app-icon svg { width: 100%; height: 100%; }
 .mx-mm-reasoning { padding: 0 8px 8px; border-top: 1px solid var(--line); }
 .mx-mm-reasoning .mx-mm-head { padding-left: 6px; }
-.mx-newchat .mx-model-button[data-state="open"] { background: var(--m-sel); }
 .mx-nsd-start { height: 28px; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: var(--nsd-start-w); padding: 0 13px; border: 1px solid var(--fg); background: var(--fg); font-size: 12.5px; font-weight: 600; color: var(--bg); white-space: nowrap; }
 .mx-nsd-start:not(:disabled):hover { background: color-mix(in srgb, var(--fg) 90%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 90%, var(--bg)); }
 .mx-nsd-start:disabled { opacity: .45; }
@@ -102,7 +77,7 @@
 .mx-chip-menu.is-token .mx-chip-footer { flex: none; gap: 2px; padding: 4px; }
 .mx-chip-menu.is-token .mx-chip-action { width: 100%; height: 30px; gap: 9px; padding: 0 8px; font-size: 12.5px; }
 .mx-nsd-foot-mark { flex: none; width: 14px; display: inline-flex; justify-content: center; font: 600 12px var(--mono); color: var(--dim); }
-.mx-chip-menu.is-token .mx-chip-footer .mx-nc-menu-foot { display: flex; flex-direction: column; gap: 2px; }
+.mx-chip-menu .mx-chip-footer .mx-nc-menu-foot { display: flex; flex-direction: column; gap: 2px; }
 
 /* Open a folder on <machine>. */
 .mx-fp-head { position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 46px; padding: 0 6px 0 14px; }
@@ -179,22 +154,8 @@
 }
 :root[data-reduced-motion="true"] :is(.mx-fp, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename) { animation: none; }
 
-.mx-nsd-where { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; min-height: 36px; }
-.mx-nsd-token.is-down { color: var(--warn); }
-.mx-nsd-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.mx-nsd-perm { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; font-size: 12.5px; color: var(--fg2); border: 1px solid var(--line); white-space: nowrap; }
-.mx-nsd-perm.is-danger { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
-.mx-nsd-more-toggle { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 0; font-size: 12.5px; color: var(--fg2); }
-.mx-nsd-more-toggle:hover { color: var(--fg); }
-.mx-nsd-more-toggle:focus-visible { box-shadow: var(--focus-underline); }
-.mx-nsd-option { display: flex; align-items: flex-start; gap: 10px; font-size: 12.5px; color: var(--fg2); cursor: default; }
-.mx-nsd-option strong { display: block; font-weight: 500; color: var(--fg); }
-.mx-nsd-option small { display: block; font-size: 12px; line-height: 1.4; color: var(--dim); }
 /* A chip that cannot be used says why in its tooltip: dimmed, not hidden, and no hover. */
-.mx-nsd-token.is-quiet { color: var(--dim); cursor: default; }
-.mx-nsd-token.is-quiet:hover { background: transparent; color: var(--dim); }
 /* Where the chat works (This folder, New worktree): a token like the others, so its two-line choices open from it. */
-.mx-nsd-token.is-mode { flex: none; margin-left: 4px; }
 /* The checkout's standing against origin: the sentence, and the one button that acts on it, at its end. */
 .mx-nsd-sync { display: flex; align-items: center; gap: 8px; }
 .mx-nsd-sync > span { min-width: 0; }
@@ -202,43 +163,22 @@
 .mx-nsd-sync-name { font: 500 12px var(--mono); color: var(--fg2); }
 .mx-chip-menu.is-token .mx-nc-behind { font-size: 11.5px; color: var(--dim); }
 .mx-chip-menu.is-token .mx-chip-row .mx-nc-in-use + .mx-nc-behind::before { content: '\00b7'; margin-right: 6px; }
-/* The branch list's fetch button at the end of its search box, and the reason a typed name is refused under it. */
-.mx-chip-fetch { flex: none; display: inline-flex; align-items: center; height: 22px; padding: 0 6px; font-size: 11.5px; color: var(--dim); white-space: nowrap; }
-.mx-chip-fetch:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
-.mx-chip-fetch:disabled { opacity: .7; cursor: default; }
+/* The reason a typed name is refused, under the search box. */
 .mx-chip-refused { flex: none; display: flex; gap: 6px; margin: 0; padding: 4px 16px; font-size: 12px; line-height: 1.4; color: var(--danger); }
 .mx-nsd-foot-hint { margin: 0; padding: 4px 8px 2px; font-size: 11.5px; color: var(--dim); }
 
-/* ---- The New session draft: a chat in the main area, not a dialog ---- */
-/* It sits over the panes, so it stays opaque; the question is centred low, right above the box it leads into. */
+/* ---- The New session draft: a chat pane in the main area, not a dialog ---- */
+/* It sits over the panes, so it stays opaque. Inside it is a started chat's pane: `.mx-pane-head`, then the chat with its box. */
 .mx-newchat { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--main); }
 /* The header is `.mx-pane-head`: a dashed draft mark, the name, and at the right that nothing is started. */
-.mx-nc-head { min-width: 0; }
-.mx-nc-mark { flex: none; width: 14px; height: 14px; border: 1px dashed var(--dim); }
-.mx-nc-draft-name { flex: none; margin: 0; font-size: 14px; font-weight: 600; color: var(--fg2); }
-.mx-nc-state { font-size: 12px; color: var(--dim); white-space: nowrap; }
 /* The body centres the question, where it runs and the box as one block; while it starts the card takes the top and the box stays low. */
-.mx-nc-body { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; }
-.mx-nc-body:has(> .mx-nc-start) { justify-content: flex-end; }
-.mx-nc-intro { width: 100%; max-width: var(--chat-width, 760px); margin: 0 auto; padding: 0 20px 14px; box-sizing: border-box; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
-.mx-nc-title { margin: 0; font-size: clamp(22px, 2.6vw, 28px); font-weight: 650; line-height: 1.15; letter-spacing: -.02em; color: var(--fg); }
-.mx-nc-sub { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
-.mx-nc-foot { width: 100%; display: flex; justify-content: space-between; gap: 12px; }
-.mx-nc-works { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-nc-keys { flex: none; }
-.mx-nc-keys b { font: 600 11.5px var(--mono); color: var(--fg2); }
-.mx-nc-start { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 24px 20px 22px; text-align: center; }
-.mx-nc-start.is-starting { align-items: stretch; justify-content: flex-start; text-align: left; overflow-y: auto; }
-.mx-nc-on { flex: none; font-size: 12px; color: var(--dim); white-space: nowrap; }
 /* The chips of the box's foot: the agent keeps the room it needs, the rest sit beside it. */
-.mx-newchat .mx-box-row.mx-nsd-who { gap: 8px; }
-.mx-newchat .mx-nsd-agent { flex: 0 1 var(--nsd-agent-w); }
-.mx-nsd-more-toggle { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg2); border: 1px solid var(--line); }
-.mx-nsd-more-toggle:hover, .mx-nsd-more-toggle[data-state="open"] { background: var(--m-hover); color: var(--fg); }
-.mx-nsd-more-toggle:focus-visible { box-shadow: var(--focus-underline); }
-.mx-nsd-more-body { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
-.mx-nsd-hint { margin: 0; font-size: 12px; line-height: 1.45; color: var(--dim); }
-@media (max-width: 767px) {
-  .mx-newchat .mx-box-row.mx-nsd-who { flex-wrap: wrap; }
-  .mx-newchat .mx-nsd-agent { flex-basis: 100%; }
-}
+.mx-newchat-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; font-family: var(--ui); line-height: normal; }
+/* The question, centred in the empty conversation above the box. */
+.mx-chat-hello { margin: 0; font-size: clamp(20px, 2.2vw, 24px); font-weight: 600; line-height: 1.25; letter-spacing: -.015em; color: var(--fg); }
+/* What the start needs said (a machine that is down, a clone, a refused start) sits above the box, as wide as it. */
+.mx-composer-column > .mx-nsd-note { align-self: stretch; padding: 0 4px 8px; }
+/* The branch menu's own-worktree switch, under its list. */
+.mx-chip-switch { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--fg2); cursor: default; }
+.mx-chip-switch strong { display: block; font-weight: 500; color: var(--fg); }
+.mx-chip-switch small { display: block; font-size: 12px; line-height: 1.4; color: var(--dim); }

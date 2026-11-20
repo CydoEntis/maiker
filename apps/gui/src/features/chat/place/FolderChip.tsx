@@ -6,6 +6,7 @@ import { Icon } from '@/features/workspace/components/glyphs'
 import { ChipMenu, type ChipItem } from '@/features/workspace/components/NewChatMenus'
 import { PlaceHead } from './PlaceHead'
 import type { PlaceProject } from './placeActions'
+import type { FolderPicking } from './picking'
 
 const WIDTH = 320
 
@@ -16,6 +17,8 @@ type Props = {
   machine: number
   projects: readonly PlaceProject[]
   onNewSessionIn: (folder: string) => void
+  /** Given for a draft: the menu chooses the folder the session will run in, instead of only showing it. */
+  picking?: FolderPicking | undefined
 }
 
 function row(key: string, label: string, onPick: () => void, extra: Partial<ChipItem> = {}): ChipItem {
@@ -23,7 +26,7 @@ function row(key: string, label: string, onPick: () => void, extra: Partial<Chip
 }
 
 /** The row under the box's folder chip: where the session runs, with the ways to copy and show it. The folder of a started session is not changed here; that is chosen before the first message. */
-export function FolderChip({ folder, text, machine, projects, onNewSessionIn }: Props) {
+export function FolderChip({ folder, text, machine, projects, onNewSessionIn, picking }: Props) {
   const copy = () => {
     copyText(folder).then(
       () => { toast.success('Path copied') },
@@ -33,26 +36,26 @@ export function FolderChip({ folder, text, machine, projects, onNewSessionIn }: 
   const reveal = () => {
     revealInExplorer(folder).catch((error: unknown) => { toast.failed('Could not show the folder', error) })
   }
-  const here: ChipItem[] = [
+  // No folder is chosen yet, so there is nothing to copy or show.
+  const here: ChipItem[] = folder === '' ? [] : [
     row('copy', 'Copy path', copy, { icon: <Icon name="files" size={13} /> }),
     // The file manager is this computer's: a path on another machine means nothing to it.
     ...(machine === LOCAL_MACHINE ? [row('reveal', 'Show in Explorer', reveal, { icon: <Icon name="folder" size={13} /> })] : []),
   ]
   const mine: ChipItem[] = projects.map((project) => row(project.folder, project.name, () => { onNewSessionIn(project.folder) }, { icon: <Icon name="folderPlain" size={13} /> }))
+  const hereSection = here.length === 0 ? [] : [{ heading: 'This folder', quiet: true, items: here }]
   return (
     <ChipMenu
-      title={folder}
+      title={folder === '' ? 'Folder' : folder}
       summary={text}
       chevron={false}
       triggerClass="mx-place-chip is-folder"
       width={WIDTH}
       icon={<span className="mx-place-icon"><Icon name="folderPlain" size={13} /></span>}
       label={<span className="mx-place-text">{text}</span>}
-      header={<PlaceHead mono main={folder} sub="This session runs here" />}
-      sections={[
-        { heading: 'This folder', quiet: true, items: here },
-        ...(mine.length === 0 ? [] : [{ heading: 'New session in:', items: mine }]),
-      ]}
+      header={<PlaceHead mono={folder !== ''} main={folder === '' ? 'No folder yet' : folder} sub={picking === undefined ? 'This session runs here' : folder === '' ? 'Choose where it runs' : 'The session will run here'} />}
+      sections={picking === undefined ? [...hereSection, ...(mine.length === 0 ? [] : [{ heading: 'New session in:', items: mine }])] : [...hereSection, ...picking.sections]}
+      {...(picking === undefined ? {} : { search: picking.search, fromQuery: picking.fromQuery, footer: picking.footer })}
     />
   )
 }

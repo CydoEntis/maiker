@@ -79,6 +79,9 @@ export type ComposerFacts = {
     readonly start?: AgentChoice
     /** The chat runs on another machine: this computer's model list says nothing of what it has. */
     readonly remote?: boolean
+    /** Given by a draft (a session not started), whose picks are kept for its start: the picker changes the choice and the agent. */
+    readonly onChange?: (change: Partial<AgentChoice>) => void
+    readonly onAgent?: (agent: ChatAgent) => void
   } | undefined
 }
 
@@ -119,6 +122,8 @@ type Props = {
   place?: SessionPlace | undefined
   /** Set once the session has ended: the box gives way to a read-only line with these ways on. */
   ended?: EndedActions | undefined
+  /** What the empty box says; a draft asks for the task, a started chat for a message. */
+  hint?: string | undefined
 }
 
 /** What an ended session offers in place of the box. */
@@ -150,7 +155,7 @@ const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
  * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
  * offline the box still takes typing but does not send.
  */
-export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null, place, ended }: Props) {
+export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null, place, ended, hint = 'Message the agent, or type / for commands' }: Props) {
   const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
@@ -201,7 +206,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
   }
   const attachLabel = off ? `Attach files: ${disabledReason}` : 'Attach files'
   const planning = facts.modeKey === PLAN_MODE
-  const placeholder = disabledReason ?? (running ? `Queue a message for when ${agentLabel(agent)} finishes` : planning ? 'Reply to the plan…' : 'Message the agent, or type / for commands')
+  const placeholder = disabledReason ?? (running ? `Queue a message for when ${agentLabel(agent)} finishes` : planning ? 'Reply to the plan…' : hint)
   const empty = draft.trim() === '' && attachments.length === 0
   // With nothing typed while a turn runs, the round button stops the agent instead of sending.
   const stopping = running && empty && !off
@@ -488,7 +493,7 @@ function AgentControls({ agent, conversation, facts, readOnly, lockedWhileWorkin
       {agentChips !== undefined ? (
         conversation !== undefined
           ? <ModelPicker remote={agentChips.remote === true} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={live} locked={(agentChips.pickerLocked === undefined ? agentChips.locked : agentChips.pickerLocked) ?? lockedWhileWorking} />
-          : <AgentPicker agent={agent} choice={agentChips.start ?? defaultChoice()} onChange={NO_CHANGE} locked={agentChips.locked ?? undefined} />
+          : <AgentPicker fixedModels={agentChips.remote === true} agent={agent} choice={agentChips.start ?? defaultChoice()} onChange={agentChips.onChange ?? NO_CHANGE} {...(agentChips.onAgent === undefined ? {} : { onAgent: agentChips.onAgent })} locked={agentChips.locked ?? undefined} />
       ) : (
         <>
           {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={live} locked={lockedWhileWorking} />}
