@@ -385,7 +385,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   and they take the whole dialog, with no nav (Usage's groups run full width).
   **Remote machines** (`MachinesPage.tsx`) is one list, a machine's page, or **Add a machine**, one at a time in the
   same pane; the sidebar's **+ Remote machine** (foot or rail), its + menu and the palette open the same flow as a small dialog
-  (`AddMachineDialog`, a 520px `.mx-rename` card: the add panel and Close; Esc closes it and cancels a connect in progress),
+  (`AddMachineDialog`, a fixed-size `.mx-rename` card: the add panel and Close; Esc closes it and cancels a connect in progress; the panel is one mono `Address` field with **Connect**, a hint line ("Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.") under the line that says Maiker connects with your keys and never asks for or keeps passwords, a closed **Port and key** row with a Port box, and the `~/.ssh/config` hosts as rows),
   so Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
   Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,

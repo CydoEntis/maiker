@@ -333,17 +333,17 @@ describe('adding a machine', () => {
   const open = async (add: Partial<MachinesInfo['add']> = {}, rest: Partial<MachinesInfo> = {}) => {
     const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), ...rest, add: { ...info().add, ...add } }))
     await user.click(screen.getByRole('button', { name: '+ Add machine' }))
-    // Most of these are about names; the four-box IP address has its own tests below.
-    await user.click(screen.getByRole('button', { name: 'Use a name instead' }))
     return user
   }
   const address = () => screen.getByRole('textbox', { name: 'Address' })
 
-  it('says how it connects, in a username and an address with a Connect button that waits for a valid address', async () => {
+  it('says how it connects, in one address field with a Connect button that waits for a valid address', async () => {
     await open()
     expect(screen.getByText('Maiker connects over SSH, using your keys. It never asks for or keeps passwords.')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveAttribute('placeholder', 'username')
-    expect(address()).toHaveAttribute('placeholder', 'IP address or name')
+    expect(screen.getAllByRole('textbox')).toHaveLength(1)
+    expect(screen.queryByRole('textbox', { name: 'Username' })).toBeNull()
+    expect(address()).toHaveAttribute('placeholder', 'user@host, IP address or name')
+    expect(screen.getByText('Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Connect' })).toHaveAttribute('aria-disabled', 'true')
   })
 
@@ -392,7 +392,7 @@ describe('adding a machine', () => {
     await user.type(address(), 'cydo@10.0.4')
     expect(screen.queryByRole('alert')).toBeNull()
     await user.keyboard('{Enter}')
-    expect(screen.getByRole('alert')).toHaveTextContent('An IP address has 4 numbers, like 192.168.1.20. This one has 3.')
+    expect(screen.getByRole('alert')).toHaveTextContent('That IP address is incomplete. It needs four numbers, like 10.0.4.12.')
     await user.type(address(), '.9')
     expect(screen.queryByRole('alert')).toBeNull()
     expect(onAdd).not.toHaveBeenCalled()
@@ -405,60 +405,51 @@ describe('adding a machine', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("An address can't have spaces.")
   })
 
-  it('joins a username and an address with an @', async () => {
+  it.each([
+    ['user@ip', 'dev@100.78.214.15', 'dev@100.78.214.15'],
+    ['a bare IP', '100.78.214.15', '100.78.214.15'],
+    ['a name from the SSH config', 'build', 'build'],
+    ['a trailing newline', 'dev@100.78.214.15\n', 'dev@100.78.214.15'],
+    ['spaces around it', '  dev@100.78.214.15  ', 'dev@100.78.214.15'],
+  ])('connects what is pasted as %s, whole and unchanged', async (_what, pasted, target) => {
     const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
     const user = await open({ onAdd })
-    await user.type(screen.getByRole('textbox', { name: 'Username' }), 'dev')
-    await user.type(address(), '100.78.214.15{Enter}')
-    expect(onAdd).toHaveBeenCalledWith('dev@100.78.214.15', expect.any(String), undefined)
-  })
-
-  it('splits a whole user@ip pasted into the username box, and keeps the SSH config list whole while an IP is typed', async () => {
-    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), add: { ...info().add, loadHosts: () => Promise.resolve(hosts) } }))
-    await user.click(screen.getByRole('button', { name: '+ Add machine' }))
-    await user.click(screen.getByRole('textbox', { name: 'Username' }))
-    await user.paste('dev@100.78.214.15')
-    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('dev')
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Address, part 4 of 4' }).value).toBe('15')
-    expect(await screen.findByRole('button', { name: 'Connect to build' })).toBeInTheDocument()
-  })
-
-  it('takes an IP address as four boxes with the dots already there: it moves on by itself and connects as user@ip', async () => {
-    const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
-    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), add: { ...info().add, onAdd } }))
-    await user.click(screen.getByRole('button', { name: '+ Add machine' }))
-    await user.type(screen.getByRole('textbox', { name: 'Username' }), 'dev')
-    await user.click(screen.getByRole('textbox', { name: 'Address, part 1 of 4' }))
-    await user.keyboard('100785214') // three digits move on; the next box takes 78, then 5 and 214 land in the next ones
-    expect(screen.getByRole('textbox', { name: 'Address, part 1 of 4' })).toHaveValue('100')
-    expect(screen.getByRole('textbox', { name: 'Address, part 2 of 4' })).toHaveValue('785')
-    await user.clear(screen.getByRole('textbox', { name: 'Address, part 2 of 4' }))
-    await user.type(screen.getByRole('textbox', { name: 'Address, part 2 of 4' }), '78.214.15{Enter}')
-    expect(onAdd).toHaveBeenCalledWith('dev@100.78.214.15', expect.any(String), undefined)
-  })
-
-  it('fills all four boxes and the username from a pasted user@ip, and an IP alone, and keeps a pasted name as a name', async () => {
-    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')) }))
-    await user.click(screen.getByRole('button', { name: '+ Add machine' }))
-    await user.click(screen.getByRole('textbox', { name: 'Address, part 1 of 4' }))
-    await user.paste('ops@10.0.0.5')
-    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('ops')
-    expect(['1', '2', '3', '4'].map((n) => screen.getByRole<HTMLInputElement>('textbox', { name: `Address, part ${n} of 4` }).value)).toEqual(['10', '0', '0', '5'])
-    await user.click(screen.getByRole('textbox', { name: 'Address, part 1 of 4' }))
-    await user.paste('192.168.1.20')
-    expect(screen.getByRole<HTMLInputElement>('textbox', { name: 'Address, part 3 of 4' }).value).toBe('1')
-    await user.click(screen.getByRole('textbox', { name: 'Address, part 1 of 4' }))
-    await user.paste('lab@box.example.com')
-    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveValue('box.example.com')
-    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('lab')
-  })
-
-  it('pasting user@ip into the name field moves the IP into its four boxes and the account into its own', async () => {
-    const user = await open()
     await user.click(address())
-    await user.paste('ops@10.0.0.5')
-    expect(screen.getByRole('textbox', { name: 'Username' })).toHaveValue('ops')
-    expect(screen.getByRole('textbox', { name: 'Address, part 1 of 4' })).toHaveValue('10')
+    await user.paste(pasted)
+    await user.keyboard('{Enter}')
+    expect(onAdd).toHaveBeenCalledWith(target, expect.any(String), undefined)
+  })
+
+  it('keeps the SSH config list whole while an IP address or user@host is typed, and narrows it for a name', async () => {
+    const user = await open({ loadHosts: () => Promise.resolve(hosts) })
+    await user.click(address())
+    await user.paste('dev@100.78.214.15')
+    expect(await screen.findByRole('button', { name: 'Connect to build' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Connect to lab' })).toBeInTheDocument()
+    await user.clear(address())
+    await user.type(address(), 'la')
+    expect(screen.queryByRole('button', { name: 'Connect to build' })).toBeNull()
+  })
+
+  it('tells a pasted incomplete IP address what it needs, after Enter', async () => {
+    const onAdd = vi.fn()
+    const user = await open({ onAdd })
+    await user.click(address())
+    await user.paste('dev@100.78.214')
+    await user.keyboard('{Enter}')
+    expect(screen.getByRole('alert')).toHaveTextContent('That IP address is incomplete. It needs four numbers, like 10.0.4.12.')
+    expect(onAdd).not.toHaveBeenCalled()
+  })
+
+  it('keeps the port closed under "Port and key", and sends the port typed there', async () => {
+    const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
+    const user = await open({ onAdd })
+    expect(screen.queryByRole('textbox', { name: 'Port' })).toBeNull()
+    expect(screen.queryByText(/Key file/)).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Port and key' }))
+    await user.type(screen.getByRole('textbox', { name: 'Port' }), '2222')
+    await user.type(address(), 'me@box.example{Enter}')
+    expect(onAdd).toHaveBeenCalledWith('me@box.example', 'box', 2222)
   })
 
   it('offers to retry or remove a machine that is already in Maiker', async () => {

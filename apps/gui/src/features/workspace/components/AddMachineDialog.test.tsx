@@ -57,6 +57,35 @@ describe('the Add a remote machine dialog', () => {
     expect(toast.success).toHaveBeenCalledWith('Connected to build')
   })
 
+  describe('closing before the machine connected', () => {
+    const closeAfter = async (answer: Added, extra: (user: ReturnType<typeof userEvent.setup>) => Promise<void> = () => Promise.resolve()) => {
+      const machines = info({}, { onAdd: vi.fn().mockResolvedValue(answer) })
+      const view = render(<AddMachineDialog machines={machines} onClose={vi.fn()} />)
+      const user = userEvent.setup()
+      await user.click(await screen.findByRole('button', { name: 'Connect to build' }))
+      await screen.findByRole('status', { hidden: true }).catch(() => undefined)
+      await extra(user)
+      await user.click(screen.getByRole('button', { name: 'Close' }))
+      view.unmount()
+      return machines
+    }
+
+    it('removes a machine that was saved but refused the key, so nothing invisible is left', async () => {
+      const machines = await closeAfter(refused, async () => { await screen.findByText("build didn't accept your key.") })
+      expect(machines.onRemove).toHaveBeenCalledWith('build')
+    })
+
+    it('keeps a machine the person chose to add without Maiker on it', async () => {
+      const machines = await closeAfter(added('missing'), async (user) => { await user.click(await screen.findByRole('button', { name: 'Add without it' })) })
+      expect(machines.onRemove).not.toHaveBeenCalled()
+    })
+
+    it('keeps a machine that connected', async () => {
+      const machines = await closeAfter(added('answered'))
+      expect(machines.onRemove).not.toHaveBeenCalled()
+    })
+  })
+
   describe('a key that was refused', () => {
     const session = { id: '7' } as Conversation
     const head = { key: 'machine-1', machine: 1, name: 'build', label: 'build', chip: { glyph: '●', word: 'connected', tone: 'ok' }, why: null, said: null, loginCommand: null, target: null, down: false, downSince: null, grants: { clipboard: false, notices: false }, updateCommand: null, updateAction: null } as const

@@ -798,8 +798,6 @@
 .mx-rm-address input { flex: 1; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
 .mx-rm-address input[aria-invalid="true"] { border-color: var(--danger-line); }
 .mx-rm-address { align-items: center; }
-.mx-rm-address .mx-rm-user { flex: 0 1 34%; }
-.mx-rm-address .mx-rm-at { flex: none; color: var(--muted); font-size: 14px; }
 .mx-rm-address .mx-rm-primary { height: 36px; padding: 0 16px; }
 .mx-rm-error { margin: 0; font-size: 12.5px; color: var(--danger); }
 .mx-rm-label { display: block; padding: 4px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); }
@@ -825,9 +823,6 @@
 .mx-rm-quiet:hover { color: var(--danger); }
 .mx-rm-remove { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }
 
-/* The IP address as four boxes with the dots between them. */
-.mx-rm-ip { flex: 1; min-width: 0; display: flex; align-items: center; gap: 0; }
-.mx-rm-ip-cell { flex: 1; min-width: 0; display: flex; align-items: center; }
-.mx-rm-ip-dot { flex: none; padding: 0 3px; color: var(--muted); }
-.mx-rm-address .mx-rm-ip input { flex: 1; min-width: 0; padding: 0 6px; text-align: center; }
-.mx-rm-ip[data-invalid="true"] input { border-color: var(--danger-line); }
+.mx-rm-options { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.mx-rm-option { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--fg2); }
+.mx-rm-option input { width: 84px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
