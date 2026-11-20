@@ -36,7 +36,8 @@
   --m-pane: var(--pane);
   /* A card on a panel (a sidebar group, the sidebar's foot): one small step lighter than the panel it sits on, measured from the
      design (#1b1b1b on #151517), with a hairline a step lighter again and a selected row two steps up. Never darker than the panel. */
-  --m-card: color-mix(in srgb, var(--m-raise) 55%, var(--main));
+  /* Mixed from the panel toward the text colour, not from --raise: several themes set --raise equal to --main, which would leave no step. */
+  --m-card: color-mix(in srgb, var(--main) 97%, var(--fg));
   --m-card-line: color-mix(in srgb, var(--line) 50%, var(--m-card));
   --m-card-sel: color-mix(in srgb, var(--m-sel) 97%, var(--fg));
   /* What a menu or popover is drawn on: the raised surface nudged toward the text colour, so it reads as one step lifted off the
