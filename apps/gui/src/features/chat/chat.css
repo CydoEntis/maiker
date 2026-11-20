@@ -447,9 +447,10 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-pm-name small { font-size: 11.5px; font-weight: 400; color: var(--dim); }
 .mx-pm-what { font-size: 12px; color: var(--muted); text-wrap: pretty; }
 .mx-send { width: 32px; height: 32px; flex: none; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; background: var(--accent); color: var(--on-accent); }
-.mx-send.is-off { background: var(--m-hover); color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); }
+/* With nothing to send it is still plainly a button: the selected-row fill inside the stronger hairline. */
+.mx-send.is-off { background: var(--m-card-sel); color: var(--fg2); box-shadow: inset 0 0 0 1px var(--line2); }
 .mx-send.is-stop { background: var(--m-hover); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-send.is-off:focus-visible { box-shadow: inset 0 0 0 1px var(--line), var(--focus-underline); }
+.mx-send.is-off:focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
 .mx-send.is-stop:focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
 .mx-stop-square { width: 10px; height: 10px; border-radius: var(--r-badge); background: currentColor; }
 /* Working: the stop square sits where the send arrow was, and nothing in the button moves; the line over the box is what

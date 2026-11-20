@@ -324,7 +324,7 @@ function Expanded(props: SidebarProps) {
         {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
         <button type="button" className="mx-head-button mx-add-machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={14} />Remote machine</button>
         <span className="mx-spacer" />
-        <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={15} /></button>
+        <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={16} /></button>
       </div>
       <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}

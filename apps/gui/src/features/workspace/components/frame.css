@@ -63,7 +63,10 @@
 /* A session that has not been sent anything is a quiet, italic "New session". */
 .mx-row.is-fresh .mx-row-name { font-style: italic; font-weight: 400; color: var(--muted); }
 .mx-sidebar-foot { margin: 0 8px 8px; height: 40px; padding: 0 8px 0 10px; gap: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
-.mx-sidebar-foot .mx-head-button:not(:disabled):hover { background: var(--card-hover); }
+/* The two things at the foot are the way to another machine and to Settings: drawn in the body text colour, not the quiet one, so they are found at a glance. */
+.mx-sidebar-foot .mx-head-button { color: var(--fg2); }
+.mx-sidebar-foot .mx-head-button.mx-add-machine { font-size: 12.5px; font-weight: 500; }
+.mx-sidebar-foot .mx-head-button:not(:disabled):hover { background: var(--card-hover); color: var(--fg); }
 
 .mx-app-icon.is-flat.size-16, .mx-sidebar .mx-app-icon.is-flat.size-16 { width: 16px; height: 16px; font-size: 7px; }
 .mx-app-icon.is-dimmed { opacity: .45; }
