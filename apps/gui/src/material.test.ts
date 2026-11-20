@@ -42,8 +42,10 @@ describe('the window material', () => {
     expect(offenders).toEqual([])
   })
 
-  it('has one finish, so no rule asks which finish is on and nothing blurs what is behind it', () => {
-    const offenders = Object.entries(SHEETS).filter(([, css]) => /data-finish|backdrop-filter/.test(css)).map(([path]) => path)
+  // The first-run veil is the one place that blurs what is behind it: it is on screen once, over a still app, and the owner asked for the design's blur.
+  const BLURS = ['./features/welcome/onboarding.css']
+  it('has one finish, so no rule asks which finish is on and nothing blurs what is behind it but the first-run veil', () => {
+    const offenders = Object.entries(SHEETS).filter(([path, css]) => /data-finish/.test(css) || (/backdrop-filter/.test(css) && !BLURS.includes(path))).map(([path]) => path)
     expect(offenders).toEqual([])
   })
 })

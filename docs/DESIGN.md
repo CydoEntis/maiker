@@ -270,7 +270,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   inspector), a *float* (menus, popovers, dialogs, the palette, find, toasts) or a *field* (the message box and its
   tray), and takes its fill, hairline and shadow from that role's rule in `material.css`: a panel is `--main` with a
   `--line` hairline and no shadow, a float the same with one plain shadow, a field `--raise` with a `--line2` hairline.
-  There is one finish, flat: no gradient, highlight or blur anywhere (no `backdrop-filter`; hover tints stay). A new
+  There is one finish, flat: no gradient, highlight or blur anywhere except the first-run veil (no other `backdrop-filter`; hover tints stay). A new
   surface is added to a role's list in `material.css`; it does not set a background of its own. A popover opens
   through `PopupContent` (`components/ui/popup.tsx`) or carries `mx-pop`, so it is portalled into the window root and
   takes the float role. **Inside a surface**, nothing reads the theme's solid colours directly: a sunken control is
@@ -687,7 +687,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   focused one gets a 2px accent line along its top edge, drawn above its content (as the focused terminal split does). A pane's status is the
   badge on its icon; there is no status chip in a corner. While broadcasting, the header says "◉ Broadcast".
 - **First-run setup.** On the first launch (no saved settings and no earlier welcome) the app behind goes under a flat veil
-  (`--bg` at 72%; nothing blurs, so the design's blurred backdrop is not used) and the Maiker mark draws itself in the
+  (`--bg` at 55% over a 16px blur of the app: the one place anything blurs, because the first-run setup is on screen once over a still app) and the Maiker mark draws itself in the
   text colour, fills in, and rises away (about 2.3 s; Enter, Esc or Space skips; not drawn under reduced motion). A 680px
   window (`--main`, hairline, `--r-panel`) rises in: a header of the mark and the **step bar** (Welcome, Agents, Your style,
   Your view, Review, then **Skip setup**; finished steps go back when clicked), the step, and a footer of **Back**, the
