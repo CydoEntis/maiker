@@ -391,10 +391,25 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   sidebar settings sit in Appearance, the daemon's in Remote machines ("This computer") and the approved commands in
   Permissions. **Usage** and **Performance** have no nav item: Ctrl+Shift+U and Ctrl+Shift+P or the palette open them,
   and they take the whole dialog, with no nav (Usage's groups run full width).
-  **Remote machines** (`MachinesPage.tsx`) is one list, a machine's page, or **Add a machine**, one at a time in the
-  same pane; the sidebar's **+ Remote machine** (foot or rail), its + menu and the palette open the same flow as a small dialog
-  (`AddMachineDialog`, a fixed-size `.mx-rename` card: the add panel and Close; Esc closes it and cancels a connect in progress; the panel is one mono `Address` field with **Connect**, a hint line ("Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.") under the line that says Maiker connects with your keys and never asks for or keeps passwords, a closed **Port and key** row with a Port box, and the `~/.ssh/config` hosts as rows),
-  so Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
+  **Remote machines** (`MachinesPage.tsx`) is one list, a machine's page, or this computer's details, one at a time in the
+  same pane; **+ Add machine** here, the sidebar's **+ Remote machine** (foot or rail), its + menu and the palette all open the
+  same flow as one dialog (`AddMachineDialog`, a fixed-size 600 x 560 `.mx-rename.mx-addmachine` card in every state: a header with a
+  server mark, the title, the address in mono and a close button; a scrolling body; a foot). The first step is one mono `Address`
+  field with **Connect**, a hint line ("Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.")
+  under the line that says Maiker connects with your keys and never asks for or keeps passwords, a closed **Port and key** row (a
+  Port box and a Key file box, placeholder `~/.ssh/id_ed25519`), and the `~/.ssh/config` hosts as rows; its foot is Cancel. After
+  Connect the same card shows the checklist (`Steps`, `AddChecklist`): **Reach**, **Check it's the right computer**, **Sign in with
+  your key**, **Set up the Maiker helper**, **Connected**, each ticking with its result ("Reached 100.78.214.15 · 38 ms", "Known
+  computer", "Signed in with id_ed25519"); the foot is **← Change address** (back to what was typed) and **Cancel**. A step that
+  needs the person is an amber step with one main fix: a new host ("First time connecting to <host>", `ED25519 · SHA256:…`,
+  **Trust and continue**; a changed key has no Trust), a key the machine did not accept (**Copy my key to <name>** opens the key
+  terminal inside the step, **Copy the command** beside it), a host that does not answer ("<host> didn't answer", the address, the
+  power and the SSH port, **Try again** and **Edit the address**). A missing helper is not a question: it installs as a step with a
+  progress bar ("Not installed yet. Copying Maiker <version> to <name>…"). When the machine is in, the card is **Machine added**: a
+  green "Connected. Its sessions show up in your sidebar under this name." line, a Name field (selected, so typing replaces it;
+  an SSH config host keeps its config name), the details that are known (Address, Reach time, Key used, Maiker helper; System and
+  Agents found only when the host reports them) and **Done** and **Start a session**. **Fix** on an offline machine opens the same
+  card (`Fix <name>`) at the step that failed. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
   Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
   `user@host` in mono, the one line that matters (sessions, "Key rejected", "Can't reach it · 14 min", "N sessions ·
@@ -405,26 +420,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   saved as you type as the sidebar nickname; Address; Maiker with its Update; Copy to your clipboard; Notifications;
   **Remove…**, which asks in place). The status block (`StatusBlock.tsx`) is the one place progress and problems show:
   a mark or teal spinner, one sentence, an optional command or fingerprint with Copy, the actions, and raw output behind
-  Details. **Add a machine** is a breadcrumb, one address field with **Connect**, an error line after Enter, the status
-  block (reaching, trust a new host key, install or update Maiker, or what failed) and **From your SSH config** rows
-  that connect on a click. The design is in the handoff `maiker-remote-handoff-v2`; there is no stepper and no name field.
-  An outcome has one primary action and the rest is quiet: a failure shows **Try again** and a small **More** that opens
-  **Edit address** and **Details** (`MoreOptions.tsx`); a key the machine did not accept shows **Set up the key here**,
-  a quiet **Copy the command instead** and **More** (Try again, Edit address, Details), under the words "Maiker opens a
-  terminal here with the command typed. Press Enter and type the password in it. The terminal hands it to ssh like any
-  terminal does; Maiker never reads or keeps it." **Set up the key here** shows a terminal of this computer
-  (`KeyTerminal.tsx`) under the error, inside the dialog: the shell has the command typed and not run, takes keyboard
-  focus, and is a 120 to 200px tall well (30% of the window height, `.mx-key-term`) with a one-line hint under it. While it
-  shows, the dialog is 720px wide instead of 520px and the button gives way to the terminal; the machine is dialled every
-  5 seconds (up to 10 minutes) until it connects, and then the block reads "Connected to <name>." for 1.4 seconds and the
-  dialog closes with the toast "Connected to <name>". Esc goes to the terminal while it has focus and closes the dialog
-  anywhere else; Ctrl+Tab leaves the terminal for the Copy button, and the dialog's **Close** is always there. Whatever
-  closes the dialog ends the shell. On Windows the typed line is the PowerShell one. A machine that connects without
-  it closes the dialog with the toast "Connected to <name>"; Maiker installed on it closes it with "Maiker is on <name>".
-  **Fix this machine** is the same dialog opened from a down machine's red dot in the sidebar, titled "Fix <name>", with
-  no address field: a machine that needs a login opens on the key step above (a host key to trust keeps its block, and
-  **Edit address** reads **Open in Settings**); any other down state is one panel, "<name> is not connected." with the
-  host's reason, a primary **Try again** and a quiet **Open in Settings**, and it is the same words in every state.
+  Details. **Add a machine** is the dialog described above, never a page here. The key terminal (`KeyTerminal.tsx`, a 150px well `.mx-key-term`, inside the amber key step) has the command typed and not run, takes keyboard focus and shows a one-line hint ("Press Enter, then type the password here. It goes to ssh like any terminal input; Maiker does not read or keep it."); the machine is dialled every 5 seconds (up to 10 minutes) until it connects and the checklist then carries on by itself. Esc goes to the terminal while it has focus and closes the dialog anywhere else; Ctrl+Tab leaves the terminal for the Copy button, and the dialog's close button is always there. Whatever closes the dialog ends the shell. On Windows the typed line is the PowerShell one. **Fix this machine** is the same dialog opened from a down machine's red dot in the sidebar, titled "Fix <name>", with no address field: the checklist stopped at the step that failed (the key step, the host-key step, or Reach with the host's reason and a primary **Try again**), and **Open in Settings** in the foot.
   **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
   (not Usage, which holds figures): while it has text the body is the pages' groups, each titled "Page · Group", whole
   when the page name or the group title matches, else with only the rows whose label or detail match, and a group with

@@ -98,11 +98,16 @@ export function useWorkspaceState() {
   // The width while the sidebar's edge is being dragged; it is saved when the pointer is released.
   const [liveSidebarWidth, setLiveSidebarWidth] = useState<number | null>(null)
   const [settingsSection, setSettingsSection] = useState<DesktopSettingsSection | null>(null)
-  const [addMachineOpen, setAddMachineOpen] = useState(false)
-  // The machine the dialog mends instead of adding one; it goes when the dialog does, whatever closed it.
+  const [addMachineOpen, setAddMachineOpenNow] = useState(false)
+  // The machine the dialog mends instead of adding one; it goes when the dialog does, whatever closed it, so the next plain
+  // Add a remote machine (the sidebar's, Settings') is not opened on the machine that was mended.
   const [addMachineFor, setAddMachineFor] = useState<string | null>(null)
   const addMachineForShown = addMachineOpen ? addMachineFor : null
-  const fixMachine = useCallback((name: string) => { setAddMachineFor(name); setAddMachineOpen(true) }, [])
+  const setAddMachineOpen = useCallback((open: boolean) => {
+    setAddMachineOpenNow(open)
+    if (!open) setAddMachineFor(null)
+  }, [])
+  const fixMachine = useCallback((name: string) => { setAddMachineFor(name); setAddMachineOpenNow(true) }, [])
   const [renameId, setRenameId] = useState<string | null>(null)
   // The subagent whose own chat its session's pane shows instead of the session's (README: subagents).
   const [openSubagent, setOpenSubagent] = useState<OpenSubagent | null>(null)

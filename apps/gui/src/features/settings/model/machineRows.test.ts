@@ -50,11 +50,6 @@ describe('a machine row', () => {
     expect(rowOf(head('box', 'connecting'), 0)).toMatchObject({ glyph: '○', tone: 'quiet', line: 'Connecting…', action: null })
     expect(rowOf(head('box', 'reconnecting', { attempt: 2 }), 0).line).toBe('Reconnecting #2…')
   })
-
-  it('says Just added for a machine added a moment ago that has no sessions yet', () => {
-    expect(rowOf(head('box', 'connected'), 0, true).line).toBe('Just added')
-    expect(rowOf(head('box', 'connected'), 3, true).line).toBe('3 sessions')
-  })
 })
 
 describe('the order of the list', () => {
@@ -65,11 +60,6 @@ describe('the order of the list', () => {
     expect(names).toEqual(['d-down', 'c-old', 'b-busy', 'a-quiet'])
   })
 
-  it('puts the machine just added at the top of the connected ones', () => {
-    const heads = [head('busy', 'connected'), head('fresh', 'connected')]
-    const names = ordered(heads, (each) => (each.label === 'busy' ? 5 : 0), 'fresh').map((each) => each.label)
-    expect(names).toEqual(['fresh', 'busy'])
-  })
 })
 
 describe('finding machines', () => {

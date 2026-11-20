@@ -1,18 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { HostKeyReport } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
+import { forgetKeyCommand, keyTypeName } from '../model/hostKey'
 import { StatusBlock } from './StatusBlock'
-
-const DEFAULT_SSH_PORT = 22
-
-/** How ssh names a key type in its own fingerprint line. */
-function typeName(keyType: string): string {
-  switch (keyType) {
-    case 'ssh-ed25519': return 'ED25519'
-    case 'ssh-rsa': return 'RSA'
-    default: return keyType.startsWith('ecdsa-') ? 'ECDSA' : keyType
-  }
-}
 
 type Look = { state: 'loading' } | { state: 'ready'; report: HostKeyReport } | { state: 'failed'; message: string }
 
@@ -50,12 +40,12 @@ export function HostKeyBlock({ name, inspect, trust, onCopy, plain = false, leav
   if (look.state === 'loading') return <StatusBlock tone="work" plain={plain} lead={`Reaching ${name}…`} />
   if (look.state === 'failed') return <StatusBlock tone="bad" plain={plain} lead={`Couldn't read the host key of ${name}.`} raw={look.message}>{leave}</StatusBlock>
   const { report } = look
-  const shown = `${typeName(report.key_type)} ${report.fingerprint}`
+  const shown = `${keyTypeName(report.key_type)} ${report.fingerprint}`
   if (report.status === 'trusted') {
     return <StatusBlock tone="quiet" plain={plain} lead="Its host key is already trusted." more="So the host key is not what stopped the login." raw={`${report.host}:${String(report.port)}  ${shown}`}>{leave}</StatusBlock>
   }
   if (report.status === 'changed') {
-    const forget = `ssh-keygen -R ${report.host}${report.port === DEFAULT_SSH_PORT ? '' : `:${String(report.port)}`}`
+    const forget = forgetKeyCommand(report)
     return (
       <StatusBlock
         tone="bad"

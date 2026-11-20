@@ -29,7 +29,7 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
 }))
 
 function info(overrides: Partial<MachinesInfo> = {}): MachinesInfo {
-  return { known: true, list: [], onRetry: vi.fn(), onRemove: vi.fn(), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onCheckActivity: vi.fn(() => Promise.resolve(null)), onCopyCommand: vi.fn(), onOpenLogin: vi.fn(), onRename: vi.fn(), hostKey: { inspect: vi.fn(), trust: vi.fn(() => Promise.resolve()) }, add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn() }, ...overrides }
+  return { known: true, list: [], onRetry: vi.fn(), onRemove: vi.fn(), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onCheckActivity: vi.fn(() => Promise.resolve(null)), onCopyCommand: vi.fn(), onOpenLogin: vi.fn(), onRename: vi.fn(), hostKey: { inspect: vi.fn(), trust: vi.fn(() => Promise.resolve()) }, add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn(), inspect: vi.fn(), trust: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn() }, ...overrides }
 }
 
 function renderSettings(section: DesktopSettingsSection, overrides: Partial<Parameters<typeof DesktopSettings>[0]> = {}) {

@@ -27,7 +27,7 @@ import { loadAgentAuth, signOutAgent, type AgentAuth } from '@/api/daemon'
 import { SignInCard } from '@/features/signin/SignInCard'
 import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { BUNDLED_FONT_NAME, fontStackFor, installedMonospaceFamilies, WEIGHT_BOLD, WEIGHT_EXTRA_BOLD, WEIGHT_LIGHT, WEIGHT_MEDIUM, WEIGHT_REGULAR, WEIGHT_SEMIBOLD, type TerminalFontWeight } from '@/lib/terminalFont'
-import type { Added, Grant, HostChoice, HostKeyReport, MachineActivity } from '@/api/machines'
+import type { AddMachineOptions, Added, Grant, HostChoice, HostKeyReport, MachineActivity, UpdateProgress } from '@/api/machines'
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
@@ -69,10 +69,18 @@ export type MachinesInfo = {
   add: {
     /** The hosts of ~/.ssh/config that are not machines yet. Stable between renders. */
     loadHosts: () => Promise<HostChoice[]>
-    /** Looks at the target and adds it. Rejects with the words to show when it cannot be added. */
-    onAdd: (target: string, name?: string, port?: number) => Promise<Added>
+    /** Looks at the target and adds it, with the helper installed when it is missing. Rejects with the words to show when it cannot be added. */
+    onAdd: (target: string, name?: string, port?: number, options?: AddMachineOptions) => Promise<Added>
     /** Ends the look that is running. */
     onCancel: () => void
+    /** The host key a not-yet-added host offers, before anything is saved. Rejects when it cannot be fetched. */
+    inspect: (target: string, port?: number) => Promise<HostKeyReport>
+    /** Trusts the host key whose fingerprint was shown, for a host that is not a machine yet. */
+    trust: (target: string, fingerprint: string, port?: number) => Promise<void>
+    /** Calls back as the host reports how far a machine's helper install has got; resolves with the call that stops it. */
+    onProgress: (listener: (progress: UpdateProgress) => void) => Promise<() => void>
+    /** Opens the Add a remote machine dialog (the same one the sidebar opens). */
+    open: () => void
   }
 }
 

@@ -10,11 +10,22 @@ export function unreachableKind(said: string): Unreachable {
   return 'other'
 }
 
-/** The second sentence under "Can't reach {name}.": what to check for each way it can fail. */
-export function unreachableAdvice(kind: Unreachable, host: string, port: number | null): string {
+/** The step's name when the computer could not be reached: what happened, in plain words. */
+export function unreachableTitle(kind: Unreachable, host: string): string {
   switch (kind) {
-    case 'no-answer': return "Check it's on, and on your network or VPN."
-    case 'refused': return `It's on, but nothing is listening for SSH on port ${String(port ?? DEFAULT_SSH_PORT)}.`
+    case 'no-answer': return `${host} didn't answer`
+    case 'refused': return `${host} refused the connection`
+    case 'cannot-resolve': return `Couldn't find ${host}`
+    case 'other': return `Couldn't reach ${host}`
+  }
+}
+
+/** What to check for each way reaching a computer can fail: the address, the power and the SSH port. */
+export function unreachableAdvice(kind: Unreachable, host: string, port: number | null): string {
+  const shown = String(port ?? DEFAULT_SSH_PORT)
+  switch (kind) {
+    case 'no-answer': return `Check that the address is right, that the computer is on and on your network or VPN, and that SSH is listening on port ${shown}.`
+    case 'refused': return `It's on, but nothing is listening for SSH on port ${shown}.`
     case 'cannot-resolve': return `Couldn't find a computer called ${host}. Check the spelling, or use its IP address.`
     case 'other': return 'ssh said the words under Details.'
   }

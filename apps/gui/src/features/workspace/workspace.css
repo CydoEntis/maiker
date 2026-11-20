@@ -405,9 +405,9 @@
 .mx-getfile-row.is-selected { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
 .mx-getfile-row mark { background: transparent; color: var(--accent-text); font-weight: 700; text-decoration: underline; }
 .mx-rename.mx-recent { max-width: 560px; }
-.mx-rename.mx-addmachine { width: 600px; max-width: calc(100vw - 32px); height: min(430px, calc(100vh - 48px)); display: flex; flex-direction: column; }
-.mx-rename.mx-addmachine > .mx-rm-add { flex: 1; min-height: 0; overflow-y: auto; }
-/* With the key terminal under the error the dialog is a place to work in: wider, and the terminal as tall as a short window allows. */
+/* One size in every state of Add a remote machine (the address, each step, Machine added): the card is a header, a scrolling body and a foot. */
+.mx-rename.mx-addmachine { width: 600px; max-width: calc(100vw - 32px); height: min(560px, calc(100vh - 48px)); padding: 0; gap: 0; overflow: hidden; }
+.mx-rename.mx-addmachine > form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .mx-key-term-wrap { display: flex; flex-direction: column; gap: 6px; }
 .mx-key-term { height: 150px; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); }
 .mx-key-term:focus-within { border-color: var(--line2); box-shadow: var(--focus-underline); }
@@ -688,7 +688,7 @@
 /* Settings › Remote machines (docs/UI.md): a list with one line per machine, a machine's page, and Add a machine. Colour only
    ever says status: green connected, amber needs you, red failed, teal working. The one filled button is the neutral primary,
    filled with the text colour; no button is filled with a status colour or the accent. */
-.mx-rm, .mx-rm-add, .mx-rm-page { display: flex; flex-direction: column; gap: 12px; }
+.mx-rm, .mx-rm-page { display: flex; flex-direction: column; gap: 12px; }
 .mx-rm-hint { margin: 0; font-size: 12px; color: var(--dim); }
 .mx-rm-primary { flex: none; height: 32px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--bg); background: var(--fg); }
 .mx-rm-primary:hover:not(:disabled, [aria-disabled="true"]) { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); }
@@ -783,4 +783,7 @@
 
 .mx-rm-options { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .mx-rm-option { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--fg2); }
+.mx-rm-option-list { display: flex; flex-direction: column; gap: 6px; align-self: stretch; }
+.mx-rm-option label { flex: 0 0 64px; }
+.mx-rm-option input.mx-rm-option-wide { flex: 1; width: auto; min-width: 0; }
 .mx-rm-option input { width: 84px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }

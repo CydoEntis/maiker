@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { z } from 'zod'
 import { conversationsFromSnapshot, isDesktop, loadMachines } from '@/api/daemon'
-import { LOCAL_MACHINE, addMachine, cancelAddMachine, listenMachineClipboard, listenMachineError, listenMachineNotice, listenMachineRemoved, listenMachineSessions, listenMachineState, listenMachineUpdateProgress, loadMachinesOverview, openMachineLogin, removeMachine, retryMachine, setMachineGrant, terminalOf, unregisterMachine, type Grant, type MachineState } from '@/api/machines'
+import { LOCAL_MACHINE, addMachine, cancelAddMachine, listenMachineClipboard, listenMachineError, listenMachineNotice, listenMachineRemoved, listenMachineSessions, listenMachineState, listenMachineUpdateProgress, loadMachinesOverview, openMachineLogin, removeMachine, retryMachine, setMachineGrant, terminalOf, unregisterMachine, type AddMachineOptions, type Grant, type MachineState } from '@/api/machines'
 import type { Conversation } from '@/data/preview'
 import { sendNativeNotice } from '@/features/notifications/native'
 import { COPY_TOAST_ID, COPY_TOAST_MS, copySaid } from '@/features/terminal/copyToast'
@@ -157,8 +157,8 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
     const timer = setInterval(checkLogins, LOGIN_CHECK_MS)
     return () => { clearInterval(timer) }
   }, [watchingLogins, checkLogins])
-  const addNamed = useCallback(async (target: string, name?: string, port?: number) => {
-    return addMachine(target, name, port)
+  const addNamed = useCallback(async (target: string, name?: string, port?: number, options?: AddMachineOptions) => {
+    return addMachine(target, name, port, options)
   }, [])
   // The terminal is the way out when the card cannot do it; the machine is dialled again when it closes.
   const openLoginNamed = useCallback((machine: number, name: string) => {

@@ -11,8 +11,8 @@ export function StateMark({ glyph, tone }: { glyph: Glyph | '✓'; tone: Tone | 
   return <span className={`mx-rm-mark is-${tone}`} aria-hidden="true">{glyph}</span>
 }
 
-/** A command or fingerprint in mono, with Copy that turns to Copied. */
-export function CopyLine({ text, label, onCopy }: { text: string; label: string; onCopy: (text: string) => void }) {
+/** A command or fingerprint in mono, with Copy that turns to Copied. `shown` is what is drawn when it is more than what is copied. */
+export function CopyLine({ text, label, onCopy, shown = text }: { text: string; label: string; onCopy: (text: string) => void; shown?: string }) {
   const [copied, setCopied] = useState(false)
   useEffect(() => {
     if (!copied) return undefined
@@ -21,7 +21,7 @@ export function CopyLine({ text, label, onCopy }: { text: string; label: string;
   }, [copied])
   return (
     <span className="mx-rm-copy">
-      <code className="mono">{text}</code>
+      <code className="mono">{shown}</code>
       <button type="button" className="mx-rm-text" aria-label={`Copy ${label}`} onClick={() => { onCopy(text); setCopied(true) }}>{copied ? 'Copied' : 'Copy'}</button>
     </span>
   )

@@ -6,7 +6,6 @@ import { LOCAL_MACHINE } from '@/api/machines'
 import type { MachineHead } from '@/features/workspace/model/machines'
 import { matching, nameOf, ordered, rowOf, SEARCH_AFTER, updatable, UPDATE_ALL_FROM, type MachineRow, type RowAction } from '../model/machineRows'
 import { SettingsSearch } from '../settingsSearch'
-import { AddMachinePanel } from './AddMachinePanel'
 import { Card, Row as SettingsRow, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
 import { MachinePage } from './MachinePage'
@@ -18,7 +17,7 @@ import { useUpdateFlow, type UpdateFlow } from './useUpdateFlow'
 /** How long "Retrying…" shows before the row's own state is trusted again. */
 const RETRY_BUSY_MS = 6000
 
-type View = { kind: 'list' } | { kind: 'machine'; key: string } | { kind: 'add' } | { kind: 'this' }
+type View = { kind: 'list' } | { kind: 'machine'; key: string } | { kind: 'this' }
 
 const BUTTON_WORDS: Record<Exclude<RowAction, 'retry'>, string> = { fix: 'Fix', update: 'Update', install: 'Install' }
 
@@ -29,12 +28,11 @@ type Props = {
   appVersion: string | null
 }
 
-/** Settings › Remote machines: the list, a machine's page, Add a machine, or this computer's details, one at a time. */
+/** Settings › Remote machines: the list, a machine's page, or this computer's details, one at a time. Add machine opens the Add a remote machine dialog. */
 export function MachinesPage({ daemon, machines, github, appVersion }: Props) {
   const [view, setView] = useState<View>({ kind: 'list' })
-  // The machine the person last opened, so the list marks it when they come back; and the one they just added.
+  // The machine the person last opened, so the list marks it when they come back.
   const [opened, setOpened] = useState<string | null>(null)
-  const [justAdded, setJustAdded] = useState<string | null>(null)
   const search = useContext(SettingsSearch)
   const flow = useUpdateFlow(machines.onUpdate, machines.onCheckActivity)
   const countOf = (head: MachineHead) => machines.sessionsOn?.(head.machine) ?? null
@@ -42,9 +40,6 @@ export function MachinesPage({ daemon, machines, github, appVersion }: Props) {
   // Search results hold only cards with rows: this computer's are the ones that are always there.
   if (search !== null) return <ThisComputer daemon={daemon} github={github} />
   const back = () => { setView({ kind: 'list' }) }
-  if (view.kind === 'add') {
-    return <AddMachinePanel machines={machines} onClose={back} onAdded={(name) => { setJustAdded(name); back() }} />
-  }
   if (view.kind === 'this') {
     return (
       <div className="mx-rm-page">
@@ -63,10 +58,9 @@ export function MachinesPage({ daemon, machines, github, appVersion }: Props) {
       flow={flow}
       countOf={countOf}
       opened={opened}
-      justAdded={justAdded}
       localLine={localLineOf(daemon, machines, appVersion)}
       onOpen={(head) => { setOpened(head.key); setView({ kind: 'machine', key: head.key }) }}
-      onAdd={() => { setView({ kind: 'add' }) }}
+      onAdd={machines.add.open}
       onThisComputer={() => { setView({ kind: 'this' }) }}
     />
   )
@@ -83,14 +77,13 @@ type ListProps = {
   flow: UpdateFlow
   countOf: (head: MachineHead) => number | null
   opened: string | null
-  justAdded: string | null
   localLine: string
   onOpen: (head: MachineHead) => void
   onAdd: () => void
   onThisComputer: () => void
 }
 
-function MachineList({ machines, flow, countOf, opened, justAdded, localLine, onOpen, onAdd, onThisComputer }: ListProps) {
+function MachineList({ machines, flow, countOf, opened, localLine, onOpen, onAdd, onThisComputer }: ListProps) {
   const [query, setQuery] = useState('')
   const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set())
   const [askingAll, setAskingAll] = useState(false)
@@ -98,7 +91,7 @@ function MachineList({ machines, flow, countOf, opened, justAdded, localLine, on
   useEffect(() => { const held = timers.current; return () => { for (const timer of held) window.clearTimeout(timer) } }, [])
 
   const heads = machines.list
-  const shown = ordered(matching(heads, query), countOf, justAdded)
+  const shown = ordered(matching(heads, query), countOf)
   const behind = updatable(heads)
 
   const retry = (name: string) => {
@@ -145,7 +138,7 @@ function MachineList({ machines, flow, countOf, opened, justAdded, localLine, on
           {shown.map((head) => {
             const busy = flow.running.has(head.label) ? (head.updateAction === 'install' ? 'Installing…' : 'Updating…') : flow.checking === head.label ? 'Checking…' : retrying.has(head.label) ? 'Retrying…' : null
             return (
-              <MachineRowView key={head.key} head={head} row={rowOf(head, countOf(head), head.name === justAdded)} current={opened === head.key} busy={busy} onOpen={() => { onOpen(head) }} onAction={(action) => { act(head, action) }}>
+              <MachineRowView key={head.key} head={head} row={rowOf(head, countOf(head))} current={opened === head.key} busy={busy} onOpen={() => { onOpen(head) }} onAction={(action) => { act(head, action) }}>
                 {flow.asking?.name === head.label && <UpdateAsk flow={flow} />}
               </MachineRowView>
             )

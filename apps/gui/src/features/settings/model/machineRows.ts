@@ -30,8 +30,7 @@ export type MachineRow = {
 const RANK_FAILED = 0
 const RANK_UPDATE = 1
 const RANK_CONNECTING = 2
-const RANK_JUST_ADDED = 3
-const RANK_CONNECTED = 4
+const RANK_CONNECTED = 3
 
 function countWords(count: number): string {
   return `${String(count)} ${count === 1 ? 'session' : 'sessions'}`
@@ -49,10 +48,9 @@ export function stoppedOnHostKey(head: MachineHead): boolean {
 
 /**
  * The one line and one fix of a machine's row, in the first match of: login, can't reach, fix for the
- * app there, connecting, healthy. `sessions` is null when the sidebar has not counted it; `justAdded`
- * is the machine the person added a moment ago, which says so until it has a session.
+ * app there, connecting, healthy. `sessions` is null when the sidebar has not counted it.
  */
-export function rowOf(head: MachineHead, sessions: number | null, justAdded = false): MachineRow {
+export function rowOf(head: MachineHead, sessions: number | null): MachineRow {
   const word = head.chip?.word
   const count = sessions === null ? null : sessionWords(sessions)
   if (word === 'needs login') {
@@ -73,7 +71,6 @@ export function rowOf(head: MachineHead, sessions: number | null, justAdded = fa
   if (head.chip === null || head.chip.tone === 'quiet') {
     return { glyph: '○', tone: 'quiet', line: head.chip === null ? 'Connecting…' : `${capitalised(head.chip.word)}…`, showsSince: false, action: null, rank: RANK_CONNECTING }
   }
-  if (justAdded && !sessions) return { glyph: '●', tone: 'ok', line: 'Just added', showsSince: false, action: null, rank: RANK_JUST_ADDED }
   return { glyph: '●', tone: 'ok', line: count ?? 'Connected', showsSince: false, action: null, rank: RANK_CONNECTED }
 }
 
@@ -90,10 +87,10 @@ export function nameOf(head: MachineHead): string {
  * Anything that needs a person is at the top without a filter: failed, then a machine to update, then
  * connecting, then connected, busiest first. Ties keep the alphabet.
  */
-export function ordered(heads: readonly MachineHead[], sessionsOf: (head: MachineHead) => number | null, justAdded: string | null = null): MachineHead[] {
+export function ordered(heads: readonly MachineHead[], sessionsOf: (head: MachineHead) => number | null): MachineHead[] {
   const keyed = heads.map((head) => {
     const sessions = sessionsOf(head)
-    return { head, rank: rowOf(head, sessions, head.name === justAdded).rank, sessions: sessions ?? 0 }
+    return { head, rank: rowOf(head, sessions).rank, sessions: sessions ?? 0 }
   })
   return keyed
     .sort((a, b) => a.rank - b.rank || b.sessions - a.sessions || nameOf(a.head).localeCompare(nameOf(b.head), undefined, { sensitivity: 'base' }))

@@ -1,5 +1,5 @@
 import { extensionProjects } from '@/features/extensions/projects'
-import { inspectHostKey, listSshHosts, machineActivity, trustHostKey } from '@/api/machines'
+import { inspectHostKey, inspectNewHost, listenMachineUpdateProgress, listSshHosts, machineActivity, trustHostKey, trustNewHost } from '@/api/machines'
 import { DesktopSettings, type MachinesInfo } from '@/features/settings/components/DesktopSettings'
 import { PerfOverlay } from './PerfOverlay'
 import { CommandPalette } from './CommandPalette'
@@ -40,7 +40,7 @@ export function WorkspaceDialogs() {
   const serviceFinishing = useServiceFinishing()
   const fixed = addMachineFor === null ? null : heads.find((head) => head.name === addMachineFor) ?? null
   // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
-  const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding }, keyTerminal }
+  const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding, inspect: inspectNewHost, trust: trustNewHost, onProgress: listenMachineUpdateProgress, open: () => { setAddMachineOpen(true) } }, keyTerminal }
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
@@ -136,7 +136,7 @@ export function WorkspaceDialogs() {
             {renameId !== null && sessionMap.get(renameId) && (
               <RenameDialog session={sessionMap.get(renameId) as SessionView} onSave={(name) => { saveName(renameId, name) }} onCancel={() => { setRenameId(null) }} />
             )}
-            {addMachineOpen && <AddMachineDialog machines={machinesInfo} fixing={fixed} onOpenSettings={() => { setAddMachineOpen(false); setSettingsSection('machines') }} onClose={() => { setAddMachineOpen(false) }} />}
+            {addMachineOpen && <AddMachineDialog machines={machinesInfo} fixing={fixed} appVersion={runningVersion} onStartSession={(machine) => { setAddMachineOpen(false); newSession(machine) }} onOpenSettings={() => { setAddMachineOpen(false); setSettingsSection('machines') }} onClose={() => { setAddMachineOpen(false) }} />}
             {settingsSection && (
               <DesktopSettings
                 section={settingsSection}

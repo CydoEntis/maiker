@@ -25,7 +25,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, addMach
   welcomeOpen: boolean
   shortcutsOpen: boolean
   setPaletteOpen: Dispatch<SetStateAction<boolean>>
-  setAddMachineOpen: Dispatch<SetStateAction<boolean>>
+  setAddMachineOpen: (open: boolean) => void
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   setNewChatOpen: Dispatch<SetStateAction<boolean>>
   setDrawerOpen: Dispatch<SetStateAction<boolean>>

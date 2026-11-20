@@ -107,7 +107,7 @@ describe('a pane of another machine and the features that need its files', () =>
     await user.click(await screen.findByRole('button', { name: /Add machine|Remote machine/ }))
 
     const dialog = await screen.findByRole('dialog', { name: 'Add a remote machine' })
-    expect(within(dialog).getByRole('region', { name: 'Add a machine' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('textbox', { name: 'Address' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
     await user.keyboard('{Escape}')
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Add a remote machine' })).not.toBeInTheDocument() })
