@@ -15,12 +15,13 @@
   /* A warning that blocks nothing (context almost full, back online with chats interrupted): the meters' second-quarter
      yellow, which every theme sets apart from needs you and failed. */
   --caution: var(--m-mid);
-  --focus: var(--ansi-blue);
   /* Focus is one thing everywhere: a 1px underline along the bottom edge of the control, drawn inside it so nothing grows or
      moves (design rule 10; `focusStyle.test.ts`). `--focus-line` is the accent as it reads on the ground (`--accent-text`: the
      brass darkened on a light ground, where the plain accent is 1.8:1); a theme that still fell under 3:1 would be pointed
      at `--fg` here, never given a rule of its own. A bordered control keeps its own border and lists it first. */
   --focus-line: var(--accent-text);
+  /* The message box and a found line take the same colour: focus is the theme's accent, never a fixed blue. */
+  --focus: var(--focus-line);
   --focus-underline: inset 0 -1px 0 var(--focus-line);
   /* A text field is the exception: the whole 1px edge takes the focus colour (a real border turns `border-color`; a field that
      draws its edge in `box-shadow` uses `--field-focus-edge`), never an underline, ring or glow (`material.css`, `focusStyle.test.ts`). */
