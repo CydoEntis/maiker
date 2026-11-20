@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { loadMachineFacts } from '@/api/machineFacts'
+import { factsForDisplay } from '../model/machineFacts'
 import type { MachineFacts, ReachedMachine } from '../model/addStage'
 import { AddMachineFrame, FrameBody, FrameFoot } from './AddMachineFrame'
 
@@ -24,7 +26,16 @@ function Detail({ label, value, mono = false }: { label: string; value: string; 
 }
 
 /** "Machine added": the green line, the name (selected, so typing replaces it), what is known about the machine, and Done / Start a session. */
-export function MachineAdded({ reached, facts, machine, onDone, onStart }: Props) {
+export function MachineAdded({ reached, facts: given, machine, onDone, onStart }: Props) {
+  // Asked of the machine's own daemon once the sidebar lists it. A daemon older than protocol 119 never answers: the rows are then simply left out.
+  const [asked, setAsked] = useState<MachineFacts | undefined>(undefined)
+  useEffect(() => {
+    if (machine === null || given !== undefined) return
+    let gone = false
+    loadMachineFacts(machine).then((wire) => { if (!gone) setAsked(factsForDisplay(wire)) }, () => undefined)
+    return () => { gone = true }
+  }, [machine, given])
+  const facts = given ?? asked
   const suggested = reached.fromConfig ? reached.name : facts?.reportedName ?? reached.name
   const [name, setName] = useState(suggested)
   const field = useRef<HTMLInputElement>(null)
