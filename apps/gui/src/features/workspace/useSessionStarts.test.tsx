@@ -248,13 +248,13 @@ describe('what a start in the background says, and what it hides', () => {
 })
 
 describe('a terminal that lives inside a dialog', () => {
-  it('starts a shell in the home folder and types the line in it without pressing Enter, with no pane for it', async () => {
+  it('starts a shell in the home folder and types the line in it and presses Enter, with no pane for it', async () => {
     const setLayout = vi.fn()
     const session = await starts({ setLayout }).startKeyTerminal('ssh-copy-id me@box')
     expect(session).toMatchObject({ id: '1' })
     expect(daemon.startShellSession).toHaveBeenCalledWith('/home/me')
     expect(daemon.sendTerminalInput).toHaveBeenCalledTimes(1)
-    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: '1', generation: 0 }, 'ssh-copy-id me@box')
+    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: '1', generation: 0 }, 'ssh-copy-id me@box\r')
     expect(setLayout).not.toHaveBeenCalled()
   })
 

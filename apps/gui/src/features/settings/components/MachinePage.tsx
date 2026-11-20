@@ -90,7 +90,7 @@ export function MachinePage({ head, sessions, machines, flow, appVersion, onBack
               <>
                 <span className="mx-rm-value">Its sessions stop showing here. Nothing on {name} is deleted.</span>
                 <span className="mx-rm-pbuttons">
-                  <button type="button" className="mx-rm-remove" aria-label={`Remove ${name}`} onClick={() => { machines.onRemove(name); onRemoved() }}>Remove</button>
+                  <button type="button" className="mx-rm-remove" aria-label={`Remove ${name}`} onClick={() => { void machines.onRemove(name); onRemoved() }}>Remove</button>
                   <button type="button" className="mx-rm-text" onClick={() => { setRemoving(false) }}>Cancel</button>
                 </span>
               </>

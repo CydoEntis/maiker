@@ -1,5 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { addressOf, type AddRequest, type HostResult, type MachineFacts, type Stage } from '../model/addStage'
+import { UPDATE_WORDS, type MachineHead } from '@/features/workspace/model/machines'
+import { HOST_KEY_WORDS } from '../model/machineRows'
 import { unreachableKind, unreachableTitle } from '../model/unreachable'
 import { AddChecklist, type Position, type StepId } from './AddChecklist'
 import { HelperProgressBody, NoAnswerBody, StepBody } from './AddBodies'
@@ -51,9 +53,11 @@ function positionOf(stage: Stage, { request, machines, run, appVersion, onChange
     }
     case 'no-name': return { at: 'reach', state: 'needs', label: "Can't make a name for that", body: <StepBody text={`Type ${request.target} as user@host, so Maiker can name it.`}><Button variant="soft" onClick={onChangeAddress}>Edit the address</Button></StepBody> }
     case 'name-taken': {
-      const body = <StepBody text="It is saved but did not connect. Retry it, or remove it to start again."><Button variant="needs" onClick={() => { machines.onRetry(stage.name) }}>Retry {stage.name}</Button><Button variant="soft" onClick={() => { machines.onRemove(stage.name) }}>Remove {stage.name}</Button></StepBody>
+      const body = <StepBody text="It is saved but did not connect. Retry it, or remove it to start again."><Button variant="needs" onClick={() => { run.retrySaved(stage.name) }}>Retry {stage.name}</Button><Button variant="soft" onClick={() => { run.removeSaved(stage.name) }}>Remove {stage.name}</Button></StepBody>
       return { at: 'reach', state: 'needs', label: `${stage.name} is already added`, body }
     }
+    case 'removing': return { at: 'reach', state: 'running', label: `Removing ${stage.name}…`, body: <StepBody text={`Taking the saved ${stage.name} out, then starting again.`} /> }
+    case 'saved': return savedPosition(stage.name, { request, machines, run, appVersion, onChangeAddress, onKept })
     case 'trust': return { at: 'host', state: 'needs', label: `First time connecting to ${host}`, body: <HostKeyBody report={stage.report} trusting={stage.trusting} problem={stage.problem} onTrust={run.trust} onCopy={machines.onCopyCommand} /> }
     case 'changed': return { at: 'host', state: 'failed', label: `${host}'s identity changed since you last connected`, body: <HostKeyBody report={stage.report} trusting={false} problem={null} onTrust={run.trust} onCopy={machines.onCopyCommand} /> }
     case 'unverified': return { at: 'host', state: 'needs', label: `Couldn't check ${host}'s identity`, body: <StepBody text={stage.said}><Button variant="needs" onClick={() => { machines.onRetry(stage.name) }}>Try again</Button></StepBody> }
@@ -66,6 +70,32 @@ function positionOf(stage: Stage, { request, machines, run, appVersion, onChange
     case 'helper': return helperPosition(stage, { request, machines, run, appVersion, onChangeAddress, onKept })
     case 'connected': return { at: 'connected', state: 'done' }
   }
+}
+
+/**
+ * A machine saved by an earlier try, dialled again: the checklist stops at the step its own state names, as Fix does. A line that is
+ * still coming up shows the step running, so the screen never sits silent.
+ */
+function savedPosition(name: string, { request, machines, run, onChangeAddress }: Parts): Position {
+  const live = machines.list.find((head) => head.name === name)
+  const word = live?.chip?.word
+  if (live !== undefined && word === 'needs login') return loginPosition(name, live, request, machines, run)
+  if (live?.updateAction != null) {
+    const action = live.updateAction
+    const label = action === 'install' ? `Maiker is not on ${name}` : `${name} has another Maiker`
+    return { at: 'helper', state: 'needs', label, body: <StepBody text={UPDATE_WORDS[action].need(name)}><Button variant="needs" onClick={() => { run.setUpHelper(action) }}>{UPDATE_WORDS[action].verb} it</Button></StepBody> }
+  }
+  if (live === undefined || word === 'connecting' || word?.startsWith('reconnecting') === true) return { at: 'key', state: 'running', label: `Signing in to ${name}…`, body: <StepBody text="Waiting for it to answer." /> }
+  const message = live.why ?? live.said ?? 'It did not answer.'
+  const body = <NoAnswerBody message={message} host={request.host} port={request.port} onRetry={() => { run.retrySaved(name) }} onEdit={onChangeAddress} />
+  return { at: 'reach', state: 'needs', label: `${name} is not connected`, body }
+}
+
+function loginPosition(name: string, live: MachineHead, request: AddRequest, machines: MachinesInfo, run: Run): Position {
+  if (HOST_KEY_WORDS.test(live.said ?? '')) {
+    return { at: 'host', state: 'needs', label: `Couldn't check ${request.host}'s identity`, body: <StepBody text={live.said ?? ''}><Button variant="needs" onClick={() => { run.retrySaved(name) }}>Try again</Button></StepBody> }
+  }
+  return { at: 'key', state: 'needs', label: `${name} didn't accept your key`, body: <KeyStep name={name} target={live.target ?? request.target} port={request.port} machines={machines} /> }
 }
 
 function helperPosition(stage: Extract<Stage, { kind: 'helper' }>, { machines, run, onKept }: Parts): Position {

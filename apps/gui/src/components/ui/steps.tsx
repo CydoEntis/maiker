@@ -37,7 +37,7 @@ function StepRow({ step, last }: { step: StepItem; last: boolean }) {
         {/* Always rendered, so the live region exists before its text changes and the change is read out. */}
         <span aria-live="polite" className="text-xs text-(--muted) empty:hidden">{step.result}</span>
         {step.body !== undefined && (step.state === "needs"
-          ? <Card tone="needs" className="mt-1.5"><CardBody>{step.body}</CardBody></Card>
+          ? <Card className="mt-1.5"><CardBody>{step.body}</CardBody></Card>
           : <div className="mt-1.5">{step.body}</div>)}
       </div>
     </li>

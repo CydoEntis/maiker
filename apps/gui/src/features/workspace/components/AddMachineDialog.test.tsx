@@ -1,6 +1,6 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Added, HostKeyReport, UpdateProgress } from '@/api/machines'
 import type { Conversation } from '@/data/preview'
 import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
@@ -28,7 +28,7 @@ function info(overrides: Partial<MachinesInfo> = {}, add: Partial<MachinesInfo['
     known: true,
     list: [],
     onRetry: vi.fn(),
-    onRemove: vi.fn(),
+    onRemove: vi.fn(() => Promise.resolve(true)),
     onGrant: vi.fn(),
     onUpdate: vi.fn(() => Promise.resolve()),
     onCheckActivity: vi.fn(() => Promise.resolve(null)),
@@ -51,7 +51,7 @@ function info(overrides: Partial<MachinesInfo> = {}, add: Partial<MachinesInfo['
 }
 
 const session = { id: '7' } as Conversation
-const terminalHost = (): KeyTerminalHost => ({ start: vi.fn(() => Promise.resolve(session)), end: vi.fn(() => Promise.resolve()), watch: vi.fn(() => vi.fn()), fontSize: 13, look: {} })
+const terminalHost = (extra: Partial<KeyTerminalHost> = {}): KeyTerminalHost => ({ start: vi.fn(() => Promise.resolve(session)), end: vi.fn(() => Promise.resolve()), isOpen: vi.fn(() => true), readScreen: vi.fn(() => Promise.resolve('')), watch: vi.fn(() => vi.fn()), fontSize: 13, look: {}, ...extra })
 
 /** Types an address into the dialog and presses Enter. */
 async function connectTo(machines: MachinesInfo, address = 'dev@100.78.214.15', props: Partial<Parameters<typeof AddMachineDialog>[0]> = {}) {
@@ -62,6 +62,15 @@ async function connectTo(machines: MachinesInfo, address = 'dev@100.78.214.15', 
 }
 
 describe('the address step', () => {
+  it('opens inside the themed window, so the corners and colours are the theme’s and not the bare page’s', () => {
+    const root = document.createElement('div')
+    root.className = 'mx-app'
+    document.body.append(root)
+    render(<AddMachineDialog machines={info()} onClose={vi.fn()} />)
+    expect(screen.getByRole('dialog').closest('.mx-app')).toBe(root)
+    root.remove()
+  })
+
   it('is one field, and Connect waits for an address that holds up', () => {
     render(<AddMachineDialog machines={info()} onClose={vi.fn()} />)
     expect(screen.getAllByRole('textbox')).toHaveLength(1)
@@ -189,31 +198,34 @@ describe('the checklist', () => {
       return { user, view, machines, keyTerminal }
     }
 
-    it('has one main fix, and says the password goes to ssh, never to Maiker', async () => {
-      await open()
-      expect(screen.getByRole('button', { name: 'Copy my key to server-15' })).toBeInTheDocument()
-      expect(screen.getByText(/it goes straight to ssh, and Maiker never reads or keeps it/)).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Copy the command' })).toBeInTheDocument()
+    it('says what will happen in plain words, shows the exact command, and has Run as the one main button', async () => {
+      const { keyTerminal } = await open()
+      expect(screen.getByText(/Maiker will add your public key to ~\/\.ssh\/authorized_keys on server-15, so it can sign in without a password\. You type the password once, in the terminal below; Maiker never sees it\./)).toBeInTheDocument()
+      expect(screen.getByRole('group', { name: 'The command Maiker will run' })).toHaveTextContent('ssh-copy-id dev@100.78.214.15')
+      expect(screen.getByRole('button', { name: 'Run' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument()
+      expect(keyTerminal.start).not.toHaveBeenCalled()
     })
 
-    it('opens the terminal inside the step with the command typed, not run', async () => {
+    it('opens the terminal inside the step and runs the command at once when Run is pressed', async () => {
       const { user, keyTerminal } = await open()
-      await user.click(screen.getByRole('button', { name: 'Copy my key to server-15' }))
+      await user.click(screen.getByRole('button', { name: 'Run' }))
       expect(await screen.findByTestId('key-terminal')).toHaveTextContent('7')
-      expect(keyTerminal.start).toHaveBeenCalledWith(expect.stringContaining('dev@100.78.214.15'))
+      expect(keyTerminal.start).toHaveBeenCalledWith('ssh-copy-id dev@100.78.214.15; exit $?')
       expect(keyTerminal.watch).toHaveBeenCalledWith('server-15')
       expect(within(screen.getByRole('list', { name: 'Steps to connect' })).getByTestId('key-terminal')).toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: 'The command Maiker will run' })).toBeNull()
     })
 
-    it('copies the command from the secondary button', async () => {
+    it('copies the command alone from Copy', async () => {
       const { user, machines } = await open()
-      await user.click(screen.getByRole('button', { name: 'Copy the command' }))
-      expect(machines.onCopyCommand).toHaveBeenCalledWith(expect.stringContaining('dev@100.78.214.15'))
+      await user.click(screen.getByRole('button', { name: 'Copy' }))
+      expect(machines.onCopyCommand).toHaveBeenCalledWith('ssh-copy-id dev@100.78.214.15')
     })
 
     it('carries on by itself, to Machine added, once the machine connects', async () => {
       const { user, machines, view, keyTerminal } = await open()
-      await user.click(screen.getByRole('button', { name: 'Copy my key to server-15' }))
+      await user.click(screen.getByRole('button', { name: 'Run' }))
       await screen.findByTestId('key-terminal')
       view.rerender(<AddMachineDialog machines={{ ...machines, list: [connectedHead()] }} onClose={vi.fn()} />)
       expect(await screen.findByText('Machine added')).toBeInTheDocument()
@@ -221,9 +233,72 @@ describe('the checklist', () => {
       expect(keyTerminal.end).toHaveBeenCalledWith(session)
     })
 
+    describe('when the command ends', () => {
+      /** Runs the command, lets the terminal's last line be read, then ends the shell. */
+      const finish = async (screenText: string) => {
+        let open = true
+        const keyTerminal = terminalHost({ isOpen: vi.fn(() => open), readScreen: vi.fn(() => Promise.resolve(screenText)) })
+        const machines = info({ keyTerminal }, { onAdd: vi.fn(() => Promise.resolve(refused)) })
+        const { user, view } = await connectTo(machines)
+        await user.click(await screen.findByRole('button', { name: 'Run' }))
+        await waitFor(() => { expect(keyTerminal.readScreen).toHaveBeenCalled() })
+        await act(async () => { await Promise.resolve() })
+        open = false
+        view.rerender(<AddMachineDialog machines={{ ...machines }} onClose={vi.fn()} />)
+        return { user, view, machines, keyTerminal }
+      }
+
+      it('says it is checking the key, and dials the machine again at once', async () => {
+        const { machines, keyTerminal } = await finish('Number of key(s) added: 1')
+        expect(await screen.findByText('Checking your key…')).toBeInTheDocument()
+        expect(screen.getByRole('progressbar', { name: 'Checking your key' })).toBeInTheDocument()
+        expect(screen.getByText('Number of key(s) added: 1')).toBeInTheDocument()
+        expect(machines.onRetry).toHaveBeenCalledWith('server-15')
+        // The shell ended by itself: it is not ended a second time.
+        expect(keyTerminal.end).not.toHaveBeenCalled()
+      })
+
+      it('goes on to Machine added and the Name field when the key works', async () => {
+        const onClose = vi.fn()
+        const { user, machines, view } = await finish('Number of key(s) added: 1')
+        await screen.findByText('Checking your key…')
+        view.rerender(<AddMachineDialog machines={{ ...machines, list: [connectedHead()] }} onClose={onClose} />)
+        const name = await screen.findByRole('textbox', { name: 'Name' })
+        expect(name).toHaveValue('server-15')
+        await user.clear(name)
+        await user.type(name, 'gpu box')
+        await user.click(screen.getByRole('button', { name: 'Done' }))
+        expect(machines.onRename).toHaveBeenCalledWith('server-15', 'gpu box')
+        expect(onClose).toHaveBeenCalled()
+      })
+
+      describe('and the key does not work', () => {
+        beforeEach(() => { vi.useFakeTimers({ shouldAdvanceTime: true }) })
+        afterEach(() => { vi.useRealTimers() })
+
+        it('says the computer is refusing connections for a few minutes, with the last line and Try again', async () => {
+          await finish('Connection closed by 100.78.214.15 port 22')
+          await screen.findByText('Checking your key…')
+          act(() => { vi.advanceTimersByTime(26_000) })
+          expect(await screen.findByText('This computer is refusing connections for a few minutes because of earlier failed sign-ins. Wait and try again.')).toBeInTheDocument()
+          expect(screen.getByText('Connection closed by 100.78.214.15 port 22')).toBeInTheDocument()
+          expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+        })
+
+        it('says the password was wrong for Permission denied, and Try again runs the command again', async () => {
+          const { keyTerminal } = await finish('Permission denied, please try again.')
+          await screen.findByText('Checking your key…')
+          act(() => { vi.advanceTimersByTime(26_000) })
+          expect(await screen.findByText(/The password was not accepted/)).toBeInTheDocument()
+          fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+          await waitFor(() => { expect(keyTerminal.start).toHaveBeenCalledTimes(2) })
+        })
+      })
+    })
+
     it('removes the machine the host saved when the dialog is closed before it connected, and ends the shell', async () => {
       const { user, machines, view, keyTerminal } = await open()
-      await user.click(screen.getByRole('button', { name: 'Copy my key to server-15' }))
+      await user.click(screen.getByRole('button', { name: 'Run' }))
       await screen.findByTestId('key-terminal')
       view.unmount()
       expect(machines.onRemove).toHaveBeenCalledWith('server-15')
@@ -235,7 +310,7 @@ describe('the checklist', () => {
       const keyTerminal = terminalHost()
       const machines = info({ keyTerminal }, { onAdd: vi.fn(() => Promise.resolve(refused)) })
       const { user } = await connectTo(machines, 'dev@100.78.214.15', { onClose })
-      await user.click(await screen.findByRole('button', { name: 'Copy my key to server-15' }))
+      await user.click(await screen.findByRole('button', { name: 'Run' }))
       const terminal = await screen.findByTestId('key-terminal')
       terminal.tabIndex = 0
       terminal.focus()
@@ -338,6 +413,74 @@ describe('the checklist', () => {
     })
   })
 
+  describe('a machine of the same name that is already saved', () => {
+    const taken = new Error('You already have a machine called server-15. Remove it in Remote machines, or pick another name.')
+    const takenOnce = () => vi.fn<MachinesInfo['add']['onAdd']>().mockRejectedValueOnce(taken).mockResolvedValue(added())
+    const saved = (word: string, extra: Partial<MachineHead> = {}): MachineHead => ({ ...connectedHead(), chip: { glyph: '▲', word, tone: 'bad' }, ...extra })
+
+    it('removes it, says so while it does, then runs the whole checklist again', async () => {
+      let finish: (removed: boolean) => void = () => undefined
+      const onRemove = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve }))
+      const machines = info({ onRemove }, { onAdd: takenOnce() })
+      const { user } = await connectTo(machines)
+      await user.click(await screen.findByRole('button', { name: 'Remove server-15' }))
+      expect(await screen.findByText('Removing server-15…')).toBeInTheDocument()
+      await act(async () => { finish(true); await Promise.resolve() })
+      expect(await screen.findByText('Machine added')).toBeInTheDocument()
+      expect(machines.add.inspect).toHaveBeenCalledTimes(2)
+      expect(machines.add.onAdd).toHaveBeenCalledTimes(2)
+    })
+
+    it('goes back to the choice when it could not be removed', async () => {
+      const machines = info({ onRemove: vi.fn(() => Promise.resolve(false)) }, { onAdd: takenOnce() })
+      const { user } = await connectTo(machines)
+      await user.click(await screen.findByRole('button', { name: 'Remove server-15' }))
+      expect(await screen.findByText('server-15 is already added')).toBeInTheDocument()
+      expect(machines.add.onAdd).toHaveBeenCalledTimes(1)
+    })
+
+    it('Retry dials it again and shows it signing in, never the same screen', async () => {
+      const machines = info({}, { onAdd: takenOnce() })
+      const { user } = await connectTo(machines)
+      await user.click(await screen.findByRole('button', { name: 'Retry server-15' }))
+      expect(machines.onRetry).toHaveBeenCalledWith('server-15')
+      expect(await screen.findByText('Signing in to server-15…')).toBeInTheDocument()
+      expect(screen.queryByText('server-15 is already added')).toBeNull()
+    })
+
+    it('Retry carries on at the key step when the machine needs a login, then to Machine added once it connects', async () => {
+      const machines = info({ keyTerminal: terminalHost() }, { onAdd: takenOnce() })
+      const { user, view } = await connectTo(machines)
+      await user.click(await screen.findByRole('button', { name: 'Retry server-15' }))
+      view.rerender(<AddMachineDialog machines={{ ...machines, list: [saved('needs login', { said: 'Permission denied (publickey).' })] }} onClose={vi.fn()} />)
+      expect(await screen.findByText("server-15 didn't accept your key")).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Run' })).toBeInTheDocument()
+      view.rerender(<AddMachineDialog machines={{ ...machines, list: [connectedHead()] }} onClose={vi.fn()} />)
+      expect(await screen.findByText('Machine added')).toBeInTheDocument()
+    })
+
+    it('Retry carries on at the helper step when Maiker is missing there, and installs it from the step', async () => {
+      const machines = info({}, { onAdd: takenOnce() })
+      const { user, view } = await connectTo(machines)
+      await user.click(await screen.findByRole('button', { name: 'Retry server-15' }))
+      view.rerender(<AddMachineDialog machines={{ ...machines, list: [saved('not installed', { updateAction: 'install' })] }} onClose={vi.fn()} />)
+      expect(await screen.findByText('Maiker is not on server-15')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Install it' }))
+      expect(machines.onUpdate).toHaveBeenCalledWith('server-15', 'install', false)
+      expect(await screen.findByText('Machine added')).toBeInTheDocument()
+    })
+
+    it('Retry says so, with Try again, when the machine still does not answer', async () => {
+      const machines = info({}, { onAdd: takenOnce() })
+      const { user, view } = await connectTo(machines)
+      await user.click(await screen.findByRole('button', { name: 'Retry server-15' }))
+      view.rerender(<AddMachineDialog machines={{ ...machines, list: [saved('unreachable', { why: 'ssh: connect to host 100.78.214.15 port 22: Connection timed out' })] }} onClose={vi.fn()} />)
+      expect(await screen.findByText('server-15 is not connected')).toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Try again' }))
+      expect(machines.onRetry).toHaveBeenCalledTimes(2)
+    })
+  })
+
   it('goes back to the address with ← Change address, and cancels the look that is running', async () => {
     const onAdd = vi.fn(() => new Promise<Added>(() => undefined))
     const machines = info({}, { onAdd })
@@ -418,6 +561,19 @@ describe('Machine added', () => {
     expect(await screen.findByRole('textbox', { name: 'Name' })).toHaveValue('build')
   })
 
+  it('follows the name the machine reports when it arrives after the screen, and keeps what was typed', async () => {
+    const machines = info({ list: [connectedHead()] })
+    const { user, view } = await connectTo(machines)
+    await screen.findByText('Machine added')
+    view.rerender(<AddMachineDialog machines={machines} onClose={vi.fn()} facts={{ reportedName: 'gpu-box' }} />)
+    const name = screen.getByRole('textbox', { name: 'Name' })
+    expect(name).toHaveValue('gpu-box')
+    await user.clear(name)
+    await user.type(name, 'mine')
+    view.rerender(<AddMachineDialog machines={machines} onClose={vi.fn()} facts={{ reportedName: 'other' }} />)
+    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('mine')
+  })
+
   it('suggests the name the machine reports for a bare address', async () => {
     await addedDialog({ facts: { reportedName: 'gpu-box' } })
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('gpu-box')
@@ -434,9 +590,9 @@ describe('mending a machine that is not connected', () => {
     expect(screen.getByRole('dialog', { name: 'Fix build' })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Address' })).toBeNull()
     expect(screen.getByText("build didn't accept your key")).toBeInTheDocument()
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Copy my key to build' }))
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Run' }))
     expect(await screen.findByTestId('key-terminal')).toBeInTheDocument()
-    expect(host.start).toHaveBeenCalledWith('ssh-copy-id me@build.example')
+    expect(host.start).toHaveBeenCalledWith('ssh-copy-id me@build.example; exit $?')
   })
 
   it('asks to trust a host key it has not seen, by the machine name', async () => {

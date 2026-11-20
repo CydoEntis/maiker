@@ -400,14 +400,21 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   your key**, **Set up the Maiker helper**, **Connected**, each ticking with its result ("Reached 100.78.214.15 · 38 ms", "Known
   computer", "Signed in with id_ed25519"); the foot is **← Change address** (back to what was typed) and **Cancel**. A step that
   needs the person is an amber step with one main fix: a new host ("First time connecting to <host>", `ED25519 · SHA256:…`,
-  **Trust and continue**; a changed key has no Trust), a key the machine did not accept (**Copy my key to <name>** opens the key
-  terminal inside the step, **Copy the command** beside it), a host that does not answer ("<host> didn't answer", the address, the
+  **Trust and continue**; a changed key has no Trust), a key the machine did not accept (two plain sentences on what will happen, the exact command in a read-only
+  terminal-style well with a prompt (`CommandPreview`), **Run** as the one main button and a quiet **Copy**; Run opens the key
+  terminal in place of the well and runs the command at once, the card is taller for this step so the terminal fits without
+  scrolling; when the command ends the step says **Checking your key…** and goes on by itself, or says in plain words why not
+  with the last line ssh showed and **Try again**), a host that does not answer ("<host> didn't answer", the address, the
   power and the SSH port, **Try again** and **Edit the address**). A missing helper is not a question: it installs as a step with a
   progress bar ("Not installed yet. Copying Maiker <version> to <name>…"). When the machine is in, the card is **Machine added**: a
   green "Connected. Its sessions show up in your sidebar under this name." line, a Name field (selected, so typing replaces it;
   an SSH config host keeps its config name), the details that are known (Address, Reach time, Key used, Maiker helper; System and
-  Agents found only when the host reports them) and **Done** and **Start a session**. **Fix** on an offline machine opens the same
-  card (`Fix <name>`) at the step that failed. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
+  Agents found only when the host reports them) and **Done** and **Start a session**. A saved machine of the same name is **Retry <name>** (the checklist
+  carries on at the key or helper step the machine's own state names, and shows it signing in meanwhile) or **Remove <name>**
+  (**Removing <name>…**, then the run starts again from the top). **Fix** on an offline machine opens the same
+  card (`Fix <name>`) at the step that failed. The dialog mounts in the window root (`.mx-app`), where the corner and role
+  tokens live: the frame, the wells and the buttons take `--r-panel` and `--r-control` and are rounded in Rounded mode; a step's
+  fix sits in the standard card, never in a one-off outlined box. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
   Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
   `user@host` in mono, the one line that matters (sessions, "Key rejected", "Can't reach it · 14 min", "N sessions ·

@@ -55,6 +55,10 @@ export type Stage =
   | { kind: 'no-answer'; message: string }
   | { kind: 'no-name' }
   | { kind: 'name-taken'; name: string }
+  /** The saved machine of that name is being taken out, so the run can start again from the top. */
+  | { kind: 'removing'; name: string }
+  /** A machine saved by an earlier try, dialled again: the checklist follows what the host says of it. */
+  | { kind: 'saved'; name: string }
   /** ssh would not confirm the host key and the window could not fetch it: the machine is saved but not checked. */
   | { kind: 'unverified'; name: string; said: string }
   | { kind: 'key'; login: Login }

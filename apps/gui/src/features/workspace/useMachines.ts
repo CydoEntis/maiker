@@ -210,14 +210,16 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
   const cancelAdding = useCallback(() => {
     cancelAddMachine().catch((error: unknown) => { toast.failed('Could not cancel', error) })
   }, [])
-  const removeNamed = useCallback((name: string) => {
-    removeMachine(name).then(
-      () => {
-        forgetMachine(name)
-        toast.info(`Removed ${name}. Its sessions keep running on ${name}.`)
-      },
-      (error: unknown) => { toast.failed(`Could not remove ${name}`, error) },
-    )
-  }, [forgetMachine])
+  const removeNamed = useCallback((name: string): Promise<boolean> => removeMachine(name).then(
+    () => {
+      forgetMachine(name)
+      toast.info(`Removed ${name}. Its sessions keep running on ${name}.`)
+      return true
+    },
+    (error: unknown) => {
+      toast.failed(`Could not remove ${name}`, error)
+      return false
+    },
+  ), [forgetMachine])
   return { retryNamed, addNamed, openLoginNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed }
 }

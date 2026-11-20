@@ -13,6 +13,10 @@ export type AddRun = {
   trust: () => void
   /** Puts Maiker on the saved machine (or brings it up to date), showing how far it has got. */
   setUpHelper: (action: 'install' | 'update') => void
+  /** Takes a saved machine of the same name out, then starts the whole run again from the top. */
+  removeSaved: (name: string) => void
+  /** Dials a saved machine of the same name again and follows it through the checklist from where it stopped. */
+  retrySaved: (name: string) => void
   /** Leaves the machine saved as it is (without Maiker, or with its old one): it is no longer taken out when this goes away. */
   keep: () => void
 }
@@ -88,7 +92,7 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
   }, [addedName])
 
   // A machine waiting on the person (a key, a restart) goes on by itself the moment it connects.
-  const waitingName = stage.kind === 'key' ? stage.login.name : stage.kind === 'helper' && stage.reason === 'not-running' ? stage.added.name : null
+  const waitingName = stage.kind === 'key' ? stage.login.name : stage.kind === 'saved' ? stage.name : stage.kind === 'helper' && stage.reason === 'not-running' ? stage.added.name : null
   const connectedName = waitingName !== null && list.some((head) => head.name === waitingName && head.chip?.word === 'connected') ? waitingName : null
   useEffect(() => { if (connectedName !== null) saved.current = null }, [connectedName])
   const shown: Stage = connectedName === null
@@ -99,7 +103,7 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
     ticket.current += 1
     const { stage: last, onRemove, onCancel } = latest.current
     if (last.kind === 'checking' || last.kind === 'adding') onCancel()
-    if (saved.current !== null) onRemove(saved.current)
+    if (saved.current !== null) void onRemove(saved.current)
   }, [])
 
   const trust = () => {
@@ -114,21 +118,39 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
   }
 
   const setUpHelper = (action: 'install' | 'update') => {
-    if (stage.kind !== 'helper') return
     const before = stage
+    const target = before.kind === 'helper' ? { name: before.added.name, added: before.added } : before.kind === 'saved' ? { name: before.name, added: null } : null
+    if (target === null) return
     const run = ticket.current
     setStage({ kind: 'adding', helper: true, action, percent: null })
-    machines.onUpdate(before.added.name, action, false).then(
+    machines.onUpdate(target.name, action, false).then(
       () => {
         if (run !== ticket.current) return
         saved.current = null
-        setStage({ kind: 'connected', reached: reachedOf(request, before.added.name, before.added) })
+        setStage({ kind: 'connected', reached: reachedOf(request, target.name, target.added) })
       },
       () => { if (run === ticket.current) setStage(before) },
     )
   }
 
+  // The run starts again only once the host has taken the machine out: its name is free then, so the add cannot be refused for it.
+  const removeSaved = (name: string) => {
+    const run = ++ticket.current
+    setStage({ kind: 'removing', name })
+    void machines.onRemove(name).then((removed) => {
+      if (run !== ticket.current) return
+      if (removed) begin()
+      else setStage({ kind: 'name-taken', name })
+    })
+  }
+
+  const retrySaved = (name: string) => {
+    ++ticket.current
+    machines.onRetry(name)
+    setStage({ kind: 'saved', name })
+  }
+
   const keep = () => { saved.current = null }
 
-  return { stage: shown, host, retry: begin, trust, setUpHelper, keep }
+  return { stage: shown, host, retry: begin, trust, setUpHelper, removeSaved, retrySaved, keep }
 }

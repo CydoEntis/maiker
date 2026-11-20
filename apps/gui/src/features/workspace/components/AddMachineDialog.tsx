@@ -6,6 +6,7 @@ import { FixMachine } from '@/features/settings/components/FixMachine'
 import type { MachineFacts } from '@/features/settings/model/addStage'
 import type { MachineHead } from '../model/machines'
 import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
+import { windowRoot } from './windowRoot'
 
 type Props = {
   machines: MachinesInfo
@@ -29,6 +30,8 @@ export function AddMachineDialog({ machines, onClose, fixing = null, onOpenSetti
       <DialogContent
         unstyled
         asChild
+        // Mounted in the themed window, not the body: the corners (`--r-panel`, `--r-control`) and every role colour are tokens of `.mx-app`.
+        container={windowRoot()}
         aria-describedby={undefined}
         // Esc is the terminal's own key while it has focus (it is a shell's key too); anywhere else in the dialog it closes it.
         onEscapeKeyDown={(event) => { if (event.target instanceof Element && event.target.closest(`[${KEY_TERMINAL_ATTRIBUTE}]`) !== null) event.preventDefault() }}

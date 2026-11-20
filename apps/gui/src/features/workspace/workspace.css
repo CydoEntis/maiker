@@ -408,10 +408,16 @@
 .mx-rename.mx-addmachine { width: 600px; max-width: calc(100vw - 32px); height: min(560px, calc(100vh - 48px)); padding: 0; gap: 0; overflow: hidden; }
 .mx-rename.mx-addmachine > form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
 .mx-key-term-wrap { display: flex; flex-direction: column; gap: 6px; }
-.mx-key-term { height: 150px; min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); }
+.mx-key-term { height: clamp(180px, 30vh, 240px); min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); }
 .mx-key-term:focus-within { border-color: var(--line2); box-shadow: var(--focus-underline); }
 .mx-key-term .terminal-view { padding: 6px 8px; }
 .mx-key-term-wait { margin: 0; padding: 10px 12px; }
+/* The key step has the terminal to hold, so the card is taller there than in any other step; the terminal then fits without scrolling. */
+.mx-rename.mx-addmachine:has([data-key-step]) { height: min(660px, calc(100vh - 48px)); }
+/* The command as a terminal shows it, read-only: an inset well in the terminal's mono, wrapping instead of scrolling sideways. */
+.mx-cmd-preview { margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); color: var(--fg); font-family: var(--mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.mx-cmd-prompt { margin-right: 8px; color: var(--muted); }
+.mx-cmd-preview code { font: inherit; }
 .mx-recent-list { list-style: none; margin: 0; display: flex; flex-direction: column; max-height: 360px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); padding: 4px; }
 .mx-recent-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
 .mx-recent-row:hover:not([aria-disabled="true"]), .mx-recent-row:focus-visible { background: var(--m-hover); outline: none; }

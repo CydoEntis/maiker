@@ -406,7 +406,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     )
   }, [setSettingsSection, watchSignIn, startOnMachine, runStart, home, setLayout])
 
-  // A plain shell on this computer with `line` typed at its prompt and not run, for a terminal shown inside a dialog: it is
+  // A plain shell on this computer with `line` typed at its prompt and run, for a terminal shown inside a dialog: it is
   // never placed in a pane, and the caller ends it with `endKeyTerminal`. Null when the shell did not start (said in a toast).
   const startKeyTerminal = useCallback(async (line: string): Promise<Conversation | null> => {
     const started: { session: Conversation | null } = { session: null }
@@ -414,7 +414,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       async () => home || (await defaultSessionFolder()),
       (id) => {
         started.session = queryClient.getQueryData<Conversation[]>(['conversations'])?.find((item) => item.id === id) ?? null
-        sendTerminalInput({ id, generation: 0 }, line).catch((error: unknown) => { toast.failed('Could not type the command in the terminal', error) })
+        sendTerminalInput({ id, generation: 0 }, `${line}\r`).catch((error: unknown) => { toast.failed('Could not type the command in the terminal', error) })
       },
     )
     return placed ? started.session : null

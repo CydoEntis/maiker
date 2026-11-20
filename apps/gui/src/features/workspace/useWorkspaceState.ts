@@ -2,7 +2,7 @@ import { movePanes } from './components/paneTransition'
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
-import { defaultSessionFolder, isDesktop, markSeenOnDaemon } from '@/api/daemon'
+import { defaultSessionFolder, isDesktop, loadTerminalScreen, markSeenOnDaemon } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import { readSettingsPreferences, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from '@/features/settings/preferences'
@@ -221,14 +221,16 @@ export function useWorkspaceState() {
   const { refetchSessions, retryAt, tracks } = useSessionSync({ sessionsQuery, retryDelay, queryClient, setFailures, sessions, setLayout, machinesRef, visibleKey, flash })
   const { startKeyTerminal, endKeyTerminal, signInGitHub, gitHubSignInsEnded, signInAgent, runStart, startRemoteShell, newTerminal, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree } = useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLayout, flash, focusedSession, setNewChatOpen, online, starting, setStarting, setStartedFrom, sessionMap, preferences, setExpectedAgents, setSettingsSection, setNewChatMachine, setNewChatSeed, home, machinesRef })
   const watchKey = useKeyWait(heads, retryNamed)
-  // The terminal inside Add a machine for a refused key: its own shell, in no pane; the machine is dialled again while it is open.
+  // The terminal inside Add a machine for a refused key: its own shell, in no pane, running the key command; the machine is dialled again while it is open.
   const keyTerminal = useMemo<KeyTerminalHost>(() => ({
     start: startKeyTerminal,
     end: endKeyTerminal,
+    isOpen: (id) => sessions.some((session) => session.id === id),
+    readScreen: (session) => loadTerminalScreen({ id: session.id, generation: session.generation ?? 0 }),
     watch: (name) => watchKey(name, true),
     fontSize: preferences.terminalFontSize,
     look,
-  }), [startKeyTerminal, endKeyTerminal, watchKey, preferences.terminalFontSize, look])
+  }), [startKeyTerminal, endKeyTerminal, sessions, watchKey, preferences.terminalFontSize, look])
   const { recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded } = useRecentSessions(startNewChat, starting)
   const [openProject, setOpenProject] = useOpenProjectState()
 

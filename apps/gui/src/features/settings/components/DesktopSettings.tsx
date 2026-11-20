@@ -42,7 +42,8 @@ export type MachinesInfo = {
   known: boolean
   list: readonly MachineHead[]
   onRetry: (name: string) => void
-  onRemove: (name: string) => void
+  /** Takes the machine out. Settles with whether it is gone; a refusal has already been told to the person. */
+  onRemove: (name: string) => Promise<boolean>
   /** Allow or stop one of a machine's powers over this computer. */
   onGrant: (name: string, grant: Grant, on: boolean) => void
   /**

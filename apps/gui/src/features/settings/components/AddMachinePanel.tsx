@@ -102,7 +102,7 @@ export function AddMachinePanel({ machines, onClose, onConnect, entry = { addres
         {shown && already?.name != null && (
           <p className="mx-rm-hint">
             <Button onClick={() => { machines.onRetry(already.name ?? '') }}>Retry {already.name}</Button>
-            <Button variant="ghost" onClick={() => { machines.onRemove(already.name ?? '') }}>Remove {already.name}</Button>
+            <Button variant="ghost" onClick={() => { void machines.onRemove(already.name ?? '') }}>Remove {already.name}</Button>
           </p>
         )}
         <SshHosts hosts={hosts} choices={choices} onPick={pick} />

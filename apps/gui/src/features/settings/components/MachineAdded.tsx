@@ -37,7 +37,9 @@ export function MachineAdded({ reached, facts: given, machine, onDone, onStart }
   }, [machine, given])
   const facts = given ?? asked
   const suggested = reached.fromConfig ? reached.name : facts?.reportedName ?? reached.name
-  const [name, setName] = useState(suggested)
+  // Until something is typed the field follows the suggestion, which can arrive after the screen does (the machine's own name).
+  const [typed, setTyped] = useState<string | null>(null)
+  const name = typed ?? suggested
   const field = useRef<HTMLInputElement>(null)
   useEffect(() => { field.current?.select() }, [])
   const chosen = name.trim() === '' ? reached.name : name.trim()
@@ -51,7 +53,7 @@ export function MachineAdded({ reached, facts: given, machine, onDone, onStart }
           </p>
           <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-(--fg)">
             Name
-            <input ref={field} value={name} autoFocus autoComplete="off" spellCheck={false} onChange={(event) => { setName(event.target.value) }} />
+            <input ref={field} value={name} autoFocus autoComplete="off" spellCheck={false} onChange={(event) => { setTyped(event.target.value) }} />
           </label>
           <p className="m-0 text-xs text-(--muted)">This is how it appears in the sidebar and the + menu. You can rename it any time in Settings.</p>
           <dl className="m-0 flex flex-col border-t border-(--line)">
