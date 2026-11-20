@@ -92,8 +92,8 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, view, layou
       action('new-terminal', chatView ? 'Show or hide the terminal under the chat' : 'New terminal', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
       ...(focusedSession && !isShell(focusedSession) ? [action('open-terminal', 'New terminal for this agent', () => { addAgentTerminal(focusedSession.id) })] : []),
       ...heads.filter((head) => head.name !== null && head.chip?.tone === 'ok' && online).flatMap((head) => [
-        action(`new-on-${head.key}`, `New session on ${head.label}…`, () => { openStartMenu(head.machine) }),
-        ...(chatView ? [] : [action(`new-terminal-on-${head.key}`, `New terminal on ${head.label}…`, () => { newTerminal(head.machine) })]),
+        action(`new-on-${head.key}`, `New session on ${head.label}â€¦`, () => { openStartMenu(head.machine) }),
+        ...(chatView ? [] : [action(`new-terminal-on-${head.key}`, `New terminal on ${head.label}â€¦`, () => { newTerminal(head.machine) })]),
       ]),
       action('sidebar-side', preferences.sidebarSide === 'left' ? 'Move sidebar to the right' : 'Move sidebar to the left', () => { setPreferences((current) => ({ ...current, sidebarSide: current.sidebarSide === 'left' ? 'right' : 'left' })) }),
       ...(focusedSession && focusedSession.machineName === null ? [action('open-readme', 'Open README', () => { openReadme('files') }), action('open-readme-beside', 'Open README beside the chat', () => { openReadme('beside') })] : []),
