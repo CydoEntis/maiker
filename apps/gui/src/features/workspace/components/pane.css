@@ -146,8 +146,8 @@
 .mx-termwrap[data-dock="full"]:not([data-leaving]) > .mx-main { display: none; }
 .mx-tdock {
   position: relative; flex: none; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
-  background: var(--term); border: 1px solid var(--line2); border-radius: var(--r-panel);
-  /* The terminal's inset from the dock's edge. The tab row, the body and the terminal share one ground (--term), so the inset reads as room, not as a frame. */
+  background: var(--card); border: 1px solid var(--line); border-radius: var(--r-panel);
+  /* The terminal's inset from the dock's edge. The tab row, the body and the terminal share one ground (--card, the session pane's own), so the inset reads as room, not as a frame. */
   --tdock-pad: 8px 12px;
   container: tdock / inline-size;
 }
@@ -198,11 +198,11 @@
 
 /* The terminal fills the dock edge to edge on one opaque ground (--term; a see-through ground costs a blend per repaint,
    docs/PERFORMANCE.md). A split is told from its neighbour by one hairline, never by a frame of its own. */
-.mx-tdock-body { flex: 1; min-height: 0; display: flex; background: var(--term); }
+.mx-tdock-body { flex: 1; min-height: 0; display: flex; background: var(--card); }
 .mx-tdock-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .mx-tdock-column + .mx-tdock-column { border-left: 1px solid var(--line); }
 .mx-tdock-column > .mx-tdock-split + .mx-tdock-split { border-top: 1px solid var(--line); }
-.mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: var(--tdock-pad); font-family: var(--mono); line-height: 1.6; background: var(--term); cursor: text; }
+.mx-tdock-split { position: relative; flex: 1; min-width: 0; min-height: 0; display: flex; padding: var(--tdock-pad); font-family: var(--mono); line-height: 1.6; background: var(--card); cursor: text; }
 /* The focused split of several: a 2px accent line along its top edge, drawn inside it so nothing moves. */
 .mx-tdock-split.is-focus { box-shadow: inset 0 2px 0 var(--focus-line); }
 .mx-tdock-split > :first-child { flex: 1; min-width: 0; min-height: 0; }
