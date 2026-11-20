@@ -3,9 +3,9 @@ import type { QueryClient, UseQueryResult } from '@tanstack/react-query'
 import { idsOfMachinesNotHeard, type RemoteMachine } from './model/machines'
 import { toast } from '@/lib/toast'
 import { z } from 'zod'
-import { conversationsFromSnapshot, listenSessionsChanged } from '@/api/daemon'
+import { conversationsFromSnapshot, daemonSaidRemoved, listenSessionsChanged } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
-import { type Layout, openArrangement, reconcileLayout } from './model/layout'
+import { dropGoneSessions, type Layout, openArrangement, reconcileLayout } from './model/layout'
 import type { SessionView } from './model/session'
 import { markSeen, type SessionTrack, tracksEqual, trackSessions } from './model/tracking'
 import { makeId } from './makeId'
@@ -69,9 +69,9 @@ export function useSessionSync({ sessionsQuery, retryDelay, queryClient, setFail
   }, [queryClient, setFailures])
 
   // The first list after launch: drop panes of sessions that are gone since last time, and open
-  // something when there is nothing to restore. Later lists never remove a pane: one that stopped
-  // being listed stays, as an ended pane. `sessions` also changes when the home folder arrives; only a
-  // new list counts.
+  // something when there is nothing to restore. Later lists drop only the panes of sessions that left with a reason (closed
+  // here, exited, put away, or anything else the daemon said); a session a list merely missed stays, as an ended pane.
+  // `sessions` also changes when the home folder arrives; only a new list counts.
   const reconciled = useRef<readonly Conversation[] | null>(null)
   useEffect(() => {
     // An unchanged list keeps its identity (structural sharing), so only a real change counts here.
@@ -85,7 +85,7 @@ export function useSessionSync({ sessionsQuery, retryDelay, queryClient, setFail
     setLayout((current) => {
       // A machine that has not answered yet has not lost its panes: they are unknown, not gone.
       const live = new Set([...listed, ...idsOfMachinesNotHeard(current, machinesRef.current)])
-      const reconciled = openFirst ? reconcileLayout(current, live) : current
+      const reconciled = openFirst ? reconcileLayout(current, live) : dropGoneSessions(current, live, daemonSaidRemoved)
       return openFirst && reconciled.arrangements.length === 0 && first ? openArrangement(reconciled, first.id, makeId) : reconciled
     })
   }, [sessions, sessionsQuery.data, sessionsQuery.isSuccess, machinesRef, setLayout])

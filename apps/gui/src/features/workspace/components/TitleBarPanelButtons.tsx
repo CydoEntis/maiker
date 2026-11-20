@@ -6,25 +6,36 @@ import { Icon } from './glyphs'
 
 /**
  * Changes and Files, in the window's title bar: they open the side panel for the pane that has the focus, so there is one
- * pair for the window and not one in every pane's header.
+ * pair for the window and not one in every pane's header. Beside them, in the Chat view, a Terminal button shows or hides
+ * the terminal docked under the chat; in the Terminal view the panes are terminals already, so it is not drawn.
  */
 export function TitleBarPanelButtons() {
-  const { layout, sessionMap, repoPaneOf, inspectOpen, inspectView, focusedId, diffStat, togglePanel } = useWorkspace()
+  const { layout, sessionMap, repoPaneOf, inspectOpen, inspectView, focusedId, diffStat, togglePanel, chatOf, canDock, terminalShown, toggleTerminal } = useWorkspace()
   const tip = useTipWithKeys()
   const tab = activeArrangement(layout)
   const pane = tab?.panes.find((candidate) => candidate.id === tab.focus)
   const session = pane === undefined ? undefined : sessionMap.get(pane.sessionId)
+  if (pane === undefined || session === undefined) return null
   // The panel has something for this pane: its repository, or the machine's it runs on.
-  if (pane === undefined || session === undefined || (session.machine === LOCAL_MACHINE && repoPaneOf(session) === null)) return null
+  const hasPanel = session.machine !== LOCAL_MACHINE || repoPaneOf(session) !== null
+  const dockable = canDock && chatOf(session).view === 'chat'
+  if (!hasPanel && !dockable) return null
   const showing = (view: 'changes' | 'files') => inspectOpen && focusedId === session.id && inspectView === view
   const changed = diffStat.data?.files ?? 0
   return (
     <span className="mx-tbar-panels">
-      <button type="button" className={`mx-pane-control${showing('changes') ? ' is-on' : ''}`} aria-label="Changes" title={tip('Changes', 'inspect')} aria-pressed={showing('changes')} onClick={() => { togglePanel(pane.id, session.id, 'changes') }}>
-        <Icon name="gitChanges" />
-        {changed > 0 && <span className="mx-pane-count" aria-label={`${String(changed)} changed`}>{changed}</span>}
-      </button>
-      <button type="button" className={`mx-pane-control${showing('files') ? ' is-on' : ''}`} aria-label="Files" title="Files" aria-pressed={showing('files')} onClick={() => { togglePanel(pane.id, session.id, 'files') }}><Icon name="files" size={15} /></button>
+      {dockable && (
+        <button type="button" className={`mx-pane-control${terminalShown ? ' is-on' : ''}`} aria-label="Terminal" title={tip(terminalShown ? 'Hide terminal' : 'Terminal', 'terminal')} aria-pressed={terminalShown} onClick={toggleTerminal}><Icon name="terminalBox" size={15} /></button>
+      )}
+      {hasPanel && (
+        <>
+          <button type="button" className={`mx-pane-control${showing('changes') ? ' is-on' : ''}`} aria-label="Changes" title={tip('Changes', 'inspect')} aria-pressed={showing('changes')} onClick={() => { togglePanel(pane.id, session.id, 'changes') }}>
+            <Icon name="gitChanges" />
+            {changed > 0 && <span className="mx-pane-count" aria-label={`${String(changed)} changed`}>{changed}</span>}
+          </button>
+          <button type="button" className={`mx-pane-control${showing('files') ? ' is-on' : ''}`} aria-label="Files" title="Files" aria-pressed={showing('files')} onClick={() => { togglePanel(pane.id, session.id, 'files') }}><Icon name="files" size={15} /></button>
+        </>
+      )}
     </span>
   )
 }

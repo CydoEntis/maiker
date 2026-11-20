@@ -50,7 +50,8 @@ export type SidebarProps = {
   onStartMenu: (machine: number | null) => void
   /** What the + menu lists: the agents found on this computer (null while unknown), the open project's other worktrees, and its starts. */
   start: StartSupport
-  onNewShell: (machine: number) => void
+  /** Starts a plain terminal on a machine; absent in the Chat view, which makes none. */
+  onNewShell?: ((machine: number) => void) | undefined
   onAddMachine: () => void
   onMachineSettings: () => void
   /** Fix on a machine that is not up: mends it in the Add a remote machine dialog. */
@@ -228,7 +229,7 @@ function Expanded(props: SidebarProps) {
     return [
       ...(name !== null && action !== null ? [{ label: `${UPDATE_WORDS[action].verb} Maiker`, run: () => { props.onUpdateMachine(name, action) } }, 'separator' as const] : []),
       { label: 'New session here', disabled: !props.canStart || head.down, run: () => { props.onStartMenu(head.machine) } },
-      { label: 'New terminal here', disabled: !props.canStart || head.down, run: () => { props.onNewShell(head.machine) } },
+      ...(props.onNewShell === undefined ? [] : [{ label: 'New terminal here', disabled: !props.canStart || head.down, run: () => { props.onNewShell?.(head.machine) } }]),
       ...(head.down ? [{ label: `Not reachable: ${head.why ?? head.chip?.word ?? 'not reachable'}`, disabled: true, run: () => undefined }] : []),
       'separator',
       { label: open ? 'Collapse' : 'Expand', run: () => { views.toggle(head.key) } },

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   activeArrangement,
+  dropGoneSessions,
   dropSession,
   setColumnWidths,
   setPaneHeights,
@@ -92,6 +93,14 @@ describe('tab layout', () => {
     const { layout } = withPanes('a', 'b', 'a')
     const second = layout.arrangements[0]?.panes[2]?.id ?? ''
     expect(cols(removePane(layout, second))).toEqual(['a@0', 'b@1'])
+  })
+
+  it('drops the panes of unlisted sessions that left with a reason, and keeps one a list merely missed', () => {
+    const { layout } = withPanes('a', 'b', 'c')
+    const listed = new Set(['a'])
+    expect(cols(dropGoneSessions(layout, listed, (id) => id === 'b'))).toEqual(['a@0', 'c@1'])
+    expect(dropGoneSessions(layout, listed, () => false)).toBe(layout)
+    expect(dropGoneSessions(layout, new Set(['a', 'b', 'c']), () => true)).toBe(layout)
   })
 
   it('removes the arrangement when its last pane goes', () => {

@@ -20,12 +20,13 @@ const daemon = vi.hoisted(() => ({
   loadConversations: vi.fn<() => Promise<Conversation[]>>(),
   // The daemon numbers no list here and says no session left: a row a list misses is held.
   localListRevision: () => 0,
-  daemonSaidRemoved: () => false,
+  daemonSaidRemoved: vi.fn<(id: string) => boolean>(() => false),
   // Opening Settings > Performance asks the host for a sample; this page has nothing to show before one arrives.
   loadPerformanceSample: vi.fn<() => Promise<never>>(() => new Promise(() => {})),
   listenSessionsChanged: vi.fn(() => Promise.resolve(() => {})),
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   startShellSession: vi.fn<(folder: string) => Promise<void>>(),
+  startAgentSession: vi.fn<(folder: string, agent: string, flags: readonly string[]) => Promise<void>>(),
   startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, fullAccess: boolean) => Promise<{ id: number; generation: number }>>(),
   archiveConversationOnDaemon: vi.fn<(conversation: { id: string }, archived: boolean) => Promise<void>>(),
   closeSessionWithUndo: vi.fn<(conversation: { id: string }) => Promise<void>>(),
@@ -118,10 +119,14 @@ function term(pane: number, cwd: string, extra: Partial<Conversation> = {}): Con
 const inRepo = (pane: number, root: string, cwd: string, extra: Partial<Conversation> = {}) =>
   term(pane, cwd, { folder: root, repo: root.split('/').at(-1) ?? null, branch: 'main', ...extra })
 
+const TERMINAL_VIEW = { openSessionsIn: 'terminal' }
+const setSettings = (extra: Record<string, unknown> = {}) => { window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ ...TERMINAL_VIEW, ...extra })) }
+
 describe('desktop terminal multiplexer', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
+    setSettings()
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadConversations.mockResolvedValue([])
     daemon.startShellSession.mockResolvedValue(undefined)
@@ -156,18 +161,18 @@ describe('desktop terminal multiplexer', () => {
     expect(screen.getByRole('region', { name: /^Terminal 1: ~/ })).toBeInTheDocument()
   })
 
-  it('starts a plain shell from New session (Ctrl+Shift+T): there is no draft page and no chat', async () => {
+  it('opens the + menu from New session (Ctrl+Shift+T): there is no draft page and nothing starts until one is picked', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'No sessions running' })
-    daemon.loadConversations.mockResolvedValue([term(5, HOME)])
 
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 
-    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(HOME) })
+    expect(await screen.findByRole('menu', { name: 'Start' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^Terminal/ })).toBeInTheDocument()
+    expect(daemon.startShellSession).not.toHaveBeenCalled()
     expect(daemon.startChatSession).not.toHaveBeenCalled()
     expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
-    expect(await screen.findByRole('region', { name: 'Shell in ~' })).toBeInTheDocument()
   })
 
   it('opens the + menu from the empty state New session, and its Terminal starts a plain shell', async () => {
@@ -187,7 +192,7 @@ describe('desktop terminal multiplexer', () => {
     const wide = window.innerWidth
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
     try {
-      window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ density: 'compact', sidebarTextSize: 15, tabTextSize: 12, sidebarWidth: 320 }))
+      setSettings({ density: 'compact', sidebarTextSize: 15, tabTextSize: 12, sidebarWidth: 320 })
       daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
       renderDesktopApp()
       const handle = await screen.findByRole('separator', { name: 'Resize sidebar' })
@@ -432,7 +437,7 @@ describe('desktop terminal multiplexer', () => {
 
   it('starts a new terminal in the start folder from Settings, with ~ meaning the home folder', async () => {
     const user = userEvent.setup()
-    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ startFolder: '~/code' }))
+    setSettings({ startFolder: '~/code' })
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'No sessions running' })
 
@@ -1340,6 +1345,7 @@ describe('desktop overlays and pane tools', () => {
 
   it('broadcasts typing from one pane to the tab\'s idle panes only', async () => {
     const user = userEvent.setup()
+    setSettings()
     daemon.loadConversations.mockResolvedValue([at(2)])
     renderDesktopApp()
     await screen.findByRole('region', { name: /^Shell in/ })
@@ -1352,6 +1358,179 @@ describe('desktop overlays and pane tools', () => {
     expect(await screen.findAllByText('◉ Broadcast')).toHaveLength(2)
     await user.keyboard('{Control>}{Alt>}{Shift>}b{/Shift}{/Alt}{/Control}')
     await waitFor(() => { expect(screen.queryByText('◉ Broadcast')).not.toBeInTheDocument() })
+  })
+})
+
+describe('the Chat view, agent starts and the terminal under a chat', () => {
+  const claude = (pane: number, cwd: string) => term(pane, cwd, { agent: 'claude', status: 'idle' })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    window.localStorage.clear()
+    daemon.defaultSessionFolder.mockResolvedValue(HOME)
+    daemon.startShellSession.mockResolvedValue(undefined)
+    daemon.startAgentSession.mockResolvedValue(undefined)
+    daemon.sendTerminalInput.mockResolvedValue(undefined)
+    daemon.agentsInstalled.mockResolvedValue(['claude', 'codex', 'opencode'])
+    daemon.loadConversations.mockResolvedValue([])
+    daemon.suggestProjectFolders.mockResolvedValue([])
+    daemon.daemonSaidRemoved.mockImplementation(() => false)
+  })
+
+  async function openStartMenuFromEmptyState(user: ReturnType<typeof userEvent.setup>) {
+    await screen.findByRole('heading', { name: 'No sessions running' })
+    await user.click(within(screen.getByRole('main', { name: 'Terminals' })).getByRole('button', { name: 'New session' }))
+    return screen.findByRole('menu', { name: 'Start' })
+  }
+
+  it('offers no Terminal from the empty state New session in the Chat view, and says it starts a chat', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    renderDesktopApp()
+
+    await openStartMenuFromEmptyState(user)
+
+    expect(screen.queryByRole('menuitem', { name: /^Terminal/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^Claude Code/ })).toBeInTheDocument()
+    expect(screen.getByText(/an agent chat/)).toBeInTheDocument()
+  })
+
+  it('keeps Terminal on the + menu in the Terminal view', async () => {
+    setSettings({ openSessionsIn: 'terminal' })
+    const user = userEvent.setup()
+    renderDesktopApp()
+
+    await openStartMenuFromEmptyState(user)
+
+    expect(screen.getByRole('menuitem', { name: /^Terminal/ })).toBeInTheDocument()
+  })
+
+  it.each(['chat', 'terminal'])('starts Claude Code from the + menu in the %s view as an agent session, never typed into a shell', async (view) => {
+    setSettings({ openSessionsIn: view })
+    const user = userEvent.setup()
+    renderDesktopApp()
+    await openStartMenuFromEmptyState(user)
+    daemon.loadConversations.mockResolvedValue([claude(5, HOME)])
+
+    await user.click(screen.getByRole('menuitem', { name: /^Claude Code/ }))
+
+    await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalledWith(HOME, 'claude', expect.any(Array)) })
+    expect(daemon.startShellSession).not.toHaveBeenCalled()
+    expect(daemon.sendTerminalInput).not.toHaveBeenCalled()
+  })
+
+  it('runs an agent without a chat, OpenCode, in a new shell, typed and entered', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    renderDesktopApp()
+    await openStartMenuFromEmptyState(user)
+    daemon.loadConversations.mockResolvedValue([term(5, HOME)])
+
+    await user.click(screen.getByRole('menuitem', { name: /^OpenCode/ }))
+
+    await waitFor(() => { expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't5', generation: 0 }, 'opencode\r') })
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('does not make a terminal from the New terminal command in the Chat view: it says a chat is needed first', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+
+    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'terminal under')
+    await user.keyboard('{Enter}')
+
+    expect(await screen.findByText('Open a chat first: the terminal is docked under it.')).toBeInTheDocument()
+    expect(daemon.startShellSession).not.toHaveBeenCalled()
+  })
+
+  it('opens the terminal docked under the chat from the New terminal command in the Chat view', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([claude(2, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('button', { name: 'Terminal' })
+
+    await user.keyboard('{Control>}k{/Control}')
+    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'terminal under')
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
+  })
+
+  it('does not split into a plain shell in the Chat view', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+
+    await user.keyboard('{Control>}\\{/Control}')
+    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
+
+    expect(await screen.findByText(/dock a terminal under the chat instead/)).toBeInTheDocument()
+    expect(daemon.startShellSession).not.toHaveBeenCalled()
+  })
+
+  it('shows a plain shell as its terminal in the Chat view, with no dock button for it', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    renderDesktopApp()
+
+    expect(await screen.findByRole('region', { name: 'Shell in ~/a' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument()
+  })
+
+  it('shows the Terminal button in the title bar for an agent chat in the Chat view, and it docks a terminal in the chat folder', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([claude(2, `${HOME}/a`)])
+    renderDesktopApp()
+
+    await user.click(await screen.findByRole('button', { name: 'Terminal' }))
+
+    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
+  })
+
+  it('draws no Terminal button in the Terminal view, where the panes are terminals', async () => {
+    setSettings({ openSessionsIn: 'terminal' })
+    daemon.loadConversations.mockResolvedValue([claude(2, `${HOME}/a`)])
+    renderDesktopApp()
+
+    await screen.findByRole('region', { name: /^Terminal 1:/ })
+    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument()
+  })
+
+  it('lists a terminal made by splitting in the sidebar, so no pane shows a session the sidebar leaves out', async () => {
+    setSettings({ openSessionsIn: 'terminal' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`), term(7, `${HOME}/a`)])
+
+    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
+
+    await waitFor(() => { expect(screen.getAllByRole('region', { name: /^Terminal \d/ })).toHaveLength(2) })
+    const rows = within(screen.getByRole('navigation', { name: 'Sessions' })).getAllByRole('button', { name: /^a,/ })
+    expect(rows).toHaveLength(2)
+  })
+
+  it('closes the pane of a session the daemon says has left, instead of keeping it beside an empty sidebar', async () => {
+    setSettings({ openSessionsIn: 'terminal' })
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    const { client } = renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+
+    daemon.daemonSaidRemoved.mockImplementation((id) => id === 't2')
+    daemon.loadConversations.mockResolvedValue([])
+    await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
+
+    await screen.findByRole('heading', { name: 'No sessions running' })
+    expect(screen.queryByRole('region', { name: /^Terminal \d/ })).not.toBeInTheDocument()
   })
 })
 

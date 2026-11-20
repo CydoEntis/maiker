@@ -36,9 +36,6 @@ export type PaneCardProps = {
   chat?: ReactNode
   /** What floats over the top of the body in either view: the agent's running subagents. */
   overlay?: ReactNode
-  /** Shows or hides the terminal dock; absent where the session cannot have one. */
-  onToggleTerminal?: () => void
-  terminalShown: boolean
   /** For an agent that can have terminals of its own: opens another in the terminal dock. Absent for a shell, which is one. */
   onNewTerminal?: () => void
   online: boolean
@@ -122,10 +119,6 @@ export function PaneCard(props: PaneCardProps) {
         </div>
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
         <span className="mx-pane-controls">
-          {shown === 'chat' && props.onToggleTerminal !== undefined && (
-            // The chat has no terminal under it to switch to, so the dock's terminal stays one visible click away.
-            <button type="button" className={`mx-pane-control${props.terminalShown ? ' is-on' : ''}`} aria-label="Terminal" title={props.terminalShown ? 'Hide terminal' : 'Terminal'} aria-pressed={props.terminalShown} onMouseDown={stop} onClick={props.onToggleTerminal}><Icon name="terminalBox" size={15} /></button>
-          )}
           <button
             type="button"
             className="mx-pane-control mx-pane-more"

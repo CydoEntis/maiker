@@ -20,7 +20,8 @@ export type StartMenuProps = {
   open?: boolean | undefined
   onOpenChange?: ((open: boolean) => void) | undefined
   portalContainer: HTMLElement | null
-  onTerminal: (machine: number) => void
+  /** Starts a plain terminal; absent in the Chat view, where a terminal is the dock under a chat and the menu offers none. */
+  onTerminal?: ((machine: number) => void) | undefined
   onAgent: (program: string, machine: number) => void
   onAddMachine: () => void
   /** The + button. */
@@ -68,6 +69,7 @@ function StartPages(props: Omit<StartMenuProps, 'open' | 'onOpenChange' | 'child
   const title = target === undefined ? 'This computer' : machineTitle(target)
   const agents = agentsOn(page.machine, props.installed)
   const startable = agents.filter((agent) => agent.here)
+  const { onTerminal } = props
 
   // The menu holds the keys only while one of its rows has focus, so the first row takes it whenever the page changes.
   useEffect(() => { body.current?.querySelector<HTMLElement>('[role="menuitem"]:not([data-disabled])')?.focus() }, [page])
@@ -97,10 +99,12 @@ function StartPages(props: Omit<StartMenuProps, 'open' | 'onOpenChange' | 'child
       {!atBase && <DropdownMenuItem className="mx-ctx-item" onSelect={(event) => { event.preventDefault(); back() }}><span className="mx-ctx-label">Back</span><span className="mx-ctx-hint" aria-hidden="true">←</span></DropdownMenuItem>}
       {(page.view === 'root' || page.view === 'machine') && (
         <>
-          <DropdownMenuItem className="mx-ctx-item" onSelect={() => { props.onTerminal(page.machine) }}>
-            <Icon name="terminal" size={14} /><span className="mx-ctx-label">Terminal</span>
-            {page.view === 'root' && <span className="mx-ctx-hint" aria-hidden="true">{shortcutText('new-terminal')}</span>}
-          </DropdownMenuItem>
+          {onTerminal !== undefined && (
+            <DropdownMenuItem className="mx-ctx-item" onSelect={() => { onTerminal(page.machine) }}>
+              <Icon name="terminal" size={14} /><span className="mx-ctx-label">Terminal</span>
+              {page.view === 'root' && <span className="mx-ctx-hint" aria-hidden="true">{shortcutText('new-terminal')}</span>}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuLabel className="mx-ctx-heading">Start an agent</DropdownMenuLabel>
           {agents.map((agent) => (
             <DropdownMenuItem key={agent.program} className="mx-ctx-item" disabled={!agent.here} onSelect={() => { props.onAgent(agent.program, page.machine) }}>

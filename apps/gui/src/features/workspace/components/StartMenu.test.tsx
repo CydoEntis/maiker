@@ -39,6 +39,13 @@ describe('the + menu', () => {
     expect(screen.queryByText(/copilot/i)).toBeNull()
   })
 
+  it('offers no Terminal when it has no way to start one (the Chat view), only the agents', async () => {
+    show({ onTerminal: undefined })
+    await open()
+    expect(screen.queryByRole('menuitem', { name: /^Terminal/ })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: /^Claude Code/ })).toBeInTheDocument()
+  })
+
   it('starts a terminal on its machine', async () => {
     const calls = show()
     const user = await open()

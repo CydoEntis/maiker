@@ -44,7 +44,7 @@ const NOT_LISTED = 'The Maiker service did not list the new session'
 const REMOTE_START_WAIT_MS = 8000
 const REMOTE_START_POLL_MS = 250
 /** Where a shell starts on another machine when no folder is asked for: that machine's own home. */
-const REMOTE_HOME = '~'
+export const REMOTE_HOME = '~'
 
 /** How long a session started as an agent is taken to be it while the daemon has not said so; a command that never starts one stops claiming it. */
 const EXPECTED_AGENT_MS = 30_000
@@ -376,9 +376,6 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     void runStart(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
   }, [setSettingsSection, focusedSession, runStart, startRemoteShell, preferences.startFolder, home, setLayout])
 
-  // The terminal experiment: New session is a plain shell, the same as New terminal. You type the agent's command in it.
-  const newSession = newTerminal
-
   // "New chat with summary" on a chat whose context is nearly full: the New session draft, on the same machine and folder, with
   // the summary as its first message to read and edit before it is sent.
   const newChatWithSummary = useCallback((from: SessionView, summary: string) => {
@@ -433,5 +430,5 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
   }, [queryClient])
 
-  return { startKeyTerminal, endKeyTerminal, signInAgent, signInGitHub, gitHubSignInsEnded, runStart, startRemoteShell, newSession, newTerminal, startAgentSession, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree }
+  return { startKeyTerminal, endKeyTerminal, signInAgent, signInGitHub, gitHubSignInsEnded, runStart, startRemoteShell, newTerminal, startAgentSession, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree }
 }
