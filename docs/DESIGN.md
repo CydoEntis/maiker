@@ -693,19 +693,22 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   edge; with two or more the shared card goes and each pane is a card of its own (the same `--card` and hairline) and the
   focused one gets a 2px accent line along its top edge, drawn above its content (as the focused terminal split does). A pane's status is the
   badge on its icon; there is no status chip in a corner. While broadcasting, the header says "◉ Broadcast".
-- **First-run setup.** On the first launch (no saved settings and no earlier welcome) a full-screen, three-step
-  flow covers the window (`features/welcome/Onboarding.tsx`), with a numbered progress row on top and a footer of
-  **Back**, the keys line (Enter continues, Esc goes back), **Skip for now** and the primary button. **Welcome**:
-  a mini sidebar of the three states (needs you, working, done), three facts, and **Agents on this computer** chips
-  from `agents_installed` (missing ones dashed). **How do you like to work?**: two radio cards, Terminal and Chat,
-  with no default and a still preview each; the button reads "Pick one to continue" until one is picked, and a note
-  says Gemini always opens in Terminal. The pick sets `openSessionsIn`. **Get started**: **Add a project folder**
-  (a path field and **Browse…**; the path is checked, saved as the start folder, and a session opens) or **Connect
-  a remote machine** (the Add a machine panel from Settings, embedded without its breadcrumb; once the machine is
-  added the setup ends). Skip and finishing both mark it welcomed; Esc steps back and is left to the machine panel
-  while a field in it has focus. Global shortcuts are ignored while it is open. Under reduced motion the slide-in
-  and spinner stop; the previews are always still. A window that already has settings is never greeted. Settings
-  › General › **Show the welcome again** replays it. The "Bring your TUI setup" step comes with the shared config.
+- **First-run setup.** On the first launch (no saved settings and no earlier welcome) the app behind goes under a flat veil
+  (`--bg` at 72%; nothing blurs, so the design's blurred backdrop is not used) and the Maiker mark draws itself in the
+  text colour, fills in, and rises away (about 2.3 s; Enter, Esc or Space skips; not drawn under reduced motion). A 680px
+  window (`--main`, hairline, `--r-panel`) rises in: a header of the mark and the **step bar** (Welcome, Agents, Your style,
+  Your view, Review, then **Skip setup**; finished steps go back when clicked), the step, and a footer of **Back**, the
+  Enter hint and the primary button. **Welcome**: what the app is, three points (Needs you, Many at once, Any machine) and
+  the **Home directory** field (`cd` prefix, **Browse…**, suggested folders). **Your agents**: every supported agent with
+  its description and **Installed** or **Install**; Install shows the exact command, then **Run it**, then a progress bar;
+  **Install all N** below. **How do you work?**: three questions as cards. **We'd start you in Terminal / Chat**: one
+  sentence quoting the person's answers, both preview cards (the suggested one preselected and tagged **Recommended for
+  you**), and a note on Settings, the per-session ··· switch and Gemini opening in Terminal. **You're all set**: Home
+  directory, Agents and Sessions open in, each with **Change**; **Get started** applies them and opens the New session
+  page. Skip and finishing both mark it welcomed; Esc steps back. Global shortcuts are ignored while it is open. A window
+  that already has settings is never greeted. Settings › General › **Show the welcome again** replays it. Remote machines
+  are not offered here; they are added from the + menu or Settings. The "Bring your TUI setup" step comes with the shared
+  config.
 - **Interface size.** Settings › Appearance › Interface size sets the sidebar icon size (Small 0.8, Medium 1,
   Large 1.2 times the session icons), the density (Compact 0.8,
   Comfortable 1, Spacious 1.25 times the row and pane spacing), the sidebar text size and the

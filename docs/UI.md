@@ -1573,17 +1573,29 @@ A line starting with `!` in a Claude or Gemini chat that follows a terminal is t
 ## Project-specific: first-run setup (desktop)
 
 `features/welcome/Onboarding.tsx` is the first-run flow (look: the First-run setup entry in [DESIGN](DESIGN.md)). It owns no
-state outside itself and no host calls: `WorkspaceDialogs` hands it what to save (`onOpenSessionsIn`,
-`onStartFolder`), the folder picker and check, and the same `MachinesInfo` Settings gets.
+state outside itself and no host calls except through its hooks: `WorkspaceDialogs` hands it the home folder, the saved start
+folder, the folder picker and check, and `onApply`, which saves what **Get started** chose (`startFolder`, `openSessionsIn`).
+Skipping applies nothing.
 
-- Reuse, do not copy: the machine step embeds `AddMachinePanel` (`features/settings/components/`, with `embedded`), the
-  same panel Settings › Remote machines opens; the agent chips use `useInstalledAgents`.
-- Terminal and Chat are a radio group with no default; step 2 does not continue until one is picked and then sets
-  `openSessionsIn` (Gemini opens in Terminal whichever is picked, as everywhere).
-- Keys: arrows move inside a radio group, Enter continues (and picks a focused card first), Esc goes back a step. A
-  field or button inside the machine panel keeps its own Enter and Esc.
-- Each step moves focus to its heading and announces "Step n of 3" in a polite live region.
-- Pure rules (step names, button labels, path name) live in `welcome/setup.ts`.
+- Five steps, one file each: `WelcomeStep` (with the home directory field), `AgentsStep`, `StyleStep`, `ViewStep`,
+  `ReviewStep`. The step bar is `StepBar`, the question and view cards are `ChoiceCards`, the install bar is `Progress`, a
+  failed install is a `Card tone="needs"` (all `components/ui`). The rules live in `setup.ts`: `recommendView` (the view two
+  or more answers point to, Chat otherwise), `recommendationReason` (quotes the person's own answers), `viewNote`,
+  `nextLabel` ("Skip questions" until all three are answered, then "See my recommendation").
+- The home directory is the existing `startFolder` preference, so every session start already opens there. Suggestions
+  (`useHomeSuggestions`) are the home folder, the saved folder, and a fixed shortlist under home (`code`, `projects`, `dev`,
+  `src`, `work`) listed one level deep with `listFolders`, each with a 2 s timeout; never a walk of the home folder.
+- Installing an agent (`agentInstall.ts`, `useAgentInstalls.ts`): Install fetches the exact command (`agent_install_command`)
+  and shows it; nothing runs until **Run it**. `install_agent` runs it and the `install-progress` event drives `Progress`
+  (indeterminate while the percent is null). A failure is shown in plain words as a needs-you card with Try again. Install
+  all N shows every command first, then **Run all N**.
+- Opening: the mark draws itself (`OnboardingMark`, the logo paths from `maiker-mark.tsx`; stroke in `--fg`, fill by
+  `fill-opacity`), then rises away as the window rises in, about 2.3 s. Enter, Esc or Space skips it; under reduced motion it
+  is not drawn at all.
+- Keys: arrows move inside a card group, Enter continues (and picks a focused card without continuing), Esc goes back a step;
+  the finished steps in the step bar are buttons.
+- Each step moves focus to its heading and announces "Step n of 5" in a polite live region.
+- Get started applies the choices and opens the New session page (`newSession`); the + menu has no outside trigger yet.
 
 ## Project-specific: markdown documents
 

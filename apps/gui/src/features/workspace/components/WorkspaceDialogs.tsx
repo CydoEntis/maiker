@@ -51,10 +51,11 @@ export function WorkspaceDialogs() {
               <Onboarding
                 reducedMotion={reducedMotion}
                 portalContainer={root}
+                home={home}
+                startFolder={preferences.startFolder}
                 validateFolder={folderExists}
                 onChooseFolder={chooseStartFolder}
-                onStartFolder={(path) => { setPreferences((current) => ({ ...current, startFolder: path })) }}
-                machines={machinesInfo}
+                onApply={({ startFolder, openSessionsIn }) => { setPreferences((current) => ({ ...current, startFolder, openSessionsIn })) }}
                 onClose={(startSession) => { markWelcomed(); setWelcomeOpen(false); if (startSession) newSession(focusedMachineNumber) }}
               />
             )}

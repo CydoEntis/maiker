@@ -1,249 +1,191 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Button } from '@/components/ui/button'
+import { MaikerMark } from '@/components/ui/maiker-mark'
+import { StepBar } from '@/components/ui/step-bar'
 import { APP_NAME } from '@/brand'
-import { FieldError, fieldErrorProps } from '@/components/ui/feedback'
 import { errorMessage } from '@/lib/error-message'
-import { AddMachinePanel } from '@/features/settings/components/AddMachinePanel'
-import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
+import type { PaneView } from '@/features/workspace/model/chatView'
 import { useInstalledAgents } from '@/features/workspace/model/newChatHost'
-import { folderNameOf, LAST_STEP, nextLabel, SETUP_AGENTS, SETUP_STEPS, type StartChoice } from './setup'
+import { AgentsStep } from './AgentsStep'
+import { OnboardingMark, OPENING_MS } from './OnboardingMark'
+import { ReviewStep, type ReviewRow } from './ReviewStep'
+import { StyleStep } from './StyleStep'
+import { ViewStep } from './ViewStep'
+import { WelcomeStep } from './WelcomeStep'
+import { agentLabel, nextLabel, recommendView, SETUP_AGENTS, SETUP_STEPS, STEP_AGENTS, STEP_REVIEW, STEP_STYLE, STEP_VIEW, STEP_WELCOME, viewName, type StyleAnswers } from './setup'
+import { useAgentInstalls } from './useAgentInstalls'
+import { useHomeSuggestions } from './useHomeSuggestions'
 import './onboarding.css'
 
-const FOLDER_ERROR_ID = 'mx-onb-folder-error'
-const FOLDER_MISSING = 'That folder was not found. Check the path, or use Browse.'
-const MACHINE_PANEL = '.mx-rm-add'
+/** What Get started applies. */
+export type SetupChoices = { startFolder: string; openSessionsIn: PaneView }
 
 type Props = {
-  /** What a new session opens in is chosen here; the window saves it. */
-  /** The folder new sessions start in. */
-  onStartFolder: (path: string) => void
+  /** This computer's home folder, spelled out; empty until it is known. */
+  home: string
+  /** The saved start folder; empty means the home folder. */
+  startFolder: string
   validateFolder: (path: string) => Promise<boolean>
   /** Opens the system's folder picker; the path picked, or null when cancelled. */
   onChooseFolder: (current: string) => Promise<string | null>
-  /** What the add-a-machine panel needs; the same calls Settings › Remote machines makes. */
-  machines: MachinesInfo
+  /** Saves what Get started chose. Skipping saves nothing. */
+  onApply: (choices: SetupChoices) => void
   reducedMotion: boolean
   /** The themed window root the setup mounts in, so it reads the theme's tokens. */
   portalContainer: HTMLElement | null
-  /** Finished, skipped: the setup is done. `startSession` is true when a folder was picked to start in. */
+  /** The setup is over. `startSession` is true when Get started was pressed: open the New session page. */
   onClose: (startSession: boolean) => void
 }
 
-const DEMO_ROWS = [
-  { glyph: '!', tone: 'needs', name: 'Fix the out-of-date lockfile', where: 'acme-store · main', word: 'needs you', on: true },
-  { glyph: '', tone: 'working', name: 'Add a refunds endpoint', where: 'billing-api · devbox', word: 'working', on: false },
-  { glyph: '✓', tone: 'done', name: 'Update the API docs', where: 'docs-site · main', word: 'done', on: false },
-] as const
+const LAST_STEP = SETUP_STEPS.length - 1
 
-/** The first-run setup: what this is and where to start. Full screen, two steps. */
-export function Onboarding({ onStartFolder, validateFolder, onChooseFolder, machines, reducedMotion, portalContainer, onClose }: Props) {
-  const [step, setStep] = useState(0)
+/** The first-run setup: the mark draws, then five steps in a window over the blurred app. */
+export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, onApply, reducedMotion, portalContainer, onClose }: Props) {
+  const [phase, setPhase] = useState<'draw' | 'window'>(reducedMotion ? 'window' : 'draw')
+  const [step, setStep] = useState(STEP_WELCOME)
   const [back, setBack] = useState(false)
-  const [start, setStart] = useState<StartChoice | null>(null)
-  const [path, setPath] = useState('')
+  const [typed, setTyped] = useState<string | null>(null)
   const [missing, setMissing] = useState(false)
   const [checking, setChecking] = useState(false)
   const [note, setNote] = useState('')
+  const [answers, setAnswers] = useState<StyleAnswers>({})
+  const [picked, setPicked] = useState<PaneView | null>(null)
   const installed = useInstalledAgents()
+  const installs = useAgentInstalls()
   const heading = useRef<HTMLHeadingElement>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const nextRef = useRef<() => void>(() => undefined)
 
+  const path = typed ?? (startFolder.trim() === '' ? home : startFolder)
+  const suggestions = useHomeSuggestions(home, startFolder.trim())
+  const recommended = recommendView(answers)
+  const view = picked ?? recommended
+  const isHere = (program: string) => program in installs.done || (installed?.includes(program) ?? false)
+  const geminiInstalled = isHere('gemini')
+
   useEffect(() => {
+    if (phase !== 'draw') return undefined
+    const timer = setTimeout(() => { setPhase('window') }, OPENING_MS)
+    return () => { clearTimeout(timer) }
+  }, [phase])
+
+  useEffect(() => {
+    if (phase !== 'window') return
     heading.current?.focus({ preventScroll: true })
     if (scroller.current) scroller.current.scrollTop = 0
-  }, [step])
+  }, [step, phase])
 
-  const folderName = folderNameOf(path)
   const go = (to: number) => {
     if (to < 0 || to > LAST_STEP) return
     setBack(to < step)
     setStep(to)
   }
 
-  const startInFolder = async () => {
-    const typed = path.trim()
-    if (typed === '') return
-    setChecking(true)
-    const exists = await validateFolder(typed).catch(() => false)
-    setChecking(false)
-    if (!exists) { setMissing(true); return }
-    onStartFolder(typed)
+  const leaveWelcome = async () => {
+    const wanted = path.trim()
+    if (wanted !== '') {
+      setChecking(true)
+      const exists = await validateFolder(wanted).catch(() => false)
+      setChecking(false)
+      if (!exists) { setMissing(true); return }
+    }
+    go(STEP_AGENTS)
+  }
+
+  const finish = () => {
+    const wanted = path.trim()
+    onApply({ startFolder: wanted === home ? '' : wanted, openSessionsIn: view })
     onClose(true)
   }
 
-  const canNext = step === 0 || (step === LAST_STEP && start === 'folder' && folderName !== null && !checking)
   const next = () => {
-    if (!canNext) return
-    if (step < LAST_STEP) go(step + 1)
-    else void startInFolder()
+    if (checking) return
+    if (step === STEP_WELCOME) void leaveWelcome()
+    else if (step === STEP_REVIEW) finish()
+    else go(step + 1)
   }
+  useEffect(() => { nextRef.current = next })
 
   const browse = () => {
     onChooseFolder(path).then(
-      (picked) => { if (picked !== null) { setPath(picked); setMissing(false); setNote('') } },
+      (chosen) => { if (chosen !== null) { setTyped(chosen); setMissing(false); setNote('') } },
       (error: unknown) => { setNote(errorMessage(error, 'Could not open the folder picker')) },
     )
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (phase === 'draw') {
+      if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') { event.preventDefault(); setPhase('window') }
+      return
+    }
     const target = event.target as HTMLElement
-    // The add-a-machine panel owns its own keys (Esc ends the ssh look there).
-    if (target.closest(MACHINE_PANEL) !== null) return
-    if (event.key === 'Escape' && step > 0) { event.preventDefault(); go(step - 1); return }
+    if (event.key === 'Escape' && step > STEP_WELCOME) { event.preventDefault(); go(step - 1); return }
     if (event.key !== 'Enter' || target.tagName === 'INPUT') return
-    // A radio button swallows Enter itself (so a form does not submit); here it picks and continues.
-    const isRadio = target.getAttribute('role') === 'radio'
-    if (target.tagName === 'BUTTON' && !isRadio) return
+    // A radio button swallows Enter itself; here it picks, and the person continues with the button.
+    if (target.getAttribute('role') === 'radio') { event.preventDefault(); target.click(); return }
+    if (target.tagName === 'BUTTON') return
     event.preventDefault()
-    if (isRadio) target.click()
-    // Let the pick land before the step reads it: the latest `next` sees the new state.
-    setTimeout(() => { nextRef.current() }, 0)
+    nextRef.current()
   }
 
-  useEffect(() => { nextRef.current = next })
-  const label = nextLabel(step, start, folderName)
-  const machineOpen = step === LAST_STEP && start === 'machine'
-  const live = `Step ${String(step + 1)} of ${String(SETUP_STEPS.length)}: ${SETUP_STEPS[step] ?? ''}`
+  const hereNames = SETUP_AGENTS.filter((agent) => isHere(agent.program)).map((agent) => agent.label)
+  const installing = Object.values(installs.states).filter((state) => state.phase === 'running').length
+  const review: ReviewRow[] = [
+    { key: 'home', label: 'Home directory', value: path.trim() === '' ? 'Your user folder' : path.trim(), mono: true, onChange: () => { go(STEP_WELCOME) } },
+    { key: 'agents', label: 'Agents', value: `${hereNames.length === 0 ? 'None yet' : hereNames.join(', ')}${installing > 0 ? ` (+${String(installing)} installing)` : ''}`, onChange: () => { go(STEP_AGENTS) } },
+    { key: 'view', label: 'Sessions open in', value: `${viewName(view)}${geminiInstalled && view === 'chat' ? ` (${agentLabel('gemini')} in Terminal)` : ''}`, onChange: () => { go(STEP_VIEW) } },
+  ]
 
   return (
     <Dialog open>
-    <DialogContent
-      unstyled
-      container={portalContainer}
-      overlayClassName="mx-onb"
-      className="mx-onb-win"
-      data-reduce={reducedMotion}
-      aria-describedby={undefined}
-      onKeyDown={onKeyDown}
-      // Esc steps back (see onKeyDown) and a click outside does nothing: only Skip or the last step ends the setup.
-      onEscapeKeyDown={(event) => { event.preventDefault() }}
-      onInteractOutside={(event) => { event.preventDefault() }}
-      // The heading, not the first button, so Enter reads as "continue" and a screen reader starts at the top.
-      onOpenAutoFocus={(event) => { event.preventDefault(); heading.current?.focus({ preventScroll: true }) }}
-    >
-      <DialogTitle className="mx-onb-sr">Set up {APP_NAME}</DialogTitle>
-      <div className="mx-onb-sr" aria-live="polite">{live}</div>
-      <div className="mx-onb-scroll" ref={scroller}>
-        <div className="mx-onb-col">
-          <nav className="mx-onb-prog" aria-label="Setup progress">
-            {SETUP_STEPS.map((name, index) => (
-              <span key={name} className="mx-onb-progitem">
-                {index > 0 && <span className="mx-onb-bar" data-on={index <= step} />}
-                <span className="mx-onb-st" data-s={index < step ? 'done' : index === step ? 'now' : 'todo'} aria-current={index === step ? 'step' : undefined}>
-                  <span className="mx-onb-n">{index < step ? '✓' : String(index + 1)}</span>{name}
-                </span>
-              </span>
-            ))}
-          </nav>
-
-          <section className="mx-onb-screen" data-back={back} key={step} aria-labelledby="mx-onb-h">
-            {step === 0 && (
-              <>
-                <div>
-                  <h2 id="mx-onb-h" tabIndex={-1} ref={heading}>Welcome to {APP_NAME}</h2>
-                  <p className="mx-onb-lead">See which agents need you, jump to them, and keep them running when you close the app.</p>
-                </div>
-                <div className="mx-onb-wel">
-                  <div className="mx-onb-mini" role="img" aria-label="Example: your sessions in the sidebar">
-                    <div className="mx-onb-minih">Your sessions<small>{DEMO_ROWS.length}</small></div>
-                    {DEMO_ROWS.map((row) => (
-                      <div key={row.name} className="mx-onb-mrow" data-on={row.on}>
-                        <span className="mx-onb-g" data-tone={row.tone}>{row.tone === 'working' ? <span className="mx-onb-spin" /> : row.glyph}</span>
-                        <span className="mx-onb-mt"><b>{row.name}</b><small>{row.where}</small></span>
-                        <span className="mx-onb-mw" data-tone={row.tone}>{row.word}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mx-onb-facts">
-                    <Fact tone="needs" mark="!">Amber means an agent is waiting on you.</Fact>
-                    <Fact tone="plain" mark="→">Click a session to jump to it. The ones that need you sit at the top.</Fact>
-                    <Fact tone="working" mark="▢">Close the window and they keep working.</Fact>
-                  </div>
-                </div>
-                <div className="mx-onb-agents">
-                  <span>Agents on this computer:</span>
-                  {installed === null
-                    ? <span>looking…</span>
-                    : SETUP_AGENTS.map(({ program, label: agent }) => {
-                      const found = installed.includes(program)
-                      return <span key={program} className="mx-onb-chip" data-off={!found}><b>{found ? '✓' : '–'}</b>{agent}</span>
-                    })}
-                  {installed !== null && !installed.includes('gemini') && <span>Gemini shows up here once its CLI is installed.</span>}
-                </div>
-              </>
-            )}
-
-            {step === LAST_STEP && (
-              <>
-                <div>
-                  <h2 id="mx-onb-h" tabIndex={-1} ref={heading}>Get started</h2>
-                  <p className="mx-onb-lead">Start with code on this computer, or connect another one. You can add more later.</p>
-                </div>
-                <RadioGroup className="mx-onb-opts" aria-labelledby="mx-onb-h" value={start ?? ''} onValueChange={(value) => { if (value === 'folder' || value === 'machine') setStart(value) }}>
-                  <StartOption value="folder" title="Add a project folder" detail="A folder on this computer, usually a git repo." />
-                  <StartOption value="machine" title="Connect a remote machine" detail="Another computer you reach over SSH." />
-                </RadioGroup>
-
-                {start === 'folder' && (
-                  <div className="mx-onb-sub" role="group" aria-label="Pick a project folder">
-                    <label className="mx-onb-sublbl" htmlFor="mx-onb-path">Folder</label>
-                    <div className="mx-onb-pathrow">
-                      <input
-                        id="mx-onb-path"
-                        value={path}
-                        placeholder="~/path/to/project"
-                        data-bad={missing}
-                        {...fieldErrorProps(FOLDER_ERROR_ID, missing ? FOLDER_MISSING : null)}
-                        spellCheck={false}
-                        autoComplete="off"
-                        autoFocus
-                        onChange={(event) => { setPath(event.target.value); setMissing(false) }}
-                        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); event.stopPropagation(); next() } }}
-                      />
-                      <button type="button" className="mx-onb-btn" onClick={browse}>Browse…</button>
-                    </div>
-                    {missing && <FieldError id={FOLDER_ERROR_ID}>{FOLDER_MISSING}</FieldError>}
-                    {note !== '' && <p className="mx-onb-small" role="alert">{note}</p>}
-                  </div>
+      <DialogContent
+        unstyled
+        container={portalContainer}
+        overlayClassName="mx-onb"
+        className="mx-onb-win"
+        data-reduce={reducedMotion}
+        aria-describedby={undefined}
+        onKeyDown={onKeyDown}
+        // Esc steps back (see onKeyDown) and a click outside does nothing: only Skip setup or the last step ends the setup.
+        onEscapeKeyDown={(event) => { event.preventDefault() }}
+        onInteractOutside={(event) => { event.preventDefault() }}
+        // The heading, not the first button, so Enter reads as "continue" and a screen reader starts at the top.
+        onOpenAutoFocus={(event) => { if (phase === 'window') { event.preventDefault(); heading.current?.focus({ preventScroll: true }) } }}
+      >
+        <DialogTitle className="mx-onb-sr">Set up {APP_NAME}</DialogTitle>
+        {phase === 'draw' && <div className="mx-onb-sr" role="status">Opening {APP_NAME}. Press Enter to skip.</div>}
+        {!reducedMotion && <OnboardingMark gone={phase === 'window'} />}
+        {phase === 'window' && (
+          <div className="mx-onb-window flex max-h-[calc(100vh-48px)] w-[680px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-(--r-panel) border border-(--line) bg-(--main) shadow-(--pop-sh)">
+            <div className="mx-onb-sr" aria-live="polite">{`Step ${String(step + 1)} of ${String(SETUP_STEPS.length)}: ${SETUP_STEPS[step] ?? ''}`}</div>
+            <div className="flex flex-none items-center gap-4 border-b border-(--line) px-5 py-3.5">
+              <MaikerMark width={26} height={20} />
+              <StepBar className="min-w-0 flex-1" label="Setup progress" steps={SETUP_STEPS} current={step} onSelect={go} skip={{ label: 'Skip setup', onSkip: () => { onClose(false) } }} />
+            </div>
+            <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
+              <section key={step} data-back={back} aria-labelledby="mx-onb-h" className="mx-onb-screen flex flex-col gap-5 px-7 py-6">
+                {step === STEP_WELCOME && (
+                  <WelcomeStep
+                    headingRef={heading}
+                    home={{ path, onPath: (value) => { setTyped(value); setMissing(false) }, missing, note, suggestions, onBrowse: browse, onEnter: next }}
+                  />
                 )}
-
-                {machineOpen && (
-                  <div className="mx-onb-sub" role="group" aria-label="Connect a remote machine">
-                    <AddMachinePanel machines={machines} embedded onClose={() => { setStart(null) }} onAdded={() => { onClose(false) }} />
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-        </div>
-      </div>
-
-      <div className="mx-onb-foot">
-        <div className="mx-onb-in">
-          <button type="button" className="mx-onb-btn" data-k="txt" aria-label="Back" data-hide={step === 0} tabIndex={step === 0 ? -1 : 0} onClick={() => { go(step - 1) }}>‹ Back</button>
-          <span className="mx-onb-keys"><kbd>Enter</kbd>{machineOpen ? 'connect' : 'continue'}{step > 0 && <><span className="mx-onb-gap" /><kbd>Esc</kbd>back</>}</span>
-          <button type="button" className="mx-onb-btn" data-k="txt" onClick={() => { onClose(false) }}>Skip for now</button>
-          {!machineOpen && (
-            <button type="button" className="mx-onb-btn" data-k="pri" data-off={!canNext} aria-disabled={!canNext} onClick={next}>{label}</button>
-          )}
-        </div>
-      </div>
-    </DialogContent>
+                {step === STEP_AGENTS && <AgentsStep headingRef={heading} installed={installed} states={installs.states} done={installs.done} actions={installs} />}
+                {step === STEP_STYLE && <StyleStep headingRef={heading} answers={answers} onAnswer={(question, value) => { setAnswers((current) => ({ ...current, [question]: value })); setPicked(null) }} />}
+                {step === STEP_VIEW && <ViewStep headingRef={heading} answers={answers} recommended={recommended} chosen={view} onChoose={setPicked} geminiInstalled={geminiInstalled} />}
+                {step === STEP_REVIEW && <ReviewStep headingRef={heading} rows={review} />}
+              </section>
+            </div>
+            <div className="flex flex-none items-center gap-2 border-t border-(--line) px-5 py-3">
+              <Button variant="ghost" className={step === STEP_WELCOME ? 'invisible' : ''} tabIndex={step === STEP_WELCOME ? -1 : 0} onClick={() => { go(step - 1) }}>Back</Button>
+              <span className="flex-1" />
+              <span className="flex items-center gap-1.5 text-[11.5px] text-(--dim)"><kbd className="rounded-(--r-badge) px-1 font-(family-name:--mono) text-[10.5px] shadow-[inset_0_0_0_1px_var(--line2)]">Enter</kbd>{step === STEP_REVIEW ? 'to start' : 'to continue'}</span>
+              <Button disabled={checking} onClick={next}>{nextLabel(step, answers)}</Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
     </Dialog>
-  )
-}
-
-function Fact({ tone, mark, children }: { tone: 'needs' | 'plain' | 'working'; mark: string; children: ReactNode }) {
-  return <div className="mx-onb-fact"><span className="mx-onb-k" data-tone={tone}>{mark}</span><span>{children}</span></div>
-}
-
-function StartOption({ value, title, detail }: { value: StartChoice; title: string; detail: string }) {
-  return (
-    <RadioGroupItem value={value} className="mx-onb-opt">
-      <span className="mx-onb-tx"><b>{title}</b><span>{detail}</span></span>
-      <span className="mx-onb-rd" />
-    </RadioGroupItem>
   )
 }

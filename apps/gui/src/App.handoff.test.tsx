@@ -1198,25 +1198,30 @@ describe('desktop overlays and pane tools', () => {
     const app = renderDesktopApp({ firstRun: true })
 
     const dialog = await screen.findByRole('dialog', { name: 'Set up Maiker' })
-    expect(dialog).toHaveTextContent('keep them running when you close the app')
+    // The mark draws first; Enter skips to the window.
+    await user.keyboard('{Enter}')
+    expect(await within(dialog).findByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
+    expect(dialog).toHaveTextContent('Maiker runs your coding agents side by side')
     // Global shortcuts are ignored while it is open.
     await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
 
-    await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
-    await user.click(within(dialog).getByRole('radio', { name: /Add a project folder/ }))
-
-    await user.type(within(dialog).getByRole('textbox', { name: 'Folder' }), '/definitely/not/here')
-    await user.click(within(dialog).getByRole('button', { name: 'Start in here' }))
+    await user.clear(within(dialog).getByRole('textbox', { name: 'Home directory' }))
+    await user.type(within(dialog).getByRole('textbox', { name: 'Home directory' }), '/definitely/not/here')
+    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('That folder was not found.')
 
     daemon.suggestProjectFolders.mockResolvedValue(['/home/casey/code/api/'])
-    await user.clear(within(dialog).getByRole('textbox', { name: 'Folder' }))
-    await user.type(within(dialog).getByRole('textbox', { name: 'Folder' }), '/home/casey/code/api')
-    await user.click(within(dialog).getByRole('button', { name: 'Start in api' }))
+    await user.clear(within(dialog).getByRole('textbox', { name: 'Home directory' }))
+    await user.type(within(dialog).getByRole('textbox', { name: 'Home directory' }), '/home/casey/code/api')
+    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Skip questions' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
     await screen.findByRole('heading', { name: 'No sessions running' })
-    expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api' })
+    expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api', openSessionsIn: 'chat' })
 
     app.unmount()
     renderDesktopApp({ firstRun: true })
@@ -1229,10 +1234,12 @@ describe('desktop overlays and pane tools', () => {
     renderDesktopApp({ firstRun: true })
     const dialog = await screen.findByRole('dialog', { name: 'Set up Maiker' })
 
-    await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
+    await user.keyboard('{Escape}')
+    await within(dialog).findByRole('heading', { name: 'Welcome to Maiker' })
+    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
     await user.keyboard('{Escape}')
     expect(within(dialog).getByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
-    await user.click(within(dialog).getByRole('button', { name: 'Skip for now' }))
+    await user.click(within(dialog).getByRole('button', { name: 'Skip setup' }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
 
     window.localStorage.removeItem('maiker.gui.welcomed.v1')
