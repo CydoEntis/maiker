@@ -346,9 +346,11 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   segment, a palette row), `--c-field-*` (dropdown buttons, pickers, the new-session segments, inputs), `--c-track-*`
   (the tray behind a segmented control), `--c-sw-*` and `--c-knob-*` (the switch), `--c-tile-ring` (agent and shell
   tiles) and `--c-head-bg` (sticky headers). A new control gets tokens first and is checked in both corners and both
-  kinds of theme. **Agent marks** are flat glyphs with no tile or background anywhere (`AppIcon`): Claude's is
-  `--agent-claude` orange, every other agent's takes `--fg2`, a shell's `--dim`. Settings › Appearance › Icons
-  (`iconColor`, `data-icons`): `grayscale` makes Claude's neutral too. **Segmented control**: a 28px frame on `--well`
+  kinds of theme. **Agent marks** are flat glyphs with no tile or background anywhere (`AppIcon`): each agent has its
+  own brand colour, defined once on `.mx-app` (`--agent-claude`, `--agent-codex`, `--agent-gemini`, `--agent-opencode`,
+  `--agent-deepseek`) and read by the one `.mx-app-icon` rule (`--mark`); a shell's is `--dim`. A hovered or focused menu
+  row keeps its mark's colour: only its ground changes. Settings › Appearance › Icons
+  (`iconColor`, `data-icons`): `grayscale` makes every agent's neutral. **Segmented control**: a 28px frame on `--well`
   with a 1px `--line` edge and 2px of room; 22px choices (12px/500, `--dim`, `--fg` on `--m-sel` while picked) with a
   13px mark 6px from the word. **Drawers** (Changes, Files, the terminal dock) grow as they slide: `from` opacity 0,
   translate 28px and width (height for the bottom dock) 0 over `--panel-in`, out over `--panel-out`, so the chat
@@ -646,8 +648,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **The message box** is one box (layout 2h): the text on top (two lines tall), a plan strip while Plan
   mode is on (`PLAN MODE` in mono blue, then what it means), and ONE bottom row inside the box. At its left, the model
   picker (the agent's mark, the model, the effort; it opens the menu with the effort slider) and the permissions button
-  (`ModeControl`: a shield, the mode's name, a chevron when it opens, and a `▲` in `--danger` in a mode that asks about
-  nothing); at its right, attach (a paperclip) and then send. The model and effort lock while the agent works (tooltip:
+  (`ModeControl`: a shield, the mode's name, a chevron when it opens, and a small `--danger` dot after the name in a mode that asks about
+  nothing; the name stays in the normal text colour, and Bypass permissions reads "Bypass" there, its full name in the menu and tooltip).
+  Every control in the row is 26px high in 12px regular text, and each part has a slot of fixed width (model name, level word, effort bars, mode name), so
+  picking another model, effort or mode moves nothing beside it; at its right, attach (a paperclip) and then send. The model and effort lock while the agent works (tooltip:
   "You can change the model and effort when it finishes, or after Esc"); the mode waits for the turn's end as before. The
   rest sits in **Under the box**, one row below it (`SessionBar`, `data-screen-label="Under the box"`): at the left, as plain text with no ground and no border, **folder · branch · sync**, and at the right the usage
   meters (`ContextRing`, amber from 80%). The row is never wider than the box and the folder's text gives way first (full path on hover). 
@@ -905,7 +909,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   answer. Answering removes it, the box unlocks and the agent is working again (its row and the badge follow the
   daemon); the request then folds into one line in the feed (a hairline row: its mark, "Allowed for this session",
   and **Go to step ↑**). **2. The box**: flat
-  (`--raise`, one step off the pane, a `--line2` hairline, radius `--r-panel`; focused, a `--focus` border and a 1px inset glow of the same colour), a two-line text box on top, and one bottom row: at the left the model picker ("Claude Sonnet 5.5 · Medium ▾": the agent's mark, the model
+  (`--pop-bg`, the raised surface nudged toward the text colour so it stands off the chat in dark and light themes, a `--line2` hairline, radius `--r-panel`; the new-session draft's box is this same component; focused, a `--focus` border and a 1px inset glow of the same colour), a two-line text box on top, and one bottom row: at the left the model picker ("Claude Sonnet 5.5 · Medium ▾": the agent's mark, the model
   picked or the one its own file says, the effort) and the permissions button, at the right the paperclip (attach) and the 32px send button (radius `--r-control`), in the accent when it can send and grey while
   a question waits. While the agent works and nothing is typed, the send button is the Stop square, still (the line over the
   box says the agent is at work, so the button does not spin); just after a send, before there is a turn to stop, the

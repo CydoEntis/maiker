@@ -1267,12 +1267,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   opening up from the right of the box): the agent, only before a chat starts (after that its agent is already running), as an **Agent**
   segmented control with a column per agent, each its mark and name; the models, a 32px row
   each with its description as the tooltip, the picked one shown by a filled ground and bold (never a tick: `components/ui/menu-row.css`, the one look of a picked row in every single-choice menu, list and select) and a dim "default" on the model the agent's settings
-  name; then a foot of **Effort**: a `StopSlider` (`components/ui/stop-slider.tsx`, `role="slider"`, Left and Right move it, a click on a dot or word picks it) with a stop for each level the model takes (Low, Medium, High, Max; Max is absent where the model lacks it), and the level's name at the right of the heading. Earlier models wait
+  name; then a foot of **Effort**: a `StopSlider` (`components/ui/stop-slider.tsx`, `role="slider"`, Left and Right move it, a click on a dot or word or a drag along the track picks it live) drawn as a real track with a filled line to the picked stop, a lit dot at each stop up to it, a larger thumb on the picked one and the stop names below, the picked one bold, with a stop for each level the model takes (Low, Medium, High, Max; Max is absent where the model lacks it). The menu and its rows take `--r-panel` and `--r-control`, so Rounded and Square both read right, and it has small **Model** and **Effort** section labels. Earlier models wait
   under a **More models** row, so the newest lead; the picked one shows wherever it is. Picking leaves the menu open; Esc
   or a click outside closes it. The default model (the one the settings name, else the one Claude Code says it
   would pick) stands for "nothing picked": there is no separate Default row then, and picking it sends no model. Where
-  no default is known (and for Codex), a Default row stays, because which model it means cannot be read. Effort starts as "Agent's own" with no stop filled, since the level the
-  agent uses cannot be read; pressing the picked stop again goes back to it. A level a model does not take has no stop:
+  no default is known (and for Codex), a Default row stays, because which model it means cannot be read. The effort in use (`effortInUse`, `agentChoice.ts`) is the level picked here, else the one the agent's own files say (so `/effort medium` typed in the chat lights Medium at once), else the model's default level (Medium): the slider always has a stop lit, and the line at the right of the heading reads "Medium · default" while the level is only assumed. Pressing the picked stop again goes back to the agent's own. A level a model does not take has no stop:
   the levels come from the agent's own list for each model (for Codex's Default row, whose model cannot be read, Max
   is left out). Codex's default is the top-level `model` of its `config.toml`, where its list has that model.
   Picking a model that does not take the picked level drops to Medium, or to the agent's own where it takes none.
@@ -1510,7 +1509,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   a dropdown that presses Shift+Tab until the agent's screen shows the pick (`modeFromScreen`). It can be picked while the
   agent works: the chip shows the pick at once with a toast ("… from the next turn"), and the keys (or Codex's
   `/permissions`) are typed only when the turn ends, so none lands in it; only a question the agent asks or an offline
-  daemon greys it. The effort row of the model menu names the level the agent runs at, or **Default** when its files
+  daemon greys it. The effort slider of the model menu lights the level the agent runs at, or the default stop ("Medium · default") when its files
   do not say (its tooltip: the agent's own setting); the model and reasoning picker sends `/model` and `/effort`, and a pick made while the agent works is
   typed in at once, as it would be in the terminal, for the agent to take as soon as it can; only a question the agent is asking holds the picker, since typed text would answer it. The agent
   itself is never changed in a chat that has started. A Codex chat on this computer moves its mode with Codex's own `/permissions` command

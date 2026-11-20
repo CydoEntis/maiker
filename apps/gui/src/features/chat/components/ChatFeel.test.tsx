@@ -287,7 +287,11 @@ describe('how the chat feels while it waits', () => {
     await settle(IDLE_POLL_MS)
 
     const shield = screen.getByRole('button', { name: /^Permission mode: Bypass permissions/ })
+    // Attention is a status-coloured dot beside a normal label, shortened to fit its slot; the full name stays in the tooltip.
     expect(shield.className).toContain('danger')
+    expect(shield.querySelector('.mx-mode-dot')).not.toBeNull()
+    expect(shield.querySelector('.mx-mode-name')).toHaveTextContent(/^Bypass$/)
+    expect(shield).toHaveAttribute('title', 'Permissions: Bypass permissions')
   })
 
   it('drops a message the history never showed, rather than leaving it standing as sent', async () => {

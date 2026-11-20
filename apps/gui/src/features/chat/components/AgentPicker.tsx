@@ -8,7 +8,7 @@ import { AppIcon, Icon } from '@/features/workspace/components/glyphs'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
 import { AGENT_LABEL, modelName } from '../modelName'
 import {
-  choiceFor, DEFAULT_PICK, effortAllowed, KNOWN_MODELS, effortBars, effortWord, leadingModels, menuModels, modelInUse, pickedModel, REASONING_LABEL, REASONING_LEVELS, useAgentModels, useDiscoveredModels,
+  choiceFor, DEFAULT_PICK, effortAllowed, KNOWN_MODELS, effortBars, effortInUse, effortWord, leadingModels, menuModels, modelInUse, pickedModel, REASONING_LABEL, REASONING_LEVELS, useAgentModels, useDiscoveredModels,
   type AgentChoice, type ModelOption, type Reasoning, type ReasoningPick,
 } from '../agentChoice'
 
@@ -122,11 +122,13 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
   // Nothing picked means the agent's own, and its files may say which: that is what is true, so that is what shows.
   // An agent with no effort setting shows none, whatever a page started with.
   const takesEffort = abilitiesOf(agent).takesEffort
-  const inUse = takesEffort ? (choice.reasoning === DEFAULT_PICK ? currentEffort : choice.reasoning) : null
-  const inUseWord = effortWord(inUse)
+  const effort = effortInUse(agent, model, choice.reasoning, currentEffort)
+  const inUse = effort.level
+  // The dialog's line says only what is known, so a level that is merely assumed is left off it.
+  const inUseWord = effort.assumed ? null : effort.word
   // Only the levels this model takes get a stop, so the slider is as long as the agent's own list.
   const levels = REASONING_LEVELS.filter((level) => effortAllowed(agent, model, level)).map((level) => ({ value: level, label: REASONING_LABEL[level] }))
-  const summary = `${AGENT_LABEL[agent]} · ${model?.label ?? ''} · ${inUseWord ?? (takesEffort ? REASONING_LABEL[choice.reasoning] : 'no effort setting')}`
+  const summary = `${AGENT_LABEL[agent]} · ${model?.label ?? ''} · ${effort.word ?? 'no effort setting'}`
   // A chat's button names the agent too; the dialog's, beside the agent switch, only the model (the agent's own name when none was picked).
   const fullName = modelName(agent, choice.model === DEFAULT_PICK && currentModel !== null ? undefined : model, currentModel)
   // The dialog's line already starts with the agent's name, so it carries only what follows it: the model, or "Default" while none is known.
@@ -158,8 +160,9 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
             <>
               <span className="mx-model-name">{/* With nothing picked, what the agent says it runs is the better name than the row that stands for it. */}
                 {shownName}</span>
-              {inUseWord !== null && <span className="mx-model-level">{inUseWord}</span>}
-              <MiniMeter level={inUse ?? DEFAULT_PICK} />
+              {/* A fixed slot (the longest level's width) so a pick never moves what is beside it. */}
+              {takesEffort && <span className="mx-model-level">{effortWord(inUse)}</span>}
+              {takesEffort && <MiniMeter level={inUse ?? DEFAULT_PICK} />}
             </>
           )}
           <Icon name="chevronDown" />
@@ -167,6 +170,7 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
       </Popover.Trigger>
       <PopupContent side={side} align={compact ? 'start' : 'end'} aria-label="Model and effort" className="mx-mm" onKeyDown={compact ? closeOnEnter : undefined}>
         {onAgent !== undefined && (compact ? <><p className="mx-mm-head">Agent</p><AgentList agent={agent} onAgent={onAgent} /><p className="mx-mm-head">Model</p></> : <AgentSelect agent={agent} onAgent={onAgent} />)}
+        {onAgent === undefined && <p className="mx-mm-head">Model</p>}
         <RadioGroup aria-label="Model" value={modelId} onValueChange={(value) => { const option = rows.find((row) => row.id === value); if (option) pickModel(option) }} className="mx-mm-models">
           {shown.map((option) => (
             <RadioGroupItem key={option.id} value={option.id} title={option.blurb === '' ? undefined : option.blurb} className="mx-mm-model mx-menu-row">
@@ -197,7 +201,8 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
           <div className="mx-mm-effort">
             <span className="mx-mm-effort-word">Effort</span>
             {/* Nothing picked: the agent runs at its own setting, which is named when its files say it. */}
-            <span className="mx-mm-level" title={choice.reasoning === DEFAULT_PICK ? `${AGENT_LABEL[agent]}'s own setting. Pick a level to change it.` : undefined}>{choice.reasoning !== DEFAULT_PICK ? REASONING_LABEL[choice.reasoning] : inUseWord ?? 'Default'}</span>
+            {/* The picked stop already says its level; the line at the right says only what the stops cannot: an assumed default, or a level beyond them. */}
+            <span className="mx-mm-level" title={choice.reasoning === DEFAULT_PICK ? `${AGENT_LABEL[agent]}'s own setting. Pick a level to change it.` : undefined}>{effort.assumed || !levels.some((stop) => stop.value === inUse) ? effort.word : ''}</span>
             <StopSlider
               aria-label="Effort"
               className="mx-mm-stops"

@@ -184,6 +184,32 @@ export function effortBars(level: string | null | undefined): number {
   return place >= 0 ? place + 1 : REASONING_LEVELS.length
 }
 
+/** The level an agent runs at when nothing says otherwise: what Claude Code and Codex both start on. */
+export const DEFAULT_EFFORT: Reasoning = 'medium'
+
+/** The effort a chat is on, for the button and the slider: the level to light, and its word. */
+export type EffortInUse = {
+  /** The level in use; null when the agent runs at one the menu has no stop for (`xhigh`) or the agent takes no effort. */
+  readonly level: string | null
+  /** The word for it, "Medium · default" while it is only the model's default; null when the agent takes no effort. */
+  readonly word: string | null
+  /** Nothing was picked and the agent has not said: the level is the model's default, assumed. */
+  readonly assumed: boolean
+}
+
+/**
+ * The effort a chat runs at, in order of what is known: the level picked here, else what the agent's own files say (so `/effort medium`
+ * typed in the chat shows at once), else the model's default level, so the slider always has one stop lit and says it is the default.
+ */
+export function effortInUse(agent: ChatAgent, model: ModelOption | undefined, picked: ReasoningPick, said: string | null | undefined): EffortInUse {
+  if (!abilitiesOf(agent).takesEffort) return { level: null, word: null, assumed: false }
+  const known = picked === DEFAULT_PICK ? said : picked
+  const word = effortWord(known)
+  if (known !== null && known !== undefined && word !== null) return { level: known, word, assumed: false }
+  const fallback = effortAllowed(agent, model, DEFAULT_EFFORT) ? DEFAULT_EFFORT : REASONING_LEVELS.find((level) => effortAllowed(agent, model, level)) ?? null
+  return { level: fallback, word: fallback === null ? 'Default' : `${REASONING_LABEL[fallback]} · default`, assumed: true }
+}
+
 /** What a chat will use from its next message on. */
 export type AgentChoice = { readonly model: string; readonly reasoning: ReasoningPick }
 

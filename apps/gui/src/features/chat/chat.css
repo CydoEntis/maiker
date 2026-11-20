@@ -415,23 +415,23 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-model-level { color: var(--muted); white-space: nowrap; }
 .mx-model-effort { color: var(--dim); white-space: nowrap; }
 /* The model menu (layout 2h): 300px, square, opening up from the right of the message box. */
-.mx-mm { width: min(300px, calc(100vw - 32px)); max-height: var(--radix-popover-content-available-height, none); overflow-y: auto; display: flex; flex-direction: column; padding: 0; border-radius: 0; background: var(--main); border: 1px solid var(--line2); box-shadow: 0 8px 24px rgba(var(--sd), calc(.35 * var(--sk))); }
+.mx-mm { width: min(300px, calc(100vw - 32px)); max-height: var(--radix-popover-content-available-height, none); overflow-y: auto; display: flex; flex-direction: column; padding: 0; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: 0 8px 24px rgba(var(--sd), calc(.35 * var(--sk))); }
 .mx-mm-agents { margin: 8px; }
 .mx-mm-models { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; padding: 0 6px 6px; }
 .mx-mm .mx-mm-models:first-child { padding-top: 6px; }
-.mx-mm-model { flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; font-size: 13px; font-weight: 500; color: var(--fg); text-align: left; outline: none; }
+.mx-mm-model { border-radius: var(--r-control); flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; font-size: 13px; font-weight: 500; color: var(--fg); text-align: left; outline: none; }
 .mx-mm-model > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-mm-model:hover, .mx-mm-model:focus-visible { background: var(--m-hover); }
 .mx-mm-model small { font-size: 11px; font-weight: 400; color: var(--dim); }
-.mx-mm-more { flex: none; display: flex; align-items: center; gap: 8px; height: 28px; margin: 0 6px 6px; padding: 0 8px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
+.mx-mm-more { border-radius: var(--r-control); flex: none; display: flex; align-items: center; gap: 8px; height: 28px; margin: 0 6px 6px; padding: 0 8px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
 .mx-mm-more:hover, .mx-mm-more:focus-visible { background: var(--m-hover); color: var(--fg); }
 .mx-mm-more[aria-expanded="true"] svg { transform: rotate(180deg); }
 /* The foot: the word, the four rising bars, and the level's name at the right. */
-.mx-mm-effort { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 6px; padding: 10px 14px 12px; border-top: 1px solid var(--line); }
+.mx-mm-effort { margin: 4px 0 0; display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 6px; padding: 9px 16px 10px; border-top: 1px solid var(--line); }
 .mx-mm-stops { grid-column: 1 / -1; }
 .mx-mm-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-.mx-mm-effort-word { font-size: 12px; color: var(--muted); }
-.mx-mm-level { text-align: right; font-size: 12.5px; font-weight: 600; color: var(--fg); white-space: nowrap; }
+.mx-mm-effort-word { font-size: 11px; font-weight: 600; color: var(--dim); }
+.mx-mm-level { text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; }
 .mx-mm-mini { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; margin-left: 2px; }
 /* The bars of a level that was never picked are still drawn as bars: at half the old strength the meter read as missing. */
 .mx-mm-mini span { width: 2.5px; height: 4px; border-radius: 1px; background: rgba(var(--hl), calc(.34 * var(--hk))); }
@@ -440,10 +440,10 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-mm-mini span:nth-child(4) { height: 10px; }
 .mx-mm-mini span.is-on { background: var(--accent); }
 /* The permission menu: a row a mode, each with what it does. */
-.mx-pm { width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; padding: 8px; border-radius: 14px; }
+.mx-pm { width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; padding: 8px; border-radius: var(--r-panel); }
 .mx-pm-head { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 8px; font-size: 11.5px; color: var(--muted); }
 .mx-pm-head strong { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
-.mx-pm-mode { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 10px 6px 8px; border-radius: 9px; text-align: left; outline: none; }
+.mx-pm-mode { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 10px 6px 8px; border-radius: var(--r-control); text-align: left; outline: none; }
 .mx-pm-mode:hover:not(:disabled), .mx-pm-mode:focus-visible { background: rgba(var(--hl), calc(.07 * var(--hk))); }
 .mx-pm-mode[aria-checked="true"] { background: rgba(var(--hl), calc(.07 * var(--hk))); box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.1 * var(--hk))); }
 .mx-pm-mode[aria-checked="true"]:focus-visible { box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.1 * var(--hk))), var(--focus-underline); }
@@ -470,7 +470,6 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 /* The permission mode: a shield and a chevron, its name in the tooltip; red in a mode that asks about nothing. */
 .mx-mode-button { flex: none; height: 26px; display: inline-flex; align-items: center; gap: 3px; padding: 0 5px 0 7px; border-radius: var(--r-control); color: var(--muted); white-space: nowrap; }
 .mx-mode-button:not(.is-static, .is-locked):hover { background: var(--m-hover); color: var(--fg); }
-.mx-mode-button.is-danger { color: var(--danger); }
 .mx-mode-button.is-static { padding: 0 7px; }
 .mx-mode-button.is-locked { cursor: not-allowed; opacity: .6; }
 /* Plan mode, said inside the box while it is on. */
@@ -498,8 +497,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 
 /* An agent's mark in the chat is a flat glyph in its own colour: no tile, no gradient, no ring behind it (design: the mark
    is never set on a coloured square). It covers the model chip, the agent picker and any mark in the feed. */
-:is(.mx-chat, .mx-model-icon) .mx-app-icon:is(.is-claude, .is-codex, .is-gemini, .is-deepseek, .is-opencode, .is-rust, .is-shell, .is-tinted, .is-flat) { background: none; box-shadow: none; color: var(--fg2); }
-:is(.mx-chat, .mx-model-icon) .mx-app-icon.is-claude { color: #D97757; }
+:is(.mx-chat, .mx-model-icon) .mx-app-icon:is(.is-claude, .is-codex, .is-gemini, .is-deepseek, .is-opencode, .is-rust, .is-shell, .is-tinted, .is-flat) { background: none; box-shadow: none; }
 :is(.mx-chat, .mx-model-icon) .mx-app-icon.is-shell { color: var(--dim); }
 :is(.mx-chat, .mx-model-icon) .mx-app-icon svg { width: 100%; height: 100%; }
 
@@ -575,9 +573,17 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-composer .mx-box-row { justify-content: space-between; }
 .mx-composer .mx-box-attach { position: static; box-shadow: none; }
 .mx-box-controls { display: flex; min-width: 0; align-items: center; gap: 2px; }
+/* The controls row is one rhythm: every control is 26px high in 12px regular text, and each part has a slot of its own width,
+   so picking another model, effort or mode never moves what sits beside it. Attention is a dot, never louder text. */
+.mx-box-controls :is(.mx-model-button, .mx-mode-button) { flex: none; height: 26px; font: 400 12px/1 var(--ui); gap: 6px; }
+.mx-box-controls :is(.mx-model-name, .mx-model-level, .mx-mode-name) { display: inline-block; overflow: hidden; text-overflow: ellipsis; font-weight: 400; text-align: left; }
+.mx-box-controls .mx-model-name { color: var(--fg2); min-width: 17ch; max-width: 24ch; }
+.mx-box-controls .mx-model-level { min-width: 6ch; }
+.mx-box-controls .mx-mode-name { color: var(--fg2); min-width: 16ch; }
+.mx-box-controls .mx-mm-mini { margin-left: 0; width: 14.5px; }
 .mx-box.is-ended { display: none; }
 .mx-session-bar { width: 100%; display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 6px 2px 0 6px; font-size: 12.5px; color: var(--muted); }
-.mx-mode-warn { font: 800 10px var(--mono); }
+.mx-mode-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
 .mx-mode-name { white-space: nowrap; }
 /* The ended line stands where the box was: the same well the prototype draws, so the chat reads as closed. */
 .mx-ended-line { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--m-well); border: 1px solid var(--line); }

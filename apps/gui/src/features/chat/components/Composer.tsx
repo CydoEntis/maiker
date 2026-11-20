@@ -13,7 +13,7 @@ import { DraftAttachments } from './Attachments'
 import { QuoteStrip } from './QuoteStubs'
 import { AgentPicker } from './AgentPicker'
 import { modelName } from '../modelName'
-import { PLAN_MODE } from '../chatMeta'
+import { modeShortLabel, PLAN_MODE } from '../chatMeta'
 import { PermissionMenu } from './PermissionMenu'
 import { SessionBar, type SessionPlace } from './SessionBar'
 import { QueuedMessages } from './QueuedMessages'
@@ -523,8 +523,8 @@ function ModeFace({ facts, chevron = false }: { facts: ComposerFacts; chevron?: 
   return (
     <>
       <Icon name="shield" size={13} />
-      {facts.modeDanger && <span className="mx-mode-warn" aria-hidden="true">▲</span>}
-      <span className="mx-mode-name">{facts.mode ?? 'Permissions'}</span>
+      <span className="mx-mode-name">{modeShortLabel(facts.mode) ?? 'Permissions'}</span>
+      {facts.modeDanger && <span className="mx-mode-dot" aria-hidden="true" />}
       {chevron && <Icon name="chevronDown" size={10} />}
     </>
   )

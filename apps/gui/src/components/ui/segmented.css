@@ -12,7 +12,6 @@
 .mx-seg-mark { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; }
 .mx-seg-mark > svg { width: 14px; height: 14px; }
 /* An agent's mark is the mark alone, in its own colour (Claude's orange, the others in the text colour): no tile behind it. */
-.mx-segmented .mx-seg-mark .mx-app-icon:is(.is-claude, .is-codex, .is-gemini, .is-deepseek, .is-opencode, .is-rust, .is-shell, .is-tinted, .is-flat) { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; color: var(--fg2); }
-.mx-segmented .mx-seg-mark .mx-app-icon.is-claude { color: var(--agent-claude); }
+.mx-segmented .mx-seg-mark .mx-app-icon:is(.is-claude, .is-codex, .is-gemini, .is-deepseek, .is-opencode, .is-rust, .is-shell, .is-tinted, .is-flat) { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
 .mx-segmented .mx-seg-mark .mx-app-icon.is-shell { color: var(--dim); }
 .mx-segmented .mx-seg-mark .mx-app-icon svg { width: 100%; height: 100%; }

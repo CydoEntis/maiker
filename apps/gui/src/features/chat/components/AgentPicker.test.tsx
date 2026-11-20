@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { everywhereModel, forgetChoices, forgetDiscoveredModels, noteAgentSaid, setDiscoveredModels, readChoice, useAgentChoice, wireChoice, writeChoice } from '../agentChoice'
@@ -31,7 +31,8 @@ describe('the effort the agent runs at', () => {
     const button = screen.getByRole('button', { name: /Agent, model and reasoning: Codex · .* · Medium/ })
     expect(button).toHaveTextContent('Medium')
     await userEvent.click(button)
-    expect(screen.getByTitle("Codex's own setting. Pick a level to change it.")).toHaveTextContent(/^Medium$/)
+    expect(screen.getByRole('slider', { name: 'Effort' })).toHaveAttribute('aria-valuetext', 'Medium')
+    expect(screen.getByTitle("Codex's own setting. Pick a level to change it.")).toHaveTextContent(/^$/)
   })
 
   it('names a level above the menu\'s, and says nothing where the files do not say', () => {
@@ -39,9 +40,9 @@ describe('the effort the agent runs at', () => {
     expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Xhigh')
   })
 
-  it('shows no level when the agent says none', () => {
+  it('shows the default level, named as the default, when the agent says none', () => {
     picker(null)
-    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).not.toHaveTextContent(/Low|Medium|High|Max/)
+    expect(screen.getByRole('button', { name: /Agent, model and reasoning: .* · Medium · default/ })).toHaveTextContent('Medium')
   })
 })
 
@@ -61,13 +62,26 @@ describe('the model button and its menu', () => {
   it('shows the current choice on its button and opens one column: the models, then the effort', async () => {
     const user = userEvent.setup()
     render(<Harness />)
-    const button = screen.getByRole('button', { name: /Agent, model and reasoning: Claude · Default · Default/ })
+    const button = screen.getByRole('button', { name: /Agent, model and reasoning: Claude · Default · Medium · default/ })
     await user.click(button)
     expect(screen.getByRole('radiogroup', { name: 'Model' })).toBeInTheDocument()
     expect(slider()).toHaveAttribute('aria-valuemax', '3')
     expect(within(slider()).getAllByRole('button', { hidden: true }).map((stop) => stop.textContent)).toEqual(['Low', 'Medium', 'High', 'Max'])
-    // Nothing was picked, so no level is claimed.
-    expect(screen.getByTitle("Claude's own setting. Pick a level to change it.")).toHaveTextContent(/^Default$/)
+    // Nothing was picked and the agent has not said: the default stop is lit and named as the default.
+    expect(slider()).toHaveAttribute('aria-valuetext', 'Medium')
+    expect(slider()).toHaveAttribute('aria-valuenow', '1')
+    expect(screen.getByTitle("Claude's own setting. Pick a level to change it.")).toHaveTextContent(/^Medium · default$/)
+    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Medium')
+  })
+
+  it('lights the level the agent says it runs at, and follows a change made elsewhere', () => {
+    const picker = (effort: string | null) => <AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} currentEffort={effort} />
+    const { rerender } = render(picker('high'))
+    fireEvent.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
+    expect(slider()).toHaveAttribute('aria-valuetext', 'High')
+    rerender(picker('low'))
+    expect(slider()).toHaveAttribute('aria-valuetext', 'Low')
+    expect(screen.queryByText('Medium · default')).toBeNull()
   })
 
   it('has no agent switch in a chat that has started, and one where the agent is still to be chosen', async () => {

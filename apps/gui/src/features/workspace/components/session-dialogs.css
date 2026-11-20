@@ -59,10 +59,9 @@
     .mx-nsd-start { grid-column: 2; }
 }
 /* An agent's mark here is the mark alone, in its own colour (Claude's orange, the others in the text colour): no tile, no ground behind it. */
-:is(.mx-newchat, .mx-rename) .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; color: var(--fg2); }
+:is(.mx-newchat, .mx-rename) .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
 .mx-rename .mx-app-icon.size-20 { width: 16px; height: 16px; }
 :is(.mx-newchat, .mx-rename) .mx-app-icon svg { width: 100%; height: 100%; }
-:is(.mx-newchat, .mx-rename) .mx-app-icon.is-claude { color: #D97757; }
 /* The model and effort button, in the design's terms: a bordered 28px button with the model, a dim effort and a chevron. */
 .mx-newchat .mx-model-button { flex: 1; min-width: 0; height: 28px; padding: 0 8px; border: 1px solid var(--line); font-size: 12.5px; }
 .mx-newchat .mx-model-button > svg { margin-left: auto; flex: none; }
@@ -70,8 +69,7 @@
 /* The dropdown's menu: a small head over each of its three parts, an agent's mark flat beside its name, the efforts as the one segmented control. */
 .mx-mm-head { margin: 0; padding: 8px 14px 4px; font-size: 11.5px; color: var(--dim); }
 .mx-mm-agent-list { padding-bottom: 2px; }
-.mx-mm-agent-list .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; color: var(--fg2); }
-.mx-mm-agent-list .mx-app-icon.is-claude { color: var(--agent-claude); }
+.mx-mm-agent-list .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
 .mx-mm-agent-list .mx-app-icon svg { width: 100%; height: 100%; }
 .mx-mm-reasoning { padding: 0 8px 8px; border-top: 1px solid var(--line); }
 .mx-mm-reasoning .mx-mm-head { padding-left: 6px; }

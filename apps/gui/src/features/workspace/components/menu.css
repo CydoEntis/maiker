@@ -19,6 +19,10 @@
 /* One highlighted item at a time: Radix moves `data-highlighted` with the pointer and the arrow keys, so a hovered row and a
    keyboard row can never both be lit, and the global focus underline is switched off above. */
 .mx-ctx-item:not(:disabled)[data-highlighted] { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
+/* The shared dropdown item paints every child with its focus colour; a row keeps its mark's colour, its label's and its hint's, and only the ground changes. */
+.mx-ctx-item:focus .mx-app-icon { color: var(--mark, var(--fg2)); }
+.mx-ctx-item:focus .mx-ctx-label { color: inherit; }
+.mx-ctx-item:focus .mx-ctx-hint { color: var(--dim); }
 .mx-ctx-item.is-danger { color: var(--danger); }
 .mx-ctx-item.is-danger:not(:disabled)[data-highlighted] { color: var(--danger); }
 .mx-ctx-item:disabled { opacity: .4; cursor: default; }

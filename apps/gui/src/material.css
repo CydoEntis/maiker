@@ -126,10 +126,16 @@
 .mx-app[data-motion="reduced"] :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; }
 
 /* ---- field ---- */
-/* A field sits one step off the pane it is on, so the message box can be told from its ground. */
-.mx-app .mx-box,
+/* A field sits one step off the pane it is on, so a form field can be told from its ground. */
 .mx-field {
   background: var(--raise);
+  border: 1px solid var(--line2);
+  box-shadow: none;
+}
+/* The message box (the chat's and the new-session draft's, one component) is lifted further: the raised surface nudged toward
+   the text colour, as menus are, so it stands off the chat in a dark theme and a light one alike, inside a visible hairline. */
+.mx-app .mx-box {
+  background: var(--pop-bg);
   border: 1px solid var(--line2);
   box-shadow: none;
 }

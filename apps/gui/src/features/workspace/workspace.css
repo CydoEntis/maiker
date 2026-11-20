@@ -19,8 +19,12 @@
   /* Every panel that opens from a side (the 2h handoff, §1): in eases out fast, out eases in and is a little quicker. */
   --panel-in: .28s cubic-bezier(.22, .9, .24, 1);
   --panel-out: .22s cubic-bezier(.4, 0, .7, .2);
-  /* The Claude mark's orange: the one brand colour the design keeps. */
+  /* The agents' mark colours, defined once; `.mx-app-icon` reads them (below) so every mark is coloured the same wherever it is drawn. */
   --agent-claude: #D97757;
+  --agent-codex: #10A37F;
+  --agent-gemini: #3186FF;
+  --agent-opencode: #A78BFA;
+  --agent-deepseek: #4D6BFE;
   /* The look (`theme/corners.ts`) sets --ui and --mono inline; these are the fallbacks. */
   --ui: "Geist Variable", Geist, system-ui, sans-serif;
   --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
@@ -178,9 +182,13 @@
 .mx-app-icon.size-20 { width: 20px; height: 20px; border-radius: 6px; font-size: 9px; }
 /* Claude's mark is a 16x10 pixel grid: drawn at exactly one screen pixel to a grid pixel, so its squares stay square. Fitting it to a 14px box scaled it by 0.875 and left uneven pixels. */
 .mx-app-icon.is-claude:is(.size-14, .size-18, .size-20) svg { width: 16px; height: 10px; flex: none; overflow: visible; }
-/* A mark is a flat glyph with no tile: Claude's own orange, the text colour for every other agent, the dim colour for a shell. */
-.mx-app-icon { box-shadow: none; background: none; border-radius: 0; color: var(--fg2); }
-.mx-app-icon.is-claude { color: var(--agent-claude); }
+/* A mark is a flat glyph with no tile: each agent's own colour, the dim colour for a shell. The colour never changes with a hover or focus on the row around it. */
+.mx-app-icon { box-shadow: none; background: none; border-radius: 0; color: var(--mark, var(--fg2)); }
+.mx-app-icon.is-claude { --mark: var(--agent-claude); }
+.mx-app-icon.is-codex { --mark: var(--agent-codex); }
+.mx-app-icon.is-gemini { --mark: var(--agent-gemini); }
+.mx-app-icon.is-opencode { --mark: var(--agent-opencode); }
+.mx-app-icon.is-deepseek { --mark: var(--agent-deepseek); }
 .mx-app-icon.is-shell { color: var(--dim); }
 
 :root[data-window="inactive"] :is(.mx-status-icon, .mx-status-light *, .mx-mach-spin, .mx-upd-bar span, .mx-upd-bar span::after) { animation-play-state: paused; }
@@ -533,7 +541,7 @@
 /* Finish: the surfaces' fills, lines and shadows are material.css. What is left here is the rest of Flat: no glow, no resting rings and smaller radii. Accent and warn rings (the
    focused pane, needs-you) and every status colour stay. */
 /* Settings › Appearance › Icons: Grayscale. Neutral app icons in either style; status badges on them keep their colours. */
-:root[data-icons="grayscale"] .mx-app-icon, :root[data-icons="grayscale"] .mx-app-icon.is-claude { color: var(--fg2); }
+:root[data-icons="grayscale"] .mx-app-icon:not(.is-shell) { color: var(--fg2); }
 
 /* A web view without GPU access (no WebGL 2) rasterises in software, where every blur and shadow is paid
    again on each repaint (docs/PERFORMANCE.md). It takes the same rules with cheaper token values: no blur,

@@ -78,6 +78,13 @@ export const CODEX_MODE_REFUSED = /Unknown permission profile|Usage: \/permissio
 /** The modes drawn in red: nothing is asked in them. */
 export const DANGER_MODES: readonly string[] = [BYPASS_MODE, CODEX_FULL_MODE]
 
+/** The mode's name where there is little room (the message box's control): the full name stays in the menu and the tooltip. */
+const SHORT_MODE_WORDS: Readonly<Record<string, string>> = { 'Bypass permissions': 'Bypass' }
+
+export function modeShortLabel(label: string | null): string | null {
+  return label === null ? null : (SHORT_MODE_WORDS[label] ?? label)
+}
+
 export function modeLabel(mode: string | null): string | null {
   return mode === null ? null : (MODE_WORDS[mode] ?? mode)
 }

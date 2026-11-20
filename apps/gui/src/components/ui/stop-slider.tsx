@@ -1,4 +1,5 @@
 import * as React from "react"
+import { useRef } from "react"
 import { cn } from "@/lib/utils"
 import "./stop-slider.css"
 
@@ -37,9 +38,24 @@ function StopSlider({ stops, value, onValueChange, emptyText = "Not picked", dis
     // Pressing past an end stays put, and must not read as a second press on the picked stop.
     if (next !== index) pick(stops[next])
   }
+  // Dragging along the track moves the thumb to the stop under the pointer, live. A plain press is left to the stop's own click.
+  const dragging = useRef(false)
+  const stopAt = (event: React.PointerEvent<HTMLDivElement>): number => {
+    const box = event.currentTarget.getBoundingClientRect()
+    return box.width === 0 ? -1 : Math.min(stops.length - 1, Math.max(0, Math.floor(((event.clientX - box.left) / box.width) * stops.length)))
+  }
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragging.current || disabled) return
+    const at = stopAt(event)
+    if (at >= 0 && at !== index) pick(stops[at])
+  }
   return (
     <div
       {...props}
+      onPointerDown={(event) => { dragging.current = event.button === 0 }}
+      onPointerMove={onPointerMove}
+      onPointerUp={() => { dragging.current = false }}
+      onPointerCancel={() => { dragging.current = false }}
       data-slot="stop-slider"
       role="slider"
       tabIndex={disabled ? -1 : 0}
